@@ -88,12 +88,15 @@ public:
 
   void reset_eof_cnt() { eof_channel_cnt_ = 0; }
   void inc_eof_cnt() { eof_channel_cnt_ += 1; }
+  int64_t get_eof_cnt() { return eof_channel_cnt_; }
   bool all_eof(const int64_t data_channel_cnt) const
   {
     return eof_channel_cnt_ >= data_channel_cnt;
   }
   int64_t get_process_query_time() const { return process_query_time_; }
   void set_process_query_time(int64_t process_query_time) { process_query_time_ = process_query_time; }
+  int64_t get_query_timeout_ts() const { return query_timeout_ts_; }
+  void set_query_timeout_ts(int64_t time) { query_timeout_ts_ = time; }
 private:
   int process_channels(ObIDltChannelLoopPred *pred, int64_t &nth_channel);
   int process_channel(int64_t &nth_channel);
@@ -120,6 +123,7 @@ public:
   void set_interm_result(bool flag) { use_interm_result_ = flag; }
 private:
   static const int64_t INTERRUPT_CHECK_TIMES = 16;
+  static const int64_t SERVER_ALIVE_CHECK_TIMES = 256;
   Proc *proc_map_[MAX_PROCS];
   InterruptProc *interrupt_proc_;
   common::ObSEArray<ObDtlChannel*, 128> chans_;
@@ -145,6 +149,8 @@ private:
   int64_t loop_times_;
   int64_t begin_wait_time_; // use rdtsc to record begin dtl wait time
   int64_t process_query_time_;
+  int64_t last_dump_channel_time_; // Used to track long-term active channels
+  int64_t query_timeout_ts_;
 };
 
 OB_INLINE void ObDtlChannelLoop::add_last_data_list(ObDtlChannel *ch)
@@ -190,6 +196,7 @@ OB_INLINE void ObDtlChannelLoop::reset()
   first_data_get_ = false;
   sentinel_node_.prev_link_ = &sentinel_node_;
   sentinel_node_.next_link_ = &sentinel_node_;
+  eof_channel_cnt_ = 0;
 }
 
 OB_INLINE ObDtlChannelLoop &ObDtlChannelLoop::register_processor(Proc &proc)

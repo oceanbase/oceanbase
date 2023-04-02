@@ -29,6 +29,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "ob_bloom_filter_cache.h"
 #include "ob_micro_block_reader_helper.h"
+#include "share/cache/ob_kvcache_pre_warmer.h"
 
 namespace oceanbase
 {
@@ -89,20 +90,54 @@ private:
   ObArenaAllocator allocator_;
 };
 
+class ObMicroBlockAdaptiveSplitter
+{
+struct ObMicroCompressionInfo{
+  ObMicroCompressionInfo();
+  virtual ~ObMicroCompressionInfo() {};
+  void update(const int64_t original_size, const int64_t compressed_size);
+  inline void reset() { original_size_ = compressed_size_ = 0; compression_ratio_ = 100; }
+  int64_t original_size_;
+  int64_t compressed_size_;
+  int64_t compression_ratio_;
+};
+
+public:
+  ObMicroBlockAdaptiveSplitter();
+  ~ObMicroBlockAdaptiveSplitter();
+  int init(const int64_t macro_store_size, const bool is_use_adaptive);
+  void reset();
+  int check_need_split(const int64_t micro_size,
+                       const int64_t micro_row_count,
+                       const int64_t split_size,
+                       const int64_t current_macro_size,
+                       const bool is_keep_space,
+                       bool &check_need_split) const;
+int update_compression_info(const int64_t micro_row_count, const int64_t original_size, const int64_t compressed_size);
+private:
+  static const int64_t DEFAULT_MICRO_ROW_COUNT = 16;
+  static const int64_t MICRO_ROW_MIN_COUNT = 3;
+
+private:
+  int64_t macro_store_size_;
+  bool is_use_adaptive_;
+  ObMicroCompressionInfo compression_infos_[DEFAULT_MICRO_ROW_COUNT + 1]; //compression_infos_[0] for total compression info
+};
+
 class ObMacroBlockWriter
 {
 public:
   ObMacroBlockWriter();
   virtual ~ObMacroBlockWriter();
-  void reset();
-  int open(
+  virtual void reset();
+  virtual int open(
       ObDataStoreDesc &data_store_desc,
       const ObMacroDataSeq &start_seq,
       ObIMacroBlockFlushCallback *callback = nullptr);
-  int append_macro_block(const ObMacroBlockDesc &macro_desc);
+  virtual int append_macro_block(const ObMacroBlockDesc &macro_desc);
+  virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr);
+  virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr);
   int append_index_micro_block(ObMicroBlockDesc &micro_block_desc);
-  int append_micro_block(const ObMicroBlock &micro_block);
-  int append_row(const ObDatumRow &row);
   int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge);
   int close();
   void dump_block_and_writer_buffer();
@@ -114,14 +149,24 @@ public:
                                 ObIMicroBlockWriter *&micro_writer,
                                 const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
 
+protected:
+  virtual int build_micro_block();
+  virtual int try_switch_macro_block();
+  virtual bool is_keep_freespace() const {return false; }
+  inline bool is_dirty() const { return macro_blocks_[current_index_].is_dirty() || 0 != micro_writer_->get_row_count(); }
+  inline int64_t get_curr_micro_writer_row_count() const { return micro_writer_->get_row_count(); }
+  inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
+
 private:
   int append_row(const ObDatumRow &row, const int64_t split_size);
   int check_order(const ObDatumRow &row);
-  int build_micro_block();
+  int init_hash_index_builder();
+  int append_row_and_hash_index(const ObDatumRow &row);
   int build_micro_block_desc(
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,
       ObMicroBlockHeader &header_for_rewrite);
+  int build_hash_index_block(ObMicroBlockDesc &micro_block_desc);
   int build_micro_block_desc_with_rewrite(
       const ObMicroBlock &micro_block,
       ObMicroBlockDesc &micro_block_desc,
@@ -131,7 +176,6 @@ private:
   int check_micro_block_need_merge(const ObMicroBlock &micro_block, bool &need_merge);
   int merge_micro_block(const ObMicroBlock &micro_block);
   int flush_macro_block(ObMacroBlock &macro_block);
-  int try_switch_macro_block();
   int wait_io_finish(ObMacroBlockHandle &macro_handle);
   int alloc_block();
   int check_write_complete(const MacroBlockId &macro_block_id);
@@ -147,15 +191,19 @@ private:
   int flush_bf_to_cache(ObMacroBloomFilterCacheWriter &bf_cache_writer, const int32_t row_count);
   void dump_micro_block(ObIMicroBlockWriter &micro_writer);
   void dump_macro_block(ObMacroBlock &macro_block);
+public:
+  static const int64_t DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD = 30;
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_COUNT = 128;
-  static const int64_t DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD = 30;
   typedef common::ObSEArray<MacroBlockId, DEFAULT_MACRO_BLOCK_COUNT> MacroBlockList;
 
-private:
+protected:
   ObDataStoreDesc *data_store_desc_;
+
+private:
   ObIMicroBlockWriter *micro_writer_;
   ObMicroBlockReaderHelper reader_helper_;
+  ObMicroBlockHashIndexBuilder hash_index_builder_;
   ObMicroBlockBufferHelper micro_helper_;
   ObTableReadInfo read_info_;
   ObMacroBlock macro_blocks_[2];
@@ -178,6 +226,8 @@ private:
   blocksstable::ObDatumRow check_datum_row_;
   ObIMacroBlockFlushCallback *callback_;
   ObDataIndexBlockBuilder *builder_;
+  ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
+  ObDataBlockCachePreWarmer data_block_pre_warmer_;
 };
 
 }//end namespace blocksstable

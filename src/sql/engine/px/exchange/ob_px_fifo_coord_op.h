@@ -26,6 +26,8 @@
 #include "sql/engine/px/datahub/components/ob_dh_winbuf.h"
 #include "sql/engine/px/datahub/components/ob_dh_rollup_key.h"
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
+#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
+#include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 
 namespace oceanbase
 {
@@ -101,6 +103,9 @@ private:
   ObDynamicSamplePieceMsgP sample_piece_msg_proc_;
   ObRollupKeyPieceMsgP rollup_key_piece_msg_proc_;
   ObRDWFPieceMsgP rd_wf_piece_msg_proc_;
+  ObInitChannelPieceMsgP init_channel_piece_msg_proc_;
+  ObReportingWFPieceMsgP reporting_wf_piece_msg_proc_;
+  ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
 };
 
 } // end namespace sql

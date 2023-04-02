@@ -62,7 +62,7 @@ const char * ObClusterSyncStatusHelp::cluster_sync_status_to_str(
   if (cluster_sync_status_is_valid(last_hb_ts)) {
     if (OB_UNLIKELY(sync_status >= share::ObClusterSyncStatus::SYNC_STATUS_MAX) 
         || OB_UNLIKELY(sync_status < share::ObClusterSyncStatus::NOT_AVAILABLE)) {
-      LOG_ERROR("fatal error, unknown cluster sync status", K(sync_status));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown cluster sync status", K(sync_status));
     } else {
       sync_status_str = cluster_sync_status_strs[sync_status];
     }

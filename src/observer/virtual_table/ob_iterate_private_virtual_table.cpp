@@ -97,12 +97,23 @@ int ObIteratePrivateVirtualTable::do_open()
             && (is_sys_tenant(effective_tenant_id_)
                 || *id == effective_tenant_id_)) {
           const ObSimpleTenantSchema *simple_tenant_schema = NULL;
-          if (OB_FAIL(schema_guard_->get_tenant_info(get_exec_tenant_id_(*id), simple_tenant_schema))) {
-            LOG_WARN("fail to get tenant schema", KR(ret), K(*id), "exec_tenant_id", get_exec_tenant_id_(*id));
+          const uint64_t exec_tenant_id = get_exec_tenant_id_(*id);
+          bool exist = false;
+          if (OB_FAIL(schema_guard_->get_tenant_info(exec_tenant_id, simple_tenant_schema))) {
+            LOG_WARN("fail to get tenant schema", KR(ret), K(*id), K(exec_tenant_id));
           } else if (OB_ISNULL(simple_tenant_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tenant schema is nullptr", KR(ret), K(*id), "exec_tenant_id", get_exec_tenant_id_(*id));
-          } else if (simple_tenant_schema->is_normal() && OB_FAIL(tenants_.push_back(*id))) {
+            LOG_WARN("tenant schema is nullptr", KR(ret), K(*id), K(exec_tenant_id));
+          } else if (!simple_tenant_schema->is_normal()) {
+            LOG_TRACE("tenant status is not normal, just skip", K(exec_tenant_id));
+          } else if (OB_FAIL(schema_guard_->check_table_exist(
+                     exec_tenant_id, base_table_id_, exist))) {
+            LOG_WARN("fail to check table exist",
+                     KR(ret), K(exec_tenant_id), K(base_table_id_));
+          } else if (!exist) {
+            LOG_TRACE("table not exist in tenant, maybe in upgrade process, just skip",
+                      K(exec_tenant_id), K(base_table_id_));
+          } else if (OB_FAIL(tenants_.push_back(*id))) {
             LOG_WARN("array push back failed", KR(ret));
           }
         }
@@ -232,10 +243,11 @@ int ObIteratePrivateVirtualTable::next_tenant_()
       LOG_WARN("sql or sql result no init", KR(ret), KP(sql_res_), K(sql_));
     } else if (OB_FAIL(sql_.set_length(0))) {
       LOG_WARN("reset sql failed", KR(ret));
-    } else if (OB_FAIL(construct_sql(sql_))) {
-      LOG_WARN("construct sql failed", KR(ret));
+    } else if (OB_FAIL(construct_sql(exec_tenant_id, sql_))) {
+      LOG_WARN("construct sql failed", KR(ret), K(exec_tenant_id));
     } else {
-      LOG_TRACE("construct iterate private virtual table sql", K(exec_tenant_id), K_(cur_tenant_id), K_(sql));
+      LOG_TRACE("construct iterate private virtual table sql",
+                K(exec_tenant_id), K_(cur_tenant_id), K_(sql));
       sql_res_->~ReadResult();
       inner_sql_res_ = NULL;
       new (sql_res_) ObMySQLProxy::MySQLResult();

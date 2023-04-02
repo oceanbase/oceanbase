@@ -46,7 +46,7 @@ private:
 
 template<typename T>
 ObCachedAllocator<T>::ObCachedAllocator()
-    : pool_(sizeof(T)), allocated_count_(0), cached_count_(0)
+    : lock_(ObLatchIds::OB_CACHED_ALLOCATOR_LOCK), pool_(sizeof(T)), allocated_count_(0), cached_count_(0)
 {
 }
 
@@ -62,7 +62,7 @@ ObCachedAllocator<T>::~ObCachedAllocator()
     --cached_count_;
   }
   if (0 != allocated_count_ || 0 != cached_count_) {
-    LIB_LOG(WARN, "some allocated object is not freed",
+    LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "some allocated object is not freed",
               K(allocated_count_), K(cached_count_));
   }
 }
@@ -75,7 +75,7 @@ T *ObCachedAllocator<T>::alloc()
   if (OB_SUCCESS != cached_objs_.pop_back(ret)) {
     void *p = pool_.alloc();
     if (OB_ISNULL(p)) {
-      LIB_LOG(ERROR, "no memory");
+      LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "no memory");
     } else {
       ret = new(p) T();
       ++ allocated_count_;

@@ -19,7 +19,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 
 ObServerTraceMap::ObServerTraceMap()
-  : is_inited_(false), lock_(), server_status_arr_()
+  : is_inited_(false), lock_(ObLatchIds::ALL_SERVER_TRACER_LOCK), server_status_arr_()
 {
 }
 
@@ -50,7 +50,7 @@ int ObServerTraceMap::init()
 
 int ObServerTraceMap::is_server_exist(const common::ObAddr &server, bool &exist) const
 {
-  int ret = OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("server trace map has not inited", KR(ret));
@@ -76,23 +76,53 @@ int ObServerTraceMap::is_server_exist(const common::ObAddr &server, bool &exist)
 
 int ObServerTraceMap::check_server_alive(const ObAddr &server, bool &is_alive) const
 {
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(server);
-  UNUSED(is_alive);
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server trace map has not inited", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), K(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    ObServerStatus status;
+    if (OB_FAIL(find_server_status(server, status))) {
+      LOG_WARN("fail to find server status", K(server), K_(server_status_arr), KR(ret));
+    } else {
+      is_alive = status.is_alive();
+    }
+  }
+
   return ret;
 }
 
-int ObServerTraceMap::check_in_service(const ObAddr &addr, bool &service_started) const
+int ObServerTraceMap::check_in_service(const ObAddr &server, bool &service_started) const
 {
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(addr);
-  UNUSED(service_started);
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server trace map has not inited", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), K(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    ObServerStatus status;
+    if (OB_FAIL(find_server_status(server, status))) {
+      LOG_WARN("fail to find server status", K(server), K_(server_status_arr), KR(ret));
+    } else {
+      service_started = status.in_service();
+    }
+  }
+
   return ret;
 }
 
 int ObServerTraceMap::check_server_permanent_offline(const ObAddr &addr, bool &is_offline) const
 {
-  int ret = OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
 
   ObServerStatus status;
@@ -108,7 +138,32 @@ int ObServerTraceMap::check_server_permanent_offline(const ObAddr &addr, bool &i
   if ((OB_ENTRY_NOT_EXIST == ret) && server_status_arr_.empty()) {
     // if server list is empty, treat as not offline
     ret = OB_SUCCESS;
-    is_offline = false; 
+    is_offline = false;
+  }
+
+  return ret;
+}
+
+int ObServerTraceMap::for_each_server_status(
+  const ObFunction<int(const ObServerStatus &status)> &functor)
+{
+  int ret = OB_SUCCESS;
+  SpinRLockGuard guard(lock_);
+
+  ObServerStatus status;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_status_arr_.count(); i++) {
+      ObServerStatus &status = server_status_arr_[i];
+      if (OB_UNLIKELY(!functor.is_valid())) {
+        ret = OB_EAGAIN;
+        LOG_WARN("functor is invalid");
+      } else if (OB_FAIL(functor(status))) {
+        LOG_WARN("invoke functor failed", K(ret), K(status));
+      }
+    }
   }
 
   return ret;
@@ -267,4 +322,10 @@ int ObAllServerTracer::is_server_stopped(const ObAddr &addr, bool &is_stopped) c
 int ObAllServerTracer::check_migrate_in_blocked(const ObAddr &addr, bool &is_block) const
 {
   return trace_map_.check_migrate_in_blocked(addr, is_block);
+}
+
+int ObAllServerTracer::for_each_server_status(
+  const ObFunction<int(const ObServerStatus &status)> &functor)
+{
+  return trace_map_.for_each_server_status(functor);
 }

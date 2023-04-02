@@ -56,7 +56,7 @@ public:
                      const int64_t size,
                      const int skip_pos,
                      const palf::LSN &lsn,
-                     const int64_t &log_timestamp,
+                     const share::SCN &log_timestamp,
                      const int64_t &replay_hint,
                      const share::ObLSID &ls_id,
                      const int64_t &tenant_id);
@@ -74,7 +74,7 @@ private:
   ObTxReplayExecutor(storage::ObLS *ls,
                      storage::ObLSTxService *ls_tx_srv,
                      const palf::LSN &lsn,
-                     const int64_t &log_timestamp)
+                     const share::SCN &log_timestamp)
       : ctx_(nullptr), ls_(ls), ls_tx_srv_(ls_tx_srv), lsn_(lsn),
         log_ts_ns_(log_timestamp), mmi_ptr_(nullptr), mt_ctx_(nullptr), first_created_ctx_(false),
         has_redo_(false), tx_part_log_no_(0), mvcc_row_count_(0), table_lock_row_count_(0)
@@ -90,7 +90,7 @@ private:
                  const share::ObLSID &ls_id,
                  const int64_t &tenant_id);
   int prepare_replay_(const char *buf, const int64_t &size, const int skip_pos);
-  int try_get_tx_ctx_(ObTxLogType type, int64_t tx_id, int64_t tenant_id, const share::ObLSID &ls_id);
+  int try_get_tx_ctx_(int64_t tx_id, int64_t tenant_id, const share::ObLSID &ls_id);
   int before_replay_redo_();
   void finish_replay_(const int retcode);
 
@@ -135,7 +135,7 @@ private:
   ObTxLogBlockHeader log_block_header_;
   ObTxLogBlock log_block_;
   palf::LSN lsn_;
-  int64_t log_ts_ns_;
+  share::SCN log_ts_ns_;
 
   memtable::ObMemtableMutatorIterator * mmi_ptr_;
   memtable::ObMemtableCtx *mt_ctx_;

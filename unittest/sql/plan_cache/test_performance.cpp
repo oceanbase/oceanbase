@@ -91,66 +91,6 @@ void alter_view_schema_version()
   view_schema->set_schema_version(schema_version + 1);
 }
 
-void print_stat(std::ostream &of) {
-  //print plan cache status
-  int ret = OB_SUCCESS;
-  ObPlanCacheManager::PlanCacheMap::const_iterator it_begin = plan_cache_mgr->get_plan_cache_map().begin();
-  ObPlanCacheManager::PlanCacheMap::const_iterator it_end = plan_cache_mgr->get_plan_cache_map().end();
-
-  for (int i = 1; OB_SUCC(ret) && it_begin != it_end; it_begin++,i++) {
-    of << std::endl;
-    of << "*************** plan cache " << i << " *******************" << std::endl;
-    //do not destroy plan cache
-    ObPlanCache *plan_cache = it_begin->second;
-    if (NULL != plan_cache) {
-      //plan cache stat
-      ObPlanCacheStat &pc_stat = plan_cache->get_plan_cache_stat();
-      of << "plan cache stat:" << "plan_count = " << plan_cache->get_plan_num()
-                               << ", stmtkey_count = " << plan_cache->get_sql_id_mgr()->get_stmtkey2id_map().size()
-                               << ", access_count = " << pc_stat.access_count_
-                               << ", hit_count_ = " << pc_stat.hit_count_
-                               << ", memory_used = " << plan_cache->get_mem_used()
-                               << std::endl;
-
-      //plan stat
-      ObPlanCache::IdStatMap &plan_stat = plan_cache->get_plan_stats();
-      ObPlanCache::IdStatMap::const_iterator mit_begin = plan_stat.begin();
-      ObPlanCache::IdStatMap::const_iterator mit_end = plan_stat.end();
-      for (; OB_SUCC(ret) && mit_begin != mit_end; ++mit_begin) {
-        ObPlanStat pstat = mit_begin->second;
-        of << "    plan_id = " << pstat.plan_id_
-           << ", hit_count = " << pstat.hit_count_
-           << std::endl;
-      }
-      //ref count
-      of << "plan cache ref_count:" << plan_cache->get_ref_count() << ", tenant id = " << plan_cache->tenant_id_ << std::endl;
-      ObPlanCache::SqlPlanMap::const_iterator v_begin = plan_cache->plan_cache_.begin();
-      ObPlanCache::SqlPlanMap::const_iterator v_end = plan_cache->plan_cache_.end();
-      for (; OB_SUCC(ret) && v_begin != v_end; ++v_begin) {
-        ObPlanCacheValue *value = v_begin->second;
-        if (NULL == value) {continue;}
-        of << "  sql_id : " << v_begin->first << ", value ref_count : " << value->get_ref_count() << std::endl;
-        std::string stmt_str(value->get_sql_ptr(), value->get_sql_length());
-        of << "  stmt :   " << stmt_str << std::endl;
-        DLIST_FOREACH_NORET(plan_set, value->plan_sets_) {
-          if (NULL != plan_set->local_plan_) {
-             of << "    plan_id : " << plan_set->local_plan_->plan_id_
-                << ", plan ref_count :" << plan_set->local_plan_->get_ref_count() << std::endl;
-          }
-          if (NULL != plan_set->remote_plan_) {
-             of << "    plan_id : " << plan_set->remote_plan_->plan_id_
-                << ", plan ref_count :" << plan_set->remote_plan_->get_ref_count() << std::endl;
-          }
-          if (NULL != plan_set->distr_plan_) {
-             of << "    plan_id : " << plan_set->distr_plan_->plan_id_
-                << ", plan ref_count :" << plan_set->distr_plan_->get_ref_count() << std::endl;
-          }
-        }
-      }
-    }
-  }
-}
-
 //execute one sql
 void do_operation(const char *query, uint64_t tenant_id)
 {
@@ -182,17 +122,21 @@ void do_operation(const char *query, uint64_t tenant_id)
   int64_t time_9 = 0;
   // parse
   time_1 = TestSQL::get_usec();
+  ObPlanCache plan_cache;
   if (OB_FAIL(test_sql->do_parse(allocator, query, parse_result))) {
     SQL_PC_LOG(WARN, "Generate syntax tree failed", K(query_str), K(ret));
+  } else if (OB_FAIL(plan_cache.init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+    LOG_WARN("failed to init request manager", K(ret));
   } else {
     _OB_LOG(INFO, "%s", CSJ(ObParserResultPrintWrapper(*parse_result.result_tree_)));
     time_2 = TestSQL::get_usec();
     // plan cache
-    ObPlanCache *plan_cache = plan_cache_mgr->get_or_create_plan_cache(tenant_id);
+
+    //ObPlanCache *plan_cache = plan_cache_mgr->get_or_create_plan_cache(tenant_id);
     if (NULL != plan_cache) {
-      plan_cache->set_mem_hwm(HIGH_WATER_MARK);
-      plan_cache->set_mem_lwm(LOW_WATER_MARK);
-      SQL_PC_LOG(INFO, "get plan cache from plan cache mgr", K(plan_cache->ref_count_), K(query_str));
+      plan_cache.set_mem_hwm(HIGH_WATER_MARK);
+      plan_cache.set_mem_lwm(LOW_WATER_MARK);
+      SQL_PC_LOG(INFO, "get plan cache", K(query_str));
 
       ObSysVarInPC sys_var_in_pc;
       StmtKey key;
@@ -213,8 +157,8 @@ void do_operation(const char *query, uint64_t tenant_id)
       context.schema_manager_ = test_sql->get_schema_manager();
       context.session_info_ = &session;
       exec_ctx.get_task_executor_ctx()->set_min_cluster_version(CLUSTER_VERSION_1500);
-      if (NULL != context.schema_manager_ && NULL != plan_cache) {
-        ret = plan_cache->get_plan(allocator, key,
+      if (NULL != context.schema_manager_) {
+        ret = plan_cache.get_plan(allocator, key,
                                    exec_ctx,
                                    params, sql_id,
                                    phy_plan,
@@ -222,11 +166,11 @@ void do_operation(const char *query, uint64_t tenant_id)
         SQL_PC_LOG(INFO, "get plan from plan cache", K(sql_id), K(phy_plan), K(ret));
         time_3 = TestSQL::get_usec();
         if (OB_SUCC(ret)) {
-          plan_cache->update_plan_stat(phy_plan->get_plan_id(), true, time_7 - time_1);
+          plan_cache.update_plan_stat(phy_plan->get_plan_id(), true, time_7 - time_1);
           SQL_PC_LOG(INFO, "get plan from pc");
         } else if (OB_SQL_PC_NOT_EXIST == ret) {
           SQL_PC_LOG(INFO,"plan not exist in plan cache");
-          plan_cache->update_plan_stat(0, false, 0);
+          plan_cache.update_plan_stat(0, false, 0);
           // resolve
           SQL_PC_LOG(INFO, "start to generate physical plan : resolve-->logical_plan-->physical_plan");
           if (OB_FAIL(test_sql->do_resolve(test_sql_ctx, parse_result, stmt, &params))) {
@@ -245,14 +189,14 @@ void do_operation(const char *query, uint64_t tenant_id)
               if (OB_FAIL(test_sql->generate_physical_plan(logical_plan, phy_plan))) {
                 SQL_PC_LOG(WARN, "faile to generate physical plan", K(*logical_plan), K(ret));
               } else {
-                phy_plan->set_plan_id(plan_cache->allocate_plan_id());
+                phy_plan->set_plan_id(plan_cache.allocate_plan_id());
                 SQL_PC_LOG(INFO, "generate physical plan end", K(phy_plan->get_plan_id()));
                 if (OUTPUT_PHY_PLAN) {
                     SQL_PC_LOG(INFO, "ouput phy plan", K(*phy_plan));
                 }
                 time_6 = TestSQL::get_usec();
                 SQL_PC_LOG(INFO, "add plan to plan cache");
-                ret = plan_cache->add_plan(sql_id,
+                ret = plan_cache.add_plan(sql_id,
                                            ObString::make_string(query),
                                            sys_var_in_pc,
                                            phy_plan,
@@ -271,7 +215,7 @@ void do_operation(const char *query, uint64_t tenant_id)
                 } else {
                   SQL_PC_LOG(INFO, "Successed to add plan to ObPlanCache");
                   time_7 = TestSQL::get_usec();
-                  if (OB_SUCCESS != plan_cache->add_plan_stat(key.db_id_, key.mode_,
+                  if (OB_SUCCESS != plan_cache.add_plan_stat(key.db_id_, key.mode_,
                                                         sql_id, phy_plan)) {
                     SQL_PC_LOG(WARN, "Failed to add plancache stat");
                   }//add plan stat
@@ -311,8 +255,6 @@ void do_operation(const char *query, uint64_t tenant_id)
         ret =  OB_INVALID_ARGUMENT;
         SQL_PC_LOG(WARN, "schema_manager or plan_cache is NULL", K(ret));
       }
-      plan_cache->dec_ref_count();
-      SQL_PC_LOG(INFO, "after dec plan cache  ref count",K(plan_cache->get_ref_count()));
     } else {
       SQL_PC_LOG(WARN, "fail to get or create plan cache");
     }
@@ -381,13 +323,15 @@ void test_plan_cache(obsys::CThread *thread, int thread_num, std::ostream &of)
     }
     //cache evict
     if (loop_count % CACHE_EVICT_LOOP_FREQUENCY == 0) {
-      ObPlanCache *plan_cache = plan_cache_mgr->get_plan_cache(tenant_id);
-      if (NULL != plan_cache) {
+
+      ObPlanCache plan_cache;
+      if (OB_FAIL(plan_cache.init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+        LOG_WARN("failed to init request manager", K(ret));
+      } else {
         int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = plan_cache->cache_evict())) {
+        if (OB_SUCCESS != (tmp_ret = plan_cache.cache_evict())) {
           SQL_PC_LOG(ERROR, "plan cache evict failed, please check");
         }
-        plan_cache->dec_ref_count();
       }
     }
   }

@@ -50,6 +50,9 @@ ObPxOrderedCoordOp::ObPxOrderedCoordOp(ObExecContext &exec_ctx, const ObOpSpec &
     sample_piece_msg_proc_(exec_ctx, msg_proc_),
     rollup_key_piece_msg_proc_(exec_ctx, msg_proc_),
     rd_wf_piece_msg_proc_(exec_ctx, msg_proc_),
+    init_channel_piece_msg_proc_(exec_ctx, msg_proc_),
+    reporting_wf_piece_msg_proc_(exec_ctx, msg_proc_),
+    opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
     readers_(NULL),
     receive_order_(),
     reader_cnt_(0),
@@ -110,6 +113,9 @@ int ObPxOrderedCoordOp::setup_loop_proc()
       .register_processor(sample_piece_msg_proc_)
       .register_processor(rollup_key_piece_msg_proc_)
       .register_processor(rd_wf_piece_msg_proc_)
+      .register_processor(init_channel_piece_msg_proc_)
+      .register_processor(reporting_wf_piece_msg_proc_)
+      .register_processor(opt_stats_gather_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   return ret;
 }
@@ -133,7 +139,15 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     // 为了实现 orderly receive， TASKs-QC 通道需要逐个加入到 loop 中
     int64_t timeout_us = 0;
     int64_t nth_channel = OB_INVALID_INDEX_INT64;
-    clear_evaluated_flag();
+    // Note:
+    //   inner_get_next_row is invoked in two pathes (batch vs
+    //   non-batch). The eval flag should be cleared with seperated flags
+    //   under each invoke path (batch vs non-batch). Therefore call the
+    //   overriding API do_clear_datum_eval_flag() to replace
+    //   clear_evaluated_flag
+    // TODO qubin.qb: Implement seperated inner_get_next_batch to
+    // isolate them
+    do_clear_datum_eval_flag();
     clear_dynamic_const_parent_flag();
     if (channel_idx_ < task_ch_set_.count()) {
       int64_t idx = channel_idx_;
@@ -204,6 +218,9 @@ int ObPxOrderedCoordOp::inner_get_next_row()
         case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
         case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
         case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
+        case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
           // 这几种消息都在 process 回调函数里处理了
           break;
         default:
@@ -238,7 +255,7 @@ int ObPxOrderedCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg
   wait_next_msg = true;
   LOG_TRACE("Begin next_row");
   metric_.mark_interval_start();
-  ret = reader.get_next_row(MY_SPEC.child_exprs_, eval_ctx_);
+  ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
   metric_.mark_interval_end(&time_recorder_);
   if (OB_ITER_END == ret) {
     finish_ch_cnt_++;

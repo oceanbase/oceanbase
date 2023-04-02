@@ -14,8 +14,10 @@
 #include "ob_storage_ha_src_provider.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase {
+using namespace share;
 namespace storage {
 
 ObStorageHASrcProvider::ObStorageHASrcProvider()
@@ -48,7 +50,7 @@ int ObStorageHASrcProvider::init(const uint64_t tenant_id, const ObMigrationOpTy
   return ret;
 }
 
-int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const int64_t local_clog_checkpoint_ts,
+int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const SCN &local_clog_checkpoint_scn,
     ObStorageHASrcInfo &src_info)
 {
   int ret = OB_SUCCESS;
@@ -64,8 +66,8 @@ int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const int6
     LOG_WARN("failed to get ls leader", K(ret), K_(tenant_id), K(ls_id));
   } else if (OB_FAIL(fetch_ls_member_list_(tenant_id_, ls_id, leader_addr, addr_list))) {
     LOG_WARN("failed to fetch ls leader member list", K(ret), K_(tenant_id), K(ls_id), K(leader_addr));
-  } else if (OB_FAIL(inner_choose_ob_src_(tenant_id_, ls_id, local_clog_checkpoint_ts, addr_list, chosen_src_addr))) {
-    LOG_WARN("failed to inner choose ob src", K(ret), K_(tenant_id), K(ls_id), K(local_clog_checkpoint_ts), K(addr_list));
+  } else if (OB_FAIL(inner_choose_ob_src_(tenant_id_, ls_id, local_clog_checkpoint_scn, addr_list, chosen_src_addr))) {
+    LOG_WARN("failed to inner choose ob src", K(ret), K_(tenant_id), K(ls_id), K(local_clog_checkpoint_scn), K(addr_list));
   } else {
     src_info.src_addr_ = chosen_src_addr;
     src_info.cluster_id_ = GCONF.cluster_id;
@@ -181,24 +183,31 @@ int ObStorageHASrcProvider::fetch_ls_meta_info_(const uint64_t tenant_id, const 
 }
 
 int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const int64_t local_clog_checkpoint_ts, const common::ObIArray<common::ObAddr> &addr_list,
+    const SCN &local_clog_checkpoint_scn, const common::ObIArray<common::ObAddr> &addr_list,
     common::ObAddr &choosen_src_addr)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t choose_member_idx = -1;
-  int64_t max_clog_checkpoint_ts = -1;
+  SCN max_clog_checkpoint_scn;
   for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
     const common::ObAddr &addr = addr_list.at(i);
     obrpc::ObFetchLSMetaInfoResp ls_info;
     ObMigrationStatus migration_status;
     share::ObLSRestoreStatus restore_status;
-    if (OB_SUCCESS != (tmp_ret = fetch_ls_meta_info_(tenant_id, ls_id, addr, ls_info))) {
-      LOG_WARN("failed to fetch ls meta info", K(ret), K(tenant_id), K(ls_id), K(addr));
+    if (OB_TMP_FAIL(fetch_ls_meta_info_(tenant_id, ls_id, addr, ls_info))) {
+      LOG_WARN("failed to fetch ls meta info", K(tmp_ret), K(tenant_id), K(ls_id), K(addr));
+    } else if (OB_FAIL(ObStorageHAUtils::check_server_version(ls_info.version_))) {
+      if (OB_MIGRATE_NOT_COMPATIBLE == ret) {
+        LOG_INFO("do not choose this src", K(ret), K(tenant_id), K(ls_id), K(ls_info));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to check version", K(ret), K(tenant_id), K(ls_id), K(ls_info));
+      }
     } else if (!ObReplicaTypeCheck::is_full_replica(ls_info.ls_meta_package_.ls_meta_.replica_type_)) {
       LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(ls_info));
-    } else if (local_clog_checkpoint_ts > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_ts()) {
-      LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(local_clog_checkpoint_ts), K(ls_info));
+    } else if (local_clog_checkpoint_scn > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {
+      LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(local_clog_checkpoint_scn), K(ls_info));
     } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), K(ls_info));
     } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
@@ -210,8 +219,8 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
       LOG_INFO("some ls replica restore failed, can not migrate", K(ls_info));
       break;
     } else {
-      if (ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_ts() > max_clog_checkpoint_ts) {
-        max_clog_checkpoint_ts = ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_ts();
+      if (ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn() > max_clog_checkpoint_scn) {
+        max_clog_checkpoint_scn = ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn();
         choose_member_idx = i;
       }
     }

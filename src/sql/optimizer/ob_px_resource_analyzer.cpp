@@ -132,7 +132,7 @@ int ObPxResourceAnalyzer::analyze(
   // 2. 然后模拟调度，每调度一对 dfo，就将 child 设置为 done，然后统计当前时刻多少个未完成 dfo
   // 3. 如此继续调度，直至所有 dfo 调度完成
   //
-  // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/dlmg3w
+  // ref:
   ObArray<PxInfo> px_trees;
   if (OB_FAIL(convert_log_plan_to_nested_px_tree(px_trees, root_op))) {
     LOG_WARN("fail convert log plan to nested px tree", K(ret));
@@ -593,7 +593,10 @@ int ObPxResourceAnalyzer::schedule_dfo(
     const int64_t group = 1;
     groups += group;
     ObHashSet<ObAddr> &addr_set = dfo.location_addr_;
-    if (OB_FAIL(update_parallel_map(current_thread_map, addr_set, dfo.get_dop()))) {
+    // we assume that should allocate same thread count for each sqc in the dfo.
+    // this may not true. but we can't decide the real count for each sqc. just let it be for now
+    const int64_t dop_per_addr = 0 == addr_set.size() ? dfo.get_dop() : (dfo.get_dop() + addr_set.size() - 1) / addr_set.size();
+    if (OB_FAIL(update_parallel_map(current_thread_map, addr_set, dop_per_addr))) {
       LOG_WARN("increase current thread map failed", K(ret));
     } else if (OB_FAIL(update_parallel_map(current_group_map, addr_set, group))) {
       LOG_WARN("increase current group map failed", K(ret));
@@ -616,7 +619,8 @@ int ObPxResourceAnalyzer::finish_dfo(
     const int64_t group = 1;
     groups -= group;
     ObHashSet<ObAddr> &addr_set = dfo.location_addr_;
-    if (OB_FAIL(update_parallel_map(current_thread_map, addr_set, -dfo.get_dop()))) {
+    const int64_t dop_per_addr = 0 == addr_set.size() ? dfo.get_dop() : (dfo.get_dop() + addr_set.size() - 1) / addr_set.size();
+    if (OB_FAIL(update_parallel_map(current_thread_map, addr_set, -dop_per_addr))) {
       LOG_WARN("decrease current thread map failed", K(ret));
     } else if (OB_FAIL(update_parallel_map(current_group_map, addr_set, -group))) {
       LOG_WARN("decrease current group map failed", K(ret));

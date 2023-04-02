@@ -49,7 +49,7 @@ void ObPhyOperatorTypeDescSet::set_type_str(ObPhyOperatorType type, const char *
   if (OB_LIKELY(type >= PHY_INVALID && type < PHY_END)) {
     set_[type].name_ = type_str;
   } else {
-    LOG_WARN("invalid phy operator", K(type));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid phy operator", K(type));
   }
 }
 

@@ -20,6 +20,7 @@
 #include "share/ob_define.h"
 #include "sql/session/ob_session_val_map.h"
 #include "pl/ob_pl.h"
+#include "share/ob_lob_access_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -28,7 +29,7 @@ namespace oceanbase
 namespace sql
 {
 
-#define SET_OBJ_VAR(expect_type, integer_val, str_val) do {             \
+#define SET_OBJ_VAR(expect_type, integer_val, str_val, has_lob_header) do {             \
     ObObj obj;                                         \
     if (ObTinyIntType == expect_type) {                \
       obj.set_tinyint(integer_val);                    \
@@ -79,10 +80,21 @@ namespace sql
                ObMediumTextType == expect_type ||      \
                ObLongTextType == expect_type ||        \
                ObJsonType == expect_type) {            \
-      obj.set_string(expect_type, str_val);            \
-      obj.set_collation_level(CS_LEVEL_COERCIBLE);     \
-      obj.set_collation_type(collation_type);          \
-      obj.meta_.set_inrow();                           \
+      ObTextStringResult lob(expect_type, has_lob_header, &ctx.get_allocator());         \
+      if (OB_FAIL(lob.init(str_val.length()))) {                         \
+        LOG_WARN("fail to init lob", K(ret), K(lob));                    \
+      } else if (OB_FAIL(lob.append(str_val))) {                         \
+        LOG_WARN("fail to append str", K(ret), K(lob), K(str_val));      \
+      } else {                                                           \
+        ObString lob_str;                                                \
+        lob.get_result_buffer(lob_str);                                  \
+        obj.set_string(expect_type, lob_str);                            \
+        obj.set_collation_level(CS_LEVEL_COERCIBLE);                     \
+        obj.set_collation_type(collation_type);                          \
+        if (lob.has_lob_header()) {                                      \
+          obj.set_has_lob_header();                                      \
+        }                                                                \
+      }                                                                  \
     } else {                                           \
       ret = OB_NOT_SUPPORTED;                          \
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not supported pl var type");  \
@@ -190,29 +202,34 @@ int ObGetDiagnosticsExecutor::assign_condition_val(ObExecContext &ctx, ObGetDiag
           CK (nullptr != pl_data_type.get_data_type());
           if (OB_SUCC(ret)) {
             ObObjType expect_type = pl_data_type.get_data_type()->get_obj_type();
+            bool has_lob_header = pl_data_type.get_data_type()->get_meta_type().has_lob_header();
             switch (info_type) {
               case MYSQL_ERRNO_TYPE:
                 {
                   int64_t errnum = ob_errpkt_errno(err_ret, lib::is_oracle_mode());
                   sprintf(str, "%ld", errnum);
-                  SET_OBJ_VAR(expect_type, errnum, str);
+                  SET_OBJ_VAR(expect_type, errnum, ObString(str), has_lob_header);
                 }
                 break;
               case MESSAGE_TEXT_TYPE:
                 {
-                  SET_OBJ_VAR(expect_type, (int64_t)0, err_msg_c);
+                  SET_OBJ_VAR(expect_type, (int64_t)0, err_msg_c, has_lob_header);
                 }
                 break;
               case RETURNED_SQLSTATE_TYPE:
                 {
                   ObString sqlstate(ob_sqlstate(err_ret));
-                  SET_OBJ_VAR(expect_type, (int64_t)0, err_ret > 0 ? sql_state_c : sqlstate);
+                  if (err_ret > 0) {
+                    SET_OBJ_VAR(expect_type, (int64_t)0, sql_state_c, has_lob_header);
+                  } else {
+                    SET_OBJ_VAR(expect_type, (int64_t)0, sqlstate, has_lob_header);
+                  }
                 }
                 break;
               case CLASS_ORIGIN_TYPE:
               case SUBCLASS_ORIGIN_TYPE:
                 {
-                  SET_OBJ_VAR(expect_type, (int64_t)0, "ISO 9075");
+                  SET_OBJ_VAR(expect_type, (int64_t)0, ObString("ISO 9075"), has_lob_header);
                 }
                 break;
               case COLUMN_NAME_TYPE:
@@ -403,14 +420,14 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
       LOG_TRACE("condition num is invalid");
       LOG_USER_WARN(OB_ERR_INVALID_CONDITION_NUMBER);
     } else {
+      int err_ret;
+      ObString err_msg, err_msg_c, sqlstate, sqlstate_c;
       ObSqlString query_virtual;
       if (OB_FAIL(query_virtual.assign_fmt(
         "select message, ori_code, sql_state from %s.%s limit %ld, 1", 
         OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_WARNING_TNAME, restored_arg - 1))) {
         LOG_WARN("assign fmt failed", K(ret));
       } else {
-        int err_ret;
-        ObString err_msg, err_msg_c, sqlstate, sqlstate_c;
         SMART_VAR(ObISQLClient::ReadResult, res) {
           common::sqlclient::ObMySQLResult *result = NULL;
           if (OB_FAIL(conn->execute_read(tenant_id, query_virtual.ptr(), res))) {
@@ -423,7 +440,7 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
             EXTRACT_INT_FIELD_MYSQL(*result, "ori_code", err_ret, int);
             EXTRACT_VARCHAR_FIELD_MYSQL(*result, "sql_state", sqlstate);
             if (OB_FAIL(ret)) {
-	          } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), err_msg, err_msg_c, true))) {
+            } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), err_msg, err_msg_c, true))) {
               //when using ptr(), char *'s end should be '\0'
               LOG_WARN("ob write string failed", K(ret));
             } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), sqlstate, sqlstate_c, true))) { 
@@ -432,8 +449,8 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
             }
           }
         }
-        OZ (assign_condition_val(ctx, stmt, session_info, conn, err_ret, err_msg_c, sqlstate_c));
       }
+      OZ (assign_condition_val(ctx, stmt, session_info, conn, err_ret, err_msg_c, sqlstate_c));
     }
   } else if (stmt.get_diagnostics_type() == DiagnosticsType::GET_STACKED_COND) {
     int64_t restored_arg = 0;
@@ -547,12 +564,13 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
             CK (nullptr != pl_data_type.get_data_type());
             if (OB_SUCC(ret)) {
               ObObjType expect_type = pl_data_type.get_data_type()->get_obj_type();
+              bool has_lob_header = pl_data_type.get_data_type()->get_meta_type().has_lob_header();
               if (val == "NUMBER") {
                 sprintf(str, "%ld", number);
-                SET_OBJ_VAR(expect_type, number, str);
+                SET_OBJ_VAR(expect_type, number, ObString(str), has_lob_header);
               } else if (val == "ROW_COUNT") {
                 sprintf(str, "%ld", old_affected_rows);
-                SET_OBJ_VAR(expect_type, old_affected_rows, str);
+                SET_OBJ_VAR(expect_type, old_affected_rows, ObString(str), has_lob_header);
               } else {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected", K(val), K(ret));

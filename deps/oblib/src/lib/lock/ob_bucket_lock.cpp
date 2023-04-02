@@ -326,7 +326,7 @@ ObMultiBucketLockGuard::~ObMultiBucketLockGuard()
   int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < latch_array_.count(); ++i) {
     if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = lock_.unlock_latch_idx(latch_array_.at(i))))) {
-      COMMON_LOG(ERROR, "Fail to unlock bucket, ", K(tmp_ret), "latch_idx", latch_array_.at(i));
+      COMMON_LOG_RET(ERROR, tmp_ret, "Fail to unlock bucket, ", K(tmp_ret), "latch_idx", latch_array_.at(i));
     }
   }
 };

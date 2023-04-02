@@ -24,34 +24,53 @@ namespace palf
 {
 class PalfHandleImpl;
 class LogMeta;
-class PalfEnvImpl;
+class IPalfEnvImpl;
 
 enum class LogIOTaskType
 {
   FLUSH_LOG_TYPE = 1,
   FLUSH_META_TYPE = 2,
   TRUNCATE_PREFIX_TYPE = 3,
-  TRUNCATE_LOG_TYPE = 4
+  TRUNCATE_LOG_TYPE = 4,
+	FLASHBACK_LOG_TYPE = 5
 };
+
+class LogIOTask;
+
+int push_task_into_cb_thread_pool(const int64_t tg_id, LogIOTask *io_task);
 
 class LogIOTask
 {
 public:
-  LogIOTask() : palf_epoch_(OB_INVALID_TIMESTAMP) {}
-  virtual ~LogIOTask() {}
-
+	LogIOTask(const int64_t palf_id, const int64_t palf_epoch);
+  virtual ~LogIOTask();
+	void reset();
 public:
-  virtual int do_task(int tg_id, PalfEnvImpl *palf_env_impl) = 0;
-  virtual int after_consume(PalfEnvImpl *palf_env_impl) = 0;
-  virtual LogIOTaskType get_io_task_type() const = 0;
-  virtual void free_this(PalfEnvImpl *palf_env_impl) = 0;
+  int do_task(int tg_id, IPalfEnvImpl *palf_env_impl);
+  int after_consume(IPalfEnvImpl *palf_env_impl);
+  LogIOTaskType get_io_task_type();
+  void free_this(IPalfEnvImpl *palf_env_impl);
   int64_t get_palf_id() const { return palf_id_; }
   int64_t get_palf_epoch() const { return palf_epoch_; }
-  VIRTUAL_TO_STRING_KV("LogIOTask", "dummy");
+	VIRTUAL_TO_STRING_KV("BaseClass", "LogIOTask",
+			"palf_id", palf_id_,
+			"palf_epoch", palf_epoch_,
+			"create_task_ts", init_task_ts_,
+			"push_cb_into_cb_pool_ts", push_cb_into_cb_pool_ts_);
 
 protected:
-  int64_t palf_epoch_;
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) = 0;
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) = 0;
+  virtual LogIOTaskType get_io_task_type_() const = 0;
+  virtual void free_this_(IPalfEnvImpl *palf_env_impl) = 0;
+	int push_task_into_cb_thread_pool_(const int64_t tg_id, LogIOTask *io_task);
+
+protected:
   int64_t palf_id_;
+  int64_t palf_epoch_;
+	int64_t init_task_ts_;
+	int64_t push_cb_into_cb_pool_ts_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(LogIOTask);
 };
@@ -59,22 +78,20 @@ private:
 class LogIOFlushLogTask : public LogIOTask {
   friend class BatchLogIOFlushLogTask;
 public:
-  LogIOFlushLogTask();
+  LogIOFlushLogTask(const int64_t palf_id,const int64_t palf_epoch);
   ~LogIOFlushLogTask() override;
 
 public:
   int init(const FlushLogCbCtx &flush_log_cb_ctx,
-           const LogWriteBuf &write_buf,
-           const int64_t palf_id,
-           const int64_t palf_epoch);
+           const LogWriteBuf &write_buf);
   void destroy();
   // IO thread will call this function to flush log
-  int do_task(int tg_id, PalfEnvImpl *palf_env_impl) override final;
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
   // IO thread will call this function to submit async task
-  int after_consume(PalfEnvImpl *palf_env_impl) override final;
-  LogIOTaskType get_io_task_type() const override final { return LogIOTaskType::FLUSH_LOG_TYPE; }
-  void free_this(PalfEnvImpl *palf_env_impl) override final;
-  TO_STRING_KV(K_(write_buf), K_(flush_log_cb_ctx), K_(is_inited), K_(palf_epoch));
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLUSH_LOG_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(write_buf), K_(flush_log_cb_ctx));
 
 private:
   FlushLogCbCtx flush_log_cb_ctx_;
@@ -84,19 +101,18 @@ private:
 
 class LogIOTruncateLogTask : public LogIOTask {
 public:
-  LogIOTruncateLogTask();
+  LogIOTruncateLogTask(const int64_t palf_id,const int64_t palf_epoch);
   ~LogIOTruncateLogTask() override;
 
-public:
-  int init(const TruncateLogCbCtx &truncate_log_cb_ctx,
-           const int64_t palf_id,
-           const int64_t palf_epoch);
+  int init(const TruncateLogCbCtx &truncate_log_cb_ctx);
   void destroy();
-  int do_task(int tg_id, PalfEnvImpl *palf_env_impl) override final;
-  int after_consume(PalfEnvImpl *palf_env_impl) override final;
-  LogIOTaskType get_io_task_type() const override final { return LogIOTaskType::TRUNCATE_LOG_TYPE; }
-  void free_this(PalfEnvImpl *palf_env_impl) override final;
-  TO_STRING_KV(K_(truncate_log_cb_ctx), K_(palf_id), K_(palf_epoch));
+
+  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(truncate_log_cb_ctx));
+private:
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::TRUNCATE_LOG_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
 private:
   TruncateLogCbCtx truncate_log_cb_ctx_;
   bool is_inited_;
@@ -104,45 +120,43 @@ private:
 
 class LogIOFlushMetaTask : public LogIOTask {
 public:
-  LogIOFlushMetaTask();
+  LogIOFlushMetaTask(const int64_t palf_id,const int64_t palf_epoch);
   ~LogIOFlushMetaTask() override;
 
 public:
   int init(const FlushMetaCbCtx &flush_cb_ctx,
            const char *buf,
-           const int64_t buf_len,
-           const int64_t palf_id,
-           const int64_t palf_epoch);
+           const int64_t buf_len);
   void destroy();
-  int do_task(int tg_id, PalfEnvImpl *palf_env_impl) override final;
-  int after_consume(PalfEnvImpl *palf_env_impl) override final;
-  LogIOTaskType get_io_task_type() const override final { return LogIOTaskType::FLUSH_META_TYPE; }
-  void free_this(PalfEnvImpl *palf_env_impl) override final;
-  TO_STRING_KV(K_(flush_meta_cb_ctx), K_(palf_id), K_(is_inited), K_(palf_epoch));
+  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(flush_meta_cb_ctx));
+
+private:
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLUSH_META_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
 
 private:
   FlushMetaCbCtx flush_meta_cb_ctx_;
   const char *buf_;
   int64_t buf_len_;
-  int64_t palf_id_;
-  int64_t palf_epoch_;
   bool is_inited_;
 };
 
 class LogIOTruncatePrefixBlocksTask : public LogIOTask {
 public:
-  LogIOTruncatePrefixBlocksTask();
+  LogIOTruncatePrefixBlocksTask(const int64_t palf_id,const int64_t palf_epoch);
   ~LogIOTruncatePrefixBlocksTask();
-public:
-  int init(const TruncatePrefixBlocksCbCtx& truncate_prefix_blocks_ctx,
-           const int64_t palf_id,
-           const int64_t palf_epoch);
+
+  int init(const TruncatePrefixBlocksCbCtx& truncate_prefix_blocks_ctx);
   void destroy();
-  int do_task(int tg_id, PalfEnvImpl *palf_env_impl) override final;
-  int after_consume(PalfEnvImpl *palf_env_impl) override final;
-  LogIOTaskType get_io_task_type() const override final { return LogIOTaskType::TRUNCATE_PREFIX_TYPE; }
-  void free_this(PalfEnvImpl *palf_env_impl) override final;
-  TO_STRING_KV(K_(truncate_prefix_blocks_ctx), K_(palf_id), K_(palf_epoch));
+
+  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(truncate_prefix_blocks_ctx));
+private:
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::TRUNCATE_PREFIX_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
 private:
   TruncatePrefixBlocksCbCtx truncate_prefix_blocks_ctx_;
   bool is_inited_;
@@ -159,19 +173,39 @@ public:
   void reuse();
   void destroy();
   int push_back(LogIOFlushLogTask *task);
-  int do_task(int tg_id, PalfEnvImpl *palf_env_impl);
+  int do_task(int tg_id, IPalfEnvImpl *palf_env_impl);
   int64_t get_palf_id() const { return palf_id_; }
   int64_t get_count() const { return io_task_array_.count(); }
   TO_STRING_KV(K_(palf_id), "count", io_task_array_.count(), K_(lsn_array));
 private:
-  int push_flush_cb_to_thread_pool_(int tg_id, PalfEnvImpl *palf_env_impl);
-  int do_task_(int tg_id, PalfEnvImpl *palf_env_impl);
-  void clear_memory_(PalfEnvImpl *palf_env_impl);
+  int push_flush_cb_to_thread_pool_(int tg_id, IPalfEnvImpl *palf_env_impl);
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl);
+  void clear_memory_(IPalfEnvImpl *palf_env_impl);
 private:
   BatchIOTaskArray io_task_array_;
   LogWriteBufArray log_write_buf_array_;
-  LogTsArray log_ts_array_;
+  SCNArray scn_array_;
   LSNArray lsn_array_;
+  int64_t palf_id_;
+  bool is_inited_;
+};
+
+class LogIOFlashbackTask : public LogIOTask {
+public:
+  LogIOFlashbackTask(const int64_t palf_id,const int64_t palf_epoch);
+  ~LogIOFlashbackTask();
+public:
+  int init(const FlashbackCbCtx & flashback_ctx,
+           const int64_t palf_id);
+  void destroy();
+  TO_STRING_KV(K_(palf_id), K_(flashback_ctx), K_(is_inited));
+private:
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLASHBACK_LOG_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+private:
+  FlashbackCbCtx flashback_ctx_;
   int64_t palf_id_;
   bool is_inited_;
 };

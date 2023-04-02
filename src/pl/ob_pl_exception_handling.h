@@ -65,6 +65,7 @@ public:
   static int eh_convert_exception(bool oracle_mode, int oberr, ObPLConditionType *type, int64_t *error_code, const char **sql_state, int64_t *str_len);
   static ObPLConditionType eh_classify_exception(const char *sql_state);
 
+
 public:
   static void eh_debug_int64(const char *name_ptr, int64_t name_len, int64_t object);
 

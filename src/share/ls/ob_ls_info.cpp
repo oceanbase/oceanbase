@@ -37,9 +37,31 @@ const char *ob_replica_status_str(const ObReplicaStatus status)
   if (status >= 0 && status < REPLICA_STATUS_MAX) {
     str = replica_display_status_strs[status];
   } else {
-    LOG_WARN("invalid replica status", K(status));
+    LOG_WARN_RET(OB_INVALID_ERROR, "invalid replica status", K(status));
   }
   return str;
+}
+
+int get_replica_status(const ObString &status_str, ObReplicaStatus &status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(status_str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(status_str));
+  } else {
+    status = REPLICA_STATUS_MAX;
+    for (int64_t i = 0; i < ARRAYSIZEOF(replica_display_status_strs); ++i) {
+      if (0 == status_str.case_compare(replica_display_status_strs[i])) {
+        status = static_cast<ObReplicaStatus>(i);
+        break;
+      }
+    }
+    if (REPLICA_STATUS_MAX == status) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("display status str not found", KR(ret), K(status_str));
+    }
+  }
+  return ret;
 }
 
 int get_replica_status(const char* str, ObReplicaStatus &status)
@@ -47,7 +69,7 @@ int get_replica_status(const char* str, ObReplicaStatus &status)
   int ret = OB_SUCCESS;
   if (NULL == str) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(str));
+    LOG_WARN("invalid argument", KR(ret), KP(str));
   } else {
     status = REPLICA_STATUS_MAX;
     for (int64_t i = 0; i < ARRAYSIZEOF(replica_display_status_strs); ++i) {
@@ -58,7 +80,7 @@ int get_replica_status(const char* str, ObReplicaStatus &status)
     }
     if (REPLICA_STATUS_MAX == status) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("display status str not found", K(ret), K(str));
+      LOG_WARN("display status str not found", KR(ret), K(str));
     }
   }
   return ret;
@@ -228,7 +250,6 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && role_ == other.role_
       && member_list_is_equal(member_list_, other.member_list_)
       && replica_type_ == other.replica_type_
-      && proposal_id_ == other.proposal_id_
       && replica_status_ == other.replica_status_
       && restore_status_ == other.restore_status_
       && property_ == other.property_
@@ -236,6 +257,11 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && zone_ == other.zone_
       && paxos_replica_number_ == other.paxos_replica_number_) {
     is_equal = true;
+  }
+  // only proposal_id of leader is meaningful
+  // proposal_id of follower will be set to 0 in reporting process
+  if (is_equal && ObRole::LEADER == role_) {
+    is_equal = (proposal_id_ == other.proposal_id_);
   }
   return is_equal;
 }
@@ -487,7 +513,7 @@ bool ObLSInfo::is_strong_leader(int64_t index) const
   } else {
     FOREACH_CNT(r, replicas_) {
       if (OB_ISNULL(r)) {
-        LOG_WARN("get invalie replica", K_(replicas), K(r));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "get invalie replica", K_(replicas), K(r));
       } else if (r->get_proposal_id() > replicas_.at(index).get_proposal_id()) {
         is_leader = false;
         break;
@@ -608,10 +634,47 @@ int ObLSInfo::assign(const ObLSInfo &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
+    reset();
     tenant_id_ = other.get_tenant_id();
     ls_id_ = other.get_ls_id();
     if (OB_FAIL(copy_assign(replicas_, other.replicas_))) {
       LOG_WARN("failed to copy replicas_", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLSInfo::composite_with(const ObLSInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(
+      tenant_id_ != other.get_tenant_id()
+      || ls_id_ != other.get_ls_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id or ls_id not matched", KR(ret), KPC(this), K(other));
+  } else {
+    ObLSReplica tmp_replica;
+    int64_t idx = OB_INVALID_INDEX; // not used
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.get_replicas().count(); i++) {
+      const ObLSReplica &ls_replica = other.get_replicas().at(i);
+      tmp_ret = find_idx_(ls_replica, idx);
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        // ls replica exist or warn, do nothing
+        ret = tmp_ret;
+      } else {
+        tmp_replica.reset();
+        if (OB_FAIL(tmp_replica.assign(ls_replica))) {
+          LOG_WARN("fail to assign replica", KR(ret), K(ls_replica));
+        } else if (FALSE_IT(tmp_replica.update_to_follower_role())) {
+        } else if (OB_FAIL(add_replica(tmp_replica))) {
+          LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
+        }
+      }
+    } // end for
+
+    if (FAILEDx(update_replica_status())) {
+      LOG_WARN("fail to update replica status", KR(ret), KPC(this));
     }
   }
   return ret;
@@ -650,7 +713,9 @@ int ObLSInfo::update_replica_status()
       // 2 non_paxos replicas (READONLY),NORMAL all the time
       // 3 if non_paxos replicas are deleted by partition service, status in meta table is set to REPLICA_STATUS_OFFLINE,
       //    then set replica_status to REPLICA_STATUS_OFFLINE
-      if (in_leader_member_list) {
+      if (REPLICA_STATUS_OFFLINE == r->get_replica_status()) {
+        // do nothing
+      } else if (in_leader_member_list) {
         r->set_replica_status(REPLICA_STATUS_NORMAL);
       } else if (!ObReplicaTypeCheck::is_replica_type_valid(r->get_replica_type())) {
         // invalid replicas

@@ -30,12 +30,14 @@
 #include "lib/utility/serialization.h"                  // serialization
 #include "lib/charset/ob_charset.h"                     // ObCharset
 #include "lib/time/ob_time_utility.h"                   // ObTimeUtility
+#include "lib/file/file_directory_utils.h"              // FileDirectoryUtils
 #include "share/schema/ob_table_schema.h"               // ObTableSchema
 #include "share/schema/ob_column_schema.h"              // ObColumnSchemaV2
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_get_compat_mode.h"
 #include "rpc/obmysql/ob_mysql_global.h"                // MYSQL_TYPE_*
 #include "ob_log_config.h"
+#include "ob_log_schema_cache_info.h"                   // ColumnSchemaInfo
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -598,6 +600,11 @@ bool is_json_type(const int ctype)
   return (oceanbase::obmysql::MYSQL_TYPE_JSON == ctype);
 }
 
+bool is_geometry_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_GEOMETRY);
+}
+
 double get_delay_sec(const int64_t tstamp_ns)
 {
   int64_t delta = (ObTimeUtility::current_time() - tstamp_ns / NS_CONVERSION);
@@ -837,7 +844,7 @@ bool ObLogKVCollection::is_valid() const
 {
   bool valid = true;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(kv_delimiter_) || OB_ISNULL(pair_delimiter_)) {
-    LOG_ERROR("invalid argument", K_(inited), K_(kv_delimiter), K_(pair_delimiter));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K_(inited), K_(kv_delimiter), K_(pair_delimiter));
     valid = false;
   } else {
     int64_t idx = 0;
@@ -1202,7 +1209,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
       // Retry to get it again
       ret = OB_SUCCESS;
       // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, usleep for a short time
-      ob_usleep(100L);
+      ob_usleep(100);
     }
 
     int64_t left_time = end_time - ObTimeUtility::current_time();
@@ -1309,10 +1316,12 @@ char *lbt_oblog()
 
   for (int idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
     char *res_idx = res[idx];
+    int tmp_ret = OB_SUCCESS;
 
     if (NULL != res_idx) {
-      if (OB_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        LOG_ERROR("databuff_printf fail", KR(ret), K(buf), K(pos), K(LBT_BUFFER_LENGTH));
+      if (OB_TMP_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
+        LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
+            K(LBT_BUFFER_LENGTH));
       }
     }
   }
@@ -1547,6 +1556,91 @@ int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr)
   }
 
   LOG_DEBUG("sort_and_unique_missing_log_lsn", KR(ret), K(duplicated_log_idx_arr), K(lsn_arr));
+
+  return ret;
+}
+
+int write_to_file(const char *file_path, const char *buf, const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  char *p = nullptr; // tmp file path
+  char tmp_file[MAX_PATH_SIZE] = "";
+
+  if (OB_ISNULL(file_path) || OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), KP(file_path), KP(buf), K(buf_len));
+  } else if (OB_NOT_NULL(p = strrchr(const_cast<char*>(file_path), '/'))) {
+    // Create the corresponding directory
+    char dir_buffer[OB_MAX_FILE_NAME_LENGTH];
+    snprintf(dir_buffer, OB_MAX_FILE_NAME_LENGTH, "%.*s", (int)(p - file_path), file_path);
+    if (OB_FAIL(common::FileDirectoryUtils::create_full_path(dir_buffer))) {
+      LOG_ERROR("create_full_path for timezone_info.conf failed", KR(ret), KCSTRING(dir_buffer), KCSTRING(p));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    snprintf(tmp_file, MAX_PATH_SIZE, "%s.tmp", file_path);
+    FILE *fp = NULL;
+    int64_t write_len = 0;
+
+    if (OB_ISNULL(fp = fopen(tmp_file, "w+"))) {
+      ret = OB_IO_ERROR;
+      LOG_ERROR("open tmp_file failed", KR(ret), KERRMSG, KCSTRING(file_path), KCSTRING(tmp_file));
+    } else if (OB_UNLIKELY(0 >= (write_len = fwrite(buf, 1, buf_len, fp)))) {
+      ret = OB_IO_ERROR;
+      LOG_ERROR("write to file failed", KR(ret), K(write_len), K(buf_len), KERRMSG);
+    }
+
+    if (OB_NOT_NULL(fp)) {
+      fclose(fp);
+      fp = NULL;
+    }
+
+    if (OB_SUCC(ret)) {
+      // copy tmp_file to file by user when arbserver exit
+      if (0 != ::rename(tmp_file, file_path)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("fail to move tmp config file", KERRMSG, K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int read_from_file(const char *file_path, char *buf, const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  FILE *fp = nullptr;
+
+  if (OB_ISNULL(file_path) || OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), KP(file_path), KP(buf), K(buf_len));
+  } else if (OB_ISNULL(fp = fopen(file_path, "rb"))) {
+    ret = OB_IO_ERROR;
+    LOG_ERROR("can't open file", KR(ret), KCSTRING(file_path));
+  } else {
+    int64_t read_len = fread(buf, 1, buf_len - 1, fp);
+
+    if (0 != ferror(fp)) {
+      ret = OB_IO_ERROR;
+      LOG_ERROR("read file error!", KR(ret), KCSTRING(file_path), KERRNOMSG(errno));
+    } else if (0 == feof(fp)) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_ERROR("config file is too long!", KR(ret), KCSTRING(file_path), K(buf_len));
+    } else if (read_len <= 0) {
+      ret = OB_EMPTY_RESULT;
+      LOG_WARN("config file is empty", KR(ret), KCSTRING(file_path));
+    } else if (read_len >= buf_len) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_ERROR("fread buffer overflow", KR(ret), K(read_len), K(buf_len));
+    }
+  }
+
+  if (OB_NOT_NULL(fp)) {
+    fclose(fp);
+    fp = NULL;
+  }
 
   return ret;
 }

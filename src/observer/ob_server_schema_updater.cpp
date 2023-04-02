@@ -167,7 +167,7 @@ int ObServerSchemaUpdater::init(const common::ObAddr &host, ObMultiVersionSchema
 void ObServerSchemaUpdater::stop()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     task_queue_.stop();
   }
@@ -176,7 +176,7 @@ void ObServerSchemaUpdater::stop()
 void ObServerSchemaUpdater::wait()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     task_queue_.wait();
   }
@@ -419,9 +419,9 @@ int ObServerSchemaUpdater::try_reload_schema(const ObRefreshSchemaInfo &schema_i
     // Here, we ignore error since set_tenant_received_broadcast_version() may fail before tenant firstly refresh schema.
     int tmp_ret = OB_SUCCESS;
     if (OB_INVALID_TENANT_ID != schema_info.get_tenant_id()
-        && schema_info.get_schema_version() > 0
-        && OB_SUCCESS != (tmp_ret = schema_mgr_->set_tenant_received_broadcast_version(
-           schema_info.get_tenant_id(), schema_info.get_schema_version()))) {
+        && schema_info.get_schema_version() > 0 ) {
+        // && OB_SUCCESS != (tmp_ret = schema_mgr_->set_tenant_received_broadcast_version(
+          //  schema_info.get_tenant_id(), schema_info.get_schema_version()))) {
       LOG_WARN("fail to set tenant received broadcast version", K(tmp_ret), K(schema_info));
     }
 
@@ -466,8 +466,7 @@ int ObServerSchemaUpdater::async_refresh_schema(
     ret = OB_NOT_INIT;
     LOG_WARN("ob_server_schema_updeter is not inited.", KR(ret));
   } else if (OB_INVALID_TENANT_ID == tenant_id
-             || OB_INVALID_ID == tenant_id
-             || !ObSchemaService::is_formal_version(schema_version)) {
+             || OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version));
   } else if (OB_FAIL(task_queue_.add(refresh_task))) {

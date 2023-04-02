@@ -25,6 +25,7 @@
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "share/scn.h"
 #include "share/ob_debug_sync.h"
 
 using namespace oceanbase;
@@ -173,6 +174,7 @@ static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piec
       single_ls_desc.checkpoint_scn_ = ls_piece.checkpoint_scn_;
       single_ls_desc.min_lsn_ = ls_piece.min_lsn_;
       single_ls_desc.max_lsn_ = ls_piece.max_lsn_;
+      single_ls_desc.deleted_ = ls_piece.is_ls_deleted_;
       
       if (OB_FAIL(ret)) {
       } else if (ls_piece.max_lsn_ > ls_piece.min_lsn_
@@ -425,6 +427,68 @@ int ObArchiveHandler::init(
   return ret;
 }
 
+int ObArchiveHandler::open_archive_mode()
+{
+  int ret = OB_SUCCESS;
+  ObArchiveMode archive_mode;
+  bool can = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant archive scheduler not init", K(ret));
+  } else if(OB_FAIL(check_can_do_archive(can))) {
+    LOG_WARN("failed to check can do archive", K(ret));
+  } else if (!can) {
+    ret = OB_CANNOT_START_LOG_ARCHIVE_BACKUP;
+    LOG_WARN("tenant can not do archive", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(archive_table_op_.get_archive_mode(*sql_proxy_, archive_mode))) {
+    LOG_WARN("failed to get archive mode", K(ret), K_(tenant_id));
+  } else if (!archive_mode.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("archive mode not valid", K(ret), K_(tenant_id), K(archive_mode));
+  } else if (archive_mode.is_archivelog()) {
+    ret = OB_ALREADY_IN_ARCHIVE_MODE;
+    LOG_USER_ERROR(OB_ALREADY_IN_ARCHIVE_MODE);
+    LOG_WARN("already in archive mode", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(archive_table_op_.open_archive_mode(*sql_proxy_))) {
+    LOG_WARN("failed to open archive mode", K(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("open archive mode", K_(tenant_id));
+  }
+
+  ROOTSERVICE_EVENT_ADD("log_archive", "open_archive_mode", "tenant_id", tenant_id_,
+    "result", ret);
+
+  return ret;
+}
+
+int ObArchiveHandler::close_archive_mode()
+{
+  int ret = OB_SUCCESS;
+  ObArchiveMode archive_mode;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant archive scheduler not init", K(ret));
+  } else if (OB_FAIL(archive_table_op_.get_archive_mode(*sql_proxy_, archive_mode))) {
+    LOG_WARN("failed to get archive mode", K(ret), K_(tenant_id));
+  } else if (!archive_mode.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("archive mode not valid", K(ret), K_(tenant_id), K(archive_mode));
+  } else if (archive_mode.is_noarchivelog()) {
+    ret = OB_ALREADY_IN_NOARCHIVE_MODE;
+    LOG_USER_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE);
+    LOG_WARN("already in noarchive mode", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(archive_table_op_.close_archive_mode(*sql_proxy_))) {
+    LOG_WARN("failed to close archive mode", K(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("close archive mode", K_(tenant_id));
+  }
+
+  ROOTSERVICE_EVENT_ADD("log_archive", "close_archive_mode", "tenant_id", tenant_id_,
+    "result", ret);
+
+  return ret;
+}
+
 int ObArchiveHandler::check_archive_dest_validity_(const int64_t dest_no)
 { 
   int ret = OB_SUCCESS;
@@ -516,9 +580,6 @@ int ObArchiveHandler::enable_archive(const int64_t dest_no)
       "dest_no", dest_no, "round_id", new_round_attr.round_id_,
       "status", new_round_attr.state_.status_,
       "path", new_round_attr.path_.ptr());
-  } else {
-    ROOTSERVICE_EVENT_ADD("log_archive", "enable_archive", "tenant_id", tenant_id_,
-      "dest_no", dest_no, "result", ret);
   }
 
   return ret;
@@ -543,9 +604,30 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
       "dest_no", dest_no, "round_id", new_round_attr.round_id_,
       "status", new_round_attr.state_.status_,
       "path", new_round_attr.path_.ptr());
+  }
+
+  return ret;
+}
+
+int ObArchiveHandler::defer_archive(const int64_t dest_no)
+{
+  int ret = OB_SUCCESS;
+  ObTenantArchiveRoundAttr new_round_attr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant archive scheduler not init", K(ret));
+  } else if (OB_FAIL(round_handler_.defer_archive(dest_no, new_round_attr))) {
+    LOG_WARN("failed to defer archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
-    ROOTSERVICE_EVENT_ADD("log_archive", "disable_archive", "tenant_id", tenant_id_,
-      "dest_no", dest_no, "result", ret);
+    LOG_INFO("defer archive", K(dest_no), K(new_round_attr));
+  }
+
+  if (OB_SUCC(ret)) {
+    ROOTSERVICE_EVENT_ADD("log_archive", "defer_archive", "tenant_id", tenant_id_,
+      "dest_no", dest_no, "round_id", new_round_attr.round_id_,
+      "status", new_round_attr.state_.status_,
+      "path", new_round_attr.path_.ptr());
   }
 
   return ret;
@@ -584,6 +666,7 @@ int ObArchiveHandler::checkpoint_(ObTenantArchiveRoundAttr &round_info)
   switch (round_info.state_.status_) {
     case ObArchiveRoundState::Status::STOP:
     case ObArchiveRoundState::Status::INTERRUPTED:
+    case ObArchiveRoundState::Status::SUSPEND:
       break;
     case ObArchiveRoundState::Status::PREPARE: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_PREPARE);
@@ -597,6 +680,9 @@ int ObArchiveHandler::checkpoint_(ObTenantArchiveRoundAttr &round_info)
     }
     case ObArchiveRoundState::Status::DOING: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_DOING);
+    }
+    case ObArchiveRoundState::Status::SUSPENDING: {
+      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_SUSPENDING);
     }
     case ObArchiveRoundState::Status::STOPPING: {
       DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_STOPPING);
@@ -651,7 +737,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   int64_t since_piece_id = 0;
   ObDestRoundSummary summary;
   ObDestRoundCheckpointer checkpointer;
-  ARCHIVE_SCN_TYPE max_checkpoint_scn = 0;
+  SCN max_checkpoint_scn = SCN::min_scn();
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(round_info.start_scn_, round_info.base_piece_id_, round_info.piece_switch_interval_, round_info.checkpoint_scn_, since_piece_id))) {
     LOG_WARN("failed to calc since piece id", K(ret), K(round_info));
   } else if (OB_FAIL(archive_table_op_.get_dest_round_summary(*sql_proxy_, round_info.dest_id_, round_info.round_id_, since_piece_id, summary))) {
@@ -677,15 +763,18 @@ int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
   return ret;
 }
 
-int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, ARCHIVE_SCN_TYPE &max_checkpoint_scn) const
+int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max_checkpoint_scn) const
 {
+  // For standby tenant, archive progress is limited only by the max replayable scn for each log stream.
+  // That will leads some log of type of create log stream is archived before been replayed. In this case,
+  // we should limit tenant archive progress not more than the GTS.
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
   const bool for_update = false;
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())){
-  } else if (OB_LS_MIN_SCN_VALUE >= max_checkpoint_scn) {
+  } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())) {
+  } else if (SCN::base_scn() >= max_checkpoint_scn) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("max_checkpoint_scn not valid", K(ret), K(tenant_info));
   }

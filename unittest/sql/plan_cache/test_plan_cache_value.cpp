@@ -173,9 +173,9 @@ TEST_F(TestPlanCacheValue, basic)
   ObString sql_0 = ObString::make_string("select /*no_use_px*/ * from t1 where c1 = 1");
   ObString sql_1 = ObString::make_string("select /*no_use_px*/ * from t1 where c1 = '1'");
   ObString sql_2 = ObString::make_string("select /*no_use_px*/ * from t1 where c1=1 and c2=2");
-  ObPlanCacheCtx pc_ctx_0(sql_0, false, allocator, sql_ctx[0], exec_ctx[0], common::OB_SYS_TENANT_ID);
-  ObPlanCacheCtx pc_ctx_1(sql_0, false, allocator, sql_ctx[1], exec_ctx[1], common::OB_SYS_TENANT_ID);
-  ObPlanCacheCtx pc_ctx_2(sql_0, false, allocator, sql_ctx[2], exec_ctx[2], common::OB_SYS_TENANT_ID);
+  ObPlanCacheCtx pc_ctx_0(sql_0, PC_TEXT_MODE, allocator, sql_ctx[0], exec_ctx[0], common::OB_SYS_TENANT_ID);
+  ObPlanCacheCtx pc_ctx_1(sql_0, PC_TEXT_MODE, allocator, sql_ctx[1], exec_ctx[1], common::OB_SYS_TENANT_ID);
+  ObPlanCacheCtx pc_ctx_2(sql_0, PC_TEXT_MODE, allocator, sql_ctx[2], exec_ctx[2], common::OB_SYS_TENANT_ID);
   pc_ctx_0.fp_result_.cache_params_ = &(pc_ctx_0.exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update());
   pc_ctx_1.fp_result_.cache_params_ = &(pc_ctx_1.exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update());
   pc_ctx_2.fp_result_.cache_params_ = &(pc_ctx_2.exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update());

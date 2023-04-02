@@ -81,16 +81,30 @@ int ObPLEH::eh_convert_exception(bool oracle_mode, int oberr, ObPLConditionType 
       *error_code = oberr;
       *type = ERROR_CODE;
     } else {
-      if (oberr < 0) {
-        *error_code = ob_mysql_errno(oberr);
-        if (-1 == *error_code) {
+      if (OB_SP_RAISE_APPLICATION_ERROR == oberr) {
+        ObWarningBuffer *wb = NULL;
+        CK (OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer()));
+        OX (*error_code = wb->get_err_code());
+        OX (*sql_state = wb->get_sql_state());
+        OX (*str_len = STRLEN(*sql_state));
+        if (OB_FAIL(ret)) {
+        } else if (-1 == *error_code) {
           *type = SQL_STATE;
         } else {
           *type = ERROR_CODE;
         }
       } else {
-        *error_code = oberr;
-        *type = SQL_STATE;
+        if (oberr < 0) {
+          *error_code = ob_mysql_errno(oberr);
+          if (-1 == *error_code) {
+            *type = SQL_STATE;
+          } else {
+            *type = ERROR_CODE;
+          }
+        } else {
+          *error_code = oberr;
+          *type = SQL_STATE;
+        }
       }
     }
   }
@@ -105,6 +119,7 @@ ObPLException::ObPLException(int64_t error_code)
   body_.private_2 = 0;
   new(&type_)ObPLConditionValue(ERROR_CODE, error_code);
 }
+
 
 ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
                                                int64_t pl_function,
@@ -157,6 +172,8 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
       }
     }
     tl_eptr = unwind;
+
+
   }
   return unwind;
 }

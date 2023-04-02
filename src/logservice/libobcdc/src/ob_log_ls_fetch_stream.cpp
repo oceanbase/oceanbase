@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_ls_fetch_stream.h"
+#include "lib/allocator/ob_malloc.h"
 
 #include "lib/container/ob_se_array_iterator.h"   // begin
 
@@ -175,6 +176,7 @@ int FetchStream::handle(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   bool print_stream_dispatch_info = ATOMIC_LOAD(&g_print_stream_dispatch_info);
+  ClientFetchingMode fetching_mode = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
 
   if (print_stream_dispatch_info) {
     LOG_INFO("[STAT] [FETCH_STREAM] begin handle", "fetch_stream", this,
@@ -183,22 +185,36 @@ int FetchStream::handle(volatile bool &stop_flag)
     LOG_DEBUG("[STAT] [FETCH_STREAM] begin handle", "fetch_stream", this,
         "fetch_stream", *this, "LS_CTX", *ls_fetch_ctx_);
   }
-
-  if (IDLE == state_) {
-    if (OB_FAIL(handle_idle_task_(stop_flag))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("handle IDLE task fail", KR(ret));
+  if (OB_ISNULL(ls_fetch_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls fetch ctx is invalid in fetchstream", KR(ret), KPC(this));
+  } else if (FALSE_IT(fetching_mode = ls_fetch_ctx_->get_fetching_mode())) {
+  } else if (is_integrated_fetching_mode(fetching_mode)) {
+    if (IDLE == state_) {
+      if (OB_FAIL(handle_idle_task_(stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("handle IDLE task fail", KR(ret));
+        }
       }
+    } else if (FETCH_LOG == state_) {
+      if (OB_FAIL(handle_fetch_log_task_(stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("handle FETCH_LOG task fail", KR(ret));
+        }
+      }
+    } else {
+      ret = OB_INVALID_ERROR;
+      LOG_ERROR("invalid state", KR(ret), K(state_));
     }
-  } else if (FETCH_LOG == state_) {
-    if (OB_FAIL(handle_fetch_log_task_(stop_flag))) {
+  } else if (is_direct_fetching_mode(fetching_mode)) {
+    if (OB_FAIL(handle_fetch_archive_task_(stop_flag))) {
       if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("handle FETCH_LOG task fail", KR(ret));
+        LOG_ERROR("handle fetch archive task failed", KR(ret));
       }
     }
   } else {
-    ret = OB_INVALID_ERROR;
-    LOG_ERROR("invalid state", KR(ret), K(state_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid fetching mode", KR(ret), K(fetching_mode));
   }
 
   // Note: The following can no longer continue the operation, there may be concurrency issues ！
@@ -329,12 +345,8 @@ int FetchStream::handle_idle_task_(volatile bool &stop_flag)
       bool need_fetch_log = false;
 
       // Update upper limit, prepare for fetching logs
-      if (OB_FAIL(get_upper_limit(upper_limit_))) {
-        LOG_ERROR("update upper limit fail", KR(ret));
-      }
-      // Check need to fetch logs
-      else if (OB_FAIL(check_need_fetch_log_(upper_limit_, need_fetch_log))) {
-        LOG_ERROR("check need fetch log fail", KR(ret), K(upper_limit_));
+      if (OB_FAIL(check_need_fetch_log_with_upper_limit_(need_fetch_log))) {
+        LOG_ERROR("check need fetch log with upper limit failed", KR(ret));
       } else if (! need_fetch_log) {
         // If you don't need to fetch the log, you will go into hibernation
         // No further manipulation of the data structure !!!!
@@ -379,8 +391,9 @@ int FetchStream::dispatch_fetch_task_(LSFetchCtx &task,
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), K(ls_fetch_ctx_));
   } else {
+    const ClientFetchingMode fetching_mode = ls_fetch_ctx_->get_fetching_mode();
     // The server is not blacklisted when the stream is actively switch and when the partition is discarded, but is blacklisted in all other cases.
-    if (need_add_into_blacklist_(dispatch_reason)) {
+    if (is_integrated_fetching_mode(fetching_mode) && need_add_into_blacklist_(dispatch_reason)) {
       // Get the total time of the current partition of the server service at this time
       int64_t svr_start_fetch_tstamp = OB_INVALID_TIMESTAMP;
 
@@ -477,6 +490,17 @@ int FetchStream::check_need_fetch_log_(const int64_t limit, bool &need_fetch_log
   return ret;
 }
 
+int FetchStream::check_need_fetch_log_with_upper_limit_(bool &need_fetch_log)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_upper_limit(upper_limit_))) {
+    LOG_ERROR("get upper limit failed", KR(ret), "tls_id", ls_fetch_ctx_->get_tls_id());
+  } else if (OB_FAIL(check_need_fetch_log_(upper_limit_, need_fetch_log))) {
+    LOG_ERROR("check need fetch log failed", KR(ret), K(upper_limit_));
+  }
+  return ret;
+}
+
 int FetchStream::hibernate_()
 {
   int ret = OB_SUCCESS;
@@ -520,11 +544,12 @@ int FetchStream::async_fetch_log_(
     bool &rpc_send_succeed)
 {
   int ret = OB_SUCCESS;
+  const int64_t client_progress = ls_fetch_ctx_->get_progress();
 
   rpc_send_succeed = false;
 
   // Launch an asynchronous RPC
-  if (OB_FAIL(fetch_log_arpc_.async_fetch_log(req_start_lsn, upper_limit_, rpc_send_succeed))) {
+  if (OB_FAIL(fetch_log_arpc_.async_fetch_log(req_start_lsn, client_progress, upper_limit_, rpc_send_succeed))) {
     LOG_ERROR("async_fetch_log fail", KR(ret), K(req_start_lsn), K(upper_limit_), K(fetch_log_arpc_));
   } else {
     // Asynchronous RPC execution succeeded
@@ -678,7 +703,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
 
     // Continuously iterate through the fetch log results while the current fetch log stream is continuously active, and then process
     while (! stop_flag
-        && OB_SUCCESS == ret
+        && OB_SUCC(ret)
         && is_stream_valid
         && OB_SUCC(fetch_log_arpc_.next_result(result, rpc_is_flying))) {
       need_hibernate = false;
@@ -707,7 +732,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
         fetch_log_arpc_.revert_result(result);
         result = NULL;
       }
-    }
+    } // while
 
     if (stop_flag) {
       ret = OB_IN_STOP_STATE;
@@ -725,6 +750,11 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
         // The RPC is not running, it is still the current thread that is responsible for that fetch log stream
         stream_been_taken_over_by_rpc = false;
       }
+    }
+
+    // Fetching missing log RPC failed, need retry
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_SUCCESS;
     }
 
     // Final unified processing results
@@ -754,6 +784,251 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
           // Note: no more data structures can be accessed afterwards, there is a concurrency scenario !!!!
           // TODO note
           ret = handle(stop_flag);
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
+    palf::LSN &group_start_lsn,
+    volatile bool &stop_flag,
+    KickOutInfo &kick_out_info,
+    TransStatInfo &tsi)
+{
+  int ret = OB_SUCCESS;
+  palf::MemPalfBufferIterator entry_iter;
+  TransStatInfo local_tsi;
+
+  if (group_entry.get_header().is_padding_log()) {
+    LOG_DEBUG("GroupLogEntry is_padding_log", K(group_entry), K(group_start_lsn));
+  } else if (OB_FAIL(ls_fetch_ctx_->get_log_entry_iterator(group_entry, group_start_lsn, entry_iter))) {
+    LOG_ERROR("get_log_entry_iterator failed", KR(ret), K(group_entry), K_(ls_fetch_ctx));
+  } else {
+    LOG_DEBUG("get_next_group_entry succ", K(group_entry), K(group_start_lsn));
+    // iterate log_entry in log_group and handle it
+    while (OB_SUCC(ret)) {
+      palf::LogEntry log_entry;
+      palf::LSN entry_lsn;
+      IObCDCPartTransResolver::MissingLogInfo missing_info;
+      log_entry.reset();
+      missing_info.reset();
+
+      if (OB_FAIL(entry_iter.next())) {
+        if (OB_ITER_END != ret) {
+          LOG_ERROR("iterate log_entry_iterator failed", KR(ret),
+              K(entry_iter), K(group_entry), K_(ls_fetch_ctx));
+        }
+      } else if (OB_FAIL(entry_iter.get_entry(log_entry, entry_lsn))) {
+        LOG_ERROR("get_log_entry failed", KR(ret), K(entry_iter), K(group_entry),
+            K(group_start_lsn), K_(ls_fetch_ctx));
+      } else if (OB_FAIL(ls_fetch_ctx_->read_log(
+          log_entry,
+          entry_lsn,
+          missing_info,
+          local_tsi,
+          stop_flag))) {
+        if (OB_ITEM_NOT_SETTED == ret) {
+          // handle missing_log_info
+          const bool need_reconsume = missing_info.need_reconsume_commit_log_entry();
+          KickOutReason fail_reason = NONE;
+
+          if (OB_FAIL(handle_log_miss_(log_entry, missing_info, local_tsi, stop_flag, fail_reason))) {
+            if (OB_NEED_RETRY == ret) {
+              int tmp_ret = OB_SUCCESS;
+              // need switch other server(fetch_stream) to fetch log
+              if (OB_TMP_FAIL(set_(kick_out_info, ls_fetch_ctx_->get_tls_id(), fail_reason))) {
+                if (OB_ENTRY_EXIST == tmp_ret) {
+                  tmp_ret = OB_SUCCESS;
+                } else {
+                  LOG_ERROR("set_kickout_set fail", KR(tmp_ret), K_(ls_fetch_ctx), K(missing_info), K(fail_reason));
+                }
+              }
+            } else if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("handle_missing_log_ fail", KR(ret), K(entry_iter), K(group_entry),
+                  K(group_start_lsn), K_(ls_fetch_ctx));
+            }
+          } else if (need_reconsume) {
+            IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
+            reconsume_miss_info.set_resolving_miss_log();
+            if (missing_info.need_reconsume_commit_log_entry()) {
+              reconsume_miss_info.set_need_reconsume_commit_log_entry();
+            }
+
+            // all misslog are handled, and need reconsume trans_state_log in log_entry
+            if (OB_FAIL(ls_fetch_ctx_->read_log(
+                log_entry,
+                entry_lsn,
+                reconsume_miss_info,
+                local_tsi,
+                stop_flag))) {
+              LOG_ERROR("reconsume log_entry after missing_log_info resolved failed", KR(ret),
+                  K(log_entry), K(entry_lsn), K(missing_info), K(reconsume_miss_info));
+            }
+          }
+        } else {
+          LOG_ERROR("handle log_entry failed", KR(ret), K(log_entry), K_(ls_fetch_ctx), K(entry_lsn));
+        }
+      } else {
+        // Update transaction statistics
+        tsi.update(local_tsi);
+        LOG_DEBUG("get_log_entry succ", K(log_entry), K(entry_lsn));
+      }
+    } // while
+    // End of iteration
+    if (OB_ITER_END == ret) {
+      // current group entry iter end, go on with next group_entry(if exist)
+      ret = OB_SUCCESS;
+    }
+  }
+
+  return ret;
+}
+
+void FetchStream::update_fetch_stat_info_(
+    const int64_t fetch_log_cnt,
+    const int64_t fetch_log_size,
+    const int64_t fetch_and_read_time,
+    const int64_t fetch_log_time,
+    const int64_t flush_time,
+    const TransStatInfo &tsi)
+{
+  ObByteLockGuard lock_guard(stat_lock_);
+
+  FetchStatInfo &fsi = cur_stat_info_;
+  fsi.fetch_log_rpc_cnt_++;
+  fsi.fetch_log_cnt_ += fetch_log_cnt;
+  fsi.fetch_log_size_ += fetch_log_size;
+  fsi.handle_rpc_read_log_time_ += fetch_and_read_time - fetch_log_time;
+  fsi.handle_rpc_flush_time_ += flush_time;
+  fsi.fetch_log_rpc_time_ += fetch_log_time;
+  fsi.tsi_.update(tsi);
+}
+
+int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t UPDATE_FETCH_STATE_INTERVAL = 100;
+  bool need_fetch_log = true;
+  LOG_DEBUG("handle_fetch_archive_task_ begin", K(svr_), "tls_id", ls_fetch_ctx_->get_tls_id());
+
+  if (OB_ISNULL(ls_fetch_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls fetch ctx is null", KR(ret), KPC(this));
+  } else if (! is_direct_fetching_mode(ls_fetch_ctx_->get_fetching_mode())) {
+    const ClientFetchingMode mode = ls_fetch_ctx_->get_fetching_mode();
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fetching mode of ls fetch ctx doesn't match", KR(ret), K(mode), "tls_id", ls_fetch_ctx_->get_tls_id());
+  } else if (OB_FAIL(check_need_fetch_log_with_upper_limit_(need_fetch_log))) {
+    LOG_ERROR("get upper limit failed", KR(ret), KPC(this), K(need_fetch_log), "tls_id", ls_fetch_ctx_->get_tls_id());
+  } else if (! need_fetch_log && OB_FAIL(hibernate_())) {
+    LOG_ERROR("hibernate_ failed", KR(ret), KPC(this));
+  } else {
+    KickOutInfo kick_out_info;
+    TransStatInfo tsi;
+    const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
+    int64_t fetched_group_entry_cnt = 0;
+    int64_t fetched_group_entry_size = 0;
+    int64_t start_handle_timestamp = get_timestamp();
+    int64_t start_fetch_remote_timestamp = OB_INVALID_TIMESTAMP;
+    int64_t fetch_remote_time = 0;
+
+    while (OB_SUCC(ret) && need_fetch_log) {
+      palf::LogGroupEntry log_group_entry;
+      palf::LSN lsn;
+      const char *buf = NULL;
+      int64_t buf_size = 0;
+
+      start_fetch_remote_timestamp = get_timestamp();
+      if (! ls_fetch_ctx_->is_remote_iter_inited() && OB_FAIL(ls_fetch_ctx_->init_remote_iter())) {
+        LOG_ERROR("init remote iter when handle fetch archive task failed", KR(ret), KPC(ls_fetch_ctx_));
+      } else if (OB_FAIL(ls_fetch_ctx_->get_next_remote_group_entry(log_group_entry,
+          lsn, buf, buf_size))) {
+        // reset iter on OB_ITER_END because remote_iter become invalid when meet OB_ITER_END
+        if (OB_INVALID_DATA == ret) {
+          LOG_WARN("get invalid data, retry", KR(ret), K(ls_fetch_ctx_));
+        } else if (OB_ITER_END != ret && OB_NEED_RETRY != ret) {
+          LOG_ERROR("get next group entry failed", KR(ret), K(ls_fetch_ctx_));
+        } else if (OB_NEED_RETRY == ret) {
+          int tmp_ret = OB_SUCCESS;
+          const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
+          if (OB_TMP_FAIL(set_(kick_out_info, tls_id, KickOutReason::FETCH_LOG_FAIL_IN_DIRECT_MODE))) {
+            LOG_WARN("set kickout info failed", KR(tmp_ret), K(kick_out_info), K(tls_id));
+          }
+        }
+        // retry on fetch remote log failure
+        need_fetch_log = false;
+        ls_fetch_ctx_->reset_remote_iter();
+        ret = OB_SUCCESS;
+      } else if (FALSE_IT(fetch_remote_time += get_timestamp() - start_fetch_remote_timestamp)) {
+      } else if (OB_FAIL(ls_fetch_ctx_->append_log(buf, buf_size))) {
+        LOG_ERROR("append log failed", KR(ret), K(buf), K(buf_size));
+      } else if (OB_FAIL(read_group_entry_(log_group_entry, lsn, stop_flag, kick_out_info, tsi))) {
+        if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {
+          LOG_ERROR("read group entry failed when handling fetch archive task", KR(ret), K(log_group_entry),
+              K(lsn), K(kick_out_info), K(ls_fetch_ctx_));
+        } else if (OB_NEED_RETRY == ret) {
+          LOG_WARN("read_group_entry failed, retry", KR(ret), K(log_group_entry), K(lsn), K(tls_id));
+          need_fetch_log = false;
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(ls_fetch_ctx_->update_progress(log_group_entry, lsn))) {
+        LOG_ERROR("ls fetch ctx update progress failed", KR(ret), K(log_group_entry), K(lsn), K(tls_id));
+      }
+      if (OB_SUCC(ret)) {
+        const int64_t submit_ts = log_group_entry.get_scn().get_val_for_logservice();
+
+        if (submit_ts > upper_limit_) {
+          check_need_fetch_log_with_upper_limit_(need_fetch_log);
+        }
+        fetched_group_entry_size += log_group_entry.get_serialize_size();
+        if ((++fetched_group_entry_cnt % UPDATE_FETCH_STATE_INTERVAL) == 0) {
+          int64_t flush_time = 0;
+          const int64_t read_log_time = get_timestamp() - start_handle_timestamp;
+
+          if (OB_FAIL(update_fetch_task_state_(kick_out_info, stop_flag, flush_time))) {
+            LOG_ERROR("update fetch task state failed", KR(ret), K(kick_out_info), K(tls_id));
+          } else {
+            update_fetch_stat_info_(fetched_group_entry_cnt, fetched_group_entry_size,
+              read_log_time, fetch_remote_time, flush_time, tsi);
+            if (kick_out_info.need_kick_out()) {
+              need_fetch_log = false;
+            }
+          }
+          fetch_remote_time = 0;
+          fetched_group_entry_cnt = 0;
+          fetched_group_entry_size = 0;
+          tsi.reset();
+          start_handle_timestamp = get_timestamp();
+        }
+      }
+    }
+
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_SUCCESS;
+    }
+
+    // when exit from loop, there could still be some fetch tasks to be synchronized
+    if (OB_SUCC(ret)) {
+      int64_t flush_time = 0;
+      const int64_t read_log_time = get_timestamp() - start_handle_timestamp;
+      if (OB_FAIL(update_fetch_task_state_(kick_out_info, stop_flag, flush_time))) {
+        LOG_ERROR("update fetch task state failed at loop end", KR(ret), K(kick_out_info));
+      } else {
+        update_fetch_stat_info_(fetched_group_entry_cnt, fetched_group_entry_size,
+            read_log_time, fetch_remote_time, flush_time, tsi);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (kick_out_info.need_kick_out()) {
+        if (OB_FAIL(kick_out_task_(kick_out_info))) {
+          LOG_ERROR("kick out task failed", KR(ret), K(kick_out_info), K_(ls_fetch_ctx));
+        }
+      } else {
+        if (OB_FAIL(hibernate_())) {
+          LOG_ERROR("hibernate failed", KR(ret));
         }
       }
     }
@@ -950,14 +1225,14 @@ int FetchStream::handle_fetch_log_error_(
   if (OB_SUCCESS != rcode.rcode_) {
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_RPC;
-    LOG_ERROR("fetch log fail on rpc", K(svr_), K(rcode), "fetch_stream", this);
+    LOG_ERROR("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
   }
   // server return error
   else if (OB_SUCCESS != resp.get_err()) {
     // Other errors, switch server directly
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
-    LOG_ERROR("fetch log fail on server", "fetch_stream", this, K(svr_),
+    LOG_ERROR("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
         "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
         K(rcode), K(resp));
   } else {
@@ -1117,86 +1392,10 @@ int FetchStream::read_log_(
       } else {
         // GroupLogEntry deserialize time
         decode_log_entry_time += (get_timestamp() - begin_time);
-        TransStatInfo local_tsi;
-
-        if (group_entry.get_header().is_padding_log()) {
-          LOG_DEBUG("GroupLogEntry is_padding_log", K(group_entry), K(group_start_lsn));
-        } else if (OB_FAIL(ls_fetch_ctx_->get_log_entry_iterator(group_entry, group_start_lsn, entry_iter))) {
-          LOG_ERROR("get_log_entry_iterator failed", KR(ret), K(group_entry), K_(ls_fetch_ctx), K(resp));
-        } else {
-          LOG_DEBUG("get_next_group_entry succ", K(idx), K(log_cnt), K(group_entry), K(group_start_lsn));
-          // iterate log_entry in log_group and handle it
-          while (OB_SUCC(ret)) {
-            palf::LogEntry log_entry;
-            palf::LSN entry_lsn;
-            IObCDCPartTransResolver::MissingLogInfo missing_info;
-            log_entry.reset();
-            missing_info.reset();
-
-            if (OB_FAIL(entry_iter.next())) {
-              if (OB_ITER_END != ret) {
-                LOG_ERROR("iterate log_entry_iterator failed", KR(ret),
-                    K(entry_iter), K(group_entry), K_(ls_fetch_ctx), K(resp));
-              }
-            } else if (OB_FAIL(entry_iter.get_entry(log_entry, entry_lsn))) {
-              LOG_ERROR("get_log_entry failed", KR(ret), K(entry_iter), K(group_entry),
-                  K(group_start_lsn), K_(ls_fetch_ctx));
-            } else if (OB_FAIL(ls_fetch_ctx_->read_log(
-                log_entry,
-                entry_lsn,
-                missing_info,
-                local_tsi,
-                stop_flag))) {
-              if (OB_ITEM_NOT_SETTED == ret) {
-                // handle missing_log_info
-                const bool need_reconsume = missing_info.need_reconsume_commit_log_entry();
-                KickOutReason fail_reason = NONE;
-
-                if (OB_FAIL(handle_log_miss_(log_entry, missing_info, local_tsi, stop_flag, fail_reason))) {
-                  if (OB_NEED_RETRY == ret) {
-                    // need switch other server(fetch_stream) to fetch log
-                    if (OB_FAIL(set_(kick_out_info, ls_fetch_ctx_->get_tls_id(), fail_reason))) {
-                      if (OB_ENTRY_EXIST == ret) {
-                        ret = OB_SUCCESS;
-                      } else {
-                        LOG_ERROR("set_kickout_set fail", KR(ret), K_(ls_fetch_ctx), K(missing_info), K(fail_reason));
-                      }
-                    }
-                  } else if (OB_IN_STOP_STATE != ret) {
-                    LOG_ERROR("handle_missing_log_ fail", KR(ret), K(entry_iter), K(group_entry),
-                        K(group_start_lsn), K_(ls_fetch_ctx));
-                  }
-                } else if (need_reconsume) {
-                  IObCDCPartTransResolver::MissingLogInfo reconsume_miss_info;
-                  reconsume_miss_info.set_resolving_miss_log();
-                  if (missing_info.need_reconsume_commit_log_entry()) {
-                    reconsume_miss_info.set_need_reconsume_commit_log_entry();
-                  }
-
-                  // all misslog are handled, and need reconsume trans_state_log in log_entry
-                  if (OB_FAIL(ls_fetch_ctx_->read_log(
-                      log_entry,
-                      entry_lsn,
-                      reconsume_miss_info,
-                      local_tsi,
-                      stop_flag))) {
-                    LOG_ERROR("reconsume log_entry after missing_log_info resolved failed", KR(ret),
-                        K(log_entry), K(entry_lsn), K(missing_info), K(reconsume_miss_info));
-                  }
-                }
-              } else {
-                LOG_ERROR("handle log_entry failed", KR(ret), K(log_entry), K_(ls_fetch_ctx), K(entry_lsn));
-              }
-            } else {
-              // Update transaction statistics
-              tsi.update(local_tsi);
-              LOG_DEBUG("get_log_entry succ", K(idx), K(log_cnt), K(log_entry), K(entry_lsn));
-            }
-          } // while
-
-          if (OB_ITER_END == ret) {
-            // current group entry iter end, go on with next group_entry(if exist)
-            ret = OB_SUCCESS;
+        if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn,
+            stop_flag, kick_out_info, tsi))) {
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("read group entry failed", KR(ret));
           }
         }
 
@@ -1214,6 +1413,164 @@ int FetchStream::read_log_(
     read_log_time = get_timestamp() - start_read_time;
   }
 
+  return ret;
+}
+
+int FetchStream::fetch_miss_log_direct_(
+    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+    const int64_t timeout,
+    FetchLogSRpc &fetch_log_srpc,
+    LSFetchCtx &ls_fetch_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObCdcLSFetchLogResp *resp = NULL;
+  LSFetchCtxGetSourceFunctor get_source_func(ls_fetch_ctx);
+  const int64_t current_progress = ls_fetch_ctx.get_progress();
+  const int64_t tenant_id = ls_fetch_ctx.get_tls_id().get_tenant_id();
+  const ObLSID &ls_id = ls_fetch_ctx.get_tls_id().get_ls_id();
+  archive::LargeBufferPool *buffer_pool = NULL;
+  ObRpcResultCode rcode;
+  SCN cur_scn;
+  const int64_t start_fetch_ts = get_timestamp();
+  const int64_t time_upper_limit = start_fetch_ts + timeout;
+  bool stop_fetch = false;
+  bool is_timeout = false;
+  if (OB_ISNULL(resp = OB_NEW(ObCdcLSFetchLogResp, "FetchMissResp"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc ObCdcLSFetchLogResp failed", KR(ret));
+  } else if (OB_FAIL(cur_scn.convert_from_ts(current_progress/1000L))) {
+    LOG_ERROR("convert log progress to scn failed", KR(ret), K(current_progress));
+  } else if (OB_FAIL(ls_fetch_ctx.get_large_buffer_pool(buffer_pool))) {
+    LOG_ERROR("get large buffer pool when fetching missing log failed", KR(ret), K(ls_fetch_ctx));
+  } else {
+    int64_t fetched_cnt = 0;
+    const int64_t arr_cnt = miss_log_array.count();
+    resp->set_next_miss_lsn(miss_log_array.at(0).miss_lsn_);
+    while (OB_SUCC(ret) && !stop_fetch) {
+      bool retry_on_err = false;
+      while(OB_SUCC(ret) && fetched_cnt < arr_cnt && !is_timeout) {
+        const int64_t start_fetch_entry_ts = get_timestamp();
+        const ObCdcLSFetchMissLogReq::MissLogParam &param = miss_log_array.at(fetched_cnt);
+        const LSN &missing_lsn = param.miss_lsn_;
+        const char *buf;
+        int64_t buf_size = 0;
+        palf::LogEntry log_entry;
+        palf::LSN lsn;
+        logservice::ObRemoteLogpEntryIterator entry_iter(get_source_func);
+        resp->set_next_miss_lsn(missing_lsn);
+
+        if (get_timestamp() > time_upper_limit) {
+          is_timeout = true;
+        } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
+            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool))) {
+          LOG_WARN("remote entry iter init failed", KR(ret));
+        } else if (OB_FAIL(entry_iter.next(log_entry, lsn, buf, buf_size))) {
+          retry_on_err =true;
+          LOG_WARN("log entry iter failed to iterate", KR(ret));
+        } else {
+          if (OB_UNLIKELY(missing_lsn != lsn)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("direct fetch missing_lsn not match", KR(ret), K(tenant_id), K(ls_id),
+                K(missing_lsn), K(lsn));
+          } else {
+            const int64_t entry_size = log_entry.get_serialize_size();
+            int64_t pos = 0;
+            resp->inc_log_fetch_time(get_timestamp() - start_fetch_entry_ts);
+
+            if (! resp->has_enough_buffer(entry_size)) {
+              ret = OB_BUF_NOT_ENOUGH;
+            } else {
+              int64_t remain_size = 0;
+              char *remain_buf = resp->get_remain_buf(remain_size);
+              if (OB_ISNULL(remain_buf)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("remain buffer is null", KR(ret));
+              }
+              else if (OB_FAIL(log_entry.serialize(remain_buf, remain_size, pos))) {
+                LOG_WARN("missing LogEntry serialize failed", KR(ret), K(remain_size),
+                    K(pos), K(missing_lsn), K(log_entry));
+              }
+              else {
+                // TODO: there is an issue in entry_iter.next(), the returned buffer is not as expected
+                // MEMCPY(remain_buf, buf, buf_size);
+                resp->log_entry_filled(entry_size);
+                fetched_cnt++;
+              }
+            }
+          }
+        }
+      }// while
+
+      if (OB_SUCC(ret)) {
+        stop_fetch = true;
+      } else if (OB_BUF_NOT_ENOUGH == ret) {
+        stop_fetch = true;
+        ret = OB_SUCCESS;
+      } else if (retry_on_err) {
+        ret = OB_SUCCESS;
+      }
+    } // while
+    resp->set_l2s_net_time(0);
+    resp->set_svr_queue_time(0);
+    resp->set_process_time(get_timestamp() - start_fetch_ts);
+  }
+  // regard resp not null as sending rpc successfully
+  if (OB_NOT_NULL(resp)) {
+    resp->set_debug_err(ret);
+    if (OB_FAIL(ret)) {
+      resp->set_err(OB_ERR_SYS);
+    } else {
+      resp->set_err(OB_SUCCESS);
+    }
+    ret = OB_SUCCESS;
+    rcode.rcode_ = OB_SUCCESS;
+  } else {
+    rcode.rcode_ = ret;
+    sprintf(rcode.msg_, "failed to allocate fetchlogresp");
+  }
+  fetch_log_srpc.set_resp(rcode, resp);
+
+  if (OB_NOT_NULL(resp)) {
+    OB_DELETE(ObCdcLSFetchLogResp, "FetchMissResp", resp);
+    resp = NULL;
+  }
+  return ret;
+}
+
+int FetchStream::fetch_miss_log_(
+    FetchLogSRpc &fetch_srpc,
+    IObLogRpc &rpc,
+    LSFetchCtx &ls_fetch_ctx,
+    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+    const common::ObAddr &svr,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  const ClientFetchingMode fetching_mode = ls_fetch_ctx.get_fetching_mode();
+  if (! is_fetching_mode_valid(fetching_mode)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fetching mode is not valid", KR(ret), K(fetching_mode));
+  } else if (is_integrated_fetching_mode(fetching_mode)) {
+    if (OB_FAIL(fetch_srpc.fetch_log(*rpc_,
+          ls_fetch_ctx_->get_tls_id().get_tenant_id(),
+          ls_fetch_ctx_->get_tls_id().get_ls_id(),
+          miss_log_array,
+          svr_,
+          timeout))) {
+      LOG_ERROR("fetch_misslog_rpc exec failed", KR(ret), K_(ls_fetch_ctx), K_(svr), K(miss_log_array));
+      ret = OB_NEED_RETRY;
+    } else {
+      // succ
+    }
+  } else if (is_direct_fetching_mode(fetching_mode)) {
+    // mock FetchLogSRpc here
+    if (OB_FAIL(fetch_miss_log_direct_(miss_log_array, timeout, fetch_srpc, ls_fetch_ctx))) {
+      LOG_ERROR("fetch missing log direct failed", KR(ret), K(ls_fetch_ctx), K(miss_log_array));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid fetching mode", KR(ret), K(fetching_mode), K(ls_fetch_ctx));
+  }
   return ret;
 }
 
@@ -1262,15 +1619,10 @@ int FetchStream::handle_log_miss_(
               batched_misslog_lsn_arr))) {
             LOG_ERROR("build_batch_misslog_lsn_arr_ failed", KR(ret),
                 K(handling_misslog_info), K(fetched_missing_log_cnt));
-          } else if (OB_FAIL(fetch_log_srpc->fetch_log(
-              *rpc_,
-              ls_fetch_ctx_->get_tls_id().get_tenant_id(),
-              ls_fetch_ctx_->get_tls_id().get_ls_id(),
-              batched_misslog_lsn_arr,
-              svr_,
+          } else if (OB_FAIL(fetch_miss_log_(*fetch_log_srpc, *rpc_,
+              *ls_fetch_ctx_, batched_misslog_lsn_arr, svr_,
               rpc_timeout))) {
-            LOG_ERROR("fetch_misslog_rpc exec failed", KR(ret), K_(ls_fetch_ctx), K_(svr), K(batched_misslog_lsn_arr));
-            ret = OB_NEED_RETRY; // retry fetch misslog
+            LOG_ERROR("fetch_miss_log_ failed", KR(ret), K_(ls_fetch_ctx), K_(svr), K(batched_misslog_lsn_arr));
           } else {
             const obrpc::ObRpcResultCode &rcode = fetch_log_srpc->get_result_code();
             const obrpc::ObCdcLSFetchLogResp &resp = fetch_log_srpc->get_resp(); // TODO change to fetch_miss_log RPC
@@ -1310,8 +1662,8 @@ int FetchStream::handle_log_miss_(
                 }
               }
             }
-            // TODO if OB_NEED_RETRY or other err_code, should add to kick_out_info
           }
+
           if (OB_NEED_RETRY == ret) {
             fail_reason = KickOutReason::MISSING_LOG_FETCH_FAIL;
           }
@@ -1610,23 +1962,25 @@ int FetchStream::update_fetch_task_state_(KickOutInfo &kick_out_info,
         LOG_ERROR("update progress fail", KR(ret), K(task), KPC(task));
       }
 
-      // Check if the server list needs to be updated
-      if (OB_SUCCESS == ret && task->need_update_svr_list()) {
-        bool need_print_info = (TCONF.print_ls_server_list_update_info != 0);
-        if (OB_FAIL(task->update_svr_list(need_print_info))) {
-          LOG_ERROR("update svr list fail", KR(ret), KPC(task));
+      if (is_integrated_fetching_mode(ls_fetch_ctx_->get_fetching_mode())) {
+        // Check if the server list needs to be updated
+        if (OB_SUCCESS == ret && task->need_update_svr_list()) {
+          bool need_print_info = (TCONF.print_ls_server_list_update_info != 0);
+          if (OB_FAIL(task->update_svr_list(need_print_info))) {
+            LOG_ERROR("update svr list fail", KR(ret), KPC(task));
+          }
         }
-      }
 
-      // Check if the log fetch timeout on the current server, and add the timeout tasks to the kick out collection
-      if (OB_SUCCESS == ret && OB_FAIL(check_fetch_timeout_(*task, kick_out_info))) {
-        LOG_ERROR("check fetch timeout fail", KR(ret), K(task), KPC(task), K(kick_out_info));
-      }
+        // Check if the log fetch timeout on the current server, and add the timeout tasks to the kick out collection
+        if (OB_SUCCESS == ret && OB_FAIL(check_fetch_timeout_(*task, kick_out_info))) {
+          LOG_ERROR("check fetch timeout fail", KR(ret), K(task), KPC(task), K(kick_out_info));
+        }
 
-      // Periodically check if there is a server with a higher level of excellence at this time, and if so, add the task to the kick out set for active flow cutting
-      if (need_check_switch_server) {
-        if (OB_SUCCESS == ret && OB_FAIL(check_switch_server_(*task, kick_out_info))) {
-          LOG_ERROR("check switch server fail", KR(ret), K(task), KPC(task), K(kick_out_info));
+        // Periodically check if there is a server with a higher level of excellence at this time, and if so, add the task to the kick out set for active flow cutting
+        if (need_check_switch_server) {
+          if (OB_SUCCESS == ret && OB_FAIL(check_switch_server_(*task, kick_out_info))) {
+            LOG_ERROR("check switch server fail", KR(ret), K(task), KPC(task), K(kick_out_info));
+          }
         }
       }
 

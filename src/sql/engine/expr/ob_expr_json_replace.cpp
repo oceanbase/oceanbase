@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_replace.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -92,7 +93,10 @@ int ObExprJsonReplace::eval_json_replace(const ObExpr &expr, ObEvalCtx &ctx, ObD
     } else {
       ObString path_val = path_data->get_string();
       ObJsonPath *json_path;
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *path_data,
+                  expr.args_[i]->datum_meta_, expr.args_[i]->obj_meta_.has_lob_header(), path_val))) {
+        LOG_WARN("fail to get real data.", K(ret), K(path_val));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
         ret = OB_ERR_INVALID_JSON_PATH;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
       } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(),
@@ -132,15 +136,8 @@ int ObExprJsonReplace::eval_json_replace(const ObExpr &expr, ObEvalCtx &ctx, ObD
     ObString str;
     if (OB_FAIL(json_doc->get_raw_binary(str, &temp_allocator))) {
       LOG_WARN("json_replace result to binary failed", K(ret));
-    } else {
-      char *buf = expr.get_str_res_mem(ctx, str.length());
-      if (OB_ISNULL(buf)){
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("json_remove alloc jsonString failed", K(ret), K(str.length()));
-      } else {
-        MEMCPY(buf, str.ptr(), str.length());
-        res.set_string(buf, str.length());
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
   return ret;

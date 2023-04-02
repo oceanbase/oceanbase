@@ -70,6 +70,7 @@ int ObViewTableResolver::expand_view(TableItem &view_item)
       view_resolver.set_view_ref_id(view_item.ref_id_);
       view_resolver.set_current_view_item(view_item);
       view_resolver.set_parent_view_resolver(this);
+      view_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
       if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
         LOG_WARN("do expand view failed", K(ret));
       }

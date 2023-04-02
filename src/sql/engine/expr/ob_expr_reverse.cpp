@@ -17,6 +17,7 @@
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -91,12 +92,59 @@ int calc_reverse_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     const ObString &arg_str = arg->get_string();
     const ObCollationType &arg_cs_type = expr.args_[0]->datum_meta_.cs_type_;
     ObString res_str;
-    ObExprStrResAlloc res_alloc(expr, ctx);
-    if (OB_FAIL(ObExprReverse::do_reverse(arg_str, arg_cs_type, &res_alloc, res_str))) {
-      LOG_WARN("do_reverse failed", K(ret), K(arg_str), K(arg_cs_type));
-    } else {
-      // expr reverse is in mysql mode. no need to check res_str.empty()
-      res_datum.set_string(res_str);
+    if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+      ObExprStrResAlloc res_alloc(expr, ctx);
+      if (OB_FAIL(ObExprReverse::do_reverse(arg_str, arg_cs_type, &res_alloc, res_str))) {
+        LOG_WARN("do_reverse failed", K(ret), K(arg_str), K(arg_cs_type));
+      } else {
+        // expr reverse is in mysql mode. no need to check res_str.empty()
+        res_datum.set_string(res_str);
+      }
+    } else { // text tc
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      char *buf;
+      int64_t buf_size = 0;
+      int64_t total_byte_len = 0;
+      const bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+      ObTextStringIter input_iter(expr.args_[0]->datum_meta_.type_, arg_cs_type, arg->get_string(), has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+      if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
+      } else if (OB_FAIL(input_iter.get_byte_len(total_byte_len))) {
+        LOG_WARN("get input byte len failed", K(ret));
+      } else if (OB_FAIL(output_result.init(total_byte_len))) {
+        LOG_WARN("init stringtext result failed", K(ret));
+      } else if (total_byte_len == 0) {
+        output_result.set_result();
+      } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+        LOG_WARN("stringtext result reserve buffer failed", K(ret));
+      } else {
+        ObTextStringIterState state;
+        ObString src_block_data;
+        input_iter.set_backward();
+        while (OB_SUCC(ret)
+               && buf_size > 0
+               && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          ObDataBuffer data_buf(buf, buf_size);
+          if (OB_FAIL(ObExprReverse::do_reverse(src_block_data, arg_cs_type, &data_buf, res_str))) {
+            LOG_WARN("do_reverse failed", K(ret), K(arg_str), K(arg_cs_type));
+          } else if (OB_FAIL(output_result.lseek(res_str.length(), 0))) {
+            LOG_WARN("result lseek failed", K(ret));
+          } else {
+            buf += res_str.length();
+            buf_size -= res_str.length();
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+        } else {
+          output_result.set_result();
+        }
+      }
     }
   }
   return ret;

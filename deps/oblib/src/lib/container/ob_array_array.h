@@ -50,10 +50,10 @@ public:
   OB_INLINE T &at(const int64_t array_idx, const int64_t idx)
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
-      LIB_LOG(ERROR, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
       right_to_die_or_duty_to_live();
     } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
               KP_(array_ptrs));
       right_to_die_or_duty_to_live();
     }
@@ -62,10 +62,10 @@ public:
   OB_INLINE ObIArray<T> &at(const int64_t array_idx)
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
-      LIB_LOG(ERROR, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
       right_to_die_or_duty_to_live();
     } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
               KP_(array_ptrs));
       right_to_die_or_duty_to_live();
     }
@@ -77,10 +77,10 @@ public:
   OB_INLINE int64_t count(const int64_t array_idx) const
   {
     if (OB_UNLIKELY(0 > array_idx || array_idx >= count_)) {
-      LIB_LOG(ERROR, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected array idx", K_(count), K_(capacity), K(array_idx));
       right_to_die_or_duty_to_live();
     } else if (OB_ISNULL(array_ptrs_) || OB_ISNULL(array_ptrs_[array_idx])) {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), K(array_idx),
               KP_(array_ptrs));
       right_to_die_or_duty_to_live();
     }
@@ -140,7 +140,7 @@ template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typenam
 void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reset()
 {
   if (OB_ISNULL(array_ptrs_)) {
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
+    LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
     array_ptrs_ = local_array_buf_;
     capacity_ = ARRAY_ARRAY_SIZE;
   }
@@ -151,7 +151,7 @@ void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reset
       alloc_.free(array_ptrs_[i]);
       array_ptrs_[i] = nullptr;
     } else {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
     }
   }
   if (array_ptrs_ != local_array_buf_) {
@@ -168,7 +168,7 @@ template<typename T, int64_t LOCAL_ARRAY_SIZE, int64_t ARRAY_ARRAY_SIZE, typenam
 void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reuse()
 {
   if (OB_ISNULL(array_ptrs_)) {
-    LIB_LOG(ERROR, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K_(count), K_(capacity), KP_(array_ptrs));
     reset();
   }
 
@@ -176,7 +176,7 @@ void ObArrayArray<T, LOCAL_ARRAY_SIZE, ARRAY_ARRAY_SIZE, BlockAllocatorT>::reuse
     if (OB_NOT_NULL(array_ptrs_[i])) {
       array_ptrs_[i]->reuse();
     } else {
-      LIB_LOG(ERROR, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected null array array ptr", K(i), K_(count), K_(capacity));
     }
   }
   count_ = 0;

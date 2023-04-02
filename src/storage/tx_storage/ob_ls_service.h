@@ -159,7 +159,7 @@ private:
                        const ObReplicaType replica_type,
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
-                       const int64_t create_scn,
+                       const share::SCN &create_scn,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
@@ -178,6 +178,8 @@ private:
   int alloc_ls_(ObLS *&ls);
   bool is_ls_to_restore_(const obrpc::ObCreateLSArg &arg) const;
   bool need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) const;
+  int get_restore_status_(
+      share::ObLSRestoreStatus &restore_status);
 
 private:
   bool is_inited_;

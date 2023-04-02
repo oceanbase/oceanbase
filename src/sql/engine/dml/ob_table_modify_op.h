@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace sql
 {
+
 class ForeignKeyHandle
 {
 public:
@@ -34,6 +35,7 @@ public:
   static int do_handle(ObTableModifyOp &op,
                        const ObDMLBaseCtDef &dml_ctdef,
                        ObDMLBaseRtDef &dml_rtdef);
+
 private:
   static int value_changed(ObTableModifyOp &op,
                            const common::ObIArray<ObForeignKeyColumn> &columns,
@@ -198,6 +200,13 @@ public:
   bool is_fk_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_); }
   void set_foreign_key_checks() { foreign_key_checks_ = true; }
   bool need_foreign_key_checks() { return foreign_key_checks_; }
+  bool has_before_row_trigger(const ObDMLBaseCtDef &dml_ctdef) { return dml_ctdef.is_primary_index_ && dml_ctdef.trig_ctdef_.all_tm_points_.has_before_row(); }
+  bool has_after_row_trigger(const ObDMLBaseCtDef &dml_ctdef) { return dml_ctdef.is_primary_index_ && dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row(); }
+  bool need_foreign_key_check(const ObDMLBaseCtDef &dml_ctdef) { return dml_ctdef.is_primary_index_ && dml_ctdef.fk_args_.count() > 0; }
+  bool need_after_row_process(const ObDMLBaseCtDef &dml_ctdef) { return need_foreign_key_check(dml_ctdef) || has_after_row_trigger(dml_ctdef); }
+  void set_execute_single_row() { execute_single_row_ = true; }
+  void unset_execute_single_row() { execute_single_row_ = false; }
+  bool get_execute_single_row() const { return execute_single_row_; }
   bool is_fk_root_session();
   const ObObjPrintParams &get_obj_print_params() { return obj_print_params_; }
   int init_foreign_key_operation();
@@ -207,6 +216,8 @@ public:
   void clear_dml_evaluated_flag();
   void clear_dml_evaluated_flag(int64_t parent_cnt, ObExpr **parent_exprs);
   void clear_dml_evaluated_flag(ObExpr *clear_expr);
+
+  ObDMLModifyRowsList& get_dml_modify_row_list() { return dml_modify_rows_;}
   int submit_all_dml_task();
 protected:
   OperatorOpenOrder get_operator_open_order() const;
@@ -221,6 +232,7 @@ protected:
 
   virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
+  virtual int check_need_exec_single_row();
   int get_next_row_from_child();
   //Override this interface to complete the write semantics of the DML operator,
   //and write a row to the DAS Write Buffer according to the specific DML behavior
@@ -238,6 +250,7 @@ protected:
                            int64_t delete_rows,
                            int64_t found_rows);
   int discharge_das_write_buffer();
+  virtual void record_err_for_load_data(int err_ret, int row_num) { UNUSED(err_ret); UNUSED(row_num); }
 public:
   common::ObMySQLProxy *sql_proxy_;
   observer::ObInnerSQLConnection *inner_conn_;
@@ -250,8 +263,10 @@ public:
   bool iter_end_;
   ObDMLRtCtx dml_rtctx_;
   bool is_error_logging_;
+  bool execute_single_row_;
   ObErrLogRtDef err_log_rt_def_;
   ObSEArray<ObExpr *, 4> trigger_clear_exprs_;
+  ObDMLModifyRowsList dml_modify_rows_;
 private:
   ObSQLSessionInfo::StmtSavedValue *saved_session_;
   char saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)] __attribute__((aligned (16)));;

@@ -1,8 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: guoyun.lgy
-# modifier: jiangxiu.wt
+# owner: jiangxiu.wt
 # owner group: SQL1
 # description: regexp的测试
 
@@ -19,75 +18,75 @@ insert into t1 (a) values ('a'),('abc'),('abcd'),('hello'),('test');
 select * from t1 where a regexp 'a(';
 --error 5813
 select * from t1 where a regexp 'a(b';
---error 5820
+--error 1139
 select * from t1 where a regexp '*';
---error 5820
+--error 1139
 select * from t1 where a regexp '+';
---error 5820
+--error 1139
 select * from t1 where a regexp '?';
---error 5820
+--error 1139
 select * from t1 where a regexp '(*a)';
---error 5820
+--error 1139
 select * from t1 where a regexp '(+a)';
---error 5824
+--error 1139
 select * from t1 where a regexp '(?a)';
---error 5820
+--error 1139
 select * from t1 where a regexp '({1}a)';
---error 5820
+--error 1139
 select * from t1 where a regexp '(a|*b)';
---error 5820
+--error 1139
 select * from t1 where a regexp '(a|+b)';
---error 5820
+--error 1139
 select * from t1 where a regexp '(a|?b)';
---error 5820
+--error 1139
 select * from t1 where a regexp '(a|{1}b)';
---error 5820
+
 select * from t1 where a regexp '^*';
---error 5820
+
 select * from t1 where a regexp '^+';
---error 5820
+
 select * from t1 where a regexp '^?';
---error 5820
+
 select * from t1 where a regexp '^{1}';
---error 5820
+--error 1139
 select * from t1 where a regexp '{1';
---error 5820
+--error 1139
 select * from t1 where a regexp '{1}';
---error 5818
+--error 1139
 select * from t1 where a regexp 'a{1';
---error 5819
+--error 1139
 select * from t1 where a regexp 'a{1a';
---error 5819
+--error 1139
 select * from t1 where a regexp 'a{1a}';
---error 5819
+--error 1139
 select * from t1 where a regexp 'a{1,x}';
---error 5819
+--error 1139
 select * from t1 where a regexp 'a{1,x';
---error 5819
+
 select * from t1 where a regexp 'a{300}';
---error 5819
+--error 1139
 select * from t1 where a regexp 'a{1,0}';
---error 5820
+
 select * from t1 where a regexp 'a++';
---error 5820
+
 select * from t1 where a regexp 'a*+';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a+*';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a?*';
---error 5820
+
 select * from t1 where a regexp 'a?+';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a{1}{1}';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a*{1}';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a+{1}';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a?{1}';
---error 5820
+--error 1139
 select * from t1 where a regexp 'a{1}*';
---error 5820
+
 select * from t1 where a regexp 'a{1}+';
 
 drop table t1;
@@ -280,7 +279,9 @@ select * from t1 where name regexp 'ab?c';
 select * from t1 where name regexp 'a{1}b';
 select * from t1 where name regexp 'a{1,}b';
 select * from t1 where name regexp 'a{1,2}b';
+--error 1139
 select * from t1 where name regexp 'a{,2}';
+--error 1139
 select * from t1 where name regexp 'a{,}';
 select * from t1 where name regexp 'ab{0,0}c';
 select * from t1 where name regexp 'ab{0,1}c';
@@ -290,6 +291,7 @@ select * from t1 where name regexp 'ab{1,3}c';
 select * from t1 where name regexp 'ab{2,2}c';
 select * from t1 where name regexp 'ab{2,4}c';
 select * from t1 where name regexp '((a{1,10}){1,10}){1,10}';
+--error 1139
 select * from t1 where name regexp 'a*{b}';
 select * from t1 where name regexp '[[:alnum:]]+';
 select * from t1 where name regexp '[[:alpha:]]+';
@@ -399,7 +401,7 @@ select * from t1 where name regexp '(A[1])|(A[2])|(A[3])|(A[4])|(A[5])|(A[6])|(A
 select * from t1 where name regexp 'CC[13]1|a{21}[23][EO][123][Es][12]a{15}aa[34][EW]aaaaaaa[X]a';
 select * from t1 where name regexp 'a?b';
 
-##bug:https://aone.alibaba-inc.com/req/34761589
+##bug:
 select * from t1 where name regexp 'a' "bc" '|de';
 select * from t1 where name regexp "a" '|' "b" '|' "c";
 select * from t1 where name regexp "a"'()'"b";
@@ -435,7 +437,7 @@ insert into t1 values('abcde_');
  select a as c1u from t1 where a rlike 'ab\_def';
 drop table t1;
 
-##bug:https://work.aone.alibaba-inc.com/issue/25186566
+##bug:
 --disable_warnings
 drop table if exists t;
 --enable_warnings
@@ -443,3 +445,40 @@ drop table if exists t;
 create table t (c1 char(20));
 insert into t values ('');
 select c1 regexp 'ddd' from t;
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(c1 blob);
+insert into t1 values('UNPRESS123');
+insert into t1 values('UNPRESS456');
+select * from t1 where c1 regexp '^U';
+
+
+
+##bug48378677
+set names gbk;
+select 'a' collate gbk_bin regexp 'A';
+select 'a' collate gbk_chinese_ci regexp 'A';
+select 'a' regexp 'A' collate gbk_chinese_ci;
+select 'a' regexp 'A' collate gbk_bin;
+select 'a' collate gbk_bin regexp 'A' collate gbk_bin;
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci;
+--error 1267
+select 'a' collate gbk_bin regexp 'A' collate gbk_chinese_ci;
+--error 1267
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_bin;
+
+set names latin1;
+select 'a' collate latin1_bin regexp 'A';
+select 'a' collate latin1_swedish_ci regexp 'A';
+select 'a' regexp 'A' collate latin1_swedish_ci;
+select 'a' regexp 'A' collate latin1_bin;
+select 'a' collate latin1_bin regexp 'A' collate latin1_bin;
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
+--error 1267
+select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
+--error 1267
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;

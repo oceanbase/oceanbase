@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_contains.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -98,7 +99,9 @@ int ObExprJsonContains::eval_json_contains(const ObExpr &expr, ObEvalCtx &ctx, O
         ObJsonBaseVector sub_json_targets;
         ObString path_val = path_data->get_string();
         ObJsonPath *json_path;
-        if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 2, false))) {
+        if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[2], ctx, temp_allocator, path_val, is_null_result))) {
+          LOG_WARN("fail to get real data.", K(ret), K(path_val));
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 2, false))) {
           LOG_WARN("json path parse failed", K(path_data->get_string()), K(ret));
         } else if (OB_FAIL(json_target->seek(*json_path, json_path->path_node_cnt(), true, false, sub_json_targets))) {
           LOG_WARN("json seek failed", K(path_data->get_string()), K(ret));

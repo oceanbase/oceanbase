@@ -44,7 +44,7 @@ public:
 
 class ObStringHolder
 {
-  static constexpr int64_t TINY_STR_SIZE = 16;// no need count '\0'
+  static constexpr int64_t TINY_STR_SIZE = 32;// no need count '\0'
 public:
   ObStringHolder() : buffer_(nullptr), len_(0) {}
   ~ObStringHolder() { reset(); }

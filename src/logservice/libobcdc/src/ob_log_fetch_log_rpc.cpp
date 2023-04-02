@@ -162,9 +162,9 @@ rpc::frame::ObReqTransport::AsyncCB *FetchLogSRpc::RpcCB::clone(const rpc::frame
   RpcCB *cb = NULL;
 
   if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
-    LOG_ERROR("clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
   } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
-    LOG_ERROR("construct RpcCB fail", K(buf));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
   } else {
     // success
   }
@@ -182,7 +182,7 @@ int FetchLogSRpc::RpcCB::process()
   if (OB_FAIL(do_process_(rcode, &result))) {
     LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
   }
-  // Aone: https://work.aone.alibaba-inc.com/issue/13156448
+  // Aone:
   // Note: destruct response after asynchronous RPC processing
   result.reset();
 
@@ -307,7 +307,7 @@ FetchLogARpc::FetchLogARpc(FetchStream &host) :
     cur_req_(NULL),
     flying_req_list_(),
     res_queue_(),
-    lock_()
+    lock_(ObLatchIds::OBCDC_FETCHLOG_ARPC_LOCK)
 {
   int ret = OB_SUCCESS;
 
@@ -454,6 +454,7 @@ void FetchLogARpc::discard_request(const char *discard_reason, const bool is_nor
 
 int FetchLogARpc::async_fetch_log(
     const palf::LSN &req_start_lsn,
+    const int64_t client_progress,
     const int64_t upper_limit,
     bool &rpc_send_succeed)
 {
@@ -479,7 +480,7 @@ int FetchLogARpc::async_fetch_log(
     ret = OB_INVALID_ERROR;
   }
     // Initiating asynchronous requests
-  else if (OB_FAIL(launch_async_rpc_(*cur_req_, req_start_lsn, upper_limit, false, rpc_send_succeed))) {
+  else if (OB_FAIL(launch_async_rpc_(*cur_req_, req_start_lsn, client_progress, upper_limit, false, rpc_send_succeed))) {
     LOG_ERROR("launch async rpc fail", KR(ret), K(req_start_lsn), K(upper_limit), KPC(cur_req_));
   } else {
     // success
@@ -526,7 +527,7 @@ void FetchLogARpc::stop()
     while (get_flying_request_count() > 0) {
       wait_count++;
       if (0 == (wait_count % WARN_COUNT_ON_STOP)) {
-        LOG_WARN("wait for flying async fetch log rpc done",
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "wait for flying async fetch log rpc done",
             "fetch_stream", &host_, K_(svr),
             "flying_request_count", get_flying_request_count(),
             "wait_time", get_timestamp() - start_time);
@@ -589,7 +590,7 @@ void FetchLogARpc::revert_result(FetchLogARpcResult *result)
   ObSpinLockGuard guard(lock_);
 
   if (OB_ISNULL(result_pool_)) {
-    LOG_ERROR("invalid rpc result pool", K(result_pool_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid rpc result pool", K(result_pool_));
   } else if (OB_NOT_NULL(result)) {
     result_pool_->free(result);
     result = NULL;
@@ -700,8 +701,9 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
         rpc_req.mark_flying_state(false);
       } else {
         bool rpc_send_succeed = false;
+        int64_t server_progress = resp->get_progress();
         // Launch the next RPC
-        if (OB_FAIL(launch_async_rpc_(rpc_req, req_start_lsn, next_upper_limit, true, rpc_send_succeed))) {
+        if (OB_FAIL(launch_async_rpc_(rpc_req, req_start_lsn, server_progress, next_upper_limit, true, rpc_send_succeed))) {
           LOG_ERROR("launch_async_rpc_ fail", KR(ret), K(rpc_req), K(req_start_lsn), K(next_upper_limit));
         }
       }
@@ -860,6 +862,7 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
 
 int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     const palf::LSN &req_start_lsn,
+    const int64_t progress,
     const int64_t upper_limit,
     const bool launch_by_cb,
     bool &rpc_send_succeed)
@@ -871,7 +874,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
   if (OB_ISNULL(rpc_)) {
     LOG_ERROR("invalid handlers", K(rpc_));
     ret = OB_INVALID_ERROR;
-  } else if (OB_FAIL(rpc_req.prepare(req_start_lsn, upper_limit))) {
+  } else if (OB_FAIL(rpc_req.prepare(req_start_lsn, upper_limit, progress))) {
     // First prepare the RPC request and update the req_start_lsn and upper limit
     LOG_ERROR("rpc_req prepare failed", KR(ret), K(req_start_lsn), K(upper_limit));
   } else {
@@ -1090,9 +1093,9 @@ rpc::frame::ObReqTransport::AsyncCB *FetchLogARpc::RpcCB::clone(const rpc::frame
   RpcCB *cb = NULL;
 
   if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
-    LOG_ERROR("clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
   } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
-    LOG_ERROR("construct RpcCB fail", K(buf));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
   } else {
     // 成功
   }
@@ -1110,7 +1113,7 @@ int FetchLogARpc::RpcCB::process()
   if (OB_FAIL(do_process_(rcode, &result))) {
     LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
   }
-  // Aone: https://work.aone.alibaba-inc.com/issue/13156448
+  // Aone:
   // Note: Active destructe response after asynchronous RPC processing
   result.reset();
 
@@ -1196,7 +1199,8 @@ void FetchLogARpc::RpcRequest::update_request(const int64_t upper_limit,
 
 int FetchLogARpc::RpcRequest::prepare(
     const palf::LSN &req_start_lsn,
-    const int64_t upper_limit)
+    const int64_t upper_limit,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
 
@@ -1205,7 +1209,7 @@ int FetchLogARpc::RpcRequest::prepare(
     LOG_ERROR("invalid argument", KR(ret), K(req_start_lsn));
   } else {
     req_.set_client_pid(static_cast<uint64_t>(getpid()));
-
+    req_.set_progress(progress);
     // set start lsn
     req_.set_start_lsn(req_start_lsn);
     // set request parameter: upper limit
@@ -1244,7 +1248,7 @@ void FetchLogARpc::RpcRequestList::add(RpcRequest *req)
       tail_ = req;
     } else {
       tail_->next_ = req;
-      // fix https://work.aone.alibaba-inc.com/issue/30951328
+      // fix
       tail_ = req;
     }
 

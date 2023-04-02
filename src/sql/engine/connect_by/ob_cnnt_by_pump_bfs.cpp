@@ -43,7 +43,7 @@ bool ObConnectByOpBFSPump::RowComparer::operator()(const PumpNode &pump_node1, c
              || OB_ISNULL(r)
              || OB_UNLIKELY(l->cnt_ != r->cnt_)) {
     ret_ = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parameter", KPC(l), KPC(r), K(ret_));
+    LOG_WARN_RET(ret_, "invalid parameter", KPC(l), KPC(r), K(ret_));
   } else {
     const ObDatum *lcells = l->cells();
     const ObDatum *rcells = r->cells();
@@ -224,16 +224,16 @@ int ObConnectByOpBFSPump::push_back_row_to_stack(
     LOG_WARN("copy row is NULL", KPC(new_output_row), KPC(new_left_row), K(ret));
   } else if (OB_FAIL(sort_stack_.push_back(pump_node))) {
     LOG_WARN("fail to push back row", K(ret));
+  } else if (pump_node.is_cycle_) {
+    ret = OB_ERR_CBY_LOOP;
+    LOG_WARN("there is a cycle", K(ret));
   } else {
     LOG_DEBUG("connect by pump node", K(pump_node), K(left_row), K(output_row),
       K(ObToStringExprRow(*eval_ctx_, *connect_by_prior_exprs_)));
   }
 
-  if (OB_FAIL(ret)) {//if fail free memory
+  if (OB_FAIL(ret) && OB_ERR_CBY_LOOP != ret) {//if fail free memory
     // 由于产生环，所以上面报错，导致没有restore，从而数据错了
-    if (OB_ERR_CBY_LOOP == ret && OB_SUCCESS != connect_by_->restore_prior_expr()) {
-      LOG_WARN("failed to restore prior expr", K(ret));
-    }
     if (pump_node.path_node_.prior_exprs_result_ != NULL) {
       allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(pump_node.path_node_.prior_exprs_result_));
       pump_node.path_node_.prior_exprs_result_ = NULL;
@@ -273,12 +273,7 @@ int ObConnectByOpBFSPump::init(ObNLConnectByWithIndexSpec &connect_by,
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_ISNULL(eval_ctx.exec_ctx_.get_my_session())) { 
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session is null", K(ret));
   } else {
-    uint64_t tenant_id = eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
-    allocator_.set_tenant_id(tenant_id);
     connect_by_ = &connect_by_op;
     connect_by_prior_exprs_ = &connect_by.connect_by_prior_exprs_;
     left_prior_exprs_ = &connect_by.left_prior_exprs_;

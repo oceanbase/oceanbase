@@ -15,6 +15,7 @@
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/ob_tenant_info_proxy.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log_module.h"
 #include "common/ob_smart_var.h"
@@ -115,6 +116,47 @@ int ObArchivePersistHelper::init(const uint64_t tenant_id)
   } else {
     tenant_id_ = tenant_id;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_archive_mode(
+    common::ObISQLClient &proxy, ObArchiveMode &mode) const
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  const bool for_update = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &proxy, for_update, tenant_info))) {
+    LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
+  } else {
+    mode = tenant_info.get_log_mode();
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::open_archive_mode(common::ObISQLClient &proxy) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_log_mode(tenant_id_, &proxy, NOARCHIVE_MODE, ARCHIVE_MODE))) {
+    LOG_WARN("failed to open archive mode", K(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::close_archive_mode(common::ObISQLClient &proxy) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_log_mode(tenant_id_, &proxy, ARCHIVE_MODE, NOARCHIVE_MODE))) {
+    LOG_WARN("failed to close archive mode", K(ret), K_(tenant_id));
   }
   return ret;
 }
@@ -268,6 +310,28 @@ int ObArchivePersistHelper::get_lag_target(common::ObISQLClient &proxy, const bo
     LOG_WARN("fail to set checkpoint interval", K(ret), K(value));
   } else {
     lag_target = dest_attr.lag_target_;
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_dest_state(
+    common::ObISQLClient &proxy,
+    const bool need_lock,
+    const int64_t dest_no,
+    ObLogArchiveDestState &state) const
+{
+  int ret = OB_SUCCESS;
+  common::ObSqlString value;
+  const common::ObString str(OB_STR_STATE);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(get_string_value(proxy, dest_no, need_lock, str, value))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get string value", K(ret));
+    }
+  } else if (OB_FAIL(state.set_state(value.ptr()))) {
+    LOG_WARN("fail to set dest state", K(ret), K(value));
   }
   return ret;
 }
@@ -786,7 +850,7 @@ int ObArchivePersistHelper::get_frozen_pieces(
   return ret;
 }
 
-int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const ARCHIVE_SCN_TYPE &end_scn,
+int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const SCN &end_scn,
     const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const
 {
   int ret = OB_SUCCESS;
@@ -798,8 +862,8 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
-      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN, end_scn,
-      OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN,
+      end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
@@ -948,6 +1012,41 @@ int ObArchivePersistHelper::set_ls_archive_stop(common::ObISQLClient &proxy, con
   return ret;
 }
 
+int ObArchivePersistHelper::set_ls_archive_suspend(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
+    const ObLSID &id, int64_t &affected_rows) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArchiveRoundState suspend = ObArchiveRoundState::suspend();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("update %s set %s='%s' where %s=%lu and %s=%ld and %s=%ld and %s=%ld", OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+    OB_STR_STATUS, suspend.to_status_str(), OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, dest_id, OB_STR_ROUND_ID, round_id, OB_STR_LS_ID, id.id()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::set_ls_archive_doing(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
+    const ObLSID &id, int64_t &affected_rows) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArchiveRoundState doing = ObArchiveRoundState::doing();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("update %s set %s='%s' where %s=%lu and %s=%ld and %s=%ld and %s=%ld", OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+    OB_STR_STATUS, doing.to_status_str(), OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, dest_id, OB_STR_ROUND_ID, round_id, OB_STR_LS_ID, id.id()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql), K_(tenant_id));
+  }
+  return ret;
+}
 
 int ObArchivePersistHelper::get_dest_round_summary(common::ObISQLClient &proxy, const int64_t dest_id,
     const int64_t round_id, const int64_t since_piece_id, ObDestRoundSummary &summary) const
@@ -1086,6 +1185,8 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
   int64_t ls_id = 0;
   int64_t ls_id_bak = 0;
   int64_t real_length = 0;
+  uint64_t start_scn = 0;
+  uint64_t checkpoint_scn = 0;
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
 
   EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
@@ -1097,15 +1198,19 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PIECE_ID, piece.piece_id_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, piece.incarnation_, int64_t);
     EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MIN_LSN, piece.min_lsn_, uint64_t);
-    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, piece.start_scn_, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn, uint64_t);
     EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_LSN, piece.max_lsn_, uint64_t);
-    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, piece.checkpoint_scn_, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn, uint64_t);
     EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INPUT_BYTES, piece.input_bytes_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_OUTPUT_BYTES, piece.output_bytes_, int64_t);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(piece.state_.set_status(status_str))) {
       LOG_WARN("failed to set status", K(ret), K(status_str));
+    } else if (OB_FAIL(piece.start_scn_.convert_for_inner_table_field(start_scn))) {
+      LOG_WARN("failed to set start scn", K(ret), K(start_scn));
+    } else if (OB_FAIL(piece.checkpoint_scn_.convert_for_inner_table_field(checkpoint_scn))) {
+      LOG_WARN("failed to set checkpoint scn", K(ret), K(checkpoint_scn));
     } else {
       piece.ls_id_ = ObLSID(ls_id);
       piece.is_archiving_ = true;
@@ -1135,8 +1240,8 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
       piece.piece_id_ = 0;
       piece.incarnation_ = 0;
       piece.state_.set_invalid();
-      piece.start_scn_ = 0;
-      piece.checkpoint_scn_ = 0;
+      piece.start_scn_ = SCN::min_scn();
+      piece.checkpoint_scn_ = SCN::min_scn();
       piece.min_lsn_ = 0;
       piece.max_lsn_ = 0;
       piece.input_bytes_ = 0;

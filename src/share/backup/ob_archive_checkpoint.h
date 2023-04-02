@@ -30,15 +30,16 @@ public:
   struct GeneratedLSPiece
   {
     ObLSID ls_id_;
-    ARCHIVE_SCN_TYPE start_scn_;
-    ARCHIVE_SCN_TYPE checkpoint_scn_;
+    SCN start_scn_;
+    SCN checkpoint_scn_;
     uint64_t min_lsn_;
     uint64_t max_lsn_;
     int64_t input_bytes_;
     int64_t output_bytes_;
+    bool is_ls_deleted_;
 
     TO_STRING_KV(K_(ls_id), K_(start_scn), K_(checkpoint_scn), K_(min_lsn), K_(max_lsn), 
-      K_(input_bytes), K_(output_bytes));
+      K_(input_bytes), K_(output_bytes), K_(is_ls_deleted));
   };
 
   struct GeneratedPiece
@@ -60,10 +61,10 @@ public:
   typedef common::ObFunction<int(common::ObISQLClient *, const ObTenantArchiveRoundAttr &, const Result &, const GeneratedPiece &)> PieceGeneratedCb;
   typedef common::ObFunction<int(common::ObISQLClient *, const ObTenantArchiveRoundAttr &, const ObTenantArchiveRoundAttr &)> RoundCheckpointCb;
 
-  ObDestRoundCheckpointer() : is_inited_(false), round_handler_(nullptr), max_checkpoint_scn_(0) {}
+  ObDestRoundCheckpointer() : is_inited_(false), round_handler_(nullptr), max_checkpoint_scn_() {}
 
   int init(ObArchiveRoundHandler *round_handler, const PieceGeneratedCb &piece_generated_cb, 
-      const RoundCheckpointCb &round_checkpoint_cb, const ARCHIVE_SCN_TYPE &max_checkpoint_scn);
+      const RoundCheckpointCb &round_checkpoint_cb, const SCN &max_checkpoint_scn);
 
   // This operation is allowed only if dest round is in BEGINNING/DOING/STOPPING state.
   int checkpoint(const ObTenantArchiveRoundAttr &round_info, const ObDestRoundSummary &summary);
@@ -81,13 +82,15 @@ private:
     int64_t doing_cnt_;
     // Count of log streams whose archive state are in STOP.
     int64_t stopped_cnt_;
+    // Count of log streams whose archive state are in SUSPEND.
+    int64_t suspended_cnt_;
 
     // First interrupt ls id.
     ObLSID interrupted_ls_id_;
     // The fastest log stream archived scn.
-    ARCHIVE_SCN_TYPE max_scn_;
+    SCN max_scn_;
     // The slowest log stream archived scn.
-    ARCHIVE_SCN_TYPE checkpoint_scn_;
+    SCN checkpoint_scn_;
     // Piece id which all log stream have generated. It is the max common piece id
     // for them.
     int64_t max_active_piece_id_;
@@ -119,7 +122,7 @@ private:
 
   bool is_inited_;
   ObArchiveRoundHandler *round_handler_;
-  ARCHIVE_SCN_TYPE max_checkpoint_scn_;
+  SCN max_checkpoint_scn_;
   PieceGeneratedCb piece_generated_cb_;
   RoundCheckpointCb round_checkpoint_cb_;
   DISALLOW_COPY_AND_ASSIGN(ObDestRoundCheckpointer);

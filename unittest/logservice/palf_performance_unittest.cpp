@@ -21,6 +21,7 @@
 #include "logservice/palf/log_engine.h"
 #undef private
 #include "logservice/palf/log_group_entry.h"
+#include "share/scn.h"
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_io_worker.h"
 #include "logservice/palf/log_iterator_storage.h"
@@ -74,7 +75,7 @@ public:
   int init(const int64_t palf_id, const char *log_dir, const LSN &base_lsn, const int64_t base_lsn_ts)
   {
     int ret = OB_SUCCESS;
-    log_meta_.generate_by_default(AccessMode::APPEND);
+    log_meta_.generate_by_default(AccessMode::APPEND, LogReplicaType::NORMAL_REPLICA);
     log_meta_.log_snapshot_meta_.base_lsn_ = LSN(5 * PALF_BLOCK_SIZE);
     const int64_t new_palf_epoch = ATOMIC_AAF(&palf_epoch_, 1);
     if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta_, &allocator_, &log_block_pool_, \
@@ -184,10 +185,10 @@ public:
     }
     return need_padding;
   }
-  int test_log_read_block_min_ts(const block_id_t block_id)
+  int test_log_read_block_scn(const block_id_t block_id)
   {
-    int64_t min_ts;
-    return log_engine_.get_block_min_ts_ns(block_id, min_ts);
+    share::SCN min_scn;
+    return log_engine_.get_block_min_scn(block_id, min_scn);
   }
   int test_log_engine_append_log(const std::function<int64_t()> &write_size, const int64_t total_size)
   {

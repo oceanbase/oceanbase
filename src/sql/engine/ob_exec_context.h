@@ -26,6 +26,7 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/optimizer/ob_pwj_comparer.h"
 #include "sql/das/ob_das_context.h"
+#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 #include "pl/ob_pl_package_guard.h"
 
 #define GET_PHY_PLAN_CTX(ctx) ((ctx).get_physical_plan_ctx())
@@ -41,7 +42,7 @@
       op_ctx = new (ptr) ctx_type(exec_ctx); \
       int64_t tenant_id = GET_MY_SESSION(exec_ctx)->get_effective_tenant_id(); \
       if (oceanbase::common::OB_SUCCESS != (_ret_ = op_ctx->init_base(tenant_id))) { \
-        SQL_ENG_LOG(WARN, "init operator ctx failed", K(_ret_)); \
+        SQL_ENG_LOG_RET(WARN, _ret_, "init operator ctx failed", K(_ret_)); \
       } else { \
         op_ctx->set_op_id(op_id); \
         op_ctx->set_op_type(op_type); \
@@ -80,7 +81,6 @@ class ObPhysicalPlanCtx;
 class ObIPhyOperatorInput;
 class ObTaskExecutorCtx;
 class ObSQLSessionInfo;
-class ObPlanCacheManager;
 class ObSQLSessionMgr;
 class ObExprOperatorCtx;
 class ObPxSqcHandler;
@@ -155,7 +155,7 @@ public:
    * @brief initialize execute context, must call before calling any function
    */
   int init_phy_op(uint64_t phy_op_size);
-  int init_expr_op(const uint64_t expr_op_size);
+  int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
@@ -207,9 +207,9 @@ public:
   inline ObSQLSessionInfo *get_my_session() const;
   //get the parent execute context in nested sql
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
-  //get the root execute context in nested sql
-  int get_root_ctx(ObExecContext* &root_ctx);
-  bool is_root_ctx();
+  //get the root execute context of foreign key in nested sql
+  int get_fk_root_ctx(ObExecContext* &root_ctx);
+  bool is_fk_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy
@@ -342,7 +342,6 @@ public:
   inline void set_pl_ctx(pl::ObPLCtx *pl_ctx) { pl_ctx_ = pl_ctx; }
   pl::ObPLPackageGuard* get_package_guard();
 
-  ObPlanCacheManager* get_plan_cache_manager();
   int init_pl_ctx();
 
   ObPartIdRowMapManager& get_part_row_manager() { return part_row_map_manager_; }
@@ -397,7 +396,7 @@ public:
   void set_px_sqc_id(const int64_t sqc_id) { px_sqc_id_ = sqc_id; }
   int64_t get_px_sqc_id() const { return px_sqc_id_; }
 
-  ObJoinFilterDataCtx &get_bf_ctx() { return bf_ctx_; }
+  common::ObIArray<ObJoinFilterDataCtx> &get_bloom_filter_ctx_array() { return bloom_filter_ctx_array_; }
 
   char **get_frames() const { return frames_; }
   void set_frames(char **frames) { frames_ = frames; }
@@ -430,7 +429,10 @@ public:
   const ObIArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
   int set_partition_ranges(const ObIArray<ObPxTabletRange> &part_ranges);
   int add_partition_range(ObPxTabletRange &part_range);
-  int fill_px_batch_info(ObBatchRescanParams &params, int64_t batch_id);
+  int fill_px_batch_info(
+      ObBatchRescanParams &params,
+      int64_t batch_id,
+      sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }
@@ -459,6 +461,9 @@ public:
     eval_res_allocator_.set_attr(attr);
     eval_tmp_allocator_.set_attr(attr);
   }
+  ObTableDirectInsertCtx &get_table_direct_insert_ctx() { return table_direct_insert_ctx_; }
+  void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
+  int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -569,8 +574,8 @@ protected:
   int64_t px_task_id_;
   int64_t px_sqc_id_;
 
-  //bloom filter ctx
-  ObJoinFilterDataCtx bf_ctx_;
+  //bloom filter ctx array
+  common::ObArray<ObJoinFilterDataCtx> bloom_filter_ctx_array_;
 
   // data frames and count
   char **frames_;
@@ -629,6 +634,10 @@ protected:
   // indicate if eval_tmp_allocator_ is used
   bool tmp_alloc_used_;
   // -------------------
+  // for direct insert
+  ObTableDirectInsertCtx table_direct_insert_ctx_;
+  // for deadlock detect, set in do_close_plan
+  int errcode_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

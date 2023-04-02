@@ -28,6 +28,7 @@ public:
       contain_always_false_(false),
       query_range_(NULL),
       ranges_(),
+      ss_ranges_(),
       equal_prefix_count_(0),
       equal_prefix_null_count_(0),
       range_prefix_count_(0),
@@ -48,6 +49,8 @@ public:
   bool get_contain_always_false() const { return contain_always_false_; }
   
   ObQueryRangeArray& get_ranges() { return ranges_; }
+  ObQueryRangeArray& get_ss_ranges() { return ss_ranges_; }
+  const ObQueryRangeArray& get_ss_ranges() const { return ss_ranges_; }
   void set_query_range(ObQueryRange *query_range) { query_range_ = query_range; }
   common::ObIArray<ColumnItem> &get_range_columns() { return range_columns_; }
   common::ObIArray<ObExprConstraint> &get_expr_constraints() { return expr_constraints_; }
@@ -88,6 +91,7 @@ private:
   bool contain_always_false_;
   ObQueryRange *query_range_;
   ObQueryRangeArray ranges_;
+  ObQueryRangeArray ss_ranges_; // for index skip scan, postfix range
   int64_t equal_prefix_count_;
   int64_t equal_prefix_null_count_;
   int64_t range_prefix_count_;
@@ -129,6 +133,7 @@ public:
     is_unique_index_(false),
     is_index_back_(false),
     is_index_global_(false),
+    is_geo_index_(false),
     range_info_(),
     ordering_info_(),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
@@ -158,6 +163,8 @@ public:
   void set_is_index_back(const bool is_index_back) { is_index_back_ = is_index_back; }
   bool is_index_global() const { return is_index_global_; }
   void set_is_index_global(const bool is_index_global) { is_index_global_ = is_index_global; }
+  bool is_index_geo() const { return is_geo_index_; }
+  void set_is_index_geo(const bool is_index_geo) { is_geo_index_ = is_index_geo; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
                K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
@@ -166,6 +173,7 @@ private:
   bool is_unique_index_;
   bool is_index_back_;
   bool is_index_global_;
+  bool is_geo_index_;
   QueryRangeInfo range_info_;
   OrderingInfo ordering_info_;
   int64_t interesting_order_info_;  // 记录索引的序在stmt中的哪些地方用到 e.g. join, group by, order by

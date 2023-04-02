@@ -42,6 +42,7 @@ class ObTableSchema;
 
 namespace observer
 {
+class ObInnerSQLResult;
 class ObAllVirtualProxySchema : public common::ObVirtualTableIterator
 {
   enum class DupReplicaType
@@ -121,23 +122,26 @@ public:
       common::ObIAllocator *allocator);
 
 private:
+  int init_data();
   // get base table's schema from view
   int get_view_decoded_schema_(
       const uint64_t tenant_id,
-      common::ObString &tenant_name,
+      const common::ObString &tenant_name,
       const common::ObString &view_definition,
       const bool is_oracle_mode,
       const share::schema::ObTableSchema *&new_table_schema);
   int inner_get_next_row_();
   int fill_row_(
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObString &table_name,
       const share::schema::ObTableSchema &table_schema,
       const share::ObLSReplicaLocation &replica,
       const common::ObTabletID &tablet_id,
       const DupReplicaType dup_replica_type);
 
   //////////// tenant server related ////////////
-  int get_next_tenant_server_(const share::schema::ObTableSchema *table_schema);
+  int get_next_tenant_server_(const common::ObString &table_name,
+                              const share::schema::ObTableSchema *table_schema);
   int get_tenant_servers_(const uint64_t tenant_id);
   int fill_tenant_servers_(
       const uint64_t tenant_id,
@@ -149,6 +153,7 @@ private:
 
   //////////// tablet location related ////////////
   int get_next_tablet_location_(
+      const common::ObString &table_name,
       const share::schema::ObTableSchema *table_schema,
       const common::ObTabletID &tablet_id);
   int get_table_tablet_location_(
@@ -163,9 +168,17 @@ private:
   int get_actual_tablet_id_(
       const share::schema::ObTableSchema &table_schema,
       common::ObTabletID &tablet_id);
+  int init_convert_ctx();
+  int convert_output_row(ObNewRow *&cur_row);
+  int gen_column_value(char *&buf, int64_t len,
+                       const ObString &str, const bool is_oracle_mode);
 
 private:
   bool is_inited_;
+  common::ObArenaAllocator inner_alloc_;
+  common::ObArenaAllocator convert_alloc_;
+  common::ObCastCtx cast_ctx_;
+  common::ObNewRow convert_row_;
   bool force_sql_refresh_; // use for refreshing location cache forcely
   int64_t next_table_idx_; // index for table_schemas_
   int64_t next_replica_idx_; // index for location_
@@ -173,7 +186,7 @@ private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   common::ObString input_tenant_name_;
   common::ObString input_db_name_;
-  common::ObString input_table_name_;
+  common::ObSEArray<common::ObString, 1> input_table_names_;
   // use for decoding synonym and view schema
   common::ObString level1_decoded_db_name_;
   common::ObString level1_decoded_table_name_;
@@ -183,6 +196,7 @@ private:
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   common::ObSEArray<common::ObTabletID, 1> tablet_ids_;
   common::ObSEArray<ObTenantServer, 64> tenant_servers_;
+  common::ObMySQLProxy::MySQLResult *sql_res_;
   share::ObLSLocation location_;
   share::schema::ObSchemaGetterGuard schema_guard_; // tenant_schema_guard
   // dependency

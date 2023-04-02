@@ -540,9 +540,9 @@ ObStorageFileReader::~ObStorageFileReader()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "reader is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "reader is not closed", KCSTRING(path_), K(fd_));
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret), KCSTRING(path_), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close reader", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
@@ -649,9 +649,9 @@ ObStorageFileBaseWriter::~ObStorageFileBaseWriter()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "writer is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "writer is not closed", KCSTRING(path_), K(fd_));
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close writer", K(tmp_ret), KCSTRING(path_), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close writer", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
@@ -691,7 +691,7 @@ int ObStorageFileBaseWriter::write(const char *buf,const int64_t buf_size)
   int64_t write_size = 0;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_opened_) {
@@ -737,7 +737,7 @@ int ObStorageFileBaseWriter::pwrite(const char *buf, const int64_t buf_size, con
   int64_t write_size = 0;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_opened_) {
@@ -805,10 +805,10 @@ ObStorageFileWriter::~ObStorageFileWriter()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "wrtier is not closed", KCSTRING(path_), K(fd_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "wrtier is not closed", KCSTRING(path_), K(fd_));
     has_error_ = true;
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close wrtier", K(tmp_ret), KCSTRING(path_), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close wrtier", K(tmp_ret), KCSTRING(path_), K(fd_));
     }
   }
 }
@@ -854,7 +854,7 @@ int ObStorageFileWriter::close()
 
   if (OB_SUCC(ret)) {
 #ifdef ERRSIM
-  ret = E(EventTable::EN_FILE_SYSTEM_RENAME_ERROR) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_FILE_SYSTEM_RENAME_ERROR) OB_SUCCESS;
   if (OB_FAIL(ret)) {
     has_error_ = true;
   }
@@ -894,9 +894,9 @@ ObStorageFileAppender::~ObStorageFileAppender()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_opened_) {
-    STORAGE_LOG(ERROR, "appender is not closed");
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "appender is not closed");
     if (OB_SUCCESS != (tmp_ret = close())) {
-      STORAGE_LOG(WARN, "failed to close appender", K(tmp_ret), K(fd_));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to close appender", K(tmp_ret), K(fd_));
     }
   }
 }

@@ -194,4 +194,3 @@ sqlclient::ObISQLConnection *ObSQLClientRetryWeak::get_connection()
   }
   return conn;
 }
-

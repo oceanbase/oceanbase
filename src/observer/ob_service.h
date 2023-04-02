@@ -120,15 +120,14 @@ public:
       const ObTabletID &tablet_id) override;
 
   ////////////////////////////////////////////////////////////////
-  int check_frozen_version(const obrpc::ObCheckFrozenVersionArg &arg);
+  int check_frozen_scn(const obrpc::ObCheckFrozenScnArg &arg);
   int get_min_sstable_schema_version(
       const obrpc::ObGetMinSSTableSchemaVersionArg &arg,
       obrpc::ObGetMinSSTableSchemaVersionRes &result);
   // ObRpcSwitchSchemaP @RS DDL
   int switch_schema(const obrpc::ObSwitchSchemaArg &arg, obrpc::ObSwitchSchemaResult &result);
   int calc_column_checksum_request(const obrpc::ObCalcColumnChecksumRequestArg &arg, obrpc::ObCalcColumnChecksumRequestRes &res);
-  int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
-  int write_ddl_sstable_commit_log(const obrpc::ObDDLWriteSSTableCommitLogArg &arg);
+  int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg, obrpc::ObDDLBuildSingleReplicaRequestResult &res);
   int stop_partition_write(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);
   int check_partition_log(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);
   int get_wrs_info(const obrpc::ObGetWRSArg &arg, obrpc::ObGetWRSResult &result);
@@ -145,10 +144,13 @@ public:
   int check_sys_task_exist(const share::ObTaskId &arg, bool &res);
   int check_migrate_task_exist(const share::ObTaskId &arg, bool &res);
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
-
+  int get_ls_sync_scn(const obrpc::ObGetLSSyncScnArg &arg,
+                           obrpc::ObGetLSSyncScnRes &result);
+  int force_set_ls_as_single_replica(const obrpc::ObForceSetLSAsSingleReplicaArg &arg);
+  int refresh_tenant_info(const obrpc::ObRefreshTenantInfoArg &arg,
+                          obrpc::ObRefreshTenantInfoRes &result);
   int estimate_partition_rows(const obrpc::ObEstPartArg &arg,
                               obrpc::ObEstPartRes &res) const;
-
   int estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
                                   obrpc::ObEstBlockRes &res) const;
 
@@ -165,6 +167,10 @@ public:
       const obrpc::ObCheckModifyTimeElapsedArg &arg,
       obrpc::ObCheckModifyTimeElapsedResult &result);
 
+  int check_ddl_tablet_merge_status(
+    const obrpc::ObDDLCheckTabletMergeStatusArg &arg,
+    obrpc::ObDDLCheckTabletMergeStatusResult &result);
+
   ////////////////////////////////////////////////////////////////
   // ObRpcBatchSwitchRsLeaderP @RS leader coordinator & admin
   int batch_switch_rs_leader(const ObAddr &arg);
@@ -178,6 +184,9 @@ public:
   int is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   // ObRpcCheckDeploymentModeP
   int check_deployment_mode_match(const obrpc::ObCheckDeploymentModeArg &arg, obrpc::Bool &match);
+  int get_leader_locations(
+      const obrpc::ObGetLeaderLocationsArg &arg,
+      obrpc::ObGetLeaderLocationsResult &result);
   int batch_broadcast_schema(
       const obrpc::ObBatchBroadcastSchemaArg &arg,
       obrpc::ObBatchBroadcastSchemaResult &result);
@@ -220,7 +229,15 @@ public:
   int submit_async_refresh_schema_task(const uint64_t tenant_id, const int64_t schema_version);
   int renew_in_zone_hb(const share::ObInZoneHbRequest &arg,
                        share::ObInZoneHbResponse &result);
+  int init_tenant_config(
+      const obrpc::ObInitTenantConfigArg &arg,
+      obrpc::ObInitTenantConfigRes &result);
 private:
+  int get_role_from_palf_(
+      logservice::ObLogService &log_service,
+      const share::ObLSID &ls_id,
+      common::ObRole &role,
+      int64_t &proposal_id);
   int inner_fill_tablet_info_(
       const int64_t tenant_id,
       const ObTabletID &tablet_id,
@@ -231,8 +248,15 @@ private:
 
   int register_self();
   int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &server_empty);
-  int tenant_freeze(const uint64_t tenant_id);
-  int tablet_freeze(const uint64_t tenant_id, const common::ObTabletID &tablet_id);
+
+  int handle_server_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
+  int handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
+  int handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
+  int tenant_freeze_(const uint64_t tenant_id);
+  int ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
+  int generate_master_rs_ls_info_(
+      const share::ObLSReplica &cur_leader,
+      share::ObLSInfo &ls_info);
 private:
   bool inited_;
   bool in_register_process_;

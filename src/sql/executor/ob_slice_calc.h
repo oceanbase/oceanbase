@@ -82,7 +82,6 @@ public:
   // support vectorized slice indexes calculation.
   bool support_vectorized_calc() const { return support_vectorized_calc_; }
   virtual void set_calc_hash_keys(int64_t n_keys) { UNUSED(n_keys); }
-
   // Calculate slice index vector for batch rows.
   // The function is called only support_vectorized_calc() is true.
   virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
@@ -248,7 +247,7 @@ public:
 protected:
   // this is a trick!
   // get part id from hashmap, implicate that only one level-1 part in the map
-  // reference to https://work.aone.alibaba-inc.com/issue/32897802
+  // reference to
   virtual int get_part_id_by_one_level_sub_ch_map(int64_t &part_id);
   virtual int get_sub_part_id_by_one_level_first_ch_map(
     const int64_t part_id, int64_t &sub_part_id);
@@ -695,6 +694,95 @@ public:
   int64_t n_keys_;
 };
 
+class ObHybridHashSliceIdCalcBase
+{
+public:
+  ObHybridHashSliceIdCalcBase(common::ObIAllocator &alloc,
+                              const int64_t slice_cnt,
+                              ObNullDistributeMethod::Type null_row_dist_method,
+                              const ObIArray<ObExpr*> *dist_exprs,
+                              const ObIArray<ObHashFunc> *hash_funcs,
+                              const ObIArray<uint64_t> *popular_values_hash)
+      : hash_calc_(alloc, slice_cnt, null_row_dist_method, dist_exprs, hash_funcs),
+        popular_values_hash_(popular_values_hash),
+        use_hash_lookup_(false)
+  {
+    int ret = OB_SUCCESS;
+    if (popular_values_hash && popular_values_hash->count() > 3) {
+      // popular value is not ususally not large. 2x the hash bucket size for better performance
+      if (OB_FAIL(popular_values_map_.create(popular_values_hash->count() * 2, "PopValBkt", "PopValNode"))) {
+        SQL_LOG(WARN, "fail create popular values map", K(ret), K(popular_values_hash->count()));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < popular_values_hash_->count(); ++i) {
+          if (OB_FAIL(popular_values_map_.set_refactored(popular_values_hash_->at(i), 0))) {
+            SQL_LOG(WARN, "fail init popular values map",
+                    K(ret), K(i), K(popular_values_hash->count()));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        use_hash_lookup_ = true;
+      }
+    }
+  }
+  ~ObHybridHashSliceIdCalcBase()
+  {
+    if (popular_values_map_.created()) {
+      (void) popular_values_map_.destroy();
+    }
+  }
+protected:
+  int check_if_popular_value(ObEvalCtx &eval_ctx, bool &is_popular);
+  ObHashSliceIdCalc hash_calc_;
+  const common::ObIArray<uint64_t> *popular_values_hash_;
+  common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> popular_values_map_;
+  bool use_hash_lookup_;
+};
+
+// broadcast side of px hybrid hash send
+class ObHybridHashBroadcastSliceIdCalc : public ObHybridHashSliceIdCalcBase,
+                                         public ObMultiSliceIdxCalc
+{
+public:
+  ObHybridHashBroadcastSliceIdCalc(common::ObIAllocator &alloc,
+                                   const int64_t slice_cnt,
+                                   ObNullDistributeMethod::Type null_row_dist_method,
+                                   const ObIArray<ObExpr*> *dist_exprs,
+                                   const ObIArray<ObHashFunc> *hash_funcs,
+                                   const ObIArray<uint64_t> *popular_values_hash)
+      : ObHybridHashSliceIdCalcBase(alloc, slice_cnt, null_row_dist_method, dist_exprs, hash_funcs, popular_values_hash),
+        ObMultiSliceIdxCalc(alloc, null_row_dist_method),
+        broadcast_calc_(alloc, slice_cnt, null_row_dist_method)
+  {}
+  virtual int get_slice_indexes(
+    const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, SliceIdxArray &slice_idx_array);
+private:
+  ObBroadcastSliceIdCalc broadcast_calc_;
+};
+
+// random side of px hybrid hash send
+class ObHybridHashRandomSliceIdCalc : public ObHybridHashSliceIdCalcBase,
+                                      public ObSliceIdxCalc
+{
+public:
+  ObHybridHashRandomSliceIdCalc(common::ObIAllocator &alloc,
+                                const int64_t slice_cnt,
+                                ObNullDistributeMethod::Type null_row_dist_method,
+                                const ObIArray<ObExpr*> *dist_exprs,
+                                const ObIArray<ObHashFunc> *hash_funcs,
+                                const ObIArray<uint64_t> *popular_values_hash)
+      : ObHybridHashSliceIdCalcBase(alloc, slice_cnt, null_row_dist_method, dist_exprs, hash_funcs, popular_values_hash),
+        ObSliceIdxCalc(alloc, null_row_dist_method),
+        random_calc_(alloc, slice_cnt)
+  {}
+  virtual int get_slice_idx(
+      const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx) override;
+private:
+  ObRandomSliceIdCalc random_calc_;
+};
+
+
+
 class ObSlaveMapPkeyRangeIdxCalc : public ObSlaveMapRepartIdxCalcBase
 {
 public:
@@ -865,6 +953,55 @@ private:
   int build_affi_hash_map(hash::ObHashMap<int64_t, ObPxPartChMapItem> &affi_hash_map);
 private:
   hash::ObHashMap<int64_t, ObPxPartChMapItem> affi_hash_map_;
+};
+
+class ObWfHybridDistSliceIdCalc : public ObSliceIdxCalc
+{
+public:
+  enum SliceIdCalcType {
+    INVALID = 0,
+    BROADCAST = 1,
+    RANDOM = 2,
+    HASH = 3,
+    MAX = 4,
+  };
+  ObWfHybridDistSliceIdCalc(
+      ObIAllocator &alloc, const int64_t task_cnt, ObNullDistributeMethod::Type null_row_dist_method,
+      const ObIArray<ObExpr*> *dist_exprs, const ObIArray<ObHashFunc> *hash_funcs)
+      : ObSliceIdxCalc(alloc, null_row_dist_method),
+        slice_id_calc_type_(SliceIdCalcType::INVALID),
+        broadcast_slice_id_calc_(alloc, task_cnt, null_row_dist_method),
+        random_slice_id_calc_(alloc, task_cnt),
+        hash_slice_id_calc_(alloc, task_cnt, null_row_dist_method, dist_exprs, hash_funcs)
+  {
+    support_vectorized_calc_ = false;
+  }
+  virtual int get_slice_idx(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx, int64_t &slice_idx)
+  {
+    UNUSED(exprs);
+    UNUSED(eval_ctx);
+    UNUSED(slice_idx);
+    return common::OB_NOT_IMPLEMENT;
+  }
+  virtual int get_slice_idx_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
+                                ObBitVector &skip, const int64_t batch_size,
+                                int64_t *&indexes) override;
+  virtual int get_slice_indexes(const ObIArray<ObExpr*> &exprs,
+                                ObEvalCtx &eval_ctx,
+                                SliceIdxArray &slice_idx_array);
+  virtual void set_calc_hash_keys(int64_t n_keys)
+  {
+    hash_slice_id_calc_.set_calc_hash_keys(n_keys);
+  }
+  void set_slice_id_calc_type(SliceIdCalcType slice_id_calc_type)
+  {
+    slice_id_calc_type_ = slice_id_calc_type;
+  }
+private:
+  SliceIdCalcType slice_id_calc_type_;
+  ObBroadcastSliceIdCalc broadcast_slice_id_calc_;
+  ObRandomSliceIdCalc random_slice_id_calc_;
+  ObHashSliceIdCalc hash_slice_id_calc_;
 };
 
 class ObNullAwareHashSliceIdCalc : public ObHashSliceIdCalc

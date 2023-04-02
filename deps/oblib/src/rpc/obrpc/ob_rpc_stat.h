@@ -147,15 +147,22 @@ private:
 template <int N>
 void RpcStatBulk<N>::add_piece(const RpcStatPiece &piece)
 {
-  const int64_t start = rand_.get(0, N - 1);
-  for (int64_t i = 0; ;i++) {
-    const int64_t idx = (i + start) % N;
-    if (common::OB_SUCCESS == items_[idx].lock_.trylock()) {
-      items_[idx].add_piece(piece);
-      if (OB_UNLIKELY(common::OB_SUCCESS != items_[idx].lock_.unlock())) {
-        RPC_LOG(ERROR, "unlock fail");
+  if (piece.reset_dcount_){
+    for (int64_t i = 0; i < N; i++) {
+      // only reset dcount, no need lock
+      items_[i].add_piece(piece);
+    }
+  } else {
+    const int64_t start = rand_.get(0, N - 1);
+    for (int64_t i = 0;; i++) {
+      const int64_t idx = (i + start) % N;
+      if (common::OB_SUCCESS == items_[idx].lock_.trylock()) {
+        items_[idx].add_piece(piece);
+        if (OB_UNLIKELY(common::OB_SUCCESS != items_[idx].lock_.unlock())) {
+          RPC_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unlock fail");
+        }
+        break;
       }
-      break;
     }
   }
 }

@@ -48,7 +48,7 @@ int ObPxMultiPartDeleteSpec::register_to_datahub(ObExecContext &ctx) const
         ObBarrierWholeMsg::WholeMsgProvider *provider =
           new (buf)ObBarrierWholeMsg::WholeMsgProvider();
         ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
-        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), *provider))) {
+        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), dtl::DH_BARRIER_WHOLE_MSG, *provider))) {
           LOG_WARN("fail add whole msg provider", K(ret));
         }
       }
@@ -86,11 +86,10 @@ int ObPxMultiPartDeleteOp::check_rowkey_distinct(const ObExprPtrIArray &row,
   int ret = OB_SUCCESS;
   if (DistinctType::T_DISTINCT_NONE != MY_SPEC.del_ctdef_.distinct_algo_) {
     ret = ObDMLService::check_rowkey_whether_distinct(row,
-                                                      MY_SPEC.del_ctdef_.das_ctdef_.rowkey_cnt_,
-                                                      MY_SPEC.rows_,
                                                       MY_SPEC.del_ctdef_.distinct_algo_,
                                                       eval_ctx_,
                                                       ctx_,
+                                                      del_rtdef_.table_rowkey_,
                                                       del_rtdef_.se_rowkey_dist_ctx_,
                                                       is_distinct);
   } else {
@@ -202,6 +201,7 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
   } else {
     while (OB_SUCC(ret)) {
       clear_evaluated_flag();
+      ObChunkDatumStore::StoredRow* stored_row = nullptr;
       if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(dml_row_iter.get_next_row(child_->get_spec().output_))) {
@@ -210,8 +210,10 @@ int ObPxMultiPartDeleteOp::write_rows(ObExecContext &ctx,
         } else {
           iter_end_ = true;
         }
-      } else if (OB_FAIL(ObDMLService::delete_row(MY_SPEC.del_ctdef_, del_rtdef_, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::delete_row(MY_SPEC.del_ctdef_, del_rtdef_, tablet_loc, dml_rtctx_, stored_row))) {
         LOG_WARN("delete row to das failed", K(ret));
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
+        LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
       }
     }
 

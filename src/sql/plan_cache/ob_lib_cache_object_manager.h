@@ -30,7 +30,7 @@ class ObLCObjectManager
 public:
   typedef common::hash::ObHashMap<ObCacheObjID, ObILibCacheObject*> IdCacheObjectMap;
   
-  ObLCObjectManager() {}
+  ObLCObjectManager() : object_id_(0) {}
   int init(int64_t hash_bucket, uint64_t tenant_id);
   int alloc(ObCacheObjGuard& guard,
             ObLibCacheNameSpace ns,
@@ -48,6 +48,8 @@ public:
   int foreach_alloc_cache_obj(_callback &callback) const;
   template<class _callback>
   int atomic_get_cache_obj(ObCacheObjID id, _callback &callback);
+  template<class _callback>
+  int atomic_get_alloc_cache_obj(ObCacheObjID id, _callback &callback);
   int erase_cache_obj(ObCacheObjID id, const CacheRefHandleID ref_handle);
   int add_cache_obj(ObILibCacheObject *obj);
   int64_t get_cache_obj_size() const { return cache_obj_map_.size(); }
@@ -115,6 +117,16 @@ int ObLCObjectManager::atomic_get_cache_obj(ObCacheObjID id, _callback &callback
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(cache_obj_map_.atomic_refactored(id, callback))) {
+    OB_LOG(WARN, "failed to atomic get cache obj", K(ret));
+  }
+  return ret;
+}
+
+template<class _callback>
+int ObLCObjectManager::atomic_get_alloc_cache_obj(ObCacheObjID id, _callback &callback)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(alloc_cache_obj_map_.atomic_refactored(id, callback))) {
     OB_LOG(WARN, "failed to atomic get cache obj", K(ret));
   }
   return ret;

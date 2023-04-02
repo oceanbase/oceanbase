@@ -4,6 +4,8 @@
 #sql_unittest(ob_expr_equal_test)
 #sql_unittest(ob_expr_res_type_map_test)
 #sql_unittest(ob_expr_operator_factory_test)
+sql_unittest(ob_geo_expr_utils_test)
+sql_unittest(test_gis_dispatcher test_gis_dispatcher.cpp ob_geo_func_testx.cpp ob_geo_func_testy.cpp)
 
 # engine_expr_test_lrpad_SOURCES=engine/expr/ob_expr_lrpad_test.cpp
 #ob_postfix_expression_test_SOURCES = ob_postfix_expression_test.cpp

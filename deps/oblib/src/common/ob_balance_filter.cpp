@@ -176,12 +176,12 @@ uint64_t ObBalanceFilter::filt(const uint64_t input)
 void ObBalanceFilter::migrate(const int64_t bucket_pos, const int64_t thread_pos)
 {
   if (!inited_) {
-    _OB_LOG(WARN, "have not inited");
+    _OB_LOG_RET(WARN, OB_NOT_INIT, "have not inited");
   } else if (0 > bucket_pos
              || bucket_node_num_ <= bucket_pos
              || 0 > thread_pos
              || thread_node_num_ <= thread_pos) {
-    _OB_LOG(WARN, "invalid param, bucket_pos=%ld thread_pos=%ld", bucket_pos, thread_pos);
+    _OB_LOG_RET(WARN, OB_NOT_INIT, "invalid param, bucket_pos=%ld thread_pos=%ld", bucket_pos, thread_pos);
   } else {
     _OB_LOG(INFO, "migrate bucket_pos=%ld bucket_cnt=%ld thread_pos from %ld:%ld to %ld:%ld",
               bucket_pos, bucket_nodes_[bucket_pos].cnt,

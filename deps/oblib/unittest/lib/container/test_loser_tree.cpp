@@ -33,16 +33,16 @@ class ObLoserTreeTest: public ::testing::Test
 class TestMaxComp
 {
 public:
-  int get_error_code() { return OB_SUCCESS; }
-  int64_t operator()(const int64_t &a, const int64_t &b)
+  int cmp(const int64_t &a, const int64_t &b, int64_t &cmp_ret)
   {
-    int64_t cmp_ret = 0;
+    int ret = OB_SUCCESS;
+    cmp_ret = 0;
     if (a < b) {
       cmp_ret = 1;
     } else if (a > b) {
       cmp_ret = -1;
     }
-    return cmp_ret;
+    return ret;
   }
 };
 

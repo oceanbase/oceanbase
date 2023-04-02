@@ -73,8 +73,10 @@ int ObUnpivotOp::inner_get_next_row()
     // do nothing
   }
 
-  LOG_DEBUG("arrive unpivot", K(ret), K(child_->get_spec().output_), K(MY_SPEC.output_),
-            K(curr_part_idx_), K(MY_SPEC.max_part_count_), K(MY_SPEC.unpivot_info_));
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("arrive unpivot", K(ret), K(child_->get_spec().output_), K(MY_SPEC.output_),
+              K(curr_part_idx_), K(MY_SPEC.max_part_count_), K(MY_SPEC.unpivot_info_));
+  }
 
   if (OB_SUCC(ret) && !MY_SPEC.unpivot_info_.is_include_null_) {
     bool need_try_next_part = true;
@@ -183,8 +185,10 @@ int ObUnpivotOp::inner_get_next_batch(const int64_t max_row_cnt)
     brs_.size_ = child_brs_->size_;
   }
 
-  LOG_DEBUG("arrive unpivot batch", K(ret), K(child_->get_spec().output_), K(MY_SPEC.output_),
-            K(curr_part_idx_), K(MY_SPEC.max_part_count_), K(MY_SPEC.unpivot_info_));
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("arrive unpivot batch", K(ret), K(child_->get_spec().output_), K(MY_SPEC.output_),
+              K(curr_part_idx_), K(MY_SPEC.max_part_count_), K(MY_SPEC.unpivot_info_));
+  }
 
   for (int64_t read_piece = 0; OB_SUCC(ret) && read_piece < brs_.size_; ++read_piece) {
     int64_t read_cur_row = (curr_part_idx_ * brs_.size_ + read_piece) / MY_SPEC.max_part_count_;

@@ -66,30 +66,9 @@ void point2pointer(T *&dst_pointer, B *dst_base, T *src_pointer, const B *src_ba
 
 }
 
-int ObChunkDatumStore::StoredRow::to_expr_skip_const(const ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(cnt_ != exprs.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("datum count mismatch", K(ret), K(cnt_), K(exprs.count()));
-  } else {
-    for (uint32_t i = 0; i < cnt_; ++i) {
-      const ObExpr *expr = exprs.at(i);
-      if (expr->is_const_expr()) { // T_QUESTIONMARK is included in dynamic_const
-        continue;
-      } else {
-        expr->locate_expr_datum(ctx) = cells()[i];
-        expr->set_evaluated_projected(ctx);
-        LOG_DEBUG("succ to_expr", K(cnt_), K(exprs.count()),
-                  KPC(exprs.at(i)), K(cells()[i]), K(lbt()));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObChunkDatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*> &exprs,
-                                          ObEvalCtx &ctx, int64_t count) const
+                                          ObEvalCtx &ctx,
+                                          int64_t count) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(cnt_ < count || exprs.count() < count)) {
@@ -97,8 +76,12 @@ int ObChunkDatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*> &exprs
     LOG_WARN("datum count mismatch", K(ret), K(cnt_), K(exprs.count()), K(count));
   } else {
     for (uint32_t i = 0; i < count; ++i) {
-      exprs.at(i)->locate_expr_datum(ctx) = cells()[i];
-      exprs.at(i)->set_evaluated_projected(ctx);
+      if (exprs.at(i)->is_const_expr()) {
+        continue;
+      } else {
+        exprs.at(i)->locate_expr_datum(ctx) = cells()[i];
+        exprs.at(i)->set_evaluated_projected(ctx);
+      }
     }
   }
   return ret;
@@ -1863,7 +1846,7 @@ void ObChunkDatumStore::ChunkIterator::try_free_cached_blocks()
     const int64_t age = *((int64_t *)((char *)b + b->blk_size_ - sizeof(int64_t)));
     if (age < read_age) {
       b = cached_.remove_first();
-      if (b->blk_size_ == default_block_size_) {
+      if (b->blk_size_ == default_block_size_ && 0 == free_list_.get_size()) {
 #ifndef NDEBUG
         memset((char *)b + sizeof(*b), 0xAA, b->blk_size_ - sizeof(*b));
 #endif
@@ -1892,9 +1875,11 @@ int ObChunkDatumStore::ChunkIterator::read_next_blk()
     }
   }
   if (OB_SUCC(ret) && !aio_blk_->magic_check()) {
+    #ifndef NDEBUG
+      ob_abort();
+    #endif
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("read corrupt data", K(ret), K(aio_blk_->magic_),
-             K(store_->file_size_), K(cur_iter_pos_));
+    LOG_WARN("read corrupt data", K(ret), K(*aio_blk_), K(*this), K(*store_));
   }
   if (OB_SUCC(ret)) {
     // data block is larger than min block
@@ -1928,6 +1913,9 @@ int ObChunkDatumStore::ChunkIterator::read_next_blk()
     read_blk_buf_ = aio_blk_buf_;
     aio_blk_ = NULL;
     aio_blk_buf_ = NULL;
+    #ifndef NDEBUG
+      LOG_INFO("read one block", K(*read_blk_), K(*this), K(*store_));
+    #endif
     if (OB_FAIL(read_blk_->swizzling(NULL))) {
       LOG_WARN("swizzling failed", K(ret));
     } else {
@@ -2139,7 +2127,7 @@ void ObChunkDatumStore::ChunkIterator::reset_cursor(const int64_t file_size)
     cur_iter_blk_ = NULL;
     store_->callback_free(chunk_read_size_);
     if (read_file_iter_end()) {
-      LOG_ERROR("unexpect status: chunk mem is allocated, but don't free");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: chunk mem is allocated, but don't free");
     }
   }
 
@@ -2360,38 +2348,6 @@ int ObChunkDatumStore::Iterator::get_next_batch(const StoredRow **rows,
   return ret;
 };
 
-int ObChunkDatumStore::Iterator::get_next_batch(
-    const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
-    const int64_t max_rows, int64_t &read_rows, const StoredRow **rows)
-{
-  int ret = OB_SUCCESS;
-  int64_t max_batch_size = ctx.max_batch_size_;
-  const StoredRow **srows = rows;
-  if (NULL == rows) {
-    if (!chunk_it_.is_valid()) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("not init", K(ret));
-    } else if (OB_FAIL(chunk_it_.get_store()->init_batch_ctx(exprs.count(), max_batch_size))) {
-      LOG_WARN("init batch ctx failed", K(ret), K(max_batch_size));
-    } else {
-      srows = const_cast<const StoredRow **>(chunk_it_.get_store()->batch_ctx_->stored_rows_);
-    }
-  }
-  CK(max_rows <= max_batch_size);
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_next_batch(srows, max_rows, read_rows))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("get next batch failed", K(ret), K(max_rows));
-    } else {
-      read_rows = 0;
-    }
-  } else {
-    attach_rows(exprs, ctx, srows, read_rows);
-  }
-
-  return ret;
-}
-
 int ObChunkDatumStore::RowIterator::convert_to_row(
   const StoredRow *sr, const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx)
 {
@@ -2456,18 +2412,22 @@ int ObChunkDatumStore::RowIterator::get_next_batch(const common::ObIArray<ObExpr
   if (OB_SUCC(ret)) {
     for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
       ObExpr *e = exprs.at(col_idx);
-      ObDatum *datums = e->locate_batch_datums(ctx);
-      if (!e->is_batch_result()) {
-        datums[0] = rows[0]->cells()[col_idx];
+      if (e->is_const_expr()) {
+        continue;
       } else {
-        for (int64_t i = 0; i < read_rows; i++) {
-          datums[i] = rows[i]->cells()[col_idx];
+        ObDatum *datums = e->locate_batch_datums(ctx);
+        if (!e->is_batch_result()) {
+          datums[0] = rows[0]->cells()[col_idx];
+        } else {
+          for (int64_t i = 0; i < read_rows; i++) {
+            datums[i] = rows[i]->cells()[col_idx];
+          }
         }
+        e->set_evaluated_projected(ctx);
+        ObEvalInfo &info = e->get_eval_info(ctx);
+        info.notnull_ = false;
+        info.point_to_frame_ = false;
       }
-      e->set_evaluated_projected(ctx);
-      ObEvalInfo &info = e->get_eval_info(ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
     }
   }
 
@@ -2538,12 +2498,11 @@ int ObChunkDatumStore::write_file(void *buf, int64_t size)
       } else {
         file_size_ = 0;
         io_.tenant_id_ = tenant_id_;
-        io_.io_desc_.set_category(common::ObIOCategory::USER_IO);
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id));
       }
     }
-    ret = E(EventTable::EN_8) ret;
+    ret = OB_E(EventTable::EN_8) ret;
   }
   if (OB_SUCC(ret) && size > 0) {
     set_io(size, static_cast<char *>(buf));
@@ -2593,7 +2552,6 @@ int ObChunkDatumStore::read_file(
     OX (ret = OB_ITER_END);
   } else {
     this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_category(common::ObIOCategory::USER_IO);
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     if (0 == read_size
         && OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_tmp_file_size(io_.fd_, tmp_file_size))) {
@@ -2626,7 +2584,6 @@ int ObChunkDatumStore::aio_read_file(
     LOG_WARN("invalid argument", K(size), K(offset), KP(buf));
   } else if (size > 0) {
     this->set_io(size, static_cast<char *>(buf));
-    io_.io_desc_.set_category(common::ObIOCategory::USER_IO);
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_, offset, handle))) {
       if (OB_ITER_END != ret) {

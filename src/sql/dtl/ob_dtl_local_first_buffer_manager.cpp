@@ -116,7 +116,7 @@ int ObDtlLocalFirstBufferCache::cache_buffer(ObDtlCacheBufferInfo *&buffer)
     uint64_t chan_id = buffer->chid();
 #ifdef ERRSIM
     // -17 enable failed set refactored
-    ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+    ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
 #endif
     int64_t tmp_ret = ret;
     if (TP_ENABLE_FAILED_SET_HT == ret) {
@@ -219,7 +219,7 @@ void ObDtlBufferInfoManager::ObDtlBufferInfoAllocator::destroy()
   DLIST_FOREACH_REMOVESAFE_NORET(node, free_list_) {
     buffer_info = node;
     if (nullptr != buffer_info->buffer()) {
-      LOG_ERROR("data buffer is not null", K(buffer_info));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "data buffer is not null", K(buffer_info));
       buffer_info->set_buffer(nullptr);
     }
     free_list_.remove(buffer_info);
@@ -358,11 +358,9 @@ ObDtlLocalFirstBufferCacheManager::~ObDtlLocalFirstBufferCacheManager()
 int ObDtlLocalFirstBufferCacheManager::init()
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id_, ObModIds::OB_SQL_DTL);
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
-                OB_MALLOC_NORMAL_BLOCK_SIZE,
-                attr))) {
+                OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("failed to init allocator", K(ret));
   } else {
     allocator_.set_label(ObModIds::OB_SQL_DTL);
@@ -430,7 +428,7 @@ int ObDtlLocalFirstBufferCacheManager::cache_buffer(int64_t chid, ObDtlLinkedBuf
         ObDtlLinkedBuffer *buffer = nullptr;
     #ifdef ERRSIM
         // -16 enable failed to alloc memory
-        ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+        ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
     #endif
         if (OB_SUCC(ret) || TP_ENABLE_FAILED_ALLOC_MEM != ret) {
           ret = OB_SUCCESS;

@@ -19,6 +19,7 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -113,8 +114,14 @@ int ObExprGetUserVar::eval_get_user_var(const ObExpr &expr, ObEvalCtx &ctx, ObDa
           OZ(ObDatumCast::cast_obj(ctx, calc_alloc, expr.datum_meta_.type_,
                                   expr.datum_meta_.cs_type_, sess_obj, res_obj));
           OZ(res.from_obj(res_obj));
+          if (is_lob_storage(res_obj.get_type())) {
+            OZ(ob_adjust_lob_datum(res_obj, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));
+          }
         } else {
           OZ(res.from_obj(sess_obj));
+          if (is_lob_storage(sess_obj.get_type())) {
+            OZ(ob_adjust_lob_datum(sess_obj, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));
+          }
         }
         // res.ptr_ may allocated by temporary allocator, need deep copy.
         OZ(expr.deep_copy_datum(ctx, res));

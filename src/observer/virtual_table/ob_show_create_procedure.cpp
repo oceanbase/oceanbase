@@ -163,12 +163,6 @@ int ObShowCreateProcedure::fill_row_cells(uint64_t show_procedure_id, const ObRo
           }
           if (OB_FAIL(ret)) {
             // do nothing
-          } else if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_2271) {
-            // 这个字段的类型会在在2272版本从varchar改为longtext，但升级过程中会在一个时间窗口内
-            // 不确定当前节点是否已经刷到最新的schema，所以只能以实际column_schema信息为准。
-            ObString value_str(static_cast<int32_t>(pos),
-                               static_cast<int32_t>(pos), routine_def_buf);
-            cur_row_.cells_[cell_idx].set_varchar(value_str);
           } else {
             cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType,
                                                     routine_def_buf, static_cast<int32_t>(pos));

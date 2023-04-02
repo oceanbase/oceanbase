@@ -128,6 +128,9 @@ public:
 
   // for rollup distributor and collector
   bool is_rollup_hybrid_;
+
+  // for window function adaptive pushdown
+  bool is_wf_hybrid_;
 };
 
 class ObTransmitOp : public ObOperator

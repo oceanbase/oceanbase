@@ -45,6 +45,11 @@ public:
     UNUSED(obj);
     return OB_NOT_IMPLEMENT;
   }
+  virtual int decode(ObObj &obj, ObIAllocator &allocator)
+  {
+    UNUSED(allocator);
+    return decode(obj);
+  }
 
   TO_STRING_KV(K(is_needed()));
 
@@ -235,14 +240,16 @@ public:
     tab_stat_(tab_stat)
   {}
 
-  static int build_histogram_from_topk_items(const ObIArray<ObTopkItem> &buckets,
+  static int build_histogram_from_topk_items(ObIAllocator &allocator,
+                                             const ObIArray<ObTopkItem> &buckets,
                                              int64_t max_bucket_num,
                                              int64_t total_row_count,
                                              int64_t not_null_count,
                                              int64_t num_distinct,
                                              ObHistogram &histogram);
 
-  static int try_build_topk_histogram(const ObIArray<ObHistBucket> &bkts,
+  static int try_build_topk_histogram(ObIAllocator &allocator,
+                                      const ObIArray<ObHistBucket> &bkts,
                                       const int64_t max_bucket_num,
                                       const int64_t total_row_count,
                                       const int64_t not_null_count,
@@ -257,7 +264,7 @@ public:
   // const bucket_size = 256;
   virtual bool is_needed() const override;
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
-  virtual int decode(ObObj &obj) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 protected:
   ObOptTableStat *tab_stat_;
 };
@@ -292,7 +299,7 @@ public:
   {}
 
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
-  virtual int decode(ObObj &obj) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
 private:
   bool is_null_item_;
 };
@@ -357,6 +364,8 @@ public:
   void get_llc_bitmap(char *llc_bitmap, const int64_t llc_bitmap_size) const;
 
   static double select_alpha_value(const int64_t num_bucket);
+  static int64_t get_ndv_from_llc(const char *llc_bitmap);
+  static void update_llc(char *dst_llc_bitmap, const char *src_llc_bitmap, bool force_update = false);
 
 private:
   int64_t global_ndv_;

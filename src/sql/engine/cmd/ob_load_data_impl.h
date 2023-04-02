@@ -92,7 +92,7 @@ class ObInsertValueGenerator
 {
 public:
   ObInsertValueGenerator() : cs_type_(common::CS_TYPE_INVALID), data_buffer_(NULL) {}
-  int init(ObSQLSessionInfo &session, ObLoadFileBuffer* data_buffer);
+  int init(ObSQLSessionInfo &session, ObLoadFileBuffer* data_buffer, ObSchemaGetterGuard *schema_guard);
   int set_params(common::ObString &insert_header, common::ObCollationType cs_type);
   int fill_field_expr(common::ObIArray<ObCSVGeneralParser::FieldValue> &field_values,
                       const common::ObBitSet<> &string_values);
@@ -124,7 +124,7 @@ struct ObDataFrag : common::ObLink
     row_cnt(0),
     orig_data_size(0) {}
 
-  static const int64_t DEFAULT_STRUCT_SIZE = 8ll *1024;
+  static const int64_t DEFAULT_STRUCT_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t MAX_ROW_COUNT = 1024;
   int64_t get_remain() { return frag_size - frag_pos; }
   char *get_current() { return data + frag_pos; }
@@ -351,6 +351,7 @@ public:
   int64_t get_buffer_size() { return buffer_size_; }
   int64_t *get_pos() { return &pos_; }
   void reset() { pos_ = 0; }
+  TO_STRING_KV(K_(pos), K_(buffer_size));
 private:
   int64_t pos_;
   int64_t buffer_size_;
@@ -392,8 +393,8 @@ public:
 
   int backup_incomplate_data(ObLoadFileBuffer &buffer, int64_t valid_data_len);
   int recover_incomplate_data(ObLoadFileBuffer &buffer);
-  bool has_incomplate_data() { return incomplate_data_len_ > 0; }
-  int64_t get_lines_count() { return lines_cnt_; }
+  bool has_incomplate_data() const { return incomplate_data_len_ > 0; }
+  int64_t get_lines_count() const { return lines_cnt_; }
   void commit_line_cnt(int64_t line_cnt) { lines_cnt_ += line_cnt; }
 private:
   ObCSVFormats formats_;//TODO [load data] change to ObInverseParser(formats)
@@ -632,7 +633,7 @@ struct ObFileReadCursor {
     read_size_ = 0;
     is_end_file_ = false;
   }
-  bool inline is_end_file() { return is_end_file_; }
+  bool inline is_end_file() const { return is_end_file_; }
   int64_t inline get_total_read_MBs() { return file_offset_ >> 20; }
   int64_t inline get_total_read_GBs() { return file_offset_ >> 30; }
   void commit_read() {
@@ -794,7 +795,8 @@ private:
   static int gen_insert_columns_names_buff(ObExecContext &ctx,
                                            const ObLoadArgument &load_args,
                                            common::ObIArray<ObLoadTableColumnDesc> &insert_infos,
-                                           common::ObString &data_buff);
+                                           common::ObString &data_buff,
+                                           bool need_online_osg = false);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataSPImpl);
   // function members

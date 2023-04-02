@@ -37,6 +37,8 @@ public:
   ObTxSerCompatByte() { reset(); }
   void reset();
   int init(int64_t total_object_count);
+  bool is_inited() { return total_byte_cnt_ > 0 && total_obj_cnt_ > 0; }
+  int set_all_member_need_ser();
   int set_object_flag(int64_t object_index, bool is_valid);
   bool is_object_valid(int64_t object_index) const;
 
@@ -230,43 +232,27 @@ private:
   }
 
 #define OB_TX_SERIALIZE_MEMBER(CLS, COMPAT_ARG, ...) \
-  OB_TX_SERIALIZE_MEMBER_TEMP(, CLS, COMPAT_ARG, ##__VA_ARGS__)
-
-#define OB_TX_SERIALIZE_MEMBER_TEMP(TEMP, CLS, COMPAT_ARG, ...) \
-  OB_TX_SERIALIZE_MEMBER_TEMP_IF(TEMP, CLS, COMPAT_ARG, true, ##__VA_ARGS__)
-
-#define OB_TX_SERIALIZE_MEMBER_TEMP_IF(TEMP, CLS, COMPAT_ARG, PRED, ...) \
-  OB_TX_SERIALIZE_MEMBER_COMPAT_TEMP_IF(, TEMP, CLS, COMPAT_ARG, PRED, ##__VA_ARGS__)
-
-#define OB_TX_SERIALIZE_MEMBER_COMPAT_TEMP_IF(COMPAT, TEMP, CLS, COMPAT_ARG, PRED, ...) \
-  OB_DEF_SERIALIZE##COMPAT(UNF_MYCLS(CLS), TEMP)                                        \
+  OB_DEF_SERIALIZE(CLS)                                        \
   {                                                                                     \
     int ret = OK_;                                                                      \
     UNF_UNUSED_SER;                                                                     \
-    BASE_SER(CLS);                                                                      \
-    if (PRED) {                                                                         \
     TX_SER_COMPAT_BYTES(COMPAT_ARG); \
       TX_LST_DO_CODE(OB_TX_UNIS_ENCODE, COMPAT_ARG, ##__VA_ARGS__);                     \
-    }                                                                                   \
     return ret;                                                                         \
   }                                                                                     \
-  OB_DEF_DESERIALIZE##COMPAT(UNF_MYCLS(CLS), TEMP)                                      \
+  OB_DEF_DESERIALIZE(CLS)                                      \
   {                                                                                     \
     int ret = OK_;                                                                      \
     UNF_UNUSED_DES;                                                                     \
-    BASE_DESER(CLS);                                                                    \
     TX_DSER_COMPAT_BYTES(COMPAT_ARG); \
     TX_LST_DO_CODE(OB_TX_UNIS_DECODE, COMPAT_ARG, ##__VA_ARGS__);                       \
     return ret;                                                                         \
   }                                                                                     \
-  OB_DEF_SERIALIZE_SIZE##COMPAT(UNF_MYCLS(CLS), TEMP)                                   \
+  OB_DEF_SERIALIZE_SIZE(CLS)                                   \
   {                                                                                     \
     int64_t len = 0;                                                                    \
-    BASE_ADD_LEN(CLS);                                                                  \
-    if (PRED) {                                                                         \
     TX_SER_SIZE_COMPAT_BYTES(COMPAT_ARG); \
       TX_LST_DO_CODE(OB_TX_UNIS_ADD_LEN, COMPAT_ARG, ##__VA_ARGS__);                    \
-    }                                                                                   \
     return len;                                                                         \
   }
 

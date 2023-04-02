@@ -23,6 +23,7 @@
 #include "ob_log_task_pool.h"                     // ObLogTransTaskPool
 #include "ob_log_part_trans_task.h"               // PartTransTask
 #include "ob_log_part_trans_task_queue.h"         // SafePartTransTaskQueue
+#include "ob_log_fetcher_dispatcher_interface.h"  // IObLogFetcherDispatcher
 
 namespace oceanbase
 {
@@ -93,6 +94,8 @@ public:
 public:
   int init(const TenantLSID &tls_id, const int64_t start_tstamp);
 
+  bool is_data_dict_dispatcher() const { return dispatcher_.is_data_dict_dispatcher(); }
+
   // Generate heartbeat task
   int heartbeat(const int64_t hb_tstamp);
 
@@ -135,7 +138,6 @@ public:
   const char *get_tls_id_str() const { return tls_id_str_; }
 
   int64_t get_checkpoint() const { return ATOMIC_LOAD(&checkpoint_); }
-
   int update_checkpoint(int64_t checkpoint);
 
 public:

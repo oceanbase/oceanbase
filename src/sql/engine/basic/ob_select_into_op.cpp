@@ -26,7 +26,7 @@ namespace sql
 {
 
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_,
-    outfile_name_, filed_str_, line_str_, closed_cht_, is_optional_);
+    outfile_name_, filed_str_, line_str_, closed_cht_, is_optional_, select_exprs_);
 
 
 int ObSelectIntoOp::inner_open()
@@ -72,9 +72,14 @@ int ObSelectIntoOp::inner_open()
     ObString path = file_name_.get_varchar().trim();
     if (path.prefix_match_ci(OB_OSS_PREFIX)) {
       file_location_ = IntoFileLocation::REMOTE_OSS;
-      url_ = path.split_on('?');
-      url_.trim();
-      if (OB_FAIL(access_info_.set(url_.ptr(), path.ptr()))) {
+      ObString temp_url = path.split_on('?');
+      temp_url.trim();
+      ObString storage_info;
+      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, url_, true))) {
+        LOG_WARN("fail to append string", K(ret));
+      } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, storage_info, true))) {
+        LOG_WARN("fail to append string", K(ret));
+      } else if (OB_FAIL(access_info_.set(url_.ptr(), storage_info.ptr()))) {
         LOG_WARN("fail to set access info", K(ret), K(path));
       }
 
@@ -132,24 +137,95 @@ int ObSelectIntoOp::inner_open()
       }
     }
   }
+  return ret;
+}
 
+int ObSelectIntoOp::inner_get_next_row()
+{
+  int ret = 0 == top_limit_cnt_ ? OB_ITER_END : OB_SUCCESS;
+  int64_t row_count = 0;
+  const ObItemType into_type = MY_SPEC.into_type_;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(phy_plan_ctx = ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get phy_plan_ctx failed", K(ret));
+  }
   while (OB_SUCC(ret) && row_count < top_limit_cnt_) {
-    if (is_vectorized()) {
-      int64_t batch_size = MIN(spec_.max_batch_size_, top_limit_cnt_ - row_count);
-      const ObBatchRows *brs = NULL;
-      if (OB_FAIL(ObOperator::get_next_batch(batch_size, brs))) {
-        LOG_WARN("get next batch failed", K(ret));
-      } else if (brs->size_ > 0) {
-        row_count += brs->size_ - brs->skip_->accumulate_bit_cnt(brs->size_);
+    clear_evaluated_flag();
+    if (OB_FAIL(child_->get_next_row())) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+      } else {
+        LOG_WARN("get next row failed", K(ret));
+      }
+    } else {
+      ++row_count;
+      if (T_INTO_VARIABLES == into_type) {
+        if (OB_FAIL(into_varlist())) {
+          LOG_WARN("into varlist failed", K(ret));
+        }
+      } else if (T_INTO_OUTFILE == into_type) {
+        if (OB_FAIL(into_outfile())) {
+          LOG_WARN("into outfile failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(into_dumpfile())) {
+          LOG_WARN("into dumpfile failed", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) || OB_ITER_END == ret) { // if into user variables or into dumpfile, must be one row
+      if ((T_INTO_VARIABLES == into_type || T_INTO_DUMPFILE == into_type) && row_count > 1) {
+        ret = OB_ERR_TOO_MANY_ROWS;
+        LOG_WARN("more than one row for into variables or into dumpfile", K(ret), K(row_count));
+      }
+    }
+  } //end while
+  if (OB_ITER_END == ret || OB_SUCC(ret)) { // set affected rows
+    phy_plan_ctx->set_affected_rows(row_count);
+  }
+  return ret;
+}
+
+int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  const ObBatchRows *child_brs = NULL;
+  int64_t batch_size = min(max_row_cnt, MY_SPEC.max_batch_size_);
+  int64_t row_count = 0;
+  const ObItemType into_type = MY_SPEC.into_type_;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(phy_plan_ctx = ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get phy_plan_ctx failed", K(ret));
+  }
+  bool stop_loop = false;
+  bool is_iter_end = false;
+  if (0 == top_limit_cnt_) {
+    brs_.size_ = 0;
+    brs_.end_ = true;
+    stop_loop = true;
+  }
+  while (OB_SUCC(ret) && !stop_loop) {
+    clear_evaluated_flag();
+    int64_t rowkey_batch_size = min(batch_size, top_limit_cnt_ - row_count);
+    if (OB_FAIL(child_->get_next_batch(rowkey_batch_size, child_brs))) {
+      LOG_WARN("get next batch failed", K(ret));
+    } else {
+      brs_.size_ = child_brs->size_;
+      brs_.end_ = child_brs->end_;
+      is_iter_end = brs_.end_ && 0 == brs_.size_;
+      if (brs_.size_ > 0) {
+        brs_.skip_->deep_copy(*(child_brs->skip_), brs_.size_);
+        row_count += brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_);
         if (T_INTO_OUTFILE == into_type) {
-          if (OB_FAIL(into_outfile_batch(*brs))) {
+          if (OB_FAIL(into_outfile_batch(brs_))) {
             LOG_WARN("into outfile batch failed", K(ret));
           }
         } else {
           ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
-          guard.set_batch_size(brs->size_);
-          for (int64_t i = 0; OB_SUCC(ret) && i < brs->size_; i++) {
-            if (brs->skip_->contain(i)) {
+          guard.set_batch_size(brs_.size_);
+          for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+            if (brs_.skip_->contain(i)) {
               continue;
             }
             guard.set_batch_idx(i);
@@ -165,82 +241,19 @@ int ObSelectIntoOp::inner_open()
           }
         }
       }
-      if (OB_SUCC(ret) && brs->end_) {
-        ret = OB_ITER_END;
-      }
-    } else {
-      if (OB_FAIL(ObOperator::get_next_row())) {
-        if (OB_LIKELY(OB_ITER_END == ret)) {
-        } else {
-          LOG_WARN("get next row failed", K(ret));
-        }
-      } else {
-        ++row_count;
-        if (T_INTO_VARIABLES == into_type) {
-          if (OB_FAIL(into_varlist())) {
-            LOG_WARN("into varlist failed", K(ret));
-          }
-        } else if (T_INTO_OUTFILE == into_type) {
-          if (OB_FAIL(into_outfile())) {
-            LOG_WARN("into outfile failed", K(ret));
-          }
-        } else {
-          if (OB_FAIL(into_dumpfile())) {
-            LOG_WARN("into dumpfile failed", K(ret));
-          }
-        }
-      }
     }
-    if (OB_SUCC(ret) || OB_ITER_END == ret) { // if into user variables or into dumpfile, must be one row
+    if (is_iter_end || row_count >= top_limit_cnt_) {
+      stop_loop = true;
+    }
+    if (OB_SUCC(ret) || is_iter_end) { // if into user variables or into dumpfile, must be one row
       if ((T_INTO_VARIABLES == into_type || T_INTO_DUMPFILE == into_type) && row_count > 1) {
         ret = OB_ERR_TOO_MANY_ROWS;
         LOG_WARN("more than one row for into variables or into dumpfile", K(ret), K(row_count));
       }
     }
   } //end while
-
-  if (OB_ITER_END == ret) {
-    ret = OB_SUCCESS;
-  }
   if (OB_SUCC(ret)) { // set affected rows
     phy_plan_ctx->set_affected_rows(row_count);
-  }
-  return ret;
-}
-
-int ObSelectIntoOp::inner_get_next_row()
-{
-  int ret = OB_SUCCESS;
-  clear_evaluated_flag();
-  if (OB_FAIL(child_->get_next_row())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("get next row failed", K(ret));
-    } else {
-      // OB_ITER_END
-    }
-  }
-  return ret;
-}
-
-int ObSelectIntoOp::inner_get_next_batch(const int64_t max_row_cnt)
-{
-  int ret = OB_SUCCESS;
-  clear_evaluated_flag();
-  const ObBatchRows *child_brs = NULL;
-  if (OB_FAIL(child_->get_next_batch(max_row_cnt, child_brs))) {
-    LOG_WARN("get next batch failed", K(ret));
-  } else {
-    brs_.size_ = child_brs->size_;
-    brs_.end_ = child_brs->end_;
-    if (brs_.size_ > 0) {
-      brs_.skip_->deep_copy(*(child_brs->skip_), brs_.size_);
-      const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
-      for (int64_t i = 0; i < select_exprs.count() && OB_SUCC(ret); i++) {
-        if (OB_FAIL(select_exprs.at(i)->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
-          LOG_WARN("eval expr failed", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -271,7 +284,10 @@ int ObSelectIntoOp::get_row_str(const int64_t buf_len,
   const ObObj &filed_str = filed_str_;
   char closed_cht = MY_SPEC.closed_cht_;
   bool is_optional = MY_SPEC.is_optional_;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_;
   if (!is_first_row && line_str_.is_varying_len_char_type()) { // lines terminated by "a"
     ret = databuff_printf(buf, buf_len, pos, "%.*s", line_str_.get_varchar().length(),
                          line_str_.get_varchar().ptr());
@@ -478,7 +494,10 @@ int ObSelectIntoOp::into_dumpfile()
 int ObSelectIntoOp::into_outfile()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_ ;
   if (select_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid count of exprs in select into outfile", K(select_exprs.count()), K(ret));
@@ -505,7 +524,10 @@ int ObSelectIntoOp::into_outfile()
 int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_;
   if (select_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid count of exprs in select into outfile", K(select_exprs.count()), K(ret));
@@ -535,7 +557,10 @@ int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs)
 int ObSelectIntoOp::into_varlist()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObExpr*> &select_exprs = MY_SPEC.output_;
+  //before 4_1 use output
+  //after 4_1 use select exprs
+  const ObIArray<ObExpr*> &select_exprs = (MY_SPEC.select_exprs_.empty()) ?
+                                           MY_SPEC.output_ : MY_SPEC.select_exprs_;
   const ObIArray<ObString> &user_vars = MY_SPEC.user_vars_;
   if (select_exprs.count() != user_vars.count()) {
     ret = OB_ERR_COLUMN_SIZE;

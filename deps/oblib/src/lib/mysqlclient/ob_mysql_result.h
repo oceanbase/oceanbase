@@ -180,6 +180,46 @@
     }\
   }
 
+#define EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, column_name, field, type, skip_null_error, skip_column_error, default_value) \
+  if (OB_SUCC(ret)) \
+  { \
+    uint64_t int_value = 0; \
+    if (OB_SUCCESS == (ret = (result).get_uint(column_name, int_value)))  \
+    { \
+      field = static_cast<type>(int_value); \
+    } \
+    else if (OB_ERR_NULL_VALUE == ret) \
+    { \
+      if (skip_null_error) \
+      { \
+        SQL_LOG(TRACE, "null value, ignore", K(column_name)); \
+        field = static_cast<type>(default_value); \
+        ret = OB_SUCCESS; \
+      } \
+      else \
+      { \
+        SQL_LOG(WARN, "null value", K(column_name), K(ret)); \
+      } \
+    } \
+    else if (OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      if (skip_column_error) \
+      { \
+        SQL_LOG(INFO, "column not found, ignore", K(column_name)); \
+        field = static_cast<type>(default_value); \
+        ret = OB_SUCCESS; \
+      } \
+      else \
+      { \
+        SQL_LOG(WARN, "column not found", K(column_name), K(ret)); \
+      } \
+    } \
+    else \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", K(column_name), K(ret)); \
+    }\
+  }
+
 #define EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type) \
   if (OB_SUCC(ret)) \
   { \
@@ -914,6 +954,7 @@
     从cur_default_value或者new_default_value获取，这里做了兼容处理，用default_value_v2_version做这两种情况的区分
 */
 #define EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, column_name, data_type, class_obj,is_cur_default_value, default_value_v2_version, tenant_id) \
+  [&]() { /*+ The original macro use too much stack space, wrap to lambda to avoid it. */ \
   if (OB_SUCC(ret)) \
   { \
     ObString str_value; \
@@ -936,7 +977,13 @@
       ret = OB_SUCCESS;                                                 \
     }                                                                   \
     else if (OB_SUCC(ret)) \
-    { \
+    { /*big stack check ObSchemaRetrieveUtils::fill_column_schema*/  \
+      ObObj def_obj;                                                 \
+      ObArenaAllocator allocator(ObModIds::OB_SCHEMA);               \
+      ObTimeZoneInfo tz_info;                                        \
+      const ObDataTypeCastParams dtc_params(&tz_info);               \
+      bool no_dtc_params = (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)); \
+      ObCastCtx cast_ctx(&allocator, no_dtc_params ? NULL : &dtc_params, CM_NONE, column.get_collation_type());\
       if (is_cur_default_value && column.is_default_expr_v2_column())\
       { \
         res_obj.set_varchar(str_value); \
@@ -948,76 +995,83 @@
         res_obj.set_scale(column.get_data_scale());\
         ret = (class_obj).set_##column_name(res_obj); \
       } \
-      else if (column.is_identity_column() || ob_is_string_type(data_type)) \
+      else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type)) \
       { \
         res_obj.set_string(data_type, str_value); \
         res_obj.meta_.set_collation_type(column.get_collation_type());  \
         /* will override the collaction level set in set_varchar */ \
         res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT); \
-        if (ob_is_text_tc(data_type)) { res_obj.set_inrow(); } \
-        ret = (class_obj).set_##column_name(res_obj); \
-      }                                               \
-      else if (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)) \
-      {                                                         \
-        ObObj def_obj;                                                  \
-        def_obj.set_varchar(str_value);                                 \
-        ObObj tmp_obj;                                                  \
-        ObObj dest_obj;                                                 \
-        ObArenaAllocator allocator(ObModIds::OB_SCHEMA);                \
-        ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, column.get_collation_type()); \
-        if(OB_FAIL(ObObjCaster::to_type(ObUInt64Type, cast_ctx, def_obj, tmp_obj)))  \
-        {                                                               \
-          SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type()); \
-        }                                                               \
-        else                                                            \
-        {                                                               \
-          if (ObBitType == data_type) {                                 \
-            dest_obj.set_bit(tmp_obj.get_uint64());                     \
-            dest_obj.set_scale(column.get_data_precision());              \
-          } else if (ObEnumType == data_type) {                         \
-            dest_obj.set_enum(tmp_obj.get_uint64());                    \
-          } else {/*set type*/                                          \
-            dest_obj.set_set(tmp_obj.get_uint64());                     \
-          }                                                             \
-          ret = (class_obj).set_##column_name(dest_obj);                \
-        }                                                               \
-      }                                                                 \
-      else if (ob_is_json(data_type) && is_mysql_mode())         \
-      { /* MySQL json does not support default value except null, */    \
-        ObObj default_value;                                            \
-        default_value.set_type(data_type);                              \
-        ObObj dest_obj;                                                 \
-        if (OB_FAIL(default_value.build_not_strict_default_value())) {              \
-          SQL_LOG(WARN, "failed to build not strict default json value", K(ret));   \
-        } else {                                                                    \
-          dest_obj.set_json_value(data_type,                                        \
-                                 default_value.get_string().ptr(),                  \
-                                 default_value.get_string().length());              \
-          dest_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                    \
-          ret = (class_obj).set_##column_name(dest_obj);                            \
-        }                                                                           \
-      }                                                                             \
-      else                                                              \
-      {                                                                 \
-        ObObj def_obj;                                                  \
-        def_obj.set_varchar(str_value); \
-        ObArenaAllocator allocator(ObModIds::OB_SCHEMA);\
-        ObObj dest_obj;\
-        ObTimeZoneInfo tz_info;\
-        const ObDataTypeCastParams dtc_params(&tz_info);\
-        ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, column.get_collation_type());\
-        if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_info.get_tz_map_wrap())))  \
-        {         \
-          SQL_LOG(WARN, "get tenant timezone map failed", K(ret));    \
-        }         \
-        else if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, dest_obj))) \
-        { \
-          SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type); \
+        /* only support full inrow data, all lobs from systable should be made inrow */ \
+        if (res_obj.is_outrow_lob()) { \
+          ret = OB_INVALID_ARGUMENT; \
+          SQL_LOG(WARN, "outrow lob unsupported", "column_name", #column_name); \
         } \
+        else { \
+          if (ob_is_text_tc(data_type) || ob_is_geometry(data_type)) { res_obj.set_inrow(); } \
+          ret = (class_obj).set_##column_name(res_obj); \
+        } \
+      }                                               \
+      else { \
+        if (ob_is_bit_tc(data_type) || ob_is_enum_or_set_type(data_type)) \
+        {                                                                 \
+          def_obj.set_varchar(str_value);                                 \
+          ObObj tmp_obj;                                                  \
+          if(OB_FAIL(ObObjCaster::to_type(ObUInt64Type, cast_ctx, def_obj, tmp_obj)))  \
+          {                                                                            \
+            SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type());        \
+          }                                                               \
+          else                                                            \
+          {                                                               \
+            if (ObBitType == data_type) {                                 \
+              res_obj.set_bit(tmp_obj.get_uint64());                      \
+              res_obj.set_scale(column.get_data_precision());             \
+            } else if (ObEnumType == data_type) {                         \
+              res_obj.set_enum(tmp_obj.get_uint64());                     \
+            } else {/*set type*/                                          \
+              res_obj.set_set(tmp_obj.get_uint64());                      \
+            }                                                             \
+            ret = (class_obj).set_##column_name(res_obj);                 \
+          }                                                               \
+        }                                                                 \
+        else if (ob_is_json(data_type))                                                   \
+        {                                                                                 \
+          def_obj.set_type(data_type);                                                    \
+          if (is_mysql_mode()) {                                                          \
+            if (OB_FAIL(def_obj.build_not_strict_default_value())) {                      \
+              SQL_LOG(WARN, "failed to build not strict default json value", K(ret));     \
+            } else {                                                                      \
+              res_obj.set_json_value(data_type,  def_obj.get_string().ptr(),              \
+                                      def_obj.get_string().length());                     \
+            }                                                                             \
+          } else {                                                                        \
+            def_obj.set_json_value(data_type, str_value.ptr(), str_value.length());       \
+            if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, res_obj))) {   \
+              SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type); \
+            } else {                                                                      \
+              res_obj.set_inrow();                                                        \
+            }                                                                             \
+          }                                                                               \
+          if (OB_SUCC(ret)) {                                                             \
+            res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                         \
+            ret = (class_obj).set_##column_name(res_obj);                                 \
+          }                                                                               \
+        }                                                                                 \
         else \
         { \
-          dest_obj.set_scale(column.get_data_scale()); \
-          ret = (class_obj).set_##column_name(dest_obj); \
+          def_obj.set_varchar(str_value); \
+          if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_info.get_tz_map_wrap())))  \
+          {         \
+            SQL_LOG(WARN, "get tenant timezone map failed", K(ret));    \
+          }         \
+          else if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, res_obj))) \
+          { \
+            SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type); \
+          } \
+          else \
+          { \
+            res_obj.set_scale(column.get_data_scale());\
+            ret = (class_obj).set_##column_name(res_obj); \
+          } \
         } \
       } \
     } \
@@ -1025,7 +1079,8 @@
     { \
       SQL_LOG(WARN, "fail to default value field mysql. ", K(ret)); \
     } \
-  }
+  } \
+  } ()
 
 #define EXTRACT_CREATE_TIME_FIELD_MYSQL(result, column_name, field, type) \
   EXTRACT_INT_FIELD_MYSQL(result, column_name, field, type)

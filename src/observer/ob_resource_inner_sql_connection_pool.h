@@ -37,7 +37,7 @@ public:
            const bool is_ddl = false);
   bool is_inited() { return is_inited_; }
   int acquire(const uint64_t conn_id, const bool is_oracle_mode, const bool kill_using_conn,
-              common::sqlclient::ObISQLConnection *&conn);
+              common::sqlclient::ObISQLConnection *&conn, sql::ObSQLSessionInfo *session_info);
   int release(const bool reuse_conn, common::sqlclient::ObISQLConnection *&conn);
 
 private:

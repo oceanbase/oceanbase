@@ -118,7 +118,7 @@ public:
       number_pass_ = num_pass;
     }
   }
-  OB_INLINE int32_t get_number_pass() const { return number_pass_; }
+  OB_INLINE int64_t get_number_pass() const { return number_pass_; }
 
   static bool auto_sql_memory_manager(ObSqlWorkAreaProfile &profile)
   {
@@ -264,7 +264,6 @@ public:
   OB_INLINE void set_seqno(int64_t seqno) { seqno_ = seqno; }
   OB_INLINE int64_t get_seqno() { return seqno_; }
   OB_INLINE WorkareaKey get_workarea_key() const { return workarea_key_; }
-  OB_INLINE int32_t get_sql_id_len() const { return strlen(workarea_key_.sql_id_); }
   OB_INLINE const char* get_sql_id() const { return workarea_key_.sql_id_; }
   OB_INLINE uint64_t get_plan_id() const { return workarea_key_.plan_id_; }
   OB_INLINE uint64_t get_operator_id() const { return workarea_key_.operator_id_; }
@@ -471,7 +470,7 @@ class ObSqlMemoryList
 {
 public:
   ObSqlMemoryList(int64_t seqno) :
-    seqno_(seqno)
+    seqno_(seqno), lock_(common::ObLatchIds::SQL_WA_PROFILE_LIST_LOCK)
   {}
   ~ObSqlMemoryList() { reset(); }
 
@@ -563,11 +562,12 @@ private:
 public:
   ObTenantSqlMemoryManager(int64_t tenant_id) :
     wa_intervals_(nullptr), min_bound_size_(0), tenant_id_(tenant_id),
-    enable_auto_memory_mgr_(false), mutex_(), profile_lists_(nullptr),
+    enable_auto_memory_mgr_(false), mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK), profile_lists_(nullptr),
     drift_size_(0), profile_cnt_(0), pre_profile_cnt_(0), global_bound_size_(0),
     mem_target_(0), max_workarea_size_(0), workarea_hold_size_(0), max_auto_workarea_size_(0),
     max_tenant_memory_size_(0),
-    manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0), lock_()
+    manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0),
+    lock_()
   {}
   ~ObTenantSqlMemoryManager() {}
 public:

@@ -785,7 +785,8 @@ int ObLocalityCheckHelp::check_alter_locality(
     ObIArray<AlterPaxosLocalityTask> &alter_paxos_tasks,
     bool &non_paxos_locality_modified,
     int64_t &pre_paxos_num,
-    int64_t &cur_paxos_num)
+    int64_t &cur_paxos_num,
+    const share::ObArbitrationServiceStatus &arb_service_status)
 {
   int ret = OB_SUCCESS;
   pre_paxos_num = 0;
@@ -804,9 +805,9 @@ int ObLocalityCheckHelp::check_alter_locality(
   } else if (OB_FAIL(calc_paxos_replica_num(cur_zone_locality, cur_paxos_num))) {
     LOG_WARN("fail to calc paxos replica num", K(ret));
   } else if (OB_FAIL(check_alter_locality_valid(alter_paxos_tasks,
-                                                pre_paxos_num, cur_paxos_num))) {
+                                                pre_paxos_num, cur_paxos_num, arb_service_status))) {
     LOG_WARN("check alter locality valid failed", K(ret), K(alter_paxos_tasks),
-             K(pre_paxos_num), K(cur_paxos_num), K(non_paxos_locality_modified));
+             K(pre_paxos_num), K(cur_paxos_num), K(non_paxos_locality_modified), K(arb_service_status));
   }
   return ret;
 }
@@ -1446,7 +1447,8 @@ int ObLocalityCheckHelp::get_alter_paxos_replica_number_replica_task(
 int ObLocalityCheckHelp::check_alter_locality_valid(
     ObIArray<AlterPaxosLocalityTask> &alter_paxos_tasks,
     int64_t pre_paxos_num,
-    int64_t cur_paxos_num)
+    int64_t cur_paxos_num,
+    const share::ObArbitrationServiceStatus &arb_service_status)
 {
   int ret = OB_SUCCESS;
   if (pre_paxos_num <= 0 || cur_paxos_num <= 0) {
@@ -1498,19 +1500,42 @@ int ObLocalityCheckHelp::check_alter_locality_valid(
     //       paxos -> non_paxos's type transform is remove paxos member
     if (OB_SUCC(ret)) {
       bool passed = true;
+      ObSqlString message_to_user;
       if (0 != nop_task_num) {
         // only has paxos->paxos's type transform task, no quorum value change.
       } else if (0 != add_task_num) {
-        if (1 == pre_paxos_num && 1 == add_task_num) {
+        if (arb_service_status.is_enable_like()) {
+          if (2 == pre_paxos_num && 2 == add_task_num) {
+            // special process: tenant with arb service should only support 2->4
+          } else if (OB_FAIL(message_to_user.assign("paxos replica number should be 2 or 4 when arbitration service is enabled, "
+                                                    "alter tenant locality"))) {
+            LOG_WARN("fail to construct message to user", KR(ret));
+          } else {
+            passed = false;
+          }
+        } else if (1 == pre_paxos_num && 1 == add_task_num) {
           // special process: enable locality's paxos member 1 -> 2
         } else if (pre_paxos_num >= majority(cur_paxos_num)) {
           // passed
+        } else if (OB_FAIL(message_to_user.assign("violate locality principal"))) {
+          LOG_WARN("fail to construct message to user", KR(ret));
         } else {
           passed = false;
         }
       } else if (0 != remove_task_num) {
-        if (cur_paxos_num >= majority(pre_paxos_num)) {
+        if (arb_service_status.is_enable_like()) {
+          if (4 == pre_paxos_num && 2 == remove_task_num) {
+            // special process: tenant with arb service should only support 4->2
+          } else if (OB_FAIL(message_to_user.assign("paxos replica number should be 2 or 4 when arbitration service is enabled, "
+                                                    "alter tenant locality"))) {
+            LOG_WARN("fail to construct message to user", KR(ret));
+          } else {
+            passed = false;
+          }
+        } else if (cur_paxos_num >= majority(pre_paxos_num)) {
           // passed
+        } else  if (OB_FAIL(message_to_user.assign("violate locality principal"))) {
+          LOG_WARN("fail to construct message to user", KR(ret));
         } else {
           passed = false;
         }
@@ -1519,7 +1544,7 @@ int ObLocalityCheckHelp::check_alter_locality_valid(
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("violate locality principal", K(ret), K(pre_paxos_num), K(cur_paxos_num),
                  K(add_task_num), K(remove_task_num), K(nop_task_num));
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "violate locality principal");
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, message_to_user.ptr());
       }
     }
   }

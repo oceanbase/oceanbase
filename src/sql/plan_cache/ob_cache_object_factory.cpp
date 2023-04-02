@@ -35,16 +35,12 @@ namespace sql
 int ObCacheObjectFactory::alloc(ObCacheObjGuard& guard, ObLibCacheNameSpace ns, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCache *lib_cache = get_plan_cache(tenant_id);
+  ObPlanCache *lib_cache = MTL(ObPlanCache*);
   if (OB_ISNULL(lib_cache)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null plan cache", K(ret));
   } else if (OB_FAIL(lib_cache->alloc_cache_obj(guard, ns, tenant_id))) {
     LOG_WARN("failed to alloc cache obj", K(ret), K(ns));
-  }
-  if (NULL != lib_cache) {
-    lib_cache->dec_ref_count();
-    lib_cache = NULL;
   }
   return ret;
 }
@@ -53,15 +49,11 @@ void ObCacheObjectFactory::inner_free(ObILibCacheObject *&cache_obj,
                                       const CacheRefHandleID ref_handle)
 {
   uint64_t tenant_id = cache_obj->get_tenant_id();
-  ObPlanCache *lib_cache = get_plan_cache(tenant_id);
+  ObPlanCache *lib_cache = MTL(ObPlanCache*);
   if (OB_ISNULL(lib_cache)) {
-    LOG_WARN("invalid null plan cache");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid null plan cache");
   } else {
     lib_cache->free_cache_obj(cache_obj, ref_handle);
-  }
-  if (NULL != lib_cache) {
-    lib_cache->dec_ref_count();
-    lib_cache = NULL;
   }
 }
 
@@ -70,27 +62,10 @@ void ObCacheObjectFactory::inner_free(ObPlanCache *pc,
                                       const CacheRefHandleID ref_handle)
 {
   if (OB_ISNULL(pc)) {
-    LOG_WARN("invalid null plan cache");
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid null plan cache");
   } else {
     pc->free_cache_obj(cache_obj, ref_handle);
   }
-}
-
-ObPlanCache *ObCacheObjectFactory::get_plan_cache(const uint64_t tenant_id)
-{
-  ObPlanCache *ret_pc = NULL;
-  uint64_t used_tenant_id = tenant_id;
-  ObPCMemPctConf default_conf;
-  if (tenant_id > OB_SYS_TENANT_ID && tenant_id <= OB_MAX_RESERVED_TENANT_ID) {
-    used_tenant_id = OB_SYS_TENANT_ID;
-  }
-  if (OB_ISNULL(GCTX.sql_engine_) || OB_ISNULL(GCTX.sql_engine_->get_plan_cache_manager())) {
-    LOG_WARN("invalid null sql engine", K(GCTX.sql_engine_));
-  } else {
-    ret_pc = GCTX.sql_engine_->get_plan_cache_manager()->get_or_create_plan_cache(
-                                                           used_tenant_id, default_conf);
-  }
-  return ret_pc;
 }
 
 int ObCacheObjectFactory::destroy_cache_obj(const bool is_leaked,

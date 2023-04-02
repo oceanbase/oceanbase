@@ -32,6 +32,7 @@ ObPageManagerCenter &ObPageManagerCenter::get_instance()
 int ObPageManagerCenter::register_pm(ObPageManager &pm)
 {
   int ret = OB_SUCCESS;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   lib::ObMutexGuard guard(mutex_);
   rb_tree_.insert(&pm);
   pm.has_register_ = true;
@@ -42,6 +43,7 @@ int ObPageManagerCenter::register_pm(ObPageManager &pm)
 
 void ObPageManagerCenter::unregister_pm(ObPageManager &pm)
 {
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   lib::ObMutexGuard guard(mutex_);
   pm.has_register_ = false;
   rb_tree_.remove(&pm);
@@ -57,7 +59,7 @@ int ObPageManagerCenter::print_tenant_stat(int64_t tenant_id, char *buf,
                                            int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   lib::ObMutexGuard guard(mutex_);
   int64_t sum_used = 0;
   int64_t sum_hold = 0;
@@ -74,13 +76,14 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache(int64_t tenant_id, in
   int tmpret = OB_SUCCESS;
   AChunk *ret = nullptr;
   const int RETRY_LIMIT = 10;
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   for (int retry = 0; retry < RETRY_LIMIT && OB_EAGAIN == (tmpret = mutex_.trylock()); ++retry) {
     sched_yield();
   }
   if (OB_SUCCESS == tmpret) {
     ret = alloc_from_thread_local_cache_(tenant_id, ctx_id);
     if (OB_SUCCESS != (tmpret = mutex_.unlock())) {
-      OB_LOG(ERROR, "unlock failed", K(tmpret));
+      OB_LOG_RET(ERROR, tmpret, "unlock failed", K(tmpret));
     }
   }
   return ret;
@@ -92,7 +95,7 @@ int ObPageManagerCenter::print_tenant_stat(int64_t tenant_id,
   int ret = OB_SUCCESS;
   char cmp_buf[sizeof(ObPageManager)];
   ObPageManager *cmp_node = (ObPageManager*)cmp_buf;
-  cmp_node->attr_.tenant_id_ = tenant_id - 1;
+  cmp_node->tenant_id_ = tenant_id - 1;
   cmp_node->id_ = INT64_MAX;
   ObPageManager *start = nullptr;
   rb_tree_.nsearch(cmp_node, start);
@@ -133,7 +136,7 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache_(int64_t tenant_id, i
 
   char cmp_buf[sizeof(ObPageManager)];
   ObPageManager *cmp_node = (ObPageManager*)cmp_buf;
-  cmp_node->attr_.tenant_id_ = tenant_id - 1;
+  cmp_node->tenant_id_ = tenant_id - 1;
   cmp_node->id_ = INT64_MAX;
   ObPageManager *start = nullptr;
   rb_tree_.nsearch(cmp_node, start);
@@ -167,7 +170,7 @@ AChunk *ObPageManagerCenter::alloc_from_thread_local_cache_(int64_t tenant_id, i
 
 void ObPageManager::reset()
 {
-  attr_.ctx_id_ = ObCtxIds::GLIBC;
+  ctx_id_ = ObCtxIds::GLIBC;
   bs_.reset();
   used_ = 0;
   is_inited_ = false;

@@ -29,6 +29,7 @@ namespace observer
 int ObLSTableUpdateTask::init(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const bool inner_table_only,
     const int64_t add_timestamp)
 {
   int ret = OB_SUCCESS;
@@ -39,6 +40,7 @@ int ObLSTableUpdateTask::init(
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
+    inner_table_only_ = inner_table_only;
     add_timestamp_ = add_timestamp;
   }
   return ret;
@@ -48,6 +50,7 @@ void ObLSTableUpdateTask::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
+  inner_table_only_ = false;
   add_timestamp_ = OB_INVALID_TIMESTAMP;
 }
 
@@ -64,6 +67,7 @@ int ObLSTableUpdateTask::assign(const ObLSTableUpdateTask &other)
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
+    inner_table_only_ = other.inner_table_only_;
     add_timestamp_ = other.add_timestamp_;
   }
   return ret;
@@ -81,12 +85,15 @@ bool ObLSTableUpdateTask::operator ==(const ObLSTableUpdateTask &other) const
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {
     equal = (tenant_id_ == other.tenant_id_
-        && ls_id_ == other.ls_id_);
+             && ls_id_ == other.ls_id_);
+    if (equal && is_sys_tenant(tenant_id_)) {
+      equal = (inner_table_only_ == other.inner_table_only_);
+    }
   }
   return equal;
 }
@@ -178,11 +185,26 @@ int ObLSTableUpdateQueueSet::add_task(const ObLSTableUpdateTask &task)
   } else {
     const uint64_t &tenant_id = task.get_tenant_id();
     if (is_sys_tenant(tenant_id)) {
-      if (OB_FAIL(sys_tenant_queue_.add(task))) {
+      if (task.is_inner_table_only()) {
+        // only report sys tenant's ls to inner table
+      } else if (OB_FAIL(sys_tenant_queue_.add(task))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("sys_tenant_queue add_task failed", KR(ret), K(task));
         } else {
           ret = OB_SUCCESS;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObLSTableUpdateTask new_task(task.get_tenant_id(),
+                                     task.get_ls_id(),
+                                     true/*inner_table_only*/,
+                                     task.get_add_timestamp());
+        if (OB_FAIL(meta_tenant_queue_.add(new_task))) {
+          if (OB_EAGAIN != ret) {
+            LOG_WARN("meta_tenant_queue add_task failed", KR(ret), K(new_task));
+          } else {
+            ret = OB_SUCCESS;
+          }
         }
       }
     } else if (is_meta_tenant(tenant_id)) {
@@ -252,7 +274,8 @@ int ObLSTableUpdater::async_update(
 {
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
-  ObLSTableUpdateTask task(tenant_id, ls_id, now);
+  bool inner_table_only = false;
+  ObLSTableUpdateTask task(tenant_id, ls_id, inner_table_only, now);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("init twice", KR(ret));
@@ -262,7 +285,7 @@ int ObLSTableUpdater::async_update(
   } else if (OB_FAIL(update_queue_set_.add_task(task))) {
     LOG_WARN("async_update failed", KR(ret), K(tenant_id), K(ls_id));
   } else {
-    LOG_INFO("REPORT:add ls table update task success", K(task));
+    LOG_TRACE("add ls table update task success", K(task));
   }
   return ret;
 }
@@ -284,6 +307,7 @@ int ObLSTableUpdater::batch_process_tasks(
     const ObLSTableUpdateTask &task = tasks.at(0);
     const uint64_t tenant_id = task.get_tenant_id();
     const ObLSID &ls_id = task.get_ls_id();
+    const bool inner_table_only = task.is_inner_table_only();
     bool tenant_dropped = false;
     bool schema_not_ready = false;
     uint64_t superior_tenant_id = OB_INVALID_TENANT_ID;
@@ -315,21 +339,19 @@ int ObLSTableUpdater::batch_process_tasks(
             ls_id,
             replica))) {
           if (OB_LS_NOT_EXIST == ret || OB_TENANT_NOT_IN_SERVER == ret) { // remove from table if not exist
-            if (OB_FAIL(GCTX.lst_operator_->remove(tenant_id, ls_id, server))) {
+            if (OB_FAIL(GCTX.lst_operator_->remove(tenant_id, ls_id, server, inner_table_only))) {
               LOG_WARN("fail to remove replica",
                   KR(ret), K(tenant_id), K(ls_id), "self_addr", server);
             } else {
-              ObTaskController::get().allow_next_syslog();
-              LOG_INFO("REPORT:remove ls from meta table success", K(tenant_id), K(ls_id), K(server));
+              FLOG_INFO("REPORT:remove ls from meta table success", K(tenant_id), K(ls_id), K(server));
             }
           } else {
             LOG_WARN("fail to fill log stream replica", KR(ret), K(tenant_id), K(ls_id));
           }
-        } else if (OB_FAIL(GCTX.lst_operator_->update(replica))) {
+        } else if (OB_FAIL(GCTX.lst_operator_->update(replica, inner_table_only))) {
           LOG_WARN("fail to update replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
         } else {
-          ObTaskController::get().allow_next_syslog();
-          LOG_INFO("REPORT:success to process update task", K(replica));
+          FLOG_INFO("REPORT:success to process update task", K(replica));
         }
         execute_time_us = ObTimeUtility::current_time() - start_time;
       }
@@ -391,10 +413,10 @@ void ObLSTableUpdater::throttle(
     if (ls_id.is_sys_ls()) {
       // won't limit update for sys log stream
       sleep_us = 0;
-      LOG_WARN("detected slow update for sys table", K(ls_id));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "detected slow update for sys table", K(ls_id));
     } else {
       sleep_us = MIN(RETRY_INTERVAL_US, (execute_time_us - SLOW_UPDATE_TIME_US));
-      LOG_WARN("detected slow update, may be too many concurrent updating",
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "detected slow update, may be too many concurrent updating",
           K(ls_id), K(sleep_us));
     }
   }

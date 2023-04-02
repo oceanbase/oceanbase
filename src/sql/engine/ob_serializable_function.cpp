@@ -45,7 +45,7 @@ bool check_all_ser_func_registered()
         }
       }
       if (!found) {
-        LOG_ERROR("serialize function array not registered", "ObSerFuncArrayID", i);
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "serialize function array not registered", "ObSerFuncArrayID", i);
         all_registered = false;
       }
     }
@@ -99,7 +99,7 @@ ObFuncSerialization::FuncIdxTable &ObFuncSerialization::create_hash_table()
   FuncIdxTable *ht = static_cast<FuncIdxTable *>(ob_malloc(sizeof(FuncIdxTable), attr));
   FuncIdx *buckets = static_cast<FuncIdx *>(ob_malloc(sizeof(FuncIdx) * bucket_size, attr));
   if (NULL == ht || NULL == buckets) {
-    LOG_ERROR("allocate memory failed");
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed");
     if (NULL != ht) {
       ob_free(ht);
     }
@@ -137,7 +137,7 @@ ObFuncSerialization::FuncIdxTable &ObFuncSerialization::create_hash_table()
             conflicts += 1;
           }
           if (i + 1 == ht->bucket_size_) {
-            LOG_ERROR("hash table is full, impossible");
+            LOG_ERROR_RET(OB_ERROR, "hash table is full, impossible");
             ob_abort();
           }
         }

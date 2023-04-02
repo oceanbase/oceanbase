@@ -120,7 +120,7 @@ public:
   };
   self_t &operator-=(difference_type step)
   {
-    value_ptr_ += step;
+    value_ptr_ -= step;
     return *this;
   };
   self_t &operator ++()
@@ -149,7 +149,17 @@ private:
   value_ptr_t value_ptr_;
 };
 
+template <class ObArray, class T>
+Iterator<ObArray, T> operator+(
+  typename Iterator<ObArray, T>::difference_type diff,
+  const Iterator<ObArray, T>& iter)
+{
+  Iterator<ObArray, T> iter2 = iter;
+  iter2 += diff;
+  return iter2;
 }
+}
+
 
 }
 }

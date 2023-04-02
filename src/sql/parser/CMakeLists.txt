@@ -84,6 +84,12 @@ add_library(ob_sql_server_parser_objects OBJECT
 target_link_libraries(ob_sql_proxy_parser_objects PUBLIC ob_base ob_sql_parser_base)
 target_link_libraries(ob_sql_server_parser_objects PUBLIC ob_base)
 
+if (WITH_COVERAGE)
+  # 排除少量sql解析文件，不参与coverage编译，clang针对于特殊语法文件会core
+  config_remove_coverage_flag(ob_sql_proxy_parser_objects)
+  config_remove_coverage_flag(ob_sql_server_parser_objects)
+endif()
+
 target_compile_definitions(ob_sql_proxy_parser_objects PUBLIC SQL_PARSER_COMPILATION)
 
 add_library(ob_sql_proxy_parser_static

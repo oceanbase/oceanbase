@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for define of func json_array
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_ARRAY_H_
@@ -24,6 +25,13 @@ namespace sql
 class ObExprJsonArray : public ObFuncExprOperator
 {
 public:
+  enum {
+    OPT_NULL_ID,
+    OPT_TYPE_ID,
+    OPT_STRICT_ID,
+    OPT_MAX_ID,
+  };
+
   explicit ObExprJsonArray(common::ObIAllocator &alloc);
   virtual ~ObExprJsonArray();
 
@@ -33,6 +41,7 @@ public:
                                 common::ObExprTypeCtx& type_ctx) const override;
                           
   static int eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

@@ -41,7 +41,8 @@ public:
                K_(database_id),
                K_(synonym_name),
                K_(object_name),
-               K_(object_database_id));
+               K_(object_database_id),
+               K_(status));
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -67,6 +68,9 @@ public:
   inline common::ObString &get_object_name_str() { return object_name_; }
   inline ObTenantSynonymId get_tenant_synonym_id() const
   { return ObTenantSynonymId(tenant_id_, synonym_id_); }
+  inline void set_status(const ObObjectStatus status) { status_ = status; }
+  inline void set_status(const int64_t status) { status_ = static_cast<ObObjectStatus> (status); }
+  inline ObObjectStatus get_status() const { return status_; }
 private:
   uint64_t tenant_id_;
   uint64_t synonym_id_;
@@ -75,6 +79,7 @@ private:
   common::ObString synonym_name_;
   common::ObString object_name_;
   uint64_t object_database_id_;
+  ObObjectStatus status_;
 };
 
 class ObSynonymHashWrapper
@@ -191,7 +196,8 @@ public:
                  uint64_t &synonym_id,
                  common::ObString &obj_table_name,
                  bool &do_exist,
-                 bool search_public_schema = true) const;
+                 bool search_public_schema = true,
+                 bool *is_public = NULL) const;
   int get_synonym_schemas_in_tenant(const uint64_t tenant_id,
       common::ObIArray<const ObSimpleSynonymSchema *> &synonym_schemas) const;
   int get_synonym_schemas_in_database(const uint64_t tenant_id,

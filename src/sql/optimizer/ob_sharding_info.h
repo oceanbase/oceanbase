@@ -146,15 +146,51 @@ public:
                                            const common::ObIArray<ObShardingInfo *> &right_sharding,
                                            bool &is_partition_wise);
 
-  static int check_if_match_repart(const EqualSets &equal_sets,
-                                   const common::ObIArray<ObRawExpr *> &src_join_keys,
-                                   const common::ObIArray<ObRawExpr *> &target_join_keys,
-                                   const common::ObIArray<ObRawExpr *> &target_part_keys,
-                                   bool &is_match);
+  static int check_if_match_extended_partition_wise(const EqualSets &equal_sets,
+                                                    ObIArray<ObAddr> &left_server_list,
+                                                    ObIArray<ObAddr> &right_server_list,
+                                                    const common::ObIArray<ObRawExpr*> &left_keys,
+                                                    const common::ObIArray<ObRawExpr*> &right_keys,
+                                                    const common::ObIArray<ObShardingInfo *> &left_sharding,
+                                                    const common::ObIArray<ObShardingInfo *> &right_sharding,
+                                                    bool &is_ext_partition_wise);
 
-  static int is_physically_equal_partitioned(const ObShardingInfo &left_sharding,
-                                             const ObShardingInfo &right_sharding,
-                                             bool &is_physical_equal);
+  static int check_if_match_extended_partition_wise(const EqualSets &equal_sets,
+                                                    ObIArray<ObAddr> &left_server_list,
+                                                    ObIArray<ObAddr> &right_server_list,
+                                                    const common::ObIArray<ObRawExpr*> &left_keys,
+                                                    const common::ObIArray<ObRawExpr*> &right_keys,
+                                                    const common::ObIArray<bool> &null_safe_info,
+                                                    ObShardingInfo *left_strong_sharding,
+                                                    const common::ObIArray<ObShardingInfo *> &left_weak_sharding,
+                                                    ObShardingInfo *right_strong_sharding,
+                                                    const common::ObIArray<ObShardingInfo *> &right_weak_sharding,
+                                                    bool &is_ext_partition_wise);
+
+  static int check_if_match_extended_partition_wise(const EqualSets &equal_sets,
+                                                    ObIArray<ObAddr> &left_server_list,
+                                                    ObIArray<ObAddr> &right_server_list,
+                                                    const common::ObIArray<ObRawExpr*> &left_keys,
+                                                    const common::ObIArray<ObRawExpr*> &right_keys,
+                                                    ObShardingInfo *left_strong_sharding,
+                                                    ObShardingInfo *right_strong_sharding,
+                                                    bool &is_ext_partition_wise);
+
+  static int check_if_match_repart_or_rehash(const EqualSets &equal_sets,
+                                             const common::ObIArray<ObRawExpr *> &src_join_keys,
+                                             const common::ObIArray<ObRawExpr *> &target_join_keys,
+                                             const common::ObIArray<ObRawExpr *> &target_part_keys,
+                                             bool &is_match_join_keys);
+
+  static int is_physically_both_shuffled_serverlist(ObIArray<ObAddr> &left_server_list,
+                                                    ObIArray<ObAddr> &right_server_list,
+                                                    bool &is_both_shuffled_serverlist);
+
+  static int is_physically_equal_serverlist(ObIArray<ObAddr> &left_server_list,
+                                            ObIArray<ObAddr> &right_server_list,
+                                            bool &is_equal_serverlist);
+
+  static bool is_shuffled_server_list(const ObIArray<ObAddr> &server_list);
 
   static int is_sharding_equal(const ObShardingInfo *left_strong_sharding,
                                const ObIArray<ObShardingInfo*> &left_weak_shardings,
@@ -180,6 +216,9 @@ public:
 
   static int extract_partition_key(const common::ObIArray<ObShardingInfo *> &input_shardings,
                                    ObIArray<ObSEArray<ObRawExpr*, 8>> &partition_key_list);
+
+  static int get_serverlist_from_sharding(const ObShardingInfo &sharding,
+                                          ObIArray<common::ObAddr> &server_list);
 
   inline void set_location_type(ObTableLocationType location_type)
   {
@@ -254,6 +293,10 @@ public:
   {
     return is_distributed() && NULL != phy_table_location_info_ && !partition_keys_.empty();
   }
+  inline bool is_distributed_without_table_location_with_partitioning()
+  {
+    return is_distributed() && NULL == phy_table_location_info_ && !partition_keys_.empty();
+  }
   /**
    * 获取所有的分区键
    * @param ignore_single_partition: 是否忽略掉只涉及一个分区的分区登记上的分区键
@@ -297,6 +340,8 @@ private:
                                 ObRawExpr *first_key,
                                 ObRawExpr *second_key,
                                 bool &is_equal);
+
+  static inline bool is_shuffled_addr(ObAddr addr) { return UINT32_MAX == addr.get_port(); }
 private:
   // 分区级别
   share::schema::ObPartitionLevel part_level_;

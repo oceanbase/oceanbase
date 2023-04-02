@@ -47,23 +47,23 @@ bool ObRpcSessionHandler::wakeup_next_thread(ObRequest &req)
   int64_t sessid = OB_INVALID_ID;
   if (OB_SUCCESS != (get_session_id(req, sessid))) {
     bret = false;
-    LOG_WARN("Get session id failed", K(bret));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Get session id failed", K(bret));
   } else {
     WaitObject wait_object;
     int hash_ret = next_wait_map_.get_refactored(sessid, wait_object);
     if (OB_SUCCESS != hash_ret) {
       // no thread wait for this packet;
       bret = false;
-      LOG_WARN("session not found", K(sessid));
+      LOG_WARN_RET(hash_ret, "session not found", K(sessid));
     } else {
       get_next_cond_(wait_object.thid_).lock();
       hash_ret = next_wait_map_.get_refactored(sessid, wait_object);
       if (OB_SUCCESS != hash_ret) {
         // no thread wait for this packet;
-        LOG_WARN("wakeup session but no thread wait", K(req));
+        LOG_WARN_RET(hash_ret, "wakeup session but no thread wait", K(req));
         bret = false;
       } else if (NULL != wait_object.req_) {
-        LOG_ERROR("previous stream request hasn't processed",
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "previous stream request hasn't processed",
                   "request", *wait_object.req_);
         bret = false;
       } else {
@@ -72,7 +72,7 @@ bool ObRpcSessionHandler::wakeup_next_thread(ObRequest &req)
         int overwrite = 1;
         hash_ret = next_wait_map_.set_refactored(sessid, wait_object, overwrite);
         if (OB_SUCCESS != hash_ret) {
-          LOG_WARN("rewrite wait object fail", K(*wait_object.req_), K(hash_ret));
+          LOG_WARN_RET(hash_ret, "rewrite wait object fail", K(*wait_object.req_), K(hash_ret));
         }
         //Wake up the corresponding worker thread to start work
         get_next_cond_(wait_object.thid_).signal();

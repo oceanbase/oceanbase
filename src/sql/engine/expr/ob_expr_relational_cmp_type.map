@@ -68,6 +68,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObHexStringType,        /* ObGeometryType */
   },
 
   /*TinyIntType*/
@@ -120,6 +121,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*SmallIntType*/
@@ -172,6 +174,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*MediumIntType*/
@@ -224,6 +227,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*Int32Type*/
@@ -276,6 +280,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*IntType*/
@@ -328,6 +333,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   // for all uint cmp int, we must set cmp type to unsigned,
@@ -382,6 +388,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*USmallIntType*/
@@ -434,6 +441,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*UMediumIntType*/
@@ -486,6 +494,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*UInt32Type*/
@@ -538,6 +547,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*UInt64Type*/
@@ -590,6 +600,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*FloatType*/
@@ -605,7 +616,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UMediumIntType  */
     ObDoubleType,      /* UInt32Type  */
     ObDoubleType,      /* UIntType  */
-    ObFloatType,       /* FloatType  */
+    ObDoubleType,      /* FloatType  */
     ObDoubleType,      /* DoubleType  */
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
@@ -642,6 +653,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*DoubleType*/
@@ -694,6 +706,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*UFloatType*/
@@ -711,7 +724,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UIntType  */
     ObDoubleType,      /* FloatType  */
     ObDoubleType,      /* DoubleType  */
-    ObUFloatType,      /* UFloatType  */
+    ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObDoubleType,      /* NumberType  */
     ObDoubleType,      /* UNumberType  */
@@ -746,6 +759,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*UDoubleType*/
@@ -798,6 +812,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*NumberType*/
@@ -850,6 +865,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObNumberType,        /* ObGeometryType */
   },
 
   /*UNumberType*/
@@ -902,6 +918,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObNumberType,        /* ObGeometryType */
   },
 
   /*DateTimeType*/
@@ -954,6 +971,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 
   /*TimestampType*/
@@ -1006,6 +1024,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 
   /*DateType*/
@@ -1058,6 +1077,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 
   /*TimeType*/
@@ -1110,6 +1130,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObHexStringType,        /* ObGeometryType */
   },
 
   /*YearType*/
@@ -1162,6 +1183,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
 
   /*VarcharType*/
@@ -1214,6 +1236,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObHexStringType,        /* ObGeometryType */
   },
 
   /*CharType*/
@@ -1266,6 +1289,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObHexStringType,        /* ObGeometryType */
   },
 
   /*HexStringType*/
@@ -1318,6 +1342,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObHexStringType,        /* ObGeometryType */
   },
 
   /*ExtendType*/
@@ -1370,6 +1395,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType */
     ObMaxType,         /* ObLobType */
     ObMaxType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 
   /*UnknownType*/
@@ -1422,6 +1448,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNullType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*TinyTextType*/
   {
@@ -1473,6 +1500,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 /*TextType*/
   {
@@ -1524,6 +1552,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
  /*MediumTextType*/
   {
@@ -1575,6 +1604,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
  /*LongTextType*/
   {
@@ -1626,6 +1656,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
    /*BitType*/
   {
@@ -1677,6 +1708,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
   
   /*EnumType*/
@@ -1729,6 +1761,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*SetType*/
   {
@@ -1780,6 +1813,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*EnumInnerType*/
   {
@@ -1831,6 +1865,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*SetInnerType*/
   {
@@ -1882,6 +1917,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObTimestampTZType*/
   {
@@ -1933,6 +1969,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObTimestampTZType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObTimestampLTZType*/
   {
@@ -1984,6 +2021,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObTimestampLTZType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObTimestampNanoType*/
   {
@@ -2035,6 +2073,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObTimestampNanoType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
     /*ObRawType*/
   {
@@ -2086,6 +2125,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObVarcharType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
     /*ObIntervalYMType*/
   {
@@ -2137,6 +2177,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObMaxType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObIntervalDSType*/
   {
@@ -2188,6 +2229,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObMaxType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 
   /*NumberFloatType*/
@@ -2240,6 +2282,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObMaxType,       /* ObJsonType */
+    ObDoubleType,        /* ObGeometryType */
   },
   /*ObNVarchar2Type*/
   {
@@ -2291,6 +2334,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObMaxType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
 
   /*CharType*/
@@ -2343,6 +2387,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObMaxType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObURowIDType*/
   {
@@ -2393,6 +2438,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObLobType*/
   {
@@ -2444,6 +2490,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNullType,       /* ObJsonType */
+    ObMaxType,        /* ObGeometryType */
   },
   /*ObJsonType*/
   {
@@ -2495,6 +2542,59 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
+    ObJsonType,        /* ObGeometryType*/
+  },
+  /*ObGeometryType*/
+  {
+    ObHexStringType,        /* NullType  */
+    ObDoubleType,      /* TinyIntType  */
+    ObDoubleType,      /* SmallIntType  */
+    ObDoubleType,      /* MediumIntType  */
+    ObDoubleType,      /* Int32Type  */
+    ObDoubleType,      /* IntType  */
+    ObDoubleType,      /* UTinyIntType  */
+    ObDoubleType,      /* USmallIntType  */
+    ObDoubleType,      /* UMediumIntType  */
+    ObDoubleType,      /* UInt32Type  */
+    ObDoubleType,      /* UIntType  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObNumberType,      /* NumberType  */
+    ObNumberType,     /* UNumberType  */
+    ObMaxType,    /* DateTimeType  */
+    ObMaxType,   /* TimestampType  */
+    ObMaxType,    /* DateType  */
+    ObHexStringType,        /* TimeType  */
+    ObDoubleType,      /* YearType  */
+    ObHexStringType,     /* VarcharType  */
+    ObHexStringType,        /* CharType  */
+    ObHexStringType,     /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,          /* UnknownType  */
+    ObMaxType,       /*TinyTextType*/
+    ObMaxType,       /*TextType*/
+    ObMaxType,       /*MediumTextType*/
+    ObMaxType,        /*LongTextType*/
+    ObDoubleType,      /*BitType*/
+    ObMaxType,     /* EnumType  */
+    ObMaxType,     /* SetType  */
+    ObMaxType,     /* EnumInnerType  */
+    ObMaxType,     /* SetInnerType  */
+    ObMaxType,    /* ObTimestampTZType */
+    ObMaxType,   /* ObTimestampLTZType */
+    ObMaxType,  /* ObTimestampNanoType */
+    ObMaxType,        /* ObRawType */
+    ObMaxType,     /* ObIntervalYMType */
+    ObMaxType,     /* ObIntervalDSType */
+    ObDoubleType,     /* ObNumberFloatType */
+    ObMaxType,      /* ObNVarchar2Type */
+    ObMaxType,          /* ObNCharType */
+    ObMaxType,         /* ObURowIDType */
+    ObMaxType,         /* ObLobType */
+    ObJsonType,       /* ObJsonType */
+    ObHexStringType,        /* ObGeometryType */
   },
 };
 

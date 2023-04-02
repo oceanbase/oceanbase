@@ -125,11 +125,14 @@ public:
 
 
   // build a server_list to ask informations
+  // @param [in] check_ls_service: if is true, try get rs_list from ls service.
   // @param [out] server_list, build from:
   //              (1) get master_rs from ObRsMgr
   //              (2) get rs_list from local configure
   //              (3) get member_list from ObLSService
-  int construct_initial_server_list(common::ObIArray<common::ObAddr> &server_list);
+  int construct_initial_server_list(
+      const bool check_ls_service,
+      common::ObIArray<common::ObAddr> &server_list);
   // build a broader list to ask informations
   // @param [in] rs_list, servers belongs to rs
   // @param [out] server_list, all servers except rs_list
@@ -148,7 +151,7 @@ private:
   private:
     common::ObArray<int64_t> cluster_id_list_;
     DISALLOW_COPY_AND_ASSIGN(ObRemoteClusterIdGetter);
-  }; 
+  };
 private:
   int check_inner_stat() const;
   int remove_unused_remote_master_rs_(const common::ObIArray<int64_t> &remote_cluster_id_list);

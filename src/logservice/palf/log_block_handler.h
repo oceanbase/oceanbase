@@ -13,8 +13,8 @@
 #ifndef OCEANBASE_LOGSERVICE_LOG_FILE_HANDLER_
 #define OCEANBASE_LOGSERVICE_LOG_FILE_HANDLER_
 
-#include "common/storage/ob_io_device.h"                  // ObIOFd
 #include "lib/ob_define.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "log_define.h"                                // block_id_t ...
 
 // This block contains the key class for writing a log into stable storage
@@ -55,11 +55,11 @@ public:
   // the tail unaligned part to head
   void truncate_buf();
   void reset_buf();
-  char *get_aligned_data_buf();
 
   TO_STRING_KV(K_(buf_write_offset), K_(buf_padding_size), K_(align_size), K_(aligned_buf_size),
       K_(aligned_used_ts), K_(truncate_used_ts));
 private:
+  DISALLOW_COPY_AND_ASSIGN(LogDIOAlignedBuf);
   inline bool need_align_() const
   {
     return 0 != align_size_;
@@ -88,7 +88,9 @@ public:
   ~LogBlockHandler();
 
   int init(const int dir_fd,
-           const int64_t log_block_size);
+           const int64_t log_block_size,
+           const int64_t align_size,
+           const int64_t align_buf_size);
 
   void destroy();
 
@@ -141,12 +143,6 @@ private:
   // NB: retry until suuccess
   int inner_truncate_(const offset_t offset);
   int inner_load_data_(const offset_t offset);
-
-  // if timeout, retry until fallocate return an explicit error code
-  // @retval
-  //    OB_SUCCESS, fallocate success;
-  //    OB_DISK_NOT_ENOUGH, disk not enough.
-  int inner_fallocate_();
 
   int inner_write_once_(const offset_t offset,
       const char *buf,

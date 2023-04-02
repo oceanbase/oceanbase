@@ -20,6 +20,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 namespace observer
 {
+
+ObAllVirtualPxTargetMonitor::ObAllVirtualPxTargetMonitor()
+    : tenand_array_(),
+      tenant_idx_(0),
+      target_info_array_(),
+      target_usage_idx_(0)
+{
+  svr_ip_buff_[0] = '\0';
+  peer_ip_buff_[0] = '\0';
+}
+
 int ObAllVirtualPxTargetMonitor::init()
 {
   int ret = OB_SUCCESS;

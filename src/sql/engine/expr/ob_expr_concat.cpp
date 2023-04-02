@@ -19,6 +19,7 @@
 #include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -54,7 +55,7 @@ int ObExprConcat::calc(ObObj &result, const ObObj &obj1, const ObObj &obj2,
         str2 = obj2.get_string();
       }
       if (ob_is_text_tc(result_type)) {
-        OZ (calc(result, str1.ptr(), str1.length(), str2.ptr(), str2.length(), allocator));
+        OZ (calc_text(result, obj1, obj2, allocator));
       } else {
         OZ (calc(result, str1, str2, allocator, is_oracle_mode, max_result_len));
       }
@@ -64,8 +65,7 @@ int ObExprConcat::calc(ObObj &result, const ObObj &obj1, const ObObj &obj2,
          OB_UNLIKELY(obj2.is_null())) {
       result.set_null();
     } else if (OB_UNLIKELY(obj1.is_text() || obj2.is_text())) {
-      ret = calc(result, obj1.get_string_ptr(), obj1.get_string_len(), obj2.get_string_ptr(),
-          obj2.get_string_len(), allocator);
+      ret = calc_text(result, obj1, obj2, allocator);
     } else {
       TYPE_CHECK(obj1, ObVarcharType);
       TYPE_CHECK(obj2, ObVarcharType);
@@ -80,43 +80,80 @@ int ObExprConcat::calc(ObObj &result, const ObObj &obj1, const ObObj &obj2,
   return ret;
 }
 
-int ObExprConcat::calc(common::ObObj &result,
-                       const char *obj1_ptr,
-                       const int32_t this_len,
-                       const char *obj2_ptr,
-                       const int32_t other_len,
-                       ObIAllocator *allocator)
+// text tc
+int ObExprConcat::calc_text(common::ObObj &result,
+                            const common::ObObj obj1,
+                            const common::ObObj obj2,
+                            ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  ObString varchar;
   int32_t max_length = OB_MAX_PACKET_LENGTH;
-  if (OB_UNLIKELY(this_len + other_len > max_length)) {
-    //FIXME: 合并后的字符串长度超过了最大限制，结果设置为NULL
-    result.set_null();
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("length overflow", K(ret), K(this_len), K(other_len), K(max_length));
-  } else if (OB_UNLIKELY(this_len <= 0)) {
-    result.set_lob_value(ObLongTextType, obj2_ptr, other_len);
-  } else if (OB_UNLIKELY(other_len <= 0)) {
-    result.set_lob_value(ObLongTextType, obj1_ptr, this_len);
-  } else if (OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("null allocator", K(ret), K(allocator));
+  // use a temp allocator to read lob data, the input allocator may not alloc more then once
+  common::ObArenaAllocator temp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObTextStringIter str_iter1(obj1);
+  ObTextStringIter str_iter2(obj2);
+  int64_t str1_byte_len = 0;
+  int64_t str2_byte_len = 0;
+  if (OB_FAIL(str_iter1.init(0, NULL, &temp_allocator))) {
+    LOG_WARN("init str_iter1 failed ", K(ret), K(str_iter1));
+  } else if (OB_FAIL(str_iter2.init(0, NULL, &temp_allocator))) {
+    LOG_WARN("init str_iter2 failed ", K(ret), K(str_iter2));
+  } else if (OB_FAIL(str_iter1.get_byte_len(str1_byte_len))) {
+    LOG_WARN("init str_iter1 failed ", K(ret), K(str_iter1));
+  } else if (OB_FAIL(str_iter2.get_byte_len(str2_byte_len))) {
+    LOG_WARN("init str_iter1 failed ", K(ret), K(str_iter2));
   } else {
-    char *buf = NULL;
-    if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(this_len + other_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory failed", K(ret), K(this_len + other_len));
+    bool has_lob_header = obj1.has_lob_header() || obj2.has_lob_header();
+    ObTextStringResult tmp_lob(ObLongTextType, has_lob_header, allocator);
+    int64_t res_data_byte_len = str1_byte_len + str2_byte_len;
+    if (OB_UNLIKELY(res_data_byte_len > max_length)) {
+      result.set_null();
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("length overflow", K(ret), K(str1_byte_len), K(str2_byte_len), K(max_length));
+    } else if (OB_FAIL(tmp_lob.init(res_data_byte_len))) {
+      LOG_WARN("init tmp lob failed", K(ret), K(res_data_byte_len));
     } else {
-      MEMCPY(buf, obj1_ptr, this_len);
-      MEMCPY(buf + this_len, obj2_ptr, other_len);
-      result.set_lob_value(ObLongTextType, buf, this_len + other_len);
+      ObTextStringIterState state;
+      ObString src_block_data;
+      while (OB_SUCC(ret)
+             && (state = str_iter1.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+        if (OB_FAIL(tmp_lob.append(src_block_data))) {
+          LOG_WARN("output_result append failed", K(ret), K(src_block_data));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (str_iter1.get_inner_ret() != OB_SUCCESS) ?
+              str_iter1.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter1));
+      }
+      while (OB_SUCC(ret)
+             && (state = str_iter2.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+        if (OB_FAIL(tmp_lob.append(src_block_data))) {
+          LOG_WARN("output_result append failed", K(ret), K(src_block_data));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (str_iter2.get_inner_ret() != OB_SUCCESS) ?
+              str_iter2.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter2));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObString lob_loc_str;
+      tmp_lob.get_result_buffer(lob_loc_str);
+      result.set_lob_value(ObLongTextType, lob_loc_str.ptr(), lob_loc_str.length());
+      if (tmp_lob.has_lob_header()) {
+        result.set_has_lob_header();
+      }
     }
   }
+
   return ret;
 }
 
-
+// non-text tc
 int ObExprConcat::calc(common::ObObj &result,
                        const common::ObString obj1,
                        const common::ObString obj2,
@@ -157,6 +194,7 @@ int ObExprConcat::calc(common::ObObj &result,
   }
   return ret;
 }
+
 int ObExprConcat::calc_result_typeN(ObExprResType &type,
                                     ObExprResType *types,
                                     int64_t param_num,
@@ -208,6 +246,9 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
         max_len = OB_MAX_LONGTEXT_LENGTH / 4;
       } else {
         max_len = MIN(OB_MAX_VARCHAR_LENGTH, max_len);
+        if (max_len <= 0) {
+          max_len = OB_MAX_VARCHAR_LENGTH;
+        }
       }
       type.set_length(max_len);
     }
@@ -312,6 +353,53 @@ int ObExprConcat::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &expr) const
   return ret;
 }
 
+static int eval_concat_text(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum, const int64_t &res_len)
+{
+  int ret = OB_SUCCESS;
+  ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+  if (OB_FAIL(output_result.init(res_len))) {
+    LOG_WARN("init lob result failed");
+  } else {
+    int64_t off = 0;
+    ObString v_str;
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
+      ObDatum &v = expr.locate_param_datum(ctx, i);
+      if (v.is_null()) {
+      } else {
+        ObDatumMeta input_meta = expr.args_[i]->datum_meta_;
+        bool has_lob_header = expr.args_[i]->obj_meta_.has_lob_header();
+        ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_, v.get_string(), has_lob_header);
+        ObTextStringIterState state;
+        ObString src_block_data;
+        if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+          LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
+        }
+        while (OB_SUCC(ret)
+                && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          if (OB_FAIL(output_result.append(src_block_data))) {
+            LOG_WARN("output_result append failed", K(ret), K(src_block_data));
+          } else {
+            off += src_block_data.length();
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      output_result.set_result();
+      OB_ASSERT(off == res_len);
+    }
+  }
+  return ret;
+}
+
 int ObExprConcat::eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
@@ -321,14 +409,25 @@ int ObExprConcat::eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     ObDatum *first_not_null = NULL;
     int64_t null_cnt = 0;
     int64_t res_len = 0;
-
-    for (int64_t i = 0; i < expr.arg_cnt_; i++) {
+    int64_t lob_data_byte_len = 0;
+    ObObjType res_type = expr.datum_meta_.type_;
+    // get result length
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
       ObDatum &v = expr.locate_param_datum(ctx, i);
       if (v.is_null()) {
         null_cnt += 1;
       } else {
-        res_len += v.len_;
-        if (NULL == first_not_null) {
+        if (!ob_is_text_tc(expr.args_[i]->datum_meta_.type_)) {
+          res_len += v.len_;
+        } else {
+          ObLobLocatorV2 locator(v.get_string(), expr.args_[i]->obj_meta_.has_lob_header());
+          if (OB_FAIL(locator.get_lob_data_byte_len(lob_data_byte_len))) {
+            LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+          } else {
+            res_len += lob_data_byte_len;
+          }
+        }
+        if (OB_SUCC(ret) && NULL == first_not_null) {
           first_not_null = &v;
         }
       }
@@ -342,23 +441,26 @@ int ObExprConcat::eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       const int64_t concat_res_max_len_in_pl = 65535;
       max_len = concat_res_max_len_in_pl;
     }
-    if (ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (ob_is_text_tc(res_type)) {
       // FIXME bin.lb: mysql mode can not reach here, since result type is always varchar.
-      // Seem to be a bug: https://work.aone.alibaba-inc.com/issue/24653475
+      // Seem to be a bug:
       max_len = OB_MAX_PACKET_LENGTH;
     }
-    if (res_len > max_len) {
+    // mysql mode: all param calc types are varchar;
+    // oracle mode: if result type is longtext, param calc types must be longtext
+    if (OB_FAIL(ret)) {
+    } else if (res_len > max_len) {
       expr_datum.set_null();
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("size overflow", K(ret), K(res_len), K(max_len));
     } else if (expr.arg_cnt_ == null_cnt
-            || (!lib::is_oracle_mode() && null_cnt > 0)) {
+               || (!lib::is_oracle_mode() && null_cnt > 0)) {
       // input are all null or has null in mysql mode
       expr_datum.set_null();
-    } else if (expr.arg_cnt_ - null_cnt == 1) {
+    } else if ((expr.arg_cnt_ - null_cnt == 1) && !ob_is_text_tc(res_type)) {
       // only one valid input, shadow copy
       expr_datum.set_datum(*first_not_null);
-    } else {
+    } else if (!ob_is_text_tc(res_type)) {
       char *buf = expr.get_str_res_mem(ctx, res_len);
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -375,6 +477,8 @@ int ObExprConcat::eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
         OB_ASSERT(off == res_len);
       }
       expr_datum.set_string(buf, res_len);
+    } else { // text tc
+      ret = eval_concat_text(expr, ctx, expr_datum, res_len);
     }
 
   }

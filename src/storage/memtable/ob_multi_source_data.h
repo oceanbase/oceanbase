@@ -36,6 +36,7 @@ enum class MultiSourceDataUnitType
   TABLET_SEQ = 2,
   // unit list type
   STORAGE_SCHEMA = 3,
+  MEDIUM_COMPACTION_INFO = 4,
   MAX_TYPE
 };
 
@@ -78,9 +79,9 @@ public:
   virtual bool is_valid() const = 0;
   virtual int64_t get_data_size() const = 0;
   virtual MultiSourceDataUnitType type() const = 0;
-  virtual int set_log_ts(const int64_t log_ts)
+  virtual int set_scn(const share::SCN &scn)
   {
-    UNUSED(log_ts);
+    UNUSED(scn);
     return common::OB_SUCCESS;
   }
   bool is_sync_finish() const { return sync_finish_; }
@@ -112,7 +113,7 @@ private:
 class ObMultiSourceData
 {
 public:
-  typedef common::ObDList<ObIMultiSourceDataUnit> MultiSourceDataUnitList;
+  typedef common::ObDList<ObIMultiSourceDataUnit> ObIMultiSourceDataUnitList;
 
   ObMultiSourceData(common::ObIAllocator &allocator);
   ~ObMultiSourceData();
@@ -123,11 +124,20 @@ public:
 
   bool has_multi_source_data_unit(const MultiSourceDataUnitType type) const;
 
-  int get_multi_source_data_unit(ObIMultiSourceDataUnit *const dst, ObIAllocator *allocator);
+  int get_multi_source_data_unit(
+      ObIMultiSourceDataUnit *const dst,
+      ObIAllocator *allocator,
+      bool get_lastest = true);
+  template<class T>
+  int get_multi_source_data_unit_list(
+      const T * const useless_unit,
+      ObIMultiSourceDataUnitList &dst_list,
+      ObIAllocator *allocator);
   template<class T>
   int save_multi_source_data_unit(const T *const src, bool is_callback);
   int update_unsync_cnt_for_multi_data(const MultiSourceDataUnitType multi_source_type, const bool is_inc);
   int get_unsync_cnt_for_multi_data(const MultiSourceDataUnitType multi_source_type, int &unsynced_cnt_for_multi_data);
+  int64_t get_all_unsync_cnt_for_multi_data();
 private:
   int inner_mark_unit_sync_finish(
       const int64_t unit_type,
@@ -137,7 +147,7 @@ private:
       const int64_t list_pos,
       const int64_t unit_version);
   template<class T>
-  int deep_copy_data_unit(const T *const src, T *&dst);
+  int deep_copy_data_unit(const T *const src, T *&dst, ObIAllocator &allocator);
   template<class T>
   int save_multi_source_data_unit_in_list(const T *const src, bool is_callback);
   int free_unit_list(const int64_t list_pos);
@@ -150,26 +160,26 @@ private:
   }
   common::ObIAllocator &allocator_;
   ObIMultiSourceDataUnit *units_[MAX_PTR_COUNT];
-  MultiSourceDataUnitList unit_list_array_[MAX_LIST_COUNT];
+  ObIMultiSourceDataUnitList unit_list_array_[MAX_LIST_COUNT];
 };
 
 template<class T>
-int ObMultiSourceData::deep_copy_data_unit(const T *const src, T *&dst)
+int ObMultiSourceData::deep_copy_data_unit(const T *const src, T *&dst, ObIAllocator &input_allocator)
 {
   int ret = OB_SUCCESS;
   dst = nullptr;
   void *buf = nullptr;
-  if (OB_ISNULL(buf = allocator_.alloc(src->get_data_size()))) {
+  if (OB_ISNULL(buf = input_allocator.alloc(src->get_data_size()))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "fail to alloc memory", K(ret));
   } else if (FALSE_IT(dst = new (buf) T())) {
-  } else if (OB_FAIL(dst->deep_copy_unit(src, &allocator_))) {
+  } else if (OB_FAIL(dst->deep_copy_unit(src, &input_allocator))) {
     TRANS_LOG(WARN, "fail to deep copy", K(ret), KP(dst), KP(src));
   }
   if (OB_FAIL(ret)) {
     if (nullptr != buf) {
       dst->~ObIMultiSourceDataUnit();
-      allocator_.free(buf);
+      input_allocator.free(buf);
       dst = nullptr;
     }
   }
@@ -183,19 +193,20 @@ int ObMultiSourceData::save_multi_source_data_unit_in_list(const T *const src, b
   T *dst = nullptr;
   const int64_t list_pos = get_unit_list_array_idx((int64_t)src->type());
   if (!is_callback) { // first save
-    if (unit_list_array_[list_pos].get_size() > 0
-        && OB_UNLIKELY(src->get_version() < unit_list_array_[list_pos].get_last()->get_version())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "unexpected order", K(ret), K(list_pos), K(units_[list_pos]), KPC(dst));
-    } else {
-      if (OB_FAIL(deep_copy_data_unit(src, dst))) {
-        TRANS_LOG(WARN, "failed to deep copy unit", K(ret), K(list_pos), KPC(src));
-      } else if (!unit_list_array_[list_pos].add_last(dst)) {
-        ret = common::OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "failed to add last", K(ret), K(list_pos), K(unit_list_array_[list_pos]));
-      } else if (src->is_save_last() && src->is_sync_finish()) {
-        (void)inner_release_rest_unit_data(list_pos, src->get_version());
+    if (unit_list_array_[list_pos].get_size() > 0) {
+      const ObIMultiSourceDataUnit *last_data_unit = unit_list_array_[list_pos].get_last();
+      if (OB_UNLIKELY(last_data_unit->is_sync_finish() && src->get_version() < last_data_unit->get_version())) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected order", K(ret), K(list_pos), KPC(last_data_unit), KPC(src));
       }
+    }
+    if (FAILEDx(deep_copy_data_unit(src, dst, allocator_))) {
+      TRANS_LOG(WARN, "failed to deep copy unit", K(ret), K(list_pos), KPC(src));
+    } else if (!unit_list_array_[list_pos].add_last(dst)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "failed to add last", K(ret), K(list_pos), K(unit_list_array_[list_pos]));
+    } else if (src->is_save_last() && src->is_sync_finish()) {
+      (void)inner_release_rest_unit_data(list_pos, src->get_version());
     }
   } else if (src->is_sync_finish()
       && OB_FAIL(inner_mark_unit_sync_finish(list_pos, src->get_version(), src->is_save_last()))) { // mark finish
@@ -230,7 +241,7 @@ int ObMultiSourceData::save_multi_source_data_unit(const T *const src, bool is_c
   } else if (pos < MAX_PTR_COUNT) {
     if (!is_callback) {
       // overwrite data
-      if (OB_FAIL(deep_copy_data_unit(src, dst))) {
+      if (OB_FAIL(deep_copy_data_unit(src, dst, allocator_))) {
         TRANS_LOG(WARN, "fail to deep copy data unit", K(ret), KP(dst), KP(src), K(pos));
       } else {
         ObIMultiSourceDataUnit *old_value = units_[pos];
@@ -253,6 +264,53 @@ int ObMultiSourceData::save_multi_source_data_unit(const T *const src, bool is_c
 
   return ret;
 }
+
+template<class T>
+int ObMultiSourceData::get_multi_source_data_unit_list(
+    const T * const useless_unit,
+    ObIMultiSourceDataUnitList &dst_list,
+    ObIAllocator *input_allocator)
+{
+  int ret = OB_SUCCESS;
+  int64_t type = 0;
+  int64_t list_pos = -1;
+  const int type_count = static_cast<int>(MultiSourceDataUnitType::MAX_TYPE);
+  if (OB_UNLIKELY(nullptr == useless_unit
+      || FALSE_IT(type = (int64_t)useless_unit->type())
+      || type < 0 || type >= type_count
+      || nullptr == input_allocator)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(useless_unit), KP(input_allocator));
+  } else if (!ObIMultiSourceDataUnit::is_unit_list(static_cast<MultiSourceDataUnitType>(type))) {
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(WARN, "not supported for cur data unit", K(ret), K(type));
+  } else if (FALSE_IT(list_pos = get_unit_list_array_idx(type))) {
+  } else if (OB_UNLIKELY(list_pos < 0 || list_pos >= MAX_LIST_COUNT)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "wrong unit type", K(ret), K(list_pos), K(type));
+  } else {
+    T *dst = nullptr;
+    DLIST_FOREACH_X(item, unit_list_array_[list_pos], OB_SUCC(ret)) {
+      if (OB_UNLIKELY(!item->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "data unit is invalid", K(ret), KPC(item));
+      } else if (item->is_sync_finish()) {
+        if (OB_FAIL(deep_copy_data_unit(static_cast<const T *>(item), dst, *input_allocator))) {
+          TRANS_LOG(WARN, "failed to deep copy unit", K(ret), KPC(item));
+        } else if (!dst_list.add_last(dst)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "failed to add data unit into list", K(ret), KPC(dst), K(dst_list));
+        }
+        if (OB_FAIL(ret) && nullptr != dst) {
+          dst->~ObIMultiSourceDataUnit();
+          input_allocator->free(dst);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // namespace memtable
 } // namespace oceanbase

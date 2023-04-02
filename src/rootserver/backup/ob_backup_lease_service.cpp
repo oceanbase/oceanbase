@@ -31,7 +31,7 @@ ObBackupLeaseService::ObBackupLeaseService()
   : is_inited_(false),
     can_be_leader_ts_(0),
     expect_round_(0),
-    lock_(),
+    lock_(common::ObLatchIds::BACKUP_LOCK),
     backup_lease_info_mgr_(),
     lease_info_(),
     sql_proxy_(nullptr),
@@ -310,7 +310,7 @@ void ObBackupLeaseService::run1()
 
   while(!has_set_stop()) {
     if (OB_SUCCESS != (tmp_ret = renew_lease_())) {
-      LOG_WARN("failed to renew lease", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "failed to renew lease", K(tmp_ret));
     }
     do_idle(tmp_ret);
   }
@@ -464,16 +464,11 @@ int ObBackupLeaseService::check_sys_backup_info_()
 {
   int ret = OB_SUCCESS;
   ObBackupInfoChecker checker;
-  const uint64_t cluster_observer_version = GET_MIN_CLUSTER_VERSION();
   ObBackupInnerTableVersion inner_table_version = OB_BACKUP_INNER_TABLE_VMAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret));
-  } else if (cluster_observer_version < CLUSTER_VERSION_2277
-      || (cluster_observer_version >= CLUSTER_VERSION_3000 && cluster_observer_version <= CLUSTER_VERSION_3100)) {
-    inner_table_version = OB_BACKUP_INNER_TABLE_V1;
-    LOG_INFO("no need update meta table", K(cluster_observer_version));
   } else if (OB_FAIL(share::ObBackupInfoOperator::get_inner_table_version(*sql_proxy_, inner_table_version))) {
     LOG_WARN("failed to get backup inner table version", K(ret));
   }

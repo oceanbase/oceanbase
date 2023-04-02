@@ -21,6 +21,7 @@
 #include "storage/backup/ob_backup_iterator.h"
 #include "share/backup/ob_backup_path.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 #include <algorithm>
 
@@ -193,7 +194,7 @@ int ObIBackupIndexStore::fetch_block_(const ObBackupFileType &backup_file_type, 
       } else {
         const int64_t hit_cnt = index_kv_cache_->get_hit_cnt();
         const int64_t miss_cnt = index_kv_cache_->get_miss_cnt();
-        LOG_INFO("do on cache miss", K(offset), K(length), K(hit_cnt), K(miss_cnt));
+        LOG_DEBUG("do on cache miss", K(offset), K(length), K(hit_cnt), K(miss_cnt));
       }
     } else {
       LOG_WARN("failed to get value from kv cache", K(ret), K(key));
@@ -609,7 +610,7 @@ int ObBackupMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, const Ob
 }
 
 int ObBackupMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, 
+    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
     ObBackupIndexKVCache &index_kv_cache)
 {
   int ret = OB_SUCCESS;
@@ -645,7 +646,7 @@ int ObBackupMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, const Ob
 }
 
 int ObBackupMacroBlockIndexStore::get_macro_block_index(
-    const common::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index)
+    const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
   macro_index.reset();
@@ -665,7 +666,7 @@ int ObBackupMacroBlockIndexStore::get_macro_block_index(
 }
 
 int ObBackupMacroBlockIndexStore::get_macro_range_index(
-    const common::ObLogicMacroBlockId &macro_id, ObBackupMacroRangeIndex &range_index)
+    const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroRangeIndex &range_index)
 {
   int ret = OB_SUCCESS;
   range_index.reset();
@@ -726,7 +727,7 @@ int ObBackupMacroBlockIndexStore::get_backup_index_cache_key(const ObBackupFileT
 }
 
 int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
-    const common::ObLogicMacroBlockId &logic_id, ObBackupMacroRangeIndex &output)
+    const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroRangeIndex &output)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -798,7 +799,7 @@ int ObBackupMacroBlockIndexStore::decode_range_index_index_from_block_(const int
   return decode_index_from_block_<ObBackupMacroRangeIndexIndex>(end_pos, buffer_reader, index_index_list);
 }
 
-int ObBackupMacroBlockIndexStore::find_index_lower_bound_(const common::ObLogicMacroBlockId &logic_id,
+int ObBackupMacroBlockIndexStore::find_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
     const common::ObArray<ObBackupMacroRangeIndex> &index_list, ObBackupMacroRangeIndex &index)
 {
   int ret = OB_SUCCESS;
@@ -819,7 +820,7 @@ int ObBackupMacroBlockIndexStore::find_index_lower_bound_(const common::ObLogicM
   return ret;
 }
 
-int ObBackupMacroBlockIndexStore::find_index_index_lower_bound_(const common::ObLogicMacroBlockId &logic_id,
+int ObBackupMacroBlockIndexStore::find_index_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
     const common::ObArray<ObBackupMacroRangeIndexIndex> &index_index_list, ObBackupMacroRangeIndexIndex &index_index)
 {
   int ret = OB_SUCCESS;
@@ -897,7 +898,7 @@ int ObBackupMacroBlockIndexStore::get_backup_set_desc_(
   return ret;
 }
 
-int ObBackupMacroBlockIndexStore::get_macro_block_index_(const common::ObLogicMacroBlockId &macro_id,
+int ObBackupMacroBlockIndexStore::get_macro_block_index_(const blocksstable::ObLogicMacroBlockId &macro_id,
     const ObBackupMacroRangeIndex &range_index, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
@@ -1198,7 +1199,7 @@ ObBackupMacroBlockIndexStoreWrapper::~ObBackupMacroBlockIndexStoreWrapper()
 {}
 
 int ObBackupMacroBlockIndexStoreWrapper::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, 
+    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
     ObBackupIndexKVCache &index_kv_cache)
 {
   int ret = OB_SUCCESS;
@@ -1232,7 +1233,7 @@ int ObBackupMacroBlockIndexStoreWrapper::init(const ObBackupRestoreMode &mode, c
 }
 
 int ObBackupMacroBlockIndexStoreWrapper::get_macro_block_index(const share::ObBackupDataType &backup_data_type,
-    const common::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index)
+    const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
   ObBackupMacroBlockIndexStore *index_store = NULL;

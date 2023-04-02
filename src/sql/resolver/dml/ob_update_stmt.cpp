@@ -64,44 +64,6 @@ int ObUpdateStmt::assign(const ObUpdateStmt &other)
   return ret;
 }
 
-int ObUpdateStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                          const common::ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); i++) {
-      if (OB_ISNULL(table_info_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(table_info_.at(i)->replace_exprs(other_exprs, new_exprs))) {
-        LOG_WARN("failed to replace exprs", K(ret));
-      } else { /*do nothing*/ }
-    }
-  }
-  return ret;
-}
-
-int ObUpdateStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); i++) {
-    if (OB_ISNULL(table_info_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(table_info_.at(i)->get_relation_exprs(expr_checker))) {
-      LOG_WARN("failed to get relation exprs", K(ret));
-    } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDelUpdStmt::inner_get_relation_exprs(expr_checker))) {
-      LOG_WARN("get delup stmt relation exprs failed", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObUpdateStmt::check_table_be_modified(uint64_t ref_table_id, bool& found) const
 {
   found = false;
@@ -195,21 +157,6 @@ int ObUpdateStmt::part_key_is_updated(bool &is_updated) const
   }
   return  ret;
 }
-
-// int ObUpdateStmt::expand_exprs(const ObSQLSessionInfo &session)
-// {
-//   int ret = OB_SUCCESS;
-//   if (!get_returning_exprs().empty()) {
-//     // The old engine pass the updated row to the returning expression to
-//     // get the updated value. We can not do this in static engine, we need to
-//     // replace the column with the assigned value.
-//     ObTableAssignment &ta = get_tables_assignments().at(0);
-//     FOREACH_CNT_X(e, get_returning_exprs(), OB_SUCC(ret)) {
-//       OZ(ObTableAssignment::expand_expr(ta.assignments_, *e));
-//     }
-//   }
-//   return ret;
-// }
 
 int ObUpdateStmt::get_assignments_exprs(ObIArray<ObRawExpr*> &exprs) const
 {
@@ -326,7 +273,7 @@ int ObUpdateStmt::remove_invalid_assignment()
       }
     }
   }
-  
+
   return ret;
 }
 

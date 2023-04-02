@@ -17,12 +17,14 @@
 #include "lib/ob_errno.h"
 #include "lib/restore/ob_storage.h"
 #include "lib/string/ob_string.h"    // ObString
+#include "lib/thread/threads.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "share/backup/ob_archive_piece.h"    // ObArchivePiece
 #include "lib/thread/ob_thread_name.h"
 #include "share/backup/ob_archive_struct.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/ob_debug_sync.h"
 #include "share/ob_errno.h"
 #include "share/ob_ls_id.h"          // ObLSID
 #include "share/rc/ob_tenant_base.h"    // MTL_ID
@@ -39,10 +41,12 @@
 #include "ob_archive_io.h"           // ObArchiveIO
 #include "share/backup/ob_backup_path.h"   // ObBackupPath
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
+#include "share/scn.h"   // ObArchivePathUtil
 
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
 namespace archive
 {
 ObArchiveSender::ObArchiveSender() :
@@ -93,13 +97,20 @@ int ObArchiveSender::init(const uint64_t tenant_id,
 
 void ObArchiveSender::destroy()
 {
-  inited_ = false;
   stop();
   wait();
-  tenant_id_ = OB_INVALID_TENANT_ID;
-  allocator_ = NULL;
-  ls_mgr_ = NULL;
-  persist_mgr_ = NULL;
+  if (inited_) {
+    // retire task_status and free all send_tasks
+    (void)free_residual_task_();
+    task_queue_.reset();
+    task_queue_.destroy();
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    allocator_ = NULL;
+    ls_mgr_ = NULL;
+    persist_mgr_ = NULL;
+    round_mgr_ = NULL;
+    inited_ = false;
+  }
 }
 
 int ObArchiveSender::start()
@@ -114,7 +125,6 @@ int ObArchiveSender::start()
   } else {
     ARCHIVE_LOG(INFO, "start ObArchiveSender threads succ", KR(ret));
   }
-
   return ret;
 }
 
@@ -134,7 +144,7 @@ void ObArchiveSender::wait()
 void ObArchiveSender::release_send_task(ObArchiveSendTask *task)
 {
   if (NULL == task || NULL == allocator_) {
-    ARCHIVE_LOG(ERROR, "invalid arguments", K(task), K(allocator_));
+    ARCHIVE_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid arguments", K(task), K(allocator_));
   } else {
     allocator_->free_send_task(task);
   }
@@ -175,7 +185,7 @@ int ObArchiveSender::push_task_status(ObArchiveTaskStatus *task_status)
   } else if (OB_FAIL(task_queue_.push(task_status))) {
     ARCHIVE_LOG(WARN, "push fail", K(ret), KPC(task_status));
   } else {
-    ARCHIVE_LOG(INFO, "push succ", KPC(task_status));
+    ARCHIVE_LOG(INFO, "push succ", KP(task_status));
   }
   return ret;
 }
@@ -185,17 +195,36 @@ int64_t ObArchiveSender::get_send_task_status_count() const
   return task_queue_.size();
 }
 
+int ObArchiveSender::modify_thread_count(const int64_t thread_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = thread_count;
+  if (thread_count < MIN_SENDER_THREAD_COUNT) {
+    count = MIN_SENDER_THREAD_COUNT;
+  } else if (thread_count > MAX_SENDER_THREAD_COUNT) {
+    count = MAX_SENDER_THREAD_COUNT;
+  }
+  if (count == get_thread_count()) {
+    // do nothing
+  } else if (OB_FAIL(set_thread_count(count))) {
+    ARCHIVE_LOG(WARN, "set thread count failed", K(ret));
+  } else {
+    ARCHIVE_LOG(INFO, "set thread count succ", K(count));
+  }
+  return ret;
+}
+
 int ObArchiveSender::submit_send_task_(ObArchiveSendTask *task)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task->get_ls_id();
+  const ObLSID id = task->get_ls_id();
   if (OB_ISNULL(ls_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "ls_mgr_ is NULL", K(ret), K(ls_mgr_));
   } else {
     GET_LS_TASK_CTX(ls_mgr_, id) {
       if (OB_FAIL(ls_archive_task->push_send_task(*task, *this))) {
-        ARCHIVE_LOG(WARN, "push_send_task fail", K(ret), KPC(task));
+        ARCHIVE_LOG(WARN, "push_send_task fail", K(ret), K(id), KPC(task));
       }
     }
   }
@@ -209,9 +238,9 @@ void ObArchiveSender::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "archive sender not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "archive sender not init");
   } else {
-    while (! has_set_stop()) {
+    while (!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
       do_thread_task_();
     }
   }
@@ -219,63 +248,168 @@ void ObArchiveSender::run1()
 
 void ObArchiveSender::do_thread_task_()
 {
-  int ret = OB_SUCCESS;
-  void *data = NULL;
-  const int64_t MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT = 5 * 1000 * 1000L;
-  if (OB_FAIL(task_queue_.pop(data, MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT))) {
-    // no task exist, just skip
-    ob_usleep(1 * 1000 * 1000L);
-  } else if (OB_ISNULL(data)) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "data is NULL", K(ret), K(data));
-  } else {
-    if (OB_FAIL(handle_task_list(data))) {
-      ARCHIVE_LOG(WARN, "handle task list fail", K(ret));
+  // try consume task
+  {
+    (void)try_consume_send_task_();
+  }
+
+  // try free send task
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(try_free_send_task_())) {
+      ARCHIVE_LOG(WARN, "try free send task failed", K(ret));
     }
+  }
+
+  if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+    ARCHIVE_LOG(INFO, "ObArchiveSender is running", "thread_index", get_thread_idx());
   }
 }
 
-int ObArchiveSender::handle_task_list(void *data)
+int ObArchiveSender::try_consume_send_task_()
 {
   int ret = OB_SUCCESS;
-  bool exist = false;
-  bool task_consume = false;
-  ObLink *link = NULL;
+  const int64_t counts = std::max(1L, task_queue_.size());
+  for (int64_t i = 0; OB_SUCC(ret) && i < counts; i++) {
+    ret = do_consume_send_task_();
+  }
+  return ret;
+}
+
+int ObArchiveSender::do_consume_send_task_()
+{
+  int ret = OB_SUCCESS;
   ObArchiveSendTask *task = NULL;
-  ObArchiveTaskStatus *task_status = static_cast<ObArchiveTaskStatus *>(data);
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_SEND_NUM && ! has_set_stop(); i++) {
-    task_consume = false;
-    exist = false;
-    task = NULL;
-    if (OB_FAIL(task_status->top(link, exist))) {
-      ARCHIVE_LOG(WARN, "top failed", K(ret));
-    } else if (! exist) {
-      break;
-    } else if (OB_ISNULL(link)) {
-      ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(ERROR, "link is NULL", K(ret));
-    } else if (FALSE_IT(task = static_cast<ObArchiveSendTask *>(link))) {
-    } else if (OB_SUCC(handle(*task, task_consume))) {
-      if (! task_consume) {
-        // 有任务无法被消费, 直接跳出循环
-        ob_usleep(100 * 1000L);
+  bool task_exist = false;
+  TaskConsumeStatus consume_status = TaskConsumeStatus::INVALID;
+  // As task issued flag is marked, no matter task is handled succ or fail
+  // the flag should be dealed.
+  if (OB_FAIL(get_send_task_(task, task_exist))) {
+    ARCHIVE_LOG(WARN, "get send task failed", K(ret));
+  } else if (! task_exist) {
+  } else if (FALSE_IT(handle(*task, consume_status))) {
+  } else {
+    switch (consume_status) {
+      case TaskConsumeStatus::DONE:
         break;
-      }
-    } else if (! is_retry_ret_code_(ret) && is_ignore_ret_code_(ret)) {
-      ret = OB_SUCCESS;
+      case TaskConsumeStatus::STALE_TASK:
+        task->mark_stale();
+        break;
+      case TaskConsumeStatus::NEED_RETRY:
+        if (! task->retire_task_with_retry()) {
+          ret = OB_ERR_UNEXPECTED;
+          ARCHIVE_LOG(ERROR, "retire task with retry failed", K(ret), KPC(task));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        ARCHIVE_LOG(ERROR, "handle send_task status unexpected", K(consume_status), KPC(task));
+        task->mark_stale();
+        break;
     }
+  }
+  return ret;
+}
 
-    // handle task
-    if (OB_SUCC(ret) && NULL != task && task_consume) {
-      if (OB_FAIL(task_status->pop_front(1))) {
-        ARCHIVE_LOG(ERROR, "pop front failed", K(ret), K(task_status));
+// only get task pointer, while task is still in task_status
+int ObArchiveSender::get_send_task_(ObArchiveSendTask *&task, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  task = NULL;
+  void *data = NULL;
+  ObArchiveTaskStatus *task_status = NULL;
+  ObLink *link = NULL;
+
+  if (OB_FAIL(task_queue_.pop(data, MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT))) {
+    // no task exist, just skip
+  } else if (OB_ISNULL(data)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "data is NULL", K(ret), K(data));
+  } else if (FALSE_IT(task_status = static_cast<ObArchiveTaskStatus *>(data))) {
+  } else if (OB_FAIL(task_status->get_next(link, exist))) {
+    ARCHIVE_LOG(WARN, "get next failed", K(ret));
+  } else if (! exist) {
+    ARCHIVE_LOG(WARN, "get task not exist", K(ret), K(exist), KPC(task_status));
+  } else if (OB_ISNULL(link)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "link is NULL", K(ret));
+  } else {
+    task = static_cast<ObArchiveSendTask *>(link);
+    exist = true;
+  }
+
+  // give back task_stauts, in order to the next consumption of other sender threads
+  if (NULL != task_status) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = try_retire_task_status_(*task_status))) {
+      ARCHIVE_LOG(WARN, "try_retire_task_status_ fail", K(ret), KPC(task_status));
+    }
+  }
+
+  // if no task exist, sleep
+  if (! exist) {
+    send_cond_.timedwait(10 * 1000L);
+  }
+
+  return ret;
+}
+
+// remove and free all serial tasks which are archived successfully
+int ObArchiveSender::try_free_send_task_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t counts = std::max(1L, task_queue_.size());
+  if (0 != get_thread_idx()) {
+    // only 0 thread affirm and free send task
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < counts; i++) {
+      ret = do_free_send_task_();
+    }
+  }
+  return ret;
+}
+
+int ObArchiveSender::do_free_send_task_()
+{
+  int ret = OB_SUCCESS;
+  void *data = NULL;
+  ObArchiveTaskStatus *task_status = NULL;
+  if (OB_FAIL(task_queue_.pop(data, MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT))) {
+    // no task exist, just skip
+  } else if (OB_ISNULL(data)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    task_status = static_cast<ObArchiveTaskStatus *>(data);
+    ObLink *link = NULL;
+    bool task_exist = false;
+    ObArchiveSendTask *task = NULL;
+    while (OB_SUCC(ret)) {
+      link = NULL;
+      task_exist = false;
+      task = NULL;
+      if (OB_FAIL(task_status->top(link, task_exist))) {
+        ARCHIVE_LOG(WARN, "top failed", K(ret), KPC(task_status));
+      } else if (! task_exist) {
+        ARCHIVE_LOG(TRACE, "task not exist", KPC(task_status));
+        break;
+      } else if (FALSE_IT(task = static_cast<ObArchiveSendTask*>(link))) {
+      } else if (! task->is_task_finish() && ! task->is_task_stale()) {
+        ARCHIVE_LOG(TRACE, "task not finish or stale", KPC(task), KPC(task_status));
+        break;
+      } else if (OB_FAIL(task_status->pop(link, task_exist)) || ! task_exist) {
+        ARCHIVE_LOG(ERROR, "pop failed", K(ret), KPC(task_status), K(task_exist));
       } else {
+        if (task->is_task_finish()) {
+          // update ls archive progress
+          update_archive_progress_(*task);
+        }
         release_send_task(task);
       }
     }
   }
 
+  // hold the task_status, until all eligible tasks are removed
   if (NULL != task_status) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = try_retire_task_status_(*task_status))) {
@@ -287,58 +421,78 @@ int ObArchiveSender::handle_task_list(void *data)
 
 bool ObArchiveSender::in_normal_status_(const ArchiveKey &key) const
 {
-  return round_mgr_->is_in_archive_status(key);
+  return round_mgr_->is_in_archive_status(key) || round_mgr_->is_in_suspend_status(key);
 }
 
 // 仅有需要重试的任务返回错误码
-int ObArchiveSender::handle(const ObArchiveSendTask &task, bool &task_consume)
+void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume_status)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   const ArchiveWorkStation &station = task.get_station();
   share::ObBackupDest backup_dest;
-  task_consume = true;   // 默认task需要被消费掉, 只有补偿piece场景才不会消费
   if (OB_UNLIKELY(! task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(task));
   } else if (OB_UNLIKELY(! in_normal_status_(station.get_round()))) {
     // not in normal status, just skip
+    // normal status include DOING / SUSPEND
+    // other status include INTERRUPT / STOP
+    consume_status = TaskConsumeStatus::STALE_TASK;
   } else if (OB_FAIL(round_mgr_->get_backup_dest(station.get_round(), backup_dest))) {
     ARCHIVE_LOG(WARN, "get backup dest failed", K(ret), K(task));
   } else {
     int64_t next_compensate_piece_id = 0;
     DestSendOperator operation = DestSendOperator::SEND;
     GET_LS_TASK_CTX(ls_mgr_, id) {
-      int64_t file_id = OB_INVALID_ARCHIVE_FILE_ID;
-      int64_t file_offset = OB_INVALID_ARCHIVE_FILE_OFFSET;
       ObArchiveSendDestArg arg;
       if (OB_FAIL(ls_archive_task->get_archive_send_arg(station, arg))) {
         ARCHIVE_LOG(WARN, "get archive progress failed", K(ret), K(id), K(task));
-      } else if (OB_FAIL(check_can_send_task_(task, arg.tuple_))) {
-        ARCHIVE_LOG(WARN, "can't send task", K(ret), K(task), KPC(ls_archive_task));
       } else if (OB_FAIL(check_piece_continuous_(task, arg.tuple_, next_compensate_piece_id, operation))) {
         ARCHIVE_LOG(WARN, "check piece continuous failed", K(ret));
       } else if (DestSendOperator::WAIT == operation) {
         // do nothing
-        task_consume = false;
+        consume_status = TaskConsumeStatus::NEED_RETRY;
       } else if (DestSendOperator::COMPENSATE == operation) {
-        task_consume = false;
+        consume_status = TaskConsumeStatus::NEED_RETRY;
         if (OB_FAIL(do_compensate_piece_(id, next_compensate_piece_id, station,
                                          backup_dest, *ls_archive_task))) {
           ARCHIVE_LOG(WARN, "do compensate piece failed", K(ret), K(task), KPC(ls_archive_task));
         }
       } else if (OB_FAIL(archive_log_(backup_dest, arg, task, *ls_archive_task))) {
         ARCHIVE_LOG(WARN, "archive log failed", K(ret), K(task), KPC(ls_archive_task));
-      }
-
-      if (OB_FAIL(ret)) {
-        handle_archive_error_(id, station.get_round(), ret);
       } else {
-        //
+        consume_status = TaskConsumeStatus::DONE;
+        // after archive_log, task is marked finish and not safe, can not print it any more
+        ARCHIVE_LOG(INFO, "archive log succ", K(id));
       }
     }
   }
-  return ret;
+
+  if (OB_FAIL(ret)) {
+    if (is_retry_ret_code_(ret)) {
+      consume_status = TaskConsumeStatus::NEED_RETRY;
+      ARCHIVE_LOG(WARN, "encounter need retry ret code, set task need retry",
+          K(ret), K(consume_status), K(task));
+    } else if (is_ignore_ret_code_(ret)) {
+      consume_status = TaskConsumeStatus::STALE_TASK;
+      ARCHIVE_LOG(WARN, "encounter ignore but no need retry ret code, set task stale",
+          K(ret), K(consume_status), K(task));
+    } else {
+      consume_status = TaskConsumeStatus::STALE_TASK;
+      ARCHIVE_LOG(ERROR, "archive encounter fatal error, drop task force",
+          K(ret), K(consume_status), K(task));
+    }
+  }
+
+  handle_archive_ret_code_(id, station.get_round(), ret);
+
+  // if encounter fail, sleep 100ms
+  if (OB_FAIL(ret)) {
+    ob_usleep(100 * 1000L);
+  }
+
+  DEBUG_SYNC(ARCHIVE_SENDER_HANDLE_TASK_DONE);
 }
 
 // 1. 从没归档出去过数据, 可以立即归档 -> ls_archive_task没有piece记录
@@ -353,7 +507,7 @@ int ObArchiveSender::check_piece_continuous_(const ObArchiveSendTask &task,
 {
   int ret = OB_SUCCESS;
   ObLSArchivePersistInfo info;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   const ObArchivePiece &piece = task.get_piece();
   const ArchiveWorkStation &station = task.get_station();
   if (! ls_task_tuple.get_piece().is_valid()) {
@@ -393,7 +547,7 @@ int ObArchiveSender::do_compensate_piece_(const ObLSID &id,
 {
   int ret = OB_SUCCESS;
   share::ObBackupPath prefix;
-  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(backup_dest, station.get_round().dest_id_,
+  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(backup_dest, station.get_round().dest_id_,
       station.get_round().round_, next_piece_id, id, prefix))) {
     ARCHIVE_LOG(WARN, "get piece ls dir path failed", K(ret), K(id), K(next_piece_id), K(station));
   } else {
@@ -408,23 +562,9 @@ int ObArchiveSender::do_compensate_piece_(const ObLSID &id,
   return ret;
 }
 
-int ObArchiveSender::check_can_send_task_(const ObArchiveSendTask &task,
-    const LogFileTuple &tuple)
-{
-  int ret = OB_SUCCESS;
-  if (tuple.get_piece() > task.get_piece()) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(WARN, "piece rollback", K(ret), K(tuple), K(task));
-  } else if (tuple.get_lsn() != task.get_start_lsn()) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(WARN, "lsn not continous", K(ret), K(tuple), K(task));
-  }
-  return ret;
-}
-
 int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
     const ObArchiveSendDestArg &arg,
-    const ObArchiveSendTask &task,
+    ObArchiveSendTask &task,
     ObLSArchiveTask &ls_archive_task)
 {
   int ret = OB_SUCCESS;
@@ -432,7 +572,9 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
   int64_t file_offset = 0;
   share::ObBackupPath path;
   ObBackupPathString uri;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
+  const int64_t log_size = static_cast<int64_t>((task.get_end_lsn() - task.get_start_lsn()));
+  const int64_t buf_size = task.get_buf_size();
   const ObArchivePiece &pre_piece = arg.tuple_.get_piece();
   const ObArchivePiece &piece = task.get_piece();
   const ArchiveWorkStation &station = task.get_station();
@@ -466,8 +608,7 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
   }
   // 5. fill archive file header if needed
   else if (new_file
-      && OB_FAIL(fill_file_header_if_needed_(task.get_start_lsn(), origin_data,
-          origin_data_len, filled_data, filled_data_len))) {
+      && OB_FAIL(fill_file_header_if_needed_(task, filled_data, filled_data_len))) {
     ARCHIVE_LOG(WARN, "fill file header if needed failed", K(ret));
   }
   // 6. push log
@@ -475,21 +616,20 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
           file_offset : file_offset + ARCHIVE_FILE_HEADER_SIZE,
           new_file ? filled_data : origin_data, new_file ? filled_data_len : origin_data_len))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret), K(task));
-  }
   // 7. 更新日志流归档任务archive file info
-  else if (OB_FAIL(update_archive_progress_(file_id, file_offset, task, ls_archive_task))) {
-    ARCHIVE_LOG(WARN, "update archive file info failed", K(ret), K(file_id));
+  } else {
+    task.update_file(file_id, file_offset + task.get_buf_size());
+    if (task.finish_task()) {
+      ARCHIVE_LOG(INFO, "finish task succ", K(id));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(ERROR, "finish task failed", K(ret), K(task));
+    }
   }
 
-  // 8. 释放filled buffer
-  if (NULL != filled_data) {
-    mtl_free(filled_data);
-    filled_data = NULL;
-  }
-
-  // 9. 统计
+  // 8. 统计
   if (OB_SUCC(ret)) {
-    statistic(task, common::ObTimeUtility::current_time() - start_ts);
+    statistic(log_size, buf_size, common::ObTimeUtility::current_time() - start_ts);
   }
   return ret;
 }
@@ -527,7 +667,7 @@ int ObArchiveSender::build_archive_prefix_if_needed_(const ObLSID &id,
   share::ObBackupPath prefix;
   if (pre_piece.is_valid() && pre_piece == cur_piece && piece_dir_exist) {
     // just skip
-  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(backup_dest, station.get_round().dest_id_,
+  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(backup_dest, station.get_round().dest_id_,
       station.get_round().round_, cur_piece.get_piece_id(), id, prefix))) {
     ARCHIVE_LOG(WARN, "get piece ls dir path failed", K(ret), K(id),
         K(cur_piece), K(station), K(backup_dest));
@@ -557,19 +697,15 @@ int ObArchiveSender::build_archive_path_(const ObLSID &id,
   return ret;
 }
 
-int ObArchiveSender::fill_file_header_if_needed_(const palf::LSN &lsn,
-    char *origin_data,
-    const int64_t origin_data_len,
+int ObArchiveSender::fill_file_header_if_needed_(const ObArchiveSendTask &task,
     char *&filled_data,
     int64_t &filled_data_len)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   ObArchiveFileHeader file_header;
-  filled_data_len = origin_data_len + ARCHIVE_FILE_HEADER_SIZE;
-  if (OB_ISNULL(filled_data = (char*)mtl_malloc(filled_data_len, "ArcFile"))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    ARCHIVE_LOG(WARN, "alloc memory failed", K(ret));
+  const palf::LSN &lsn = task.get_start_lsn();
+  if (FALSE_IT(task.get_origin_buffer(filled_data, filled_data_len))) {
   } else if (OB_FAIL(file_header.generate_header(lsn))) {
     ARCHIVE_LOG(WARN, "generate archive file header failed", K(ret), K(lsn));
   } else if (OB_FAIL(file_header.serialize(filled_data, filled_data_len, pos))) {
@@ -579,7 +715,6 @@ int ObArchiveSender::fill_file_header_if_needed_(const palf::LSN &lsn,
     ARCHIVE_LOG(ERROR, "pos exceed", K(ret), K(pos));
   } else {
     MEMSET(filled_data + pos, 0, ARCHIVE_FILE_HEADER_SIZE - pos);
-    MEMCPY(filled_data + ARCHIVE_FILE_HEADER_SIZE, origin_data, origin_data_len);
   }
   return ret;
 }
@@ -602,20 +737,6 @@ int ObArchiveSender::push_log_(const ObLSID &id,
   return ret;
 }
 
-int ObArchiveSender::update_archive_progress_(const int64_t file_id,
-    const int64_t file_offset,
-    const ObArchiveSendTask &task,
-    ObLSArchiveTask &ls_archive_task)
-{
-  const int64_t end_offset = file_offset + task.get_buf_size();
-  const ArchiveWorkStation &station = task.get_station();
-  const LSN &lsn = task.get_end_lsn();
-  const int64_t log_ts = task.get_max_log_ts();
-  const ObArchivePiece &piece = task.get_piece();
-  LogFileTuple tuple(lsn, log_ts, piece);
-  return ls_archive_task.update_archive_progress(station, file_id, end_offset, tuple);
-}
-
 int ObArchiveSender::try_retire_task_status_(ObArchiveTaskStatus &task_status)
 {
   int ret = OB_SUCCESS;
@@ -625,6 +746,7 @@ int ObArchiveSender::try_retire_task_status_(ObArchiveTaskStatus &task_status)
   if (OB_FAIL(task_status.retire(is_queue_empty, is_discarded))) {
     ARCHIVE_LOG(ERROR, "task_status retire fail", KR(ret), K(task_status));
   } else if (is_discarded && NULL != allocator_) {
+    ARCHIVE_LOG(INFO, "free task_status succ", K(task_status));
     allocator_->free_send_task_status(&task_status);
   } else if (! is_queue_empty) {
     if (OB_FAIL(task_queue_.push(&task_status))) {
@@ -634,18 +756,29 @@ int ObArchiveSender::try_retire_task_status_(ObArchiveTaskStatus &task_status)
   return ret;
 }
 
-void ObArchiveSender::handle_archive_error_(const ObLSID &id,
+void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
     const ArchiveKey &key,
     const int ret_code)
 {
   int ret = OB_SUCCESS;
-  if (! in_normal_status_(key)) {
+  if (OB_SUCC(ret_code)) {
     // skip it
+  } else if (! in_normal_status_(key)) {
+    // skip it
+  } else if (OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code) {
+    // ret code should report to user
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_DBA_ERROR(OB_BACKUP_DEVICE_OUT_OF_SPACE, "msg", "archive device is full", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
   } else if (is_ignore_ret_code_(ret_code)) {
   } else {
     ARCHIVE_LOG(ERROR, "archive sender encounter fatal error", K(ret), K(id), K(key), K(ret_code));
     ObArchiveInterruptReason reasaon(ObArchiveInterruptReason::Factor::SEND_ERROR, lbt(), ret_code);
-    if (OB_FAIL(ls_mgr_->mark_fata_error(id, key, reasaon))) {}
+    if (OB_FAIL(ls_mgr_->mark_fatal_error(id, key, reasaon))) {
+      ARCHIVE_LOG(WARN, "mark fatal error failed", K(id), K(key), K(ret_code));
+    }
   }
 }
 
@@ -660,18 +793,71 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const
 {
   return is_retry_ret_code_(ret_code)
-    || OB_LOG_ARCHIVE_LEADER_CHANGED == ret_code;
+    || OB_LOG_ARCHIVE_LEADER_CHANGED == ret_code
+    || OB_ENTRY_NOT_EXIST == ret_code;
 }
 
-void ObArchiveSender::statistic(const ObArchiveSendTask &task, const int64_t cost_ts)
+void ObArchiveSender::update_archive_progress_(ObArchiveSendTask &task)
+{
+  int ret = OB_SUCCESS;
+  int64_t file_id = 0;
+  int64_t file_offset = 0;
+  const ArchiveWorkStation &station = task.get_station();
+  const LSN &lsn = task.get_end_lsn();
+  const SCN scn = task.get_max_scn();
+  const ObArchivePiece &piece = task.get_piece();
+  LogFileTuple tuple(lsn, scn, piece);
+  task.get_file(file_id, file_offset);
+  GET_LS_TASK_CTX(ls_mgr_, task.get_ls_id()) {
+    if (OB_FAIL(ls_archive_task->update_archive_progress(station, file_id, file_offset, tuple))) {
+      ARCHIVE_LOG(WARN, "update archive progress failed", K(ret), K(task), KPC(ls_archive_task));
+    }
+  }
+}
+
+int ObArchiveSender::free_residual_task_()
+{
+  int ret = OB_SUCCESS;
+  void *data = NULL;
+  while (OB_SUCC(ret) && 0 < task_queue_.size()) {
+    if (OB_FAIL(task_queue_.pop(data))) {
+      ARCHIVE_LOG(WARN, "pop task failed", K(ret));
+    } else {
+      ObArchiveTaskStatus *task_status = static_cast<ObArchiveTaskStatus*>(data);
+      ObLink *link = NULL;
+      bool task_exist = true;
+      while (OB_SUCC(ret) && task_exist) {
+        task_exist = false;
+        if (OB_FAIL(task_status->pop(link, task_exist))) {
+          ARCHIVE_LOG(WARN, "task_status pop failed", K(ret), K(tenant_id_), KPC(task_status));
+        } else if (! task_exist) {
+          // do nothing
+        } else {
+          ObArchiveSendTask *send_task = static_cast<ObArchiveSendTask*>(link);
+          ARCHIVE_LOG(INFO, "free residual send_task when sender destroy", KPC(send_task), K(task_status));
+          release_send_task(send_task);
+        }
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = try_retire_task_status_(*task_status))) {
+        ARCHIVE_LOG(WARN, "retrire task_status failed", K(tmp_ret), KPC(task_status));
+      } else {
+        ARCHIVE_LOG(INFO, "free task_status when sender destroy succ");
+      }
+    }
+  }
+  return ret;
+}
+
+void ObArchiveSender::statistic(const int64_t log_size, const int64_t buf_size, const int64_t cost_ts)
 {
   static __thread int64_t SEND_LOG_LSN_SIZE;
   static __thread int64_t SEND_BUF_SIZE;
   static __thread int64_t SEND_TASK_COUNT;
   static __thread int64_t SEND_COST_TS;
 
-  SEND_LOG_LSN_SIZE += static_cast<int64_t>((task.get_end_lsn() - task.get_start_lsn()));
-  SEND_BUF_SIZE += task.get_buf_size();
+  SEND_LOG_LSN_SIZE += log_size;
+  SEND_BUF_SIZE += buf_size;
   SEND_TASK_COUNT++;
   SEND_COST_TS += cost_ts;
 

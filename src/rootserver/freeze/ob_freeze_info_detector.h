@@ -32,6 +32,7 @@ public:
   ObFreezeInfoDetector();
   virtual ~ObFreezeInfoDetector() {}
   int init(const uint64_t tenant_id,
+           const bool is_primary_service,
            common::ObMySQLProxy &sql_proxy,
            ObFreezeInfoManager &freeze_info_manager,
            ObThreadIdling &major_scheduler_idling);
@@ -45,20 +46,34 @@ public:
   int signal();
 
 private:
-  int check_need_broadcast(bool &need_broadcast);
+  int check_need_broadcast(bool &need_broadcast, const int64_t expected_epoch);
   int try_broadcast_freeze_info(const int64_t expected_epoch);
-  int try_renew_snapshot_gc_ts();
+  int try_renew_snapshot_gc_scn();
   int try_minor_freeze();
   int try_update_zone_info(const int64_t expected_epoch);
 
   int can_start_work(bool &can_work);
+  bool is_primary_service() { return is_primary_service_; }
+  int check_tenant_is_restore(const uint64_t tenant_id, bool &is_restore);
+  int try_reload_freeze_info(const int64_t expected_epoch);
+  // adjust global_merge_info in memory to avoid useless major freezes on restore major_freeze_service
+  int try_adjust_global_merge_info(const int64_t expected_epoch);
+  int check_global_merge_info(bool &is_initial) const;
+  // For backup-restore tenant that switchover to primary tenant, FreezeInfoDetector is not able to
+  // has write access immediately when it starts. Thus, FreezeInfoDetector can not renew
+  // snapshot_gc_scn immediately. Therefore, let FreezeInfoDetector to check snapshot_gc_scn
+  // after it has started for a period of time (e.g., 10 min).
+  //
+  bool need_check_snapshot_gc_scn(const int64_t start_time_us);
 
 private:
   static const int64_t FREEZE_INFO_DETECTOR_THREAD_CNT = 1;
   static const int64_t UPDATER_INTERVAL_US = 10 * 1000 * 1000; // 10s
 
   bool is_inited_;
-  bool is_gc_ts_inited_;
+  bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
+  bool is_global_merge_info_adjusted_;
+  bool is_gc_scn_inited_;
   int64_t last_gc_timestamp_;
   ObFreezeInfoManager *freeze_info_mgr_;
   ObThreadIdling *major_scheduler_idling_;

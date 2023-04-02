@@ -77,7 +77,9 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
     real_table_id = share::schema::ObSchemaUtils::get_real_table_mappings_tid(ref_table_id);
   }
   const uint64_t tenant_id = MTL_ID();
-  if (!is_vt) {
+  if (tablet_mapper.is_non_partition_optimized()) {
+    // table ids has calced for no partition entity table, continue
+  } else if (!is_vt) {
     if (schema_guard_ == nullptr) {
       void *buf = allocator_.alloc(sizeof(ObSchemaGetterGuard));
       if (OB_ISNULL(buf)) {

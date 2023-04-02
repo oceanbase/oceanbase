@@ -28,7 +28,6 @@ public:
   { }
   virtual ~ObLogMonitoringDump() = default;
   const char *get_name() const;
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type) override;
   inline void set_flags(uint64_t flags) { flags_ = flags; }
   uint64_t get_flags() { return flags_; }
   void set_dst_op_id(uint64_t dst_op_id) { dst_op_line_id_ = dst_op_id; }

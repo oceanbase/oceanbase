@@ -176,9 +176,9 @@ int ObRSTCollector::enable_query_response_time(uint64_t tenant_id){
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     ObRSTTimeCollector* time_collector;
     if (OB_SUCC(collector_map_.get_refactored(tenant_id, time_collector))){
-        SERVER_LOG(WARN, "time collector of the tenant does not exist", K(ret), K(tenant_id));
+        SERVER_LOG(INFO, "time collector of the tenant is existed", K(ret), K(tenant_id));
     } else if (OB_FAIL(collector_map_.set_refactored(tenant_id, new ObRSTTimeCollector()))) {
-        SERVER_LOG(WARN, "time collector of the tenant create failed", K(ret), K(tenant_id));
+        SERVER_LOG(WARN, "create time collector of the tenant failed", K(ret), K(tenant_id));
     }
     return ret;
 }
@@ -188,7 +188,12 @@ int ObRSTCollector::free_query_response_time(uint64_t tenant_id){
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     ObRSTTimeCollector* time_collector;
     if (OB_FAIL(collector_map_.get_refactored(tenant_id, time_collector))){
-        SERVER_LOG(WARN, "time collector of the tenant does not exist", K(ret), K(tenant_id));
+        if(OB_HASH_NOT_EXIST == ret){
+            SERVER_LOG(WARN, "time collector of the tenant does not exist", K(ret), K(tenant_id));
+            ret = OB_SUCCESS;
+        } else {
+            SERVER_LOG(WARN, "query time collector of the tenant failed", K(ret), K(tenant_id));
+        }
     } else if (OB_FAIL(collector_map_.erase_refactored(tenant_id))) {
         SERVER_LOG(WARN, "erase the time collector failed", K(tenant_id));
     }

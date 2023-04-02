@@ -15,6 +15,8 @@
 #include <cstring>
 #include <ctype.h>
 #include "common/ob_smart_var.h"
+#include "share/ob_cluster_version.h"
+#include "share/ob_task_define.h"
 
 using namespace oceanbase::share;
 namespace oceanbase
@@ -54,11 +56,12 @@ const char *log_archive_encryption_algorithm_values[] =
 // ObConfigItem
 ObConfigItem::ObConfigItem()
     : ck_(NULL), version_(0), dumped_version_(0), inited_(false), initial_value_set_(false),
-      value_updated_(false), value_valid_(false), name_str_(nullptr), info_str_(nullptr),
+      value_updated_(false), dump_value_updated_(false), value_valid_(false), name_str_(nullptr), info_str_(nullptr),
       range_str_(nullptr), lock_()
 {
   MEMSET(value_str_, 0, sizeof(value_str_));
   MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
+  MEMSET(value_dump_str_, 0, sizeof(value_dump_str_));
 }
 
 ObConfigItem::~ObConfigItem()
@@ -75,11 +78,11 @@ void ObConfigItem::init(Scope::ScopeInfo scope_info,
                         const ObParameterAttr attr)
 {
   if (OB_ISNULL(name) || OB_ISNULL(def) || OB_ISNULL(info)) {
-    OB_LOG(ERROR, "name or def or info is null", K(name), K(def), K(info));
+    OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "name or def or info is null", K(name), K(def), K(info));
   } else {
     set_name(name);
     if (!set_value(def)) {
-      OB_LOG(ERROR, "Set config item value failed", K(name), K(def));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Set config item value failed", K(name), K(def));
     } else {
      set_info(info);
      attr_ = attr;
@@ -271,7 +274,7 @@ bool ObConfigStrListItem::set(const char *str)
         }
       }
     } else {
-      OB_LOG(WARN, "input str is not available", K(str), K_(value_.valid), K_(value_.size), K(bret));
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "input str is not available", K(str), K_(value_.valid), K_(value_.size), K(bret));
     }
   } else {
     ObLatchRGuard wr_guard(value_.rwlock_, ObLatchIds::CONFIG_LOCK);
@@ -292,9 +295,9 @@ void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info,
   ObConfigItem::init(scope_info, name, def, info, attr);
   set_range(range);
   if (OB_ISNULL(range)) {
-    OB_LOG(ERROR, "Range is NULL");
+    OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Range is NULL");
   } else if (!parse_range(range)) {
-    OB_LOG(ERROR, "Parse check range fail", K(range));
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Parse check range fail", K(range));
   }
 }
 
@@ -404,9 +407,9 @@ void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info,
   ObConfigItem::init(scope_info, name, def, info, attr);
   set_range(range);
   if (OB_ISNULL(range)) {
-    OB_LOG(ERROR, "Range is NULL");
+    OB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "Range is NULL");
   } else if (!parse_range(range)) {
-    OB_LOG(ERROR, "Parse check range fail", K(range));
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Parse check range fail", K(range));
   }
 }
 
@@ -517,11 +520,11 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container,
 
 int64_t ObConfigCapacityItem::parse(const char *str, bool &valid) const
 {
-  int64_t ret = ObConfigCapacityParser::get(str, valid);
+  int64_t value = ObConfigCapacityParser::get(str, valid);
   if (!valid) {
-      OB_LOG(ERROR, "set capacity error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set capacity error", "name", name(), K(str), K(valid));
   }
-  return ret;
+  return value;
 }
 
 // ObConfigTimeItem
@@ -556,7 +559,7 @@ int64_t ObConfigTimeItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigTimeParser::get(str, valid);
   if (!valid) {
-      OB_LOG(ERROR, "set time error", "name", name(), K(str), K(valid));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "set time error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -593,7 +596,7 @@ int64_t ObConfigIntItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigIntParser::get(str, valid);
   if (!valid) {
-    OB_LOG(ERROR, "set int error", "name", name(), K(str), K(valid));
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "set int error", "name", name(), K(str), K(valid));
   }
   return value;
 }
@@ -663,11 +666,11 @@ bool ObConfigBoolItem::parse(const char *str, bool &valid) const
   bool value = true;
   if (OB_ISNULL(str)) {
     valid = false;
-    OB_LOG(ERROR, "Get bool config item fail, str is NULL!");
+    OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Get bool config item fail, str is NULL!");
   } else {
     value = ObConfigBoolParser::get(str, valid);
     if (!valid) {
-      OB_LOG(WARN, "Get bool config item fail", K(valid), K(str));
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "Get bool config item fail", K(valid), K(str));
     }
   }
   return value;
@@ -823,7 +826,7 @@ bool ObConfigLogArchiveOptionsItem::is_valid_isolate_option(const int64_t idx)
     bret = true;
   } else {
     bret = false;
-    OB_LOG(WARN, "invalid isolated option idx", K(idx));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid isolated option idx", K(idx));
   }
   return bret;
 }
@@ -836,7 +839,7 @@ void ObConfigLogArchiveOptionsItem::process_isolated_option_(const int64_t idx)
     value_.is_mandatory_ = false;
   } else {
     value_.valid_ = false;
-    OB_LOG(WARN, "invalid isolated option idx", K(idx));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid isolated option idx", K(idx));
   }
 }
 
@@ -944,7 +947,7 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t sr
     int64_t pos = 0;
     while (OB_SUCC(ret) && (source_left_len > 0)
            && (NULL != (locate_str = STRCHR(source_str, '=')))) {
-      locate = locate_str - source_str;
+      locate = static_cast<int32_t>(locate_str - source_str);
       if (OB_FAIL(databuff_printf(dest, dest_len, pos, "%.*s = ", locate, source_str))) {
         OB_LOG(WARN, "failed to databuff_print", K(ret), K(dest), K(locate), K(source_str));
       } else {
@@ -963,6 +966,161 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t sr
     }
   }
   return ret;
+}
+
+ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
+                                         Scope::ScopeInfo scope_info,
+                                         const char *name,
+                                         const char *def,
+                                         const char *range,
+                                         const char *info,
+                                         const ObParameterAttr attr)
+{
+  if (OB_LIKELY(NULL != container)) {
+    container->set_refactored(ObConfigStringKey(name), this, 1);
+  }
+  init(scope_info, name, def, range, info, attr);
+}
+
+ObConfigVersionItem::ObConfigVersionItem(ObConfigContainer *container,
+                                         Scope::ScopeInfo scope_info,
+                                         const char *name,
+                                         const char *def,
+                                         const char *info,
+                                         const ObParameterAttr attr)
+{
+  if (OB_LIKELY(NULL != container)) {
+    container->set_refactored(ObConfigStringKey(name), this, 1);
+  }
+  init(scope_info, name, def, "", info, attr);
+}
+
+bool ObConfigVersionItem::set(const char *str)
+{
+  int64_t old_value = get_value();
+  bool value_update = value_updated();
+  bool valid = ObConfigIntegralItem::set(str);
+  int64_t new_value = get_value();
+  if (valid && value_update && old_value > new_value) {
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Attention!!! data version is retrogressive", K(old_value), K(new_value));
+  }
+  if (value_update && old_value != new_value) {
+    ObTaskController::get().allow_next_syslog();
+    OB_LOG(INFO, "Config data version changed", K(old_value), K(new_value), K(value_update), K(valid));
+  }
+  return valid;
+}
+
+int64_t ObConfigVersionItem::parse(const char *str, bool &valid) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t version = 0;
+  if (OB_FAIL(ObClusterVersion::get_version(str, version))) {
+    OB_LOG(ERROR, "parse version failed", KR(ret), "name", name(), K(str));
+  }
+  valid = OB_SUCC(ret);
+  return static_cast<int64_t>(version);
+}
+
+ObConfigVersionItem &ObConfigVersionItem::operator = (int64_t value)
+{
+  char buf[64] = {0};
+  (void) snprintf(buf, sizeof(buf), "%ld", value);
+  if (!set_value(buf)) {
+    OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "obconfig version item set value failed");
+  }
+  return *this;
+}
+
+void ObConfigPairs::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  config_array_.reset();
+  allocator_.clear();
+}
+
+int ObConfigPairs::assign(const ObConfigPairs &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    int64_t array_cnt = other.config_array_.count();
+    if (OB_FAIL(config_array_.reserve(array_cnt))) {
+      OB_LOG(WARN, "fail to reserve array", KR(ret), K(array_cnt));
+    } else {
+      tenant_id_ = other.tenant_id_;
+    }
+    ObConfigPair pair;
+    bool c_like_str = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < array_cnt; i++) {
+      const ObConfigPair &other_pair = other.config_array_.at(i);
+      if (OB_FAIL(ob_write_string(allocator_, other_pair.key_, pair.key_, c_like_str))) {
+        OB_LOG(WARN, "fail to write string", KR(ret), K(other));
+      } else if (OB_FAIL(ob_write_string(allocator_, other_pair.value_, pair.value_, c_like_str))) {
+        OB_LOG(WARN, "fail to write string", KR(ret), K(other));
+      } else if (OB_FAIL(config_array_.push_back(pair))) {
+        OB_LOG(WARN, "fail to push back array", KR(ret), K(pair));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObConfigPairs::add_config(const ObString &key, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < config_array_.count(); i++) {
+    const ObConfigPair &pair = config_array_.at(i);
+    if (0 == key.case_compare(pair.key_)) {
+      ret = OB_ENTRY_EXIST;
+      OB_LOG(WARN, "config already exist", KR(ret), K(key), K(value), K(pair));
+    }
+  } // end for
+
+  ObConfigPair tmp_pair;
+  bool c_like_str = true;
+  if (FAILEDx(ob_write_string(allocator_, key, tmp_pair.key_, c_like_str))) {
+    OB_LOG(WARN, "fail to write string", KR(ret), K(key));
+  } else if (OB_FAIL(ob_write_string(allocator_, value, tmp_pair.value_, c_like_str))) {
+    OB_LOG(WARN, "fail to write string", KR(ret), K(value));
+  } else if (OB_FAIL(config_array_.push_back(tmp_pair))) {
+    OB_LOG(WARN, "fail to push back array", KR(ret), K(tmp_pair));
+  }
+  return ret;
+}
+
+int ObConfigPairs::get_config_str(char *buf, const int64_t length) const
+{
+  int ret = OB_SUCCESS;
+  int64_t array_cnt = config_array_.count();
+  if (OB_UNLIKELY(
+      array_cnt <= 0
+      || OB_ISNULL(buf)
+      || length <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid arg", KR(ret), K(array_cnt), KP(buf), K(length));
+  }
+  int64_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < array_cnt; i++) {
+    const ObConfigPair &pair = config_array_.at(i);
+    if (OB_FAIL(databuff_printf(buf, length, pos, "%s%s=%s",
+                (0 == pos ? "" : ","),
+                pair.key_.ptr(), pair.value_.ptr()))) {
+      OB_LOG(WARN, "fail to print pair", KR(ret), K(pair));
+    }
+  } // end for
+  return ret;
+}
+
+int64_t ObConfigPairs::get_config_str_length() const
+{
+  int64_t length = config_array_.count() * 2; // reserved for some characters
+  for (int64_t i = 0; i < config_array_.count(); i++) {
+    length += config_array_.at(i).key_.length();
+    length += config_array_.at(i).value_.length();
+  } // end for
+  return length;
+
 }
 
 } // end of namespace common

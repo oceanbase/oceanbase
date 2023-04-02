@@ -56,12 +56,6 @@ void ObVectorStore::reset()
   default_row_.reset();
 }
 
-void ObVectorStore::reuse()
-{
-  ObBlockBatchedRowStore::reuse();
-  count_ = 0;
-}
-
 int ObVectorStore::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
@@ -215,7 +209,7 @@ int ObVectorStore::fill_rows(
   } else {
     blocksstable::ObMicroBlockReader *block_reader = static_cast<blocksstable::ObMicroBlockReader*>(reader);
     if (OB_FAIL(block_reader->get_rows(cols_projector_, col_params_, map_types_, default_row_,
-                                       row_ids_, row_capacity, row_buf_, datums_))) {
+                                       row_ids_, row_capacity, row_buf_, datums_, exprs_, eval_ctx_))) {
       LOG_WARN("fail to copy rows", K(ret), K(cols_projector_), K(row_capacity),
                "row_ids", common::ObArrayWrap<const int64_t>(row_ids_, row_capacity));
     }

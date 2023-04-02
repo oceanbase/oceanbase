@@ -59,7 +59,7 @@ bool ObServerBlacklist::ObMapMarkBlackFunctor::operator() (const ObCascadMember 
       info.is_in_blacklist_ = true;
       mark_cnt_++;
     }
-    SHARE_LOG(WARN, "mark server in blacklist", K(member), K(info), K(black_svr_cnt_));
+    SHARE_LOG_RET(WARN, OB_SUCCESS, "mark server in blacklist", K(member), K(info), K(black_svr_cnt_));
   }
   return true;
 }
@@ -91,15 +91,15 @@ bool ObServerBlacklist::ObMapRespFunctor::operator() (const ObCascadMember &memb
   const int64_t now = ObTimeUtility::current_time();
   const int64_t server_start_time = resp_.get_server_start_time();
   if (info.last_send_timestamp_ != req_send_ts) {
-    SHARE_LOG(WARN, "req_send_ts not match", K(member), K_(resp), K(info));
+    SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "req_send_ts not match", K(member), K_(resp), K(info));
   } else {
     const int64_t rpc_trans_time = (now - req_send_ts) / 2;
     if (rpc_trans_time > RPC_TRANS_TIME_THRESHOLD) {
-      SHARE_LOG(WARN, "[SERVER_BLACKLIST] rpc trans time is too large, attention !",
+      SHARE_LOG_RET(WARN, OB_SUCCESS, "[SERVER_BLACKLIST] rpc trans time is too large, attention !",
           K(rpc_trans_time), K(member));
     }
     if (server_start_time != 0 &&  server_start_time > info.server_start_time_) {
-      SHARE_LOG(WARN, "[SERVER_BLACKLIST] dst server may restart, attention !",
+      SHARE_LOG_RET(WARN, OB_SUCCESS, "[SERVER_BLACKLIST] dst server may restart, attention !",
           K(info.server_start_time_), K(server_start_time), K(member));
     }
     bool is_removed = info.is_in_blacklist_; 
@@ -123,7 +123,7 @@ bool ObServerBlacklist::ObMapIterFunctor::operator() (const ObCascadMember &memb
   bl_info.dst_svr_ = member.get_server();
   bl_info.dst_info_ = info;
   if (OB_SUCCESS != (tmp_ret = info_iter_.push(bl_info))) {
-    SHARE_LOG(WARN, "info_iter_.push failed", K(tmp_ret));
+    SHARE_LOG_RET(WARN, tmp_ret, "info_iter_.push failed", K(tmp_ret));
   } else {
     bool_ret = true;
   }
@@ -266,7 +266,7 @@ void ObServerBlacklist::run1()
 void ObServerBlacklist::blacklist_loop_()
 {
   while (!has_set_stop()) {
-    int tmp_ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;
     const int64_t start_time = ObTimeUtility::current_time();
     int64_t send_cnt = 0;
     if (IS_NOT_INIT) {
@@ -276,34 +276,34 @@ void ObServerBlacklist::blacklist_loop_()
     } else {
       // Clean up the dst_server that does not need to communicate in the map
       ObMapRemoveFunctor remove_functor(ObTimeUtility::current_time());
-      if (OB_SUCCESS != (tmp_ret = dst_info_map_.remove_if(remove_functor))) {
-        SHARE_LOG(WARN, "dst_info_map_ remove_if failed", K(tmp_ret));
+      if (OB_SUCCESS != (ret = dst_info_map_.remove_if(remove_functor))) {
+        SHARE_LOG_RET(WARN, ret, "dst_info_map_ remove_if failed", K(ret));
       }
       const int64_t remove_cnt = remove_functor.get_remove_cnt();
       if (remove_cnt > 0) {
-        SHARE_LOG(INFO, "dst_info_map_ remove_if finished", K(tmp_ret), "remove count",
+        SHARE_LOG(INFO, "dst_info_map_ remove_if finished", K(ret), "remove count",
             remove_cnt);
       }
       // Statistics should be added to the server of the blacklist
       ObMapMarkBlackFunctor mark_functor;
-      if (OB_SUCCESS != (tmp_ret = dst_info_map_.for_each(mark_functor))) {
-        SHARE_LOG(WARN, "dst_info_map_ for_each failed", K(tmp_ret));
+      if (OB_SUCCESS != (ret = dst_info_map_.for_each(mark_functor))) {
+        SHARE_LOG_RET(WARN, ret, "dst_info_map_ for_each failed", K(ret));
       }
       const int64_t mark_cnt = mark_functor.get_mark_cnt();
       if (mark_cnt > 0) {
-        SHARE_LOG(INFO, "dst_info_map_ mark blacklist finished", K(tmp_ret), "mark count",
+        SHARE_LOG(INFO, "dst_info_map_ mark blacklist finished", K(ret), "mark count",
             mark_cnt);
       }
       // Send message to server in map
       ObMapSendReqFunctor send_req_functor(this, self_);
-      if (OB_SUCCESS != (tmp_ret = dst_info_map_.for_each(send_req_functor))) {
-        SHARE_LOG(WARN, "dst_info_map_ for_each failed", K(tmp_ret));
+      if (OB_SUCCESS != (ret = dst_info_map_.for_each(send_req_functor))) {
+        SHARE_LOG(WARN, "dst_info_map_ for_each failed", K(ret));
       }
       send_cnt = send_req_functor.get_send_cnt();
     }
     const int64_t cost_time = ObTimeUtility::current_time() - start_time;
     if (cost_time > 100 * 1000) {
-      SHARE_LOG(WARN, "blacklist_loop cost too much time", K(cost_time));
+      SHARE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "blacklist_loop cost too much time", K(cost_time));
     }
     int32_t sleep_time = BLACKLIST_LOOP_INTERVAL - static_cast<const int32_t>(cost_time);
     if (sleep_time < 0) {
@@ -326,14 +326,14 @@ bool ObServerBlacklist::is_in_blacklist(const share::ObCascadMember &member, boo
   int tmp_ret = OB_SUCCESS;
   ObDstServerInfo svr_info;
   if (IS_NOT_INIT) {
-    SHARE_LOG(WARN, "ObServerBlacklist is not inited");
+    SHARE_LOG_RET(WARN, OB_NOT_INIT, "ObServerBlacklist is not inited");
   } else if (self_ == member.get_server()) {
     // always return false for self
   } else if (false == ATOMIC_LOAD(&is_enabled_)) {
     // always return false when not enable server_blacklist
   } else if (OB_SUCCESS != (tmp_ret = dst_info_map_.get(member, svr_info))) {
     if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-      SHARE_LOG(WARN, "dst_info_map_.get failed", K(tmp_ret));
+      SHARE_LOG_RET(WARN, tmp_ret, "dst_info_map_.get failed", K(tmp_ret));
     } else if (add_server) {
       svr_info.clean_on_time_ = true;
       svr_info.add_timestamp_ = ObTimeUtility::current_time();
@@ -345,7 +345,7 @@ bool ObServerBlacklist::is_in_blacklist(const share::ObCascadMember &member, boo
                 (server_start_time != 0 && svr_info.server_start_time_ != 0
                  && svr_info.server_start_time_ > server_start_time);
     if (bool_ret) {
-      SHARE_LOG(WARN, "server in blacklist", K(svr_info), K(server_start_time));
+      SHARE_LOG_RET(WARN, OB_SUCCESS, "server in blacklist", K(svr_info), K(server_start_time));
     }
   }
   return bool_ret;

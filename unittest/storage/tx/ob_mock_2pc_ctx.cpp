@@ -129,22 +129,29 @@ int MockOb2pcCtx::on_clear()
   return OB_SUCCESS;
 }
 
-bool MockOb2pcCtx::is_root() const
+Ob2PCRole MockOb2pcCtx::get_2pc_role() const
 {
-  return participants_.size() != 0;
+
+  Ob2PCRole role;
+
+  if (participants_.size()!=0) {
+    role = Ob2PCRole::ROOT;
+  } else if (participants_.size()==0) {
+    // not root & downstream is empty
+    role = Ob2PCRole::LEAF;
+  } else {
+    role = Ob2PCRole::INTERNAL;
+  }
+
+  return role;
 }
 
-bool MockOb2pcCtx::is_leaf() const
-{
-  return participants_.size() == 0;
-}
-
-int64_t MockOb2pcCtx::get_participants_size()
+int64_t MockOb2pcCtx::get_downstream_size() const
 {
   return participants_.size();
 }
 
-uint64_t MockOb2pcCtx::get_participant_id()
+int64_t MockOb2pcCtx::get_self_id()
 {
   int participant_id = 0;
 
@@ -163,7 +170,7 @@ int MockOb2pcCtx::submit_log(const ObTwoPhaseCommitLogType& log_type)
 }
 
 int MockOb2pcCtx::post_msg(const ObTwoPhaseCommitMsgType& msg_type,
-                          const uint8_t participant)
+                          const int64_t participant)
 {
   int ret = OB_SUCCESS;
   int64_t to = 0;
@@ -200,17 +207,11 @@ int MockOb2pcCtx::post_msg(const ObTwoPhaseCommitMsgType& msg_type,
   return ret;
 }
 
-int MockOb2pcCtx::post_msg(const ObTwoPhaseCommitMsgType& msg_type)
+int MockOb2pcCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
 {
   int ret = OB_SUCCESS;
 
-  for (int i = 0; i < participants_.size(); i++) {
-    if (OB_FAIL(post_msg(msg_type, i))) {
-      TRANS_LOG(WARN, "send mailbox failed", K(ret), K(msg_type));
-    }
-  }
-
-  TRANS_LOG(INFO, "post msg to participants success", K(*this), K(msg_type));
+  UNUSED(msg_type);
 
   return ret;
 }
@@ -282,14 +283,14 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
 {
   switch (new_state) {
   case ObTxState::INIT: {
-    TRANS_LOG(ERROR, "tx switch to init failed", K(*this), K(new_state));
+    TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to init failed", K(*this), K(new_state));
     ob_abort();
     break;
   }
   case ObTxState::PREPARE: {
     if (ObTxState::INIT != downstream_state_
         && ObTxState::PREPARE != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to prepare failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to prepare failed", K(*this), K(new_state));
       ob_abort();
     }
     break;
@@ -297,7 +298,7 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
   case ObTxState::PRE_COMMIT: {
     if (ObTxState::PREPARE != downstream_state_
         && ObTxState::PRE_COMMIT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to pre commit failed", KPC(this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to pre commit failed", KPC(this), K(new_state));
       ob_abort();
     }
     break;
@@ -305,7 +306,7 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
   case ObTxState::COMMIT: {
     if (ObTxState::PRE_COMMIT != downstream_state_
         && ObTxState::COMMIT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to commit failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to commit failed", K(*this), K(new_state));
       ob_abort();
     } else {
       tx_state_ = new_state;
@@ -316,7 +317,7 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
     if (ObTxState::INIT != downstream_state_
         && ObTxState::PREPARE != downstream_state_
         && ObTxState::ABORT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to abort failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to abort failed", K(*this), K(new_state));
       ob_abort();
     } else {
       tx_state_ = new_state;
@@ -326,13 +327,13 @@ int MockOb2pcCtx::set_downstream_state(const ObTxState new_state)
   case ObTxState::CLEAR: {
     if (ObTxState::COMMIT != downstream_state_
         && ObTxState::ABORT != downstream_state_) {
-      TRANS_LOG(ERROR, "tx switch to clear failed", K(*this), K(new_state));
+      TRANS_LOG_RET(ERROR, OB_ERROR, "tx switch to clear failed", K(*this), K(new_state));
       ob_abort();
     }
     break;
   }
   default: {
-    TRANS_LOG(WARN, "invalid 2pc state", KPC(this));
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid 2pc state", KPC(this));
     ob_abort();
     break;
   }
@@ -398,7 +399,7 @@ bool MockOb2pcCtx::check_status_valid(const bool should_commit)
   }
 
   if (!bret) {
-    TRANS_LOG(ERROR, "state is not match", K(*this), K(should_commit));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "state is not match", K(*this), K(should_commit));
   }
 
   return bret;

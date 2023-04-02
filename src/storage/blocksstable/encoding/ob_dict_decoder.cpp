@@ -1056,7 +1056,8 @@ int ObDictDecoder::load_data_to_obj_cell(
     }
     case ObStringSC:
     case ObTextSC: 
-    case ObJsonSC: {
+    case ObJsonSC:
+    case ObGeometrySC: {
       load_obj.val_len_ = static_cast<int32_t>(cell_len);
       load_obj.v_.string_ = cell_data;
       break;

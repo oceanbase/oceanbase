@@ -91,6 +91,7 @@ int ObTransformQueryPushDown::transform_one_stmt(common::ObIArray<ObParentDMLStm
     LOG_WARN("stmt is NULL", K(ret));
   } else if (!stmt->is_select_stmt()) {
     // do nothing
+    OPT_TRACE("not select stmt, can not transform");
   } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
     // do nothing
   } else if (1 == select_stmt->get_from_item_size() &&  // only one table reference
@@ -103,6 +104,7 @@ int ObTransformQueryPushDown::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("failed to get table item", K(ret), K(cur_from));
     } else if (!view_table_item->is_generated_table()) {
       // do nothing
+      OPT_TRACE("table item is not view, can not pushdown query");
     } else if (OB_ISNULL(view_stmt = view_table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("view stmt is null", K(ret));
@@ -116,6 +118,7 @@ int ObTransformQueryPushDown::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("gather transform information failed", K(ret));
     } else if (!can_transform) {
       /*do nothing*/
+      OPT_TRACE("can not pushdown query");
     } else if (OB_FAIL(do_transform(select_stmt,
                                     view_stmt,
                                     need_distinct,
@@ -134,6 +137,7 @@ int ObTransformQueryPushDown::transform_one_stmt(common::ObIArray<ObParentDMLStm
     }
   } else {
     /*do nothing*/
+    OPT_TRACE("not simple stmt, can not transform");
   }
   LOG_TRACE("succeed to push query down", K(trans_happened));
   return ret;
@@ -168,10 +172,14 @@ int ObTransformQueryPushDown::need_transform(const common::ObIArray<ObParentDMLS
     } else if (!query_hint->has_outline_data()) {
       if (OB_FAIL(check_hint_allowed_query_push_down(stmt, *table->ref_query_, need_trans))) {
         LOG_WARN("failed to check hint allowed query push down", K(ret));
-      } else {/*do nothing*/}
+      } else if (!need_trans) {
+        OPT_TRACE("hint reject transform");
+      }
     } else if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
                                                 get_hint(table->ref_query_->get_stmt_hint()))) {
       need_trans = true;
+    } else {
+      OPT_TRACE("outline reject transform");
     }
   }
   return ret;
@@ -242,11 +250,13 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
              select_stmt->is_set_stmt() ||
              (select_stmt->has_sequence() && !view_stmt->is_spj()) ||
              view_stmt->has_ora_rowscn()) {//判断1, 2
-    can_transform = false; 
+    can_transform = false;
+    OPT_TRACE("stmt is not spj");
   } else if (OB_FAIL(check_rownum_push_down(select_stmt, view_stmt, check_status))) {//判断3
     LOG_WARN("check rownum push down failed", K(check_status), K(ret));
   } else if (!check_status) {
     can_transform = false;
+    OPT_TRACE("can not pushdwon rownum");
   } else if (OB_FAIL(check_select_item_push_down(select_stmt,
                                                  view_stmt,
                                                  select_offset,
@@ -255,6 +265,7 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
     LOG_WARN("check select item push down failed");
   } else if (!check_status) {
     can_transform = false;
+    OPT_TRACE("can not pushdown select expr");
   } else if (select_stmt->get_condition_size() > 0 &&
              OB_FAIL(check_where_condition_push_down(select_stmt,
                                                      view_stmt,
@@ -263,21 +274,26 @@ int ObTransformQueryPushDown::check_transform_validity(ObSelectStmt *select_stmt
     LOG_WARN("check where condition push down failed", K(check_status), K(ret));
   } else if (!check_status) {
     can_transform = false;
+    OPT_TRACE("can not pushdown where condition");
   } else if ((select_stmt->has_group_by() || select_stmt->has_rollup())
              && !view_stmt->is_spj()) {//判断6
     can_transform = false;
+    OPT_TRACE("stmt has group by, but view is not spj");
   } else if (select_stmt->has_window_function() &&
              OB_FAIL(check_window_function_push_down(view_stmt, check_status))) {//判断7
     LOG_WARN("check window function push down failed", K(check_status), K(ret));
   } else if (!check_status) {
     can_transform = false;
+    OPT_TRACE("can not pushdown windown function");
   } else if (select_stmt->has_distinct() &&
              OB_FAIL(check_distinct_push_down(view_stmt, need_distinct, check_status))) {//判断8
     LOG_WARN("check distinct push down failed", K(check_status), K(ret));
   } else if (!check_status) {
     can_transform = false;
+    OPT_TRACE("can not pushdown distinct");
   } else if (select_stmt->has_order_by() && view_stmt->has_limit()) {//判断9
     can_transform = false;
+    OPT_TRACE("stmt has order by, but view has limit ,can not pushdown");
   } else if (select_stmt->has_limit()) {//判断10
     can_transform = (!select_stmt->is_calc_found_rows()
                      && !view_stmt->is_contains_assignment()
@@ -371,8 +387,7 @@ int ObTransformQueryPushDown::is_select_item_same(ObSelectStmt *select_stmt,
         } else {
           is_same_exactly = false;
         }
-      } else if (!sel_expr->is_column_ref_expr() ||
-                 sel_expr->get_expr_level() != select_stmt->get_current_level()) {
+      } else if (!sel_expr->is_column_ref_expr()) {
         is_same = false;
       } else if (OB_FAIL(select_offset.push_back(static_cast<const ObColumnRefRawExpr *>(sel_expr)
                                                    ->get_column_id() - OB_APP_MIN_COLUMN_ID))) {
@@ -495,6 +510,7 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
     LOG_WARN("failed to check select item has subquery", K(ret));
   } else if (!check_status) {
     can_be = false;
+    OPT_TRACE("view`s select expr has subquery");
   } else if (OB_FAIL(ObTransformUtils::check_has_assignment(*view_stmt, has_assign))) {
     LOG_WARN("check has assign failed", K(ret));
   } else if (has_assign) {
@@ -510,6 +526,7 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
     LOG_WARN("failed to check select expr valid", K(ret));
   } else if (!is_select_expr_valid) {
     can_be = false;
+    OPT_TRACE("stmt or view has assignment");
   } else if(OB_FAIL(is_select_item_same(select_stmt,
                                         view_stmt,
                                         check_status,
@@ -523,8 +540,20 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
              (view_stmt->is_recursive_union() && (!check_status || !select_offset.empty())) ||
              (view_stmt->is_set_stmt() && !view_stmt->is_recursive_union())) {
     can_be = false;
+    OPT_TRACE("view is scalary group or view has distinct");
   } else {
     can_be = true;
+  }
+  if (OB_SUCC(ret) && select_stmt->has_rollup()) {
+    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < select_exprs.count(); ++i) {
+      if (OB_ISNULL(select_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("select expr is null", K(ret));
+      } else {
+        can_be = !select_exprs.at(i)->is_const_expr() &&
+                 !select_exprs.at(i)->has_flag(CNT_SUB_QUERY);
+      }
+    }
   }
   return ret;
 }
@@ -804,11 +833,7 @@ int ObTransformQueryPushDown::push_down_stmt_exprs(ObSelectStmt *select_stmt,
     } else if (OB_FAIL(append(view_stmt->get_subquery_exprs(),
                        select_stmt->get_subquery_exprs()))) {
       LOG_WARN("view stmt append subquery failed", K(ret));
-    } else if (OB_FAIL(view_stmt->adjust_subquery_stmt_parent(select_stmt, view_stmt))) {
-      LOG_WARN("failed to adjust subquery stmt parent", K(ret));
     } else {
-      view_stmt->set_current_level(select_stmt->get_current_level());
-      view_stmt->set_parent_namespace_stmt(select_stmt->get_parent_namespace_stmt());
       //bug20488629, 备库普通租户SHOW database语句执行超时，始终要求选择Leader副本
       //view pull后需要继承原show db信息
       bool is_from_show_stmt = select_stmt->is_from_show_stmt();
@@ -840,9 +865,9 @@ int ObTransformQueryPushDown::replace_stmt_exprs(ObDMLStmt *parent_stmt,
                                        *child_stmt,
                                        new_column_exprs))) {
     LOG_WARN("failed to convert column expr to select expr", K(ret));
-  } else {
-    ret = parent_stmt->replace_inner_stmt_expr(old_column_exprs,
-                                               new_column_exprs);
+  } else if (OB_FAIL(parent_stmt->replace_relation_exprs(old_column_exprs,
+                                                         new_column_exprs))) {
+    LOG_WARN("failed to replace relation exprs", K(ret));
   }
   return ret;
 }
@@ -955,10 +980,10 @@ int ObTransformQueryPushDown::reset_set_stmt_select_list(ObSelectStmt *select_st
         } else {/*do nothing*/}
       }
       if (OB_SUCC(ret) && adjust_old_select_exprs.count() > 0) {
-        if (OB_FAIL(select_stmt->replace_inner_stmt_expr(adjust_old_select_exprs,
-                                                         adjust_new_select_exprs))) {
-          LOG_WARN("failed to replace inner stmt expr", K(ret));
-        } else {/*do nothing*/}
+        if (OB_FAIL(select_stmt->replace_relation_exprs(adjust_old_select_exprs,
+                                                        adjust_new_select_exprs))) {
+          LOG_WARN("failed to replace relation exprs", K(ret));
+        }
       }
     }
   }

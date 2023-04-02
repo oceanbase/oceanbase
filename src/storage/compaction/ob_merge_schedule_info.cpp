@@ -149,7 +149,8 @@ int ObMajorMergeHistory::search_entry(const int64_t frozen_version, ObMergeStatE
  */
 
 ObMinorMergeHistory::ObMinorMergeHistory(const uint64_t tenant_id)
-  : count_(0),
+  : mutex_(common::ObLatchIds::INFO_MGR_LOCK),
+    count_(0),
     tenant_id_(tenant_id)
 {
 }

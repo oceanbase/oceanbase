@@ -218,16 +218,16 @@ int TestDmlCommon::create_data_tablet(
   } else {
     transaction::ObMulSourceDataNotifyArg trans_flags;
     trans_flags.tx_id_ = 123;
-    trans_flags.log_ts_ = -1;
+    trans_flags.scn_ = share::SCN::invalid_scn();
     trans_flags.for_replay_ = false;
 
     ObLS *ls = ls_handle.get_ls();
     if (OB_FAIL(ls->get_tablet_svr()->on_prepare_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to prepare create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(trans_flags.log_ts_ = INT64_MAX - 100)) {
+    } else if (FALSE_IT(trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100))) {
     } else if (OB_FAIL(ls->get_tablet_svr()->on_redo_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to redo create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(++trans_flags.log_ts_)) {
+    } else if (FALSE_IT(trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1))) {
     } else if (OB_FAIL(ls->get_tablet_svr()->on_commit_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to commit create tablets", K(ret), K(arg));
     }
@@ -246,13 +246,17 @@ int TestDmlCommon::create_data_and_index_tablets(
   ObLSHandle ls_handle;
   obrpc::ObBatchCreateTabletArg arg;
 
+  share::SCN log_scn;
   if (OB_FAIL(create_ls(tenant_id, ls_id, ls_handle))) {
     STORAGE_LOG(WARN, "failed to create ls", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(build_mixed_tablets_arg(tenant_id, ls_id,
       data_tablet_id, index_tablet_id_array, arg))) {
     STORAGE_LOG(WARN, "failed to build pure data tablet arg", K(ret),
         K(tenant_id), K(ls_id), K(data_tablet_id), K(index_tablet_id_array));
-  } else if (OB_FAIL(ls_handle.get_ls()->batch_create_tablets(arg, true/*is_replay*/))) {
+  } else if (OB_FAIL(log_scn.convert_for_logservice(1))) {
+    STORAGE_LOG(WARN, "failed to convert_for_logservice", K(ret));
+
+  } else if (OB_FAIL(ls_handle.get_ls()->batch_create_tablets(arg, log_scn, true/*is_replay*/))) {
     STORAGE_LOG(WARN, "failed to batch create tablets", K(ret), K(arg));
   }
 
@@ -447,7 +451,7 @@ int TestDmlCommon::build_table_scan_param_base_(
   scan_param.limit_param_.offset_ = 0;
   scan_param.need_scn_ = false;
   scan_param.pd_storage_flag_ = false;
-  scan_param.fb_snapshot_ = transaction::ObTransVersion::INVALID_TRANS_VERSION;
+  scan_param.fb_snapshot_.reset();
 
   ObNewRange range;
   range.table_id_ = table_id;
@@ -576,7 +580,6 @@ int TestDmlCommon::build_pure_data_tablet_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
-  int64_t frozen_timestamp = 0;
   share::schema::ObTableSchema table_schema;
   build_data_table_schema(tenant_id, table_schema);
 
@@ -588,9 +591,8 @@ int TestDmlCommon::build_pure_data_tablet_arg(
   } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id),
-        K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", K(ret), K(table_schema));
   } else if (OB_FAIL(arg.tablets_.push_back(tablet_info))) {
@@ -616,7 +618,6 @@ int TestDmlCommon::build_mixed_tablets_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
-  int64_t frozen_timestamp = 0;
   share::schema::ObTableSchema data_table_schema;
   share::schema::ObTableSchema index_table_schema;
   build_data_table_schema(tenant_id, data_table_schema);
@@ -642,8 +643,8 @@ int TestDmlCommon::build_mixed_tablets_arg(
   } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id), K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(data_table_schema))) {
     STORAGE_LOG(WARN, "failed to push back data table schema", K(ret), K(data_table_schema));
   } else if (OB_FAIL(arg.table_schemas_.push_back(index_table_schema))) {

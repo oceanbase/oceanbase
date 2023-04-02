@@ -35,7 +35,7 @@
 #include "pl/ob_pl.h"
 
 #include "storage/tx/wrs/ob_weak_read_service.h"         // ObWeakReadService
-#include "storage/ob_long_ops_monitor.h"
+#include "storage/tx/wrs/ob_black_list.h"
 #include "storage/ob_partition_component_factory.h"
 
 #include "rootserver/ob_root_service.h"
@@ -62,16 +62,20 @@
 #include "share/ls/ob_ls_table_operator.h" // for ObLSTableOperator
 #include "storage/ob_locality_manager.h"
 #include "storage/ob_partition_component_factory.h"
+#include "storage/ddl/ob_ddl_heart_beat_task.h"
 
 #include "storage/ob_disk_usage_reporter.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
 #include "logservice/ob_server_log_block_mgr.h"
+
+#include "share/table/ob_table_rpc_proxy.h"
 
 namespace oceanbase
 {
 namespace omt
 {
 class ObTenantTimezoneMgr;
+class ObTenantSrsMgr;
 }
 namespace share
 {
@@ -217,6 +221,8 @@ public:
   common::ObMySQLProxy &get_mysql_proxy() { return sql_proxy_; }
   int64_t get_start_time() const { return start_time_; }
   sql::ObConnectResourceMgr& get_conn_res_mgr() { return conn_res_mgr_; }
+  obrpc::ObTableRpcProxy &get_table_rpc_proxy() { return table_rpc_proxy_; }
+  share::ObLocationService &get_location_service() { return location_service_; }
 private:
   int stop();
 
@@ -246,7 +252,7 @@ private:
   int init_sequence();
   int init_pl();
   int init_global_context();
-  int init_cluster_version();
+  int init_version();
   int init_ts_mgr();
   int init_px_target_mgr();
   int init_storage();
@@ -256,14 +262,16 @@ private:
   int init_table_lock_rpc_client();
   int start_log_mgr();
   int stop_log_mgr();
+  int init_srs_mgr();
   int reload_bandwidth_throttle_limit(int64_t network_speed);
   int get_network_speed_from_sysfs(int64_t &network_speed);
   int get_network_speed_from_config_file(int64_t &network_speed);
   int refresh_network_speed();
-
   int clean_up_invalid_tables();
   int clean_up_invalid_tables_by_tenant(const uint64_t tenant_id);
   int init_ctas_clean_up_task(); //Regularly clean up the residuals related to querying and building tables and temporary tables
+  int init_redef_heart_beat_task();
+  int init_ddl_heart_beat_task_container();
   int refresh_temp_table_sess_active_time();
   int init_refresh_active_time_task(); //Regularly update the sess_active_time of the temporary table created by the proxy connection sess
   int init_refresh_network_speed_task();
@@ -271,6 +279,17 @@ private:
   int set_running_mode();
   int check_server_can_start_service();
   int try_create_hidden_sys();
+  int parse_mode();
+
+  // ------------------------------- arb server start ------------------------------------
+  bool is_arbitration_mode() const;
+  int start_sig_worker_and_handle();
+  int init_server_in_arb_mode();
+  int start_server_in_arb_mode();
+  int stop_server_in_arb_mode();
+  int wait_server_in_arb_mode();
+  int destroy_server_in_arb_mode();
+  // ------------------------------- arb server end --------------------------------------
 
 public:
   volatile bool need_ctas_cleanup_; //true: ObCTASCleanUpTask should traverse all table schemas to find the one need be dropped
@@ -313,6 +332,7 @@ private:
   obrpc::ObDBMSSchedJobRpcProxy dbms_sched_job_rpc_proxy_;
   obrpc::ObInterruptRpcProxy interrupt_proxy_; // global interrupt
   obrpc::ObLoadDataRpcProxy load_data_proxy_;
+  obrpc::ObTableRpcProxy table_rpc_proxy_;
 
   // The OceanBase configuration relating to.
   common::ObServerConfig &config_;
@@ -320,6 +340,8 @@ private:
   common::ObConfigManager config_mgr_;
   omt::ObTenantConfigMgr &tenant_config_mgr_;
   omt::ObTenantTimezoneMgr &tenant_timezone_mgr_;
+  // gis: srs mgr
+  omt::ObTenantSrsMgr &tenant_srs_mgr_;
 
   // The Oceanbase schema relating to.
   share::schema::ObMultiVersionSchemaService &schema_service_;
@@ -366,6 +388,8 @@ private:
 
   // Weakly Consistent Read Service
   transaction::ObWeakReadService  weak_read_service_;
+  // blacklist service
+  transaction::ObBLService &bl_service_;
   // table service
   ObTableService table_service_;
 
@@ -386,8 +410,8 @@ private:
   common::ObMysqlRandom scramble_rand_;
   ObTenantDutyTask duty_task_;
   ObTenantSqlMemoryTimerTask sql_mem_task_;
-  storage::ObPurgeCompletedMonitorInfoTask long_ops_task_;
   ObCTASCleanUpTask ctas_clean_up_task_;     // repeat & no retry
+  ObRedefTableHeartBeatTask redef_table_heart_beat_task_;
   ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   ObCollectInfoGCTask collect_info_gc_task_;

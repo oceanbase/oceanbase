@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include "ob_admin_utils.h"
 #include "share/ob_rpc_struct.h"
+#include "storage/tablelock/ob_table_lock_rpc_struct.h"
 
 using namespace std;
 
@@ -43,6 +44,8 @@ using namespace std;
 
 using namespace oceanbase::tools;
 using namespace oceanbase::common;
+using namespace oceanbase::transaction;
+using namespace oceanbase::transaction::tablelock;
 
 namespace oceanbase {
   namespace tools {
@@ -330,6 +333,35 @@ DEF_COMMAND(SERVER, force_set_all_as_single_replica, 1, "#force set all as singl
   return ret;
 }
 
+DEF_COMMAND(SERVER, force_set_ls_as_single_replica, 1, "tenant_id:ls_id  # force set as single replica")
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObForceSetLSAsSingleReplicaArg arg;
+  string arg_str;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("## Error: should provide tenant_id:ls_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+  uint64_t tenant_id = 0;
+  int64_t ls_id_val = -1;
+  if (OB_FAIL(ret)) {
+  } else if (2 != sscanf(arg_str.c_str(), "%ld:%ld", &tenant_id, &ls_id_val)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret));
+  } else {
+    share::ObLSID ls_id(ls_id_val);
+    if (OB_SUCCESS != (ret = arg.init(tenant_id, ls_id))) {
+      COMMON_LOG(ERROR, "init arg failed", K(ret), K(arg), K(tenant_id), K(ls_id));
+    } else if (OB_SUCCESS != (ret = client_->force_set_ls_as_single_replica(arg))) {
+      COMMON_LOG(ERROR, "send req failed", K(ret), K(arg));
+    }
+  }
+  COMMON_LOG(INFO, "force_set_ls_as_single_replica", K(ret), K(arg));
+  return ret;
+}
+
 DEF_COMMAND(SERVER, force_create_sys_table, 1, "tenant_id:table_id:last_replay_log_id # force create sys table")
 {
   int ret = OB_SUCCESS;
@@ -517,4 +549,240 @@ DEF_COMMAND(TRANS, kill_part_trans_ctx, 1,
     "partition_id:partition_cnt:table_id trans_inc:timestamp svr_ip svr_port # kill_part_trans_ctx")
 {
   return OB_NOT_SUPPORTED;
+}
+
+// ls_remove_member
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+// @params [in]  svr_ip, the server ip want to delete
+// @params [in]  svr_port, the server port want to delete
+// @params [in]  orig_paxos_number, paxos replica number before this deletion
+// @params [in]  new_paxos_number, paxos replica number after this deletion
+// ATTENTION:
+//    Please make sure let log stream's leader to execute this command
+//    For permanant offline, orig_paxos_number should equals to new_paxos_number
+DEF_COMMAND(TRANS, ls_remove_member, 1, "tenant_id ls_id svr_ip svr_port orig_paxos_number new_paxos_number # ls_remove_member")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObLSDropPaxosReplicaArg arg;
+  int64_t tenant_id_to_set = OB_INVALID_TENANT_ID;
+  int64_t ls_id_to_set = 0;
+  int64_t orig_paxos_replica_number = 0;
+  int64_t new_paxos_replica_number = 0;
+  int32_t port = 0;
+  char ip[30];
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id ,member to remove, previous and new paxos replica number");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (6 != sscanf(arg_str.c_str(), "%ld %ld %s %d %ld %ld", &tenant_id_to_set, &ls_id_to_set,
+                         ip, &port, &orig_paxos_replica_number, &new_paxos_replica_number)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
+               K(tenant_id_to_set), K(ls_id_to_set),
+               K(port), K(orig_paxos_replica_number), K(new_paxos_replica_number));
+  } else {
+    common::ObAddr server_to_remove(common::ObAddr::VER::IPV4, ip, port);
+    common::ObReplicaMember remove_member(server_to_remove, 1);
+    share::ObTaskId task_id;
+    share::ObLSID ls_id(ls_id_to_set);
+    task_id.init(server_to_remove);
+    if (OB_ISNULL(client_)
+        || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_to_set
+                      || !ls_id.is_valid_with_tenant(tenant_id_to_set)
+                      || !server_to_remove.is_valid()
+                      || 1 < orig_paxos_replica_number - new_paxos_replica_number
+                      || 0 > orig_paxos_replica_number - new_paxos_replica_number)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid argument", K(ret), K(tenant_id_to_set), K(ls_id),
+                 K(remove_member), K(task_id), K(orig_paxos_replica_number),
+                 K(new_paxos_replica_number), K(port), K(ip), KP(client_));
+    } else if (OB_FAIL(arg.init(
+                 task_id,
+                 tenant_id_to_set,
+                 ls_id,
+                 remove_member,
+                 orig_paxos_replica_number,
+                 new_paxos_replica_number))) {
+      COMMON_LOG(WARN, "init arg failed", K(ret), K(task_id), K(tenant_id_to_set), K(ls_id),
+                 K(remove_member), K(orig_paxos_replica_number), K(new_paxos_replica_number));
+    } else if (OB_FAIL(client_->ls_remove_paxos_replica(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    }
+  }
+  COMMON_LOG(INFO, "ls_remove_member", K(arg));
+  return ret;
+}
+
+// remove_lock
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+// @params [in]  obj_type, lock object type (1:OBJ_TYPE_TABLE, 2:OBJ_TYPE_TABLET)
+// @params [in]  obj_id, lock object id
+// @params [in]  lock_mode, lock mode (1:EXCLUSIVE, 2:SHARE, 4:ROW_EXCLUSIVE, 6:SHARE_ROW_EXCLUSIVE, 8:ROW_SHARE)
+// @params [in]  owner_id, for OUT_TRANS lock and unlock
+// @params [in]  create_tx_id, which transaction create this lock
+// @params [in]  op_type, (1:IN_TRANS_DML_LOCK; 2:OUT_TRANS_LOCK; 3:OUT_TRANS_UNLOCK; 4:IN_TRANS_LOCK_TABLE_LOCK)
+DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id create_tx_id op_type # remove_lock")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminRemoveLockOpArg arg;
+  int64_t tenant_id_to_set = OB_INVALID_TENANT_ID;
+  int64_t ls_id_to_set = 0;
+  int64_t obj_type = 0; // how to change int64_t to be enum class
+  int64_t obj_id = 0;
+  int64_t lock_mode = 0;
+  int64_t owner_id = 0;
+  int64_t create_tx_id = 0;
+  int64_t op_type = 0;
+  int64_t lock_op_status = 1; // does not used.
+  int64_t seq_no = 0;
+  int64_t create_timestamp = 0;
+  int64_t create_schema_version = 0;
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, create_tx_id, op_type");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (8 != sscanf(arg_str.c_str(),
+                          "%ld %ld %ld %ld %ld %ld %ld %ld",
+                          &tenant_id_to_set, &ls_id_to_set, &obj_type,
+                          &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
+               K(tenant_id_to_set), K(ls_id_to_set),
+               K(obj_type), K(obj_id), K(lock_mode), K(owner_id), K(create_tx_id),
+               K(op_type), K(lock_op_status), K(seq_no), K(create_timestamp),
+               K(create_schema_version));
+  } else {
+    share::ObLSID ls_id(ls_id_to_set);
+    ObLockID lock_id;
+    ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
+    ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
+    ObTableLockOwnerID real_owner_id = owner_id;
+    ObTransID real_create_tx_id = create_tx_id;
+    ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
+    ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
+    ObTableLockOp lock_op;
+    lock_id.set(real_obj_type, obj_id);
+
+    lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
+                real_lock_op_status, seq_no, create_timestamp, create_schema_version);
+    if (OB_ISNULL(client_)
+        || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_to_set
+                       || !ls_id.is_valid_with_tenant(tenant_id_to_set)
+                       || !lock_op.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid argument", K(ret), K(tenant_id_to_set), K(ls_id),
+                 K(lock_op), KP(client_));
+    } else if (OB_FAIL(arg.set(tenant_id_to_set, ls_id, lock_op))) {
+      COMMON_LOG(WARN, "set remove lock op arg failed", K(ret), K(tenant_id_to_set),
+                 K(ls_id), K(lock_op));
+    } else if (OB_FAIL(client_->admin_remove_lock_op(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    }
+  }
+  COMMON_LOG(INFO, "remove_lock", K(arg));
+  return ret;
+}
+
+// update_lock
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+// @params [in]  obj_type, lock object type (1:OBJ_TYPE_TABLE, 2:OBJ_TYPE_TABLET)
+// @params [in]  obj_id, lock object id
+// @params [in]  lock_mode, lock mode (1:EXCLUSIVE, 2:SHARE, 4:ROW_EXCLUSIVE, 6:SHARE_ROW_EXCLUSIVE, 8:ROW_SHARE)
+// @params [in]  owner_id, for OUT_TRANS lock and unlock
+// @params [in]  create_tx_id, which transaction create this lock
+// @params [in]  op_type, (1:IN_TRANS_DML_LOCK; 2:OUT_TRANS_LOCK; 3:OUT_TRANS_UNLOCK; 4:IN_TRANS_LOCK_TABLE_LOCK)
+// @params [in]  op_status, (1:LOCK_OP_DOING; 2:LOCK_OP_COMPLETE;)
+// @params [in]  commit_version, the lock op transaction commit version
+// @params [in]  commit_scn, the lock op transaction commit scn
+DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode owner_id create_tx_id op_type new_op_status commit_version commit_scn# update_lock")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminUpdateLockOpArg arg;
+  int64_t tenant_id_to_set = OB_INVALID_TENANT_ID;
+  int64_t ls_id_to_set = 0;
+  int64_t obj_type = 0; // how to change int64_t to be enum class
+  int64_t obj_id = 0;
+  int64_t lock_mode = 0;
+  int64_t owner_id = 0;
+  int64_t create_tx_id = 0;
+  int64_t op_type = 0;
+  int64_t lock_op_status = 1;
+  int64_t commit_version = 0;
+  int64_t commit_scn = 0;
+  int64_t seq_no = 0;
+  int64_t create_timestamp = 0;
+  int64_t create_schema_version = 0;
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id, obj_type, obj_id, lock_mode, owner_id, create_tx_id, op_type, new_op_status, commit_version, commit_scn");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (11 != sscanf(arg_str.c_str(),
+                          "%ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld",
+                          &tenant_id_to_set, &ls_id_to_set, &obj_type,
+                          &obj_id, &lock_mode, &owner_id, &create_tx_id, &op_type,
+                          &lock_op_status, &commit_version, &commit_scn)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
+               K(tenant_id_to_set), K(ls_id_to_set),
+               K(obj_type), K(obj_id), K(lock_mode), K(owner_id), K(create_tx_id),
+               K(op_type), K(lock_op_status), K(commit_version), K(commit_scn));
+  } else {
+    share::ObLSID ls_id(ls_id_to_set);
+    ObLockID lock_id;
+    ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
+    ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
+    ObTableLockOwnerID real_owner_id = owner_id;
+    ObTransID real_create_tx_id = create_tx_id;
+    ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
+    ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
+    ObTableLockOp lock_op;
+    share::SCN real_commit_version;
+    share::SCN real_commit_scn;
+
+    lock_id.set(real_obj_type, obj_id);
+    lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
+                real_lock_op_status, seq_no, create_timestamp, create_schema_version);
+    real_commit_version.convert_for_tx(commit_version);
+    real_commit_scn.convert_for_logservice(commit_scn);
+    if (OB_ISNULL(client_)
+        || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_to_set
+                       || !ls_id.is_valid_with_tenant(tenant_id_to_set)
+                       || !lock_op.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid argument", K(ret), K(tenant_id_to_set), K(ls_id),
+                 K(lock_op), KP(client_));
+    } else if (OB_FAIL(arg.set(tenant_id_to_set,
+                               ls_id,
+                               lock_op,
+                               real_commit_version,
+                               real_commit_scn))) {
+      COMMON_LOG(WARN, "set update lock op arg failed", K(ret), K(tenant_id_to_set),
+                 K(ls_id), K(lock_op), K(real_commit_version), K(real_commit_scn));
+    } else if (OB_FAIL(client_->admin_update_lock_op(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    }
+  }
+  COMMON_LOG(INFO, "update_lock", K(arg));
+  return ret;
 }

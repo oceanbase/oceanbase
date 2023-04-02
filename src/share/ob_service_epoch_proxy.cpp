@@ -30,7 +30,8 @@ namespace share
 int ObServiceEpochProxy::init_service_epoch(
     ObISQLClient &sql_proxy,
     const int64_t tenant_id,
-    const int64_t freeze_service_epoch)
+    const int64_t freeze_service_epoch,
+    const int64_t arbitration_service_epoch)
 {
   int ret = OB_SUCCESS;
   if (is_user_tenant(tenant_id)) {
@@ -39,11 +40,23 @@ int ObServiceEpochProxy::init_service_epoch(
   // sys/meta tenant initialized freeze_service_epoch
   } else if (OB_FAIL(insert_service_epoch(sql_proxy, tenant_id, FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
     LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(tenant_id), K(freeze_service_epoch));
+  } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+                         sql_proxy,
+                         tenant_id,
+                         ARBITRATION_SERVICE_EPOCH,
+                         arbitration_service_epoch))) {
+    LOG_WARN("fail to init arb service epoch", KR(ret), K(tenant_id), K(arbitration_service_epoch));
   } else if (is_meta_tenant(tenant_id)) {
     // user tenant initialized freeze_service_epoch
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
     if (OB_FAIL(insert_service_epoch(sql_proxy, user_tenant_id, FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
       LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(user_tenant_id), K(freeze_service_epoch));
+    } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+                           sql_proxy,
+                           user_tenant_id,
+                           ARBITRATION_SERVICE_EPOCH,
+                           arbitration_service_epoch))) {
+      LOG_WARN("fail to init arb service epoch", KR(ret), K(user_tenant_id), K(arbitration_service_epoch));
     }
   }
   return ret;
@@ -128,6 +141,28 @@ int ObServiceEpochProxy::select_service_epoch_for_update(
   return inner_get_service_epoch_(sql_proxy, tenant_id, true, name, epoch_value);
 }
 
+int ObServiceEpochProxy::check_service_epoch(
+    common::ObISQLClient &sql_proxy,
+    const int64_t tenant_id,
+    const char *name,
+    const int64_t expected_epoch,
+    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  int64_t persistent_epoch = -1;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || (expected_epoch < 0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(expected_epoch));
+  } else if (OB_FAIL(ObServiceEpochProxy::get_service_epoch(sql_proxy, tenant_id, name, persistent_epoch))) {
+    LOG_WARN("fail to get service_epoch", KR(ret), K(tenant_id));
+  } else if (persistent_epoch != expected_epoch) {
+    is_match = false;
+    LOG_WARN("service_epoch mismatch", K(tenant_id), K(expected_epoch), K(persistent_epoch));
+  }
+  return ret;
+}
+
 int ObServiceEpochProxy::inner_get_service_epoch_(
     ObISQLClient &sql_proxy,
     const int64_t tenant_id,
@@ -166,6 +201,28 @@ int ObServiceEpochProxy::inner_get_service_epoch_(
         LOG_WARN("get more row than one", KR(ret), KR(tmp_ret), K(sql));
       }
     }
+  }
+  return ret;
+}
+
+int ObServiceEpochProxy::check_service_epoch_with_trans(
+    ObMySQLTransaction &trans,
+    const int64_t tenant_id,
+    const char *name,
+    const int64_t expected_epoch,
+    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  int64_t persistent_epoch = -1;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || (expected_epoch < 0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(expected_epoch));
+  } else if (OB_FAIL(ObServiceEpochProxy::select_service_epoch_for_update(trans, tenant_id,
+                                            name, persistent_epoch))) {
+    LOG_WARN("fail to select service_epoch for update", KR(ret), K(tenant_id));
+  } else if (persistent_epoch != expected_epoch) {
+    is_match = false;
   }
   return ret;
 }

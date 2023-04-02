@@ -19,23 +19,55 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/parser/ob_char_type.h"
 #include "sql/parser/parse_malloc.h"
+#include "sql/udr/ob_udr_struct.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+struct FPContext
+{
+public:
+	bool enable_batched_multi_stmt_;
+	bool is_udr_mode_;
+	common::ObCollationType conn_coll_;
+	ObSQLMode sql_mode_;
+	QuestionMarkDefNameCtx *def_name_ctx_;
+
+	FPContext()
+		: enable_batched_multi_stmt_(false),
+			is_udr_mode_(false),
+			conn_coll_(CS_TYPE_INVALID),
+			sql_mode_(0),
+			def_name_ctx_(nullptr)
+	{}
+	FPContext(common::ObCollationType conn_coll)
+		: enable_batched_multi_stmt_(false),
+			is_udr_mode_(false),
+			conn_coll_(conn_coll),
+			sql_mode_(0),
+			def_name_ctx_(nullptr)
+	{}
+};
+
 struct ObFastParser final
 {
 public:
 	static int parse(const common::ObString &stmt,
-									 const bool enable_batched_multi_stmt,
+									 const FPContext &fp_ctx,
+									 common::ObIAllocator &allocator,
+									 char *&no_param_sql,
+									 int64_t &no_param_sql_len,
+									 ParamList *&param_list,
+									 int64_t &param_num);
+	static int parse(const common::ObString &stmt,
+									 const FPContext &fp_ctx,
+									 common::ObIAllocator &allocator,
 			 						 char *&no_param_sql,
 			 						 int64_t &no_param_sql_len,
 			 						 ParamList *&param_list,
 			 						 int64_t &param_num,
-			 						 common::ObCollationType connection_collation,
-		   						 	 common::ObIAllocator &allocator,
-									 ObSQLMode sql_mode = 0);
+									 ObQuestionMarkCtx &ctx);
 };
 
 class ObFastParserBase
@@ -47,14 +79,14 @@ public:
 	typedef int (ObFastParserBase::*ProcessIdfFunc) (bool is_number_begin);
 
 	explicit ObFastParserBase(common::ObIAllocator &allocator,
-														const common::ObCollationType connection_collation,
-														const bool enable_batched_multi_stmt);
+														const FPContext fp_ctx);
 	~ObFastParserBase() {}
 	int parse(const common::ObString &stmt,
 						char *&no_param_sql,
 						int64_t &no_param_sql_len,
 						ParamList *&param_list,
 						int64_t &param_num);
+	const ObQuestionMarkCtx &get_question_mark_ctx() const { return question_mark_ctx_; }
 
 protected:
 	enum TokenType
@@ -286,6 +318,8 @@ protected:
 		return is_valid_char(ch) && USER_VAR_CHAR[static_cast<uint8_t>(ch)];
 	}
 	void reset_parser_node(ParseNode *node);
+	//{U}
+	int64_t is_latin1_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
 	int64_t is_utf8_char(const int64_t pos);
 	// NOTES: No boundary check, the caller guarantees safety!!!
@@ -343,7 +377,11 @@ protected:
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
 	}
-
+    inline bool is_latin1(char ch)
+	{
+		return is_valid_char(ch) &&
+		static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF;
+	}
 	// [0-9]{n}
 	inline bool is_n_continuous_digits(const char *str,
 									   const int64_t pos,
@@ -382,6 +420,9 @@ protected:
 														const char *name,
 														const int64_t name_len,
 														char *buf);
+	int64_t get_question_mark_by_defined_name(QuestionMarkDefNameCtx *ctx,
+																						const char *name,
+																						const int64_t name_len);
 	/**
 	 * The hexadecimal number in mysql mode has the following two representations:
 	 * x'([0-9A-F])*' or 0x([0-9A-F])+
@@ -398,6 +439,7 @@ protected:
 	int process_binary(bool is_quote);
 	int process_hint();
 	int process_question_mark();
+	int process_ps_statement();
 	int process_number(bool has_minus);
 	int process_negative();
 	int process_identifier_begin_with_l(bool &need_process_ws);
@@ -489,6 +531,8 @@ protected:
 	int param_num_;
 	bool is_oracle_mode_;
 	bool is_batched_multi_stmt_split_on_;
+	bool is_udr_mode_;
+	QuestionMarkDefNameCtx *def_name_ctx_;
 	bool is_mysql_compatible_comment_;
 	int64_t cur_token_begin_pos_;
 	int64_t copy_begin_pos_;
@@ -515,10 +559,9 @@ class ObFastParserMysql final : public ObFastParserBase
 public:
 	explicit ObFastParserMysql(
 		common::ObIAllocator &allocator,
-		const common::ObCollationType connection_collation,
-		const bool enable_batched_multi_stmt,
-		ObSQLMode sql_mode)
-		: ObFastParserBase(allocator, connection_collation, enable_batched_multi_stmt),sql_mode_(sql_mode)
+		const FPContext fp_ctx)
+		: ObFastParserBase(allocator, fp_ctx),
+			sql_mode_(fp_ctx.sql_mode_)
 	{
 		is_oracle_mode_ = false;
 		set_callback_func(
@@ -541,7 +584,6 @@ private:
 	 */
 	int process_string(const char quote);
 	int process_zero_identifier();
-	int process_ps_statement();
 	int process_identifier_begin_with_n();
 	
 private:
@@ -553,9 +595,8 @@ class ObFastParserOracle final : public ObFastParserBase
 public:
 	explicit ObFastParserOracle(
 		common::ObIAllocator &allocator,
-		const common::ObCollationType connection_collation,
-		const bool enable_batched_multi_stmt)
-		: ObFastParserBase(allocator, connection_collation, enable_batched_multi_stmt)
+		const FPContext fp_ctx)
+		: ObFastParserBase(allocator, fp_ctx)
 	{
 		is_oracle_mode_ = true;
 		set_callback_func(
@@ -573,7 +614,6 @@ private:
 	 * else, means that the current token starts with ("N"|"n")?{sqbegin }
 	 */
 	int process_string(const bool in_q_quote);
-	int process_ps_statement();
 	int process_identifier_begin_with_n();
 
 private:

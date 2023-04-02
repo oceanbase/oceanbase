@@ -97,7 +97,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -158,7 +159,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -212,7 +214,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -277,7 +280,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -366,7 +370,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -529,7 +534,8 @@ SQL: select * from t1 order by c2 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -590,7 +596,8 @@ SQL: select * from t1 order by c2 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -644,7 +651,8 @@ SQL: select * from t1 order by c2 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -709,7 +717,8 @@ SQL: select * from t1 order by c2 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -798,7 +807,8 @@ SQL: select * from t1 order by c2 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -961,7 +971,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -1022,7 +1033,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -1076,7 +1088,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -1141,7 +1154,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -1230,7 +1244,8 @@ SQL: select * from (select * from t1 order by c2) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -1424,7 +1439,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -1485,7 +1501,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -1539,7 +1556,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -1604,7 +1622,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -1693,7 +1712,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -1887,7 +1907,8 @@ SQL: select * from (select * from t1 order by c2 desc) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -1948,7 +1969,8 @@ SQL: select * from (select * from t1 order by c2 desc) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -2002,7 +2024,8 @@ SQL: select * from (select * from t1 order by c2 desc) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -2067,7 +2090,8 @@ SQL: select * from (select * from t1 order by c2 desc) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -2156,7 +2180,8 @@ SQL: select * from (select * from t1 order by c2 desc) a limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_last_desc"
     }
@@ -2350,7 +2375,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -2411,7 +2437,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -2465,7 +2492,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -2530,7 +2558,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -2619,7 +2648,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -2813,7 +2843,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -2874,7 +2905,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -2928,7 +2960,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -2993,7 +3026,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -3082,7 +3116,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -3276,7 +3311,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -3337,7 +3373,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -3391,7 +3428,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -3456,7 +3494,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -3545,7 +3584,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -3739,7 +3779,8 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -3800,7 +3841,8 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -3854,7 +3896,8 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -3919,7 +3962,8 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -4038,7 +4082,8 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_last_desc"
     }
@@ -4235,7 +4280,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -4296,7 +4342,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -4350,7 +4397,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -4415,7 +4463,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -4504,7 +4553,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -4698,7 +4748,8 @@ SQL: select * from (select * from (select * from (select * from (select * from (
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -4759,7 +4810,8 @@ SQL: select * from (select * from (select * from (select * from (select * from (
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -4813,7 +4865,8 @@ SQL: select * from (select * from (select * from (select * from (select * from (
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -4878,7 +4931,8 @@ SQL: select * from (select * from (select * from (select * from (select * from (
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -4967,7 +5021,8 @@ SQL: select * from (select * from (select * from (select * from (select * from (
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -5130,7 +5185,8 @@ SQL: select * from (select * from (select d.* from (select c.* from (select * fr
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -5191,7 +5247,8 @@ SQL: select * from (select * from (select d.* from (select c.* from (select * fr
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -5245,7 +5302,8 @@ SQL: select * from (select * from (select d.* from (select c.* from (select * fr
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -5310,7 +5368,8 @@ SQL: select * from (select * from (select d.* from (select c.* from (select * fr
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -5399,7 +5458,8 @@ SQL: select * from (select * from (select d.* from (select c.* from (select * fr
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -5562,7 +5622,8 @@ SQL: select * from (select * from t1) a order by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -5623,7 +5684,8 @@ SQL: select * from (select * from t1) a order by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -5677,7 +5739,8 @@ SQL: select * from (select * from t1) a order by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -5742,7 +5805,8 @@ SQL: select * from (select * from t1) a order by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -5831,7 +5895,8 @@ SQL: select * from (select * from t1) a order by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -6025,7 +6090,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -6086,7 +6152,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -6140,7 +6207,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -6205,7 +6273,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -6294,7 +6363,8 @@ SQL: select * from t1 order by c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -6488,7 +6558,8 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -6549,14 +6620,86 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
   "select": [
      {
       "expression": {
+<<<<<<< HEAD
         "item_type":"T_FUN_COUNT",
+=======
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":1064963,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
+        "column_id":16,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c1",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      },
+      "is_alias":false,
+      "alias_name":"c1",
+      "expr_name":"c1",
+      "default": {
+        "NULL":"NULL"
+      },
+      "paramed_alias_name":"",
+      "questions_pos": [
+      ],
+      "params_idx": [
+      ],
+      "esc_str_flag":false,
+      "need_check_dup_name":false,
+      "implicit_filled":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden_rowid":false
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+>>>>>>> de0eba8f08f... GIS sql syntax
         "result_type": {
           "meta": {
             "type":"BIGINT",
@@ -6587,6 +6730,7 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
         ],
         "children": [
         ],
+<<<<<<< HEAD
         "distinct":false,
         "order_by": [
         ],
@@ -6600,6 +6744,15 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
         },
         "is_nested_aggr":false,
         "pl_agg_udf_expr":null
+=======
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+>>>>>>> de0eba8f08f... GIS sql syntax
       },
       "is_alias":false,
       "alias_name":"count(*)",
@@ -6695,6 +6848,7 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
+<<<<<<< HEAD
         "accuracy": {
           "length":-1,
           "precision":20,
@@ -6706,6 +6860,52 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
           "collation":"invalid_type",
           "coercibility":"INVALID"
         }
+=======
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
+        "column_id":17,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      },
+      "ascending":"NULLs_first_asc"
+    }
+  ],
+  "limit": {
+    "item_type":"T_INT",
+    "result_type": {
+      "meta": {
+        "type":"BIGINT",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":2,
+        "precision":2,
+        "scale":0
+>>>>>>> de0eba8f08f... GIS sql syntax
       },
       "expr_info": [
         "IS_AGG",
@@ -6925,7 +7125,8 @@ SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -6986,7 +7187,8 @@ SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -7040,11 +7242,86 @@ SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
+<<<<<<< HEAD
       "expr_name":"a.c1",
+=======
+      "expr_name":"c1",
+      "default": {
+        "NULL":"NULL"
+      },
+      "paramed_alias_name":"",
+      "questions_pos": [
+      ],
+      "params_idx": [
+      ],
+      "esc_str_flag":false,
+      "need_check_dup_name":false,
+      "implicit_filled":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden_rowid":false
+    },
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
+        "column_id":17,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      },
+      "is_alias":false,
+      "alias_name":"c2",
+      "expr_name":"c2",
+      "default": {
+        "NULL":"NULL"
+      },
+>>>>>>> de0eba8f08f... GIS sql syntax
       "paramed_alias_name":"",
       "questions_pos": [
       ],
@@ -7130,6 +7407,61 @@ SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10;
   "aggr_func": [
   ],
   "order_by": [
+<<<<<<< HEAD
+=======
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
+        "column_id":17,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      },
+      "ascending":"NULLs_first_asc"
+    }
+>>>>>>> de0eba8f08f... GIS sql syntax
   ],
   "limit": {
     "item_type":"T_INT",
@@ -7300,6 +7632,421 @@ SQL: select a.c2 from (select * from t1) a;
           1
         ],
         "table_id":1099511677779,
+<<<<<<< HEAD
+=======
+        "column_id":17,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_FUN_COUNT",
+        "result_type": {
+          "meta": {
+            "type":"BIGINT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":20,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_AGG",
+          "CNT_AGG"
+        ],
+        "rel_id": [
+        ],
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "children": [
+        ],
+        "distinct":false,
+        "order_by": [
+        ],
+        "separator_param_expr":null,
+        "udf_meta": {
+          "tenant_id":-1,
+          "name":"",
+          "ret":0,
+          "dl":"",
+          "type":0
+        },
+        "linear_inter_expr":null,
+        "is_nested_aggr":false,
+        "pl_agg_udf_expr":null
+      },
+      "is_alias":false,
+      "alias_name":"count(*)",
+      "expr_name":"count(*)",
+      "default": {
+        "NULL":"NULL"
+      },
+      "paramed_alias_name":"",
+      "questions_pos": [
+      ],
+      "params_idx": [
+      ],
+      "esc_str_flag":false,
+      "need_check_dup_name":false,
+      "implicit_filled":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden_rowid":false
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":1099511677779,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"INT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":11,
+          "scale":0
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+        1
+      ],
+      "table_id":1099511677779,
+      "column_id":17,
+      "database_name":"opt",
+      "table_name":"t1",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"c2",
+      "expr_level":0,
+      "expr_levels": [
+        0
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_joined_dup_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false,
+      "srs_id":-32
+    }
+  ],
+  "rollup": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+     {
+      "item_type":"T_FUN_COUNT",
+      "result_type": {
+        "meta": {
+          "type":"BIGINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":20,
+          "scale":0
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_AGG",
+        "CNT_AGG"
+      ],
+      "rel_id": [
+      ],
+      "expr_level":0,
+      "expr_levels": [
+        0
+      ],
+      "children": [
+      ],
+      "distinct":false,
+      "order_by": [
+      ],
+      "separator_param_expr":null,
+      "udf_meta": {
+        "tenant_id":-1,
+        "name":"",
+        "ret":0,
+        "dl":"",
+        "type":0
+      },
+      "linear_inter_expr":null,
+      "is_nested_aggr":false,
+      "pl_agg_udf_expr":null
+    }
+  ],
+  "order_by": [
+  ],
+  "limit": {
+    "item_type":"T_INT",
+    "result_type": {
+      "meta": {
+        "type":"BIGINT",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":2,
+        "precision":2,
+        "scale":0
+      },
+      "flag":1,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+      }
+    },
+    "expr_info": [
+      "IS_CONST",
+      "CNT_CONST"
+    ],
+    "rel_id": [
+    ],
+    "value": {
+      "BIGINT":10
+    }
+  },
+  "win_func": [
+  ],
+  "offset": {
+    "item_type":"T_QUESTIONMARK",
+    "result_type": {
+      "meta": {
+        "type":"BIGINT",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":1,
+        "precision":1,
+        "scale":0
+      },
+      "flag":1,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+      }
+    },
+    "expr_info": [
+      "IS_CONST",
+      "IS_PARAM",
+      "CNT_CONST",
+      "CNT_PARAM"
+    ],
+    "rel_id": [
+    ],
+    "value": {
+      "UNKNOWN":0
+    }
+  },
+  "show_stmt_ctx": {
+    "is_from_show_stmt":false,
+    "global_scope":false,
+    "tenant_id":-1,
+    "show_database_id":-1,
+    "show_table_id":-1,
+    "grants_user_id":-1,
+    "show_seed":false
+  },
+  "hint": {
+    "read_static":false,
+    "no_rewrite":false,
+    "frozen_version":-1,
+    "topk_precision":-1,
+    "sharding_minimum_row_count":0,
+    "query_timeout":-1,
+    "hotspot":false,
+    "index": [
+    ],
+    "read_consistency":-1,
+    "join_ordered":false,
+    "join_order": [
+    ],
+    "merge_hint_ids": [
+    ],
+    "hash_hint_ids": [
+    ],
+    "no_hash_hint_ids": [
+    ],
+    "nl_hint_ids": [
+    ],
+    "part_hints": [
+    ],
+    "use_late_materialization":-1,
+    "log_level":"",
+    "max_concurrent":-1,
+    "only_concurrent_hint":false,
+    "has_hint_exclude_concurrent":false,
+    "parallel":-1,
+    "monitor":false,
+    "use_px":2,
+    "use_expand":0,
+    "use_view_merge":0,
+    "use_unnest":0,
+    "use_place_groupby":0,
+    "use_inline":0,
+    "use join filter": [
+    ],
+    "org_pq_distributes": [
+    ],
+    "pq_distributes": [
+    ],
+    "pdml_option":-1
+  },
+  "user_variables": [
+  ],
+  "query_context": {
+    "param_num":1,
+    "fetch_cur_time":true,
+    "calculable_items": [
+    ]
+  },
+  "current_level":0,
+  "pseudo_column_like_exprs": [
+  ],
+  "child_stmts": [
+  ],
+  "is_hierarchical_query":false
+}
+***************   Case 17   ***************
+SQL: select a.c1 from (select * from t1) a group by a.c2 limit 1, 10;
+{
+  "stmt_type":1,
+  "transpose_item":null,
+  "table": [
+     {
+      "table_id":1099511677779,
+      "table_name":"t1",
+      "alias_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "table_type":0,
+      "ref_id":1099511677779,
+      "database_name":"opt",
+      "for_update":false,
+      "wait":-1,
+      "skip_locked":false,
+      "mock_id":-1,
+      "view_base_item":-1,
+      "dblink_name":"",
+      "link_database_name":""
+    }
+  ],
+  "joined_table": [
+  ],
+  "semi_info": [
+  ],
+  "partition_express": [
+  ],
+  "column": [
+     {
+      "column_id":16,
+      "table_id":1099511677779,
+      "column":"c1",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511677779,
+      "base_cid":16,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":1064963,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
         "column_id":16,
         "database_name":"opt",
         "table_name":"t1",
@@ -7317,10 +8064,273 @@ SQL: select a.c2 from (select * from t1) a;
         "is_joined_dup_column":false,
         "is_unpivot_mocked_column":false,
         "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      }
+    },
+     {
+      "column_id":17,
+      "table_id":1099511677779,
+      "column":"c2",
+      "auto_filled_timestamp":false,
+      "default_value": {
+        "NULL":"NULL"
+      },
+      "base_tid":1099511677779,
+      "base_cid":17,
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":0,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
+        "column_id":17,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c2",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      }
+    }
+  ],
+  "select": [
+     {
+      "expression": {
+        "item_type":"T_REF_COLUMN",
+        "result_type": {
+          "meta": {
+            "type":"INT",
+            "collation":"binary",
+            "coercibility":"NUMERIC"
+          },
+          "accuracy": {
+            "length":-1,
+            "precision":11,
+            "scale":0
+          },
+          "flag":1064963,
+          "calc_type": {
+            "type":"NULL",
+            "collation":"invalid_type",
+            "coercibility":"INVALID"
+          }
+        },
+        "expr_info": [
+          "IS_COLUMN",
+          "CNT_COLUMN"
+        ],
+        "rel_id": [
+          1
+        ],
+        "table_id":1099511677779,
+>>>>>>> de0eba8f08f... GIS sql syntax
+        "column_id":16,
+        "database_name":"opt",
+        "table_name":"t1",
+        "synonym_name":"",
+        "synonym_db_name":"",
+        "column_name":"c1",
+        "expr_level":0,
+        "expr_levels": [
+          0
+        ],
+        "column_flags":0,
+        "enum_set_values": [
+        ],
+        "is_lob_column":false,
+        "is_joined_dup_column":false,
+        "is_unpivot_mocked_column":false,
+        "is_hidden":false,
+<<<<<<< HEAD
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
         "is_mul_key_column":false
+=======
+        "is_unique_key_column":false,
+        "is_mul_key_column":false,
+        "srs_id":-32
+      },
+      "is_alias":false,
+      "alias_name":"c1",
+      "expr_name":"a.c1",
+      "default": {
+        "NULL":"NULL"
+      },
+      "paramed_alias_name":"",
+      "questions_pos": [
+      ],
+      "params_idx": [
+      ],
+      "esc_str_flag":false,
+      "need_check_dup_name":false,
+      "implicit_filled":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden_rowid":false
+    }
+  ],
+  "distinct":false,
+  "rollup":false,
+  "nocycle":false,
+  "from": [
+     {
+      "table_id":1099511677779,
+      "is_join":false
+    }
+  ],
+  "start_with": [
+  ],
+  "connect_by": [
+  ],
+  "where": [
+  ],
+  "group_by": [
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"INT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":11,
+          "scale":0
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+        1
+      ],
+      "table_id":1099511677779,
+      "column_id":17,
+      "database_name":"opt",
+      "table_name":"t1",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"c2",
+      "expr_level":0,
+      "expr_levels": [
+        0
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_joined_dup_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false,
+      "is_unique_key_column":false,
+      "is_mul_key_column":false,
+      "srs_id":-32
+    }
+  ],
+  "rollup": [
+  ],
+  "having": [
+  ],
+  "aggr_func": [
+  ],
+  "order_by": [
+  ],
+  "limit": {
+    "item_type":"T_INT",
+    "result_type": {
+      "meta": {
+        "type":"BIGINT",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":2,
+        "precision":2,
+        "scale":0
+      },
+      "flag":1,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+      }
+    },
+    "expr_info": [
+      "IS_CONST",
+      "CNT_CONST"
+    ],
+    "rel_id": [
+    ],
+    "value": {
+      "BIGINT":10
+    }
+  },
+  "win_func": [
+  ],
+  "offset": {
+    "item_type":"T_QUESTIONMARK",
+    "result_type": {
+      "meta": {
+        "type":"BIGINT",
+        "collation":"binary",
+        "coercibility":"NUMERIC"
+      },
+      "accuracy": {
+        "length":1,
+        "precision":1,
+        "scale":0
+      },
+      "flag":1,
+      "calc_type": {
+        "type":"NULL",
+        "collation":"invalid_type",
+        "coercibility":"INVALID"
+>>>>>>> de0eba8f08f... GIS sql syntax
       }
     },
      {
@@ -7381,7 +8391,8 @@ SQL: select a.c2 from (select * from t1) a;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -7435,7 +8446,8 @@ SQL: select a.c2 from (select * from t1) a;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -7632,7 +8644,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":true,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-1
       }
     },
      {
@@ -7693,7 +8706,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -7754,7 +8768,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":true,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-1
       }
     },
      {
@@ -7815,7 +8830,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -7869,7 +8885,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-1
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -7934,7 +8951,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-1
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -7999,7 +9017,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":true,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -8064,7 +9083,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
         "from_alias_table":true,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -8178,7 +9198,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-1
         },
          {
           "item_type":"T_REF_COLUMN",
@@ -8228,7 +9249,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
           "from_alias_table":true,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-32
         }
       ]
     }
@@ -8395,7 +9417,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -8456,7 +9479,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -8510,7 +9534,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -8575,7 +9600,8 @@ SQL: select * from (select * from t1) a, t1 where a.c2 = t1.c2 limit 10;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -8749,7 +9775,8 @@ SQL: select * from (select * from t1) a where a.c2 = 1 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -8810,7 +9837,8 @@ SQL: select * from (select * from t1) a where a.c2 = 1 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -8864,7 +9892,8 @@ SQL: select * from (select * from t1) a where a.c2 = 1 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -8929,7 +9958,8 @@ SQL: select * from (select * from t1) a where a.c2 = 1 limit 1;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -9040,7 +10070,8 @@ SQL: select * from (select * from t1) a where a.c2 = 1 limit 1;
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "srs_id":-32
         },
          {
           "item_type":"T_QUESTIONMARK",
@@ -9245,7 +10276,8 @@ SQL: select distinct a.c1 from (select * from t1) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -9299,7 +10331,8 @@ SQL: select distinct a.c1 from (select * from t1) a limit 1;
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -9559,7 +10592,8 @@ SQL: select b.c2 from (select * from (select * from t1) a limit 10) b;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -9613,7 +10647,8 @@ SQL: select b.c2 from (select * from (select * from t1) a limit 10) b;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -9816,7 +10851,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -9877,7 +10913,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -9931,7 +10968,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":false,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -9996,7 +11034,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -10193,7 +11232,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":true,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         },
          {
@@ -10254,7 +11294,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":true,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -10308,7 +11349,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":true,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -10373,7 +11415,8 @@ SQL: (select * from (select * from t1) a limit 10) union all (select * from (sel
             "from_alias_table":true,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c2",
@@ -10675,7 +11718,8 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     },
      {
@@ -10736,7 +11780,8 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -10790,7 +11835,8 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
         "from_alias_table":false,
         "is_rowkey_column":true,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c1",
@@ -10855,7 +11901,8 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -11085,7 +12132,8 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "ascending":"NULLs_first_asc"
     }
@@ -11190,6 +12238,179 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
           "column":"c1",
           "auto_filled_timestamp":false,
           "default_value": {
+<<<<<<< HEAD
+=======
+            "NULL":"NULL"
+          },
+          "base_tid":1099511677779,
+          "base_cid":16,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"INT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":11,
+                "scale":0
+              },
+              "flag":1064963,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":-3,
+            "column_id":16,
+            "database_name":"opt",
+            "table_name":"t1",
+            "synonym_name":"",
+            "synonym_db_name":"",
+            "column_name":"c1",
+            "expr_level":1,
+            "expr_levels": [
+              1
+            ],
+            "column_flags":68719476736,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false,
+            "is_joined_dup_column":false,
+            "is_unpivot_mocked_column":false,
+            "is_hidden":false,
+            "is_unique_key_column":false,
+            "is_mul_key_column":false,
+            "srs_id":-32
+          }
+        },
+         {
+          "column_id":17,
+          "table_id":-3,
+          "column":"c2",
+          "auto_filled_timestamp":false,
+          "default_value": {
+            "NULL":"NULL"
+          },
+          "base_tid":1099511677779,
+          "base_cid":17,
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"INT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":11,
+                "scale":0
+              },
+              "flag":0,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":-3,
+            "column_id":17,
+            "database_name":"opt",
+            "table_name":"t1",
+            "synonym_name":"",
+            "synonym_db_name":"",
+            "column_name":"c2",
+            "expr_level":1,
+            "expr_levels": [
+              1
+            ],
+            "column_flags":68719476736,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false,
+            "is_joined_dup_column":false,
+            "is_unpivot_mocked_column":false,
+            "is_hidden":false,
+            "is_unique_key_column":false,
+            "is_mul_key_column":false,
+            "srs_id":-32
+          }
+        }
+      ],
+      "select": [
+         {
+          "expression": {
+            "item_type":"T_REF_COLUMN",
+            "result_type": {
+              "meta": {
+                "type":"INT",
+                "collation":"binary",
+                "coercibility":"NUMERIC"
+              },
+              "accuracy": {
+                "length":-1,
+                "precision":11,
+                "scale":0
+              },
+              "flag":1064963,
+              "calc_type": {
+                "type":"NULL",
+                "collation":"invalid_type",
+                "coercibility":"INVALID"
+              }
+            },
+            "expr_info": [
+              "IS_COLUMN",
+              "CNT_COLUMN"
+            ],
+            "rel_id": [
+              1
+            ],
+            "table_id":-3,
+            "column_id":16,
+            "database_name":"opt",
+            "table_name":"t1",
+            "synonym_name":"",
+            "synonym_db_name":"",
+            "column_name":"c1",
+            "expr_level":1,
+            "expr_levels": [
+              1
+            ],
+            "column_flags":68719476736,
+            "enum_set_values": [
+            ],
+            "is_lob_column":false,
+            "is_joined_dup_column":false,
+            "is_unpivot_mocked_column":false,
+            "is_hidden":false,
+            "is_unique_key_column":false,
+            "is_mul_key_column":false,
+            "srs_id":-32
+          },
+          "is_alias":false,
+          "alias_name":"c1",
+          "expr_name":"c1",
+          "default": {
+>>>>>>> de0eba8f08f... GIS sql syntax
             "NULL":"NULL"
           },
           "base_tid":1099511677779,
@@ -11242,6 +12463,7 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
             "from_alias_table":true,
             "is_rowkey_column":true,
             "is_unique_key_column":false,
+<<<<<<< HEAD
             "is_mul_key_column":false
           }
         }
@@ -11277,6 +12499,10 @@ SQL: select * from (select * from t1 order by c2) a where exists (select * from 
             "value": {
               "BIGINT":1
             }
+=======
+            "is_mul_key_column":false,
+            "srs_id":-32
+>>>>>>> de0eba8f08f... GIS sql syntax
           },
           "is_alias":false,
           "alias_name":"1",
@@ -11540,7 +12766,8 @@ SQL: select now(), b.* from (select c2 from t1 group by c2) as b;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       }
     }
   ],
@@ -11641,7 +12868,8 @@ SQL: select now(), b.* from (select c2 from t1 group by c2) as b;
         "from_alias_table":false,
         "is_rowkey_column":false,
         "is_unique_key_column":false,
-        "is_mul_key_column":false
+        "is_mul_key_column":false,
+        "srs_id":-32
       },
       "is_alias":false,
       "alias_name":"c2",
@@ -11721,7 +12949,8 @@ SQL: select now(), b.* from (select c2 from t1 group by c2) as b;
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "srs_id":-32
     }
   ],
   "rollup": [
@@ -12051,7 +13280,8 @@ SQL: select * from tl0 union distinct select * from tr0;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -12105,7 +13335,8 @@ SQL: select * from tl0 union distinct select * from tr0;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -12636,7 +13867,8 @@ SQL: select * from tl0 union distinct select * from tr1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -12690,7 +13922,8 @@ SQL: select * from tl0 union distinct select * from tr1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -13215,7 +14448,8 @@ SQL: select * from tl0 union distinct select * from tr2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -13269,7 +14503,8 @@ SQL: select * from tl0 union distinct select * from tr2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -13800,7 +15035,8 @@ SQL: select * from tl0 union distinct select * from tr3;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -13854,7 +15090,8 @@ SQL: select * from tl0 union distinct select * from tr3;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -14391,7 +15628,8 @@ SQL: select * from tl1 union distinct select * from tr0;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -14480,7 +15718,8 @@ SQL: select * from tl1 union distinct select * from tr0;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -15037,7 +16276,8 @@ SQL: select * from tl1 union distinct select * from tr1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -15126,7 +16366,8 @@ SQL: select * from tl1 union distinct select * from tr1;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -15685,7 +16926,8 @@ SQL: select * from tl1 union distinct select * from tr2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -15774,7 +17016,8 @@ SQL: select * from tl1 union distinct select * from tr2;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -16331,7 +17574,8 @@ SQL: select * from tl1 union distinct select * from tr3;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -16420,7 +17664,8 @@ SQL: select * from tl1 union distinct select * from tr3;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -16991,7 +18236,8 @@ SQL: select * from tl2 union distinct select * from tr0;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -17045,7 +18291,8 @@ SQL: select * from tl2 union distinct select * from tr0;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -17576,7 +18823,8 @@ SQL: select * from tl2 union distinct select * from tr1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -17665,7 +18913,8 @@ SQL: select * from tl2 union distinct select * from tr1;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -18224,7 +19473,8 @@ SQL: select * from tl2 union distinct select * from tr2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -18278,7 +19528,8 @@ SQL: select * from tl2 union distinct select * from tr2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",
@@ -18809,7 +20060,8 @@ SQL: select * from tl2 union distinct select * from tr3;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -18898,7 +20150,8 @@ SQL: select * from tl2 union distinct select * from tr3;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -19469,7 +20722,8 @@ SQL: select * from tl3 union distinct select * from tr0;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -19558,7 +20812,8 @@ SQL: select * from tl3 union distinct select * from tr0;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -20123,7 +21378,8 @@ SQL: select * from tl3 union distinct select * from tr1;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -20212,7 +21468,8 @@ SQL: select * from tl3 union distinct select * from tr1;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -20771,7 +22028,8 @@ SQL: select * from tl3 union distinct select * from tr2;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -20860,7 +22118,8 @@ SQL: select * from tl3 union distinct select * from tr2;
                 "from_alias_table":false,
                 "is_rowkey_column":false,
                 "is_unique_key_column":false,
-                "is_mul_key_column":false
+                "is_mul_key_column":false,
+                "srs_id":-32
               },
                {
                 "item_type":"T_INT",
@@ -21425,7 +22684,8 @@ SQL: select * from tl3 union distinct select * from tr3;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           }
         }
       ],
@@ -21479,7 +22739,8 @@ SQL: select * from tl3 union distinct select * from tr3;
             "from_alias_table":false,
             "is_rowkey_column":false,
             "is_unique_key_column":false,
-            "is_mul_key_column":false
+            "is_mul_key_column":false,
+            "srs_id":-32
           },
           "is_alias":false,
           "alias_name":"c1",

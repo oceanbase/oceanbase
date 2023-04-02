@@ -63,7 +63,7 @@ public:
                              const int64_t &proposal_id);
   virtual int set_scan_disk_log_finished();
   virtual bool can_append(const int64_t proposal_id, const bool need_check_proposal_id) const;
-  virtual bool can_raw_write() const;
+  virtual bool can_raw_write(const int64_t proposal_id, const bool need_check_proposal_id) const;
   virtual bool can_slide_sw() const;
   virtual bool can_handle_committed_info(const int64_t &proposal_id) const;
   virtual bool can_revoke(const int64_t proposal_id) const;
@@ -78,6 +78,7 @@ public:
   virtual bool can_handle_prepare_response(const int64_t &proposal_id) const;
   virtual bool can_handle_prepare_request(const int64_t &proposal_id) const;
   virtual bool can_receive_log(const int64_t &proposal_id) const;
+  virtual bool can_receive_config_log(const int64_t &proposal_id) const;
   virtual bool can_send_log_ack(const int64_t &proposal_id) const;
   virtual bool can_receive_log_ack(const int64_t &proposal_id) const;
   virtual bool can_truncate_log() const;
@@ -95,15 +96,21 @@ public:
   virtual int enable_vote();
   virtual LogReplicaType get_replica_type() const;
   virtual int get_election_role(common::ObRole &role, int64_t &epoch) const;
-  TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_),                         \
-      "state", replica_state_to_string(state_), K_(prepare_meta), K_(leader), K_(leader_epoch),        \
-      K_(is_sync_enabled), K_(pending_end_lsn), K_(scan_disk_log_finished), K_(last_check_start_id),   \
-      K_(reconfirm_start_time_ns), KP_(palf_role_change_cb), K_(allow_vote));
+  virtual bool is_arb_replica() const;
+  virtual int set_changing_config_with_arb();
+  virtual int reset_changing_config_with_arb();
+  virtual bool is_changing_config_with_arb() const;
+  TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_), "replica_type",         \
+      replica_type_2_str(replica_type_), "state", replica_state_to_string(state_), K_(prepare_meta),   \
+      K_(leader), K_(leader_epoch), K_(is_sync_enabled), K_(allow_vote), K_(pending_end_lsn),          \
+      K_(scan_disk_log_finished), K_(last_check_start_id), K_(is_changing_config_with_arb),            \
+      K_(reconfirm_start_time_us), KP_(palf_role_change_cb), K_(allow_vote));
 private:
   bool check_role_and_state_(const common::ObRole &role, const ObReplicaState &state) const;
   void update_role_and_state_(const common::ObRole &new_role, const ObReplicaState &new_state);
   int reject_prepare_request_(const common::ObAddr &server,
                               const int64_t &proposal_id);
+  bool is_reconfirm_can_receive_log_() const;
   bool is_follower_active_() const;
   bool is_follower_init_() const;
   bool is_leader_reconfirm_() const;
@@ -169,9 +176,9 @@ private:
   common::ObAddr leader_;
   int64_t leader_epoch_;
   int64_t last_check_start_id_;
-  int64_t last_check_start_id_time_ns_;
+  int64_t last_check_start_id_time_us_;
   int64_t last_check_pending_replay_cnt_;
-  int64_t reconfirm_start_time_ns_;
+  int64_t reconfirm_start_time_us_;
   int64_t check_sync_enabled_time_;
   int64_t check_reconfirm_timeout_time_;
   mutable int64_t check_follower_pending_warn_time_;
@@ -186,6 +193,9 @@ private:
   bool allow_vote_;
   // whether this replica is an arbitration replica
   LogReplicaType replica_type_;
+  // is changing config with arbitration member, stop appending logs
+  bool is_changing_config_with_arb_;
+  int64_t last_set_changing_config_with_arb_time_us_;
   bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(LogStateMgr);

@@ -50,6 +50,7 @@ public:
   void set_running(const bool is_running) { is_running_ = is_running; }
   bool is_running() const { return is_running_; }
   void set_delay(const int64_t delay) { delay_ = delay; }
+  int64_t get_delay() const { return delay_; }
 protected:
   bool is_registered_;
   bool is_running_;
@@ -123,7 +124,7 @@ public:
   virtual int register_timeout_task(ObITimeoutTask &task, const int64_t delay);
   virtual int unregister_timeout_task(ObITimeoutTask &task);
 private:
-  int get_thread_num_() { return common::max(sysconf(_SC_NPROCESSORS_ONLN) / 24, 2); }
+  int64_t get_thread_num_() { return common::max(sysconf(_SC_NPROCESSORS_ONLN) / 24, 2); }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransTimer);
 protected:

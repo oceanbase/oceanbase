@@ -136,7 +136,7 @@ int ObSyncTabletSeqLogCb::on_success()
   } else if (OB_FAIL(autoinc_seq.set_autoinc_seq_value(new_autoinc_seq_))) {
     LOG_WARN("failed to set autoinc seq value", K(ret), K(new_autoinc_seq_));
   } else if (OB_FAIL(tablet_handle.get_obj()->save_multi_source_data_unit(&autoinc_seq,
-                                                                          __get_ts_ns(),
+                                                                          __get_scn(),
                                                                           false/*for_replay*/,
                                                                           memtable::MemtableRefOp::DEC_REF,
                                                                           true/*is_callback*/))) {
@@ -173,7 +173,7 @@ int ObSyncTabletSeqLogCb::on_failure()
   } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_autoinc_seq(autoinc_seq))) {
     LOG_WARN("fail to get latest autoinc seq", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->save_multi_source_data_unit(&autoinc_seq,
-                                                                          -1/*clog_ts*/,
+                                                                          SCN::invalid_scn()/*scn*/,
                                                                           false/*for_replay*/,
                                                                           memtable::MemtableRefOp::DEC_REF,
                                                                           true/*is_callback*/))) {

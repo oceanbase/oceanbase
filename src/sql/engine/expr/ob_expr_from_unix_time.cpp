@@ -216,14 +216,14 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
                         usec_val))) {
       LOG_WARN("failed to get_usec_from_datum", K(ret));
       // warn on fail mode
-      ObCastMode default_cast_mode = CM_NONE;
-      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session,
-                                                    default_cast_mode))) {
-        LOG_WARN("failed to get default cast mode", K(ret));
-      } else if (CM_IS_WARN_ON_FAIL(default_cast_mode)) {
+      ObCastMode cast_mode = CM_NONE;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode)))) {
+        LOG_WARN("get_default_cast_mode failed", K(tmp_ret), K(session->get_stmt_type()));
+      } else if (CM_IS_WARN_ON_FAIL(cast_mode)) {
         ret = OB_SUCCESS;
-        expr_datum.set_null();
       }
+      expr_datum.set_null();
     } else {
       ObTime ob_time;
       ObDatum tmp_val;
@@ -241,7 +241,7 @@ int ObExprFromUnixTime::eval_fromtime_normal(const ObExpr &expr,
                            expr_datum, ObTimestampType,
                            get_timezone_info(session),
                            ob_time,
-                           get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0))) {
+                           get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0, false))) {
         LOG_WARN("failed to cast datum to obtime with date", K(ret));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_str_format(
                                             ob_time,

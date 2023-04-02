@@ -103,7 +103,7 @@ public:
   {
     int64_t pos = 0;
     if (OB_LIKELY(NULL != buf && len > 0)) {
-      int max_cpy = MIN(len, len_);
+      int64_t max_cpy = MIN(len, len_);
       STRNCPY(buf, str_, max_cpy);
       while (buf[pos] != '\0' && pos < max_cpy)
 	pos++;
@@ -719,6 +719,5 @@ private:
 
 #define LOG_KVS_(N, ...) CONCAT(LOG_KVS_, N)(__VA_ARGS__)
 #define LOG_KVS(...) "placeholder" LOG_KVS_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
-
 
 #endif

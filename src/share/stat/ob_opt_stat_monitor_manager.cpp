@@ -23,6 +23,7 @@
 #include "share/schema/ob_schema_utils.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "storage/ob_locality_manager.h"
 
 namespace oceanbase
 {
@@ -145,14 +146,14 @@ void ObOptStatMonitorManager::destroy()
     inited_ = false;
     for (auto iter = column_usage_maps_.begin(); iter != column_usage_maps_.end(); ++iter) {
       if (OB_ISNULL(iter->second)) {
-        BACKTRACE(ERROR, true, "column usage map is null");
+        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "column usage map is null");
       } else {
         iter->second->destroy();
       }
     }
     for (auto iter = dml_stat_maps_.begin(); iter != dml_stat_maps_.end(); ++iter) {
       if (OB_ISNULL(iter->second)) {
-        BACKTRACE(ERROR, true, "dml stats map is null");
+        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "dml stats map is null");
       } else {
         iter->second->destroy();
       }
@@ -168,25 +169,51 @@ ObOptStatMonitorManager &ObOptStatMonitorManager::get_instance()
 
 int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &ctx,
                                                             const bool is_flush_col_usage,
-                                                            const bool is_flush_dml_stat)
+                                                            const bool is_flush_dml_stat,
+                                                            const bool ignore_failed)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObCommonRpcProxy *proxy = NULL;
-  if (OB_ISNULL(ctx.get_my_session())) {
+  int64_t timeout = -1;
+  ObSEArray<ObServerLocality, 4> all_server_arr;
+  bool has_read_only_zone = false; // UNUSED;
+  if (OB_ISNULL(ctx.get_my_session()) ||
+      OB_ISNULL(GCTX.srv_rpc_proxy_) ||
+      OB_ISNULL(GCTX.locality_manager_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ctx.get_task_executor_ctx()->get_common_rpc(proxy))) {
-    LOG_WARN("failed to get common rpc", K(ret));
-  } else if (OB_ISNULL(proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is null", K(ret), K(proxy));
+    LOG_WARN("get unexpected null", K(ret), K(GCTX.srv_rpc_proxy_),
+                                    K(GCTX.locality_manager_), K(ctx.get_my_session()));
   } else {
     obrpc::ObFlushOptStatArg arg(ctx.get_my_session()->get_effective_tenant_id(),
                                  is_flush_col_usage,
                                  is_flush_dml_stat);
-    if (OB_FAIL(proxy->flush_opt_stat_monitoring_info(arg))) {
-      LOG_WARN("failed to flush opt stat monitoring info", K(ret));
-    } else {/*do nothing*/}
+    if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
+                                                                  has_read_only_zone))) {
+      LOG_WARN("fail to get server locality", K(ret));
+    } else {
+      ObSEArray<ObServerLocality, 4> failed_server_arr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
+        if (!all_server_arr.at(i).is_active()
+            || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
+            || 0 == all_server_arr.at(i).get_start_service_time()
+            || 0 != all_server_arr.at(i).get_server_stop_time()) {
+        //server may not serving
+        } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("query timeout is reached", K(ret), K(timeout));
+        } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(all_server_arr.at(i).get_addr())
+                                                  .timeout(timeout)
+                                                  .by(ctx.get_my_session()->get_rpc_tenant_id())
+                                                  .flush_local_opt_stat_monitoring_info(arg))) {
+          LOG_WARN("failed to flush opt stat monitoring info caused by unknow error",
+                                                K(ret), K(all_server_arr.at(i).get_addr()), K(arg));
+          //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later.
+          if (ignore_failed && OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+      }
+      LOG_TRACE("flush database monitoring info cache", K(arg), K(failed_server_arr), K(all_server_arr));
+    }
   }
   return ret;
 }
@@ -249,7 +276,7 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FALSE_IT(col_map = new(buff)ColumnUsageMap())) {
-      } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", tenant_id))) {
+      } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", OB_SERVER_TENANT_ID))) {
         LOG_WARN("failed to create column usage map", K(ret));
       } else if (OB_FAIL(column_usage_maps_.set_refactored(tenant_id, col_map))) {
         // set refacter failed, may created by other thread
@@ -294,7 +321,7 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id, ObOptDmlStat
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FALSE_IT(dml_stat_map = new(buff)DmlStatMap())) {
-      } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatsHashMap", "DmlStatsHashMap", tenant_id))) {
+      } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatsHashMap", "DmlStatsHashMap", OB_SERVER_TENANT_ID))) {
         LOG_WARN("failed to create column usage map", K(ret));
       } else if (OB_FAIL(dml_stat_maps_.set_refactored(tenant_id, dml_stat_map))) {
         // set refacter failed, may created by other thread
@@ -721,7 +748,7 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
     } else if (NULL == (col_map = new(buff)ColumnUsageMap())) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to constructor column usage map", K(ret));
-    } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", entry.first))) {
+    } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", OB_SERVER_TENANT_ID))) {
       LOG_WARN("failed to create column usage map", K(ret));
     } else {
       column_usage_map_ = entry.second;
@@ -757,7 +784,7 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
     } else if (NULL == (dml_stat_map = new(buff)DmlStatMap())) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to constructor DmlStatMap", K(ret));
-    } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatMap", "DmlStatMap", entry.first))) {
+    } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatMap", "DmlStatMap", OB_SERVER_TENANT_ID))) {
       LOG_WARN("failed to create column usage map", K(ret));
     } else {
       dml_stat_map_ = entry.second;
@@ -929,10 +956,17 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
   const char* all_table_name = NULL;
   if (OB_FAIL(ObSchemaUtils::get_all_table_name(tenant_id, all_table_name))) {
     LOG_WARN("failed to get all table name", K(ret));
-  } else if (OB_FAIL(delete_sql.append_fmt("delete from %s m where not exists " \
-            "(select 1 from %s t where t.table_id = m.table_id and t.tenant_id = m.tenant_id) "\
-            " and table_id > %ld;",
-            share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, OB_MAX_INNER_TABLE_ID))) {
+  } else if (OB_FAIL(delete_sql.append_fmt("DELETE FROM %s m WHERE (NOT EXISTS (SELECT 1 " \
+            "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
+            "AND t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND db.database_name != '__recyclebin') "\
+            "OR (tenant_id, table_id, tablet_id) IN (SELECT m.tenant_id, m.table_id, m.tablet_id FROM "\
+            "%s m, %s t WHERE t.table_id = m.table_id AND t.tenant_id = m.tenant_id AND t.part_level > 0 "\
+            "AND NOT EXISTS (SELECT 1 FROM %s p WHERE  p.table_id = m.table_id AND p.tenant_id = m.tenant_id AND p.tablet_id = m.tablet_id) "\
+            "AND NOT EXISTS (SELECT 1 FROM %s sp WHERE  sp.table_id = m.table_id AND sp.tenant_id = m.tenant_id AND sp.tablet_id = m.tablet_id))) "\
+            "AND table_id > %ld;",
+            share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_DATABASE_TNAME,
+            share::OB_ALL_MONITOR_MODIFIED_TNAME, all_table_name, share::OB_ALL_PART_TNAME,
+            share::OB_ALL_SUB_PART_TNAME, OB_MAX_INNER_TABLE_ID))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else if (OB_FAIL(mysql_proxy_->write(tenant_id, delete_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", K(ret), K(delete_sql));

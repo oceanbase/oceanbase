@@ -88,6 +88,22 @@ enum PackageAlterOptions
   PACKAGE_ALTER_NONEDITIONABLE
 };
 
+enum TriggerAlterOptions
+{
+  TRIGGER_ALTER_COMPILE = 0,
+  TRIGGER_ALTER_IF_ENABLE,
+  TRIGGER_ALTER_RENAME,
+  TRIGGER_ALTER_IF_EDITIONABLE
+};
+
+enum SpDataAccess
+{
+  SP_CONTAINS_SQL = 0,
+  SP_NO_SQL = 1,
+  SP_READS_SQL_DATA = 2,
+  SP_MODIFIES_SQL_DATA = 3
+};
+
 #ifdef __cplusplus
 }
 #endif

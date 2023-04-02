@@ -73,6 +73,10 @@ public:
   void add_trans_start_count(const uint64_t tenant_id, const int64_t value);
   // count the total time of transactions, from start_trans to the end of receiving ack from coordinator
   void add_trans_total_used_time(const uint64_t tenant_id, const int64_t value);
+  // count the total time of local trans
+  void add_local_trans_total_used_time(const uint64_t tenant_id, const int64_t value);
+  // count the total time of distributed trans
+  void add_dist_trans_total_used_time(const uint64_t tenant_id, const int64_t value);
   // count the number of local stmt
   void add_local_stmt_count(const uint64_t, const int64_t value);
   // count the number of remote stmt
@@ -293,6 +297,8 @@ private:
 #define TX_STAT_ELR_ENABLE_TRANS_INC ObTransStatistic::get_instance().add_elr_enable_trans_count(MTL_ID(), 1);
 #define TX_STAT_ELR_UNABLE_TRANS_INC ObTransStatistic::get_instance().add_elr_unable_trans_count(MTL_ID(), 1);
 #define TX_STAT_READ_ELR_ROW_COUNT_INC transaction::ObTransStatistic::get_instance().add_read_elr_row_count(MTL_ID(), 1);
+#define TX_STAT_LOCAL_TOTAL_TIME_USED(time) ObTransStatistic::get_instance().add_local_trans_total_used_time(MTL_ID(), time);
+#define TX_STAT_DIST_TOTAL_TIME_USED(time) ObTransStatistic::get_instance().add_dist_trans_total_used_time(MTL_ID(), time);
 
 // TODO: following events is not used, do clean up
 // count the interval time between statements

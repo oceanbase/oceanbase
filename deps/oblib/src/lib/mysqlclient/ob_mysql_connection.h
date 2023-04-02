@@ -49,7 +49,9 @@ public:
 public:
   ObMySQLConnection();
   ~ObMySQLConnection();
-  int connect(const char *user, const char *pass, const char *db, const bool use_ssl);
+  int connect(const char *user, const char *pass, const char *db,
+                                 oceanbase::common::ObAddr &addr, int64_t timeout, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
+  int connect(const char *user, const char *pass, const char *db, const bool use_ssl, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
   void close();
   virtual bool is_closed() const;
   // use user provided the statement
@@ -68,15 +70,19 @@ public:
 
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      bool is_from_pl = false) override;
+      const common::ObAddr *sql_exec_addr = nullptr) override;
+
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      bool is_from_pl = false) override;
-  virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
-      int64_t &affected_rows, bool is_user_sql = false) override;
-  virtual int execute_write(const uint64_t tenant_id, const char *sql,
-      int64_t &affected_rows, bool is_user_sql = false) override;
+      const common::ObAddr *sql_exec_addr = nullptr) override;
 
+  virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
+      int64_t &affected_rows, bool is_user_sql = false,
+      const common::ObAddr *sql_exec_addr = nullptr) override;
+
+  virtual int execute_write(const uint64_t tenant_id, const char *sql,
+                            int64_t &affected_rows, bool is_user_sql = false,
+                            const common::ObAddr *sql_exec_addr = nullptr) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int rollback() override;
   virtual int commit() override;
@@ -84,8 +90,9 @@ public:
   // session environment
   virtual int get_session_variable(const ObString &name, int64_t &val) override;
   virtual int set_session_variable(const ObString &name, int64_t val) override;
+  int set_session_variable(const ObString &name, const ObString &val);
 
-  int ping();
+  virtual int ping() override;
   int set_trace_id();
   void set_timeout(const int64_t timeout);
   virtual int set_timeout_variable(const int64_t query_timeout, const int64_t trx_timeout);
@@ -100,11 +107,10 @@ public:
   void set_read_consistency(const int64_t read_consistency) { read_consistency_ = read_consistency; }
   void set_read_consistency_strong() { set_read_consistency(READ_CONSISTENCY_STRONG); }
 
-  TO_STRING_KV(KCSTRING_(db_name),
-               K_(busy));
+  VIRTUAL_TO_STRING_KV(K_(db_name), K_(busy));
 
   // dblink.
-  virtual int connect_dblink(const bool use_ssl);
+  virtual int connect_dblink(const bool use_ssl, int64_t sql_request_level);
 
 
 private:

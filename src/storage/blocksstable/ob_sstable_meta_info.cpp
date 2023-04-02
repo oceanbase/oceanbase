@@ -43,11 +43,13 @@ bool ObRootBlockInfo::is_valid() const
 
 void ObRootBlockInfo::reset()
 {
-  if (OB_NOT_NULL(block_data_.buf_) && OB_NOT_NULL(block_data_allocator_)) {
-    block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.buf_)));
-  }
-  if (OB_NOT_NULL(block_data_.extra_buf_) && OB_NOT_NULL(block_data_allocator_)) {
-    block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.extra_buf_)));
+  if (ObMicroBlockData::INDEX_BLOCK == block_data_.type_) {
+    if (OB_NOT_NULL(block_data_.buf_) && OB_NOT_NULL(block_data_allocator_)) {
+      block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.buf_)));
+    }
+    if (OB_NOT_NULL(block_data_.extra_buf_) && OB_NOT_NULL(block_data_allocator_)) {
+      block_data_allocator_->free(static_cast<void *>(const_cast<char *>(block_data_.extra_buf_)));
+    }
   }
   block_data_.reset();
   block_data_allocator_ = nullptr;
@@ -154,23 +156,29 @@ int ObRootBlockInfo::init_root_block_info(
   } else if (FALSE_IT(addr_ = addr)) {
   } else if (FALSE_IT(block_data_allocator_ = allocator)) {
   } else if (!addr.is_memory()) {
-    // nothing to do.
+    block_data_.type_ = ObMicroBlockData::INDEX_BLOCK;
   } else if (OB_FAIL(addr.get_mem_addr(offset, size))) {
     LOG_WARN("fail to get memory address", K(ret), K(addr));
-  } else if (OB_ISNULL(dst_buf = static_cast<char *>(allocator->alloc(size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc buf", K(ret), K(size));
   } else {
-    MEMCPY(dst_buf, block_data.buf_, size);
-    block_data_.buf_ = dst_buf;
-    block_data_.size_ = size;
+    LOG_DEBUG("block data type", K(block_data.type_));
+    if (ObMicroBlockData::DDL_BLOCK_TREE == block_data.type_) {
+      block_data_ = block_data;
+    } else {
+      if (OB_ISNULL(dst_buf = static_cast<char *>(allocator->alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc buf", K(ret), K(size));
+      } else {
+        MEMCPY(dst_buf, block_data.buf_, size);
+        block_data_.buf_ = dst_buf;
+        block_data_.size_ = size;
+        block_data_.type_ = ObMicroBlockData::INDEX_BLOCK;
+      }
+    }
   }
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(dst_buf)) {
       allocator->free(dst_buf);
     }
-  } else {
-    block_data_.type_ = ObMicroBlockData::INDEX_BLOCK;
   }
   return ret;
 }
@@ -187,7 +195,8 @@ int ObRootBlockInfo::load_root_block_data(const ObMicroBlockDesMeta &des_meta)
     char *dst_buf = nullptr;
     ObMacroBlockReader reader;
     bool is_compressed = false;
-    if (OB_ISNULL(dst_buf = static_cast<char *>(ob_malloc(addr_.size())))) {
+    const ObMemAttr mem_attr(MTL_ID(), "RootBlkInfo");
+    if (OB_ISNULL(dst_buf = static_cast<char *>(ob_malloc(addr_.size(), mem_attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc buf", K(ret), K(addr_));
     } else if (OB_FAIL(read_block_data(addr_, dst_buf, addr_.size()))) {
@@ -210,7 +219,9 @@ int ObRootBlockInfo::load_root_block_data(const ObMicroBlockDesMeta &des_meta)
 int ObRootBlockInfo::transform_root_block_data(const ObTableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(block_data_.get_extra_buf()) && OB_NOT_NULL(block_data_.get_buf())) {
+  if (ObMicroBlockData::INDEX_BLOCK == block_data_.type_
+      && OB_ISNULL(block_data_.get_extra_buf())
+      && OB_NOT_NULL(block_data_.get_buf())) {
     ObIndexBlockDataTransformer *transformer = nullptr;
     ObDecoderAllocator *allocator = nullptr;
     if (OB_UNLIKELY(!read_info.is_valid())) {
@@ -220,6 +231,7 @@ int ObRootBlockInfo::transform_root_block_data(const ObTableReadInfo &read_info)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate decoder allocator", K(ret));
     } else if (OB_ISNULL(transformer = GET_TSI_MULT(ObIndexBlockDataTransformer, 1))) {
+      // There must be get_decoder_allocator before GET_TSI_MULT(ObIndexBlockDataTransformer)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate transformer", K(ret));
     } else {
@@ -265,7 +277,6 @@ int ObRootBlockInfo::read_block_data(
     blocksstable::ObMacroBlockReadInfo read_info;
     handle.reset();
     read_info.io_desc_.set_mode(ObIOMode::READ);
-    read_info.io_desc_.set_category( ObIOCategory::SYS_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));
@@ -371,7 +382,10 @@ ObSSTableMacroInfo::ObSSTableMacroInfo()
     data_block_ids_(),
     other_block_ids_(),
     linked_block_ids_(),
-    entry_id_()
+    entry_id_(),
+    is_meta_root_(false),
+    nested_offset_(0),
+    nested_size_(0)
 {
 }
 
@@ -392,6 +406,9 @@ int ObSSTableMacroInfo::init_macro_info(
       param.data_block_macro_meta_addr_, param.data_block_macro_meta_))) {
     LOG_WARN("fail to init macro meta info", K(ret), K(param));
   } else {
+    is_meta_root_ = param.is_meta_root_;
+    nested_offset_ = param.nested_offset_;
+    nested_size_ = 0 == param.nested_size_ ? OB_DEFAULT_MACRO_BLOCK_SIZE : param.nested_size_;
     data_block_ids_.set_allocator(allocator);
     other_block_ids_.set_allocator(allocator);
     linked_block_ids_.set_allocator(allocator);
@@ -419,8 +436,11 @@ void ObSSTableMacroInfo::reset()
   macro_meta_info_.reset();
   data_block_ids_.reset();
   other_block_ids_.reset();
+  linked_block_ids_.reset();
   entry_id_.reset();
-  reset_linked_block_list();
+  is_meta_root_ = false;
+  nested_offset_ = 0;
+  nested_size_ = 0;
 }
 
 int ObSSTableMacroInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -483,6 +503,15 @@ int ObSSTableMacroInfo::serialize_(char *buf, const int64_t buf_len, int64_t &po
       LOG_WARN("fail to serialize other id array", K(ret), K(other_block_ids_), K(buf_len), K(pos));
     }
   }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, is_meta_root_))) {
+    LOG_WARN("fail to serialize is_meta_root_", K(ret), K(is_meta_root_), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, nested_offset_))) {
+    LOG_WARN("fail to serialize nested_offset_", K(ret), K(buf_len), K(pos), K(nested_offset_));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, nested_size_))) {
+    LOG_WARN("fail to serialize nested_size_", K(ret), K(buf_len), K(pos), K(nested_size_));
+  }
 
   return ret;
 }
@@ -518,18 +547,6 @@ int ObSSTableMacroInfo::save_linked_block_list(
     }
   }
   return ret;
-}
-
-void ObSSTableMacroInfo::reset_linked_block_list()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < linked_block_ids_.count(); i++) {
-    const MacroBlockId &macro_id = linked_block_ids_.at(i);
-    if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
-      LOG_ERROR("fail to dec macro block ref cnt", K(ret), K(i), K(macro_id));
-    }
-  }
-  linked_block_ids_.reset();
 }
 
 int ObSSTableMacroInfo::deserialize(
@@ -572,20 +589,6 @@ int ObSSTableMacroInfo::deserialize(
   return ret;
 }
 
-int ObSSTableMacroInfo::deserialize_post_work()
-{
-  int ret = OB_SUCCESS;
-  if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != entry_id_) { // linked block
-    ObLinkedMacroBlockItemReader block_reader;
-    if (OB_FAIL(read_block_ids(block_reader))) {
-      LOG_WARN("fail to read data block ids", K(ret));
-    } else if (OB_FAIL(save_linked_block_list(block_reader.get_meta_block_list(), linked_block_ids_))) {
-      LOG_WARN("fail to save linked block ids", K(ret), K_(linked_block_ids));
-    }
-  }
-  return ret;
-}
-
 int ObSSTableMacroInfo::deserialize_(
     common::ObIAllocator *allocator,
     const ObMicroBlockDesMeta &des_meta,
@@ -596,6 +599,7 @@ int ObSSTableMacroInfo::deserialize_(
   int ret = OB_SUCCESS;
   data_block_ids_.set_allocator(allocator);
   other_block_ids_.set_allocator(allocator);
+  nested_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
 
   if (OB_FAIL(macro_meta_info_.deserialize(allocator, des_meta, buf, data_len, pos))) {
     LOG_WARN("fail to deserialize macro meta info", K(ret), K(des_meta), K(data_len), K(pos));
@@ -603,13 +607,27 @@ int ObSSTableMacroInfo::deserialize_(
     LOG_WARN("fail to deserialize entry block macro id", K(ret), KP(buf), K(data_len), K(pos));
   } else if (ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK != entry_id_) {
     linked_block_ids_.set_allocator(allocator);
-    // Here, do nothing. ID's array will be read from linked block at post work.
+    ObLinkedMacroBlockItemReader block_reader;
+    if (OB_FAIL(read_block_ids(block_reader))) {
+      LOG_WARN("fail to read data block ids", K(ret));
+    } else if (OB_FAIL(linked_block_ids_.assign(block_reader.get_meta_block_list()))) {
+      LOG_WARN("fail to save linked block ids", K(ret), K_(linked_block_ids));
+    }
   } else {
     if (pos < data_len && OB_FAIL(data_block_ids_.deserialize(buf, data_len, pos))) {
       LOG_WARN("fail to deserialize data block ids", K(ret), KP(buf), K(data_len), K(pos));
     } else if (pos < data_len && OB_FAIL(other_block_ids_.deserialize(buf, data_len, pos))) {
       LOG_WARN("fail to deserialize other block ids", K(ret), KP(buf), K(data_len), K(pos));
     }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (pos < data_len && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &is_meta_root_))) {
+    LOG_WARN("fail to deserialize is_meta_root_", K(ret));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_i64(buf, data_len, pos, &nested_offset_))) {
+    LOG_WARN("fail to deserialize nested_offset_", K(ret));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_i64(buf, data_len, pos, &nested_size_))) {
+    LOG_WARN("fail to deserialize nested_size_", K(ret));
   }
 
   return ret;
@@ -660,6 +678,9 @@ int64_t ObSSTableMacroInfo::get_serialize_size_() const
     len += data_block_ids_.get_serialize_size();
     len += other_block_ids_.get_serialize_size();
   }
+  len += serialization::encoded_length_bool(is_meta_root_);
+  len += serialization::encoded_length_i64(nested_offset_);
+  len += serialization::encoded_length_i64(nested_size_);
   return len;
 }
 
@@ -670,7 +691,10 @@ DEF_TO_STRING(ObSSTableMacroInfo)
   J_KV(K_(macro_meta_info),
       K(data_block_ids_.count()),
       K(other_block_ids_.count()),
-      K(linked_block_ids_.count()));
+      K(linked_block_ids_.count()),
+      K(is_meta_root_),
+      K(nested_offset_),
+      K(nested_size_));
   J_OBJ_END();
   return pos;
 }

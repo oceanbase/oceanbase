@@ -321,7 +321,7 @@ private:
     {
       // depth_ is not more than 64
       if (OB_UNLIKELY(depth_ >= GENEALOGY_LEN)) {
-        TRANS_LOG(ERROR, "unexpect, genealogy is too deep", K(depth_));
+        TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpect, genealogy is too deep", K(depth_));
       } else {
         list_[depth_].bucket_node_ = node;
         list_[depth_].bucket_idx_ = idx;

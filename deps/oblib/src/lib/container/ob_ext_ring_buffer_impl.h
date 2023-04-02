@@ -37,7 +37,7 @@ namespace erb
 static inline void on_fatal_error()
 {
   while(true) {
-    LIB_LOG(ERROR, "on_fatal_error");
+    LIB_LOG_RET(ERROR, common::OB_ERROR, "on_fatal_error");
     sleep(1);
   }
 }
@@ -221,7 +221,7 @@ public:
     begin_sn_(0),
     end_sn_(0),
     dir_(0),
-    es_lock_(),
+    es_lock_(common::ObLatchIds::ALLOC_ESS_LOCK),
     allocator_(NULL)
   { }
   virtual ~ObExtendibleRingBufferBase() { }
@@ -362,10 +362,10 @@ private:
   {
     Segment *pret = NULL;
     if (NULL == allocator_) {
-      LIB_LOG(ERROR, "err alloc");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err alloc");
     }
     else if (NULL == (pret = static_cast<Segment*>(allocator_->alloc(seg_size_)))) {
-      LIB_LOG(WARN, "failed to alloc Segment", K(seg_size_));
+      LIB_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "failed to alloc Segment", K(seg_size_));
     } else {
       new(pret)Segment();
       pret->reset(seg_capacity_, allocator_);
@@ -408,9 +408,9 @@ private:
     Dir *pret = NULL;
     int64_t size = static_cast<int64_t>(sizeof(Dir) + (seg_cnt * sizeof(Segment*)));
     if (NULL == allocator_) {
-      LIB_LOG(ERROR, "err alloc");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err alloc");
     } else if (NULL == (pret = static_cast<Dir*>(allocator_->alloc(size)))) {
-      LIB_LOG(WARN, "failed to alloc Dir", K(size));
+      LIB_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "failed to alloc Dir", K(size));
     } else {
       new(pret)Dir();
       pret->reset(seg_cnt, seg_capacity_, allocator_);
@@ -511,7 +511,7 @@ private:
   void expand_rearrange_(const int64_t ctrl_sn, Dir *dir, Dir *new_dir)
   {
     if (NULL == dir || NULL == new_dir) {
-      LIB_LOG(ERROR, "err dir", K(dir), K(new_dir));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err dir", K(dir), K(new_dir));
     }
     else {
       SlotIdx slot_idx = calc_slot_idx_(ctrl_sn, dir);
@@ -578,7 +578,7 @@ private:
   void shrink_rearrange_(const int64_t ctrl_sn, Dir *dir, Dir *new_dir)
   {
     if (NULL == dir || NULL == new_dir) {
-      LIB_LOG(ERROR, "err dir", K(dir), K(new_dir));
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "err dir", K(dir), K(new_dir));
     }
     else {
       SlotIdx slot_idx = calc_slot_idx_(ctrl_sn + 1, dir); // Slot index of the next begin slot.
@@ -613,7 +613,7 @@ private:
         WLockGuard guard(sn_dir_lock_);
         set_dir_(new_dir); // Replace. It's caller's duty to retire Dir & Segment.
         // Ensure atomicity of updating begin_sn_ & Dir
-        // https://yuque.antfin.com/docs/share/22158f7c-5375-4d0c-953a-d43b7614d2dc?#
+        //
         update_begin_sn_(ctrl_sn+1);
       }
       esunlock_();

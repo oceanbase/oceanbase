@@ -23,6 +23,7 @@
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService, ObLSIterator
 #include "storage/tx_storage/ob_ls_handle.h" // ObLSHandle
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
+#include "storage/tablet/ob_tablet.h" // ObTablet
 
 namespace oceanbase
 {
@@ -177,23 +178,46 @@ void ObTenantMetaChecker::destroy()
 int ObTenantMetaChecker::check_ls_table()
 {
   int ret = OB_SUCCESS;
-  int64_t dangling_count = 0;  // replica only in ls meta table
-  int64_t report_count = 0;  // replica not in/match ls meta table
   ObCurTraceId::init(GCONF.self_addr_);
+  share::ObLSTable::Mode mode = share::ObLSTable::DEFAULT_MODE;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    if (OB_FAIL(check_ls_table_(mode))) {
+      LOG_WARN("check ls table failed", KR(ret), K(mode));
+    }
+    // Additionally, check sys tenant's inner table
+    if (is_sys_tenant(tenant_id_)) { // overwrite ret
+      mode = share::ObLSTable::INNER_TABLE_ONLY_MODE;
+      if (OB_FAIL(check_ls_table_(mode))) {
+        LOG_WARN("check ls table failed", KR(ret), K(mode));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantMetaChecker::check_ls_table_(
+    const share::ObLSTable::Mode mode)
+{
+  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else {
     const int64_t start_time = ObTimeUtility::current_time();
     ObLSReplicaMap replica_map;
-    if (OB_FAIL(build_replica_map_(replica_map))) {
-      LOG_WARN("build replica map from ls table failed", KR(ret));
+    int64_t dangling_count = 0;  // replica only in ls meta table
+    int64_t report_count = 0;    // replica not in/match ls meta table
+    if (OB_FAIL(build_replica_map_(replica_map, mode))) {
+      LOG_WARN("build replica map from ls table failed", KR(ret), K(mode));
     } else if (OB_FAIL(check_dangling_replicas_(replica_map, dangling_count))) {
       LOG_WARN("check replicas exist in ls table but not in local failed", KR(ret));
     } else if (OB_FAIL(check_report_replicas_(replica_map, report_count))) {
       LOG_WARN("check replicas not in/match ls table failed", KR(ret));
     } else if (dangling_count != 0 || report_count != 0) {
-      LOG_INFO("checker found and corrected dangling or to report replicas for ls meta table", 
+      LOG_INFO("checker found and corrected dangling or to report replicas for ls meta table",
         KR(ret), K_(tenant_id), K(dangling_count), K(report_count), K_(ls_checker_tg_id));
     }
     LOG_TRACE("finish checking ls table", KR(ret), K_(tenant_id),
@@ -221,7 +245,7 @@ int ObTenantMetaChecker::check_tablet_table()
     } else if (OB_FAIL(check_report_replicas_(replica_map, report_count))) {
       LOG_WARN("check replicas not in/match tablet table failed", KR(ret));
     } else if (dangling_count != 0 || report_count != 0) {
-      LOG_INFO("checker found and corrected dangling or to report replicas for tablet meta table", 
+      LOG_INFO("checker found and corrected dangling or to report replicas for tablet meta table",
         KR(ret), K_(tenant_id), K(dangling_count), K(report_count), K_(tablet_checker_tg_id));
     }
     LOG_TRACE("finish checking tablet table", KR(ret), K_(tenant_id),
@@ -276,7 +300,9 @@ int ObTenantMetaChecker::schedule_tablet_meta_check_task()
   return ret;
 }
 
-int ObTenantMetaChecker::build_replica_map_(ObLSReplicaMap &replica_map)
+int ObTenantMetaChecker::build_replica_map_(
+    ObLSReplicaMap &replica_map,
+    const share::ObLSTable::Mode mode)
 {
   int ret = OB_SUCCESS;
   ObLSTableIterator lst_iter;
@@ -290,8 +316,8 @@ int ObTenantMetaChecker::build_replica_map_(ObLSReplicaMap &replica_map)
       hash::cal_next_prime(LS_REPLICA_MAP_BUCKET_NUM),
       "LSCheckMap"))) {
     LOG_WARN("fail to create replica_map", KR(ret));
-  } else if (OB_FAIL(lst_iter.init(*lst_operator_, tenant_id_))) {
-    LOG_WARN("fail to init ls meta table iter", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(lst_iter.init(*lst_operator_, tenant_id_, mode))) {
+    LOG_WARN("fail to init ls meta table iter", KR(ret), K_(tenant_id), K(mode));
   } else if (OB_FAIL(lst_iter.get_filters().set_reserved_server(GCONF.self_addr_))) {
     LOG_WARN("fail to set server for filter", KR(ret), "server", GCONF.self_addr_);
   } else {

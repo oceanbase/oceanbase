@@ -70,6 +70,7 @@ ObBinlogRecordPrinter::ObBinlogRecordPrinter() : inited_(false),
                                                  enable_print_lob_md5_(false),
                                                  enable_verify_mode_(false),
                                                  enable_print_detail_(false),
+                                                 enable_print_special_detail_(false),
                                                  dml_tx_br_count_(0),
                                                  total_tx_count_(0),
                                                  total_br_count_(0),
@@ -90,9 +91,11 @@ int ObBinlogRecordPrinter::init(const char *data_file,
     const bool enable_print_hex,
     const bool enable_print_lob_md5,
     const bool enable_verify_mode,
-    const bool enable_print_detail)
+    const bool enable_print_detail,
+    const bool enable_print_special_detail)
 {
   int ret = OB_SUCCESS;
+
   if (inited_) {
     ret = OB_INIT_TWICE;
   } else if (NULL != data_file && OB_FAIL(open_file_(data_file, data_file_fd_))) {
@@ -108,8 +111,10 @@ int ObBinlogRecordPrinter::init(const char *data_file,
     enable_print_lob_md5_ = enable_print_lob_md5;
     enable_verify_mode_ = enable_verify_mode;
     enable_print_detail_ = enable_print_detail;
+    enable_print_special_detail_ = enable_print_special_detail;
     inited_ = true;
   }
+
   return ret;
 }
 
@@ -132,6 +137,7 @@ void ObBinlogRecordPrinter::destroy()
   enable_print_lob_md5_ = false;
   enable_verify_mode_ = false;
   enable_print_detail_ = false;
+  enable_print_special_detail_ = false;
   dml_tx_br_count_ = 0;
   total_tx_count_ = 0;
   total_br_count_ = 0;
@@ -192,8 +198,10 @@ int ObBinlogRecordPrinter::print_binlog_record(IBinlogRecord *br)
     } else if (data_file_fd_ >= 0) {
       bool need_rotate_file = false;
 
-      if (OB_FAIL(output_data_file(br, record_type, oblog_br, data_file_fd_, only_print_hex_, only_print_dml_tx_checksum_, enable_print_hex_,
-          enable_print_lob_md5_, enable_verify_mode_, enable_print_detail_, dml_tx_br_count_, dml_data_crc_, need_rotate_file))) {
+      if (OB_FAIL(output_data_file(br, record_type, oblog_br, data_file_fd_, only_print_hex_,
+          only_print_dml_tx_checksum_, enable_print_hex_,
+          enable_print_lob_md5_, enable_verify_mode_, enable_print_detail_, enable_print_special_detail_,
+          dml_tx_br_count_, dml_data_crc_, need_rotate_file))) {
         LOG_ERROR("output_data_file fail", K_(data_file_fd), K_(data_file), K(ret));
       } else if (need_rotate_file && OB_FAIL(rotate_data_file_())) {
         LOG_ERROR("rotate_data_file fail", K(ret));
@@ -268,6 +276,7 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     const bool enable_print_lob_md5,
     const bool enable_verify_mode,
     const bool enable_print_detail,
+    const bool enable_print_special_detail,
     int64_t &tx_br_count,
     uint64_t &dml_data_crc,
     bool &need_rotate_file)
@@ -296,6 +305,8 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     const binlogBuf *filter_rv = filter_rv_impl->filterValues((unsigned int &) filter_rv_count);
     common::ObString trace_id;
     common::ObString unique_id;
+    const char *trace_info_ptr = br->obTraceInfo();
+    common::ObString trace_info(trace_info_ptr);
 
     if (filter_rv != NULL && filter_rv_count > 2) {
       unique_id.assign_ptr(filter_rv[1].buf, filter_rv[1].buf_used_size);
@@ -322,6 +333,9 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     } else if (ECOMMIT == record_type) {
       if (only_print_dml_tx_checksum) {
         ri++;
+        // TODO
+        // Support to print CRC value, at present PDML transaction data change order is not stable
+        dml_data_crc = 0;
         ROW_PRINTF(ptr, size, pos, ri, "TX_BR_COUNT:%ld, TX_DATA_CRC:%lu", tx_br_count, dml_data_crc);
         tx_br_count = 0;
         dml_data_crc = 0;
@@ -397,14 +411,19 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
       ROW_PRINTF(ptr, size, pos, ri, "uk_info:%s", uk_info);
       ROW_PRINTF(ptr, size, pos, ri, "uks:%s", uks);
 
-      // If trace_id is not empty, then print
+      // If trace_id is not empty, then print (trace_id is deprecated in 4.x)
       if (trace_id.length() > 0) {
         ROW_PRINTF(ptr, size, pos, ri, "trace_id:[%.*s](%d)", trace_id.length(), trace_id.ptr(), trace_id.length());
       }
 
+      // if trace_info is not empty and enable_print_detail, then print
+      if (enable_print_special_detail && 0 < trace_info.length()) {
+        ROW_PRINTF(ptr, size, pos, ri, "trace_info:[%.*s](%d)", trace_info.length(), trace_info.ptr(), trace_info.length());
+      }
+
       for (int64_t index = 0; OB_SUCC(ret) && index < column_count; index++) {
         ret = output_data_file_column_data(br, table_meta, index, ptr, size, ri, only_print_hex, enable_print_hex,
-            enable_print_lob_md5, enable_print_detail, pos);
+            enable_print_lob_md5, enable_print_detail, enable_print_special_detail, pos);
       }
 
       DATABUFF_PRINTF(ptr, size, pos, "%s", STMT_DELEMITER);
@@ -441,8 +460,7 @@ int ObBinlogRecordPrinter::parse_major_version_(const binlogBuf *filter_rv, int3
   int ret = OB_SUCCESS;
   major_version = -1; // default -1, invalid value
   // Get major version, major version is only output if version 1.x is configured and the corresponding configuration item is configured
-  bool need_major_version = common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_2000
-          && TCONF.test_mode_on && TCONF.test_output_major_version;
+  bool need_major_version = false;
   if (need_major_version) {
     const binlogBuf *major_version_buf = filter_rv + 3;
     major_version = (int32_t) atoi(major_version_buf->buf);
@@ -502,6 +520,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     const bool enable_print_hex,
     const bool enable_print_lob_md5,
     const bool enable_print_detail,
+    const bool enable_print_special_detail,
     int64_t &pos)
 {
   OB_ASSERT(NULL != br && NULL != table_meta && NULL != ptr && size > 0 && index >= 0 && pos >= 0);
@@ -525,9 +544,13 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   const long col_data_length = col_meta ? col_meta->getLength(): 0;
   bool is_generated_column = col_meta ? col_meta->isGenerated() : false;
   bool is_hidden_row_key_column = col_meta ? col_meta->isHiddenRowKey() : false;
+  bool is_partition_column = col_meta ? col_meta->isPartitioned() : false;
+  bool is_generate_dep_column = col_meta ? col_meta->isDependent() : false;
   bool is_lob = is_lob_type(ctype);
   bool is_json = is_json_type(ctype);
-  std::string enum_set_values_str;
+  ObArenaAllocator str_allocator;
+  ObStringBuffer enum_set_values_str(&str_allocator);
+  bool is_geometry = is_geometry_type(ctype);
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -540,26 +563,35 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     if (is_hidden_row_key_column) {
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_hidden_rowkey:%d", column_index, is_hidden_row_key_column);
     }
-    //  print the length of varchar only in print detail mode, 
+    if (is_partition_column) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_partition_col:true", column_index);
+    }
+    if (is_generate_dep_column) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_dep_col_of_gen_col:true", column_index);
+    }
+    //  print the length of varchar only in print detail mode,
     //  because there have been many test cases with varchar type before the varchar length info is added into column meta
     if (oceanbase::obmysql::MYSQL_TYPE_VAR_STRING == ctype || oceanbase::obmysql::MYSQL_TYPE_BIT == ctype) {
       ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_define_length:%ld", column_index, col_data_length);
-    } 
+    }
     else if ((oceanbase::obmysql::MYSQL_TYPE_ENUM == ctype) || (oceanbase::obmysql::MYSQL_TYPE_SET == ctype)) {
-      const std::string delim = ",";
+      const char *delim = ",";
       for (int i = 0; i < values_of_enum_set->size(); i++) {
-        enum_set_values_str += (*values_of_enum_set)[i];
-        if (i != values_of_enum_set->size() - 1) {
-          enum_set_values_str += delim;
+        const char *elem_str = (*values_of_enum_set)[i];
+        if (OB_FAIL(enum_set_values_str.append(elem_str))) {
+          LOG_ERROR("enum_set_value_str append failed", K(i), K(elem_str),
+            "enum_set_value_str", enum_set_values_str.ptr());
+        } else if (i != values_of_enum_set->size() - 1 && OB_FAIL(enum_set_values_str.append(delim))) {
+          LOG_ERROR("enum_set_value_str append failed", K(i), K(delim),
+            "enum_set_value_str", enum_set_values_str.ptr());
         }
       }
-      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.c_str());
-    } 
-    //  print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL) 
-    //  whose precision is 38 and scale is 0, more importantly, the default precision(-1, PRECISION_UNKNOWN_YET) 
-    //  and scale(-85, ORA_NUMBER_SCALE_UNKNOWN_YET) of NUMBER in oracle mode is confusing, so we decide not to 
-    //  modify test results for oracle mode temporarily for convenience and efficiency.
-    //  TODO
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_extend_info:%s", column_index, enum_set_values_str.ptr());
+    }
+    // print precision & scale only in print detail mode, becacuse INT in oracle mode is also a kind of NUMBER(DECIMAL)
+    // whose precision is 38 and scale is 0
+    // the default value of precision is -1(PRECISION_UNKNOWN_YET) and the default value of scale is -85
+    // (ORA_NUMBER_SCALE_UNKNOWN_YET), when using default precision & scale, the number type would behave adaptively
     else if ((oceanbase::obmysql::MYSQL_TYPE_DECIMAL == ctype) || (oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL == ctype)) {
       // Not sure if MYSQL_TYPE_DECIMAL is deprecated, DECIMAL in mysql & oracle mode should be MYSQL_TYPE_NEWDECIMAL
       ROW_PRINTF(ptr, size, pos , ri, "[C%ld] column_precision:%ld", column_index, precision);
@@ -578,7 +610,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
       const char *new_col_value = new_cols[index].buf;
       size_t new_col_value_len = new_cols[index].buf_used_size;
 
-      if ((is_lob || is_json) && enable_print_lob_md5) {
+      if ((is_lob || is_json || is_geometry) && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_md5:[%s](%ld)",
             column_index, calc_md5_cstr(new_col_value, new_col_value_len), new_col_value_len);
       } else {
@@ -609,7 +641,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
         if (OB_SUCCESS == ret && OB_FAIL(print_hex(old_col_value, old_col_value_len, ptr, size, pos))) {
           LOG_ERROR("print_hex fail", K(ret));
         }
-      } else if ((is_lob || is_json) && enable_print_lob_md5) {
+      } else if ((is_lob || is_json || is_geometry) && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_md5:[%s](%ld)",
             column_index, calc_md5_cstr(old_col_value, old_col_value_len), old_col_value_len);
       } else {
@@ -755,7 +787,8 @@ bool ObBinlogRecordPrinter::need_print_hex(int ctype)
       || obmysql::MYSQL_TYPE_STRING == ctype
       || obmysql::MYSQL_TYPE_OB_NVARCHAR2 == ctype
       || obmysql::MYSQL_TYPE_OB_NCHAR == ctype
-      || obmysql::MYSQL_TYPE_JSON == ctype);
+      || obmysql::MYSQL_TYPE_JSON == ctype
+      || obmysql::MYSQL_TYPE_GEOMETRY == ctype);
 }
 
 int ObBinlogRecordPrinter::write_data_file(const int fd,

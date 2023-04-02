@@ -307,6 +307,10 @@ int ObLogFetcherIdlePool::handle_task_(LSFetchCtx *task, bool &need_dispatch)
         if (OB_FAIL(task->locate_start_lsn(*start_lsn_locator_))) {
           LOG_ERROR("locate start lsn fail", KR(ret), K(start_lsn_locator_), KPC(task));
         }
+      } else if (task->need_locate_end_lsn()) {
+        if (OB_FAIL(task->locate_end_lsn(*start_lsn_locator_))) {
+          LOG_ERROR("locate end lsn fail", KR(ret), K(start_lsn_locator_), KPC(task));
+        }
       } else {
         // After all the above conditions are met, allow distribution to the fetch log stream
         need_dispatch = true;

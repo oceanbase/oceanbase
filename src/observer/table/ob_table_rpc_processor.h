@@ -34,29 +34,6 @@ using oceanbase::table::ObTableConsistencyLevel;
 struct ObGlobalContext;
 class ObTableService;
 
-struct ObTableApiCredential final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTableApiCredential();
-  ~ObTableApiCredential();
-public:
-  int64_t cluster_id_;
-  uint64_t tenant_id_;
-  uint64_t user_id_;
-  uint64_t database_id_;
-  int64_t expire_ts_;
-  uint64_t hash_val_;
-public:
-  uint64_t hash(uint64_t seed = 0) const;
-  TO_STRING_KV(K_(cluster_id),
-               K_(tenant_id),
-               K_(user_id),
-               K_(database_id),
-               K_(expire_ts),
-               K_(hash_val));
-};
-
 /// @see RPC_S(PR5 login, obrpc::OB_TABLE_API_LOGIN, (table::ObTableLoginRequest), table::ObTableLoginResult);
 class ObTableLoginP: public obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOGIN> >
 {
@@ -77,6 +54,7 @@ private:
   static const int64_t CREDENTIAL_BUF_SIZE = 256;
 private:
   const ObGlobalContext &gctx_;
+  table::ObTableApiCredential credential_;
   char credential_buf_[CREDENTIAL_BUF_SIZE];
 };
 
@@ -99,6 +77,12 @@ public:
   bool allow_rpc_retry_;
   int64_t local_retry_interval_us_;
   int64_t max_local_retry_count_;
+};
+
+class ObTableApiUtils
+{
+public:
+  static int check_user_access(const common::ObString &credential_str, const ObGlobalContext &gctx, table::ObTableApiCredential &credential);
 };
 
 /*
@@ -128,10 +112,15 @@ public:
   static int init_session();
   int check_user_access(const ObString &credential_str);
   // transaction control
-  int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type, 
+  int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
                   const table::ObTableConsistencyLevel consistency_level, uint64_t table_id,
                   const share::ObLSID &ls_id, int64_t timeout_ts);
   int end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts, bool use_sync = false);
+  // for get
+  int init_read_trans(const table::ObTableConsistencyLevel  consistency_level,
+                      const share::ObLSID &ls_id,
+                      int64_t timeout_ts);
+  void release_read_trans();
   inline bool did_async_end_trans() const { return did_async_end_trans_; }
   inline transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
@@ -165,7 +154,7 @@ protected:
   ObTableService *table_service_;
   storage::ObAccessService *access_service_;
   share::ObLocationService *location_service_;
-  ObTableApiCredential credential_;
+  table::ObTableApiCredential credential_;
   int32_t stat_event_type_;
   int64_t audit_row_count_;
   bool need_audit_;
@@ -205,104 +194,6 @@ protected:
   virtual void save_request_string() override;
   virtual void generate_sql_id() override;
   virtual uint64_t get_request_checksum() = 0;
-};
-
-class ObHTableDeleteExecutor final
-{
-public:
-  ObHTableDeleteExecutor(common::ObArenaAllocator &alloc,
-                         uint64_t table_id,
-                         common::ObTabletID tablet_id,
-                         share::ObLSID ls_id,
-                         int64_t timeout_ts,
-                         ObTableApiProcessorBase *processor,
-                         ObTableService *table_service,
-                         ObAccessService *access_service);
-  ~ObHTableDeleteExecutor() {}
-  // @param affected_rows [out] deleted number of htable cells
-  int htable_delete(const table::ObTableBatchOperation &delete_op, int64_t &affected_rows);
-private:
-  int execute_query(const table::ObTableQuery &query,
-                    table::ObTableQueryResultIterator *&result_iterator);
-  int generate_delete_cells(
-      table::ObTableQueryResult &one_row,
-      table::ObTableEntityFactory<table::ObTableEntity> &entity_factory,
-      table::ObTableBatchOperation &mutations_out);
-  int execute_mutation(const table::ObTableBatchOperation &mutations,
-                       table::ObTableBatchOperationResult &mutations_result);
-private:
-  ObTableService *table_service_;
-  storage::ObAccessService *access_service_;
-  ObTableServiceQueryCtx query_ctx_;
-  table::ObTableQuery query_;
-  table::ObTableQueryResult one_result_;
-  table::ObTableEntityFactory<table::ObTableEntity> entity_factory_;
-  table::ObTableBatchOperation mutations_;
-  table::ObTableBatchOperationResult mutations_result_;
-  ObTableServiceGetCtx mutate_ctx_;
-  // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObHTableDeleteExecutor);
-};
-
-class ObHTablePutExecutor final
-{
-public:
-  ObHTablePutExecutor(common::ObArenaAllocator &alloc,
-                      uint64_t table_id,
-                      common::ObTabletID tablet_id,
-                      share::ObLSID ls_id,
-                      int64_t timeout_ts,
-                      ObTableApiProcessorBase *processor,
-                      ObTableService *table_service);
-  ~ObHTablePutExecutor() {}
-
-  int htable_put(const ObTableBatchOperation &put_op, int64_t &affected_rows, int64_t now_ms = 0);
-private:
-  ObTableService *table_service_;
-  table::ObTableEntityFactory<table::ObTableEntity> entity_factory_;
-  table::ObTableBatchOperationResult mutations_result_;
-  ObTableServiceGetCtx mutate_ctx_;
-  // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObHTablePutExecutor);
-};
-
-// executor of Increment and Append
-class ObHTableIncrementExecutor final
-{
-public:
-  ObHTableIncrementExecutor(table::ObTableOperationType::Type type,
-                            common::ObArenaAllocator &alloc,
-                            uint64_t table_id,
-                            common::ObTabletID tablet_id,
-                            share::ObLSID ls_id,
-                            int64_t timeout_ts,
-                            ObTableApiProcessorBase *processor,
-                            ObTableService *table_service);
-  ~ObHTableIncrementExecutor() {}
-
-  int htable_increment(ObTableQueryResult &row_cells,
-                       const table::ObTableBatchOperation &increment_op,
-                       int64_t &affected_rows,
-                       table::ObTableQueryResult *results);
-private:
-  typedef std::pair<common::ObString, int32_t> ColumnIdx;
-  class ColumnIdxComparator;
-  int sort_qualifier(const table::ObTableBatchOperation &increment);
-  int execute_mutation(const table::ObTableBatchOperation &mutations,
-                       table::ObTableBatchOperationResult &mutations_result);
-  static int add_to_results(table::ObTableQueryResult &results, const ObObj &rk, const ObObj &cq,
-                            const ObObj &ts, const ObObj &value);
-private:
-  table::ObTableOperationType::Type type_;
-  ObTableService *table_service_;
-  table::ObTableEntityFactory<table::ObTableEntity> entity_factory_;
-  table::ObTableBatchOperation mutations_;
-  table::ObTableBatchOperationResult mutations_result_;
-  ObTableServiceGetCtx mutate_ctx_;
-  common::ObSEArray<ColumnIdx, OB_DEFAULT_SE_ARRAY_COUNT> columns_;
-  common::ObArenaAllocator allocator_;
-  // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObHTableIncrementExecutor);
 };
 
 template<class T>

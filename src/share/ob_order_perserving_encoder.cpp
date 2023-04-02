@@ -321,14 +321,22 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
       break;
     }
     // for date
-    case ObTimestampTZType:
+    case ObTimestampTZType: {
+      if (to_len + sizeof(int64_t) + sizeof(uint16_t) > max_buf_len) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_TRACE("no enough memory to do encoding", K(ret), K(param.type_));
+      } else {
+        encode_from_timestamp(data.get_otimestamp_tz(), to, to_len);
+      }
+      break;
+    }
     case ObTimestampLTZType:
     case ObTimestampNanoType: {
       if (to_len + sizeof(int64_t) + sizeof(uint16_t) > max_buf_len) {
         ret = OB_BUF_NOT_ENOUGH;
         LOG_TRACE("no enough memory to do encoding", K(ret), K(param.type_));
       } else {
-        encode_from_timestamp(data.get_otimestamp_tz(), to, to_len);
+        encode_from_timestamp(data.get_otimestamp_tiny(), to, to_len);
       }
       break;
     }
@@ -341,8 +349,10 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
       }
       break;
     }
+    case ObRawType:
     case ObVarcharType:
     case ObNVarchar2Type: {
+      param.is_var_len_ = false;
       if (OB_FAIL(encode_from_string_varlen(data.get_string(), to, max_buf_len, to_len, param))) {
         if (ret == OB_BUF_NOT_ENOUGH) {
           // ignore ret
@@ -352,16 +362,13 @@ int ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
       }
       break;
     }
-    case ObRawType:
     case ObNCharType:
     case ObCharType: {
-      if (param.is_var_len_) {
-        if (OB_FAIL(encode_from_string_varlen(data.get_string(), to, max_buf_len, to_len, param))) {
-          LOG_WARN("failed to encode varlen str", K(ret));
-        }
-      } else {
-        if (OB_FAIL(encode_from_string_fixlen(data.get_string(), to, max_buf_len, to_len, param))) {
-          LOG_WARN("failed to encode fix len str", K(ret));
+      if (OB_FAIL(encode_from_string_varlen(data.get_string(), to, max_buf_len, to_len, param))) {
+        if (ret == OB_BUF_NOT_ENOUGH) {
+          // ignore ret
+        } else {
+          LOG_WARN("failed to encode string", K(ret));
         }
       }
       break;
@@ -433,12 +440,19 @@ int ObOrderPerservingEncoder::convert_ob_charset_utf8mb4_bin_sp(unsigned char *d
           sp_cnt = 0;
       }
 
+      int16_t sp_cnt_mask = 0;
       int16_t tmp = (int16_t)((*data) - 0x20);
       int16_t x = (~tmp) >> 16;
       MEMCPY(to, (unsigned char *)&x, 2);
       *to = 0x20;
+      if (tmp > 0) {
+        *(to+1) = 0x21;
+        sp_cnt_mask = 0xFFFF;
+      } else {
+        *(to+1) = 0x19;
+        sp_cnt_mask = 0;
+      }
       to += 2;
-      int16_t sp_cnt_mask = (tmp) >> 16;
       sp_cnt = ((sp_cnt) ^ sp_cnt_mask) ^ 0x8000;
       sp_cnt = bswap_16(sp_cnt);
       MEMCPY(to, (unsigned char *)&sp_cnt, 2);
@@ -463,11 +477,18 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
   int ret = OB_SUCCESS;
   bool is_valid_uni = false;
   bool is_mem = lib::is_oracle_mode();
-  if ((to_len + 4 * str.length() + 2) > max_buf_len) {
+
+  // tail is up to 8 byte, and src will only expand four times at most when encoding.
+  if ((to_len + 4 * str.length() + 8) > max_buf_len) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_TRACE("no enough memory to do encoding for string", K(ret));
-  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
-             || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
+  } else if (str.empty() ||  (str.length()==1 && *str.ptr()=='\0')) {
+    if (OB_FAIL(encode_tails(to, max_buf_len, to_len, is_mem, cs, str.length()==1 && *str.ptr()=='\0'))) {
+      LOG_WARN("failed to encode tails", K(ret));
+    }
+  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
+    convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
+  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
     if (is_mem) {
       convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
     } else {
@@ -497,11 +518,18 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
   int ret = OB_SUCCESS;
   ObCollationType cs = param.cs_type_;
   bool is_valid_uni = false;
-  if ((to_len + 4 * str.length() + 2) > max_buf_len) {
+
+  // tail is up to 8 byte, and src will only expand four times at most when encoding.
+  if ((to_len + 4 * str.length() + 8) > max_buf_len) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_TRACE("no enough memory to do encoding for string", K(ret));
-  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
-             || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
+  } else if (str.empty() || (str.length()==1 && *str.ptr()=='\0')) {
+    if (OB_FAIL(encode_tails(to, max_buf_len, to_len, param.is_memcmp_, cs, str.length()==1 && *str.ptr()=='\0'))) {
+      LOG_WARN("failed to encode tails", K(ret));
+    }
+  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
+    convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
+  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
     if (param.is_memcmp_) {
       convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
     } else {
@@ -511,14 +539,9 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
              || cs == CS_TYPE_GB18030_CHINESE_CI) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
-                                                 max_buf_len, param.is_memcmp_, is_valid_uni);
-    if (!is_valid_uni) {
-      // use origninal code to compare
-      if (param.is_memcmp_) {
-        convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
-      } else {
-        convert_ob_charset_utf8mb4_bin_sp((unsigned char *)str.ptr(), str.length(), to, to_len);
-      }
+                                                 max_buf_len, param.is_memcmp_, param.is_valid_uni_);
+    if (!param.is_valid_uni_) {
+      // invalid unicode, do nothing
     } else {
       to_len += res_len;
     }
@@ -667,7 +690,7 @@ int ObOrderPerservingEncoder::encode_from_number(ObNumber val,
     to++;
 
     // digits encoding
-    int32_t digits_mask = (int64_t)((~se) ^ 0x80) >> 8;
+    int32_t digits_mask = static_cast<int32_t>((int64_t)((~se) ^ 0x80) >> 8);
     uint32_t *digits_ptr = val.get_digits();
     for (int64_t i = 0; i < desc.len_; i++) {
       uint32_t dig = bswap_32((digits_ptr[i] + 1) ^ digits_mask);
@@ -689,14 +712,17 @@ int ObOrderPerservingEncoder::encode_from_timestamp(ObOTimestampData val,
   int64_t time_us = val.time_us_;
   uint16_t nsec = val.time_ctx_.tail_nsec_;
 
-  time_us ^= SIGN_MASK_64;
-  time_us = bswap_64(time_us);
-  MEMCPY(to + to_len, (unsigned char *)&time_us, sizeof(time_us));
-  to_len += sizeof(time_us);
+  uint64_t t1 = time_us ^ SIGN_MASK_64;
+  t1 = bswap_64(t1);
+
+  MEMCPY(to, (unsigned char *)&t1, sizeof(uint64_t));
+  to_len += sizeof(t1);
+  to += sizeof(t1);
 
   nsec = bswap_32(nsec);
-  MEMCPY(to + to_len, (unsigned char *)&nsec, sizeof(nsec));
+  MEMCPY(to, (unsigned char *)&nsec, sizeof(nsec));
   to_len += sizeof(nsec);
+  to += sizeof(nsec);
 
   return OB_SUCCESS;
 }
@@ -710,15 +736,88 @@ int ObOrderPerservingEncoder::encode_from_interval_ds(ObIntervalDSValue val,
 
   nsec ^= SIGN_MASK_64;
   nsec = bswap_64(nsec);
-  MEMCPY(to + to_len, (unsigned char *)&nsec, sizeof(nsec));
+  MEMCPY(to, (unsigned char *)&nsec, sizeof(nsec));
   to_len += sizeof(nsec);
+  to += sizeof(nsec);
 
   frac_nsec ^= SIGN_MASK_32;
   frac_nsec = bswap_32(frac_nsec);
-  MEMCPY(to + to_len, (unsigned char *)&frac_nsec, sizeof(frac_nsec));
+  MEMCPY(to, (unsigned char *)&frac_nsec, sizeof(frac_nsec));
   to_len += sizeof(frac_nsec);
+  to += sizeof(frac_nsec);
 
   return OB_SUCCESS;
+}
+
+
+int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_len,
+                                           int64_t &to_len, bool is_mem,
+                                           common::ObCollationType cs, bool with_empty_str)
+{
+  int ret = OB_SUCCESS;
+  // do nothing
+  if (to_len + 8 > max_buf_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("no enough memory to do encoding for string", K(ret));
+  } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
+    if (with_empty_str) {
+      *to = 0x00;
+      to++;
+      to_len++;
+    }
+    *to = 0x00;
+    *(to+1) = 0x00;
+    to_len += 2;
+  } else if (cs == CS_TYPE_UTF8MB4_BIN
+           || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN
+           || cs == CS_TYPE_UTF8MB4_GENERAL_CI) {
+    if (with_empty_str) {
+      *to = 0x00;
+      to++;
+      to_len++;
+    }
+    if (is_mem) {
+      *to = 0x00;
+      *(to+1) = 0x00;
+    } else {
+      *to = 0x20;
+      *(to+1) = 0x20;
+    }
+    to_len += 2;
+  } else if ( cs == CS_TYPE_GBK_CHINESE_CI
+              || cs == CS_TYPE_UTF16_GENERAL_CI) {
+    if (with_empty_str) {
+      MEMSET(to, 0x00, 2);
+      to += 2;
+      to_len += 2;
+    }
+    if (is_mem) {
+      MEMSET(to, 0x00, 4);
+    } else {
+      MEMSET(to, 0x00, 4);
+      *(to+1) = 0x20;
+      *(to+3) = 0x20;
+    }
+    to_len += 4;
+  } else if (cs == CS_TYPE_UTF16_BIN || cs == CS_TYPE_GB18030_CHINESE_CI) {
+    if (with_empty_str) {
+      MEMSET(to, 0x00, 4);
+      to += 4;
+      to_len += 4;
+    }
+    if (is_mem) {
+      MEMSET(to, 0x00, 8);
+    } else {
+      MEMSET(to, 0x00, 8);
+      *(to+3) = 0x20;
+      *(to+7) = 0x20;
+    }
+    to_len += 8;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support collation", K(cs));
+  }
+  return ret;
 }
 
 int ObSortkeyConditioner::process_key_conditioning(
@@ -746,9 +845,18 @@ int ObSortkeyConditioner::process_key_conditioning(
     // do nothing
   } else if (OB_FAIL(share::ObOrderPerservingEncoder::make_order_perserving_encode_from_object(
                data, to + to_len, max_buf_len, to_len, param))) {
-    LOG_WARN("failed  to encode sortkey", K(ret));
+    if (ret != OB_BUF_NOT_ENOUGH) {
+      LOG_WARN("failed  to encode sortkey", K(ret));
+    }
+  } else if (max_buf_len < to_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_TRACE("no enough memory to do encoding for obnumber", K(ret));
   } else if (!param.is_asc_) {
-    process_decrease(to + 1, to_len);
+    if (param.is_nullable_) {
+      process_decrease(to + 1, to_len - 1);
+    } else {
+      process_decrease(to, to_len);
+    }
   }
 
   return ret;

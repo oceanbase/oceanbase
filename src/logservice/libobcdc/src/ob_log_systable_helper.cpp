@@ -20,7 +20,6 @@
 #include "common/ob_role.h"                                    // LEADER
 
 #include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
-#include "share/ob_cluster_version.h"                          // GET_MIN_CLUSTER_VERSION
 #include "share/schema/ob_schema_struct.h"                     // TenantStatus
 #include "ob_log_config.h"                                     // ObLogConfig, TCONF
 #include "ob_log_utils.h"
@@ -46,36 +45,6 @@ namespace libobcdc
 {
 
 bool ISQLStrategy::g_is_replica_type_info_valid = true;
-
-bool is_cluster_version_be_equal_or_greater_than_200_()
-{
-  bool bool_ret = true;
-
-  // ob version: 2_0_0
-  bool_ret = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000);
-
-  return bool_ret;
-}
-
-bool is_cluster_version_be_equal_or_greater_than_220_()
-{
-  bool bool_ret = true;
-
-  // ob version: 2_2_0
-  bool_ret = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2200);
-
-  return bool_ret;
-}
-
-bool is_cluster_version_be_equal_or_greater_than_320()
-{
-  bool bool_ret = true;
-
-  // ob version: 3_2_0
-  bool_ret = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3200);
-
-  return bool_ret;
-}
 
 ////////////////////////////////////// QueryClusterId /////////////////////////////////
 int QueryClusterIdStrategy::build_sql_statement(char *sql_buf,
@@ -129,13 +98,9 @@ int QueryTimeZoneInfoVersionStrategy::build_sql_statement(char *sql_buf,
   int ret = OB_SUCCESS;
   pos = 0;
   const char *query_sql = NULL;
-  const bool need_query_tenant_timezone_version = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260);
+  const bool need_query_tenant_timezone_version = true;
 
-  if (need_query_tenant_timezone_version) {
-    query_sql = "select value from __all_virtual_sys_stat where name='current_timezone_version' and tenant_id=";
-  } else {
-    query_sql = "select value from __all_zone where name='time_zone_info_version';";
-  }
+  query_sql = "select value from __all_virtual_sys_stat where name='current_timezone_version' and tenant_id=";
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
@@ -213,7 +178,7 @@ int QueryAllTenantStrategy::build_sql_statement(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT TENANT_ID FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
+      "SELECT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf));
   }
 
@@ -620,26 +585,29 @@ int IObLogSysTableHelper::BatchSQLQuery::get_records(
   return get_records_tpl_(records, "QueryAllServerInfo", record_count);
 }
 
-int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(common::ObIArray<uint64_t> &records)
+int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(common::ObIArray<TenantInfo> &records)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   int64_t index = -1;
+  ObString tenant_name;
 
   index++;
   GET_DATA(uint, index, tenant_id, "TENANT_ID");
+  index++;
+  GET_DATA(varchar, index, tenant_name, "TENANT_NAME");
 
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_DATA;
     LOG_ERROR("invalid tenant_id query from server", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(records.push_back(tenant_id))) {
+  } else if (OB_FAIL(records.push_back(TenantInfo(tenant_id, tenant_name)))) {
     LOG_ERROR("push_back tenant_id into tenant_id_list failed", KR(ret), K(tenant_id), K(records));
   }
 
   return ret;
 }
 
-int IObLogSysTableHelper::BatchSQLQuery::get_records(common::ObIArray<uint64_t> &records)
+int IObLogSysTableHelper::BatchSQLQuery::get_records(common::ObIArray<TenantInfo> &records)
 {
   int64_t record_count = 0;
   return get_records_tpl_(records, "QueryAllTenantInfo", record_count);
@@ -1112,12 +1080,12 @@ int ObLogSysTableHelper::query_sql_server_list(
   return ret;
 }
 
-int ObLogSysTableHelper::query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list)
+int ObLogSysTableHelper::query_tenant_info_list(common::ObIArray<TenantInfo> &tenant_info_list)
 {
   int ret = OB_SUCCESS;
   BatchSQLQuery query;
   QueryAllTenantStrategy query_all_tenant_strategy;
-  tenant_id_list.reset();
+  tenant_info_list.reset();
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
@@ -1134,7 +1102,7 @@ int ObLogSysTableHelper::query_tenant_id_list(common::ObIArray<uint64_t> &tenant
           "mysql_error_code", query.get_mysql_err_code(),
           "mysql_error_msg", query.get_mysql_err_msg());
     }
-  } else if (OB_FAIL(query.get_records(tenant_id_list))) {
+  } else if (OB_FAIL(query.get_records(tenant_info_list))) {
     if (OB_NEED_RETRY == ret) {
       LOG_WARN("get_records fail while query_all_tenant_info, need retry", KR(ret),
           "mysql_error_code", query.get_mysql_err_code(),
@@ -1143,6 +1111,36 @@ int ObLogSysTableHelper::query_tenant_id_list(common::ObIArray<uint64_t> &tenant
       LOG_ERROR("get_records fail while query_all_tenant_info", KR(ret),
           "mysql_error_code", query.get_mysql_err_code(),
           "mysql_error_msg", query.get_mysql_err_msg());
+    }
+  }
+
+  LOG_DEBUG("query_all_tenant_info", KR(ret), K(tenant_info_list));
+
+  return ret;
+}
+
+int ObLogSysTableHelper::query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list)
+{
+  int ret = OB_SUCCESS;
+  BatchSQLQuery query;
+  QueryAllTenantStrategy query_all_tenant_strategy;
+  common::ObSEArray<TenantInfo, 16> tenant_info_list;
+
+  tenant_id_list.reset();
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("systable_helper not init", KR(ret));
+  } else if (OB_FAIL(query_tenant_info_list(tenant_info_list))) {
+    LOG_ERROR("query tenant_id, tenant_name list failed", KR(ret), K(tenant_info_list));
+  } else {
+    const int64_t tenant_list_size = tenant_info_list.count();
+    ARRAY_FOREACH_N(tenant_info_list, i, tenant_list_size) {
+      const TenantInfo &tenant_id_name = tenant_info_list.at(i);
+      if (OB_FAIL(tenant_id_list.push_back(tenant_id_name.tenant_id))) {
+        LOG_ERROR("push tenant_id into tenant_id_list failed", K(tenant_id_name), K(tenant_id_list),
+            K(tenant_info_list));
+      }
     }
   }
 

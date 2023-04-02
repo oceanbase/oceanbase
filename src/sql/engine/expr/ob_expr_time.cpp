@@ -158,7 +158,8 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
                                   bool with_date,
                                   bool is_dayofmonth,
                                   ObEvalCtx &ctx,
-                                  ObTime &ot)
+                                  ObTime &ot,
+                                  bool has_lob_header)
 {
   int ret = OB_SUCCESS;
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
@@ -170,14 +171,15 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
     ObDateSqlMode date_sql_mode;
     date_sql_mode.init(session->get_sql_mode());
     if (OB_FAIL(ob_datum_to_ob_time_with_date(datum, type, get_timezone_info(session),
-        ot2, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), is_dayofmonth, date_sql_mode))) {
+        ot2, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), is_dayofmonth, date_sql_mode,
+        has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
     } else {
       ot = ot2;
     }
   } else {
     ObTime ot2(DT_TYPE_TIME);
-    if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, get_timezone_info(session), ot2))) {
+    if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, get_timezone_info(session), ot2, has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
     } else {
       ot = ot2;
@@ -202,7 +204,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
   } else {
     ObTime ot;
     if (OB_FAIL(ob_expr_convert_to_time(*param_datum, expr.args_[0]->datum_meta_.type_, with_date,
-                                        is_dayofmonth, ctx, ot))) {
+                                        is_dayofmonth, ctx, ot, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(lbt()), K(session->get_stmt_type()));
       LOG_USER_WARN(OB_ERR_CAST_VARCHAR_TO_TIME);
       uint64_t cast_mode = 0;

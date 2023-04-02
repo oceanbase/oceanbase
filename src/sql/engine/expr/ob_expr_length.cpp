@@ -21,6 +21,7 @@
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -61,7 +62,11 @@ int ObExprLength::calc_result_type1(ObExprResType &type, ObExprResType &text,
       type.set_int();
       type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
       type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-      text.set_calc_type(common::ObVarcharType);
+      if (ob_is_text_tc(text.get_type()) && (session->get_exec_min_cluster_version() >= CLUSTER_VERSION_4_1_0_0)) {
+        // no need to do cast, save memory
+      } else {
+        text.set_calc_type(common::ObVarcharType);
+      }
     }
     OX(ObExprOperator::calc_result_flag1(type, text));
   }
@@ -88,7 +93,9 @@ int ObExprLength::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObE
     } else if (lib::is_oracle_mode()) {
       rt_expr.eval_func_ = ObExprLength::calc_oracle_mode;
     } else {
-      CK(ObVarcharType == text_type);
+      if (op_cg_ctx.session_->get_exec_min_cluster_version() < CLUSTER_VERSION_4_1_0_0) {
+        CK(ObVarcharType == text_type);
+      }
       rt_expr.eval_func_ = ObExprLength::calc_mysql_mode;
     }
   }
@@ -112,14 +119,22 @@ int ObExprLength::calc_oracle_mode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     expr_datum.set_null();
   } else {
     ObString m_text = text_datum->get_string();
-    size_t c_len = ObCharset::strlen_char(expr.args_[0]->datum_meta_.cs_type_, m_text.ptr(),
-                                          static_cast<int64_t>(m_text.length()));
-    ObNumStackOnceAlloc tmp_alloc;
-    number::ObNumber num;
-    if (OB_FAIL(num.from(static_cast<int64_t>(c_len), tmp_alloc))) {
-      LOG_WARN("copy number fail", K(ret));
-    } else {
-      expr_datum.set_number(num);
+    int64_t c_len = 0;
+    if (!is_lob_storage(expr.args_[0]->datum_meta_.type_)) {
+      c_len = ObCharset::strlen_char(expr.args_[0]->datum_meta_.cs_type_, m_text.ptr(),
+                                    static_cast<int64_t>(m_text.length()));
+    } else if (OB_FAIL(ObTextStringHelper::get_char_len(ctx, *text_datum, expr.args_[0]->datum_meta_,
+                       expr.args_[0]->obj_meta_.has_lob_header(), c_len))) {
+      LOG_WARN("failed to get char len for lob type", K(ret), K(expr.args_[0]->datum_meta_.type_));
+    }
+    if (OB_SUCC(ret)) {
+      ObNumStackOnceAlloc tmp_alloc;
+      number::ObNumber num;
+      if (OB_FAIL(num.from(static_cast<int64_t>(c_len), tmp_alloc))) {
+        LOG_WARN("copy number fail", K(ret));
+      } else {
+        expr_datum.set_number(num);
+      }
     }
   }
   return ret;
@@ -132,8 +147,16 @@ int ObExprLength::calc_mysql_mode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     LOG_WARN("eval param value failed", K(ret));
   } else if (text_datum->is_null()) {
     expr_datum.set_null();
-  } else {
+  } else if (!is_lob_storage(expr.args_[0]->datum_meta_.type_)) {
     expr_datum.set_int(static_cast<int64_t>(text_datum->len_));
+  } else { // text tc only
+    ObLobLocatorV2 locator(text_datum->get_string(), expr.args_[0]->obj_meta_.has_lob_header());
+    int64_t lob_data_byte_len = 0;
+    if (OB_FAIL(locator.get_lob_data_byte_len(lob_data_byte_len))) {
+      LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+    } else {
+      expr_datum.set_int(static_cast<int64_t>(lob_data_byte_len));
+    }
   }
   return ret;
 }

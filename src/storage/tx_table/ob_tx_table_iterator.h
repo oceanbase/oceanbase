@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_TABLE_ITERATOR
 #define OCEANBASE_STORAGE_OB_TX_TABLE_ITERATOR
 
+#include "lib/container/ob_array.h"
+#include "logservice/archiveservice/ob_archive_util.h"
 #include "storage/memtable/ob_memtable_iterator.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
@@ -31,8 +33,9 @@ namespace transaction
 }
 namespace storage
 {
+class ObTxTable;
 class ObTxDataMemtable;
-class ObTxDataSortListNode;
+class ObTxDataLinkNode;
 class ObSSTableArray;
 struct TxDataReadSchema;
 
@@ -74,33 +77,29 @@ enum TX_CTX_SSTABLE_COL_IDX : int64_t
  * └────────────┴──────────────┴─────────────┴────────────┴──────────────────────────────────┘
  *
  * This iterator will execute twice sorting and once reading from old tx data sstable.
- * For more details, see https://yuque.antfin-inc.com/ob/transaction/lurtok
+ * For more details, see
  *
  */
-
 
 class ObTxDataMemtableScanIterator : public memtable::ObIMemtableIterator
 {
 private:
   static const int64_t BUF_LENGTH = 1024;
-  static int64_t PERIODICAL_SELECT_INTERVAL_NS;
 
 public:
-  ObTxDataMemtableScanIterator(const ObTableIterParam &iter_param)
+  ObTxDataMemtableScanIterator(const ObTableIterParam &iter_param, const blocksstable::ObDatumRange &range)
     : is_inited_(false),
       iter_param_(iter_param),
-      dump_tx_data_done_(false),
-      cur_max_commit_version_(0),
-      pre_start_log_ts_(0),
-      tx_data_row_cnt_(0),
+      range_(range),
+      iterate_row_cnt_(0),
+      start_tx_id_(0),
+      end_tx_id_(0),
+      row_cnt_to_dump_(0),
       pre_tx_data_(nullptr),
-      arena_allocator_(),
       cur_node_(nullptr),
-      row_(),
-      buf_(arena_allocator_),
       tx_data_memtable_(nullptr),
       key_datum_(),
-      DEBUG_iter_commit_ts_cnt_(0) {}
+      DEBUG_drop_tx_data_cnt_(0) {}
 
   ~ObTxDataMemtableScanIterator() { reset(); }
 
@@ -123,7 +122,9 @@ public:
   virtual void reuse();
 
 private:
-  int get_next_tx_data_row_(const blocksstable::ObDatumRow *&row);
+  int get_next_tx_data_(ObTxData *&tx_data);
+
+  int drop_and_get_tx_data_(ObTxData *&tx_data);
 
   int get_next_commit_version_row_(const blocksstable::ObDatumRow *&row);
 
@@ -135,10 +136,10 @@ private:
 
   int get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions);
 
-  int deserialize_commit_versions_array_from_row_(const blocksstable::ObDatumRow *row, ObCommitVersionsArray &past_commit_versions);
+  int deserialize_commit_versions_array_from_row_(const blocksstable::ObDatumRow *row,
+                                                  ObCommitVersionsArray &past_commit_versions);
 
-
-  int merge_cur_and_past_commit_verisons_(const int64_t recycle_ts,
+  int merge_cur_and_past_commit_verisons_(const share::SCN recycle_scn,
                                           ObCommitVersionsArray &cur_commit_versions,
                                           ObCommitVersionsArray &past_commit_versions,
                                           ObCommitVersionsArray &merged_commit_versions);
@@ -148,49 +149,67 @@ private:
    *
    * @param[in] step_len to control serialize size of commit versions array
    * @param[in] start_scn_limit to drop some nodes in past commit versions array
-   * @param[in] recycle_ts to recycle some nodes
+   * @param[in] recycle_scn to recycle some nodes
    * @param[in] data_arr the source data to be merged
    * @param[out] max_commit_version to record current max commit version
    * @param[out] merged_arr the target array to be dumped
    */
   int merge_pre_process_node_(const int64_t step_len,
-                              const int64_t start_scn_limit,
-                              const int64_t recycle_ts,
+                              const share::SCN start_scn_limit,
+                              const share::SCN recycle_scn,
                               const ObIArray<ObCommitVersionsArray::Node> &data_arr,
-                              int64_t &max_commit_version,
+                              share::SCN &max_commit_version,
                               ObIArray<ObCommitVersionsArray::Node> &merged_arr);
 
   int set_row_with_merged_commit_versions_(ObCommitVersionsArray &merged_commit_versions,
                                            const blocksstable::ObDatumRow *&row);
+
+  int init_iterate_range_(ObTxDataMemtable *tx_data_memtable);
 
   int DEBUG_check_past_and_cur_arr(ObCommitVersionsArray &cur_commit_versions,
                                    ObCommitVersionsArray &past_commit_versions);
 
   int DEBUG_try_calc_upper_and_check_(ObCommitVersionsArray &merged_commit_versions);
 
-  int DEBUG_fake_calc_upper_trans_version(const int64_t sstable_end_log_ts,
-                                          int64_t &upper_trans_version,
+  int DEBUG_fake_calc_upper_trans_version(const share::SCN sstable_end_scn,
+                                          share::SCN &upper_trans_version,
                                           ObCommitVersionsArray &merged_commit_versions);
 
   void DEBUG_print_start_scn_list_();
-  void DEBUG_print_merged_commit_versions_(ObCommitVersionsArray &merged_commit_versions);
+
+  int init_iterate_count_(ObTxDataMemtable *tx_data_memtable);
 
 private:
+  class TxData2DatumRowConverter {
+  public:
+    TxData2DatumRowConverter() :
+    serialize_buffer_(nullptr), buffer_len_(0), tx_data_(nullptr), generate_size_(0) {}
+    ~TxData2DatumRowConverter() { reset(); }
+    OB_NOINLINE int init(ObTxData *tx_data);
+    void reset();
+    int generate_next_now(const blocksstable::ObDatumRow *&row);
+    TO_STRING_KV(KP_(serialize_buffer), K_(buffer_len), KPC_(tx_data),
+                 K_(generate_size), K_(datum_row));
+  private:
+    char *serialize_buffer_;
+    int64_t buffer_len_;
+    ObTxData *tx_data_;
+    int64_t generate_size_;
+    blocksstable::ObDatumRow datum_row_;
+  };
   bool is_inited_;
   const ObTableIterParam &iter_param_;
-  bool dump_tx_data_done_;
-  int64_t cur_max_commit_version_;
-  int64_t pre_start_log_ts_;
-  int64_t tx_data_row_cnt_;
+  const blocksstable::ObDatumRange &range_;
+  int64_t iterate_row_cnt_;
+  int64_t start_tx_id_;
+  int64_t end_tx_id_;
+  int64_t row_cnt_to_dump_;
   ObTxData *pre_tx_data_;
-  ObArenaAllocator arena_allocator_;
-  ObTxDataSortListNode *cur_node_;
-  blocksstable::ObDatumRow row_;
-  ObTxLocalBuffer buf_;
+  ObTxDataLinkNode *cur_node_;
+  TxData2DatumRowConverter tx_data_2_datum_converter_;
   ObTxDataMemtable *tx_data_memtable_;
   blocksstable::ObStorageDatum key_datum_;
-  int64_t DEBUG_iter_commit_ts_cnt_;
-  int64_t DEBUG_last_start_log_ts_;
+  int64_t DEBUG_drop_tx_data_cnt_;
 };
 
 /**
@@ -219,15 +238,17 @@ private:
                              ObSSTableArray &sstables,
                              const ObTableIterParam &iter_param,
                              ObTableAccessContext &access_context,
-                             ObTxData &tx_data);
-  int deserialize_tx_data_from_store_row_(const blocksstable::ObDatumRow *row, ObTxData &tx_data);
+                             ObStringHolder &temp_buffer,
+                             int64_t &total_need_buffer_cnt);
+  OB_NOINLINE int deserialize_tx_data_from_store_buffers_(ObTxData &tx_data);
 
 private:
-  const ObTableIterParam & iter_param_;
+  const ObTableIterParam &iter_param_;
   SliceAllocator &slice_allocator_;
   transaction::ObTransID tx_id_;
   ObArenaAllocator arena_allocator_;
   blocksstable::ObStorageDatum key_datums_[2];
+  ObArray<ObStringHolder> tx_data_buffers_;
 };
 
 /**
@@ -302,7 +323,6 @@ private:
   transaction::ObLSTxCtxIterator ls_tx_ctx_iter_;
   const int64_t MAX_VALUE_LENGTH_;
   bool is_inited_;
-
 };
 
 }  // namespace storage

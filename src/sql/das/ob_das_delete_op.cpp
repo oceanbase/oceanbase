@@ -59,6 +59,10 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("delete rows to access service failed", K(ret));
     }
+  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_spatial_index())
+      && 0 == affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows after do delete", K(affected_rows), K(ret));
   }
   return ret;
 }
@@ -66,7 +70,9 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
 ObDASDeleteOp::ObDASDeleteOp(ObIAllocator &op_alloc)
   : ObIDASTaskOp(op_alloc),
     del_ctdef_(nullptr),
-    del_rtdef_(nullptr)
+    del_rtdef_(nullptr),
+    write_buffer_(),
+    affected_rows_(0)
 {
 }
 
@@ -92,6 +98,7 @@ int ObDASDeleteOp::open_op()
     }
   } else {
     del_rtdef_->affected_rows_ += affected_rows;
+    affected_rows_ = affected_rows;
   }
   return ret;
 }
@@ -116,15 +123,16 @@ int ObDASDeleteOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASDeleteOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASDeleteOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  UNUSED(memory_limit);
 #if !defined(NDEBUG)
   CK(typeid(task_result) == typeid(ObDASDeleteResult));
 #endif
   if (OB_SUCC(ret)) {
     ObDASDeleteResult &del_result = static_cast<ObDASDeleteResult&>(task_result);
-    del_result.set_affected_rows(del_rtdef_->affected_rows_);
+    del_result.set_affected_rows(affected_rows_);
     has_more = false;
   }
   return ret;
@@ -151,12 +159,12 @@ int ObDASDeleteOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
   return ret;
 }
 
-int ObDASDeleteOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full)
+int ObDASDeleteOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full)
 {
   int ret = OB_SUCCESS;
   bool added = false;
   buffer_full = false;
-  if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, added, true))) {
+  if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
     LOG_WARN("try add row to datum store failed", K(ret), K(row), K(write_buffer_));
   } else if (!added) {
     buffer_full = true;
@@ -179,10 +187,18 @@ ObDASDeleteResult::~ObDASDeleteResult()
 {
 }
 
-int ObDASDeleteResult::init(const ObIDASTaskOp &op)
+int ObDASDeleteResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   UNUSED(op);
+  UNUSED(alloc);
   return OB_SUCCESS;
+}
+
+int ObDASDeleteResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  affected_rows_ = 0;
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER((ObDASDeleteResult, ObIDASTaskResult),

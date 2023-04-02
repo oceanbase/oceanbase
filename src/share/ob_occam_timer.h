@@ -78,16 +78,15 @@ class ObOccamTimerTask : public ObTimeWheelTask
         if (OB_LIKELY(func_shared_ptr.is_valid())) {
           int64_t delay_time = ObClockGenerator::getRealClock() - schedule_time_;
           if (OB_UNLIKELY(delay_time > 50_ms)) {
-            OCCAM_LOG(WARN, "task executed too delay", K(delay_time), K(*p_task_));
+            OCCAM_LOG_RET(WARN, OB_ERR_UNEXPECTED, "task executed too delay", K(delay_time), K(*p_task_));
           }
           stop_flag = (*func_shared_ptr)();// run the task
+          if (__time_guard__.is_timeout()) {
+            OCCAM_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "run this task use too much time", K(*p_task_));
+          }
         } else {
-          OCCAM_LOG(WARN, "func_shared_ptr_ upgrade failed, task has been stopped",
-                          K(function_), KP(p_task_));
+          OCCAM_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "func_shared_ptr_ upgrade failed, task has been stopped", K(function_));
         }
-      }
-      if (__time_guard__.is_timeout()) {
-        OCCAM_LOG(WARN, "run this task use too much time", K(*p_task_));
       }
       if (need_delete_) {// can use task_ pointer here, cause it;s promised it won't be free in other place
         CLICK();
@@ -132,7 +131,9 @@ public:
     function_class_(function_class),
     function_name_(function_name),
     file_(file),
-    line_(line) {}
+    line_(line),
+    lock_(ObLatchIds::TIME_WHEEL_TASK_LOCK)
+  {}
   ~ObOccamTimerTask() {
     time_wheel_ = nullptr;
     thread_pool_ = nullptr;
@@ -359,7 +360,7 @@ class ObOccamTimerTaskRAIIHandle
 {
   friend class ObOccamTimer;
 public:
-  ObOccamTimerTaskRAIIHandle() : task_(nullptr), is_inited_(false), is_running_(false) { OCCAM_LOG(INFO, "task handle constructed", K(*this)); }
+  ObOccamTimerTaskRAIIHandle() : task_(nullptr), is_inited_(false), is_running_(false), lock_(ObLatchIds::TIME_WHEEL_TASK_LOCK) { OCCAM_LOG(INFO, "task handle constructed", K(*this)); }
   ObOccamTimerTaskRAIIHandle(ObOccamTimerTaskRAIIHandle&&) = delete;
   ObOccamTimerTaskRAIIHandle(const ObOccamTimerTaskRAIIHandle&) = delete;
   ObOccamTimerTaskRAIIHandle& operator=(const ObOccamTimerTaskRAIIHandle&) = delete;
@@ -547,7 +548,10 @@ public:
     }
     return OB_SUCCESS;
   }
-  int init_and_start(const int64_t worker_number, const int64_t precision, const char *name)
+  int init_and_start(const int64_t worker_number,
+                     const int64_t precision,
+                     const char *name,
+                     const int64_t queue_size_square_of_2 = 14)
   {
     TIMEGUARD_INIT(OCCAM, 100_ms);
     int ret = OB_SUCCESS;
@@ -555,7 +559,7 @@ public:
       OCCAM_LOG(WARN, "create thread pool failed", K(ret));
     } else if (CLICK_FAIL(ob_make_shared<ObTimeWheel>(timer_shared_ptr_))) {
       OCCAM_LOG(WARN, "create time wheel failed", K(ret));
-    } else if (CLICK_FAIL(thread_pool_shared_ptr_->init(worker_number))) {
+    } else if (CLICK_FAIL(thread_pool_shared_ptr_->init(worker_number, queue_size_square_of_2))) {
       OCCAM_LOG(WARN, "init thread_pool_shared_ptr_ failed", K(ret));
     } else if (CLICK_FAIL(timer_shared_ptr_->init(precision, 1, name))) {
       OCCAM_LOG(WARN, "init timer_shared_ptr_ failed", K(ret));

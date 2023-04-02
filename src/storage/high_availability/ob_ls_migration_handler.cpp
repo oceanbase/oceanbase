@@ -545,6 +545,7 @@ int ObLSMigrationHandler::do_init_status_()
   int tmp_ret = OB_SUCCESS;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   bool is_empty = false;
+  bool can_switch_next_stage = true;
   ObLSMigrationHandlerStatus new_status = ObLSMigrationHandlerStatus::MAX_STATUS;
 
   if (!is_inited_) {
@@ -578,6 +579,8 @@ int ObLSMigrationHandler::do_init_status_()
         } else {
           if (OB_FAIL(build_rebuild_task_())) {
             LOG_WARN("failed to build rebuild task", K(ret), KPC(ls_));
+            can_switch_next_stage = false;
+            reuse_();
           } else {
             is_empty = false;
           }
@@ -590,26 +593,22 @@ int ObLSMigrationHandler::do_init_status_()
       }
 
       if (OB_SUCC(ret)) {
-        if (!is_empty && OB_FAIL(check_before_do_task_())) {
+        ObLSMigrationTask task;
+        if (OB_FAIL(check_before_do_task_())) {
           LOG_WARN("failed to check before do task", K(ret), KPC(ls_));
         } else if (OB_FAIL(change_status_(new_status))) {
           LOG_WARN("failed to change status", K(ret), K(new_status), KPC(ls_));
+        } else if (OB_FAIL(get_ls_migration_task_(task))) {
+          LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
         } else {
-          if (!is_empty) {
-            ObLSMigrationTask task;
-            if (OB_FAIL(get_ls_migration_task_(task))) {
-              LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
-            } else {
-              SERVER_EVENT_ADD("storage_ha", "ls_ha_start",
-                  "tenant_id", ls_->get_tenant_id(),
-                  "ls_id", ls_->get_ls_id().id(),
-                  "src", task.arg_.data_src_.get_server(),
-                  "dst", task.arg_.dst_.get_server(),
-                  "task_id", task.task_id_,
-                  "is_failed", OB_SUCCESS,
-                  ObMigrationOpType::get_str(task.arg_.type_));
-            }
-          }
+          SERVER_EVENT_ADD("storage_ha", "ls_ha_start",
+              "tenant_id", ls_->get_tenant_id(),
+              "ls_id", ls_->get_ls_id().id(),
+              "src", task.arg_.data_src_.get_server(),
+              "dst", task.arg_.dst_.get_server(),
+              "task_id", task.task_id_,
+              "is_failed", OB_SUCCESS,
+              ObMigrationOpType::get_str(task.arg_.type_));
           wakeup_();
         }
       }
@@ -617,7 +616,9 @@ int ObLSMigrationHandler::do_init_status_()
   }
 
   if (OB_FAIL(ret)) {
-    if (OB_SUCCESS != (tmp_ret = switch_next_stage(ret))) {
+    if (!can_switch_next_stage) {
+      //do nothing
+    } else if (OB_SUCCESS != (tmp_ret = switch_next_stage(ret))) {
       LOG_WARN("failed to report result", K(ret), K(tmp_ret));
     }
   }
@@ -998,10 +999,11 @@ int ObLSMigrationHandler::check_can_skip_prepare_status_(bool &can_skip)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
-  } else if (OB_FAIL(get_ls_migration_task_(task))) {
-    LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
-  } else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
-    can_skip = false;
+  //} else if (OB_FAIL(get_ls_migration_task_(task))) {
+  //  LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+  //} else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
+  //  can_skip = false;
+  // TODO(muwei.ym) Open IT in 4.1 and the condition should change to migration status rebuild flag setted.
   } else {
     can_skip = true;
   }
@@ -1105,6 +1107,15 @@ int ObLSMigrationHandler::build_rebuild_task_()
     }
   }
 
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_GENERATE_REBUILD_TASK_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_GENERATE_REBUILD_TASK_FAILED", K(ret));
+      }
+    }
+#endif
+
   if (OB_FAIL(ret)) {
   } else {
     ObTaskId task_id;
@@ -1147,7 +1158,8 @@ int ObLSMigrationHandler::get_ls_info_(
   } else if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_->get_ls_id(), ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_->get_ls_id(), share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), "ls id", ls_->get_ls_id());
   }
   return ret;

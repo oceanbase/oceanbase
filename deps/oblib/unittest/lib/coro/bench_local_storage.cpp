@@ -28,7 +28,9 @@ void bench(string name, void (*func)())
   func();
   auto end_ts = ObTimeUtility::current_time();
   auto elapsed = end_ts - start_ts;
-  cout << name << ": " <<   CNT / elapsed << "Mps" << endl;
+  if (end_ts > start_ts) {
+    cout << name << ": " <<   CNT / elapsed << "Mps" << endl;
+  }
 }
 
 void bench_thread_local()

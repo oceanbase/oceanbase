@@ -14,7 +14,7 @@
 #define OB_ALL_VIRTUAL_TENANT_MEMSOTRE_ALLOCATOR_INFO_H_
 
 #include "share/ob_virtual_table_iterator.h"
-#include "common/ob_range.h"
+#include "share/ob_table_range.h"
 
 namespace oceanbase
 {
@@ -31,14 +31,14 @@ struct ObMemstoreAllocatorInfo
         is_active_(false),
         ls_id_(OB_INVALID_ID),
         tablet_id_(OB_INVALID_ID),
-        log_ts_range_() {}
+        scn_range_() {}
   ~ObMemstoreAllocatorInfo() {}
-  TO_STRING_KV(K_(protection_clock), K_(is_active), K_(ls_id), K_(tablet_id), K_(log_ts_range));
+  TO_STRING_KV(K_(protection_clock), K_(is_active), K_(ls_id), K_(tablet_id), K_(scn_range));
   int64_t protection_clock_;
   bool is_active_;
   int64_t ls_id_;
   uint64_t tablet_id_;
-  common::ObLogTsRange log_ts_range_;
+  share::ObScnRange scn_range_;
 };
 class ObAllVirtualTenantMemstoreAllocatorInfo : public common::ObVirtualTableIterator
 {

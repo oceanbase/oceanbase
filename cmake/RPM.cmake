@@ -40,6 +40,7 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 %global _find_debuginfo_opts -g
 %define __strip ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-strip
 %undefine __brp_mangle_shebangs
+%global __requires_exclude ^\(/bin/bash\|/usr/bin/\.*\)$
 %define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
 %if \\\"%name\\\" != \\\"oceanbase-ce-sql-parser\\\" && \\\"%name\\\" != \\\"oceanbase-sql-parser\\\"
 %debug_package
@@ -50,22 +51,24 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 #
 # - PATH is relative to the **ROOT directory** of project other than the cmake directory.
 
+set(BITCODE_TO_ELF_LIST "")
+
 ## server
 install(PROGRAMS
   tools/import_time_zone_info.py
   ${CMAKE_BINARY_DIR}/src/observer/observer
-  $<$<STREQUAL:${ARCHITECTURE},"x86_64">:tools/mysql_tzinfo_to_sql>
   DESTINATION bin
   COMPONENT server)
 
 install(FILES
   src/sql/fill_help_tables-ob.sql
   tools/timezone_V1.log
+  tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
   tools/upgrade/upgrade_post.py
-  tools/upgrade/upgrade_post_checker.py
   tools/upgrade/upgrade_checker.py
-  tools/upgrade/upgrade_cluster_health_checker.py
+  tools/upgrade/upgrade_health_checker.py
+  tools/upgrade/oceanbase_upgrade_dep.yml
   DESTINATION etc
   COMPONENT server)
 
@@ -75,7 +78,7 @@ install(
   COMPONENT server)
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE)
+if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
 include(GNUInstallDirs)
 install(
   TARGETS obcdc obcdc_tailf
@@ -103,11 +106,24 @@ install(
 endif()
 
 ## oceanbase-sql-parser
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
-  DESTINATION lib
-  COMPONENT sql-parser
-  )
+if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
+
+  if (ENABLE_THIN_LTO)
+    message(STATUS "add libob_sql_proxy_parser_static_to_elf")
+    add_custom_command(
+      OUTPUT libob_sql_proxy_parser_static_to_elf
+      COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/bitcode_to_elfobj --ld=${OB_LD_BIN} --input=${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a --output=${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
+      DEPENDS ob_sql_proxy_parser_static
+      COMMAND_EXPAND_LISTS)
+    list(APPEND BITCODE_TO_ELF_LIST libob_sql_proxy_parser_static_to_elf)
+  endif()
+
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
+    DESTINATION lib
+    COMPONENT sql-parser
+    )
+endif()
 
 install(FILES
   src/objit/include/objit/common/ob_item_type.h
@@ -118,13 +134,6 @@ install(FILES
   src/sql/parser/parse_node.h
   DESTINATION include
   COMPONENT sql-parser)
-
-## oceanbase-sql-parser
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
-  DESTINATION lib
-  COMPONENT sql-parser
-  )
 
 install(FILES
   src/objit/include/objit/common/ob_item_type.h
@@ -229,7 +238,6 @@ install(FILES
   deps/oblib/src/lib/lock/ob_spin_rwlock.h
   deps/oblib/src/lib/lock/ob_thread_cond.h
   deps/oblib/src/lib/lock/ob_rwlock.h
-  deps/oblib/src/lib/lock/threadmutex.h
   deps/oblib/src/lib/metrics/ob_counter.h
   deps/oblib/src/lib/net/ob_addr.h
   deps/oblib/src/lib/net/ob_net_util.h
@@ -248,7 +256,6 @@ install(FILES
   deps/oblib/src/lib/queue/ob_fixed_queue.h
   deps/oblib/src/lib/queue/ob_link.h
   deps/oblib/src/lib/random/ob_random.h
-  deps/oblib/src/lib/regex/ob_regex.h
   deps/oblib/src/lib/resource/achunk_mgr.h
   deps/oblib/src/lib/resource/ob_cache_washer.h
   deps/oblib/src/lib/resource/ob_resource_mgr.h
@@ -296,20 +303,33 @@ install(FILES
   COMPONENT table)
 
 install(FILES
-  src/libtable//examples/ob_pstore_example.cpp
-  src/libtable//examples/ob_kvtable_example.cpp
-  src/libtable//examples/ob_table_example.cpp
-  src/libtable//examples/example_makefile.mk
+  src/libtable/examples/ob_pstore_example.cpp
+  src/libtable/examples/ob_kvtable_example.cpp
+  src/libtable/examples/ob_table_example.cpp
+  src/libtable/examples/example_makefile.mk
   DESTINATION examples
   COMPONENT table)
 
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1.0.0
-  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
-  DESTINATION lib
-  COMPONENT table)
+if (OB_BUILD_LIBOBTABLE)
+
+  if (ENABLE_THIN_LTO)
+    message(STATUS "add libobtable_static_to_elf")
+    add_custom_command(
+      OUTPUT libobtable_static_to_elf
+      COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/bitcode_to_elfobj --ld=${OB_LD_BIN} --input=${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a --output=${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
+      DEPENDS obtable_static
+      COMMAND_EXPAND_LISTS)
+      list(APPEND BITCODE_TO_ELF_LIST libobtable_static_to_elf)
+  endif()
+
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1.0.0
+    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
+    DESTINATION lib
+    COMPONENT table)
+endif()
 
 ## oceanbase-libs
 install(PROGRAMS
@@ -321,13 +341,15 @@ install(PROGRAMS
   DESTINATION lib
   COMPONENT libs
 )
-## oceanbase-utils
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-  ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-  DESTINATION /usr/bin
-  COMPONENT utils
-)
+if(OB_BUILD_OBADMIN)
+    ## oceanbase-utils
+    install(PROGRAMS
+      ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+      ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+      DESTINATION /usr/bin
+      COMPONENT utils
+    )
+  endif()
 
 # install cpack to make everything work
 include(CPack)
@@ -337,4 +359,6 @@ add_custom_target(rpm
   COMMAND +make package
   DEPENDS
   observer obcdc_tailf obtable obtable_static
-  ob_admin ob_error ob_sql_proxy_parser_static)
+  ob_admin ob_error ob_sql_proxy_parser_static
+  ${BITCODE_TO_ELF_LIST}
+  )

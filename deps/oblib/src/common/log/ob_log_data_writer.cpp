@@ -496,7 +496,7 @@ const char *ObLogDataWriter::select_pool_file(char *buf, const int64_t buf_len)
   char *result = NULL;
   int64_t len = 0;
   if (OB_ISNULL(buf) || buf_len < 0) {
-    SHARE_LOG(WARN, "invalid argument", KP(buf), K(buf_len));
+    SHARE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", KP(buf), K(buf_len));
   } else if (OB_ISNULL(min_avail_file_id_getter_)) {
     // do nothing
   } else if (0 == min_file_id_) {
@@ -504,16 +504,16 @@ const char *ObLogDataWriter::select_pool_file(char *buf, const int64_t buf_len)
     SHARE_LOG(INFO, "min_file_id has not inited, can not reuse file, "
               "will create new file num_file_to_add", K(num_file_to_add_));
   } else if (min_file_id_ < 0) {
-    SHARE_LOG(ERROR, "min_file_id < 0", K(min_file_id_));
+    SHARE_LOG_RET(ERROR, OB_ERROR, "min_file_id < 0", K(min_file_id_));
   } else if (num_file_to_add_ > 0) {
     num_file_to_add_--;
     SHARE_LOG(INFO, "num_file_to_add >= 0 will create new file.", K(num_file_to_add_));
   } else if (min_file_id_ > min_avail_file_id_
              && min_file_id_ > (min_avail_file_id_ = min_avail_file_id_getter_->get())) {
-    SHARE_LOG(WARN, "can not select pool_file", K(min_file_id_), K(min_avail_file_id_));
+    SHARE_LOG_RET(WARN, OB_ERROR, "can not select pool_file", K(min_file_id_), K(min_avail_file_id_));
   } else if ((len = snprintf(buf, buf_len, "%s/%ld", log_dir_, min_file_id_)) < 0
              || len >= buf_len) {
-    SHARE_LOG(ERROR, "gen fname fail", K(buf_len), KCSTRING(log_dir_), K(min_file_id_));
+    SHARE_LOG_RET(ERROR, OB_ERROR, "gen fname fail", K(buf_len), KCSTRING(log_dir_), K(min_file_id_));
   } else {
     result = buf;
     min_file_id_++;

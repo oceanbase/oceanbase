@@ -15,6 +15,7 @@
 #include "rootserver/freeze/ob_tenant_major_freeze.h"
 
 #include "share/ob_errno.h"
+#include "share/ob_tablet_meta_table_compaction_operator.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,7 @@ using namespace common;
 using namespace share;
 
 ObTenantMajorFreeze::ObTenantMajorFreeze()
-  : is_inited_(false), tenant_id_(OB_INVALID_ID),
+  : is_inited_(false), tenant_id_(OB_INVALID_ID), is_primary_service_(true),
     zone_merge_mgr_(), freeze_info_mgr_(), freeze_info_detector_(),
     merge_scheduler_(), daily_launcher_(), schema_service_(nullptr)
 {
@@ -36,6 +37,7 @@ ObTenantMajorFreeze::~ObTenantMajorFreeze()
 
 int ObTenantMajorFreeze::init(
     const uint64_t tenant_id,
+    const bool is_primary_service,
     ObMySQLProxy &sql_proxy,
     ObServerConfig &config,
     share::schema::ObMultiVersionSchemaService &schema_service,
@@ -49,16 +51,20 @@ int ObTenantMajorFreeze::init(
     LOG_WARN("fail to init zone_merge_mgr", KR(ret));
   } else if (OB_FAIL(freeze_info_mgr_.init(tenant_id, sql_proxy, zone_merge_mgr_))) {
     LOG_WARN("fail to init freeze_info_mgr", KR(ret));
-  } else if (OB_FAIL(merge_scheduler_.init(tenant_id, zone_merge_mgr_, freeze_info_mgr_,
-          schema_service, server_trace, config, sql_proxy))) {
-    LOG_WARN("fail to init merge_scheduler", KR(ret));
-  }  else if (OB_FAIL(freeze_info_detector_.init(tenant_id, sql_proxy, freeze_info_mgr_, 
-          merge_scheduler_.get_major_scheduler_idling()))) {
-    LOG_WARN("fail to init freeze_info_detector", KR(ret));
-  } else if (OB_FAIL(daily_launcher_.init(tenant_id, config, sql_proxy, freeze_info_mgr_))) {
-    LOG_WARN("fail to init daily_launcher", KR(ret));
-  } else {
+  } else if (OB_FAIL(merge_scheduler_.init(tenant_id, is_primary_service, zone_merge_mgr_,
+             freeze_info_mgr_, schema_service, server_trace, config, sql_proxy))) {
+    LOG_WARN("fail to init merge_scheduler", KR(ret), K(is_primary_service));
+  }  else if (OB_FAIL(freeze_info_detector_.init(tenant_id, is_primary_service, sql_proxy,
+              freeze_info_mgr_, merge_scheduler_.get_major_scheduler_idling()))) {
+    LOG_WARN("fail to init freeze_info_detector", KR(ret), K(is_primary_service));
+  } else if (is_primary_service) {
+    if (OB_FAIL(daily_launcher_.init(tenant_id, config, sql_proxy, freeze_info_mgr_))) {
+      LOG_WARN("fail to init daily_launcher", KR(ret), K(is_primary_service));
+    }
+  }
+  if (OB_SUCC(ret)) {
     tenant_id_ = tenant_id;
+    is_primary_service_ = is_primary_service;
     schema_service_ = &schema_service;
     is_inited_ = true;
   }
@@ -76,24 +82,36 @@ int ObTenantMajorFreeze::start()
     LOG_WARN("fail to start freeze_info_detector", KR(ret));
   } else if (OB_FAIL(merge_scheduler_.start())) {
     LOG_WARN("fail to start merge_scheduler", KR(ret));
-  } else if (OB_FAIL(daily_launcher_.start())) {
-    LOG_WARN("fail to start daily_launcher", KR(ret), K_(tenant_id));
+  } else if (is_primary_service()) {
+    if (OB_FAIL(daily_launcher_.start())) {
+      LOG_WARN("fail to start daily_launcher", KR(ret), K_(tenant_id), K_(is_primary_service));
+    }
   }
   return ret;
 }
 
 void ObTenantMajorFreeze::stop()
 {
-  daily_launcher_.stop();
+  if (is_primary_service()) {
+    LOG_INFO("daily_launcher start to stop", K_(tenant_id), K_(is_primary_service));
+    daily_launcher_.stop();
+  }
+  LOG_INFO("freeze_info_detector start to stop", K_(tenant_id), K_(is_primary_service));
   freeze_info_detector_.stop();
+  LOG_INFO("merge_scheduler start to stop", K_(tenant_id), K_(is_primary_service));
   merge_scheduler_.stop();
 }
 
 int ObTenantMajorFreeze::wait()
 {
   int ret = OB_SUCCESS;
-  daily_launcher_.wait();
+  if (is_primary_service()) {
+    LOG_INFO("daily_launcher start to wait", K_(tenant_id), K_(is_primary_service));
+    daily_launcher_.wait();
+  }
+  LOG_INFO("freeze_info_detector start to wait", K_(tenant_id), K_(is_primary_service));
   freeze_info_detector_.wait();
+  LOG_INFO("merge_scheduler start to wait", K_(tenant_id), K_(is_primary_service));
   merge_scheduler_.wait();
   return ret;
 }
@@ -101,31 +119,55 @@ int ObTenantMajorFreeze::wait()
 int ObTenantMajorFreeze::destroy()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(daily_launcher_.destroy())) {
-    LOG_WARN("fail to destroy daily_launcher", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(freeze_info_detector_.destroy())) {
-    LOG_WARN("fail to destroy freeze_info_detector", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(merge_scheduler_.destroy())) {
-    LOG_WARN("fail to destroy merge_scheduler", KR(ret), K_(tenant_id));
-  } 
+  if (is_primary_service()) {
+    LOG_INFO("daily_launcher start to destroy", K_(tenant_id), K_(is_primary_service));
+    if (OB_FAIL(daily_launcher_.destroy())) {
+      LOG_WARN("fail to destroy daily_launcher", KR(ret), K_(tenant_id), K_(is_primary_service));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("freeze_info_detector start to destroy", K_(tenant_id), K_(is_primary_service));
+    if (OB_FAIL(freeze_info_detector_.destroy())) {
+      LOG_WARN("fail to destroy freeze_info_detector", KR(ret), K_(tenant_id), K_(is_primary_service));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("merge_scheduler start to destroy", K_(tenant_id), K_(is_primary_service));
+    if (OB_FAIL(merge_scheduler_.destroy())) {
+      LOG_WARN("fail to destroy merge_scheduler", KR(ret), K_(tenant_id), K_(is_primary_service));
+    }
+  }
   return ret;
 }
 
 void ObTenantMajorFreeze::pause()
 {
-  daily_launcher_.pause();
+  if (is_primary_service()) {
+    daily_launcher_.pause();
+  }
   freeze_info_detector_.pause();
   merge_scheduler_.pause();
 }
 
 void ObTenantMajorFreeze::resume()
 {
-  daily_launcher_.resume();
+  if (is_primary_service()) {
+    daily_launcher_.resume();
+  }
   freeze_info_detector_.resume();
   merge_scheduler_.resume();
 }
 
-int ObTenantMajorFreeze::get_frozen_scn(int64_t &frozen_scn)
+bool ObTenantMajorFreeze::is_paused() const
+{
+  bool is_paused = (freeze_info_detector_.is_paused() || merge_scheduler_.is_paused());
+  if (is_primary_service()) {
+    is_paused = (is_paused || daily_launcher_.is_paused());
+  }
+  return is_paused;
+}
+
+int ObTenantMajorFreeze::get_frozen_scn(SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -137,7 +179,7 @@ int ObTenantMajorFreeze::get_frozen_scn(int64_t &frozen_scn)
   return ret;
 }
 
-int ObTenantMajorFreeze::get_global_broadcast_scn(int64_t &global_broadcast_scn) const
+int ObTenantMajorFreeze::get_global_broadcast_scn(SCN &global_broadcast_scn) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -174,6 +216,9 @@ int ObTenantMajorFreeze::launch_major_freeze()
     ret = OB_MAJOR_FREEZE_NOT_ALLOW;
     LOG_WARN("enable_major_freeze is off, refuse to to major_freeze", 
              K_(tenant_id), KR(ret));
+  } else if (merge_scheduler_.is_paused()) {
+    ret = OB_LEADER_NOT_EXIST;
+    LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(merge_scheduler_.try_update_epoch_and_reload())) {
     LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(check_freeze_info())) {
@@ -245,8 +290,26 @@ int ObTenantMajorFreeze::clear_merge_error()
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
     const int64_t expected_epoch = merge_scheduler_.get_epoch();
-    if (OB_FAIL(zone_merge_mgr_.set_merge_error(error_type, expected_epoch))) {
+    if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_,
+                                                                         expected_epoch))) {
+      LOG_WARN("fail to batch update status", KR(ret), K_(tenant_id), K(expected_epoch));
+    } else if (OB_FAIL(zone_merge_mgr_.set_merge_error(error_type, expected_epoch))) {
       LOG_WARN("fail to set merge error", KR(ret), K_(tenant_id), K(error_type), K(expected_epoch));
+    }
+  }
+  return ret;
+}
+
+int ObTenantMajorFreeze::get_uncompacted_tablets(
+    ObArray<ObTabletReplica> &uncompacted_tablets) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else {
+    if (OB_FAIL(merge_scheduler_.get_uncompacted_tablets(uncompacted_tablets))) {
+      LOG_WARN("fail to get uncompacted tablets", KR(ret), K_(tenant_id));
     }
   }
   return ret;
@@ -274,8 +337,8 @@ int ObTenantMajorFreeze::check_tenant_status() const
 int ObTenantMajorFreeze::check_freeze_info()
 {
   int ret = OB_SUCCESS;
-  int64_t latest_frozen_scn = 0;
-  int64_t global_last_merged_scn = 0;
+  SCN latest_frozen_scn;
+  SCN global_last_merged_scn;
   ObZoneMergeInfo::MergeStatus global_merge_status = ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MAX;
 
   if (IS_NOT_INIT) {

@@ -29,7 +29,7 @@ class ObLSDDLLogHandler : public logservice::ObIReplaySubHandler,
                           public logservice::ObICheckpointSubHandler
 {
 public:
-  ObLSDDLLogHandler() : is_inited_(false), is_online_(false), ls_(nullptr) {}
+  ObLSDDLLogHandler() : is_inited_(false), is_online_(false), ls_(nullptr), last_rec_scn_() {}
   ~ObLSDDLLogHandler() { reset(); }
 
 public:
@@ -44,7 +44,7 @@ public:
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const int64_t log_ts) override final;
+             const share::SCN &log_ts) override final;
                       
   // for role change
   void switch_to_follower_forcedly() override final;
@@ -53,20 +53,20 @@ public:
   int resume_leader() override final;
 
   // for checkpoint
-  int flush(int64_t rec_log_ts) override final;
-  int64_t get_rec_log_ts() override final;
+  int flush(share::SCN &rec_scn) override final;
+  share::SCN get_rec_scn() override final;
 private:
-  int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_prepare_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_tablet_schema_version_change_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_start_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
+  int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_tablet_schema_version_change_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_start_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
 private:
   bool is_inited_;
   bool is_online_;
   ObLS *ls_;
   common::TCRWLock online_lock_;
   ObDDLRedoLogReplayer ddl_log_replayer_;
+  share::SCN last_rec_scn_;
 };
 
 } // storage

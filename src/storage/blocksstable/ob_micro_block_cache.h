@@ -20,6 +20,9 @@
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_micro_block_info.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "lib/stat/ob_diagnose_info.h"
+#include "storage/blocksstable/ob_block_manager.h"
+
 
 namespace oceanbase
 {
@@ -141,22 +144,121 @@ public:
   virtual int add_put_size(const int64_t put_size) = 0;
 };
 
+// New Block IO Callbacks for version 4.0
+class ObIMicroBlockIOCallback : public common::ObIOCallback
+{
+public:
+  ObIMicroBlockIOCallback();
+  virtual ~ObIMicroBlockIOCallback();
+  virtual int alloc_io_buf(char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset);
+  VIRTUAL_TO_STRING_KV(KP_(io_buffer));
+protected:
+  friend class ObIMicroBlockCache;
+  int process_block(
+      ObMacroBlockReader *reader,
+      char *buffer,
+      const int64_t offset,
+      const int64_t size,
+      const ObMicroBlockCacheValue *&micro_block,
+      common::ObKVCacheHandle &cache_handle);
+  int assign(const ObIMicroBlockIOCallback &other);
+private:
+  int read_block_and_copy(
+      ObMacroBlockReader &reader,
+      char *buffer,
+      const int64_t size,
+      ObMicroBlockData &block_data,
+      const ObMicroBlockCacheValue *&micro_block,
+      common::ObKVCacheHandle &handle);
+
+  static const int64_t ALLOC_BUF_RETRY_INTERVAL = 100 * 1000;
+  static const int64_t ALLOC_BUF_RETRY_TIMES = 3;
+protected:
+  ObIMicroBlockCache *cache_;
+  ObIPutSizeStat *put_size_stat_;
+  common::ObIAllocator *allocator_;
+  char *io_buffer_;
+  char *data_buffer_;
+  const ObTableReadInfo *read_info_;
+  uint64_t tenant_id_;
+  MacroBlockId block_id_;
+  int64_t offset_;
+  int64_t size_;
+  ObRowStoreType row_store_type_;
+  ObMicroBlockDesMeta block_des_meta_;
+  bool use_block_cache_;
+  bool need_write_extra_buf_;
+};
+
+class ObSingleMicroBlockIOCallback : public ObIMicroBlockIOCallback
+{
+public:
+  ObSingleMicroBlockIOCallback();
+  virtual ~ObSingleMicroBlockIOCallback();
+  virtual int64_t size() const;
+  virtual int inner_process(const bool is_success) override;
+  virtual int inner_deep_copy(
+      char *buf, const int64_t buf_len,
+      ObIOCallback *&callback) const override;
+  virtual const char *get_data() override;
+  INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback, KP_(micro_block),
+                       K_(tablet_handle), K_(cache_handle), K_(need_write_extra_buf));
+private:
+  friend class ObIMicroBlockCache;
+  // Notice: lifetime shoule be longer than AIO or deep copy here
+  const ObMicroBlockCacheValue *micro_block_;
+  ObTabletHandle tablet_handle_;
+  common::ObKVCacheHandle cache_handle_;
+};
+
+class ObMultiDataBlockIOCallback : public ObIMicroBlockIOCallback
+{
+public:
+  ObMultiDataBlockIOCallback();
+  virtual ~ObMultiDataBlockIOCallback();
+  virtual int64_t size() const;
+  virtual int inner_process(const bool is_success) override;
+  virtual int inner_deep_copy(
+      char *buf, const int64_t buf_len,
+      ObIOCallback *&callback) const override;
+  virtual const char *get_data() override;
+  INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback, K_(io_ctx));
+private:
+  friend class ObDataMicroBlockCache;
+  int set_io_ctx(const ObMultiBlockIOParam &io_param);
+  void reset_io_ctx() { io_ctx_.reset(); }
+  int deep_copy_ctx(const ObMultiBlockIOCtx &io_ctx);
+  int alloc_result();
+  void free_result();
+  // Notice: lifetime shoule be longer than AIO or deep copy here
+  ObMultiBlockIOCtx io_ctx_;
+  ObMultiBlockIOResult io_result_;
+};
+
 class ObIMicroBlockCache : public ObIPutSizeStat
 {
 public:
   typedef common::ObIKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue> BaseBlockCache;
+public:
   int get_cache_block(
       const uint64_t tenant_id,
       const MacroBlockId block_id,
       const int64_t offset,
       const int64_t size,
       ObMicroBlockBufferHandle &handle);
-  virtual int prefetch(
+  virtual int reserve_kvpair(
+      const ObMicroBlockDesc &micro_block_desc,
+      const ObTableReadInfo &read_info,
+      ObKVCacheInstHandle &inst_handle,
+      ObKVCacheHandle &cache_handle,
+      ObKVCachePair *&kvpair,
+      int64_t &kvpair_size);
+  int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMicroIndexInfo& idx_row,
       const common::ObQueryFlag &flag,
-      const ObTableReadInfo &full_read_info,
+      const ObTableReadInfo &read_info,
       const ObTabletHandle &tablet_handle,
       ObMacroBlockHandle &macro_handle);
   virtual int load_block(
@@ -165,87 +267,33 @@ public:
       const ObTableReadInfo *read_info,
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
-      ObIAllocator *allocator);
+      ObIAllocator *allocator) = 0;
   virtual void destroy() = 0;
   virtual int get_cache(BaseBlockCache *&cache) = 0;
   virtual int get_allocator(common::ObIAllocator *&allocator) = 0;
+  virtual int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, const int64_t row_count,
+                                 const int64_t request_count, int64_t &extra_size, bool &need_decoder) = 0;
+  virtual int write_extra_buf(const ObTableReadInfo &read_info, const char *block_buf, const int64_t block_size,
+                              const int64_t extra_size, char *extra_buf, ObMicroBlockData &micro_data) = 0;
+  virtual ObMicroBlockData::Type get_type() = 0;
   virtual int add_put_size(const int64_t put_size) override;
-public:
-  // New Block IO Callbacks for version 4.0
-  class ObIMicroBlockIOCallback : public common::ObIOCallback
-  {
-    public:
-    ObIMicroBlockIOCallback();
-    virtual ~ObIMicroBlockIOCallback();
-    virtual int alloc_io_buf(char *&io_buf, int64_t &io_buf_size, int64_t &aligned_offset);
-    VIRTUAL_TO_STRING_KV(KP_(io_buffer));
-  protected:
-    friend class ObIMicroBlockCache;
-    int process_block(
-        ObMacroBlockReader *reader,
-        char *buffer,
-        const int64_t offset,
-        const int64_t size,
-        const ObMicroBlockCacheValue *&micro_block,
-        common::ObKVCacheHandle &handle);
-    int assign(const ObIMicroBlockIOCallback &other);
-    static int cache_decoders(
-        const ObColDescIArray &full_col_descs,
-        const int64_t data_length,
-        ObMicroBlockData &micro_data,
-        char *block_buf);
-    static int transform_index_block(
-        const ObTableReadInfo &index_read_info,
-        const int64_t data_length,
-        ObMicroBlockData &micro_data,
-        char *block_buf,
-        ObIndexBlockDataTransformer &transformer);
-  private:
-    int read_block_and_copy(
-        ObMacroBlockReader &reader,
-        char *buffer,
-        const int64_t size,
-        ObMicroBlockData &block_data,
-        const ObMicroBlockCacheValue *&micro_block,
-        common::ObKVCacheHandle &handle);
-    virtual int write_extra_buf_on_demand(
-        const int64_t data_length,
-        ObMicroBlockData &micro_data,
-        char *block_buf) = 0;
-    virtual int64_t calc_value_size(int64_t data_length, int64_t row_count) = 0;
-    virtual ObMicroBlockData::Type get_type() = 0;
-
-    static const int64_t ALLOC_BUF_RETRY_INTERVAL = 100 * 1000;
-    static const int64_t ALLOC_BUF_RETRY_TIMES = 3;
-  protected:
-    BaseBlockCache *cache_;
-    ObIPutSizeStat *put_size_stat_;
-    common::ObIAllocator *allocator_;
-    char *io_buffer_;
-    char *data_buffer_;
-    uint64_t tenant_id_;
-    MacroBlockId block_id_;
-    int64_t offset_;
-    int64_t size_;
-    ObRowStoreType row_store_type_;
-    ObMicroBlockDesMeta block_des_meta_;
-    bool use_block_cache_;
-  };
 protected:
-  virtual int prefetch(
+  int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
-      const ObIndexBlockRowHeader& idx_row_header,
+      const ObMicroIndexInfo& idx_row,
       const common::ObQueryFlag &flag,
       ObMacroBlockHandle &macro_handle,
       ObIMicroBlockIOCallback &callback);
-  virtual int prefetch(
+  int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
       const ObMultiBlockIOParam &io_param,
       const ObQueryFlag &flag,
       ObMacroBlockHandle &macro_handle,
       ObIMicroBlockIOCallback &callback);
+  int alloc_base_kvpair(const ObMicroBlockDesc &micro_block_desc, const int64_t key_size, const int64_t value_size,
+                        ObKVCacheInstHandle &inst_handle, ObKVCacheHandle &cache_handle, ObKVCachePair *&kvpair);
 };
 
 class ObDataMicroBlockCache
@@ -257,14 +305,7 @@ public:
   virtual ~ObDataMicroBlockCache() {}
   int init(const char *cache_name, const int64_t priority = 1);
   virtual void destroy() override;
-  int prefetch(
-      const uint64_t tenant_id,
-      const MacroBlockId &macro_id,
-      const ObMicroIndexInfo& idx_row,
-      const common::ObQueryFlag &flag,
-      const ObTableReadInfo &full_read_info,
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockHandle &macro_handle) override;
+  using ObIMicroBlockCache::prefetch;
   int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
@@ -281,90 +322,22 @@ public:
       ObIAllocator *allocator) override;
   virtual int get_cache(BaseBlockCache *&cache) override;
   virtual int get_allocator(common::ObIAllocator *&allocator) override;
-public:
-  class ObDataMicroBlockIOCallback : public ObIMicroBlockIOCallback
-  {
-  public:
-    ObDataMicroBlockIOCallback();
-    virtual ~ObDataMicroBlockIOCallback();
-    virtual int64_t size() const;
-    virtual int inner_process(const bool is_success) override;
-    virtual int inner_deep_copy(
-        char *buf, const int64_t buf_len,
-        ObIOCallback *&callback) const override;
-    virtual const char *get_data() override;
-    INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback,
-        KPC(full_cols_), KP_(micro_block), K_(handle), K_(need_write_extra_buf));
-  private:
-    virtual int64_t calc_value_size(int64_t data_length, int64_t row_count) override;
-    virtual int write_extra_buf_on_demand(
-        const int64_t data_length,
-        ObMicroBlockData &micro_data,
-        char *block_buf) override;
-    virtual ObMicroBlockData::Type get_type() override;
-  private:
-    friend class ObDataMicroBlockCache;
-    // Notice: lifetime shoule be longer than AIO or deep copy here
-    const ObColDescIArray *full_cols_;
-    const ObMicroBlockCacheValue *micro_block_;
-    ObTabletHandle tablet_handle_;
-    common::ObKVCacheHandle handle_;
-    bool need_write_extra_buf_;
-  };
-  class ObMultiDataBlockIOCallback : public ObIMicroBlockIOCallback
-  {
-  public:
-    ObMultiDataBlockIOCallback();
-    virtual ~ObMultiDataBlockIOCallback();
-    virtual int64_t size() const;
-    virtual int inner_process(const bool is_success) override;
-    virtual int inner_deep_copy(
-        char *buf, const int64_t buf_len,
-        ObIOCallback *&callback) const override;
-    virtual const char *get_data() override;
-    INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback,
-        KPC(full_cols_), K_(io_ctx));
-  private:
-    virtual int write_extra_buf_on_demand(
-        const int64_t data_length,
-        ObMicroBlockData &micro_data,
-        char *block_buf) override;
-    virtual int64_t calc_value_size(int64_t data_length, int64_t row_count) override;
-    virtual ObMicroBlockData::Type get_type() override;
-  private:
-    friend class ObDataMicroBlockCache;
-    int set_io_ctx(const ObMultiBlockIOParam &io_param);
-    void reset_io_ctx() { io_ctx_.reset(); }
-    int deep_copy_ctx(const ObMultiBlockIOCtx &io_ctx);
-    int alloc_result();
-    void free_result();
-    // Notice: lifetime shoule be longer than AIO or deep copy here
-    const ObColDescIArray *full_cols_;
-    ObMultiBlockIOCtx io_ctx_;
-    ObMultiBlockIOResult io_result_;
-  };
+  virtual int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, const int64_t row_count,
+                                 const int64_t request_count, int64_t &extra_size, bool &need_decoder);
+  virtual int write_extra_buf(const ObTableReadInfo &read_info, const char *block_buf, const int64_t block_size,
+                              const int64_t extra_size, char *extra_buf, ObMicroBlockData &micro_data);
+  virtual ObMicroBlockData::Type get_type() override;
 private:
   common::ObConcurrentFIFOAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObDataMicroBlockCache);
 };
 
-class ObIndexMicroBlockCache
-  : public common::ObKVCache<ObMicroBlockCacheKey, ObMicroBlockCacheValue>,
-    public ObIMicroBlockCache
+class ObIndexMicroBlockCache : public ObDataMicroBlockCache
 {
 public:
-  ObIndexMicroBlockCache() {}
-  virtual ~ObIndexMicroBlockCache() {}
+  ObIndexMicroBlockCache();
+  virtual ~ObIndexMicroBlockCache();
   int init(const char *cache_name, const int64_t priority = 10);
-  virtual void destroy() override;
-  int prefetch(
-      const uint64_t tenant_id,
-      const MacroBlockId &macro_id,
-      const ObMicroIndexInfo& idx_row,
-      const common::ObQueryFlag &flag,
-      const ObTableReadInfo &index_read_info,
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockHandle &macro_handle) override;
   int load_block(
       const ObMicroBlockId &micro_block_id,
       const ObMicroBlockDesMeta &des_meta,
@@ -372,41 +345,13 @@ public:
       ObMacroBlockReader *macro_reader,
       ObMicroBlockData &block_data,
       ObIAllocator *allocator) override;
-  virtual int get_cache(BaseBlockCache *&cache) override;
-  virtual int get_allocator(common::ObIAllocator *&allocator) override;
-public:
-  class ObIndexMicroBlockIOCallback : public ObIMicroBlockIOCallback
-  {
-  public:
-    ObIndexMicroBlockIOCallback();
-    virtual ~ObIndexMicroBlockIOCallback();
-    virtual int64_t size() const;
-    virtual int inner_process(const bool is_success) override;
-    virtual int inner_deep_copy(
-        char *buf, const int64_t buf_len,
-        ObIOCallback *&callback) const override;
-    virtual const char *get_data() override;
-    INHERIT_TO_STRING_KV("ObIMicroBlockIOCallback", ObIMicroBlockIOCallback,
-        KPC(index_read_info_), KP_(micro_block), K_(handle));
-  private:
-    virtual int64_t calc_value_size(int64_t data_length, int64_t row_count) override;
-    virtual int write_extra_buf_on_demand(
-        const int64_t data_length,
-        ObMicroBlockData &micro_data,
-        char *block_buf) override;
-    virtual ObMicroBlockData::Type get_type() override;
-  private:
-    friend class ObIndexMicroBlockCache;
-    // Notice: lifetime shoule be longer than AIO or deep copy here
-    const ObTableReadInfo *index_read_info_;
-    const ObMicroBlockCacheValue *micro_block_;
-    ObTabletHandle tablet_handle_;
-    common::ObKVCacheHandle handle_;
-  };
-private:
-  common::ObConcurrentFIFOAllocator allocator_;
-  DISALLOW_COPY_AND_ASSIGN(ObIndexMicroBlockCache);
+  virtual int64_t calc_value_size(const int64_t data_length, const ObRowStoreType &type, const int64_t row_count,
+                                 const int64_t request_count, int64_t &extra_size, bool &need_decoder);
+  virtual int write_extra_buf(const ObTableReadInfo &read_info, const char *block_buf, const int64_t block_size,
+                              const int64_t extra_size, char *extra_buf, ObMicroBlockData &micro_data);
+  virtual ObMicroBlockData::Type get_type() override;
 };
+
 
 }//end namespace blocksstable
 }//end namespace oceanbase

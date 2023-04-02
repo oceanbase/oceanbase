@@ -19,7 +19,7 @@
 #include "objit/common/ob_item_type.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
-
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase {
 using namespace common;
@@ -118,9 +118,10 @@ int ObExprLowerUpper::calc(ObObj &result, const ObString &text,
 {
   int ret = OB_SUCCESS;
   ObString str_result;
+  bool has_lob_header = get_result_type().get_calc_meta().has_lob_header();
   if (text.empty()) {
     str_result.reset();
-  } else {
+  } else if (!ob_is_text_tc(result.get_type())) {
     int64_t buf_len = text.length() * get_case_mutiply(cs_type);
     char *buf = reinterpret_cast<char *>(string_buf.alloc(buf_len));
     if (OB_ISNULL(buf)) {
@@ -137,11 +138,65 @@ int ObExprLowerUpper::calc(ObObj &result, const ObString &text,
       }
       str_result.assign(buf, static_cast<int32_t>(out_len));
     }
+  } else {
+    ObString real_str;
+    int32_t multiply = get_case_mutiply(cs_type);
+    ObObjType text_type = get_result_type().get_calc_meta().get_type();
+    // Need calc buff, user AreanaAllocator instead, for cannot find the caller of this function
+    common::ObArenaAllocator temp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    // not found caller of this func, need text src obj to judge whether has lob header
+    ObTextStringIter src_iter(text_type, cs_type, text, has_lob_header);
+    char *buf = NULL; // res buffer
+    int64_t src_byte_len = 0;
+    int64_t buf_size = 0;
+    int32_t buf_len = 0;
+
+    if (OB_FAIL(src_iter.init(0, NULL, &temp_allocator))) {
+      LOG_WARN("init lob str iter failed ", K(ret), K(src_iter));
+    } else if (OB_FAIL(src_iter.get_byte_len(src_byte_len))) {
+      LOG_WARN("get input byte len failed");
+    } else {
+      int64_t buf_len = src_byte_len * multiply;
+      ObTextStringResult output_result(text_type, has_lob_header, &string_buf);
+      if (OB_FAIL(output_result.init(buf_len))) {
+        LOG_WARN("init stringtext result failed", K(ret), K(output_result), K(buf_len));
+      } else if (buf_len == 0) {
+        str_result.reset();
+      } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+        LOG_WARN("get empty buffer failed", K(ret), K(buf_len));
+      } else if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("alloc memory failed", "size", buf_len);
+      } else  {
+        OB_ASSERT(buf_size == buf_len);
+        ObTextStringIterState state;
+        ObString src_block_data;
+
+        while (OB_SUCC(ret)
+               && buf_size > 0
+               && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          // binary collation的casedn什么都没做，所以需要copy
+          MEMCPY(buf, src_block_data.ptr(), src_block_data.length());
+          int32_t out_len = 0;
+          //gb18030 可能会膨胀，src和dst不同，其他字符集相同
+          char *src_str = (multiply > 1) ? const_cast<char*>(src_block_data.ptr()) : buf;
+          if (OB_FAIL(calc(cs_type, src_str, src_block_data.length(), buf, buf_size, out_len))) {
+            LOG_WARN("failed to calc", K(ret));
+          } else if (OB_FAIL(output_result.lseek(out_len, 0))) {
+            LOG_WARN("output_result lseek failed", K(ret));
+          } else {
+            buf += out_len;
+            buf_size -= out_len;
+          }
+        }
+        output_result.get_result_buffer(str_result);
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
     result.set_common_value(str_result);
-    result.set_meta_type(get_result_type());
+    result.set_meta_type(get_result_type()); // should set has lob header here
   }
 
   return ret;
@@ -165,7 +220,7 @@ int32_t ObExprLower::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }
@@ -190,7 +245,7 @@ int32_t ObExprUpper::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->caseup_multiply;
   }
@@ -282,6 +337,21 @@ int ObExprUpper::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 
+static inline int32_t calc_common_inner(char *buf,
+                                        const int32_t &buf_len,
+                                        const ObString &m_text,
+                                        const ObCollationType &cs_type,
+                                        const bool &is_lower)
+{
+  MEMCPY(buf, m_text.ptr(), m_text.length());
+  //gb18030 may expand in size, src_str and dst_str should has different buf, other cs_type can use the same buf
+  char *src_str = (buf_len != m_text.length()) ? const_cast<char*>(m_text.ptr()) : buf;
+  return (is_lower
+          ? static_cast<int32_t>(ObCharset::casedn(cs_type, src_str, m_text.length(), buf, buf_len))
+          : static_cast<int32_t>(ObCharset::caseup(cs_type, src_str, m_text.length(), buf, buf_len))
+          );
+}
+
 int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
                                   ObDatum &expr_datum, bool lower, ObCollationType cs_type)
 {
@@ -297,40 +367,91 @@ int ObExprLowerUpper::calc_common(const ObExpr &expr, ObEvalCtx &ctx,
       cs_type = expr.datum_meta_.cs_type_;
     }
     ObString str_result;
-    if (m_text.empty()) {
+    bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+    ObDatumMeta text_meta = expr.args_[0]->datum_meta_;
+    uchar multiply = 0;
+    if (m_text.empty() && !ob_is_text_tc(text_meta.type_)) {
       str_result.reset();
-    } else {
-      int32_t buf_len = m_text.length();
+    } else if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("charset is null", K(ret), K(cs_type));
+    } else if (FALSE_IT(multiply = (lower ? ObCharset::get_charset(cs_type)->casedn_multiply
+                                          : ObCharset::get_charset(cs_type)->caseup_multiply))) {
+    } else if (!ob_is_text_tc(text_meta.type_)) {
+      int32_t buf_len = m_text.length() * multiply;
+      char *buf = expr.get_str_res_mem(ctx, buf_len);
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("alloc memory failed", "size", buf_len);
+      } else {
+        int32_t out_len = calc_common_inner(buf, buf_len, m_text, cs_type, lower);
+        str_result.assign(buf, static_cast<int32_t>(out_len));
+      }
+    } else { // text tc only
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      ObTextStringIter src_iter(text_meta.type_, text_meta.cs_type_, text_datum->get_string(), has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+
+      ObString dst;
+      char *buf = NULL; // res buffer
+      int64_t src_byte_len = 0;
+      int64_t buf_size = 0;
+      int32_t buf_len = 0;
       if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("charset is null", K(ret), K(cs_type));
+      } else if (OB_FAIL(src_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("init src_iter failed ", K(ret), K(src_iter));
+      } else if (OB_FAIL(src_iter.get_byte_len(src_byte_len))) {
+        LOG_WARN("get input byte len failed", K(ret));
+      } else if (FALSE_IT(buf_len = multiply * src_byte_len)) {
+      } else if (OB_FAIL(output_result.init(buf_len))) {
+        LOG_WARN("init stringtext result failed", K(ret));
+      } else if (buf_len == 0) {
+        output_result.set_result();
+        output_result.get_result_buffer(str_result);
+      } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+        LOG_WARN("stringtext result reserve buffer failed", K(ret));
+      } else if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("alloc memory failed", "size", buf_len);
       } else {
-        buf_len *= (lower ? ObCharset::get_charset(cs_type)->casedn_multiply
-                          : ObCharset::get_charset(cs_type)->caseup_multiply);
-      }
-      if (OB_SUCC(ret)) {
-        char *buf = expr.get_str_res_mem(ctx, buf_len);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("alloc memory failed", "size", buf_len);
-        } else {
-          MEMCPY(buf, m_text.ptr(), m_text.length());
-          int32_t out_len = 0;
-          //gb18030 可能会膨胀，src_str和dst_str要转入不同的buf，其他字符集可以传相同的
-          char *src_str = (buf_len != m_text.length()) ? const_cast<char*>(m_text.ptr()) : buf;
-          if (lower) {
-            out_len = static_cast<int32_t>(ObCharset::casedn(cs_type,
-                                                src_str, m_text.length(), buf, buf_len));
-          } else {
-            out_len = static_cast<int32_t>(ObCharset::caseup(cs_type,
-                                                src_str, m_text.length(), buf, buf_len));
+        OB_ASSERT(buf_size == buf_len);
+        ObTextStringIterState state;
+        ObString src_block_data;
+
+        while (OB_SUCC(ret)
+               && buf_size > 0
+               && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          int32_t out_len = calc_common_inner(buf,
+                                              buf_size,
+                                              src_block_data,
+                                              cs_type,
+                                              lower);
+          buf += out_len;
+          buf_size -= out_len;
+          if (OB_FAIL(output_result.lseek(out_len, 0))) {
+            LOG_WARN("result lseek failed", K(ret));
           }
-          str_result.assign(buf, static_cast<int32_t>(out_len));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = (src_iter.get_inner_ret() != OB_SUCCESS) ?
+                src_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(src_iter));
+        } else {
+          output_result.get_result_buffer(str_result);
         }
       }
     }
     if (OB_SUCC(ret)) {
-      expr_datum.set_string(str_result);
+      if (OB_UNLIKELY(is_oracle_mode() && str_result.length() == 0
+                      && ob_is_string_tc(expr.datum_meta_.type_))) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(str_result);
+      }
     }
   }
   return ret;
@@ -361,13 +482,26 @@ int ObExprLowerUpper::calc_nls_common(const ObExpr &expr, ObEvalCtx &ctx,
     } else if (param_datum->is_null()) {
       // Second param_datum is null, set result null as well.
       expr_datum.set_null();
-    }
-    else {
-      const ObString &m_param = param_datum->get_string();
-      if (OB_UNLIKELY(!ObExprOperator::is_valid_nls_param(m_param))) {
-        ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
-        LOG_WARN("invalid nls parameter", K(ret), K(m_param));
-      } else {
+    } else {
+      if (!ob_is_text_tc(expr.args_[1]->datum_meta_.type_)) {
+        const ObString &m_param = param_datum->get_string();
+        if (OB_UNLIKELY(!ObExprOperator::is_valid_nls_param(m_param))) {
+          ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
+          LOG_WARN("invalid nls parameter", K(ret), K(m_param));
+        }
+      } else { // text tc only
+        ObString m_param = param_datum->get_string();
+        ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+        common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *param_datum,
+                    expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), m_param))) {
+          LOG_WARN("failed to read real pattern", K(ret), K(m_param));
+        } else if (OB_UNLIKELY(!ObExprOperator::is_valid_nls_param(m_param))) {
+          ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
+          LOG_WARN("invalid nls parameter", K(ret), K(m_param));
+        }
+      }
+      if (OB_SUCC(ret)) {
         // Should set cs_type here, but for now, we do nothing 
         // since nls parameter only support BINARY
         if (OB_FAIL(ret)) {
@@ -408,7 +542,7 @@ int32_t ObExprNlsLower::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }
@@ -450,7 +584,7 @@ int32_t ObExprNlsUpper::get_case_mutiply(const ObCollationType cs_type) const
 {
   int32_t mutiply_num = 0;
   if (OB_UNLIKELY(!ObCharset::is_valid_collation(cs_type))) {
-    LOG_WARN("invalid charset", K(cs_type));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid charset", K(cs_type));
   } else {
     mutiply_num = ObCharset::get_charset(cs_type)->casedn_multiply;
   }

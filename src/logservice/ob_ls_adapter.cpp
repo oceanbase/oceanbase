@@ -72,26 +72,35 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
                                 replay_task->log_buf_,
                                 replay_task->log_size_,
                                 replay_task->lsn_,
-                                replay_task->log_ts_))) {
+                                replay_task->scn_))) {
     CLOG_LOG(WARN, "log stream do replay failed", K(ret), KPC(replay_task));
   }
   if (OB_EAGAIN == ret) {
     if (common::OB_INVALID_TIMESTAMP == replay_task->first_handle_ts_) {
       replay_task->first_handle_ts_ = start_ts;
       replay_task->print_error_ts_ = start_ts;
-    } else if ((start_ts - replay_task->print_error_ts_) > MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD) {
+    } else {
       replay_task->retry_cost_ = start_ts - replay_task->first_handle_ts_;
-      CLOG_LOG(WARN, "single replay task retry cost too much time. replay may be delayed",
-                KPC(replay_task));
-      replay_task->print_error_ts_ = start_ts;
+      if ((start_ts - replay_task->print_error_ts_) > MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD) {
+        if (replay_task->retry_cost_ > 100 * 1000 *1000 && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          CLOG_LOG(ERROR, "single replay task retry cost too much time. replay may be delayed",
+                   K(ret), KPC(replay_task));
+        } else {
+          CLOG_LOG(WARN, "single replay task retry cost too much time. replay may be delayed",
+                   K(ret), KPC(replay_task));
+        }
+        replay_task->print_error_ts_ = start_ts;
+      }
     }
   }
   replay_task->replay_cost_ = ObTimeUtility::fast_current_time() - start_ts;
   if (replay_task->replay_cost_ > MAX_SINGLE_REPLAY_WARNING_TIME_THRESOLD) {
-    if (replay_task->replay_cost_ > MAX_SINGLE_REPLAY_ERROR_TIME_THRESOLD && !get_replay_is_writing_throttling()) {
-      CLOG_LOG(ERROR, "single replay task cost too much time. replay may be delayed", KPC(replay_task));
+    if (replay_task->replay_cost_ > MAX_SINGLE_REPLAY_ERROR_TIME_THRESOLD
+        && !get_replay_is_writing_throttling()
+        && lib::is_mini_mode()) {
+      CLOG_LOG_RET(ERROR, OB_ERR_TOO_MUCH_TIME, "single replay task cost too much time. replay may be delayed", KPC(replay_task));
     } else {
-      CLOG_LOG(WARN, "single replay task cost too much time", KPC(replay_task));
+      CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "single replay task cost too much time", KPC(replay_task));
     }
   }
   return ret;

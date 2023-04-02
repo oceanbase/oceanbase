@@ -111,27 +111,6 @@ private:
   ObTenantResourceMgr *tenant_resource_mgr_;
 };
 
-class ObTenantResourceMgrList
-{
-public:
-  ObTenantResourceMgrList()
-    : inited_(false), mutex_(), header_(NULL), chunk_(NULL)
-    {
-      mutex_.enable_record_stat(false);
-    }
-  virtual ~ObTenantResourceMgrList() {}
-  void destroy();
-
-  int init(const int64_t max_count);
-  int push(ObTenantResourceMgr *tenant_resource_mgr);
-  int pop(ObTenantResourceMgr *&tenant_resource_mgr);
-private:
-  bool inited_;
-  ObMutex mutex_;
-  ObTenantResourceMgr *header_;
-  AChunk *chunk_;
-};
-
 class ObResourceMgr
 {
   friend class ObTenantResourceMgrHandle;
@@ -158,7 +137,6 @@ private:
   ObICacheWasher *cache_washer_;
   common::SpinRWLock locks_[MAX_TENANT_COUNT];
   ObTenantResourceMgr *tenant_resource_mgrs_[MAX_TENANT_COUNT];
-  ObTenantResourceMgrList free_list_;
 };
 
 }//end namespace lib

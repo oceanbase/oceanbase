@@ -80,6 +80,10 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
     } else {
       type.set_scale(-1);
     }
+    if (lib::is_mysql_mode() && ob_is_real_type(type.get_type()) &&
+         SCALE_UNKNOWN_YET != type.get_scale()) {
+      type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
+    }
     type.set_length(MAX(type1.get_length(), type2.get_length()));
     type1.set_calc_meta(type.get_obj_meta());
     type1.set_calc_accuracy(type.get_accuracy());

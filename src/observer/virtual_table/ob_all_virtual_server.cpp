@@ -79,7 +79,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   } else {
     const int64_t col_count = output_column_ids_.count();
     const double hard_limit = GCONF.resource_hard_limit;
-    const int64_t cpu_capacity = GCTX.omt_->get_node_quota();
+    const int64_t cpu_capacity = get_cpu_count();
     const double cpu_capacity_max = (cpu_capacity * hard_limit) / 100;
     const double cpu_assigned = svr_res_assigned.min_cpu_;
     const double cpu_assigned_max = svr_res_assigned.max_cpu_;

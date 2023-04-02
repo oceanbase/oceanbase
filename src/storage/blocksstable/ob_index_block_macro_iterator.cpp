@@ -116,7 +116,6 @@ int ObIndexBlockMacroIterator::open(
       } else {
         curr_key_ = range.get_end_key();
         if (start_beyond_range) {
-          ret = OB_BEYOND_THE_RANGE;
           is_iter_end_ = true;
         } else if (end_beyond_range) {
           // endkey beyond the open range
@@ -144,7 +143,6 @@ int ObIndexBlockMacroIterator::open(
         // for check reuse boundary during compaction
         curr_key_.set_min_rowkey();
         if (start_beyond_range) {
-          ret = OB_BEYOND_THE_RANGE;
           is_iter_end_ = true;
         } else if (end_beyond_range) {
         }
@@ -380,6 +378,9 @@ int ObDualMacroMetaIterator::get_next_macro_block(ObMacroBlockDesc &block_desc)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Dual macro meta iterator not inited", K(ret));
+  } else if (OB_ISNULL(macro_meta)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid null pointer to read macro meta", K(ret), K(block_desc), KP(macro_meta));
   } else if (OB_UNLIKELY(iter_end_)) {
     ret = OB_ITER_END;
   } else if (OB_SUCC(macro_iter_.get_next_macro_block(block_desc))) {

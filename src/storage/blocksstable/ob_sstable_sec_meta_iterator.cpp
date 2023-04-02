@@ -15,6 +15,9 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_table_param.h"
 #include "ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -24,7 +27,7 @@ namespace blocksstable
 ObSSTableSecMetaIterator::ObSSTableSecMetaIterator()
   : sstable_meta_(nullptr), index_read_info_(nullptr), tenant_id_(OB_INVALID_TENANT_ID),
     prefetch_flag_(), idx_cursor_(), macro_reader_(), block_cache_(nullptr),
-    micro_reader_(nullptr), micro_reader_helper_(),
+    micro_reader_(nullptr), micro_reader_helper_(), block_meta_tree_(nullptr),
     query_range_(nullptr), start_bound_micro_block_(), end_bound_micro_block_(),
     micro_handles_(), row_(), curr_handle_idx_(0), prefetch_handle_idx_(0), prev_block_row_cnt_(0),
     curr_block_start_idx_(0), curr_block_end_idx_(0), curr_block_idx_(0), step_cnt_(0),
@@ -41,6 +44,7 @@ void ObSSTableSecMetaIterator::reset()
   block_cache_ = nullptr;
   micro_reader_ = nullptr;
   micro_reader_helper_.reset();
+  block_meta_tree_ = nullptr;
   row_.reset();
   query_range_ = nullptr;
   curr_handle_idx_ = 0;
@@ -66,6 +70,7 @@ int ObSSTableSecMetaIterator::open(
     const int64_t sample_step)
 {
   int ret = OB_SUCCESS;
+  bool is_meta_root = false;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Fail to open sstable secondary meta iterator", K(ret));
@@ -87,14 +92,36 @@ int ObSSTableSecMetaIterator::open(
     query_range_ = &query_range;
     is_reverse_scan_ = is_reverse_scan;
     block_cache_ = &ObStorageCacheSuite::get_instance().get_block_cache();
+    is_meta_root = sstable_meta_->get_macro_info().is_meta_root();
   }
 
   if (OB_FAIL(ret) || is_prefetch_end_) {
+  } else if (sstable.is_ddl_mem_sstable()) {
+    const ObMicroBlockData &root_block = sstable.get_meta().get_root_info().get_block_data();
+    if (ObMicroBlockData::DDL_BLOCK_TREE != root_block.type_ || nullptr == root_block.buf_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("block type is not ddl block tree", K(ret), K(root_block));
+    } else {
+      block_meta_tree_ = reinterpret_cast<ObBlockMetaTree *>(const_cast<char *>(root_block.buf_));
+      if (OB_FAIL(block_meta_tree_->locate_range(query_range,
+                                                 index_read_info.get_datum_utils(),
+                                                 true, //is_left_border
+                                                 true, //is_right_border,
+                                                 curr_block_start_idx_,
+                                                 curr_block_end_idx_))) {
+        LOG_WARN("locate range failed", K(ret));
+      } else {
+        const int64_t step = max(1, sample_step);
+        step_cnt_ = !is_reverse_scan ? step : -step;
+        curr_block_idx_ = !is_reverse_scan ? curr_block_start_idx_ : curr_block_end_idx_;
+        is_inited_ = true;
+      }
+    }
   } else if (OB_FAIL(idx_cursor_.init(sstable, allocator, index_read_info_,
       get_index_tree_type_map()[meta_type]))) {
     LOG_WARN("Fail to init index block tree cursor", K(ret), K(meta_type));
   } else if (OB_FAIL(init_micro_reader(
-      static_cast<ObRowStoreType>(sstable.get_meta().get_basic_meta().row_store_type_),
+      static_cast<ObRowStoreType>(sstable.get_meta().get_basic_meta().root_row_store_type_),
       allocator))) {
     LOG_WARN("Fail to get root row store type", K(ret), K(sstable));
   } else {
@@ -102,6 +129,8 @@ int ObSSTableSecMetaIterator::open(
         - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     is_range_end_key_multi_version_ =
         schema_rowkey_cnt < query_range.get_end_key().get_datum_cnt();
+  }
+  if (OB_SUCC(ret) && !is_prefetch_end_ && !is_meta_root) {
     bool start_key_beyond_range = false;
     bool end_key_beyond_range = false;
     if (is_reverse_scan) {
@@ -136,28 +165,34 @@ int ObSSTableSecMetaIterator::open(
 
     if (OB_FAIL(ret) || is_prefetch_end_) {
     } else if (OB_UNLIKELY(start_key_beyond_range)) {
-      ret = OB_BEYOND_THE_RANGE;
       set_iter_end();
-    } else if (OB_FAIL(prefetch_micro_block(1 /* fetch first micro block */))) {
-      LOG_WARN("Fail to prefetch next micro block", K(ret), K_(is_prefetch_end));
-    } else if (OB_FAIL(row_.init(allocator, index_read_info_->get_request_count()))) {
-      STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-    } else {
-      if (sample_step != 0) {
-        // is sample scan
-        const int64_t start_offset = sample_step > 1 ? (sample_step / 2 - 1) : 0;
-        step_cnt_ = is_reverse_scan ? (-sample_step) : sample_step;
-        curr_block_idx_ = is_reverse_scan ? (-1 - start_offset) : start_offset;
-      } else {
-        step_cnt_ = is_reverse_scan ? -1 : 1;
-        curr_block_idx_ = is_reverse_scan ? -1 : 0;
-      }
-      curr_block_start_idx_ = 1;
-      curr_block_end_idx_ = -1;
       is_inited_ = true;
-      LOG_DEBUG("Open secondary meta iterator", K(ret), K(meta_type), K(is_reverse_scan),
-          K(sample_step), K_(step_cnt), K_(curr_block_idx), K_(tenant_id), KPC_(query_range));
     }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (is_prefetch_end_) {
+    is_inited_ = true;
+  } else if (!is_meta_root && OB_FAIL(prefetch_micro_block(1 /* fetch first micro block */))) {
+    LOG_WARN("Fail to prefetch next micro block", K(ret), K_(is_prefetch_end));
+  } else if (OB_FAIL(row_.init(allocator, index_read_info_->get_request_count()))) {
+    STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
+  } else {
+    if (sample_step != 0) {
+      // is sample scan
+      const int64_t start_offset = sample_step > 1 ? (sample_step / 2 - 1) : 0;
+      step_cnt_ = is_reverse_scan ? (-sample_step) : sample_step;
+      curr_block_idx_ = is_reverse_scan ? (-1 - start_offset) : start_offset;
+    } else {
+      step_cnt_ = is_reverse_scan ? -1 : 1;
+      curr_block_idx_ = is_reverse_scan ? -1 : 0;
+    }
+    curr_block_start_idx_ = 1;
+    curr_block_end_idx_ = -1;
+    is_inited_ = true;
+    LOG_DEBUG("Open secondary meta iterator", K(ret), K(meta_type), K(is_reverse_scan),
+        K(sample_step), K_(step_cnt), K_(curr_block_idx), K_(tenant_id), KPC_(query_range));
   }
   return ret;
 }
@@ -169,11 +204,26 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Secondary meta iterator not inited", K(ret));
+  } else if (nullptr != block_meta_tree_) {
+    if (!is_target_row_in_curr_block()) {
+      ret = OB_ITER_END;
+    } else if (OB_FAIL(block_meta_tree_->get_macro_block_meta(curr_block_idx_, macro_meta))) {
+      LOG_WARN("get next macro block meta failed", K(ret), K(curr_block_idx_));
+    } else {
+      curr_block_idx_ += step_cnt_;
+    }
   } else {
     while (OB_SUCC(ret) && !is_target_row_in_curr_block()) {
-      if (OB_FAIL(open_next_micro_block())) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("Fail to open next micro block", K(ret));
+      if (is_prefetch_end_ && is_handle_buffer_empty()) {
+        ret = OB_ITER_END;
+      } else {
+        const bool is_data_block = sstable_meta_->get_macro_info().is_meta_root();
+        if (!is_data_block && OB_FAIL(open_next_micro_block())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("Fail to open next micro block", K(ret));
+          }
+        } else if (is_data_block && OB_FAIL(open_meta_root_block())) {
+          LOG_WARN("Fail to open data root block", K(ret));
         }
       }
     }
@@ -183,7 +233,13 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
     } else if (OB_FAIL(macro_meta.parse_row(row_))) {
       LOG_WARN("Fail to parse macro meta", K(ret));
     } else {
+      const ObSSTableMacroInfo &macro_info = sstable_meta_->get_macro_info();
+      if (!macro_info.is_meta_root() && 0 == macro_info.get_other_block_ids().count()) {
+        macro_meta.val_.macro_id_ = macro_info.get_data_block_ids().at(0);
+      }
       curr_block_idx_ += step_cnt_;
+      macro_meta.nested_size_ = macro_info.get_nested_size();
+      macro_meta.nested_offset_ = macro_info.get_nested_offset();
     }
   }
   return ret;
@@ -261,9 +317,7 @@ int ObSSTableSecMetaIterator::open_next_micro_block()
   int64_t end_idx = 0;
   ObMicroBlockData micro_data;
   ObMicroBlockDataHandle &micro_handle = micro_handles_[curr_handle_idx_ % HANDLE_BUFFER_SIZE];
-  if (is_prefetch_end_ && 0 == handle_buffer_count()) {
-    ret = OB_ITER_END;
-  } else if (OB_FAIL(prefetch_micro_block(HANDLE_BUFFER_SIZE - handle_buffer_count()))) {
+  if (OB_FAIL(prefetch_micro_block(HANDLE_BUFFER_SIZE - handle_buffer_count()))) {
     LOG_WARN("Fail to prefetch micro blocks", K(ret), K(handle_buffer_count()));
   } else if (OB_FAIL(micro_handle.get_data_block_data(macro_reader_, micro_data))) {
     LOG_WARN("Fail to get micro block data", K(ret), K_(curr_handle_idx), K(micro_handle));
@@ -300,38 +354,93 @@ int ObSSTableSecMetaIterator::open_next_micro_block()
         K(begin_idx), K(end_idx), K_(curr_block_idx), K(is_index_scan), K(block_id));
   }
 
-  if (OB_SUCC(ret)) {
-    const int64_t curr_block_row_cnt = end_idx - begin_idx + 1;
-    if (is_reverse_scan_) {
-      if (OB_UNLIKELY(curr_block_idx_ >= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Invalid current block index on reverse scan", K(ret), K_(curr_block_idx),
-            K_(curr_block_start_idx), K_(curr_block_end_idx), K(begin_idx), K(end_idx));
-      } else if (curr_block_idx_ + curr_block_row_cnt >= 0) {
-        // next row in this block
-        curr_block_idx_ = end_idx + curr_block_idx_ + 1;
-      } else {
-        curr_block_idx_ += curr_block_row_cnt;
-      }
-    } else {
-      if (OB_UNLIKELY(curr_block_idx_ < prev_block_row_cnt_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Invalid current block index on sequential scan", K(ret), K_(curr_block_idx),
-            K_(curr_block_start_idx), K_(curr_block_end_idx), K(begin_idx), K(end_idx));
-      } else if (curr_block_idx_ - prev_block_row_cnt_ < row_cnt) {
-        // First block in scan : begin_idx may larger than 0, update curr_block_idx_
-        // Non-first block : next row in this block
-        curr_block_idx_ = begin_idx + (curr_block_idx_ - prev_block_row_cnt_);
-      } else {
-        curr_block_idx_ -= prev_block_row_cnt_;
-      }
-    }
-    prev_block_row_cnt_ = row_cnt;
-    curr_block_start_idx_ = begin_idx;
-    curr_block_end_idx_ = end_idx;
+  if (OB_SUCC(ret) && OB_FAIL(adjust_index(begin_idx, end_idx, row_cnt))) {
+    LOG_WARN("fail to move index", K(ret));
+  } else {
     ++curr_handle_idx_;
   }
 
+  return ret;
+}
+
+int ObSSTableSecMetaIterator::open_meta_root_block()
+{
+  int ret = OB_SUCCESS;
+  const ObMicroBlockData &micro_data = sstable_meta_->get_macro_info().get_macro_meta_data();
+  int64_t row_cnt = 0;
+  int64_t begin_idx = 0;
+  int64_t end_idx = 0;
+  if (OB_UNLIKELY(!micro_data.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid micro block data", K(ret), K(micro_data));
+  } else if (OB_FAIL(micro_reader_->init(micro_data, *index_read_info_))) {
+    LOG_WARN("Fail to init micro block reader", K(ret));
+  } else if (OB_FAIL(micro_reader_->get_row_count(row_cnt))) {
+    LOG_WARN("Fail to get end index", K(ret));
+  } else {
+    end_idx = row_cnt;
+    const bool is_index_scan = true;
+    if (OB_FAIL(micro_reader_->locate_range(
+        *query_range_,
+        true,
+        true,
+        begin_idx,
+        end_idx,
+        is_index_scan))) {
+      if (OB_BEYOND_THE_RANGE == ret) {
+        set_iter_end();
+        ret = OB_ITER_END;
+        FLOG_INFO("this special sstable only locates range during iteration, so beyong range err should be transformed into iter end", K(ret));
+      } else {
+        LOG_WARN("Fail to locate range", K(ret), KPC(query_range_));
+      }
+    }
+    LOG_DEBUG("Open next micro block", K(ret), K(begin_idx), K(end_idx), K(is_index_scan));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(adjust_index(begin_idx, end_idx, row_cnt))) {
+    LOG_WARN("fail to move index", K(ret));
+  } else {
+    is_prefetch_end_ = true;
+  }
+  return ret;
+}
+
+int ObSSTableSecMetaIterator::adjust_index(const int64_t begin_idx, const int64_t end_idx, const int64_t row_cnt)
+{
+  int ret = OB_SUCCESS;
+  const int64_t curr_block_row_cnt = end_idx - begin_idx + 1;
+  if (is_reverse_scan_) {
+    if (OB_UNLIKELY(curr_block_idx_ >= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid current block index on reverse scan", K(ret), K_(curr_block_idx),
+          K_(curr_block_start_idx), K_(curr_block_end_idx), K(begin_idx), K(end_idx));
+    } else if (curr_block_idx_ + curr_block_row_cnt >= 0) {
+      // next row in this block
+      curr_block_idx_ = end_idx + curr_block_idx_ + 1;
+    } else {
+      curr_block_idx_ += curr_block_row_cnt;
+    }
+  } else {
+    if (OB_UNLIKELY(curr_block_idx_ < prev_block_row_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid current block index on sequential scan", K(ret), K_(curr_block_idx),
+          K_(curr_block_start_idx), K_(curr_block_end_idx), K(begin_idx), K(end_idx), K_(prev_block_row_cnt));
+    } else if (curr_block_idx_ - prev_block_row_cnt_ < row_cnt) {
+      // First block in scan : begin_idx may larger than 0, update curr_block_idx_
+      // Non-first block : next row in this block
+      curr_block_idx_ = begin_idx + (curr_block_idx_ - prev_block_row_cnt_);
+    } else {
+      curr_block_idx_ -= prev_block_row_cnt_;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    prev_block_row_cnt_ = row_cnt;
+    curr_block_start_idx_ = begin_idx;
+    curr_block_end_idx_ = end_idx;
+  }
   return ret;
 }
 
@@ -392,13 +501,18 @@ int ObSSTableSecMetaIterator::get_micro_block(
   int ret = OB_SUCCESS;
   data_handle.reset();
   ObTabletHandle tablet_handle;
+  const int64_t nested_offset = sstable_meta_->get_macro_info().get_nested_offset();
   if (OB_UNLIKELY(!macro_id.is_valid() || !idx_row_header.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid parameters to locate micro block", K(ret), K(macro_id), K(idx_row_header));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(block_cache_->get_cache_block(
       tenant_id_,
       macro_id,
-      idx_row_header.get_block_offset(),
+      idx_row_header.get_block_offset() + nested_offset,
       idx_row_header.get_block_size(),
       data_handle.cache_handle_))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
@@ -407,6 +521,7 @@ int ObSSTableSecMetaIterator::get_micro_block(
       // Cache miss, async IO
       ObMicroIndexInfo idx_info;
       idx_info.row_header_ = &idx_row_header;
+      idx_info.nested_offset_ = nested_offset;
       // TODO: @saitong.zst not safe here, remove tablet_handle from SecMeta prefetch interface, disable cache decoders
       if (OB_FAIL(block_cache_->prefetch(
           tenant_id_,
@@ -427,7 +542,7 @@ int ObSSTableSecMetaIterator::get_micro_block(
 
   if (OB_SUCC(ret)) {
     data_handle.macro_block_id_ = macro_id;
-    data_handle.micro_info_.offset_ = idx_row_header.get_block_offset();
+    data_handle.micro_info_.offset_ = idx_row_header.get_block_offset() + nested_offset;
     data_handle.micro_info_.size_ = idx_row_header.get_block_size();
     const bool deep_copy_key = true;
     if (OB_FAIL(idx_row_header.fill_micro_des_meta(deep_copy_key, data_handle.des_meta_))) {

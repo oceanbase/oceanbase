@@ -24,6 +24,9 @@
 #include "storage/blocksstable/ob_macro_block_writer.h"
 #include "storage/ob_sstable_struct.h"
 #include "storage/blocksstable/ob_sstable.h"
+#include "lib/container/ob_loser_tree.h"
+#include "storage/compaction/ob_partition_rows_merger.h"
+#include "storage/compaction/ob_compaction_trans_cache.h"
 
 namespace oceanbase
 {
@@ -53,28 +56,25 @@ protected:
   virtual int process(const blocksstable::ObMicroBlock &micro_block);
   virtual int process(const blocksstable::ObMacroBlockDesc &macro_meta);
   virtual int process(const blocksstable::ObDatumRow &row);
+  virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) = 0;
+  virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
+  virtual int try_rewrite_macro_block(const ObMacroBlockDesc &macro_block, bool &rewrite);
+  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) = 0;
   template <typename T> T *alloc_merge_helper();
-  virtual int init_merge_iters(ObIPartitionMergeFuser &fuser,
-                               ObMergeParameter &merge_param,
-                               MERGE_ITER_ARRAY &merge_iters) = 0;
   virtual int init_partition_fuser(const ObMergeParameter &merge_param) = 0;
   int init_data_store_desc(ObTabletMergeCtx &ctx);
   int open_macro_writer(ObMergeParameter &merge_param);
   int prepare_merge_partition(ObMergeParameter &merge_param,
-                              MERGE_ITER_ARRAY &merge_iters);
-  int end_merge_partition(MERGE_ITER_ARRAY &merge_iters);
-  void clean_iters_and_reset(MERGE_ITER_ARRAY &merge_iters);
-  int move_iters_next(MERGE_ITER_ARRAY &merge_iters);
+                              ObPartitionMergeHelper &merge_helper);
+  int get_macro_block_count_to_rewrite(const ObMergeParameter &merge_param,
+                                       int64_t &need_rewrite_block_cnt);
   int check_row_columns(const blocksstable::ObDatumRow &row);
-  int compare_row_iters_simple(ObPartitionMergeIter *base_iter,
-                               ObPartitionMergeIter *macro_row_iter,
-                               int &cmp_ret);
-  int compare_row_iters_range(ObPartitionMergeIter *base_iter,
-                              ObPartitionMergeIter *macro_row_iter,
-                              int &cmp_ret);
   int try_filter_row(const blocksstable::ObDatumRow &row, ObICompactionFilter::ObFilterRet &filter_ret);
+  int get_base_iter_curr_macro_block(const blocksstable::ObMacroBlockDesc *&macro_desc);
+  void set_base_iter(const MERGE_ITER_ARRAY &minimum_iters);
 protected:
   static const int64_t DEFAULT_ITER_ARRAY_SIZE = DEFAULT_ITER_COUNT * sizeof(ObPartitionMergeIter *);
+  static const int64_t CACHED_TRANS_STATE_MAX_CNT = 10 * 1024l;
 protected:
   common::ObArenaAllocator allocator_;
   ObTabletMergeCtx *merge_ctx_;
@@ -82,9 +82,12 @@ protected:
   ObIPartitionMergeFuser *partition_fuser_;
   blocksstable::ObDataStoreDesc data_store_desc_;
   ObSSTableMergeInfo merge_info_;
-  blocksstable::ObMacroBlockWriter macro_writer_;
+  blocksstable::ObMacroBlockWriter *macro_writer_;
   MERGE_ITER_ARRAY minimum_iters_;
+  ObPartitionMergeIter *base_iter_;
+  ObCachedTransStateMgr trans_state_mgr_;
   int64_t task_idx_;
+  bool check_macro_need_merge_;
   bool is_inited_;
 };
 
@@ -98,24 +101,16 @@ public:
 protected:
   virtual int open(ObTabletMergeCtx &ctx, const int64_t idx) override;
   virtual int inner_process(const blocksstable::ObDatumRow &row) override;
-  virtual int init_merge_iters(ObIPartitionMergeFuser &fuser,
-                               ObMergeParameter &merge_param,
-                               MERGE_ITER_ARRAY &merge_iters) override;
   virtual int init_partition_fuser(const ObMergeParameter &merge_param) override;
+  virtual int try_rewrite_macro_block(const ObMacroBlockDesc &macro_desc, bool &rewrite) override;
+  virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
+  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) override;
 private:
-  int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters);
-  int reuse_base_sstable(MERGE_ITER_ARRAY &merge_iters);
-  int check_need_reuse_base_sstable(MERGE_ITER_ARRAY &merge_iters,
-                                    int need_rewrite_count,
-                                    bool is_full_merge,
-                                    bool &is_need_reuse_sstable) const;
-  int get_macro_block_count_to_rewrite(const blocksstable::ObDatumRange &merge_range,
-                                       int64_t &need_rewrite_block_cnt);
-  int find_minimum_iters(const MERGE_ITER_ARRAY &macro_row_iters,
-                         MERGE_ITER_ARRAY &minimum_iters);
-  int check_row_iters_purge(MERGE_ITER_ARRAY &minimum_iters,
-                            ObPartitionMergeIter *base_major_iter,
-                            bool &can_purged);
+  int merge_micro_block_iter(ObPartitionMergeIter &iter, int64_t &reuse_row_cnt);
+  int reuse_base_sstable(ObPartitionMajorMergeHelper &merge_helper);
+private:
+  int64_t rewrite_block_cnt_;
+  int64_t need_rewrite_block_cnt_;
 };
 
 class ObPartitionMinorMerger : public ObPartitionMerger
@@ -125,21 +120,17 @@ public:
   ~ObPartitionMinorMerger();
   virtual void reset() override;
   virtual int merge_partition(ObTabletMergeCtx &ctx, const int64_t idx) override;
-  INHERIT_TO_STRING_KV("ObPartitionMinorMerger", ObPartitionMerger, K_(rowkey_minimum_iters),
-                       K_(minimum_iter_idxs), K_(need_build_bloom_filter), KP_(cols_id_map));
+  INHERIT_TO_STRING_KV("ObPartitionMinorMerger", ObPartitionMerger, K_(minimum_iter_idxs),
+                       K_(need_build_bloom_filter), KP_(cols_id_map));
 protected:
   virtual int open(ObTabletMergeCtx &ctx, const int64_t idx) override;
   virtual int close() override;
   virtual int inner_process(const blocksstable::ObDatumRow &row) override;
-  virtual int init_merge_iters(ObIPartitionMergeFuser &fuser,
-                               ObMergeParameter &merge_param,
-                               MERGE_ITER_ARRAY &merge_iters) override;
   virtual int init_partition_fuser(const ObMergeParameter &merge_param) override;
-  int find_rowkey_minimum_iters(const MERGE_ITER_ARRAY &merge_iters, MERGE_ITER_ARRAY &minimum_iters);
   int find_minimum_iters_with_same_rowkey(MERGE_ITER_ARRAY &merge_iters,
                                           MERGE_ITER_ARRAY &minimum_iters,
                                           common::ObIArray<int64_t> &iter_idxs);
-  int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters);
+  virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters) override;
   int try_remove_ghost_iters(MERGE_ITER_ARRAY &merge_iters,
                              const bool shadow_already_output,
                              MERGE_ITER_ARRAY &minimum_iters,
@@ -151,6 +142,7 @@ protected:
   virtual int check_need_prebuild_bloomfilter();
   virtual int init_bloomfilter_writer();
   virtual int append_bloom_filter(const blocksstable::ObDatumRow &row);
+  virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
 private:
   int check_add_shadow_row(MERGE_ITER_ARRAY &merge_iters, const bool contain_multi_trans, bool &add_shadow_row);
   int merge_single_iter(ObPartitionMergeIter &merge_ite);
@@ -161,7 +153,6 @@ private:
                       const bool need_check_last);
 
 protected:
-  MERGE_ITER_ARRAY rowkey_minimum_iters_;
   common::ObSEArray<int64_t, DEFAULT_ITER_COUNT> minimum_iter_idxs_;
   share::schema::ColumnMap *cols_id_map_;
   blocksstable::ObBloomFilterDataWriter bf_macro_writer_;
@@ -171,8 +162,9 @@ protected:
 class ObPartitionMergeDumper
 {
 public:
-  static void print_error_info(const int err_no, ObTabletMergeCtx &ctx,
-                               MERGE_ITER_ARRAY &merge_iters);
+  static void print_error_info(const int err_no,
+                               const MERGE_ITER_ARRAY &merge_iters,
+                               ObTabletMergeCtx &ctx);
   static int generate_dump_table_name(
       const char *dir_name,
       const storage::ObITable *table,

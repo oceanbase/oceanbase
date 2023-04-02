@@ -68,7 +68,9 @@ int ObColumnNamespaceChecker::remove_reference_table(int64_t tid)
  * for oracle mode, if table name is specified, we need to make sure that this column does not appear in the using columns in the joined table
  * for example, select t1.a from t1 inner join t2 using (a), this is not allowed in oracle mode
  */
-int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName &q_name, const TableItem *&table_item)
+int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName &q_name,
+                                                           const TableItem *&table_item,
+                                                           bool is_from_multi_tab_insert/*default false*/)
 {
   int ret = OB_SUCCESS;
   table_item = NULL;
@@ -76,7 +78,7 @@ int ObColumnNamespaceChecker::check_table_column_namespace(const ObQualifiedName
   bool need_check_unique = false;
   //针对multi table insert需要进行特殊检测,因为同一个sql中可能插入多次相同表,eg:
   //insert all into t1 values(1,1) into t1 values(2,2) select 1 from dual;
-  if (get_resolve_params().is_multi_table_insert_) {
+  if (is_from_multi_tab_insert) {
     if (OB_UNLIKELY(all_table_refs_.count() <= 0) ||
         OB_ISNULL(cur_table = all_table_refs_.at(all_table_refs_.count() - 1))) {
       ret = OB_ERR_UNEXPECTED;
@@ -257,8 +259,7 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
   } else if (table_item.is_basic_table()) {
     //check column name in schema checker
     if (OB_FAIL(params_.schema_checker_->check_column_exists(
-                params_.session_info_->get_effective_tenant_id(), table_id, col_name, is_exist,
-                table_item.is_link_table()))) {
+                params_.session_info_->get_effective_tenant_id(), table_id, col_name, is_exist))) {
       LOG_WARN("check column exists failed", K(ret));
     }
   } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
@@ -305,8 +306,7 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
   } else if (table_item.is_fake_cte_table()) {
     // cte table 按照generate的方式来检查列就好了
     if (OB_FAIL(params_.schema_checker_->check_column_exists(
-        params_.session_info_->get_effective_tenant_id(), table_id, col_name, is_exist,
-        table_item.is_link_table()))) {
+        params_.session_info_->get_effective_tenant_id(), table_id, col_name, is_exist))) {
       LOG_WARN("check column exists failed", K(ret));
     }
   } else if (table_item.is_function_table()) {
@@ -317,13 +317,20 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
     } else {
       is_exist = true;
     }
+  } else if (table_item.is_json_table()) {
+    if (OB_FAIL(ObResolverUtils::check_json_table_column_exists(table_item,
+                                                                params_,
+                                                                col_name,
+                                                                is_exist))) {
+      LOG_WARN("failed to check json table column exist", K(ret), K(col_name));
+    }
   } else if (table_item.is_link_table()) {
     const share::schema::ObColumnSchemaV2 *col_schema = NULL;
     ObSqlSchemaGuard *sql_schema_guard = params_.schema_checker_->get_sql_schema_guard();
     if (OB_ISNULL(sql_schema_guard)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expected dblink schema guard", K(ret));
-    } else if (OB_FAIL(sql_schema_guard->get_column_schema(table_id, col_name, col_schema, table_item.is_link_table()))) {
+    } else if (OB_FAIL(sql_schema_guard->get_column_schema(table_id, col_name, col_schema, true))) {
       LOG_WARN("failed to get col schema");
     } else if (OB_NOT_NULL(col_schema)) {
       is_exist = true;
@@ -533,7 +540,8 @@ int ObColumnNamespaceChecker::check_rowscn_table_column_namespace(
 }
 
 int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifiedName &q_name,
-                                                                 const TableItem *&table_item)
+                                                                 const TableItem *&table_item,
+                                                                 bool is_from_multi_tab_insert/*default false*/)
 {
   int ret = OB_SUCCESS;
   table_item = nullptr;
@@ -541,7 +549,7 @@ int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifi
   bool is_match = false;
   //for multi table insert need extra check, because rowid must be come from generate table and the
   //generate table must be the last one in all_table_refs_.
-  if (get_resolve_params().is_multi_table_insert_) {
+  if (is_from_multi_tab_insert) {
     if (OB_UNLIKELY(all_table_refs_.count() <= 1) ||
         OB_ISNULL(cur_table = all_table_refs_.at(all_table_refs_.count() - 1)) ||
         OB_UNLIKELY(!cur_table->is_generated_table())) {

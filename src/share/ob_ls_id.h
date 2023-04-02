@@ -32,7 +32,9 @@ public:
   static const int64_t LOCK_SERVICE_LS_ID = SYS_LS_ID;   // LS for Lock Service
   static const int64_t GAIS_LS_ID = SYS_LS_ID;           // LS for Global AutoInc Service
   static const int64_t DAS_ID_LS_ID = SYS_LS_ID;         // LS for DAS Id service
+  static const int64_t WRS_LS_ID = SYS_LS_ID;            // LS for Weak Read Service
   static const int64_t SCHEDULER_LS_ID = INT64_MAX;      // LS for Trans scheduler
+  static const int64_t MAJOR_FREEZE_LS_ID = SYS_LS_ID;   // LS for Major Freeze Service
 
   static const int64_t MIN_USER_LS_ID = 1000;
   static const int64_t MIN_USER_LS_GROUP_ID = 1000;
@@ -53,13 +55,14 @@ public:
 
   // LS attribute interface
   bool is_sys_ls() const { return SYS_LS_ID == id_; }
+  bool is_user_ls() const { return id_ > MIN_USER_LS_ID && SCHEDULER_LS_ID != id_; }
   bool is_scheduler_ls() const { return SCHEDULER_LS_ID == id_; }
   bool is_valid() const { return INVALID_LS_ID != id_; }
   bool is_valid_with_tenant(const uint64_t tenant_id) const
   {
-    // 1. User tenant support all valid LS
+    // 1. User tenant have SYS LS and User LS
     // 2. SYS tenant and Meta tenant only have SYS LS
-    return (is_user_tenant(tenant_id) && is_valid())
+    return (is_user_tenant(tenant_id) && (is_sys_ls() || is_user_ls()))
         || ((is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) && is_sys_ls());
   }
 
@@ -95,6 +98,8 @@ static const ObLSID GAIS_LS(ObLSID::GAIS_LS_ID);
 static const ObLSID SCHEDULER_LS(ObLSID::SCHEDULER_LS_ID);
 static const ObLSID LOCK_SERVICE_LS(ObLSID::LOCK_SERVICE_LS_ID);
 static const ObLSID DAS_ID_LS(ObLSID::DAS_ID_LS_ID);
+static const ObLSID MAJOR_FREEZE_LS(ObLSID::MAJOR_FREEZE_LS_ID);
+static const ObLSID WRS_LS_ID(ObLSID::WRS_LS_ID);
 
 static const int64_t OB_DEFAULT_LS_COUNT = 3;
 typedef common::ObSEArray<ObLSID, OB_DEFAULT_LS_COUNT> ObLSArray;

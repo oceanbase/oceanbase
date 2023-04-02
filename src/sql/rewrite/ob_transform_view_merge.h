@@ -35,12 +35,9 @@ class ObTransformViewMerge : public ObTransformRule
 {
 public:
   ObTransformViewMerge(ObTransformerCtx *ctx)
-    : ObTransformRule(ctx, TransMethod::POST_ORDER, T_MERGE_HINT),
-      for_post_process_(false)
+    : ObTransformRule(ctx, TransMethod::POST_ORDER, T_MERGE_HINT)
   {}
   virtual ~ObTransformViewMerge() {}
-
-  void set_for_post_process(bool for_post_process)  { for_post_process_ = for_post_process; }
 
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
@@ -117,7 +114,7 @@ private:
 
   int replace_stmt_exprs(ObDMLStmt *parent_stmt,
                          ObSelectStmt *child_stmt,
-                         uint64_t table_id,
+                         TableItem *table,
                          ViewMergeHelper &helper,
                          bool need_wrap_case_when);
 
@@ -174,7 +171,6 @@ private:
                                ObSelectStmt &ref_query, 
                                bool &force_merge,
                                bool &force_no_merge);
-  bool for_post_process_;
   DISALLOW_COPY_AND_ASSIGN(ObTransformViewMerge);
 };
 

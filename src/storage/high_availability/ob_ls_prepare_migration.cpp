@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/ob_log_service.h"
 #include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -30,7 +31,7 @@ ObLSPrepareMigrationCtx::ObLSPrepareMigrationCtx()
     task_id_(),
     start_ts_(0),
     finish_ts_(0),
-    log_sync_scn_(0)
+    log_sync_scn_(SCN::min_scn())
 {
 }
 
@@ -41,7 +42,7 @@ ObLSPrepareMigrationCtx::~ObLSPrepareMigrationCtx()
 bool ObLSPrepareMigrationCtx::is_valid() const
 {
   return arg_.is_valid() && !task_id_.is_invalid()
-      && tenant_id_ != 0 && tenant_id_ != OB_INVALID_ID && log_sync_scn_ >= 0;
+      && tenant_id_ != 0 && tenant_id_ != OB_INVALID_ID && log_sync_scn_.is_valid();
 }
 
 void ObLSPrepareMigrationCtx::reset()
@@ -51,7 +52,7 @@ void ObLSPrepareMigrationCtx::reset()
   task_id_.reset();
   start_ts_ = 0;
   finish_ts_ = 0;
-  log_sync_scn_ = 0;
+  log_sync_scn_.set_min();
   ObIHADagNetCtx::reset();
 }
 
@@ -78,7 +79,7 @@ int ObLSPrepareMigrationCtx::fill_comment(char *buf, const int64_t buf_len) cons
 void ObLSPrepareMigrationCtx::reuse()
 {
   ObIHADagNetCtx::reuse();
-  log_sync_scn_ = 0;
+  log_sync_scn_.set_min();
 }
 
 /******************ObLSPrepareMigrationDagNet*********************/
@@ -198,7 +199,7 @@ bool ObLSPrepareMigrationDagNet::operator == (const ObIDagNet &other) const
   } else {
     const ObLSPrepareMigrationDagNet &other_dag_net = static_cast<const ObLSPrepareMigrationDagNet &>(other);
     if (!is_valid() || !other_dag_net.is_valid()) {
-      LOG_ERROR("ls prepare migration dag net is invalid", K(*this), K(other));
+      LOG_ERROR_RET(OB_INVALID_ERROR, "ls prepare migration dag net is invalid", K(*this), K(other));
     } else if (ctx_.arg_.ls_id_ != other_dag_net.get_ls_id()) {
       is_same = false;
     }
@@ -212,7 +213,7 @@ int64_t ObLSPrepareMigrationDagNet::hash() const
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_ERROR("migration ctx is NULL", K(tmp_ret), K(ctx_));
+    LOG_ERROR_RET(tmp_ret, "migration ctx is NULL", K(tmp_ret), K(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_.arg_.ls_id_, sizeof(ctx_.arg_.ls_id_), hash_value);
   }
@@ -324,7 +325,7 @@ bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ha_dag_net_ctx_) || OB_ISNULL(ha_dag.get_ha_dag_net_ctx())) {
       is_same = false;
-      LOG_ERROR("prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_), KP(ha_dag.get_ha_dag_net_ctx()));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "prepare migration ctx should not be NULL", KP(ha_dag_net_ctx_), KP(ha_dag.get_ha_dag_net_ctx()));
     } else if (ha_dag_net_ctx_->get_dag_net_ctx_type() != ha_dag.get_ha_dag_net_ctx()->get_dag_net_ctx_type()) {
       is_same = false;
     } else {
@@ -751,7 +752,7 @@ int ObStartPrepareMigrationTask::process()
     LOG_WARN("failed to wait log replay sync", K(ret), KPC(ctx_));
   } else if (OB_FAIL(remove_local_incomplete_tablets_())) {
     LOG_WARN("failed to remove local incomplete tablets", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(wait_ls_checkpoint_ts_push_())) {
+  } else if (OB_FAIL(wait_ls_checkpoint_scn_push_())) {
     LOG_WARN("failed to wait ls checkpoint ts push", K(ret), KPC(ctx_));
   } else if (OB_FAIL(generate_prepare_migration_dags_())) {
     LOG_WARN("failed to generate prepare migration dags", K(ret), KPC(ctx_));
@@ -812,8 +813,8 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   } else if (OB_FAIL(ls->get_saved_info(saved_info))) {
     LOG_WARN("failed to get saved info", K(ret), KPC(ls));
   } else if (!saved_info.is_empty()) {
-    ctx_->log_sync_scn_ = saved_info.clog_checkpoint_ts_;
-  } else if (OB_FAIL(ls->get_end_ts_ns(ctx_->log_sync_scn_))) {
+    ctx_->log_sync_scn_ = saved_info.clog_checkpoint_scn_;
+  } else if (OB_FAIL(ls->get_end_scn(ctx_->log_sync_scn_))) {
     LOG_WARN("failed to get end ts ns", K(ret), KPC(ctx_));
   }
   return ret;
@@ -827,8 +828,8 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
   logservice::ObLogService *log_service = nullptr;
   bool wait_log_replay_success = false;
   bool is_cancel = false;
-  int64_t current_replay_log_ts_ns = 0;
-  int64_t last_replay_log_ts_ns = 0;
+  SCN current_replay_scn;
+  SCN last_replay_scn;
   const int64_t OB_CHECK_LOG_SYNC_INTERVAL = 200 * 1000; // 200ms
   const int64_t CLOG_IN_SYNC_DELAY_TIMEOUT = 30 * 60 * 1000 * 1000L; // 30 min
   ObLSSavedInfo saved_info;
@@ -861,9 +862,9 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
-      } else if (OB_FAIL(ls->get_max_decided_log_ts_ns(current_replay_log_ts_ns))) {
-        LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
-      } else if (current_replay_log_ts_ns >= ctx_->log_sync_scn_) {
+      } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
+        LOG_WARN("failed to get current replay log scn", K(ret), KPC(ctx_));
+      } else if (current_replay_scn >= ctx_->log_sync_scn_) {
         wait_log_replay_success = true;
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
@@ -872,11 +873,11 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
         bool is_timeout = false;
         if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("log is not sync, retry next loop", "arg", ctx_->arg_,
-              "current_replay_log_ts_ns", current_replay_log_ts_ns,
+              "current_replay_scn", current_replay_scn,
               "log_sync_scn", ctx_->log_sync_scn_);
         }
 
-        if (current_replay_log_ts_ns == last_replay_log_ts_ns) {
+        if (current_replay_scn == last_replay_scn) {
 
           if (current_ts - last_replay_ts > CLOG_IN_SYNC_DELAY_TIMEOUT) {
             is_timeout = true;
@@ -889,15 +890,15 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
               ret = OB_TIMEOUT;
               STORAGE_LOG(WARN, "failed to check log replay sync. timeout, stop migration task",
                   K(ret), K(*ctx_), K(CLOG_IN_SYNC_DELAY_TIMEOUT), K(wait_replay_start_ts),
-                  K(current_ts), K(current_replay_log_ts_ns));
+                  K(current_ts), K(current_replay_scn));
             }
           }
-        } else if (last_replay_log_ts_ns > current_replay_log_ts_ns) {
+        } else if (last_replay_scn > current_replay_scn) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("last end log ts should not smaller than current end log ts", K(ret),
-              K(last_replay_log_ts_ns), K(current_replay_log_ts_ns));
+              K(last_replay_scn), K(current_replay_scn));
         } else {
-          last_replay_log_ts_ns = current_replay_log_ts_ns;
+          last_replay_scn = current_replay_scn;
           last_replay_ts = current_ts;
         }
 
@@ -927,10 +928,19 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
   ObBackfillTXCtx *backfill_tx_ctx = nullptr;
   ObTabletID tablet_id;
   ObStartPrepareMigrationDag *start_prepare_migration_dag = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (ls->is_offline()) {
+    LOG_INFO("ls is in offline status, no need generate backfill dag", KPC(ls));
   } else if (OB_ISNULL(start_prepare_migration_dag = static_cast<ObStartPrepareMigrationDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("start prepare migration dag should not be NULL", K(ret), KP(start_prepare_migration_dag));
@@ -1013,13 +1023,13 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
   return ret;
 }
 
-int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
+int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   checkpoint::ObCheckpointExecutor *checkpoint_executor = NULL;
-  int64_t checkpoint_ts = 0;
+  SCN checkpoint_scn;
   const int64_t MAX_WAIT_INTERVAL_BY_CHECKPOINT_BY_FLUSH = GCONF._advance_checkpoint_timeout;
   const int64_t MAX_SLEEP_INTERVAL_MS = 5 * 1000 * 1000; //5s
   bool is_cancel = false;
@@ -1037,9 +1047,6 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
     LOG_WARN("failed to get ls saved info", K(ret), KPC(ls), KPC(ctx_));
   } else if (!saved_info.is_empty()) {
     LOG_INFO("saved info is not empty, no need wait ls checkpoint ts push", K(saved_info), KPC(ctx_));
-  } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("checkpoint executor should not be NULL", K(ret), KPC(ctx_), KP(checkpoint_executor));
   } else {
     const int64_t wait_checkpoint_push_start_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
@@ -1054,12 +1061,12 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
-      } else if (FALSE_IT(checkpoint_ts = ls->get_clog_checkpoint_ts())) {
-      } else if (checkpoint_ts >= ctx_->log_sync_scn_) {
+      } else if (FALSE_IT(checkpoint_scn = ls->get_clog_checkpoint_scn())) {
+      } else if (checkpoint_scn >= ctx_->log_sync_scn_) {
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_checkpoint_push_start_ts;
         LOG_INFO("succeed wait clog checkpoint ts push", "cost", cost_ts, "ls_id", ctx_->arg_.ls_id_);
         break;
-      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
+      } else if (OB_FAIL(ls->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
         if (OB_NO_NEED_UPDATE == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -1071,10 +1078,10 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
         const int64_t current_ts = ObTimeUtility::current_time();
         if (current_ts - wait_checkpoint_push_start_ts >= MAX_WAIT_INTERVAL_BY_CHECKPOINT_BY_FLUSH) {
           ret = OB_TIMEOUT;
-          LOG_WARN("wait ls checkpoint ts push time out",
-              "ls_checkpoint_ts", checkpoint_ts, "need_checkpoint_ts", ctx_->log_sync_scn_, "ls_id", ctx_->arg_.ls_id_);
+          LOG_WARN("wait ls checkpoint scn push time out",
+              "ls_checkpoint_scn", checkpoint_scn, "need_checkpoint_ts", ctx_->log_sync_scn_, "ls_id", ctx_->arg_.ls_id_);
         } else {
-          LOG_INFO("wait ls checkpoint ts push", "ls_checkpoint_ts", checkpoint_ts,
+          LOG_INFO("wait ls checkpoint ts push", "ls_checkpoint_scn", checkpoint_scn,
               "need_checkpoint_ts", ctx_->log_sync_scn_, "ls_id", ctx_->arg_.ls_id_);
           ob_usleep(MAX_SLEEP_INTERVAL_MS);
         }
@@ -1145,7 +1152,7 @@ int ObStartPrepareMigrationTask::remove_local_incomplete_tablets_()
 
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_LS_REBUILD_PREPARE_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_LS_REBUILD_PREPARE_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_LS_REBUILD_PREPARE_FAILED", K(ret));
       }

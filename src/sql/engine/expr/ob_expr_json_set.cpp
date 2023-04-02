@@ -8,9 +8,11 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_set
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "deps/oblib/src/lib/json_type/ob_json_path.h"
 #include "ob_expr_json_func_helper.h"
 #include "ob_expr_json_set.h"
 
@@ -153,7 +155,9 @@ int ObExprJsonSet::eval_json_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       LOG_WARN("eval json path datum failed", K(ret));
     } else {
       ObString path_val = path_data->get_string();
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[i], ctx, temp_allocator, path_val, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(path_val));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
         LOG_WARN("get json path cache failed", K(path_data->get_string()), K(ret));
       } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(), true, false, hit))) {
         LOG_WARN("json seek failed", K(path_data->get_string()), K(ret));
@@ -179,15 +183,8 @@ int ObExprJsonSet::eval_json_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     ObString str;
     if (OB_FAIL(json_doc->get_raw_binary(str, &temp_allocator))) {
       LOG_WARN("json_set result to binary failed", K(ret));
-    } else {
-      char *buf = expr.get_str_res_mem(ctx, str.length());
-      if (OB_UNLIKELY(buf == NULL)){
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory for json set result", K(ret));
-      } else {
-        MEMCPY(buf, str.ptr(), str.length());
-        res.set_string(buf, str.length());
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
   return ret;

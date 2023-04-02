@@ -21,7 +21,6 @@
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
-#include "share/ob_cluster_version.h"   // GET_MIN_CLUSTER_VERSION
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
@@ -127,7 +126,7 @@ ObLogSysLsTaskHandler::ObLogSysLsTaskHandler() :
     sequencer_(NULL),
     err_handler_(NULL),
     schema_getter_(NULL),
-    ddl_processor_(),
+    ddl_processor_(NULL),
     handle_pid_(0),
     stop_flag_(true),
     sys_ls_fetch_queue_(),
@@ -141,6 +140,7 @@ ObLogSysLsTaskHandler::~ObLogSysLsTaskHandler()
 
 int ObLogSysLsTaskHandler::init(
     IObLogDdlParser *ddl_parser,
+    ObLogDDLProcessor *ddl_processor,
     IObLogSequencer *sequencer,
     IObLogErrHandler *err_handler,
     IObLogSchemaGetter *schema_getter,
@@ -152,13 +152,12 @@ int ObLogSysLsTaskHandler::init(
     ret = OB_INIT_TWICE;
     LOG_ERROR("ObLogSysLsTaskHandler init twice", KR(ret), K(is_inited_));
   } else if (OB_ISNULL(ddl_parser_ = ddl_parser)
+      || OB_ISNULL(ddl_processor_ = ddl_processor)
       || OB_ISNULL(sequencer_ = sequencer)
       || OB_ISNULL(err_handler_ = err_handler)
-      || OB_ISNULL(schema_getter_ = schema_getter)) {
+      || (OB_ISNULL(schema_getter_ = schema_getter) && is_online_refresh_mode(TCTX.refresh_mode_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(ddl_parser), K(sequencer), K(err_handler), K(schema_getter));
-  } else if (OB_FAIL(ddl_processor_.init(schema_getter, skip_reversed_schema_version))) {
-    LOG_ERROR("ddl_processor_ init fail", KR(ret), K(schema_getter), K(skip_reversed_schema_version));
   } else {
     handle_pid_ = 0;
     stop_flag_ = true;
@@ -176,10 +175,10 @@ void ObLogSysLsTaskHandler::destroy()
 
   is_inited_ = false;
   ddl_parser_ = NULL;
+  ddl_processor_ = NULL;
   sequencer_ = NULL;
   err_handler_ = NULL;
   schema_getter_ = NULL;
-  ddl_processor_.destroy();
   handle_pid_ = 0;
   stop_flag_ = true;
 }
@@ -219,7 +218,7 @@ void ObLogSysLsTaskHandler::stop()
       int pthread_ret = pthread_join(handle_pid_, NULL);
 
       if (0 != pthread_ret) {
-        LOG_ERROR("join DDL handle thread fail", K(handle_pid_), K(pthread_ret),
+        LOG_ERROR_RET(OB_ERR_SYS, "join DDL handle thread fail", K(handle_pid_), K(pthread_ret),
             KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop ObLogSysLsTaskHandler thread succ");
@@ -238,7 +237,7 @@ int ObLogSysLsTaskHandler::push(PartTransTask *task, const int64_t timeout)
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid DDL parser", KR(ret), K(ddl_parser_));
   } else if (OB_UNLIKELY(! task->is_ddl_trans()
-      && ! task->is_ls_table_trans()
+      && ! task->is_ls_op_trans()
       && ! task->is_sys_ls_heartbeat()
       && !task->is_sys_ls_offline_task())) {
     ret = OB_NOT_SUPPORTED;
@@ -342,7 +341,7 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! task.is_ddl_trans()
-      && ! task.is_ls_table_trans()
+      && ! task.is_ls_op_trans()
       && ! task.is_sys_ls_heartbeat()
       && ! task.is_sys_ls_offline_task())) {
     ret = OB_NOT_SUPPORTED;
@@ -363,8 +362,10 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
     LOG_ERROR("tenant state is not serving, unexpected", KR(ret), KPC(tenant), K(task),
         K(ddl_tenant_id), K(is_tenant_served));
   } else {
+    const bool is_using_online_schema = is_online_refresh_mode(TCTX.refresh_mode_);
     // The following handles DDL transaction tasks and DDL heartbeat tasks
-    if (task.is_ddl_trans() && OB_FAIL(ddl_processor_.handle_ddl_trans(task, *tenant, stop_flag_))) {
+    // NOTICE: handle_ddl_trans before sequencer when using online_schmea, otherwise(using data_dict) handle_ddl_trans in sequencer.
+    if (task.is_ddl_trans() && is_using_online_schema && OB_FAIL(ddl_processor_->handle_ddl_trans(task, *tenant, stop_flag_))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("ddl_processor_ handle_ddl_trans fail", KR(ret), K(task), K(ddl_tenant_id), K(tenant),
             K(is_tenant_served));

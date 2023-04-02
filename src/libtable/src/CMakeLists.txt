@@ -20,7 +20,7 @@ target_link_libraries(obtable
   PUBLIC obtable_base_objects
   PRIVATE
   -Wl,--whole-archive
-  $<TARGET_OBJECTS:obtable_base_objects>
+  obtable_base_objects
   -Wl,--no-whole-archive
   -Wl,--allow-multiple-definition)
 set_target_properties(obtable PROPERTIES SOVERSION 1 VERSION 1.0.0)

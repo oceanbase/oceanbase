@@ -88,6 +88,7 @@ int ObLogTransRedoDispatcher::dispatch_trans_redo(TransCtx &trans, volatile bool
       LOG_ERROR("failed to dispatch redo of trans", KR(ret), K(trans), K(stop_flag));
     }
   } else {
+    trans.set_trans_redo_dispatched();
     trans_stat_mgr_->do_dispatch_trans_stat();
   }
 
@@ -174,6 +175,7 @@ int ObLogTransRedoDispatcher::dispatch_by_turn_(TransCtx &trans, volatile bool &
       if (OB_UNLIKELY(++retry_cnt % 1000 == 0)) {
         LOG_WARN("trans dispatch_by_turn for too many times", KR(ret), K(retry_cnt), K(trans), K_(trans_dispatch_ctx));
       }
+    } else {
     }
   }
 
@@ -229,7 +231,10 @@ int ObLogTransRedoDispatcher::dispatch_trans_batch_redo_(TransCtx &trans, volati
   return ret;
 }
 
-int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(TransCtx &trans, PartBudgetArray &part_task_budget_array, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
+    TransCtx &trans,
+    PartBudgetArray &part_task_budget_array,
+    volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   bool is_cur_batch_dispatch_finish = (0 == part_task_budget_array.count());
@@ -289,11 +294,12 @@ int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(TransCtx &trans, P
   return ret;
 }
 
-int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(PartTransTask &part_trans_task,
-                                                           bool &has_memory_to_dispatch_redo,
-                                                           bool &is_part_dispatch_finish,
-                                                           volatile bool &stop_flag,
-                                                           PartTransDispatchBudget *part_budget)
+int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(
+    PartTransTask &part_trans_task,
+    bool &has_memory_to_dispatch_redo,
+    bool &is_part_dispatch_finish,
+    volatile bool &stop_flag,
+    PartTransDispatchBudget *part_budget)
 {
   int ret = OB_SUCCESS;
 
@@ -315,18 +321,24 @@ int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(PartTransTask &p
         is_part_dispatch_finish = true;
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(dispatch_redo_(part_trans_task, *redo_node, stop_flag))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("failed to dispatch redo", KR(ret), KPC(redo_node), K(stop_flag));
-      }
     } else {
-      // dispatch one redo success
-      if (enable_sort_by_seq_no_) {
-        if (OB_ISNULL(part_budget)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("part_budget should not be null after try_get_and_dispatch redo_node succ", KR(ret), K_(enable_sort_by_seq_no), K(part_trans_task), KP(part_budget));
-        } else {
-          part_budget->inc_dispatched_size(redo_node->get_data_len());
+      const int64_t redo_node_len = redo_node->get_data_len();
+
+      // redo is not null, whcih is checked by PartTransTask::next_redo_to_dispatch
+      // NOTICE: NO MORE ACCESS TO redo_node after dispatch_redo_
+      if (OB_FAIL(dispatch_redo_(part_trans_task, *redo_node, stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("failed to dispatch redo", KR(ret), KPC(redo_node), K(stop_flag));
+        }
+      } else {
+        // dispatch one redo success
+        if (enable_sort_by_seq_no_) {
+          if (OB_ISNULL(part_budget)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("part_budget should not be null after try_get_and_dispatch redo_node succ", KR(ret), K_(enable_sort_by_seq_no), K(part_trans_task), KP(part_budget));
+          } else {
+            part_budget->inc_dispatched_size(redo_node_len);
+          }
         }
       }
     }
@@ -412,8 +424,8 @@ int ObLogTransRedoDispatcher::alloc_task_for_redo_(const PartTransTask &part_tas
     LOG_ERROR("failed to init log_entry_task", KR(ret), K(part_task), KP(&part_task), K(redo_node), KP(&redo_node));
   } else {
     /* init log_entry_task success*/
-    const int64_t redo_size = redo_node.get_data_len();
-    (void)ATOMIC_AAF(&cur_dispatched_redo_memory_, redo_size);
+    const int64_t redo_node_len = redo_node.get_data_len();
+    (void)ATOMIC_AAF(&cur_dispatched_redo_memory_, redo_node_len);
   }
 
   return ret;

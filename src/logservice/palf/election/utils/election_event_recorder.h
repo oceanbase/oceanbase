@@ -32,6 +32,7 @@ enum class ElectionEventType
 {
   VOTE,
   DECENTRALIZED_TO_BE_LEADER,
+  DIRECTLY_CHANGE_LEADER,
   PREPARE_CHANGE_LEADER,
   CHANGE_LEADER_TO_REVOKE,
   LEASE_EXPIRED_TO_REVOKE,
@@ -49,6 +50,8 @@ inline const char *obj_to_string(ElectionEventType type)
       return "vote";
     case ElectionEventType::DECENTRALIZED_TO_BE_LEADER:
       return "decentralized to be leader";
+    case ElectionEventType::DIRECTLY_CHANGE_LEADER:
+      return "directly change leader";
     case ElectionEventType::PREPARE_CHANGE_LEADER:
       return "prepare change leader";
     case ElectionEventType::CHANGE_LEADER_TO_REVOKE:
@@ -74,10 +77,12 @@ class EventRecorder
 {
 public:
   EventRecorder(const int64_t &ls_id, const ObAddr &self_addr, ObOccamTimer *&timer) :
-  ls_id_(ls_id), self_addr_(self_addr), timer_(timer) {}
+  ls_id_(ls_id), self_addr_(self_addr), timer_(timer), need_report_(true) {}
+  void set_need_report(const bool need_report) { need_report_ = need_report; }
   // proposer event
   int report_decentralized_to_be_leader_event(const MemberListWithStates &member_list_with_states);// 当选Leader
   int report_leader_lease_expired_event(const MemberListWithStates &member_list_with_states);// Leader续约失败卸任
+  int report_directly_change_leader_event(const ObAddr &dest_svr, const ObStringHolder &reason);// Leader直接切主，不走RCS流程
   int report_prepare_change_leader_event(const ObAddr &dest_svr, const ObStringHolder &reason);// 旧Leader准备切主
   int report_change_leader_to_revoke_event(const ObAddr &dest_svr);// 旧Leader卸任
   int report_change_leader_to_takeover_event(const ObAddr &addr);// 新Leader上任
@@ -92,6 +97,7 @@ private:
   const int64_t &ls_id_;
   const ObAddr &self_addr_;
   ObOccamTimer *&timer_;
+  bool need_report_;
 };
 
 }

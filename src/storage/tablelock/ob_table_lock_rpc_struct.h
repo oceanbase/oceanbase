@@ -43,6 +43,12 @@ enum ObTableLockTaskType
   LOCK_TABLET = 2,
   UNLOCK_TABLET = 3,
   PRE_CHECK_TABLET = 4,
+  LOCK_PARTITION = 5,
+  UNLOCK_PARTITION = 6,
+  LOCK_SUBPARTITION = 7,
+  UNLOCK_SUBPARTITION = 8,
+  LOCK_OBJECT = 9,
+  UNLOCK_OBJECT = 10,
   MAX_TASK_TYPE,
 };
 
@@ -60,6 +66,7 @@ public:
       expired_time_(0),
       schema_version_(-1)
   {}
+  virtual ~ObLockParam() {}
   int set(
       const ObLockID &lock_id,
       const ObTableLockMode lock_mode,
@@ -88,6 +95,105 @@ public:
   // current schema version
   int64_t schema_version_;
 };
+
+struct ObLockRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  enum class ObLockMsgType
+  {
+    UNKNOWN_MSG_TYPE        = 0,
+    INTRANS_LOCK_TABLE_REQ  = 1, // reserved for old LockTableMsg
+    INTRANS_LOCK_TABLET_REQ = 2, // reserved for old LockTableMsg
+    LOCK_OBJ_REQ =            3,
+    LOCK_TABLE_REQ =          4,
+    LOCK_PARTITION_REQ =      5,
+    LOCK_TABLET_REQ =         6,
+  };
+public:
+  ObLockRequest() :
+      owner_id_(0),
+      lock_mode_(NO_LOCK),
+      op_type_(UNKNOWN_TYPE),
+      timeout_us_(0)
+  { type_ = ObLockMsgType::UNKNOWN_MSG_TYPE; }
+  virtual ~ObLockRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  VIRTUAL_TO_STRING_KV(K_(owner_id), K_(lock_mode), K_(op_type), K_(timeout_us));
+public:
+  ObLockMsgType type_;
+  ObTableLockOwnerID owner_id_;
+  ObTableLockMode lock_mode_;
+  ObTableLockOpType op_type_;
+  int64_t timeout_us_;
+};
+
+struct ObLockObjRequest : public ObLockRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockObjRequest() :
+      ObLockRequest(),
+      obj_type_(ObLockOBJType::OBJ_TYPE_INVALID),
+      obj_id_(0)
+  { type_ = ObLockMsgType::LOCK_OBJ_REQ; }
+  virtual ~ObLockObjRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockRequest", ObLockRequest, K_(obj_type), K_(obj_id));
+public:
+  // which object should we lock
+  ObLockOBJType obj_type_;
+  uint64_t obj_id_;
+};
+using ObUnLockObjRequest = ObLockObjRequest;
+
+struct ObLockTableRequest : public ObLockRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockTableRequest() : ObLockRequest(), table_id_(0)
+  { type_ = ObLockMsgType::LOCK_TABLE_REQ; }
+  virtual ~ObLockTableRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockRequest", ObLockRequest, K_(table_id));
+public:
+  // which table should we lock
+  uint64_t table_id_;
+};
+using ObUnLockTableRequest = ObLockTableRequest;
+
+struct ObLockPartitionRequest : public ObLockTableRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockPartitionRequest() : ObLockTableRequest(), part_object_id_(0)
+  { type_ = ObLockMsgType::LOCK_PARTITION_REQ; }
+  virtual ~ObLockPartitionRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockTableRequest", ObLockTableRequest, K_(part_object_id));
+public:
+  uint64_t part_object_id_;
+};
+using ObUnLockPartitionRequest = ObLockPartitionRequest;
+
+struct ObLockTabletRequest : public ObLockTableRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockTabletRequest() : tablet_id_()
+  { type_ = ObLockMsgType::LOCK_TABLET_REQ; }
+  virtual ~ObLockTabletRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockTableRequest", ObLockTableRequest, K_(tablet_id));
+public:
+  common::ObTabletID tablet_id_;
+};
+using ObUnLockTabletRequest = ObLockTabletRequest;
 
 class ObTableLockTaskRequest final
 {
@@ -126,6 +232,35 @@ public:
   ObLockParam param_;
   transaction::ObTxDesc *tx_desc_;
 private:
+  bool need_release_tx_;
+};
+
+class ObLockTaskBatchRequest final
+{
+  OB_UNIS_VERSION(1);
+ public:
+  ObLockTaskBatchRequest() :
+      task_type_(INVALID_LOCK_TASK_TYPE),
+      lsid_(),
+      params_(),
+      tx_desc_(nullptr),
+      need_release_tx_(false)
+  {}
+  ~ObLockTaskBatchRequest();
+  int init(const ObTableLockTaskType task_type,
+           const share::ObLSID &lsid,
+           transaction::ObTxDesc *tx_desc);
+  bool is_inited() const;
+  bool is_valid() const;
+  int assign(const ObLockTaskBatchRequest &arg);
+
+  TO_STRING_KV(K(task_type_), K(lsid_), K(params_));
+ public:
+  ObTableLockTaskType task_type_;
+  share::ObLSID lsid_; // go to which ls to lock.
+  common::ObSArray<ObLockParam> params_;
+  transaction::ObTxDesc *tx_desc_;
+ private:
   bool need_release_tx_;
 };
 
@@ -186,6 +321,7 @@ public:
     UNKNOWN_MSG_TYPE        = 0,
     INTRANS_LOCK_TABLE_REQ  = 1,
     INTRANS_LOCK_TABLET_REQ = 2,
+    INTRANS_LOCK_OBJ_REQ    = 3,
   };
 public:
   ObInTransLockTableRequest()
@@ -199,7 +335,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(type), K_(table_id), K_(lock_mode), K_(timeout_us));
 
   ObLockTableMsgType type_;
-  uint64_t table_id_;
+  uint64_t table_id_; // as obj_id when lock_obj
   ObTableLockMode lock_mode_;
   int64_t timeout_us_;
 };
@@ -215,6 +351,62 @@ public:
   INHERIT_TO_STRING_KV("ObInTransLockTableRequest", ObInTransLockTableRequest, K_(tablet_id));
 public:
   common::ObTabletID tablet_id_;
+};
+
+struct ObAdminRemoveLockOpArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminRemoveLockOpArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), lock_op_() {}
+  ~ObAdminRemoveLockOpArg()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    ls_id_.reset();
+  }
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id,
+          const ObTableLockOp &lock_op);
+  int assign(const ObAdminRemoveLockOpArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(lock_op));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTableLockOp lock_op_;
+};
+
+struct ObAdminUpdateLockOpArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminUpdateLockOpArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(),
+      lock_op_(),
+      commit_version_(),
+      commit_scn_()
+  {}
+  ~ObAdminUpdateLockOpArg()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    ls_id_.reset();
+    commit_version_.reset();
+    commit_scn_.reset();
+  }
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id,
+          const ObTableLockOp &lock_op,
+          const share::SCN &commit_version,
+          const share::SCN &commit_scn);
+  int assign(const ObAdminUpdateLockOpArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(lock_op), K_(commit_version), K_(commit_scn));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObTableLockOp lock_op_;
+  share::SCN commit_version_;
+  share::SCN commit_scn_;
 };
 
 }

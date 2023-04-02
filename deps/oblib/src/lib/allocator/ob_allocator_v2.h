@@ -69,6 +69,7 @@ private:
   __MemoryContext__ *mem_context_;
   ObMemAttr attr_;
   const bool use_pm_;
+  lib::ObTenantCtxAllocatorGuard ta_;
   void *pm_;
   lib::ISetLocker *locker_;
   lib::SetDoNothingLocker do_nothing_locker_;
@@ -78,8 +79,43 @@ private:
   lib::ObMutexV2 mutex_;
 #endif
   lib::SetLocker<decltype(mutex_)> do_locker_;
+  class : public lib::IBlockMgr
+  {
+  public:
+    virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override
+    {
+      ABlock *block = NULL;
+      auto ta =
+        lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_);
+      if (OB_NOT_NULL(ta)) {
+        block = ta->get_block_mgr().alloc_block(size, attr);
+      }
+      return block;
+    }
+    virtual void free_block(ABlock *block) override
+    {
+      auto ta =
+        lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_);
+      if (OB_NOT_NULL(ta)) {
+        ta->get_block_mgr().free_block(block);
+      } else {
+        OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "tenant ctx allocator is null", K(tenant_id_), K(ctx_id_));
+      }
+    }
+    virtual int64_t sync_wash(int64_t wash_size) override
+    {
+      int64_t washed_size = 0;
+      auto ta =
+        lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id_, ctx_id_);
+      if (OB_NOT_NULL(ta)) {
+        washed_size = ta->get_block_mgr().sync_wash(wash_size);
+      }
+      return washed_size;
+    }
+  } blk_mgr_;
   ObjectSet os_;
   bool is_inited_;
+public:
 };
 
 inline ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr &attr, const bool use_pm,
@@ -94,7 +130,6 @@ inline ObAllocator::ObAllocator(__MemoryContext__ *mem_context, const ObMemAttr 
     os_(mem_context_, ablock_size),
     is_inited_(false)
 {
-  os_.set_check_unfree(true);
 }
 
 inline int ObAllocator::init()
@@ -112,15 +147,9 @@ inline int ObAllocator::init()
     blk_mgr = pm;
     pm_ = pm;
   } else {
-    ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-    if (OB_ISNULL(ma)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(ERROR, "null ptr", K(ret));
-    } else if (OB_ISNULL(blk_mgr = ma->get_tenant_ctx_block_mgr(attr_.tenant_id_,
-                                                                attr_.ctx_id_))) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(ERROR, "null ptr", K(ret), K(attr_.tenant_id_), K(attr_.ctx_id_));
-    }
+    blk_mgr_.tenant_id_ = attr_.tenant_id_;
+    blk_mgr_.ctx_id_ = attr_.ctx_id_;
+    blk_mgr = &blk_mgr_;
   }
   if (OB_SUCC(ret)) {
     os_.set_block_mgr(blk_mgr);

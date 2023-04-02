@@ -371,8 +371,8 @@ public:
   virtual ~ObAdminUpgradeVirtualSchema() {}
 
   int execute();
+  int execute(const uint64_t tenant_id, int64_t &upgrade_cnt);
 private:
-  int execute_(const uint64_t tenant_id, int64_t &upgrade_cnt);
   int upgrade_(const uint64_t tenant_id, share::schema::ObTableSchema &table);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminUpgradeVirtualSchema);
@@ -543,6 +543,23 @@ public:
 private:
   obrpc::ObAdminSetTPArg arg_;
   DISALLOW_COPY_AND_ASSIGN(ObAdminSetTP);
+};
+
+class ObAdminSyncRewriteRules : public ObTenantServerAdminUtil
+{
+public:
+  explicit ObAdminSyncRewriteRules(const ObSystemAdminCtx &ctx)
+    : ObTenantServerAdminUtil(ctx)
+  {}
+  virtual ~ObAdminSyncRewriteRules() {}
+
+  int call_server(const common::ObAddr &server,
+                  const obrpc::ObSyncRewriteRuleArg &arg);
+
+  int execute(const obrpc::ObSyncRewriteRuleArg &arg);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminSyncRewriteRules);
 };
 
 } // end namespace rootserver

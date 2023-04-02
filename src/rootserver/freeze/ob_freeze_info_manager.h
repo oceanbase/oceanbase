@@ -17,6 +17,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "common/storage/ob_freeze_define.h"
 #include "share/ob_rpc_struct.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -39,33 +40,33 @@ public:
   // local cached freeze status >= global_broadcast_scn,
   // and stored order by freeze_scn asc
   common::ObSEArray<share::ObSimpleFrozenStatus, 4> frozen_statuses_;
-  // local cached latest snapshot gc ts
-  int64_t latest_snapshot_gc_ts_;
+  // local cached latest snapshot gc scn
+  share::SCN latest_snapshot_gc_scn_;
 
   ObFreezeInfo()
-    : frozen_statuses_(), latest_snapshot_gc_ts_(0)
+    : frozen_statuses_(), latest_snapshot_gc_scn_(share::SCN::min_scn())
   {}
   ~ObFreezeInfo() {}
 
   void set_invalid() { reset(); }
 
-  bool is_valid() const { return !frozen_statuses_.empty() && (latest_snapshot_gc_ts_ >= 0); }
+  bool is_valid() const { return !frozen_statuses_.empty() && (latest_snapshot_gc_scn_.is_valid()); }
   void reset()
   {
     frozen_statuses_.reset();
-    latest_snapshot_gc_ts_ = 0;
+    latest_snapshot_gc_scn_.reset();
   }
 
   int assign(const ObFreezeInfo &other);
-  int get_latest_frozen_scn(int64_t &frozen_scn) const;
+  int get_latest_frozen_scn(share::SCN &frozen_scn) const;
   int get_min_freeze_info_greater_than(
-      const int64_t frozen_scn, 
+      const share::SCN &frozen_scn,
       share::ObSimpleFrozenStatus &frozen_status) const;
   int get_frozen_status(
-      const int64_t frozen_scn, 
+      const share::SCN &frozen_scn,
       share::ObSimpleFrozenStatus &frozen_status) const;
 
-  TO_STRING_KV(K_(frozen_statuses), K_(latest_snapshot_gc_ts));
+  TO_STRING_KV(K_(frozen_statuses), K_(latest_snapshot_gc_scn));
 };
 
 // ObFreezeInfoManager(tenant level) used to manage __all_freeze_info in memory.
@@ -77,7 +78,7 @@ public:
       tenant_id_(common::OB_INVALID_ID),
       sql_proxy_(nullptr),
       merge_info_mgr_(nullptr), 
-      lock_(), 
+      lock_(common::ObLatchIds::OB_FREEZE_INFO_MANAGER_LOCK),
       freeze_info_()
   {}
   virtual ~ObFreezeInfoManager() {}
@@ -90,46 +91,45 @@ public:
 
   int set_freeze_info();
 
-  int get_freeze_info(const int64_t frozen_scn,
+  int get_freeze_info(const share::SCN &frozen_scn,
                       share::ObSimpleFrozenStatus &frozen_status);
 
-  int renew_snapshot_gc_ts();
+  int renew_snapshot_gc_scn();
   int try_gc_freeze_info();
   int try_update_zone_info(const int64_t expected_epoch);
 
-  int check_snapshot_gc_ts();
+  int check_snapshot_gc_scn();
   int check_need_broadcast(bool &need_broadcast);
   int broadcast_freeze_info(const int64_t expected_epoch);
 
-  int get_global_last_merged_scn(int64_t &global_last_merged_scn) const;
-  int get_global_broadcast_scn(int64_t &global_broadcast_scn) const;
-  int get_local_latest_frozen_scn(int64_t &frozen_scn);
+  int get_global_last_merged_scn(share::SCN &global_last_merged_scn) const;
+  int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
+  int get_local_latest_frozen_scn(share::SCN &frozen_scn);
+  int adjust_global_merge_info(const int64_t expected_epoch);
 
   void reset_freeze_info();
+  int get_gts(share::SCN &gts_scn) const;
 
 private:
   int inner_reload(ObFreezeInfo &freeze_info);
 
   int generate_frozen_scn(
       const ObFreezeInfo &freeze_info,
-      const int64_t snapshot_gc_ts, 
-      int64_t &new_frozen_scn);
+      const share::SCN &snapshot_gc_scn,
+      share::SCN &new_frozen_scn);
 
-  int set_local_snapshot_gc_ts(const int64_t time);
+  int set_local_snapshot_gc_scn(const share::SCN &new_scn);
 
-  int get_gts(int64_t &ts) const;
-  int get_schema_version(const int64_t frozen_scn, int64_t &schema_version) const;
+  int get_schema_version(const share::SCN &frozen_scn, int64_t &schema_version) const;
 
   int get_min_freeze_info(share::ObSimpleFrozenStatus &frozen_status);
   int get_min_freeze_info_to_broadcast(share::ObSimpleFrozenStatus &frozen_status) const;
   int check_inner_stat();
 
 public:
-  static const int64_t ORIGIN_FROZEN_SCN = 1;
-  static const int64_t ORIGIN_SCHEMA_VERSION = 1;
+  static const int64_t SNAPSHOT_GC_TS_WARN = 30LL * 60LL * 1000LL * 1000LL;
+  static const int64_t SNAPSHOT_GC_TS_ERROR = 2LL * 60LL * 60LL * 1000LL * 1000LL;
 
-  static const int64_t SNAPSHOT_GC_TS_WARN = 30LL * 60LL * 1000LL * 1000LL * 1000LL; // ns
-  static const int64_t SNAPSHOT_GC_TS_ERROR = 2LL * 60LL * 60LL * 1000LL * 1000LL * 1000LL; // ns
 
 private:
   bool is_inited_;

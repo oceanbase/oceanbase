@@ -21,6 +21,7 @@
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ob_store_row_comparer.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
 {
@@ -37,23 +38,23 @@ struct ObComplementDataParam final
 public:
   static const int64_t DEFAULT_COMPLEMENT_DATA_MEMORY_LIMIT = 128L * 1024L * 1024L;
   ObComplementDataParam():
-    is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID), 
-    source_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
-    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("CompleteDataPar"), 
+    is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID),
+    source_table_id_(common::OB_INVALID_ID), dest_table_id_(common::OB_INVALID_ID),
+    source_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), allocator_("CompleteDataPar"),
     row_store_type_(common::ENCODING_ROW_STORE), schema_version_(0), snapshot_version_(0),
-    concurrent_cnt_(0), task_id_(0), execution_id_(0), tablet_task_id_(0),
-    compat_mode_(lib::Worker::CompatMode::INVALID)
+    concurrent_cnt_(0), task_id_(0), execution_id_(-1), tablet_task_id_(0),
+    compat_mode_(lib::Worker::CompatMode::INVALID), data_format_version_(0)
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const ObDDLBuildSingleReplicaRequestArg &arg);
-  int split_task_ranges(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t hint_parallelism);
-  int deep_copy_table_schemas(const share::schema::ObTableSchema *data_table_schema, const share::schema::ObTableSchema *hidden_table_schema);
+  int split_task_ranges(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, const int64_t tablet_size, const int64_t hint_parallelism);
   bool is_valid() const
   {
-    return common::OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid()
-           && dest_tablet_id_.is_valid() && OB_NOT_NULL(data_table_schema_) && OB_NOT_NULL(hidden_table_schema_)
+    return common::OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid()
+           && common::OB_INVALID_ID != source_table_id_ && common::OB_INVALID_ID != dest_table_id_
+           && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && 0 != concurrent_cnt_ && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID
-           && execution_id_ > 0 && tablet_task_id_ > 0;
+           && execution_id_ >= 0 && tablet_task_id_ > 0 && data_format_version_ > 0;
   }
   int get_hidden_table_key(ObITable::TableKey &table_key) const;
   void destroy()
@@ -61,16 +62,10 @@ public:
     is_inited_ = false;
     tenant_id_ = common::OB_INVALID_TENANT_ID;
     ls_id_.reset();
+    source_table_id_ = common::OB_INVALID_ID;
+    dest_table_id_ = common::OB_INVALID_ID;
     source_tablet_id_.reset();
     dest_tablet_id_.reset();
-    if (nullptr != data_table_schema_) {
-      data_table_schema_->~ObTableSchema();
-    }
-    if (nullptr != hidden_table_schema_) {
-      hidden_table_schema_->~ObTableSchema();
-    }
-    data_table_schema_ = nullptr;
-    hidden_table_schema_ = nullptr;
     ranges_.reset();
     allocator_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
@@ -78,21 +73,23 @@ public:
     snapshot_version_ = 0;
     concurrent_cnt_ = 0;
     task_id_ = 0;
-    execution_id_ = 0;
+    execution_id_ = -1;
     tablet_task_id_ = 0;
     compat_mode_ = lib::Worker::CompatMode::INVALID;
+    data_format_version_ = 0;
   }
-  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
-      KPC_(data_table_schema), KPC_(hidden_table_schema), K_(schema_version), K_(tablet_task_id),
-      K_(snapshot_version), K_(concurrent_cnt), K_(task_id), K_(execution_id), K_(compat_mode));
+  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(source_table_id), K_(dest_table_id),
+      K_(source_tablet_id), K_(dest_tablet_id), K_(schema_version), K_(tablet_task_id),
+      K_(snapshot_version), K_(concurrent_cnt), K_(task_id), K_(execution_id), K_(compat_mode),
+      K_(data_format_version));
 public:
   bool is_inited_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  uint64_t source_table_id_;
+  uint64_t dest_table_id_;
   ObTabletID source_tablet_id_;
   ObTabletID dest_tablet_id_;
-  const share::schema::ObTableSchema *data_table_schema_;
-  const share::schema::ObTableSchema *hidden_table_schema_;
   common::ObArenaAllocator allocator_;
   common::ObRowStoreType row_store_type_;
   int64_t schema_version_;
@@ -102,6 +99,7 @@ public:
   int64_t execution_id_;
   int64_t tablet_task_id_;
   lib::Worker::CompatMode compat_mode_;
+  int64_t data_format_version_;
   ObSEArray<common::ObStoreRange, 32> ranges_;
 };
 
@@ -110,13 +108,14 @@ struct ObComplementDataContext final
 public:
   ObComplementDataContext():
     is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
-    allocator_("CompleteDataCtx"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
+    allocator_("CompleteDataCtx"), lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
+    data_sstable_redo_writer_(), index_builder_(nullptr), ddl_kv_mgr_handle_(), row_scanned_(0), row_inserted_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);
   void destroy();
   int write_start_log(const ObComplementDataParam &param);
-  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder));
+  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder), K_(row_scanned), K_(row_inserted));
 public:
   bool is_inited_;
   bool is_major_sstable_exist_;
@@ -127,6 +126,8 @@ public:
   ObDDLSSTableRedoWriter data_sstable_redo_writer_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
+  int64_t row_scanned_;
+  int64_t row_inserted_;
 };
 
 class ObComplementPrepareTask;
@@ -182,12 +183,11 @@ public:
   int process() override;
 private:
   int generate_next_task(share::ObITask *&next_task);
-  int generate_col_param(const share::schema::ObTableSchema *data_table_schema,
-                         const share::schema::ObTableSchema *hidden_table_schema);
+  int generate_col_param();
   int local_scan_by_range();
   int do_local_scan();
   int append_row(ObLocalScan &local_scan);
-  int add_extra_rowkey(const int64_t extra_rowkey_cnt, const blocksstable::ObDatumRow &row);
+  int add_extra_rowkey(const int64_t rowkey_cnt, const int64_t extra_rowkey_cnt, const blocksstable::ObDatumRow &row);
 
 private:
   static const int64_t RETRY_INTERVAL = 100 * 1000; // 100ms
@@ -243,26 +243,39 @@ public:
   int init(const common::ObIArray<share::schema::ObColDesc> &col_ids,
            const common::ObIArray<share::schema::ObColDesc> &org_col_ids,
            const common::ObIArray<int32_t> &projector,
-            const share::schema::ObTableSchema *data_table_schema,
+           const share::schema::ObTableSchema &data_table_schema,
            const int64_t snapshot_version,
            transaction::ObTransService *txs,
-           const share::schema::ObTableSchema *hidden_table_schema,
+           const share::schema::ObTableSchema &hidden_table_schema,
            const bool output_org_cols_only);
-  int table_scan(const share::ObLSID &ls_id,
+  int table_scan(const share::schema::ObTableSchema &data_table_schema,
+                 const share::ObLSID &ls_id,
                  const ObTabletID &tablet_id,
                  ObTabletTableIterator &table_iter,
                  common::ObQueryFlag &query_flag,
                  blocksstable::ObDatumRange &range,
                  transaction::ObTxDesc *tx_desc);
   virtual int get_next_row(const blocksstable::ObDatumRow *&tmp_row) override;
-  int get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids);
+  int get_origin_table_checksum(
+      ObArray<int64_t> &report_col_checksums,
+      ObArray<int64_t> &report_col_ids);
   compaction::ObColumnChecksumCalculator *get_checksum_calculator() {return &checksum_calculator_;}
 private:
-  int get_output_columns(common::ObIArray<ObColDesc> &col_ids);
-  int get_exist_column_mapping(); // to record data table columns position in hidden tables.
-  int check_generated_column_exist(const common::ObIArray<share::schema::ObColDesc> &org_col_ids);
-  int construct_column_schema();
-  int construct_access_param(const ObTabletID &tablet_id, const ObTableReadInfo &full_read_info);
+  int get_output_columns(
+      const share::schema::ObTableSchema &hidden_table_schema,
+      common::ObIArray<ObColDesc> &col_ids);
+  int get_exist_column_mapping(
+      const share::schema::ObTableSchema &data_table_schema,
+      const share::schema::ObTableSchema &hidden_table_schema); // to record data table columns position in hidden tables.
+  int check_generated_column_exist(
+      const share::schema::ObTableSchema &hidden_table_schema,
+      const common::ObIArray<share::schema::ObColDesc> &org_col_ids);
+  int construct_column_schema(
+      const share::schema::ObTableSchema &data_table_schema);
+  int construct_access_param(
+      const share::schema::ObTableSchema &data_table_schema,
+      const ObTabletID &tablet_id,
+      const ObTableReadInfo &full_read_info);
   int construct_range_ctx(common::ObQueryFlag &query_flag, const share::ObLSID &ls_id, transaction::ObTxDesc *tx_desc);
   int construct_multiple_scan_merge(ObTablet &tablet, blocksstable::ObDatumRange &range);
   int construct_multiple_scan_merge(
@@ -270,9 +283,11 @@ private:
       blocksstable::ObDatumRange &range);
 private:
   bool is_inited_;
+  uint64_t tenant_id_;
+  uint64_t source_table_id_;
+  uint64_t dest_table_id_;
+  int64_t schema_version_;
   ObExtendedGCParam extended_gc_;
-  const share::schema::ObTableSchema *data_table_schema_;
-  const share::schema::ObTableSchema *hidden_table_schema_;
   int64_t snapshot_version_;
   transaction::ObTransService *txs_;
   blocksstable::ObDatumRow default_row_;

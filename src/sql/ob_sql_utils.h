@@ -18,8 +18,8 @@
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_2d_array.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
+#include "lib/geo/ob_s2adapter.h"
 #include "share/partition_table/ob_partition_location.h"
-#include "share/ob_errno.h"             // get_ob_errno_from_oracle_errno
 #include "share/ob_i_sql_expression.h"          // ObISqlExpression,ObExprCtx
 #include "share/schema/ob_table_param.h"        // ObColDesc
 #include "share/schema/ob_multi_version_schema_service.h"     // ObMultiVersionSchemaService
@@ -29,7 +29,7 @@
 #include "sql/resolver/ob_stmt_type.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
-
+#include "sql/monitor/flt/ob_flt_span_mgr.h"
 namespace oceanbase
 {
 namespace sql
@@ -55,6 +55,8 @@ struct ObPreCalcExprFrameInfo;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 struct ObExprConstraint;
+typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
+class ObSelectStmt;
 
 struct EstimatedPartition {
   common::ObAddr addr_;
@@ -109,13 +111,6 @@ private:
   int ret_;
 };
 
-class ObDblinkUtils
-{
-public:
-  static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, common::sqlclient::ObISQLConnection *dblink_conn, int &ob_errno);
-  static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, int &ob_errno);
-};
-
 class ObSQLUtils
 {
 public:
@@ -139,7 +134,7 @@ public:
    *  and a partition func.
    *
    *  The range array is assumed to only contain single_value ranges and
-   *  the partiton_ids will contain all the resulted partition ids without
+   *  the partition_ids will contain all the resulted partition ids without
    *  duplicates.
    */
   static int calc_partition_ids(const common::ObIArray<common::ObNewRange*> &ranges,
@@ -175,7 +170,8 @@ public:
   static void clear_expr_eval_flags(const ObExpr &expr, ObEvalCtx &ctx);
   static int calc_sql_expression_without_row(ObExecContext &exec_ctx,
                                              const ObISqlExpression &expr,
-                                             ObObj &result);
+                                             ObObj &result,
+                                             ObIAllocator *allocator = NULL);
 
   static int calc_const_expr(const ObRawExpr *expr,
                              const ParamStore *params,
@@ -226,7 +222,7 @@ public:
             const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
                             + (*e)->res_buf_len_ * idx;
             if (datum_ptr != res_ptr) {
-              SQL_LOG(WARN, "sanity check failure, column index", K(expr_idx), K(idx),
+              SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
                                      KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
               abort();
             }
@@ -235,7 +231,7 @@ public:
           const char *datum_ptr = datum->ptr_;
           const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
           if (datum_ptr != res_ptr) {
-            SQL_LOG(WARN, "sanity check failure, column index",
+            SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
                      K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
             abort();
           }
@@ -244,7 +240,7 @@ public:
       expr_idx++;
     }
   }
-
+  static int is_charset_data_version_valid(ObCharsetType charset_type, const int64_t tenant_id);
   static int calc_calculable_expr(ObSQLSessionInfo *session,
                                   const ObRawExpr *expr,
                                   common::ObObj &result,
@@ -291,13 +287,13 @@ public:
                                  ObObj &result);
   static void destruct_default_expr_context(ObExprCtx &expr_ctx);
   static int64_t get_usec();
-  static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool perserver_lettercase,
+  static int check_and_convert_db_name(const common::ObCollationType cs_type, const bool preserve_lettercase,
                                        common::ObString &name);
   static int cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_guard,
                                 const ObSQLSessionInfo *session,
                                 common::ObString &name);
   static int check_and_convert_table_name(const common::ObCollationType cs_type,
-                                          const bool perserve_lettercase,
+                                          const bool preserve_lettercase,
                                           common::ObString &name,
                                           const stmt::StmtType stmt_type = stmt::T_NONE,
                                           const bool is_index_table = false);
@@ -339,6 +335,12 @@ public:
                                    const bool ret_error = false);
   static void set_insert_update_scope(common::ObCastMode &cast_mode);
   static bool is_insert_update_scope(common::ObCastMode &cast_mode);
+  static common::ObCollationLevel transform_cs_level(const common::ObCollationLevel cs_level);
+  static int set_cs_level_cast_mode(const common::ObCollationLevel cs_level,
+                                    common::ObCastMode &cast_mode);
+  static int get_cs_level_from_cast_mode(const common::ObCastMode cast_mode,
+                                         const common::ObCollationLevel default_level,
+                                         common::ObCollationLevel &cs_level);
   static int  get_outline_key(common::ObIAllocator &allocator,
                               const ObSQLSessionInfo *session,
                               const common::ObString &query_sql,
@@ -361,7 +363,15 @@ public:
                                    common::ObString &outline_sql);
 
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
+                             ObSchemaGetterGuard *schema_guard,
                              ObObjPrintParams print_params = ObObjPrintParams());
+  static int print_sql(ObIAllocator &allocator,
+                       char *buf,
+                       int64_t buf_len,
+                       const ObStmt *stmt,
+                       ObString &sql,
+                       ObSchemaGetterGuard *schema_guard,
+                       ObObjPrintParams print_params);
 
   static int wrap_expr_ctx(const stmt::StmtType &stmt_type,
                            ObExecContext &exec_ctx,
@@ -380,6 +390,13 @@ public:
                                            void *range_buffer,
                                            const ParamStore &param_store,
                                            ObQueryRangeArray &key_ranges);
+  static int extract_geo_query_range(const ObQueryRange &pre_query_range,
+                                       ObIAllocator &allocator,
+                                       ObExecContext &exec_ctx,
+                                       ObQueryRangeArray &key_ranges,
+                                       ObMbrFilterArray &mbr_filters,
+                                       ObGetMethodArray get_method,
+                                       const ObDataTypeCastParams &dtc_params);
 
   static bool is_same_type(const ObExprResType &type1, const ObExprResType &type2);
 
@@ -417,7 +434,7 @@ public:
                                      const share::schema::ObPartitionFuncType part_type);
 
   static int choose_best_replica_for_estimation(
-                              const ObCandiTabletLocIArray &part_loc_info_array,
+                              const ObCandiTabletLoc &phy_part_loc_info,
                               const ObAddr &local_addr,
                               const common::ObIArray<ObAddr> &addrs_list,
                               const bool no_use_remote,
@@ -478,6 +495,8 @@ public:
                                                   common::ObCollationType connection_collation,
                                                   const share::schema::ObViewSchema &view_schema,
                                                   common::ObString &view_definition);
+  static void record_execute_time(const ObPhyPlanType type,
+                                  const int64_t time_cost);
   static int handle_audit_record(bool need_retry,
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
@@ -505,7 +524,6 @@ public:
                               const common::ObString &identifier_name);
   static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
-  static bool check_can_encode_sortkey(const common::ObIArray<OrderItem> &order_keys);
   static int create_encode_sortkey_expr(ObRawExprFactory &expr_factory,
                                         ObExecContext* exec_ctx,
                                         const common::ObIArray<OrderItem> &order_keys,
@@ -536,18 +554,37 @@ public:
                                            int64_t query_num,
                                            int64_t param_num,
                                            ParamStore &param_store);
-  static int transform_pl_ext_type(ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst);
+  static int transform_pl_ext_type(ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst, bool is_forall = false);
   static int get_one_group_params(int64_t &pos, ParamStore &src, ParamStore &obj_params);
-  static int copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst);
+  static int copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst, ObIAllocator &alloc, bool is_forall = false);
   static int init_elements_info(ParamStore &src, ParamStore &dst);
   /*-----------------------
   *  Observer no longer depends on Linux NTP service to adjust server time since 4.0.
   *  So, timestamp between servers can be vary large.
   *  A sql executed across servers needs to be corrected
   *  according to the THIS_WORKER.get_ntp_offset(),
-  *  That is the time correctly set by the processer of the RPC
+  *  That is the time correctly set by the processor of the RPC
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
+  static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
+                                  ObSelectStmt *select_stmt,
+                                  bool reset_column_infos,
+                                  common::ObIAllocator &alloc,
+                                  sql::ObSQLSessionInfo &session_info);
+  static int find_synonym_ref_obj(const ObString &database_name,
+                                  const ObString &object_name,
+                                  const uint64_t tenant_id,
+                                  bool &exist,
+                                  uint64_t &object_id,
+                                  share::schema::ObObjectType &obj_type,
+                                  uint64_t &schema_version);
+  static int find_synonym_ref_obj(const uint64_t database_id,
+                                  const ObString &object_name,
+                                  const uint64_t tenant_id,
+                                  bool &exist,
+                                  uint64_t &object_id,
+                                  share::schema::ObObjectType &obj_type,
+                                  uint64_t &schema_version);
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
@@ -559,44 +596,24 @@ private:
   };
 }; // end of ObSQLUtils
 
+class ObSqlGeoUtils
+{
+public:
+  static int check_srid_by_srs(uint64_t tenant_id, uint64_t srid);
+  static int check_srid(uint32_t column_srid, uint32_t input_srid);
+};
+
 class RelExprCheckerBase
 {
 public:
-  const static int32_t FIELD_LIST_SCOPE;
-  const static int32_t WHERE_SCOPE;
-  const static int32_t GROUP_SCOPE;
-  const static int32_t HAVING_SCOPE;
-  /* const static int32_t INSERT_SCOPE; */
-  /* const static int32_t UPDATE_SCOPE; */
-  /* const static int32_t AGG_SCOPE; */
-  /* const static int32_t VARIABLE_SCOPE; */
-  /* const static int32_t WHEN_SCOPE; */
-  const static int32_t ORDER_SCOPE;
-  //  const static int32_t EXPIRE_SCOPE;
-  //  const static int32_t PARTITION_SCOPE;
-  const static int32_t FROM_SCOPE;
-  const static int32_t LIMIT_SCOPE;
-  //  const static int32_t PARTITION_RANGE_SCOPE;
-  //  const static int32_t INTO_SCOPE;
-  const static int32_t START_WITH_SCOPE;
-  const static int32_t CONNECT_BY_SCOPE;
-  const static int32_t JOIN_CONDITION_SCOPE;
-  const static int32_t EXTRA_OUTPUT_SCOPE;
-
-public:
   RelExprCheckerBase()
-      : duplicated_checker_(), ignore_scope_(0)
-  {
-  }
-  RelExprCheckerBase(int32_t ignore_scope)
-      : duplicated_checker_(), ignore_scope_(ignore_scope)
+      : duplicated_checker_()
   {
   }
   virtual ~RelExprCheckerBase()
   {
     duplicated_checker_.destroy();
   }
-  bool is_ignore(int32_t ignore_scope) {return ignore_scope & ignore_scope_; }
   virtual int init(int64_t bucket_num = CHECKER_BUCKET_NUM);
   virtual int add_expr(ObRawExpr *&expr) = 0;
   int add_exprs(common::ObIArray<ObRawExpr*> &exprs);
@@ -604,7 +621,6 @@ public:
 protected:
   static const int64_t CHECKER_BUCKET_NUM = 1000;
   common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> duplicated_checker_;
-  int32_t ignore_scope_;
 };
 
 
@@ -616,10 +632,6 @@ public:
   {
   }
 
-  RelExprChecker(common::ObIArray<ObRawExpr*> &rel_array, int32_t ignore_scope)
-      : RelExprCheckerBase(ignore_scope), rel_array_(rel_array)
-  {
-  }
   virtual ~RelExprChecker() {}
   int add_expr(ObRawExpr *&expr);
 private:
@@ -630,7 +642,6 @@ class FastRelExprChecker : public RelExprCheckerBase
 {
 public:
   FastRelExprChecker(common::ObIArray<ObRawExpr *> &rel_array);
-  FastRelExprChecker(common::ObIArray<ObRawExpr *> &rel_array, int32_t ignore_scope);
   virtual ~FastRelExprChecker();
   int add_expr(ObRawExpr *&expr);
   int dedup();
@@ -646,10 +657,6 @@ public:
       : RelExprCheckerBase(), rel_array_(rel_array), expr_id_map_()
   {
   }
-  RelExprPointerChecker(common::ObIArray<ObRawExprPointer> &rel_array, int32_t ignore_scope)
-      : RelExprCheckerBase(ignore_scope), rel_array_(rel_array), expr_id_map_()
-  {
-  }
   virtual ~RelExprPointerChecker() {}
   virtual int init(int64_t bucket_num = CHECKER_BUCKET_NUM) override;
   int add_expr(ObRawExpr *&expr);
@@ -663,10 +670,6 @@ class AllExprPointerCollector : public RelExprCheckerBase
 public:
   AllExprPointerCollector(common::ObIArray<ObRawExpr**> &rel_array)
       : RelExprCheckerBase(), rel_array_(rel_array)
-  {
-  }
-  AllExprPointerCollector(common::ObIArray<ObRawExpr**> &rel_array, int32_t ignore_scope)
-      : RelExprCheckerBase(ignore_scope), rel_array_(rel_array)
   {
   }
   virtual ~AllExprPointerCollector() {}
@@ -989,6 +992,7 @@ enum PreCalcExprExpectResult {
   PRE_CALC_RESULT_NOT_NULL,
   PRE_CALC_RESULT_TRUE,
   PRE_CALC_RESULT_FALSE,
+  PRE_CALC_RESULT_NO_WILDCARD,
   PRE_CALC_ERROR,
   PRE_CALC_PRECISE,
   PRE_CALC_NOT_PRECISE,

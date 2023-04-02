@@ -13,9 +13,9 @@
 #ifndef OCEANBASE_ARCHIVE_TASK_QUEUE_H_
 #define OCEANBASE_ARCHIVE_TASK_QUEUE_H_
 
-#include "lib/queue/ob_link_queue.h"    // ObLink ObSpLinkQueue
 #include "share/ob_ls_id.h"     // ObLSID
 #include "ob_archive_util.h"
+#include <cstdint>
 
 namespace oceanbase
 {
@@ -25,6 +25,7 @@ class ObArchiveWorker;
 using oceanbase::share::ObLSID;
 struct ObArchiveTaskStatus : common::ObLink
 {
+  static const int64_t PRINT_WARN_THRESHOLD = 30 * 1000 * 1000L;   // 30s
 public:
   ObArchiveTaskStatus(const ObLSID &id);
   virtual ~ObArchiveTaskStatus();
@@ -33,18 +34,20 @@ public:
   int push(common::ObLink *task, ObArchiveWorker &worker);
   int pop(ObLink *&link, bool &task_exist);
   int top(ObLink *&link, bool &task_exist);
-  int pop_front(const int64_t num);
+  int get_next(ObLink *&link, bool &task_exist);
   int retire(bool &is_empty, bool &is_discarded);  // 从全局公共队列释放
   void free(bool &is_discarded);   // 释放该结构体指针
   bool mark_io_error();
   void clear_error_info();
+  void print_self();
 
   TO_STRING_KV(K_(issue),
                K_(ref),
                K_(num),
                K_(id));
 private:
-  int retire_unlock(bool &is_discarded);  // 从全局公共队列释放
+  int retire_unlock_(bool &is_discarded);  // 从全局公共队列释放
+  void print_self_();
 
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard  RLockGuard;
@@ -53,8 +56,9 @@ protected:
   bool                      issue_;     // 标记该结构是否被挂到公共队列
   int64_t                   ref_;       // 该结构的引用计数
   int64_t                   num_;       // 任务总数
+  int64_t                   last_issue_timestamp_;
   ObLSID                    id_;
-  ObSpLinkQueue             queue_;     // 任务队列
+  SimpleQueue               queue_;     // 任务队列
   mutable RWLock            rwlock_;
 };
 }

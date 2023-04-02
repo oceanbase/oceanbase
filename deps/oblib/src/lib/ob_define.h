@@ -33,7 +33,7 @@ namespace common
 // All objects have common ID Type, including Table/Partition and so on.
 // Define 'uint64_t' as Object ID Type for code-compatibility temporarily.
 // TODO: Use 'int64_t' instead when all objects are ready.
-// See: https://yuque.antfin-inc.com/ob/rootservice/lvnlgi
+// See: docs on yuque rootservice/lvnlgi
 
 // Common Object ID Type
 typedef uint64_t ObObjectID;
@@ -85,6 +85,7 @@ const int64_t OB_MAX_CLIENT_INFO_LENGTH = 64;
 const int64_t OB_MAX_MOD_NAME_LENGTH = 48;
 const int64_t OB_MAX_ACT_NAME_LENGTH = 32;
 const int64_t OB_MAX_UUID_LENGTH = 16;
+const int64_t OB_MAX_UUID_STR_LENGTH = 36;
 const int64_t MAX_ZONE_LENGTH = 128;
 const int64_t MAX_REGION_LENGTH = 128;
 const int64_t MAX_GTS_NAME_LENGTH = 128;
@@ -108,6 +109,7 @@ const int64_t MAX_ZONE_STATUS_LENGTH = 16;
 const int64_t MAX_REPLICA_STATUS_LENGTH = 64;
 const int64_t MAX_REPLICA_TYPE_LENGTH = 16;
 const int64_t MAX_DISASTER_RECOVERY_TASK_TYPE_LENGTH = 64;
+const int64_t MAX_ARB_REPLICA_TASK_TYPE_LENGTH = 32;
 const int64_t MAX_TENANT_STATUS_LENGTH = 64;
 const int64_t MAX_RESOURCE_POOL_NAME_LEN = 128;
 const int32_t MAX_REPLICA_COUNT_PER_ZONE = 5;
@@ -123,14 +125,18 @@ const int64_t MAX_PATH_SIZE = 1024;
 const int64_t MAX_DISK_ALIAS_NAME = 128;
 const int64_t MAX_DISKGROUP_NAME = 128;
 const int64_t DEFAULT_BUF_LENGTH = 4096;
+const int64_t MAX_SINGLE_MEMBER_LENGTH = (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
 const int64_t MAX_MEMBER_LIST_LENGTH = MAX_ZONE_NUM * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
 const int64_t OB_MAX_MEMBER_NUMBER = 7;
 const int64_t OB_MAX_GLOBAL_LEARNER_NUMBER = 2000;
+const int64_t MAX_LEARNER_LIST_LENGTH = OB_MAX_GLOBAL_LEARNER_NUMBER * (MAX_IP_PORT_LENGTH + 17 /* timestamp length*/  + 1);
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER = 15;
 const int64_t OB_MAX_CHILD_MEMBER_NUMBER_IN_FOLLOWER = 5;
 const int64_t OB_DEFAULT_MEMBER_NUMBER = 3;
 const int64_t MAX_VALUE_LENGTH = 4096;
 const int64_t MAX_LLC_BITMAP_LENGTH = 4096;
+const int64_t MAX_CLUSTER_EVENT_NAME_LENGTH = 256;
+const int64_t MAX_CLUSTER_EVENT_VALUE_LENGTH = 4096;
 const int64_t MAX_ROOTSERVICE_EVENT_NAME_LENGTH = 256;
 const int64_t MAX_ROOTSERVICE_EVENT_VALUE_LENGTH = 256;
 const int64_t MAX_ROOTSERVICE_EVENT_DESC_LENGTH = 64;
@@ -153,6 +159,10 @@ const char *const OB_NEXT_RESTART_SEQUENCE_PREFIX = "next_restart_sequence_";
 const uint64_t SEARRAY_INIT_NUM = 4;
 const int64_t OB_DEFAULT_TABLE_DOP = 1;
 const int64_t OB_DEFAULT_META_OBJ_PERCENTAGE_LIMIT = 10;
+const uint64_t OB_DEFAULT_COLUMN_SRS_ID = 0xffffffffffffffe0;
+const int64_t OB_MAX_SPAN_LENGTH = 1024;
+const int64_t OB_MAX_SPAN_TAG_LENGTH = 8 * 1024L;
+const int64_t OB_MAX_REF_TYPE_LENGTH = 10;
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;
@@ -311,6 +321,7 @@ const int64_t OB_MAX_USERNAME_LENGTH = 32;
 const int64_t OB_MAX_PASSWORD_LENGTH = 128;
 const int64_t OB_MAX_PASSWORD_BUF_LENGTH = OB_MAX_PASSWORD_LENGTH + 1;
 // After each sha1 is 41 characters, the incremental backup is up to 64 times, and the maximum password required for recovery is 64*(41+1)=2,688
+const int64_t OB_MAX_ENCRYPTED_PASSWORD_LENGTH = OB_MAX_PASSWORD_LENGTH * 4;
 const int64_t OB_MAX_PASSWORD_ARRAY_LENGTH = 4096;
 const int64_t OB_MAX_ERROR_MSG_LEN = 512;
 const int64_t OB_MAX_RESULT_MESSAGE_LENGTH = 1024;
@@ -340,7 +351,7 @@ const int64_t OB_MPI_MAX_PARTITION_NUM = 128;
 const int64_t OB_MPI_MAX_TASK_NUM = 256;
 
 const int64_t OB_MAX_TABLE_NUM_PER_STMT = 256;
-const int64_t OB_TMP_BUF_SIZE_256 = 256;
+const int32_t OB_TMP_BUF_SIZE_256 = 256;
 const int64_t OB_SCHEMA_MGR_MAX_USED_TID_MAP_BUCKET_NUM = 64;
 const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
 const int64_t OB_SKIP_RANGE_LIMIT = 256;
@@ -448,7 +459,6 @@ const int64_t OB_MYSQL_COMPRESSED_HEADER_SIZE = OB_MYSQL_HEADER_LENGTH + 3;  /* 
 
 
 //-----------------------------------oceanbase 2.0 c/s protocol----------------------//
-// https://lark.alipay.com/quanwei.wqw/aap9pg/wrga61
 const uint16_t OB20_PROTOCOL_MAGIC_NUM = 0x20AB;
 const int64_t OB20_PROTOCOL_HEADER_LENGTH = 24;
 const int64_t OB20_PROTOCOL_TAILER_LENGTH = 4;  // for CRC32
@@ -502,12 +512,12 @@ const int32_t OB_UPS_LIMIT_RATIO = 2;
 
 const int64_t OB_MERGED_VERSION_INIT = 1;
 
-const int64_t OB_TRACE_BUFFER_SIZE = 4 * 1024; //4k
+const int32_t OB_TRACE_BUFFER_SIZE = 4 * 1024; //4k
 const int64_t OB_TRACE_STAT_BUFFER_SIZE= 200; //200
 
 
 const int64_t OB_MAX_VERSION_COUNT = 32;// max version count
-const int64_t OB_MAX_VERSION_COUNT_FOR_MERGE = 16;
+const int64_t OB_MAX_VERSION_COUNT_FOR_MERGE = 4;
 const int64_t OB_EASY_HANDLER_COST_TIME = 10 * 1000; // 10ms
 const int64_t OB_EASY_MEMORY_LIMIT = 4L << 30; // 4G
 
@@ -770,7 +780,7 @@ const char *const OB_FAKE_TENANT_NAME = "fake_tenant";
 const char *const OB_GTS_TENANT_NAME = "gts";
 const char *const OB_SYS_HOST_NAME = "%";
 const char *const OB_DEFAULT_HOST_NAME = "%";
-const char *const OB_MONITOR_TENANT_NAME = "monitor";
+// const char *const OB_MONITOR_TENANT_NAME = "monitor";
 const char *const OB_DIAG_TENANT_NAME = "diag";
 //for sync ddl (ClusterID_TenantID_SchemaVersion)
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
@@ -786,6 +796,7 @@ const int64_t SYS_MAX_ALLOCATE_MEMORY = 1L << 34;
 
 // mem factor
 const double SQL_AUDIT_MEM_FACTOR = 0.1;
+const double SQL_PLAN_MEM_FACTOR = 0.1;
 const double MONITOR_MEM_FACTOR = 0.01;
 const double KVCACHE_FACTOR = TENANT_RESERVE_MEM_RATIO;
 
@@ -798,7 +809,6 @@ const double OB_DIAG_CPU = 1.0;
 const double OB_DATA_CPU = 2.5;
 const double OB_RS_CPU = 1.0;
 const double OB_SVR_BLACKLIST_CPU = 1.0;
-const int64_t OB_DIAG_MEMORY = 2L << 30;
 const int64_t OB_RS_MEMORY = 2L << 30;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
@@ -807,13 +817,12 @@ const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
 const uint64_t OB_ELECT_TENANT_ID = 501;
 const uint64_t OB_EXT_LOG_TENANT_ID = 506;
-const uint64_t OB_MONITOR_TENANT_ID = 507;
+// const uint64_t OB_MONITOR_TENANT_ID = 507;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
 const uint64_t OB_RS_TENANT_ID = 510;
 const uint64_t OB_GTS_SOURCE_TENANT_ID = 511;
 const uint64_t OB_SVR_BLACKLIST_TENANT_ID = 512;
-const uint64_t OB_DIAG_TENANT_ID = 999;
 const uint64_t OB_MAX_RESERVED_TENANT_ID = 1000;
 const uint64_t OB_USER_TENANT_ID = 1000;
 
@@ -823,6 +832,7 @@ const uint64_t OB_SYS_UNIT_ID = 1;
 const uint64_t OB_INIT_SERVER_ID = 1;
 const uint64_t OB_INIT_DDL_TASK_ID = 1;
 const uint64_t OB_SYS_UNIT_GROUP_ID = 1;
+const uint64_t OB_INIT_REWRITE_RULE_VERSION = 1;
 const uint64_t OB_USER_UNIT_CONFIG_ID = 1000;
 const uint64_t OB_USER_RESOURCE_POOL_ID = 1000;
 const uint64_t OB_USER_UNIT_ID = 1000;
@@ -841,7 +851,7 @@ const int64_t OB_SCHEMA_CODE_VERSION = 1;
  *
  * OBJECT_ID FOR INNER OBJECTS (0, 500000)
  *
- * For more details: https://yuque.antfin-inc.com/ob/product_functionality_review/fgcxak
+ * For more details: see docs on yuque product_functionality_review/fgcxak
  *
  * To avolid confict, border for each range should not be used.
  *
@@ -899,7 +909,6 @@ const uint64_t OB_MAX_LS_INNER_TABLE_ID       = 49500;
 // (49500, 49999) for cte, cte table opens up a separate id space, which does not conflict with other id
 const uint64_t OB_MIN_CTE_TABLE_ID            = 49500;
 const uint64_t OB_MAX_CTE_TABLE_ID            = 49999;
-const uint64_t OB_MIN_CTE_COLUMN_ID           = 0;
 // (50000, 60000) for inner lob meta table
 // (60000, 70000) for inner lob piece table
 const uint64_t OB_MIN_SYS_LOB_META_TABLE_ID   = 50000;
@@ -1312,6 +1321,8 @@ OB_INLINE bool is_inner_pl_object_id(const uint64_t object_id)
 const char* const OB_PRIMARY_INDEX_NAME = "PRIMARY";
 
 const int64_t OB_MAX_CONFIG_URL_LENGTH = 512;
+const int64_t OB_MAX_ARBITRATION_SERVICE_NAME_LENGTH = 256;
+const int64_t OB_MAX_ARBITRATION_SERVICE_LENGTH = 512;
 
 const int64_t OB_MIGRATE_ACTION_LENGTH = 64;
 const int64_t OB_MIGRATE_REPLICA_STATE_LENGTH = 64;
@@ -1333,6 +1344,7 @@ const int64_t OB_PARALLEL_MERGE_INFO_LENGTH = 512;
 const int64_t OB_COMPACTION_EVENT_STR_LENGTH = 256;
 const int64_t OB_PART_TABLE_INFO_LENGTH = 512;
 const int64_t OB_MACRO_ID_INFO_LENGTH = 256;
+const int64_t OB_COMPACTION_INFO_LENGTH = 128;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;
@@ -1345,6 +1357,20 @@ const char* const OB_LOG_ELLIPSIS = "...";
 
 
 const char *const DEFAULT_REGION_NAME = "default_region";
+
+// The connect attribute key value prefix that the obproxy transparently transmits to the observer
+const char *const OB_PROXY_TRANSPARENT_TRANSMIT_PREFIX__ = "__proxy_dont_care_prefix__";
+
+// The connect attribute key that the proxy transparently transmits to the observer,
+// in order to prevent the sql request thread from deadlocking (such as dblink sql request)
+const char *const OB_SQL_REQUEST_LEVEL = "__proxy_dont_care_prefix__sql_request_level";
+
+// The connect attribute value that the proxy transparently transmits to the observer,
+// in order to prevent the sql request thread from deadlocking (such as dblink sql request)
+const char *const OB_SQL_REQUEST_LEVEL0 = "__sql_request_L0";
+const char *const OB_SQL_REQUEST_LEVEL1 = "__sql_request_L1";
+const char *const OB_SQL_REQUEST_LEVEL2 = "__sql_request_L2";
+const char *const OB_SQL_REQUEST_LEVEL3 = "__sql_request_L3";
 
 // for obproxy
 const char *const OB_MYSQL_CLIENT_MODE = "__mysql_client_type";
@@ -1365,6 +1391,8 @@ const char *const OB_MYSQL_PROXY_VEERSION = "__proxy_version";
 const char *const OB_MYSQL_JAVA_CLIENT_MODE_NAME = "__ob_java_client";
 const char *const OB_MYSQL_OCI_CLIENT_MODE_NAME = "__ob_libobclient";
 const char *const OB_MYSQL_JDBC_CLIENT_MODE_NAME = "__ob_jdbc_client";
+
+const char *const OB_MYSQL_CLIENT_ATTRIBUTE_CAPABILITY_FLAG = "__ob_client_attribute_capability_flag";
 
 enum ObClientMode
 {
@@ -1419,7 +1447,7 @@ OB_INLINE uint64_t combine_sequence_id(int64_t rootservice_epoch, uint64_t pure_
  * 1) If tenant_id = OB_SYS_TENANT_ID, it's sys tenant.
  * 2) If tenant_id is odd, it's meta tenant.
  * 3) If tenant_id is even, it't user tenant.
- * https://yuque.antfin-inc.com/ob/rootservice/cnxdv7#pIAUC
+ * see more docs on yuque rootservice/cnxdv7#pIAUC
  */
 OB_INLINE bool is_sys_tenant(const uint64_t tenant_id)
 {
@@ -1566,12 +1594,21 @@ const int64_t OB_MAX_NUMBER_PRECISION = 38;          //Number in Oracle: p:[1, 3
 const int64_t OB_MAX_NUMBER_PRECISION_INNER = 40;    //Number in Oracle: p can reach 40 if not define by user
 const int64_t OB_MIN_NUMBER_SCALE = -84;             //Number in Oracle: s:[-84, 127]
 const int64_t OB_MAX_NUMBER_SCALE = 127;             //Number in Oracle: s:[-84, 127]
+
 // len_ = 2, se_ = 192: 2 digits(e.g: 111.111)
 const uint32_t NUM_DESC_2DIGITS_POSITIVE_DECIMAL = 0xc0000002;
 // len_ = 1, se_ = 191: 1 digit fragment(e.g 0.111)
 const uint32_t NUM_DESC_1DIGIT_POSITIVE_FRAGMENT = 0xbf000001;
 // len_ = 1, se_ = 192: 1 digit integer(e.g 111)
 const uint32_t NUM_DESC_1DIGIT_POSITIVE_INTEGER = 0xc0000001;
+// len_ = 2, se_ = 64: 2 digits(e.g: -111.111)
+const uint32_t NUM_DESC_2DIGITS_NEGATIVE_DECIMAL = 0x40000002;
+// len_ = 1, se_ = 65: 1 digit fragment(e.g -0.111)
+const uint32_t NUM_DESC_1DIGIT_NEGATIVE_FRAGMENT = 0x41000001;
+// len_ = 1, se_ = 64: 1 digit integer(e.g -111)
+const uint32_t NUM_DESC_1DIGIT_NEGATIVE_INTEGER = 0x40000001;
+
+
 const int64_t OB_DECIMAL_NOT_SPECIFIED = -1;
 const int64_t OB_MIN_NUMBER_FLOAT_PRECISION = 1;     //Float in Oracle: p[1, 126]
 const int64_t OB_MAX_NUMBER_FLOAT_PRECISION = 126;
@@ -1579,6 +1616,7 @@ const double OB_PRECISION_BINARY_TO_DECIMAL_FACTOR = 0.30103;
 const double OB_PRECISION_DECIMAL_TO_BINARY_FACTOR = 3.32193;
 
 const int64_t OB_MAX_DOUBLE_FLOAT_SCALE = 30;
+const int64_t OB_NOT_FIXED_SCALE = OB_MAX_DOUBLE_FLOAT_SCALE + 1;
 const int64_t OB_MAX_DOUBLE_FLOAT_PRECISION = 53;//why?? mysql is 255 TODO::@yanhua
 const int64_t OB_MAX_FLOAT_PRECISION = 24;
 const int64_t OB_MAX_INTEGER_DISPLAY_WIDTH = 255; //TINYINT, SMALLINT, MEDIUMINT, INT, BIGINT
@@ -1605,6 +1643,10 @@ const int64_t OB_MAX_MEDIUMTEXT_LENGTH = 16 *  1024 * 1024L;  // mysql (1LL << 2
 const int64_t OB_MAX_LONGTEXT_LENGTH = 512 * 1024 * 1024L - 1; // 2^29-1,for datum.len_ only has 29 bit // mysql (1LL << 32)
 const int64_t OB_MAX_MEDIUMTEXT_LENGTH_OLD = 256 * 1024L;  // for compatibility
 const int64_t OB_MAX_LONGTEXT_LENGTH_OLD = 512 * 1024L;  // for compatibility
+
+const int64_t OB_MAX_CAST_CHAR_VARCHAR_LENGTH = 512;
+const int64_t OB_MAX_CAST_CHAR_TEXT_LENGTH = 16383;
+const int64_t OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH = 4194303;
 
 const char *const SYS_DATE = "$SYS_DATE";
 const char *const OB_DEFAULT_COMPRESS_FUNC_NAME = "none";
@@ -1660,7 +1702,7 @@ const int64_t OB_MAX_STATICS_PER_TABLE = 128;
 const uint64_t OB_DEFAULT_INDEX_ATTRIBUTES_SET = 0;
 const uint64_t OB_DEFAULT_INDEX_VISIBILITY = 0;//0 menas visible;1 means invisible
 
-const uint64_t BNLJ_DEFAULT_GROUP_SIZE = 1000;
+const uint64_t OB_MAX_BULK_JOIN_ROWS = 1000;
 
 const int64_t OB_INDEX_WRITE_START_DELAY = 20 * 1000 * 1000; //20s
 
@@ -1670,10 +1712,6 @@ const int64_t OB_DUMP_ROOT_TABLE_TYPE = 1;
 const int64_t OB_DUMP_UNUSUAL_TABLET_TYPE = 2;
 const int64_t OB_MAX_SYS_VAR_NON_STRING_VAL_LENGTH = 128;
 const int64_t OB_MAX_SYS_VAR_VAL_LENGTH = 4096;//original 128 is too small
-
-//mini minor merge related parameters
-const int64_t OB_MIN_MINOR_SSTABLE_ROW_COUNT = 2000000; // L0 -> L1 row count threashold
-const int64_t OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR= 25; // / mini_sstable_total > minor_sstable_total * OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR / 100
 
 // bitset defines
 const int64_t OB_DEFAULT_BITSET_SIZE = OB_MAX_TABLE_NUM_PER_STMT;
@@ -1814,8 +1852,7 @@ OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
   return is_virtual_tenant_id(tenant_id) &&
        (OB_EXT_LOG_TENANT_ID == tenant_id ||
-        OB_RS_TENANT_ID == tenant_id ||
-        OB_DIAG_TENANT_ID == tenant_id);
+        OB_RS_TENANT_ID == tenant_id);
 }
 
 enum ObNameCaseMode
@@ -1876,6 +1913,9 @@ enum ObReplicaType
   REPLICA_TYPE_READONLY = (ASYNC_CLOG | WITH_SSSTORE | WITH_MEMSTORE), // 16
   // Incremental copy: not a member of paxos; no ssstore; memstore
   REPLICA_TYPE_MEMONLY = (ASYNC_CLOG | WITHOUT_SSSTORE | WITH_MEMSTORE), // 20
+  // TODO by yunlong: is it proper to use ASYNC_CLOG
+  // Arbitration copy: a member of paxos; no ssstore; no memstore
+  REPLICA_TYPE_ARBITRATION = (ASYNC_CLOG | WITHOUT_SSSTORE | WITHOUT_MEMSTORE), // 21
   // Encrypted log copy: encrypted; paxos member; no sstore; no memstore
   REPLICA_TYPE_ENCRYPTION_LOGONLY = (WITH_ENCRYPTION | SYNC_CLOG | WITHOUT_SSSTORE | WITHOUT_MEMSTORE), // 261
   // invalid value
@@ -2067,6 +2107,12 @@ enum ObWFRemoveMode
   REMOVE_EXTRENUM = 2
 };
 
+enum ObTraceGranularity
+{
+  QUERY_LEVEL = 0,
+  TRANS_LEVEL = 1
+};
+
 } // end namespace common
 } // end namespace oceanbase
 
@@ -2116,7 +2162,6 @@ enum ObWFRemoveMode
 #define DIO_ALIGN_SIZE 4096
 #define DIO_READ_ALIGN_SIZE 4096
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
-#define CORO_INIT_PRIORITY 120
 #define MALLOC_INIT_PRIORITY 128
 #define NORMAL_INIT_PRIORITY (MALLOC_INIT_PRIORITY + 1)
 
@@ -2161,6 +2206,7 @@ struct ObNumberDesc
   explicit ObNumberDesc(const uint32_t desc): desc_(desc) {}
   explicit ObNumberDesc(const uint8_t len, uint8_t flag, uint8_t exp, uint8_t sign)
                        : len_(len), reserved_(0), flag_(flag), exp_(exp), sign_(sign) {}
+
   bool is_2d_positive_decimal()
   {
     return (desc_ == oceanbase::common::NUM_DESC_2DIGITS_POSITIVE_DECIMAL);
@@ -2173,6 +2219,20 @@ struct ObNumberDesc
   {
     return (desc_ == oceanbase::common::NUM_DESC_1DIGIT_POSITIVE_INTEGER);
   }
+
+  bool is_2d_negative_decimal()
+  {
+    return (desc_ == oceanbase::common::NUM_DESC_2DIGITS_NEGATIVE_DECIMAL);
+  }
+  bool is_1d_negative_fragment()
+  {
+    return (desc_ == oceanbase::common::NUM_DESC_1DIGIT_NEGATIVE_FRAGMENT);
+  }
+  bool is_1d_negative_integer()
+  {
+    return (desc_ == oceanbase::common::NUM_DESC_1DIGIT_NEGATIVE_INTEGER);
+  }
+
   union
   {
     uint32_t desc_;
@@ -2245,6 +2305,18 @@ OB_INLINE bool &get_ignore_mem_limit()
   return ignore_mem_limit;
 }
 
+OB_INLINE int64_t &get_seq()
+{
+  RLOCAL_INLINE(int64_t, seq);
+  return seq;
+}
+
+OB_INLINE bool &tl_need_speed_limit()
+{
+  RLOCAL_INLINE(bool, tl_need_speed_limit);
+  return tl_need_speed_limit;
+}
+
 OB_INLINE uint32_t &get_writing_throttling_sleep_interval()
 {
   RLOCAL_INLINE(uint32_t, writing_throttling_sleep_interval);
@@ -2266,28 +2338,43 @@ OB_INLINE int64_t ob_gettid()
   return tid;
 }
 
-OB_INLINE uint64_t &ob_get_tenant_id()
+OB_INLINE uint64_t& ob_get_tenant_id()
 {
-  RLOCAL_INLINE(uint64_t, tenant_id);
+  thread_local uint64_t tenant_id = 0;;
   return tenant_id;
 }
 
-OB_INLINE char *ob_get_tname()
+OB_INLINE char* ob_get_tname()
 {
-  struct TNameBuf {
-    TNameBuf() {
-      snprintf(v_, oceanbase::OB_THREAD_NAME_BUF_LEN, "%s", "");
-    }
-    char v_[oceanbase::OB_THREAD_NAME_BUF_LEN];
-  };
-  RLOCAL_INLINE(TNameBuf, tname);
-  return tname.v_;
+  thread_local char tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
+  return tname;
+}
+
+OB_INLINE const char*& ob_get_origin_thread_name()
+{
+  thread_local const char* tname = nullptr;
+  return tname;
+}
+
+// There are many clusters in arbitration server, we need a field identify the different clusters.
+OB_INLINE int64_t &ob_get_cluster_id()
+{
+  RLOCAL(int64_t, cluster_id);
+  return cluster_id;
+}
+
+OB_INLINE int64_t &ob_get_arb_tenant_id()
+{
+  RLOCAL(int64_t, arb_tenant_id);
+  return arb_tenant_id;
 }
 
 #define GETTID() ob_gettid()
 #define GETTNAME() ob_get_tname()
 #define GET_TENANT_ID() ob_get_tenant_id()
 #define gettid GETTID
+#define GET_CLUSTER_ID() ob_get_cluster_id()
+#define GET_ARB_TENANT_ID() ob_get_arb_tenant_id()
 
 //for explain
 #define LEFT_BRACKET "("
@@ -2312,5 +2399,14 @@ inline bool is_x86() {
 #define DISABLE_WARNING_GCC(option) DO_PRAGMA(GCC diagnostic ignored option)
 #define DISABLE_WARNING_GCC_POP _Pragma("GCC diagnostic pop")
 #define DISABLE_WARNING_GCC_ATTRIBUTES DISABLE_WARNING_GCC("-Wattributes")
+
+extern "C" {
+extern int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
+                                pthread_mutex_t *__restrict __mutex);
+extern int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
+                                     pthread_mutex_t *__restrict __mutex,
+                                     const struct timespec *__restrict __abstime);
+}
+
 
 #endif // OCEANBASE_COMMON_DEFINE_H_

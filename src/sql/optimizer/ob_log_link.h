@@ -14,7 +14,7 @@
 #define OCEANBASE_SQL_OB_LOG_LINK_H
 
 #include "sql/optimizer/ob_logical_operator.h"
-
+#include "sql/optimizer/ob_log_plan.h"
 namespace oceanbase
 {
 namespace sql
@@ -22,27 +22,43 @@ namespace sql
 
 typedef common::ObIArray<common::ObString> ObStringIArray;
 
+enum LinkType {
+  NONE = 0,
+  SELECT,
+  INSERT,
+  UPDATE,
+  DELETE,
+  MERGE_INTO
+};
+
 class ObLogLink : public ObLogicalOperator
 {
 public:
   ObLogLink(ObLogPlan &plan);
   virtual ~ObLogLink() {}
   virtual int est_cost() override;
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
-
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
-
+  virtual int compute_sharding_info() override;
+  virtual int compute_op_parallel_and_server_info() override;
   inline const common::ObIArray<ObParamPosIdx> &get_param_infos() const { return param_infos_; }
   inline const char *get_stmt_fmt_buf() const { return stmt_fmt_buf_; }
   inline int32_t get_stmt_fmt_len() const { return stmt_fmt_len_; }
   int gen_link_stmt_param_infos();
+  virtual int set_link_stmt(const ObDMLStmt* stmt = NULL);
+  inline void set_reverse_link(bool reverse_link) { is_reverse_link_ = reverse_link; }
+  inline bool get_reverse_link() { return is_reverse_link_; }
+  int mark_exec_params(ObDMLStmt *stmt);
+protected:
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
   int print_link_stmt(char *buf, int64_t buf_len);
-private:
+protected:
   common::ObIAllocator &allocator_;
   char *stmt_fmt_buf_;
   int32_t stmt_fmt_len_;
-  common::ObSEArray<ObParamPosIdx, 16> param_infos_;
+  bool is_reverse_link_;
+  uint64_t tm_dblink_id_;
+  common::ObSEArray<ObParamPosIdx, 16, common::ModulePageAllocator, true> param_infos_;
 };
 
 } // namespace sql

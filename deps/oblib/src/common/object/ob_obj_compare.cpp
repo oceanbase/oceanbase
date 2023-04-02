@@ -37,7 +37,7 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 }
 #define OBJ_TYPE_CLASS_CHECK(obj, tc)\
   if (OB_UNLIKELY(obj.get_type_class() != tc)) { \
-    LOG_ERROR("unexpected error. mismatch function for comparison", K(obj), K(tc));\
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "unexpected error. mismatch function for comparison", K(obj), K(tc));\
     right_to_die_or_duty_to_live();\
   }
 
@@ -301,6 +301,9 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
              : CR_EQ; \
   }
 
+#define IS_FIXED_DOUBLE_CMP obj1.is_fixed_double() && obj2.is_fixed_double() && \
+  lib::is_mysql_mode()
+
 #define DEFINE_CMP_OP_FUNC_REAL_REAL_EQ(real1_tc, real1_type, real2_tc, real2_type) \
   template <> inline \
   int ObObjCmpFuncs::cmp_op_func<real1_tc, real2_tc, CO_EQ>(const ObObj &obj1, \
@@ -320,6 +323,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_FALSE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) == 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num == r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -345,6 +350,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_TRUE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) <= 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num <= r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -370,6 +377,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_TRUE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) < 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num < r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -395,6 +404,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_FALSE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) >= 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num >= r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -420,6 +431,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_FALSE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) > 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num > r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -443,6 +456,8 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_TRUE;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      ret = fixed_double_cmp(obj1, obj2) != 0 ? CR_TRUE : CR_FALSE;\
     } else {\
       ret = (l_num != r_num ? CR_TRUE : CR_FALSE);\
     }\
@@ -468,6 +483,9 @@ bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
       } else {\
         ret = CR_LT;\
       }\
+    } else if (IS_FIXED_DOUBLE_CMP) {\
+      int cmp_res = fixed_double_cmp(obj1, obj2);\
+      ret = cmp_res == 0 ? CR_EQ : (cmp_res < 0 ? CR_LT : CR_GT);\
     } else {\
       ret = l_num == r_num ? CR_EQ : (l_num < r_num ? CR_LT : CR_GT);\
     }\
@@ -702,7 +720,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -725,7 +743,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -747,7 +765,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObRawTC); \
     if (CS_TYPE_BINARY != obj1.get_collation_type() \
         || CS_TYPE_BINARY != obj2.get_collation_type()) { \
-      LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
     } else { \
       ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY, obj1.v_.string_, obj1.val_len_, \
                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0); \
@@ -766,7 +784,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObRawTC);\
     if (CS_TYPE_BINARY != obj1.get_collation_type() \
         || CS_TYPE_BINARY != obj2.get_collation_type()) { \
-      LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(cmp_ctx.cmp_cs_type_)); \
     } else { \
       ret = INT_TO_CR(ObCharset::strcmpsp(CS_TYPE_BINARY, obj1.v_.string_, obj1.val_len_, \
                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))); \
@@ -776,27 +794,43 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
 
 
 // stringtc vs texttc temporarily
+// Notice:
+// 1. ObObj compare only support inrow lobs, because lob manager cannot be reached from here.
+//    Need to convert outrow lobs inrow before comparation
+// 2. ObObj::get_string(Obstring &) only gets inrow lob data
 #define DEFINE_CMP_OP_FUNC_STRING_TEXT(op, op_str) \
   template <> inline \
   int ObObjCmpFuncs::cmp_op_func<ObStringTC, ObTextTC, op>(const ObObj &obj1, \
                                                              const ObObj &obj2, \
                                                              const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObStringTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-	return CS_TYPE_INVALID != cs_type \
-           ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
-           : CR_OB_ERROR; \
+    ObString data_str; \
+    if (obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str))) { \
+      LOG_ERROR("invalid text object", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
+                                                   data_str.ptr(), data_str.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 #define DEFINE_CMP_FUNC_STRING_TEXT() \
@@ -805,22 +839,33 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                                                       const ObObj &obj2, \
                                                       const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObStringTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-/*LOG_ERROR("END SPACE", K(obj1.v_.string_), K(obj1.val_len_), K(obj2.v_.string_), K(obj2.val_len_), K(lbt())); */\
-	return CS_TYPE_INVALID != cs_type \
-           ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
-           : CR_OB_ERROR; \
+    ObString data_str; \
+    if (obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str))) { \
+      LOG_ERROR("invalid text object", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
+                                            data_str.ptr(), data_str.length(), \
+                                            CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 // texttc vs stringtc temporarily
@@ -850,21 +895,37 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                                                              const ObObj &obj2, \
                                                              const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObTextTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-    return CS_TYPE_INVALID != cs_type \
-           ? static_cast<int>(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                                  obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
-           : CR_OB_ERROR; \
+    ObString data_str1; \
+    ObString data_str2; \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) { \
+      LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) { \
+      LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? static_cast<int>(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
+                                                   data_str2.ptr(), data_str2.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx)) op_str 0) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 #define DEFINE_CMP_FUNC_TEXT_TEXT() \
@@ -873,21 +934,37 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                                                       const ObObj &obj2, \
                                                       const ObCompareCtx &cmp_ctx) \
   { \
+    int ret = CR_OB_ERROR; \
     OBJ_TYPE_CLASS_CHECK(obj1, ObTextTC);\
     OBJ_TYPE_CLASS_CHECK(obj2, ObTextTC);\
     ObCollationType cs_type = cmp_ctx.cmp_cs_type_; \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
     } \
-	return CS_TYPE_INVALID != cs_type \
-           ? INT_TO_CR(ObCharset::strcmpsp(cs_type, obj1.v_.string_, obj1.val_len_, \
-                                           obj2.v_.string_, obj2.val_len_, CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
-           : CR_OB_ERROR; \
+    ObString data_str1; \
+    ObString data_str2; \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) { \
+      LOG_ERROR("not support outrow lobs", K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) { \
+      LOG_ERROR("invalid text object1", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) { \
+      LOG_ERROR("invalid text object2", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+      ret = CR_OB_ERROR; \
+    } else { \
+      ret = CS_TYPE_INVALID != cs_type \
+            ? INT_TO_CR(ObCharset::strcmpsp(cs_type, data_str1.ptr(), data_str1.length(), \
+                                                   data_str2.ptr(), data_str2.length(), \
+                                                   CALC_WITH_END_SPACE(obj1, obj2, cmp_ctx))) \
+            : CR_OB_ERROR; \
+    } \
+    return ret; \
   }
 
 
@@ -906,7 +983,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int64_t v2 = obj2.get_datetime();                                   \
     if (obj1.get_type() != obj2.get_type()) {                           \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {             \
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2));         \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2));         \
         ret = CR_OB_ERROR;                                              \
       } else {                                                          \
         /*same tc while not same type*/                                 \
@@ -938,7 +1015,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int64_t v2 = obj2.get_datetime();\
     if (obj1.get_type() != obj2.get_type()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) { \
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else { \
         /*same tc while not same type*/ \
@@ -982,7 +1059,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value();\
     if (!obj2.is_timestamp_nano()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v1.time_us_ -= cmp_ctx.tz_off_;\
@@ -1006,7 +1083,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value(); \
     if (!obj2.is_timestamp_nano()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v1.time_us_ -= cmp_ctx.tz_off_;\
@@ -1038,7 +1115,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     v2.time_us_ = obj2.get_datetime();\
     if (!obj1.is_timestamp_nano()) {\
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v2.time_us_ -= cmp_ctx.tz_off_;\
@@ -1062,7 +1139,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     v2.time_us_ = obj2.get_datetime();\
     if (!obj1.is_timestamp_nano()) {\
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         v2.time_us_ -= cmp_ctx.tz_off_;\
@@ -1091,7 +1168,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value(); \
     if (obj1.is_timestamp_nano() != obj2.is_timestamp_nano()) { \
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else {\
         if (obj1.is_timestamp_nano()) {\
@@ -1118,7 +1195,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     ObOTimestampData v2 = obj2.get_otimestamp_value();\
     if (obj1.is_timestamp_nano() != obj2.is_timestamp_nano()) {\
       if (OB_UNLIKELY(INVALID_TZ_OFF == cmp_ctx.tz_off_)) {\
-        LOG_ERROR("invalid timezone offset", K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid timezone offset", K(obj1), K(obj2)); \
         ret = CR_OB_ERROR; \
       } else if (obj1.is_timestamp_nano()) {\
         v1.time_us_ -= cmp_ctx.tz_off_;\
@@ -1148,7 +1225,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObIntervalTC); \
     ObCmpRes ret = CR_FALSE;\
     if (obj1.get_type() != obj2.get_type()) { \
-      LOG_ERROR("different interval type can not compare", K(obj1), K(obj2)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "different interval type can not compare", K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else if (obj1.is_interval_ym()) { \
       ret = obj1.get_interval_ym() op_str obj2.get_interval_ym() ? CR_TRUE : CR_FALSE; \
@@ -1170,7 +1247,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     OBJ_TYPE_CLASS_CHECK(obj2, ObIntervalTC); \
     ObCmpRes ret = CR_FALSE; \
     if (obj1.get_type() != obj2.get_type()) { \
-      LOG_ERROR("different interval type can not compare", K(obj1), K(obj2)); \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "different interval type can not compare", K(obj1), K(obj2)); \
       ret = CR_OB_ERROR; \
     } else if (obj1.is_interval_ym()) { \
       ObIntervalYMValue v1 = obj1.get_interval_ym(); \
@@ -1205,7 +1282,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -1246,20 +1323,36 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     int cmp_ret = CR_OB_ERROR;                                                                  \
     int ret = OB_SUCCESS;                                                                       \
     int result = 0;                                                                             \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                        \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                        \
-    ObIJsonBase *j_base1 = &j_bin1;                                                             \
-    ObIJsonBase *j_base2 = &j_bin2;                                                             \
-    if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
-      LOG_WARN("fail to reset json bin1 iter", K(ret), K(obj1.val_len_));                       \
-    } else if (OB_FAIL(j_bin2.reset_iter())) {                                                  \
-      LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
-    } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
-      LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    ObString data_str1;                                                                         \
+    ObString data_str2;                                                                         \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
+      LOG_ERROR("not support outrow json lobs", K(obj1), K(obj2));                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+      LOG_ERROR("invalid json lob object1",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+      LOG_ERROR("invalid json lob object2",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      cmp_ret = result op_str 0;                                                                \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObIJsonBase *j_base1 = &j_bin1;                                                           \
+      ObIJsonBase *j_base2 = &j_bin2;                                                           \
+      if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
+        LOG_WARN("fail to reset json bin1 iter", K(ret), K(data_str1.length()));                \
+      } else if (OB_FAIL(j_bin2.reset_iter())) {                                                \
+        LOG_WARN("fail to reset json bin2 iter", K(ret), K(data_str2.length()));                \
+      } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                 \
+        LOG_WARN("fail to compare json", K(ret), K(data_str1.length()), K(data_str2.length())); \
+      } else {                                                                                  \
+        cmp_ret = result op_str 0;                                                              \
+      }                                                                                         \
     }                                                                                           \
-                                                                                                \
     return cmp_ret;                                                                             \
   }
 
@@ -1274,23 +1367,104 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     UNUSED(cmp_ctx);                                                                            \
     int ret = OB_SUCCESS;                                                                       \
     int result = CR_OB_ERROR;                                                                   \
-    ObJsonBin j_bin1(obj1.v_.string_, obj1.val_len_);                                           \
-    ObJsonBin j_bin2(obj2.v_.string_, obj2.val_len_);                                           \
-    ObIJsonBase *j_base1 = &j_bin1;                                                             \
-    ObIJsonBase *j_base2 = &j_bin2;                                                             \
-    if (OB_FAIL(j_bin1.reset_iter())) {                                                         \
-      LOG_WARN("fail to reset json bin1 iter", K(ret), K(obj1.val_len_));                       \
-    } else if (OB_FAIL(j_bin2.reset_iter())) {                                                  \
-      LOG_WARN("fail to reset json bin2 iter", K(ret), K(obj2.val_len_));                       \
-    } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                   \
-      LOG_WARN("fail to compare json", K(ret), K(obj1.val_len_), K(obj1.val_len_));             \
+    ObString data_str1;                                                                         \
+    ObString data_str2;                                                                         \
+    if (obj1.is_outrow_lob() || obj2.is_outrow_lob()) {                                         \
+      LOG_ERROR("not support outrow json lobs", K(obj1), K(obj2));                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj1.get_string(data_str1))) {                                           \
+      LOG_ERROR("invalid json lob object1",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
+    } else if (OB_FAIL(obj2.get_string(data_str2))) {                                           \
+      LOG_ERROR("invalid json lob object2",                                                     \
+                K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
+                K(obj1), K(obj2));                                                              \
+      ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      result = INT_TO_CR(result);                                                               \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObIJsonBase *j_base1 = &j_bin1;                                                           \
+      ObIJsonBase *j_base2 = &j_bin2;                                                           \
+      if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
+        LOG_WARN("fail to reset json bin1 iter", K(ret), K(data_str1.length()));                \
+      } else if (OB_FAIL(j_bin2.reset_iter())) {                                                \
+        LOG_WARN("fail to reset json bin2 iter", K(ret), K(data_str2.length()));                \
+      } else if (OB_FAIL(j_base1->compare(*j_base2, result))) {                                 \
+        LOG_WARN("fail to compare json", K(ret), K(data_str1.length()), K(data_str2.length())); \
+      } else {                                                                                  \
+        result = INT_TO_CR(result);                                                             \
+      }                                                                                         \
     }                                                                                           \
                                                                                                 \
     return result;                                                                              \
   }
 
+// geometrytc vs geometrytc
+#define DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(op, op_str)                                        \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_op_func<ObGeometryTC, ObGeometryTC, op>(const ObObj &obj1,             \
+                                                                 const ObObj &obj2,             \
+                                                                 const ObCompareCtx &cmp_ctx)   \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObGeometryTC);                                                   \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObGeometryTC);                                                   \
+    UNUSED(cmp_ctx);                                                                            \
+    int cmp_ret = CR_OB_ERROR;                                                                  \
+    if (op == CO_EQ || op == CO_NE) {                                                           \
+      ObString wkb1 = obj1.get_string();                                                        \
+      ObString wkb2 = obj2.get_string();                                                        \
+      ObLobLocatorV2 lob1(wkb1, obj1.has_lob_header());                                         \
+      ObLobLocatorV2 lob2(wkb2, obj2.has_lob_header());                                         \
+      if (lob1.has_inrow_data() && lob2.has_inrow_data()) {                                     \
+        (void)lob1.get_inrow_data(wkb1);                                                        \
+        (void)lob2.get_inrow_data(wkb2);                                                        \
+        cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                          \
+                                                     wkb1.ptr(), wkb1.length(),                 \
+                                                     wkb2.ptr(), wkb2.length(),                 \
+                                                     false)                                     \
+                                                     op_str 0);                                 \
+      } else {                                                                                  \
+        cmp_ret = static_cast<int>(ObCharset::strcmpsp(CS_TYPE_BINARY,                          \
+                                                     obj1.v_.string_, obj1.val_len_,            \
+                                                     obj2.v_.string_, obj2.val_len_,            \
+                                                     false)                                     \
+                                                     op_str 0);                                 \
+      }                                                                                         \
+    }                                                                                           \
+    return cmp_ret;                                                                             \
+  }
+
+// There is no greater than and less than in geometry, if not equal then error
+#define DEFINE_CMP_FUNC_GEOMETRY_GEOMETRY()                                                     \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_func<ObGeometryTC, ObGeometryTC>(const ObObj &obj1,                    \
+                                                          const ObObj &obj2,                    \
+                                                          const ObCompareCtx &cmp_ctx)          \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObGeometryTC);                                                   \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObGeometryTC);                                                   \
+    UNUSED(cmp_ctx);                                                                            \
+    ObString wkb1 = obj1.get_string();                                                          \
+    ObString wkb2 = obj2.get_string();                                                          \
+    ObLobLocatorV2 lob1(wkb1, obj1.has_lob_header());                                           \
+    ObLobLocatorV2 lob2(wkb2, obj2.has_lob_header());                                           \
+    if (lob1.has_inrow_data() && lob2.has_inrow_data()) {                                       \
+      (void)lob1.get_inrow_data(wkb1);                                                          \
+      (void)lob2.get_inrow_data(wkb2);                                                          \
+    }                                                                                           \
+    int result = ObCharset::strcmpsp(CS_TYPE_BINARY, wkb1.ptr(), wkb1.length(),                 \
+                                     wkb2.ptr(), wkb2.length(), false);                         \
+    if (0 == result) {                                                                          \
+      result = CR_EQ;                                                                           \
+    } else if (0 > result) {                                                                    \
+      result = CR_LT;                                                                           \
+    } else {                                                                                    \
+      result = CR_GT;                                                                           \
+    }                                                                                           \
+    return result;                                                                              \
+  }
 
 #define DEFINE_CMP_FUNC_ROWT_ROWT()                                            \
   template <>                                                                  \
@@ -1303,7 +1477,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (OB_UNLIKELY(obj1.get_type() != obj2.get_type()) ||                     \
         OB_UNLIKELY(!obj1.is_urowid())) {                                      \
       ret = CR_OB_ERROR;                                                       \
-      LOG_ERROR("only support urowid for now", K(ret));                        \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "only support urowid for now", K(ret));                        \
     } else {                                                                   \
       ret =                                                                    \
           static_cast<ObCmpRes>(obj1.get_urowid().compare(obj2.get_urowid())); \
@@ -1322,7 +1496,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     if (OB_UNLIKELY(obj1.get_type() != obj2.get_type()) ||                   \
         OB_UNLIKELY(!obj1.is_urowid())) {                                    \
       ret = CR_OB_ERROR;                                                     \
-      LOG_ERROR("only support urowid for now", K(ret));                      \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "only support urowid for now", K(ret));                      \
     } else {                                                                 \
       ret = obj1.get_urowid() op_str obj2.get_urowid() ? CR_TRUE : CR_FALSE; \
     }                                                                        \
@@ -1519,7 +1693,7 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
     if (CS_TYPE_INVALID == cs_type) { \
       if (obj1.get_collation_type() != obj2.get_collation_type() \
           || CS_TYPE_INVALID == obj1.get_collation_type()) { \
-        LOG_ERROR("invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid collation", K(obj1.get_collation_type()), K(obj2.get_collation_type()), K(obj1), K(obj2)); \
       } else { \
         cs_type = obj1.get_collation_type(); \
       } \
@@ -1937,6 +2111,15 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   DEFINE_CMP_OP_FUNC_JSON_JSON(CO_NE, !=); \
   DEFINE_CMP_FUNC_JSON_JSON()
 
+#define DEFINE_CMP_FUNCS_GEOMETRY_GEOMETRY() \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_EQ, ==); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_LE, <=); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_LT, < ); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_GE, >=); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_GT, > ); \
+  DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(CO_NE, !=); \
+  DEFINE_CMP_FUNC_GEOMETRY_GEOMETRY()
+
 #define DEFINE_CMP_FUNCS_STRING_TEXT() \
   DEFINE_CMP_OP_FUNC_STRING_TEXT(CO_EQ, ==); \
   DEFINE_CMP_OP_FUNC_STRING_TEXT(CO_LE, <=); \
@@ -2078,6 +2261,7 @@ DEFINE_CMP_FUNCS_STRING_TEXT();
 DEFINE_CMP_FUNCS_TEXT_STRING();
 DEFINE_CMP_FUNCS_LOB_LOB();
 DEFINE_CMP_FUNCS_JSON_JSON();
+DEFINE_CMP_FUNCS_GEOMETRY_GEOMETRY();
 
 DEFINE_CMP_FUNCS_ENUMSETINNER_INT();
 DEFINE_CMP_FUNCS_ENUMSETINNER_UINT();
@@ -2249,6 +2433,7 @@ DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObIntervalTC, ObIntervalTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObRowIDTC, ObRowIDTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObLobTC, ObLobTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC)
+DEFINE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObExtendTC)
 DEFINE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC)
 DEFINE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC)
@@ -2281,6 +2466,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     DECLARE_CMP_FUNCS_NULLSAFE_LEFTNULL_ENTRY(ObMaxTC),//rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // int
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2306,6 +2492,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // uint
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2331,6 +2518,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // float
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2356,6 +2544,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // double
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2381,6 +2570,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // number
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2406,6 +2596,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // datetime
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2431,6 +2622,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // date
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2456,6 +2648,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL,  // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // time
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2481,6 +2674,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // year
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2506,6 +2700,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // string
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2531,6 +2726,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // extend
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObExtendTC),
@@ -2556,6 +2752,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObExtendTC, ObMaxTC, ObExtendTC, ObMaxTC), // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // unknown
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2581,6 +2778,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // text
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2606,6 +2804,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // bit
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2631,6 +2830,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { //enumset
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2656,6 +2856,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { //enumsetInner
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2681,6 +2882,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // otimestamp
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2706,6 +2908,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     NULL, // json
+    NULL, // geometry
   },
   { // raw
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2731,6 +2934,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // rowid
    NULL, // lob
    NULL, // json
+   NULL, // geometry
   },
   { // interval
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2756,6 +2960,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    NULL, // rowid
    NULL, // lob
    NULL, // json
+   NULL, // geometry
   },
   { // rowid
    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2781,6 +2986,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObRowIDTC, ObRowIDTC, ObMaxTC, ObMaxTC), // rowid
    NULL, // lob
    NULL, // json
+   NULL, // geometry
   },
   { // lob
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2806,6 +3012,7 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObLobTC, ObLobTC, ObMaxTC, ObMaxTC), // lob
     NULL, // json
+    NULL, // geometry
   },
   { // json
     DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
@@ -2831,6 +3038,33 @@ const obj_cmp_func_nullsafe ObObjCmpFuncs::cmp_funcs_nullsafe[ObMaxTC][ObMaxTC] 
     NULL, // rowid
     NULL, // lob
     DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObJsonTC, ObJsonTC, ObMaxTC, ObMaxTC), // json
+    NULL, // geometry
+  },
+  { // geometry
+    DECLARE_CMP_FUNCS_NULLSAFE_RIGHTNULL_ENTRY(ObMaxTC),
+    NULL,  // int
+    NULL,  // uint
+    NULL,  // float
+    NULL,  // double
+    NULL,  // number
+    NULL,  // datetime
+    NULL,  // date
+    NULL,  // time
+    NULL,  // year
+    NULL,  // string
+    NULL,  // extend
+    NULL,  // unknown
+    NULL,  // text
+    NULL,  // bit
+    NULL,  // enumset
+    NULL,  //enumsetInner will not go here
+    NULL, // otimestamp
+    NULL, // raw
+    NULL, // interval
+    NULL, // rowid
+    NULL, // lob
+    NULL, // json
+    DECLARE_CMP_FUNCS_NULLSAFE_ENTRY(ObGeometryTC, ObGeometryTC, ObMaxTC, ObMaxTC), // geometry
   },
 };
 
@@ -2860,6 +3094,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//rowid
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//lob
     DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//json
+    DEFINE_CMP_FUNCS_ENTRY(ObNullTC, ObMaxTC),//geometry
   },
   { // int
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2885,6 +3120,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // uint
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2910,6 +3146,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // float
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2935,6 +3172,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // double
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2960,6 +3198,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // number
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -2985,6 +3224,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // datetime
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3010,6 +3250,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // date
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3035,6 +3276,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // time
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3060,6 +3302,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // year
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3085,6 +3328,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // string
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3110,6 +3354,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // extend
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObNullTC),
@@ -3135,6 +3380,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObExtendTC, ObMaxTC),//rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // unknown
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3160,6 +3406,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // text
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3185,6 +3432,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // bit
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3210,6 +3458,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { //enumset
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3235,6 +3484,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { //enumsetInner
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3260,6 +3510,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // otimestamp
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3285,6 +3536,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // raw
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC),
@@ -3310,6 +3562,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // interval
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3335,6 +3588,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // rowid
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3360,6 +3614,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY(ObRowIDTC, ObRowIDTC),  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // lob
     DEFINE_CMP_FUNCS_ENTRY_NULL, //null
@@ -3385,6 +3640,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
   },
   { // json
     DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
@@ -3410,6 +3666,33 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
     DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
     DEFINE_CMP_FUNCS_ENTRY(ObJsonTC, ObJsonTC),  //json
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //geometry
+  },
+  { // geometry
+    DEFINE_CMP_FUNCS_ENTRY(ObMaxTC, ObNullTC), //null
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // int
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // uint
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // float
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // double
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // number
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // datetime
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // date
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //extend
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumset
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // enumsetInner will not go here
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // otimestamp
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // raw
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  // interval
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //rowid
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //lob
+    DEFINE_CMP_FUNCS_ENTRY_NULL,  //json
+    DEFINE_CMP_FUNCS_ENTRY(ObGeometryTC, ObGeometryTC),  //geometry
   },
 };
 
@@ -3479,7 +3762,7 @@ bool ObObjCmpFuncs::compare_oper_nullsafe(const ObObj &obj1,
   if (OB_UNLIKELY(ob_is_invalid_obj_type(type1)
                   || ob_is_invalid_obj_type(type2)
                   || ob_is_invalid_cmp_op_bool(cmp_op))) {
-    LOG_ERROR("invalid obj1 or obj2 or cmp_op", K(obj1), K(obj2), K(cmp_op));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid obj1 or obj2 or cmp_op", K(obj1), K(obj2), K(cmp_op));
     right_to_die_or_duty_to_live();
   } else {
     obj_cmp_func cmp_op_func = NULL;
@@ -3487,12 +3770,12 @@ bool ObObjCmpFuncs::compare_oper_nullsafe(const ObObj &obj1,
                                                   obj2.get_meta(),
                                                   cmp_op,
                                                   cmp_op_func))) {
-      LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2), K(cmp_op));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "obj1 and obj2 can't compare", K(obj1), K(obj2), K(cmp_op));
       right_to_die_or_duty_to_live();
     } else {
       ObCompareCtx cmp_ctx(ObMaxType, cs_type, true, INVALID_TZ_OFF, default_null_pos());
       if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_op_func(obj1, obj2, cmp_ctx)))) {
-        LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2), K(cmp_op));
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "failed to compare obj1 and obj2", K(obj1), K(obj2), K(cmp_op));
         right_to_die_or_duty_to_live();
       }
     }
@@ -3535,12 +3818,12 @@ int ObObjCmpFuncs::compare_nullsafe(const ObObj &obj1,
                                                 obj2.get_meta(),
                                                 CO_CMP,
                                                 cmp_func))) {
-    LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "obj1 and obj2 can't compare", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
     right_to_die_or_duty_to_live();
   } else {
     ObCompareCtx cmp_ctx(ObMaxType, cs_type, true, INVALID_TZ_OFF, lib::is_oracle_mode() ? NULL_LAST : NULL_FIRST);
     if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_func(obj1, obj2, cmp_ctx)))) {
-      LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "failed to compare obj1 and obj2", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
       right_to_die_or_duty_to_live();
     }
   }
@@ -3592,7 +3875,7 @@ int ObObjCmpFuncs::compare_nullsafe(const ObObj &obj1,
   // because this function is so fundamental and performance related.
   if (ob_is_invalid_obj_type(type1)
                   || ob_is_invalid_obj_type(type2)) {
-    LOG_ERROR("invalid obj1 or obj2", K(obj1), K(obj2));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "invalid obj1 or obj2", K(obj1), K(obj2));
     right_to_die_or_duty_to_live();
   } else {
     obj_cmp_func cmp_func = NULL;
@@ -3600,10 +3883,10 @@ int ObObjCmpFuncs::compare_nullsafe(const ObObj &obj1,
                                                   obj2.get_meta(),
                                                   CO_CMP,
                                                   cmp_func))) {
-      LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "obj1 and obj2 can't compare", K(obj1), K(obj2));
       right_to_die_or_duty_to_live();
     } else if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_func(obj1, obj2, cmp_ctx)))) {
-      LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "failed to compare obj1 and obj2", K(obj1), K(obj2));
       right_to_die_or_duty_to_live();
     } else {
       // do nothing

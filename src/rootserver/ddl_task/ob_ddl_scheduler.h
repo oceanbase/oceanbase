@@ -59,20 +59,95 @@ public:
   int get_next_task(ObDDLTask *&task);
   int remove_task(ObDDLTask *task);
   int add_task_to_last(ObDDLTask *task);
-  int get_task(const ObDDLTaskKey &task_key, ObDDLTask *&task);
-  int get_task(const int64_t task_id, ObDDLTask *&task);
+  template<typename F>
+  int modify_task(const ObDDLTaskKey &task_key, F &&op);
+  template<typename F>
+  int modify_task(const ObDDLTaskID &task_id, F &&op);
+  int update_task_copy_deps_setting(const ObDDLTaskID &task_id,
+                                    const bool is_copy_constraints,
+                                    const bool is_copy_indexes,
+                                    const bool is_copy_triggers,
+                                    const bool is_copy_foreign_keys,
+                                    const bool is_ignore_errors);
+  int update_task_process_schedulable(const ObDDLTaskID &task_id);
+  int abort_task(const ObDDLTaskID &task_id);
+  int64_t get_task_cnt() const { return task_list_.get_size(); }
   void destroy();
 private:
   typedef common::ObDList<ObDDLTask> TaskList;
   typedef common::hash::ObHashMap<ObDDLTaskKey, ObDDLTask *,
           common::hash::NoPthreadDefendMode> TaskKeyMap;
-  typedef common::hash::ObHashMap<int64_t, ObDDLTask *,
+  typedef common::hash::ObHashMap<ObDDLTaskID, ObDDLTask *,
           common::hash::NoPthreadDefendMode> TaskIdMap;
   TaskList task_list_;
   TaskKeyMap task_map_;
   TaskIdMap task_id_map_;
   common::ObSpinLock lock_;
   bool is_inited_;
+};
+
+class ObDDLTaskHeartBeatMananger final
+{
+public:
+  ObDDLTaskHeartBeatMananger();
+  ~ObDDLTaskHeartBeatMananger();
+  int init();
+  int update_task_active_time(const ObDDLTaskID &task_id);
+  int remove_task(const ObDDLTaskID &task_id);
+  int get_inactive_ddl_task_ids(ObArray<ObDDLTaskID>& remove_task_ids);
+private:
+  static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
+  common::hash::ObHashMap<ObDDLTaskID, int64_t> register_task_time_;
+  bool is_inited_;
+  common::ObBucketLock bucket_lock_;
+};
+struct ObPrepareAlterTableArgParam final
+{
+public:
+  ObPrepareAlterTableArgParam() :
+    session_id_(common::OB_INVALID_ID),
+    sql_mode_(0),
+    tz_info_wrap_(),
+    allocator_(lib::ObLabel("PrepAlterTblArg")),
+    nls_formats_{}
+  {}
+  ~ObPrepareAlterTableArgParam() = default;
+  int init(const uint64_t session_id,
+          const ObSQLMode &sql_mode,
+          const ObString &ddl_stmt_str,
+          const ObString &orig_table_name,
+          const ObString &orig_database_name,
+          const ObString &target_database_name,
+          const ObTimeZoneInfo &tz_info,
+          const ObTimeZoneInfoWrap &tz_info_wrap,
+          const ObString *nls_formats);
+  bool is_valid() const
+  {
+    return OB_INVALID_ID != session_id_ &&
+            !orig_table_name_.empty() &&
+            !orig_database_name_.empty() &&
+            !target_database_name_.empty();
+  }
+  int set_nls_formats(const common::ObString *nls_formats);
+  TO_STRING_KV(K_(session_id),
+                K_(sql_mode),
+                K_(ddl_stmt_str),
+                K_(orig_table_name),
+                K_(orig_database_name),
+                K_(target_database_name),
+                K_(tz_info_wrap),
+                "nls_formats", common::ObArrayWrap<ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+public:
+  uint64_t session_id_;
+  ObSQLMode sql_mode_;
+  common::ObString ddl_stmt_str_;
+  common::ObString orig_table_name_;
+  common::ObString orig_database_name_;
+  common::ObString target_database_name_;
+  common::ObTimeZoneInfo tz_info_;
+  common::ObTimeZoneInfoWrap tz_info_wrap_;
+  common::ObArenaAllocator allocator_;
+  common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
 /*
@@ -101,6 +176,7 @@ public:
   int schedule_ddl_task(
       const ObDDLTaskRecord &task_record);
   int recover_task();
+  int remove_inactive_ddl_task();
 
   int destroy_task();
 
@@ -114,10 +190,11 @@ public:
       const ObDDLTaskKey &task_key,
       const int64_t snapshot_version,
       const int64_t execution_id,
-      const int ret_code);
+      const int ret_code,
+      const ObDDLTaskInfo &addition_info);
 
   int on_ddl_task_finish(
-      const int64_t parent_task_id,
+      const ObDDLTaskID &parent_task_id,
       const ObDDLTaskKey &task_key,
       const int ret_code,
       const ObCurTraceId::TraceId &parent_task_trace_id);
@@ -126,7 +203,29 @@ public:
       const ObDDLTaskKey &task_key,
       const uint64_t autoinc_val,
       const int ret_code);
+  template<typename F>
+  int update_task_info(const ObDDLTaskID &task_id,
+                                      ObMySQLTransaction &trans,
+                                      ObDDLTaskRecord &task_record,
+                                      ObTableRedefinitionTask *ddl_task,
+                                      common::ObArenaAllocator &allocator,
+                                      F &&modify_info);
 
+  int abort_redef_table(const ObDDLTaskID &task_id);
+
+  int copy_table_dependents(const ObDDLTaskID &task_id,
+                            const bool is_copy_constraints,
+                            const bool is_copy_indexes,
+                            const bool is_copy_triggers,
+                            const bool is_copy_foreign_keys,
+                            const bool is_ignore_errors);
+  int finish_redef_table(const ObDDLTaskID &task_id);
+  int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
+  int update_ddl_task_active_time(const ObDDLTaskID &task_id);
+
+  int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
+                              const ObTableSchema *target_table_schema,
+                              obrpc::ObAlterTableArg &alter_table_arg);
 private:
   class DDLIdling : public ObThreadIdling
   {
@@ -145,6 +244,19 @@ private:
     void runTimerTask() override;
   private:
     static const int64_t DDL_TASK_SCAN_PERIOD = 60 * 1000L * 1000L; // 60s
+    ObDDLScheduler &ddl_scheduler_;
+  };
+
+  class HeartBeatCheckTask : public common::ObTimerTask
+  {
+  public:
+    explicit HeartBeatCheckTask(ObDDLScheduler &ddl_scheduler): ddl_scheduler_(ddl_scheduler) {}
+    virtual ~HeartBeatCheckTask() {};
+    int schedule(int tg_id);
+  private:
+    void runTimerTask() override;
+  private:
+    static const int64_t DDL_TASK_CHECK_PERIOD = 30 * 1000L * 1000L; // 30s
     ObDDLScheduler &ddl_scheduler_;
   };
 private:
@@ -234,7 +346,6 @@ private:
       const obrpc::ObDDLArg *arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
-
   int schedule_build_index_task(
       const ObDDLTaskRecord &task_record);
   int schedule_drop_primary_key_task(const ObDDLTaskRecord &task_record);
@@ -246,6 +357,9 @@ private:
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int add_sys_task(ObDDLTask *task);
   int remove_sys_task(ObDDLTask *task);
+  int add_task_to_longops_mgr(ObDDLTask *ddl_task);
+  int remove_task_from_longops_mgr(ObDDLTask *ddl_task);
+  int remove_ddl_task(ObDDLTask *ddl_task);
 
 private:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
@@ -259,7 +373,9 @@ private:
   DDLIdling idler_;
   common::ObConcurrentFIFOAllocator allocator_;
   ObDDLTaskQueue task_queue_;
+  ObDDLTaskHeartBeatMananger manager_reg_heart_beat_task_;
   DDLScanTask scan_task_;
+  HeartBeatCheckTask heart_beat_check_task_;
 };
 
 template<typename T>

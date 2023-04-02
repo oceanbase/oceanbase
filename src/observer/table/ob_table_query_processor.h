@@ -16,7 +16,9 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
+#include "ob_table_context.h"
+#include "ob_table_executor.h"
+#include "ob_table_cache.h"
 
 namespace oceanbase
 {
@@ -39,12 +41,16 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
+  int init_tb_ctx(table::ObTableApiCacheGuard &cache_guard);
+  int query_and_result(table::ObTableApiScanExecutor *executor);
   int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
-  DISALLOW_COPY_AND_ASSIGN(ObTableQueryP);
+
 private:
   common::ObArenaAllocator allocator_;
-  ObTableServiceQueryCtx table_service_ctx_;
+  table::ObTableCtx tb_ctx_;
   int64_t result_row_count_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableQueryP);
 };
 
 } // end namespace observer

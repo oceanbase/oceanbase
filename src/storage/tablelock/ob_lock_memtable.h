@@ -17,6 +17,7 @@
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/tablelock/ob_obj_lock.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -82,11 +83,11 @@ public:
   // update the lock status.
   // @param[in] op_info, which lock op need update.
   // @param[in] commit_version, if it is called by commit, set the commit version too.
-  // @param[in] commit_log_ts, if it is called by commit, set the commit logts too.
+  // @param[in] commit_scn, if it is called by commit, set the commit logts too.
   // @param[in] status, the lock op status will be set.
   int update_lock_status(const ObTableLockOp &op_info,
-                         const int64_t commit_version,
-                         const int64_t commit_log_ts,
+                         const share::SCN &commit_version,
+                         const share::SCN &commit_scn,
                          const ObTableLockOpStatus status);
 
   int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr);
@@ -117,8 +118,8 @@ public:
   bool is_active_memtable() const override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
-  virtual int64_t get_rec_log_ts() override;
-  virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
+  virtual share::SCN get_rec_scn();
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const;
 
@@ -131,7 +132,7 @@ public:
   // used by the replay process of multi data source.
   int replay_lock(memtable::ObMemtableCtx *mem_ctx,
                   const ObTableLockOp &lock_op,
-                  const int64_t log_ts);
+                  const share::SCN &scn);
 
   // ================ NOT SUPPORTED INTERFACE ===============
 
@@ -178,7 +179,7 @@ public:
 
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
 
-  void set_flushed_log_ts(int64_t flushed_log_ts) { flushed_log_ts_ = flushed_log_ts; }
+  void set_flushed_scn(const share::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
 
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(snapshot_version), K_(ls_id));
 private:
@@ -198,16 +199,15 @@ private:
               const int64_t expired_time = 0);
   int check_lock_need_replay_(memtable::ObMemtableCtx *mem_ctx,
                               const ObTableLockOp &lock_op,
-                              const int64_t log_ts,
+                              const share::SCN &scn,
                               bool &need_replay);
   int replay_lock_(memtable::ObMemtableCtx *mem_ctx,
                    const ObTableLockOp &lock_op,
-                   const int64_t log_ts);
+                   const share::SCN &scn);
   int post_obj_lock_conflict_(memtable::ObMvccAccessCtx &acc_ctx,
                               const ObLockID &lock_id,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
-  void wakeup_waiters_(const ObTableLockOp &lock_op);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
@@ -218,11 +218,12 @@ private:
   share::ObLSID ls_id_;
   // the lock map store lock data
   ObOBJLockMap obj_lock_map_;
-  int64_t freeze_log_ts_;
-  // data before the flushed_log_ts_ have been flushed
-  int64_t flushed_log_ts_;
-  int64_t rec_log_ts_;
-  int64_t max_committed_log_ts_;
+  share::SCN freeze_scn_;
+  // data before the flushed_scn_ have been flushed
+  share::SCN flushed_scn_;
+  share::SCN rec_scn_;
+  share::SCN pre_rec_scn_;
+  share::SCN max_committed_scn_;
   bool is_frozen_;
 
   storage::ObFreezer *freezer_;

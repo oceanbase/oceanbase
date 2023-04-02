@@ -113,6 +113,16 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
       LOG_WARN("failed to resolve hints", K(ret));
+    } else if ((stmt::T_INSERT == insert_stmt->stmt_type_)
+        && insert_stmt->value_from_select()
+        && GCONF._ob_enable_direct_load) {
+      ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
+      if (OB_ISNULL(query_ctx)) {
+        LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
+      } else if (query_ctx->get_query_hint().get_global_hint().has_append()) {
+        // For insert into select clause with direct-insert mode, plan cache is disabled
+        query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
+      }
     }
   }
 
@@ -667,7 +677,6 @@ int ObInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr *column_re
       value_desc->set_column_flags(column_ref->get_column_flags());
       value_desc->set_dependant_expr(const_cast<ObRawExpr *>(column_ref->get_dependant_expr()));
       value_desc->set_ref_id(stmt->get_insert_table_info().table_id_, column_ref->get_column_id());
-      value_desc->set_expr_level(current_level_);
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
           && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
@@ -744,7 +753,7 @@ int ObInsertResolver::resolve_column_ref_expr(const ObQualifiedName &q_name, ObR
       //In insert into select stmt, insert clause and select clause belong to the same namespace
       //the on duplicate key update clause will see the column in select clause,
       //so need to add table reference to insert resolve column namespace checker
-      //eg:https://aone.alibaba-inc.com/issue/20923332
+      //eg:
       int64_t idx = -1;
       ObString dummy_name;
       TableItem *view = NULL;
@@ -797,7 +806,7 @@ int ObInsertResolver::resolve_column_ref_expr(const ObQualifiedName &q_name, ObR
     } else {
       // don't print this log as WARN,
       // as it takes lots of CPU cycles when inserting many rows
-      // related issue: https://work.aone.alibaba-inc.com/issue/39479211
+      // related issue:
       LOG_TRACE("resolve basic column ref failed", K(ret), K(q_name));
     }
   }
@@ -844,7 +853,7 @@ int ObInsertResolver::resolve_insert_constraint()
     LOG_WARN("get unexpected null", K(ret));
   } else {
     ObInsertTableInfo &table_info = insert_stmt->get_insert_table_info();
-    if (OB_FAIL(resolve_view_check_exprs(table_item, false, table_info.view_check_exprs_))) {
+    if (OB_FAIL(resolve_view_check_exprs(table_item->table_id_, table_item, false, table_info.view_check_exprs_))) {
       LOG_WARN("resolve view check exprs failed", K(ret));
     } else if (OB_FAIL(resolve_check_constraints(table_item, table_info.check_constraint_exprs_))) {
       LOG_WARN("failed to resolve check constraints", K(ret));
@@ -855,6 +864,21 @@ int ObInsertResolver::resolve_insert_constraint()
                       table_info, table_info.view_check_exprs_.at(i)))) {
           LOG_WARN("fail to replace column ref for check constraint", K(ret),
                     K(i), K(table_info.view_check_exprs_.at(i)));
+        }
+      }
+      const ObIArray<ObColumnRefRawExpr *> &table_columns = table_info.column_exprs_;
+      for (uint64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); ++i) {
+        ObColumnRefRawExpr *table_column = table_columns.at(i);
+        if (OB_ISNULL(table_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to resolve table desc as tbl column expr is null", K(ret));
+        } else if (table_column->is_strict_json_column() > 0) {   // 0 not json  1 relax json  4 strict json
+          for (uint64_t j = 0; OB_SUCC(ret) && j < table_info.values_desc_.count(); ++j) {
+            ObColumnRefRawExpr *table_column_desc = table_info.values_desc_.at(j);
+            if (table_column_desc->get_column_id() == table_column->get_column_id()) {
+              table_column_desc->set_strict_json_column(table_column->is_strict_json_column());
+            }
+          }
         }
       }
     }

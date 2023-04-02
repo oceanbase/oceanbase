@@ -33,11 +33,22 @@ public:
                                     const ObCollationType input_cs_type,
                                     const bool use_original_algo,
                                     const bool fix_min_len,
-                                    char *buf, const int64_t len, int64_t &pos);
+                                    char *buf, const int64_t len, int64_t &pos,
+                                    bool &is_first,
+                                    int8_t &last_soundex_code);
   static int calc(const ObString &input, const ObCollationType intput_cs_type,
-                        const ObCollationType res_cs_type,
-                        common::ObIAllocator &tmp_alloc, common::ObIAllocator &res_alloc,
-                        ObString &out);
+                  const ObCollationType res_cs_type,
+                  common::ObIAllocator &tmp_alloc, common::ObIAllocator &res_alloc,
+                  ObString &out);
+  static int calc_text(const ObDatum &input_datum,
+                       const ObObjType input_type,
+                       const ObObjType res_type,
+                       const ObCollationType input_cs_type,
+                       const ObCollationType res_cs_type,
+                       const bool input_has_lob_header,
+                       ObIAllocator &tmp_alloc, ObIAllocator &res_alloc,
+                       ObString &out,
+                       bool has_lob_header);
   static int eval_soundex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   static const int64_t MIN_RESULT_LENGTH = 4;

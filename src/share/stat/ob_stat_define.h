@@ -18,6 +18,8 @@
 #include "common/object/ob_object.h"
 #include "common/rowkey/ob_rowkey_info.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/stat/ob_opt_table_stat.h"
+#include "share/stat/ob_opt_column_stat.h"
 
 namespace oceanbase
 {
@@ -28,6 +30,8 @@ class ObOptColumnStat;
 
 typedef std::pair<int64_t, int64_t> BolckNumPair;
 typedef hash::ObHashMap<int64_t, BolckNumPair, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
+typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
+typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
 
 enum StatOptionFlags
 {
@@ -44,11 +48,17 @@ enum StatOptionFlags
   OPT_STATTYPE         = 1 << 10,
   OPT_FORCE            = 1 << 11,
   OPT_APPROXIMATE_NDV  = 1 << 12,
-  OPT_STAT_OPTION_ALL  = (1 << 13) -1
+  OPT_ESTIMATE_BLOCK   = 1 << 13,
+  OPT_STAT_OPTION_ALL  = (1 << 14) -1
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
-const static int64_t OPT_STATS_MAX_VALUE_CAHR_LEN = 128;
+const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
+const int64_t MAGIC_SAMPLE_SIZE = 5500;
+const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
+const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
+const int64_t MAGIC_BASE_SAMPLE_SIZE = 1000;
+const double MAGIC_SAMPLE_CUT_RATIO = 0.00962;
 
 enum StatLevel
 {
@@ -289,7 +299,10 @@ struct ObTableStatParam {
     duration_time_(-1),
     global_tablet_id_(0),
     global_data_part_id_(INVALID_GLOBAL_PART_ID),
-    data_table_id_(INVALID_GLOBAL_PART_ID)
+    data_table_id_(INVALID_GLOBAL_PART_ID),
+    need_estimate_block_(true),
+    is_temp_table_(false),
+    allocator_(NULL)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -360,6 +373,9 @@ struct ObTableStatParam {
   uint64_t global_tablet_id_;
   int64_t global_data_part_id_; // used to check wether table is locked, while gathering index stats.
   int64_t data_table_id_; // the data table id for index schema
+  bool need_estimate_block_;//need estimate macro/micro block count
+  bool is_temp_table_;
+  common::ObIAllocator *allocator_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -402,7 +418,9 @@ struct ObTableStatParam {
                K(duration_time_),
                K(global_tablet_id_),
                K(global_data_part_id_),
-               K(data_table_id_));
+               K(data_table_id_),
+               K(need_estimate_block_),
+               K(is_temp_table_));
 };
 
 struct ObOptStat
@@ -537,6 +555,23 @@ struct ObOptDmlStat
                K(update_row_count_),
                K(delete_row_count_));
 };
+
+enum OSG_TYPE
+{
+  NORMAL_OSG = 0,
+  GATHER_OSG = 1,
+  MERGE_OSG = 2
+};
+struct OSGPartInfo {
+  OB_UNIS_VERSION(1);
+public:
+  OSGPartInfo() : part_id_(OB_INVALID_ID), tablet_id_(OB_INVALID_ID) {}
+  ObObjectID part_id_;
+  ObTabletID tablet_id_;
+  TO_STRING_KV(K_(part_id), K_(tablet_id));
+};
+
+typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
 
 }
 }

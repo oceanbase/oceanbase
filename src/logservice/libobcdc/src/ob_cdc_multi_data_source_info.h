@@ -20,11 +20,14 @@
 #include "storage/tx/ob_multi_data_source.h"    // transaction::ObTxBufferNode
 
 #include "ob_cdc_tablet_to_table_info.h"        // CDCTabletChangeInfo
+#include "logservice/data_dictionary/ob_data_dict_struct.h" // ObDictTenantMeta
 
 namespace oceanbase
 {
 namespace libobcdc
 {
+class TenantSchemaInfo;
+class DBSchemaInfo;
 
 class MultiDataSourceNode
 {
@@ -68,6 +71,10 @@ private:
 
 typedef common::ObSEArray<MultiDataSourceNode, 1> MultiDataSourceNodeArray;
 typedef common::ObSEArray<ObCDCTabletChangeInfo, 1> CDCTabletChangeInfoArray;
+typedef common::ObSEArray<const datadict::ObDictTenantMeta*, 1> DictTenantArray;
+typedef common::ObSEArray<const datadict::ObDictDatabaseMeta*, 1> DictDatabaseArray;
+typedef common::ObSEArray<const datadict::ObDictTableMeta*, 1> DictTableArray;
+
 class MultiDataSourceInfo
 {
 public:
@@ -85,17 +92,36 @@ public:
   const CDCTabletChangeInfoArray &get_tablet_change_info_arr() const { return tablet_change_info_arr_; }
   void set_ddl_trans() { has_ddl_trans_op_ = true; }
   bool is_ddl_trans() const { return has_ddl_trans_op_; }
+  DictTenantArray &get_dict_tenant_array() { return dict_tenant_metas_; }
+  DictDatabaseArray &get_dict_database_array() { return dict_database_metas_; }
+  DictTableArray &get_dict_table_array() { return dict_table_metas_; }
+
+  int get_new_tenant_scehma_info(
+      const uint64_t tenant_id,
+      TenantSchemaInfo &tenant_schema_info);
+  int get_new_database_scehma_info(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      DBSchemaInfo &db_schema_info);
+  int get_new_table_meta(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const datadict::ObDictTableMeta *&table_meta);
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
-private:
 
+private:
   bool has_ls_table_op_;
   // ls change op(create/delete logstream), parse from ObTxBufferNode(LS_TABLE type) in commit_log
   share::ObLSAttr ls_attr_;
   // tablet_change_op(create/delete tabelt), parse from MultiDataSourceNode.
   CDCTabletChangeInfoArray tablet_change_info_arr_;
-  // ddl_trans_info(incremental schema info), TODO replace by DICT info.
+
+  // ddl_trans_info(incremental schema info)
   bool has_ddl_trans_op_;
+  DictTenantArray dict_tenant_metas_;
+  DictDatabaseArray dict_database_metas_;
+  DictTableArray dict_table_metas_;
 };
 
 } // namespace libobcdc

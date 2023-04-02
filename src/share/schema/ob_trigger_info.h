@@ -86,6 +86,14 @@ public:
   OB_INLINE bool has_after_point() const { return 1 == after_stmt_ || 1 == after_row_; }
   OB_INLINE bool has_stmt_point() const { return 1 == before_stmt_ || 1 == after_stmt_; }
   OB_INLINE bool has_row_point() const { return 1 == before_row_ || 1 == after_row_ || 1 == instead_row_; }
+  OB_INLINE bool only_before_row() const { return 1 == before_row_ && 0 == after_row_
+                                           && 0 == before_stmt_ && 0 == after_stmt_ && 0 == instead_row_; }
+  OB_INLINE bool only_after_row() const { return 0 == before_row_ && 1 == after_row_
+                                           && 0 == before_stmt_ && 0 == after_stmt_ && 0 == instead_row_; }
+  OB_INLINE bool only_before_stmt() const { return 0 == before_row_ && 0 == after_row_
+                                            && 1 == before_stmt_ && 0 == after_stmt_ && 0 == instead_row_; }
+  OB_INLINE bool only_after_stmt() const { return 0 == before_row_ && 0 == after_row_
+                                           && 0 == before_stmt_ && 1 == after_stmt_ && 0 == instead_row_; }
 public:
   union
   {
@@ -161,6 +169,12 @@ public:
     SPEC_ONLY,
     BODY_ONLY
   };
+  enum OrderType
+  {
+    OT_INVALID = 0,
+    OT_FOLLOWS,
+    OT_PRECEDES,
+  };
 
   class TriggerContext
   {
@@ -179,6 +193,14 @@ public:
     common::ObString after_stmt_execute_;
     common::ObString trigger_body_; // for mysql trigger
     common::ObString compound_declare_; // only for compound trigger
+  };
+
+  struct ActionOrderComparator
+  {
+    ActionOrderComparator() : ret_(common::OB_SUCCESS) {}
+    bool operator() (const ObTriggerInfo *left, const ObTriggerInfo *right);
+    int get_ret() const { return ret_; }
+    int ret_;
   };
 
 public:
@@ -325,8 +347,13 @@ public:
     return ret;
   }
   OB_INLINE void set_sql_mode(uint64_t sql_mode) { sql_mode_ = sql_mode; }
-
-
+  OB_INLINE void set_order_type(OrderType order_type) { order_type_ = order_type; }
+  OB_INLINE void set_order_type(int64_t order_type) { order_type_ = static_cast<OrderType>(order_type); }
+  OB_INLINE int set_ref_trg_db_name(const common::ObString &ref_trg_db_name)
+  { return deep_copy_str(ref_trg_db_name, ref_trg_db_name_); }
+  OB_INLINE int set_ref_trg_name(const common::ObString &ref_trg_name)
+  { return deep_copy_str(ref_trg_name, ref_trg_name_); }
+  OB_INLINE void set_action_order(int64_t action_order) { action_order_ = action_order; }
 //OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
 //OB_INLINE uint64_t get_trigger_id() const { return trigger_id_; }
   OB_INLINE uint64_t get_owner_id() const { return owner_id_; }
@@ -374,6 +401,17 @@ public:
   OB_INLINE int64_t get_package_comp_flag() const { return package_spec_info_.get_comp_flag(); }
   OB_INLINE const common::ObString &get_package_exec_env() const { return package_spec_info_.get_exec_env(); }
   OB_INLINE uint64_t get_sql_mode() const { return sql_mode_; }
+  OB_INLINE OrderType get_order_type() const { return order_type_; }
+  OB_INLINE int64_t get_order_type_value() const { return static_cast<int64_t>(order_type_); }
+  OB_INLINE bool is_order_follows() const { return OT_FOLLOWS == order_type_; }
+  OB_INLINE bool is_order_precedes() const { return OT_PRECEDES == order_type_; }
+  OB_INLINE const common::ObString &get_ref_trg_db_name() const { return ref_trg_db_name_; }
+  OB_INLINE const common::ObString &get_ref_trg_name() const { return ref_trg_name_; }
+  OB_INLINE int64_t get_action_order() const { return action_order_; }
+  OB_INLINE bool is_row_level_before_trigger() const { return is_simple_dml_type() && timing_points_.only_before_row(); }
+  OB_INLINE bool is_row_level_after_trigger() const { return is_simple_dml_type() && timing_points_.only_after_row(); }
+  OB_INLINE bool is_stmt_level_before_trigger() const { return is_simple_dml_type() && timing_points_.only_before_stmt(); }
+  OB_INLINE bool is_stmt_level_after_trigger() const { return is_simple_dml_type() && timing_points_.only_after_stmt(); }
   OB_INLINE bool has_event(uint64_t value) const { return trigger_events_.has_value(value); }
   OB_INLINE static uint64_t get_insert_event() { return ObTriggerEvents::get_insert_event(); }
   OB_INLINE static uint64_t get_update_event() { return ObTriggerEvents::get_update_event(); }
@@ -414,19 +452,17 @@ public:
   {
     return package_id & ~common::OB_MOCK_TRIGGER_PACKAGE_ID_MASK & ~common::OB_MOCK_PACKAGE_BODY_ID_MASK;
   }
-
   bool is_valid_for_create() const;
   virtual void reset();
   virtual bool is_valid() const;
   virtual int deep_copy(const ObTriggerInfo &other);
   virtual int64_t get_convert_size() const;
 
-  static int gen_package_source(const ObTriggerInfo &trigger_info,
-                                const common::ObString &base_object_database,
-                                const common::ObString &base_object_name,
-                                common::ObString &spec_source,
-                                common::ObString &body_source,
-                                common::ObIAllocator &alloc);
+  static OB_INLINE bool is_same_timing_event(const ObTriggerInfo &left, const ObTriggerInfo right)
+  {
+    return left.get_timing_points() == right.get_timing_points()
+           && left.get_trigger_events() == right.get_trigger_events();
+  }
   static int gen_package_source(const uint64_t tenant_id,
                                 const uint64_t tg_package_id,
                                 common::ObString &source,
@@ -442,6 +478,11 @@ public:
                            const ParseNode &parse_node,
                            const ObDataTypeCastParams &dtc_params,
                            ObString &procedure_source);
+  static int replace_table_name_in_body(ObTriggerInfo &trigger_info,
+                                        common::ObIAllocator &alloc,
+                                        const common::ObString &base_object_database,
+                                        const common::ObString &base_object_name,
+                                        bool is_oracle_mode);
   TO_STRING_KV(K(tenant_id_),
                K(trigger_id_),
                K(owner_id_),
@@ -463,7 +504,11 @@ public:
                K(package_spec_info_.get_source()),
                K(package_body_info_.get_source()),
                K(sql_mode_),
-               K(priv_user_));
+               K(priv_user_),
+               K(order_type_),
+               K(ref_trg_db_name_),
+               K(ref_trg_name_),
+               K(action_order_));
 protected:
   static int gen_package_source_simple(const ObTriggerInfo &trigger_info,
                                        const common::ObString &base_object_database,
@@ -546,7 +591,12 @@ protected:
   ObPackageInfo package_body_info_;
   uint64_t sql_mode_;
   common::ObString priv_user_;
+  OrderType order_type_;                    // trigger指定的排序方式
+  common::ObString ref_trg_db_name_;              // 排序方式中指定的trigger的db name
+  common::ObString ref_trg_name_;                 // 排序方式中指定的trigger的name
+  int64_t action_order_;                          // 该值在rs端计算,从系统表里面读出来的值是有意义的
 };
+
 
 }  // namespace schema
 }  // namespace share

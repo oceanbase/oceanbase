@@ -40,7 +40,7 @@ struct ObDTLIntermResultMonitorInfo
     qc_id_(qc_id), dfo_id_(dfo_id), sqc_id_(sqc_id)
   { }
     TO_STRING_KV(K_(qc_id), K_(dfo_id), K_(sqc_id));
-  int32_t qc_id_;
+  int64_t qc_id_;
   int64_t dfo_id_;
   int64_t sqc_id_;
 };
@@ -104,6 +104,7 @@ public:
   int64_t dump_time_;
   int64_t dump_cost_;
   ObDTLIntermResultMonitorInfo monitor_info_;
+  uint64_t tenant_id_;
 };
 
 struct ObDTLIntermResultInfoGuard
@@ -204,15 +205,17 @@ public:
   bool is_eof_;
 };
 
-class ObAtomicEraseIntermResultInfoCall
+class ObEraseTenantIntermResultInfo
 {
 public:
-  ObAtomicEraseIntermResultInfoCall() : need_free_(false) {}
-  ~ObAtomicEraseIntermResultInfoCall() = default;
-  void operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
+  ObEraseTenantIntermResultInfo() : tenant_id_(OB_INVALID_ID), expire_keys_(), ret_(common::OB_SUCCESS) {}
+  ~ObEraseTenantIntermResultInfo() = default;
+  int operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
       ObDTLIntermResultInfo *> &entry);
 public:
-  bool need_free_;
+  uint64_t tenant_id_;
+  common::ObSEArray<ObDTLIntermResultKey, 64> expire_keys_;
+  int ret_;
 };
 
 class ObDTLIntermResultManager
@@ -246,6 +249,7 @@ public:
   int init();
   void destroy();
   int generate_monitor_info_rows(observer::ObDTLIntermResultMonitorInfoGetter &monitor_info_getter);
+  int erase_tenant_interm_result_info(int64_t tenant_id);
   static void free_interm_result_info_store(ObDTLIntermResultInfo *result_info);
   static void free_interm_result_info(ObDTLIntermResultInfo *result_info);
   static void inc_interm_result_ref_count(ObDTLIntermResultInfo *result_info);

@@ -17,7 +17,6 @@
 #include <functional>
 #include "lib/container/ob_vector.h"
 #include "lib/lock/ob_bucket_lock.h"    // ObBucketLock
-#include "ob_worker_pool.h"
 #include "ob_tenant_node_balancer.h"
 
 namespace oceanbase
@@ -75,21 +74,23 @@ typedef common::ObSortedVector<ObTenant*> TenantList;
 typedef TenantList::iterator TenantIterator;
 typedef common::ObVector<uint64_t> TenantIdList;
 
+enum class UpdateTenantConfigOpt {
+  CONVERT_HIDDEN_TO_REAL_SYS_TENANT = 0,
+  CONVERT_REAL_TO_HIDDEN_SYS_TENANT = 1,
+  NORMAL_UPDATE_TENANT_CONFIG_OPT = 2
+};
+
 // This is the entry class of OMT module.
 class ObMultiTenant
     : public share::ObThreadPool
 {
 public:
-  const     static int64_t DEFAULT_TIMES_OF_WORKERS = 10;
   const     static int64_t TIME_SLICE_PERIOD        = 10000;
-  constexpr static double  DEFAULT_NODE_QUOTA       = 16.;
 
 public:
   explicit ObMultiTenant();
 
   int init(common::ObAddr myaddr,
-           double node_quota = DEFAULT_NODE_QUOTA,
-           int64_t times_of_workers = DEFAULT_TIMES_OF_WORKERS,
            common::ObMySQLProxy *sql_proxy = NULL,
            bool mtl_bind_flag = true);
 
@@ -116,10 +117,11 @@ public:
   int update_tenant_cpu(const uint64_t tenant_id, const double min_cpu, const double max_cpu);
   int update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit);
   int update_tenant_log_disk_size(const uint64_t tenant_id,
-                                  const int64_t expected_log_disk_size);
+                                  const int64_t expected_log_disk_size,
+                                  const UpdateTenantConfigOpt &opt);
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);
-  int update_palf_disk_config(ObTenantConfigGuard &tenant_config);
+  int update_palf_config();
   int update_tenant_dag_scheduler_config();
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
@@ -159,7 +161,6 @@ public:
   inline bool has_synced() const;
 
   void set_workers_per_cpu(int64_t v);
-  void set_group_sug_token();
   int write_create_tenant_abort_slog(uint64_t tenant_id);
   int write_delete_tenant_commit_slog(uint64_t tenant_id);
   int clear_persistent_data(const uint64_t tenant_id);
@@ -180,17 +181,19 @@ protected:
                                         const int64_t mem_limit,
                                         ObTenantMeta &meta);
   int create_virtual_tenants();
-  int remove_tenant(const uint64_t tenant_id);
+  int remove_tenant(const uint64_t tenant_id, bool &lock_succ);
   uint32_t get_tenant_lock_bucket_idx(const uint64_t tenant_id);
-  int update_tenant_unit_no_lock(const share::ObUnitInfoGetter::ObTenantConfig &unit);
+  int update_tenant_unit_no_lock(const share::ObUnitInfoGetter::ObTenantConfig &unit,
+                                 const UpdateTenantConfigOpt &opt);
 
 protected:
       static const int DEL_TRY_TIMES = 30;
   enum class ObTenantCreateStep {
       STEP_BEGIN = 0, // begin
       STEP_CTX_MEM_CONFIG_SETTED = 1, // set_tenant_ctx_idle succ
-      STEP_TENANT_NEWED = 2, // new tenant succ
-      STEP_WRITE_PREPARE_SLOG = 3, // write_prepare_create_tenant_slog succ
+      STEP_LOG_DISK_SIZE_PINNED = 2,  // pin log disk size succ
+      STEP_TENANT_NEWED = 3, // new tenant succ
+      STEP_WRITE_PREPARE_SLOG = 4, // write_prepare_create_tenant_slog succ
       STEP_FINISH,
   };
 
@@ -204,8 +207,6 @@ protected:
 
   mutable common::SpinRWLock lock_; // protect tenant list
   TenantList tenants_;
-  double node_quota_;
-  int64_t times_of_workers_;
   ObTenantNodeBalancer *balancer_;
   common::ObAddr myaddr_;
   bool cpu_dump_;
@@ -220,16 +221,6 @@ private:
 TenantList &ObMultiTenant::get_tenant_list()
 {
   return tenants_;
-}
-
-double ObMultiTenant::get_node_quota() const
-{
-  return node_quota_;
-}
-
-int64_t ObMultiTenant::get_times_of_workers() const
-{
-  return times_of_workers_;
 }
 
 int ObMultiTenant::lock_tenant_list(bool write)

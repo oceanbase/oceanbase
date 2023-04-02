@@ -19,10 +19,6 @@
 #include "common/ob_range.h"
 namespace oceanbase
 {
-namespace sql
-{
-class ObPlanCacheManager;
-}
 namespace observer
 {
 class ObVirtualSqlPlanStatistics : public common::ObVirtualTableScannerIterator
@@ -31,7 +27,6 @@ public:
   ObVirtualSqlPlanStatistics();
   virtual ~ObVirtualSqlPlanStatistics();
   int inner_open();
-  virtual void set_pcm(sql::ObPlanCacheManager *pcm) { pcm_ = pcm; }
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
   void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -59,7 +54,6 @@ private:
     EXTEND_INFO1,
     EXTEND_INFO2
   };
-  sql::ObPlanCacheManager *pcm_;
   common::ObSEArray<uint64_t, 16> tenant_id_array_;
   common::ObSEArray<sql::ObOperatorStat, 128> operator_stat_array_;
   int64_t tenant_id_;

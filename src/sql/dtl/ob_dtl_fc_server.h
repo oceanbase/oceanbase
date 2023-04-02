@@ -194,7 +194,7 @@ OB_INLINE bool ObTenantDfc::need_block(ObDtlFlowControl *dfc)
     need_block = dfc->get_used() >= max_size_per_dfc || tenant_dfc_.get_used() >= max_buffer_size_;
   #ifdef ERRSIM
     int ret = common::OB_SUCCESS;
-    ret = E(EventTable::EN_FORCE_DFC_BLOCK) ret;
+    ret = OB_E(EventTable::EN_FORCE_DFC_BLOCK) ret;
     need_block = (common::OB_SUCCESS != ret) ? true : need_block;
     SQL_DTL_LOG(TRACE, "trace block", K(need_block), K(ret));
     ret = common::OB_SUCCESS;

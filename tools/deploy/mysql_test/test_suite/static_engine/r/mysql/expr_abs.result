@@ -52,17 +52,15 @@ select abs(1.0);
 +----------+
 explain select abs(1.0);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(1.0)]), filter(nil)
       values({abs(1.0)})
-
 select abs(1);
 +--------+
 | abs(1) |
@@ -71,17 +69,15 @@ select abs(1);
 +--------+
 explain select abs(1);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(1)]), filter(nil)
       values({abs(1)})
-
 select abs(1+2+3-4-1-2+5-5);
 +----------------------+
 | abs(1+2+3-4-1-2+5-5) |
@@ -90,17 +86,15 @@ select abs(1+2+3-4-1-2+5-5);
 +----------------------+
 explain select abs(1+2+3-4-1-2+5-5);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(1 + 2 + 3 - 4 - 1 - 2 + 5 - 5)]), filter(nil)
       values({abs(1 + 2 + 3 - 4 - 1 - 2 + 5 - 5)})
-
 select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
 +-----------------------------------+
 | abs(abs(1+2+3-4-1-2+5-5)-abs(-3)) |
@@ -109,17 +103,15 @@ select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
 +-----------------------------------+
 explain select abs(abs(1+2+3-4-1-2+5-5)-abs(-3));
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(abs(1 + 2 + 3 - 4 - 1 - 2 + 5 - 5) - abs(-3))]), filter(nil)
       values({abs(abs(1 + 2 + 3 - 4 - 1 - 2 + 5 - 5) - abs(-3))})
-
 select abs(true and false);
 +---------------------+
 | abs(true and false) |
@@ -128,17 +120,15 @@ select abs(true and false);
 +---------------------+
 explain select abs(true and false);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(cast(1 AND 0, BIGINT(-1, 0)))]), filter(nil)
       values({abs(cast(1 AND 0, BIGINT(-1, 0)))})
-
 select abs(10/0);
 +-----------+
 | abs(10/0) |
@@ -149,17 +139,15 @@ SELECT ABS(-9223372036854775808);
 ERROR 22003: value is out of range
 explain SELECT ABS(-9223372036854775808);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([ABS(-9223372036854775808)]), filter(nil)
       values({ABS(-9223372036854775808)})
-
 select abs(-9999999999999999999999);
 +------------------------------+
 | abs(-9999999999999999999999) |
@@ -168,17 +156,15 @@ select abs(-9999999999999999999999);
 +------------------------------+
 explain select abs(-9999999999999999999999);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(-9999999999999999999999)]), filter(nil)
       values({abs(-9999999999999999999999)})
-
 select abs(9999999999999999999999);
 +-----------------------------+
 | abs(9999999999999999999999) |
@@ -187,17 +173,15 @@ select abs(9999999999999999999999);
 +-----------------------------+
 explain select abs(9999999999999999999999);
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(9999999999999999999999)]), filter(nil)
       values({abs(9999999999999999999999)})
-
 select abs(repeat('1',100));
 +----------------------+
 | abs(repeat('1',100)) |
@@ -206,17 +190,15 @@ select abs(repeat('1',100));
 +----------------------+
 explain select abs(repeat('1',100));
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(cast(repeat('1', 100), DOUBLE(-1, -1)))]), filter(nil)
       values({abs(cast(repeat('1', 100), DOUBLE(-1, -1)))})
-
 select abs(repeat('1',46));
 +-----------------------+
 | abs(repeat('1',46))   |
@@ -225,17 +207,15 @@ select abs(repeat('1',46));
 +-----------------------+
 explain select abs(repeat('1',46));
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(cast(repeat('1', 46), DOUBLE(-1, -1)))]), filter(nil)
       values({abs(cast(repeat('1', 46), DOUBLE(-1, -1)))})
-
 select abs(0-repeat('1',46));
 +-----------------------+
 | abs(0-repeat('1',46)) |
@@ -244,17 +224,15 @@ select abs(0-repeat('1',46));
 +-----------------------+
 explain select abs(0-repeat('1',46));
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([abs(cast(0, DOUBLE(-1, -1)) - cast(repeat('1', 46), DOUBLE(-1, -1)))]), filter(nil)
       values({abs(cast(0, DOUBLE(-1, -1)) - cast(repeat('1', 46), DOUBLE(-1, -1)))})
-
 
 
 select abs(t1) from t;
@@ -266,17 +244,17 @@ select abs(t1) from t;
 +---------+
 explain select abs(t1) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t1, BIGINT(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t1, BIGINT(-1, 0)))]), filter(nil), rowset=256
       access([t.t1]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t2) from t;
 +---------+
 | abs(t2) |
@@ -286,17 +264,17 @@ select abs(t2) from t;
 +---------+
 explain select abs(t2) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t2, BIGINT(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t2, BIGINT(-1, 0)))]), filter(nil), rowset=256
       access([t.t2]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t3) from t;
 +---------+
 | abs(t3) |
@@ -306,17 +284,17 @@ select abs(t3) from t;
 +---------+
 explain select abs(t3) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t3, BIGINT(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t3, BIGINT(-1, 0)))]), filter(nil), rowset=256
       access([t.t3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t4) from t;
 +---------+
 | abs(t4) |
@@ -326,17 +304,17 @@ select abs(t4) from t;
 +---------+
 explain select abs(t4) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t4, BIGINT(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t4, BIGINT(-1, 0)))]), filter(nil), rowset=256
       access([t.t4]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t5) from t;
 +---------+
 | abs(t5) |
@@ -346,17 +324,17 @@ select abs(t5) from t;
 +---------+
 explain select abs(t5) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(t.t5)]), filter(nil), rowset=256, 
+  0 - output([abs(t.t5)]), filter(nil), rowset=256
       access([t.t5]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t6) from t;
 +---------+
 | abs(t6) |
@@ -366,17 +344,17 @@ select abs(t6) from t;
 +---------+
 explain select abs(t6) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t6, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t6, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256
       access([t.t6]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t7) from t;
 +---------+
 | abs(t7) |
@@ -386,17 +364,17 @@ select abs(t7) from t;
 +---------+
 explain select abs(t7) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t7, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t7, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256
       access([t.t7]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t8) from t;
 +---------+
 | abs(t8) |
@@ -406,17 +384,17 @@ select abs(t8) from t;
 +---------+
 explain select abs(t8) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t8, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t8, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256
       access([t.t8]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t9) from t;
 +---------+
 | abs(t9) |
@@ -426,17 +404,17 @@ select abs(t9) from t;
 +---------+
 explain select abs(t9) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t9, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t9, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256
       access([t.t9]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t10) from t;
 +----------+
 | abs(t10) |
@@ -446,17 +424,17 @@ select abs(t10) from t;
 +----------+
 explain select abs(t10) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(t.t10)]), filter(nil), rowset=256, 
+  0 - output([abs(t.t10)]), filter(nil), rowset=256
       access([t.t10]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t11) from t;
 +---------------------+
 | abs(t11)            |
@@ -466,17 +444,17 @@ select abs(t11) from t;
 +---------------------+
 explain select abs(t11) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t11, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t11, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t11]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t12) from t;
 +---------------------+
 | abs(t12)            |
@@ -486,17 +464,17 @@ select abs(t12) from t;
 +---------------------+
 explain select abs(t12) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t12, DOUBLE UNSIGNED(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t12, DOUBLE UNSIGNED(-1, -1)))]), filter(nil), rowset=256
       access([t.t12]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t13) from t;
 +----------+
 | abs(t13) |
@@ -506,17 +484,17 @@ select abs(t13) from t;
 +----------+
 explain select abs(t13) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(t.t13)]), filter(nil), rowset=256, 
+  0 - output([abs(t.t13)]), filter(nil), rowset=256
       access([t.t13]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t14) from t;
 +----------+
 | abs(t14) |
@@ -526,17 +504,17 @@ select abs(t14) from t;
 +----------+
 explain select abs(t14) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(t.t14)]), filter(nil), rowset=256, 
+  0 - output([abs(t.t14)]), filter(nil), rowset=256
       access([t.t14]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t15) from t;
 +----------+
 | abs(t15) |
@@ -546,17 +524,17 @@ select abs(t15) from t;
 +----------+
 explain select abs(t15) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(t.t15)]), filter(nil), rowset=256, 
+  0 - output([abs(t.t15)]), filter(nil), rowset=256
       access([t.t15]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t16) from t;
 +----------+
 | abs(t16) |
@@ -566,17 +544,17 @@ select abs(t16) from t;
 +----------+
 explain select abs(t16) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(t.t16)]), filter(nil), rowset=256, 
+  0 - output([abs(t.t16)]), filter(nil), rowset=256
       access([t.t16]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t17) from t;
 +----------------+
 | abs(t17)       |
@@ -586,17 +564,17 @@ select abs(t17) from t;
 +----------------+
 explain select abs(t17) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t17, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t17, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t17]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t18) from t;
 +----------------+
 | abs(t18)       |
@@ -606,17 +584,17 @@ select abs(t18) from t;
 +----------------+
 explain select abs(t18) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t18, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t18, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t18]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t19) from t;
 +----------+
 | abs(t19) |
@@ -626,17 +604,17 @@ select abs(t19) from t;
 +----------+
 explain select abs(t19) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t19, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t19, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t19]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t20) from t;
 +----------+
 | abs(t20) |
@@ -646,17 +624,17 @@ select abs(t20) from t;
 +----------+
 explain select abs(t20) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t20, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t20, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t20]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t21) from t;
 +----------+
 | abs(t21) |
@@ -666,17 +644,17 @@ select abs(t21) from t;
 +----------+
 explain select abs(t21) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t21, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t21, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256
       access([t.t21]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t22) from t;
 +----------+
 | abs(t22) |
@@ -686,17 +664,17 @@ select abs(t22) from t;
 +----------+
 explain select abs(t22) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t22, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t22, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t22]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t23) from t;
 +----------+
 | abs(t23) |
@@ -706,17 +684,17 @@ select abs(t23) from t;
 +----------+
 explain select abs(t23) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t23, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t23, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t23]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t24) from t;
 +----------+
 | abs(t24) |
@@ -726,17 +704,17 @@ select abs(t24) from t;
 +----------+
 explain select abs(t24) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t24, DOUBLE(-1, -1)))]), filter(nil), 
+  0 - output([abs(cast(t.t24, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t24]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t25) from t;
 +----------+
 | abs(t25) |
@@ -746,17 +724,17 @@ select abs(t25) from t;
 +----------+
 explain select abs(t25) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t25, DOUBLE(-1, -1)))]), filter(nil), 
+  0 - output([abs(cast(t.t25, DOUBLE(-1, -1)))]), filter(nil)
       access([t.t25]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t26) from t;
 +----------+
 | abs(t26) |
@@ -766,17 +744,17 @@ select abs(t26) from t;
 +----------+
 explain select abs(t26) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t26, DOUBLE(-1, -1)))]), filter(nil), 
+  0 - output([abs(cast(t.t26, DOUBLE(-1, -1)))]), filter(nil)
       access([t.t26]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t27) from t;
 +----------+
 | abs(t27) |
@@ -786,17 +764,17 @@ select abs(t27) from t;
 +----------+
 explain select abs(t27) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t27, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t27, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=256
       access([t.t27]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t28) from t;
 +----------+
 | abs(t28) |
@@ -806,17 +784,17 @@ select abs(t28) from t;
 +----------+
 explain select abs(t28) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t28, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t28, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t28]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 select abs(t29) from t;
 +----------+
 | abs(t29) |
@@ -826,17 +804,17 @@ select abs(t29) from t;
 +----------+
 explain select abs(t29) from t;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t   |2        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t   |2       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t29, DOUBLE(-1, -1)))]), filter(nil), rowset=256, 
+  0 - output([abs(cast(t.t29, DOUBLE(-1, -1)))]), filter(nil), rowset=256
       access([t.t29]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t.__pk_increment]), range(MIN ; MAX)always true
 
 drop table if exists t1;
 create table t1(c1 decimal unsigned, c2 smallint unsigned);

@@ -51,6 +51,8 @@ private:
   int get_proxy_scramble(ObString &proxy_scramble) const;
   int get_client_ip(ObString &client_ip) const;
 
+  int get_client_attribute_capability(uint64_t &cap) const;
+
   int extract_user_tenant(const common::ObString &in);
   common::ObString extract_user_name(const common::ObString &in) const;
   int extract_real_scramble(const ObString &proxy_scramble);

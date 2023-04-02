@@ -1,0 +1,378 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: linlin.xll
+#owner group: sql1
+#tags: pl
+#description:
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+--disable_warnings
+drop table if exists a,t;
+drop procedure if exists p;
+--enable_warnings
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE CONTINUE HANDLER FOR sqlexception insert into a values(0);
+DECLARE EXIT HANDLER FOR SQLSTATE '23000' insert into a values(1);
+insert into t values(1);
+insert into a values(2);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR sqlexception insert into a values(0);
+begin
+DECLARE EXIT HANDLER FOR aaa insert into a values(4);
+insert into t values(1);
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR sqlwarning insert into a values(0);
+begin
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE EXIT HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR sqlwarning insert into a values(0);
+begin
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE CONTINUE HANDLER FOR sqlwarning insert into a values(5);
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end;
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE CONTINUE HANDLER FOR sqlexception insert into a values(5);
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE CONTINUE HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end;
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE exit HANDLER FOR aaa insert into a values(4);
+signal SQLSTATE '01000';
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR aaa insert into a values(0);
+begin
+DECLARE exit HANDLER FOR aaa insert into a values(4);
+insert into t values(1);
+insert into a values(2);
+end;
+insert into a values(3);
+end//
+delimiter ;//
+--error 1062
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE EXIT HANDLER FOR sqlexception insert into a values(0);
+begin
+DECLARE exit HANDLER FOR aaa insert into a values(4);
+insert into t values(1);
+insert into a values(2);
+end;
+insert into a values(3);
+end;
+insert into a values(5);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE continue HANDLER FOR sqlexception insert into a values(-1);
+begin
+DECLARE aaa CONDITION FOR SQLSTATE '42S02';
+DECLARE continue HANDLER FOR sqlexception
+begin
+insert into a values(0);
+insert into t values(1);
+insert into a values(6);
+end;
+begin
+DECLARE exit HANDLER FOR aaa insert into a values(4);
+insert into t values(1);
+insert into a values(2);
+end;
+insert into a values(3);
+end;
+insert into a values(5);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE EXIT HANDLER FOR sqlexception insert into a values(0);
+DECLARE EXIT HANDLER FOR SQLSTATE '23000' insert into a values(1);
+insert into t values(1);
+insert into a values(2);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(a int primary key);
+insert into t values(1);
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+DECLARE EXIT HANDLER FOR SQLSTATE '23000' insert into a values(1);
+DECLARE EXIT HANDLER FOR sqlexception insert into a values(0);
+insert into t values(1);
+insert into a values(2);
+end//
+delimiter ;//
+call p(0);
+select * from a;
+drop table a;
+drop table t;
+drop procedure p;
+
+create table t(col int primary key);
+insert into t values(1);
+
+delimiter //;
+create procedure p()
+begin
+  declare x condition for sqlstate '23000';
+  declare exit handler for x
+  begin
+    rollback;
+    resignal;
+  end;
+  insert into t values(1);
+end;
+//
+--error 1062
+call p();
+//
+delimiter ;//
+drop procedure p;
+drop table t;

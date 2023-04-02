@@ -35,8 +35,8 @@ public:
   void reset();
   void destroy();
   int recover(const blocksstable::ObDatumRow &row,
-              ObSliceAlloc &slice_allocator,
-              transaction::ObLSTxCtxMgr* ls_tx_ctx_mgr);
+              ObTxDataTable &tx_data_table,
+              transaction::ObLSTxCtxMgr *ls_tx_ctx_mgr);
 
   TO_STRING_KV(K_(in_multi_row_state), K_(prev_meta), K_(prev_end_pos));
 
@@ -48,6 +48,7 @@ private:
   void set_in_multi_row_state_();
   void clear_in_multi_row_state_();
   bool is_in_multi_row_state_() const;
+  void finish_recover_one_tx_ctx_();
   virtual int recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls_tx_ctx_mgr,
                                   ObTxCtxTableInfo& ctx_info);
 private:
@@ -109,7 +110,7 @@ public:
   int release_ref_();
 
   // We use the method to recover the tx_ctx_table for reboot.
-  int recover(const blocksstable::ObDatumRow &row, ObSliceAlloc &slice_allocator);
+  int recover(const blocksstable::ObDatumRow &row, ObTxDataTable &tx_data_table);
 
   int check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
 

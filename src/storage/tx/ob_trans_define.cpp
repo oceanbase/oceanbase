@@ -30,6 +30,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace sql;
 using namespace storage;
 using namespace memtable;
@@ -55,9 +56,8 @@ OB_SERIALIZE_MEMBER(ObTransID, tx_id_);
 OB_SERIALIZE_MEMBER(ObStartTransParam, access_mode_, type_, isolation_, consistency_type_,
                     cluster_version_, is_inner_trans_, read_snapshot_type_);
 OB_SERIALIZE_MEMBER(ObElrTransInfo, trans_id_, commit_version_, result_);
-OB_SERIALIZE_MEMBER(MonotonicTs, mts_);
 OB_SERIALIZE_MEMBER(ObLSLogInfo, id_, offset_);
-
+OB_SERIALIZE_MEMBER(ObStateInfo, ls_id_, state_, version_, snapshot_version_);
 OB_SERIALIZE_MEMBER(ObTransDesc, a_);
 
 // class ObStartTransParam
@@ -287,12 +287,12 @@ bool ObMemtableKeyInfo::operator==(const ObMemtableKeyInfo &other) const
 void ObElrTransInfo::reset()
 {
   trans_id_.reset();
-  commit_version_ = -1;
+  commit_version_.reset();
   result_ = ObTransResultState::UNKNOWN;
   ctx_id_ = 0;
 }
 
-int ObElrTransInfo::init(const ObTransID &trans_id, uint32_t ctx_id, const int64_t commit_version)
+int ObElrTransInfo::init(const ObTransID &trans_id, uint32_t ctx_id, const SCN commit_version)
 {
   int ret = OB_SUCCESS;
 
@@ -988,15 +988,15 @@ void ObTxExecInfo::reset()
   prev_record_lsn_.reset();
   redo_lsns_.reset();
   scheduler_.reset();
-  prepare_version_ = ObTransVersion::INVALID_TRANS_VERSION;
+  prepare_version_.reset();
   trans_type_ = TransType::SP_TRANS;
   next_log_entry_no_ = 0;
-  max_applied_log_ts_ = OB_INVALID_TIMESTAMP;
-  max_applying_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_applied_log_ts_.reset();
+  max_applying_log_ts_.reset();
   max_applying_part_log_no_ = INT64_MAX;
   max_submitted_seq_no_ = 0;
   checksum_ = 0;
-  checksum_log_ts_ = 0;
+  checksum_scn_.set_min();
   max_durable_lsn_.reset();
   data_complete_ = false;
   is_dup_tx_ = false;
@@ -1005,6 +1005,7 @@ void ObTxExecInfo::reset()
   prepare_log_info_arr_.reset();
   xid_.reset();
   need_checksum_ = true;
+  is_sub2pc_ = false;
 }
 
 void ObTxExecInfo::destroy()
@@ -1035,14 +1036,15 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
                     checksum_,
-                    checksum_log_ts_,
+                    checksum_scn_,
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,
 //                    touched_pkeys_,
                     prepare_log_info_arr_,
                     xid_,
-                    need_checksum_);
+                    need_checksum_,
+                    is_sub2pc_);
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 

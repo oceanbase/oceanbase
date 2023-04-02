@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -34,7 +35,7 @@ STATIC_ASSERT(sizeof(ObPrecision) == sizeof(ObLengthSemantics),
 OB_SERIALIZE_MEMBER(ObDatumMeta, type_, cs_type_, scale_, precision_);
 
 
-ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx)
+ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
   : frames_(exec_ctx.get_frames()),
     max_batch_size_(0),
     exec_ctx_(exec_ctx),
@@ -43,7 +44,7 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx)
     tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
     batch_idx_(0),
     batch_size_(0),
-    expr_res_alloc_(exec_ctx.get_eval_res_allocator())
+    expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ? (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator())
 {
 }
 
@@ -185,7 +186,8 @@ OB_DEF_DESERIALIZE(ObExpr)
   }
 
   if (OB_SUCC(ret)) {
-    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_);
+    basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_, datum_meta_.scale_,
+                                                lib::is_oracle_mode(), obj_meta_.has_lob_header());
     CK(NULL != basic_funcs_);
   }
   if (is_batch_result()) {
@@ -403,6 +405,9 @@ int ObDatumObjParam::from_objparam(const ObObjParam &objparam, ObIAllocator *all
     accuracy_ = objparam.get_accuracy();
     res_flags_ = objparam.get_result_flag();
     flag_ = objparam.get_param_flag();
+    if (objparam.has_lob_header()) {
+      set_result_flag(HAS_LOB_HEADER_FLAG);
+    }
   }
 
   return ret;
@@ -415,6 +420,9 @@ int ObDatumObjParam::to_objparam(common::ObObjParam &obj_param, ObIAllocator *al
   meta.set_type(meta_.type_);
   meta.set_collation_type(meta_.cs_type_);
   meta.set_scale(meta_.scale_);
+  if (res_flags_ & HAS_LOB_HEADER_FLAG) {
+    meta.set_has_lob_header();
+  }
   if (OB_UNLIKELY(meta_.is_ext_sql_array())) {
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_UNEXPECTED;
@@ -609,16 +617,21 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   }
   datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + ctx.get_batch_idx();
   if (need_evaluate) {
-    reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
-    ret = eval_func_(*this, ctx, *datum);
-    if (OB_SUCC(ret)) {
-      ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
-      evaluated_flags->set(ctx.get_batch_idx());
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      datum->set_null();
-    }
-    if (datum->is_null()) {
-      info->notnull_ = false;
+      reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
+      ret = eval_func_(*this, ctx, *datum);
+      CHECK_STRING_LENGTH((*this), (*datum));
+      if (OB_SUCC(ret)) {
+        ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
+        evaluated_flags->set(ctx.get_batch_idx());
+      } else {
+        datum->set_null();
+      }
+      if (datum->is_null()) {
+        info->notnull_ = false;
+      }
     }
   }
 
@@ -655,17 +668,31 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       info->notnull_ = false;
       info->point_to_frame_ = true;
     }
-    ret = (*eval_batch_func_)(*this, ctx, skip, size);
-    if (OB_SUCC(ret)) {
-      if (!info->evaluated_) {
-        info->cnt_ = size;
-        info->evaluated_ = true;
-      }
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
-      ObDatum *datum_end = datum + size;
-      for (; datum < datum_end; datum += 1) {
-        datum->set_null();
+      ret = (*eval_batch_func_)(*this, ctx, skip, size);
+      if (OB_SUCC(ret)) {
+        if (!info->evaluated_) {
+          info->cnt_ = size;
+          info->evaluated_ = true;
+        }
+        #ifndef NDEBUG
+          if (is_oracle_mode() && (ob_is_string_tc(datum_meta_.type_) || ob_is_raw(datum_meta_.type_))) {
+            ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+            for (int64_t i = 0; i < size; i++) {
+              if (!skip.contain(i) && 0 == datum[i].len_ && !datum[i].is_null()) {
+                SQL_ENG_LOG(ERROR, "unexpected datum length", KPC(this));
+              }
+            }
+          }
+        #endif
+      } else {
+        ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+        ObDatum *datum_end = datum + size;
+        for (; datum < datum_end; datum += 1) {
+          datum->set_null();
+        }
       }
     }
   }
@@ -690,6 +717,7 @@ int expr_default_eval_batch_func(const ObExpr &expr,
       // set current evaluate index
       batch_info_guard.set_batch_idx(i);
       ret = expr.eval_func_(expr, ctx, datum[i]);
+      CHECK_STRING_LENGTH(expr, datum[i]);
       evaluated_flags->set(i);
       if (datum[i].is_null()) {
         got_null = true;
@@ -721,6 +749,10 @@ int eval_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
         LOG_WARN("obj type miss match", K(ret), K(v), K(expr));
       } else if (OB_FAIL(expr_datum.from_obj(v, expr.obj_datum_map_))) {
         LOG_WARN("set obj to datum failed", K(ret));
+      } else if (is_lob_storage(v.get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(v, expr.obj_meta_, expr.obj_datum_map_,
+                                             ctx.exec_ctx_.get_allocator(), expr_datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(v.get_meta()), K(expr.obj_meta_));
       }
     }
   }
@@ -753,7 +785,7 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       cast_mode = lib::is_oracle_mode() ?
       (cast_mode | CM_CHARSET_CONVERT_IGNORE_ERR) : (cast_mode | CM_COLUMN_CONVERT);
       if (ctx.exec_ctx_.get_physical_plan_ctx()->is_ignore_stmt()) {
-        cast_mode = cast_mode | CM_WARN_ON_FAIL;
+        cast_mode = cast_mode | CM_WARN_ON_FAIL | CM_CHARSET_CONVERT_IGNORE_ERR;
       }
       ObCastCtx cast_ctx(&allocator, &dtc_params, cast_mode, dst_meta.get_collation_type());
       if (OB_FAIL(ObObjCaster::to_type(dst_meta.get_type(), cast_ctx, v, dst_obj))) {

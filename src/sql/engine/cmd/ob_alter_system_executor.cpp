@@ -22,7 +22,6 @@
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_task_executor_ctx.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "lib/allocator/page_arena.h"
@@ -37,6 +36,9 @@
 #include "observer/omt/ob_tenant.h" //ObTenant
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rpc/obmysql/ob_sql_sock_session.h"
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 namespace oceanbase
 {
 using namespace common;
@@ -73,6 +75,7 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
       } else {
         arg.zone_ = stmt.get_zone();
         arg.tablet_id_ = stmt.get_tablet_id();
+        arg.ls_id_ = stmt.get_ls_id();
       }
       if (OB_SUCC(ret)) {
         // get all tenants to freeze
@@ -170,36 +173,64 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
     common::ObString sql_id = stmt.flush_cache_arg_.sql_id_;
     switch (stmt.flush_cache_arg_.cache_type_) {
       case CACHE_TYPE_LIB_CACHE: {
-        if (OB_ISNULL(GCTX.sql_engine_->get_plan_cache_manager())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("plan cache manager is null");
-        } else if (stmt.flush_cache_arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
+        if (stmt.flush_cache_arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
           ObLibCacheNameSpace ns = stmt.flush_cache_arg_.ns_type_;
           if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_lib_cache_by_ns(ns);
+            common::ObArray<uint64_t> tenant_ids;
+            if (OB_ISNULL(GCTX.omt_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+            } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+              LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+            } else {
+              for (int64_t i = 0; i < tenant_ids.size(); i++) {
+                MTL_SWITCH(tenant_ids.at(i)) {
+                  ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                  ret = plan_cache->flush_lib_cache_by_ns(ns);
+                }
+                // ignore errors at switching tenant
+                ret = OB_SUCCESS;
+              }
+            }
           } else {
             for (int64_t i = 0; i < tenant_num; ++i) { //ignore ret
-              ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_lib_cache_by_ns(
-                    stmt.flush_cache_arg_.tenant_ids_.at(i), ns);
+              MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_lib_cache_by_ns(ns);
+              }
             }
           }
         } else {
           if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_lib_cache();
+            common::ObArray<uint64_t> tenant_ids;
+            if (OB_ISNULL(GCTX.omt_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+            } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+              LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+            } else {
+              for (int64_t i = 0; i < tenant_ids.size(); i++) {
+                MTL_SWITCH(tenant_ids.at(i)) {
+                  ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                  ret = plan_cache->flush_lib_cache();
+                }
+                // ignore errors at switching tenant
+                ret = OB_SUCCESS;
+              }
+            }
           } else {
             for (int64_t i = 0; i < tenant_num; ++i) { //ignore ret
-              ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_lib_cache(
-                    stmt.flush_cache_arg_.tenant_ids_.at(i));
+              MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_lib_cache();
+              }
             }
           }
         }
         break;
       }
       case CACHE_TYPE_PLAN: {
-        if (OB_ISNULL(GCTX.sql_engine_->get_plan_cache_manager())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("plan cache manager is null");
-        } else if (stmt.flush_cache_arg_.is_fine_grained_) {
+        if (stmt.flush_cache_arg_.is_fine_grained_) {
           // purge in sql_id level, aka. fine-grained plan evict
           // we assume tenant_list must not be empty and this will be checked in resolve phase
           if (0 == tenant_num) {
@@ -208,22 +239,42 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
           } else {
             for (int64_t i = 0; i < tenant_num; i++) { // ignore ret
               int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
-              if (db_num == 0) { // not specified db_name, evcit all dbs
-                ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(t_id, OB_INVALID_ID, sql_id);
-              } else { // evict db by db
-                for(int64_t j = 0; j < db_num; j++) { // ignore ret
-                  ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache_by_sql_id(
-                                    t_id, stmt.flush_cache_arg_.db_ids_.at(j), sql_id);
+              MTL_SWITCH(t_id) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                // not specified db_name, evcit all dbs
+                if (db_num == 0) {
+                  ret = plan_cache->flush_plan_cache_by_sql_id(OB_INVALID_ID, sql_id);
+                } else { // evict db by db
+                  for(int64_t j = 0; j < db_num; j++) { // ignore ret
+                    ret = plan_cache->flush_plan_cache_by_sql_id(stmt.flush_cache_arg_.db_ids_.at(j), sql_id);
+                  }
                 }
               }
             }
           }
         } else if (0 == tenant_num) { // purge in tenant level, aka. coarse-grained plan evict
-          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_plan_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_plan_cache();
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {
-          for (int64_t i = 0; i < tenant_num; ++i) { //ignore ret
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_plan_cache(
-                stmt.flush_cache_arg_.tenant_ids_.at(i));
+          for (int64_t i = 0; OB_SUCC(ret) && i < tenant_num; ++i) { //ignore ret
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_plan_cache();
+            }
           }
         }
         break;
@@ -267,20 +318,60 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
       }
       case CACHE_TYPE_PL_OBJ: {
         if (0 == tenant_num) {
-          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_pl_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_pl_cache();
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {
           for (int64_t i = 0; i < tenant_num; i++) { // ignore internal err code
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_pl_cache(stmt.flush_cache_arg_.tenant_ids_.at(i));
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_pl_cache();
+            }
           }
         }
         break;
       }
       case CACHE_TYPE_PS_OBJ: {
         if (0 == tenant_num) {
-          ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_all_ps_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPsCache* ps_cache = MTL(ObPsCache*);
+                if (ps_cache->is_inited()) {
+                  ret = ps_cache->cache_evict_all_ps();
+                }
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {
           for (int64_t i = 0; i < tenant_num; i++) { // ignore internal err code
-            ret = GCTX.sql_engine_->get_plan_cache_manager()->flush_ps_cache(stmt.flush_cache_arg_.tenant_ids_.at(i));
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPsCache* ps_cache = MTL(ObPsCache*);
+              if (ps_cache->is_inited()) {
+                ret = ps_cache->cache_evict_all_ps();
+              }
+            }
           }
         }
         break;
@@ -512,94 +603,116 @@ int ObAdminServerExecutor::execute(ObExecContext &ctx, ObAdminServerStmt &stmt)
       } else if (ObAdminServerArg::STOP == stmt.get_op()
                  || ObAdminServerArg::FORCE_STOP == stmt.get_op()) {
         // check whether all leaders are switched out
-        ObMySQLProxy *sql_proxy = ctx.get_sql_proxy();
-        const int64_t idx = 0;
-        const int64_t retry_interval_us = 1000l * 1000l; // 1s
-        ObSqlString sql;
-        if (OB_FAIL(sql.assign_fmt(
-            "SELECT CAST(COUNT(*) AS SIGNED) FROM %s "
-            "WHERE role = 'LEADER' and (svr_ip, svr_port) IN (",
-            share::OB_CDB_OB_LS_LOCATIONS_TNAME))) {
-          LOG_WARN("assign_fmt failed", K(ret));
-        } else {
-          const int64_t size = arg.servers_.size();
-          for (int64_t idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
-            const ObAddr &server = arg.servers_[idx];
-            char svr_ip[MAX_IP_ADDR_LENGTH] = "\0";
-            if (!server.is_valid()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("addr is not vaild", K(ret), K(server));
-            } else if (!server.ip_to_string(svr_ip, sizeof(svr_ip))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("format ip str failed", K(ret), K(server));
-            } else {
-              // server-zone mapping has been checked in rootservice
-              if (idx == (size - 1)) {
-                if (OB_FAIL(sql.append_fmt(
-                        "('%s','%d'))", svr_ip, server.get_port()))) {
-                  LOG_WARN("append_fmt failed", K(ret));
-                }
-              } else {
-                if (OB_FAIL(sql.append_fmt(
-                        "('%s','%d'), ", svr_ip, server.get_port()))) {
-                  LOG_WARN("append_fmt failed", K(ret));
-                }
-              }
-            }
-          }
-        }
-        bool stop = false;
-        while (OB_SUCC(ret) && !stop) {
-          SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-            sqlclient::ObMySQLResult *result = NULL;
-            const int64_t rpc_timeout = THIS_WORKER.get_timeout_remain();
-            obrpc::Bool can_stop(true /* default value */);
-            int64_t leader_cnt = 0;
-            if (0 > THIS_WORKER.get_timeout_remain()) {
-              ret = OB_WAIT_LEADER_SWITCH_TIMEOUT;
-              LOG_WARN("wait switching out leaders from all servers timeout", K(ret));
-            } else if (OB_FAIL(THIS_WORKER.check_status())) {
-              LOG_WARN("ctx check status failed", K(ret));
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (!can_stop) {
-            } else if (OB_FAIL(sql_proxy->read(res, sql.ptr()))) {
-              if (OB_RS_SHUTDOWN == ret || OB_RS_NOT_MASTER == ret) {
-                // switching rs, sleep and retry
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("execute sql failed", K(ret), K(sql));
-              }
-            } else if (OB_ISNULL(result = res.get_result())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get result failed", K(ret));
-            } else if (OB_FAIL(result->next())) {
-              if (OB_ITER_END == ret) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("result is empty", K(ret));
-              } else {
-                LOG_WARN("get next result failed", K(ret));
-              }
-            } else if (OB_FAIL(result->get_int(idx, leader_cnt))) {
-              if (OB_ERR_NULL_VALUE == ret) {
-                // __all_virtual_server_stat is not ready, sleep and retry
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("get sum failed", K(ret));
-              }
-            } else if (0 == leader_cnt) {
-              stop = true;
-            } else {
-              LOG_INFO("waiting switching leaders out", K(ret), "left count", leader_cnt);
-              ob_usleep(retry_interval_us);
-            }
-          }
+        if (OB_FAIL(wait_leader_switch_out_(*(ctx.get_sql_proxy()), arg.servers_))) {
+          LOG_WARN("fail to wait leader switch out", KR(ret), K(arg));
         }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected op", "type", static_cast<int64_t>(stmt.get_op()));
+    }
+  }
+  return ret;
+}
+
+int ObAdminServerExecutor::wait_leader_switch_out_(
+    ObISQLClient &sql_proxy,
+    const obrpc::ObServerList &svr_list)
+{
+  int ret = OB_SUCCESS;
+  const int64_t idx = 0;
+  const int64_t retry_interval_us = 1000l * 1000l; // 1s
+  ObSqlString sql;
+  bool stop = false;
+  if (OB_UNLIKELY(0 >= svr_list.size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(svr_list));
+  } else if (OB_FAIL(construct_wait_leader_switch_sql_(svr_list, sql))) {
+    LOG_WARN("fail to construct wait leader switch sql", KR(ret), K(svr_list));
+  }
+
+  while (OB_SUCC(ret) && !stop) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      int64_t leader_cnt = 0;
+      if (0 > THIS_WORKER.get_timeout_remain()) {
+        ret = OB_WAIT_LEADER_SWITCH_TIMEOUT;
+        LOG_WARN("wait switching out leaders from all servers timeout", KR(ret));
+      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("ctx check status failed", KR(ret));
+      } else if (OB_FAIL(sql_proxy.read(res, sql.ptr()))) {
+        if (OB_RS_SHUTDOWN == ret || OB_RS_NOT_MASTER == ret) {
+          // switching rs, sleep and retry
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("execute sql failed", KR(ret), K(sql));
+        }
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get result failed", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is empty", KR(ret));
+        } else {
+          LOG_WARN("get next result failed", KR(ret));
+        }
+      } else if (OB_FAIL(result->get_int(idx, leader_cnt))) {
+        if (OB_ERR_NULL_VALUE == ret) {
+          // __all_virtual_server_stat is not ready, sleep and retry
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get sum failed", KR(ret));
+        }
+      } else if (0 == leader_cnt) {
+        stop = true;
+      } else {
+        LOG_INFO("waiting switching leaders out", KR(ret), "left count", leader_cnt);
+        ob_usleep(retry_interval_us);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminServerExecutor::construct_wait_leader_switch_sql_(
+    const obrpc::ObServerList &svr_list,
+    ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 >= svr_list.size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(svr_list));
+  } else if (OB_FAIL(sql.assign_fmt(
+                         "SELECT CAST(COUNT(*) AS SIGNED) FROM %s "
+                         "WHERE role = 'LEADER' and (svr_ip, svr_port) IN (",
+                         share::OB_CDB_OB_LS_LOCATIONS_TNAME))) {
+    LOG_WARN("assign_fmt failed", KR(ret));
+  } else {
+    const int64_t size = svr_list.size();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < size; ++idx) {
+      const ObAddr &server = svr_list[idx];
+      char svr_ip[MAX_IP_ADDR_LENGTH] = "\0";
+      if (!server.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("addr is not vaild", KR(ret), K(server));
+      } else if (!server.ip_to_string(svr_ip, sizeof(svr_ip))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("format ip str failed", KR(ret), K(server));
+      } else {
+        // server-zone mapping has been checked in rootservice
+        if (idx == (size - 1)) {
+          if (OB_FAIL(sql.append_fmt(
+                  "('%s','%d'))", svr_ip, server.get_port()))) {
+            LOG_WARN("append_fmt failed", KR(ret));
+          }
+        } else {
+          if (OB_FAIL(sql.append_fmt(
+                  "('%s','%d'), ", svr_ip, server.get_port()))) {
+            LOG_WARN("append_fmt failed", KR(ret));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -961,7 +1074,7 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
   } else if (OB_FAIL(common_rpc->admin_set_config(stmt.get_rpc_arg()))) {
     LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
-  } 
+  }
   return ret;
 }
 
@@ -1000,6 +1113,36 @@ int ObMigrateUnitExecutor::execute(ObExecContext &ctx, ObMigrateUnitStmt &stmt)
 		LOG_WARN("migrate unit rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
 	}
 	return ret;
+}
+
+int ObAddArbitrationServiceExecutor::execute(ObExecContext &ctx, ObAddArbitrationServiceStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, stmt);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support in CE Version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "add arbitration service in CE version");
+  return ret;
+}
+
+int ObRemoveArbitrationServiceExecutor::execute(ObExecContext &ctx, ObRemoveArbitrationServiceStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, stmt);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support in CE Version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "remove arbitration service in CE version");
+  return ret;
+}
+
+int ObReplaceArbitrationServiceExecutor::execute(ObExecContext &ctx, ObReplaceArbitrationServiceStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, stmt);
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support in CE Version", KR(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace arbitration service in CE version");
+  return ret;
 }
 
 int ObClearLocationCacheExecutor::execute(ObExecContext &ctx, ObClearLocationCacheStmt &stmt)
@@ -1521,7 +1664,7 @@ int ObClearBalanceTaskExecutor::execute(ObExecContext &ctx, ObClearBalanceTaskSt
  * 2. session is not in trans.
  * 3. login user has oceanbase db's access privilege.
  * 4. ObServer has target tenant's resource.
- * https://lark.alipay.com/ob/rootservice/gkz8ex
+ *
  */
 int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt)
 {
@@ -1571,15 +1714,10 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     LOG_WARN("chang tenant is not allow when prepared stmt already opened in session", KR(ret), KPC(session_info));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "change tenant when has prepared stmt already opened in session");
   } else {
+    observer::ObSMConnection* conn = nullptr;
     // switch connection
     if (OB_SUCC(ret)) {
-      rpc::ObSqlSockDesc& sock_desc = session_info->get_sock_desc();
-      easy_connection_t* easy_conn = nullptr;
-      observer::ObSMConnection* conn = nullptr;
-      if (OB_ISNULL((easy_conn = static_cast<easy_connection_t*>(sock_desc.sock_desc_)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sock_desc is null", KR(ret), KPC(session_info));
-      } else if (OB_ISNULL(conn = static_cast<observer::ObSMConnection*>(easy_conn->user_data))) {
+      if (OB_ISNULL(conn = session_info->get_sm_connection())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("connection is null", KR(ret), KPC(session_info));
       } else {
@@ -1607,34 +1745,34 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     }
     // switch session
     if (OB_SUCC(ret)) {
-      ObPlanCacheManager *plan_cache_mgr = session_info->get_plan_cache_manager();
       ObPCMemPctConf pc_mem_conf;
+      // tenant has been locked before
+      ObPlanCache *pc  = conn->tenant_->get<ObPlanCache*>();
       int64_t received_schema_version = OB_INVALID_VERSION;
       if (OB_SUCC(ret)) {
-        ret = E(EventTable::EN_CHANGE_TENANT_FAILED) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_CHANGE_TENANT_FAILED) OB_SUCCESS;
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(plan_cache_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("plan_cache_mgr is null", KR(ret));
       } else if (OB_FAIL(session_info->get_pc_mem_conf(pc_mem_conf))) {
         LOG_WARN("fail to get pc mem conf", KR(ret), KPC(session_info));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_received_broadcast_version(
                  effective_tenant_id, received_schema_version))) {
-        LOG_WARN("fail to get tenant received brocast version", KR(ret), K(effective_tenant_id));
+        LOG_WARN("fail to get tenant received broadcast version", KR(ret), K(effective_tenant_id));
       } else if (OB_FAIL(session_info->switch_tenant(effective_tenant_id))) {
         LOG_WARN("fail to switch tenant", KR(ret), K(effective_tenant_id), K(pre_effective_tenant_id));
       } else if (OB_FAIL(session_info->set_default_database(database_name))) {
         LOG_WARN("fail to set default database", KR(ret), K(database_name));
       } else if (OB_FAIL(session_info->update_sys_variable(
                  share::SYS_VAR_OB_LAST_SCHEMA_VERSION, received_schema_version))) {
-        // bugfix: https://work.aone.alibaba-inc.com/issue/18698167
+        // bugfix:
         LOG_WARN("fail to set session variable for last_schema_version", KR(ret),
                  K(effective_tenant_id), K(pre_effective_tenant_id), K(received_schema_version));
+      } else if (OB_FAIL(pc->set_mem_conf(pc_mem_conf))) {
+        SQL_PC_LOG(WARN, "fail to set plan cache memory conf", K(ret));
       } else {
         session_info->set_database_id(OB_SYS_DATABASE_ID);
-        session_info->set_plan_cache(plan_cache_mgr->get_or_create_plan_cache(effective_tenant_id, pc_mem_conf));
-        session_info->set_ps_cache(plan_cache_mgr->get_or_create_ps_cache(effective_tenant_id, pc_mem_conf));
+        session_info->set_plan_cache(pc);
+        session_info->set_ps_cache(NULL);
 
         if (OB_SUCC(ret)) {
           // System tenant's __oceanbase_inner_standby_user is used to execute remote sqls
@@ -1642,7 +1780,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
           // have a higher priority than sqls from user. Otherwise, it may cause an unstable cluster status
           // while cluster/tenant is lack of rpc resource. Here, we use special tenant' rpc resource to
           // deal with remote sqls accross cluster to avoid the influence of user's sql.
-          // bugfix: https://work.aone.alibaba-inc.com/issue/33024810
+          // bugfix:
           const ObString &user_name = session_info->get_user_name();
           if (0 == user_name.case_compare(OB_STANDBY_USER_NAME)) {
             // TODO: (yanmu.ztl) should use a independent special tenant
@@ -1675,24 +1813,48 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
 {
   int ret = OB_SUCCESS;
   ObString first_stmt;
-  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
-  obrpc::ObCommonRpcProxy *common_rpc = NULL;
-  if (OB_ISNULL(task_exec_ctx)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("get task executor context failed");
-  } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
-  } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt", KR(ret), K(stmt));
   } else {
     ObSwitchTenantArg &arg = stmt.get_arg();
     arg.set_stmt_str(first_stmt);
 
+    //left 200ms to return result
+    const int64_t remain_timeout_interval_us = THIS_WORKER.get_timeout_remain();
+    const int64_t execute_timeout_interval_us = remain_timeout_interval_us - 200 * 1000; // left 200ms to return result
+    const int64_t original_timeout_abs_us = THIS_WORKER.get_timeout_ts();
+    if (0 < execute_timeout_interval_us) {
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + execute_timeout_interval_us);
+    }
+
     // TODO support specify ALL
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.switch_tenant(arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(arg));
+    }
+
+    //set timeout back
+    if (0 < execute_timeout_interval_us) {
+      THIS_WORKER.set_timeout_ts(original_timeout_abs_us);
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTenantExecutor::execute(ObExecContext &ctx, ObRecoverTenantStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObString first_stmt;
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+    LOG_WARN("fail to get first stmt", KR(ret), K(stmt));
+  } else {
+    ObRecoverTenantArg &arg = stmt.get_rpc_arg();
+    arg.set_stmt_str(first_stmt);
+
+    // TODO support specify ALL and tenant list
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.recover_tenant(arg))) {
+      LOG_WARN("failed to recover_tenant", KR(ret), K(arg));
     }
   }
   return ret;
@@ -1932,7 +2094,7 @@ int ObDeletePolicyExecutor::execute(ObExecContext &ctx, ObDeletePolicyStmt &stmt
     if (OB_FAIL(databuff_printf(arg.policy_name_, sizeof(arg.policy_name_), "%s", stmt.get_policy_name()))) {
       LOG_WARN("failed to set policy name", K(ret), K(stmt));
     } else if (OB_FAIL(databuff_printf(arg.recovery_window_, sizeof(arg.recovery_window_), "%s", stmt.get_recovery_window()))) {
-      LOG_WARN("failed to set recovery window", K(ret), K(stmt));   
+      LOG_WARN("failed to set recovery window", K(ret), K(stmt));
     } else if (OB_FAIL(arg.clean_tenant_ids_.assign(stmt.get_clean_tenant_ids()))) {
       LOG_WARN("set clean tenant ids failed", K(ret));
     } else if (OB_FAIL(common_proxy->delete_policy(arg))) {

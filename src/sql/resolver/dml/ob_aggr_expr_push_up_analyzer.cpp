@@ -28,82 +28,63 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
                                                             ObRawExpr *&final_aggr)
 {
   int ret = OB_SUCCESS;
-  cur_level_ = cur_resolver_.get_current_level();
+  bool has_param_aggr = false;
+  ObArray<ObExecParamRawExpr *> final_exec_params;
+  ObArray<ObQueryRefRawExpr *> param_query_refs;
+  ObSelectResolver *min_level_resolver = NULL;
+  ObSelectResolver *final_aggr_resolver = NULL;
+  ObRawExpr *root_expr = aggr_expr;
   if (OB_ISNULL(aggr_expr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("aggr expr is null");
-  } else if (OB_FAIL(level_exprs_checker_.init(AGGR_HASH_BUCKET_SIZE))) {
-    LOG_WARN("init level exprs checker failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_expr->get_param_count(); ++i) {
-    ObRawExpr *&param_expr = aggr_expr->get_param_expr(i);
-    if (OB_FAIL(analyze_aggr_param_expr(param_expr))) {
-      LOG_WARN("analyze aggr param expr failed", K(ret));
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("aggr expr is null", K(ret));
+  } else if (OB_FAIL(analyze_aggr_param_expr(root_expr, true))) {
+    LOG_WARN("failed to analyze aggr param expr", K(ret), K(*root_expr));
+  } else if (OB_FAIL(get_min_level_resolver(min_level_resolver))) {
+    LOG_WARN("failed to get min level resolver", K(ret));
+  } else if (OB_ISNULL(final_aggr_resolver = fetch_final_aggr_resolver(&cur_resolver_,
+                                                                       min_level_resolver))) {
+    ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+    LOG_WARN("no resolver can produce aggregate function", K(ret));
+  } else if (final_aggr_resolver == &cur_resolver_) {
+    // do nothing
+  } else if (OB_FAIL(get_exec_params(final_aggr_resolver, exec_columns_, final_exec_params))) {
+    LOG_WARN("failed to get final exec params", K(ret));
+  } else if (OB_FAIL(check_param_aggr(final_exec_params, has_param_aggr))) {
+    LOG_WARN("failed to check param expr level", K(ret));
+  } else if (has_param_aggr) {
+    ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+    LOG_WARN("no resolver can produce aggregate function", K(ret));
+  } else if (OB_FAIL(push_up_aggr_column(final_aggr_resolver))) {
+    LOG_WARN("push up aggr column failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(aggr_expr, param_query_refs))) {
+    LOG_WARN("failed to extract query ref exprs", K(ret));
+  } else if (OB_FAIL(push_up_subquery_in_aggr(*final_aggr_resolver,
+                                              param_query_refs))) {
+    LOG_WARN("push up subquery in aggr failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::decorrelate(reinterpret_cast<ObRawExpr *&>(aggr_expr),
+                                                   final_exec_params))) {
+    LOG_WARN("failed to decorrelate exec params", K(ret));
   }
   if (OB_SUCC(ret)) {
-    //push up aggr to final aggr stmt
-    bool has_param_aggr = false;
-    ObSelectResolver *final_aggr_resolver = fetch_final_aggr_resolver(&cur_resolver_,
-                                                                      get_final_aggr_level());
-    ObArray<ObExecParamRawExpr *> final_exec_params;
-    if (NULL == final_aggr_resolver) {
-      ret = OB_ERR_INVALID_GROUP_FUNC_USE;
-      LOG_WARN("no resolver can produce aggregate function");
+    if (OB_FAIL(final_aggr_resolver->add_aggr_expr(aggr_expr))) {
+      LOG_WARN("add aggr to final resolver failed", K(ret));
     } else if (final_aggr_resolver == &cur_resolver_) {
-      // do nothing
-    } else if (OB_FAIL(get_exec_params(final_aggr_resolver->get_current_level(),
-                                       final_exec_params))) {
-      LOG_WARN("failed to get final exec params", K(ret));
-    } else if (OB_FAIL(check_param_aggr(final_exec_params, has_param_aggr))) {
-      LOG_WARN("failed to check param expr level", K(ret));
-    } else if (has_param_aggr) {
-      ret = OB_ERR_INVALID_GROUP_FUNC_USE;
-      LOG_WARN("no resolver can produce aggregate function", K(final_exec_params));
-    } else if (OB_FAIL(push_up_aggr_column(final_aggr_resolver->get_current_level()))) {
-      LOG_WARN("push up aggr column failed", K(ret));
-    } else if (OB_FAIL(adjust_query_level(final_aggr_resolver->get_current_level()))) {
-      LOG_WARN("adjust query level failed", K(ret));
-    } else if (OB_FAIL(push_up_subquery_in_aggr(*final_aggr_resolver,
-                                                final_exec_params))) {
-      LOG_WARN("push up subquery in aggr failed", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::decorrelate(reinterpret_cast<ObRawExpr *&>(aggr_expr),
-                                                     final_aggr_resolver->get_current_level()))) {
-      LOG_WARN("failed to decorrelate expr", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(final_aggr_resolver->add_aggr_expr(aggr_expr))) {
-        LOG_WARN("add aggr to final resolver failed", K(ret));
-      } else if (final_aggr_resolver == &cur_resolver_) {
-        final_aggr = aggr_expr;
-      } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(expr_factory,
-                                                             final_aggr_resolver->get_subquery(),
-                                                             aggr_expr,
-                                                             final_aggr))) {
-        LOG_WARN("failed to get exec param expr", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if(OB_FAIL(remove_alias_exprs())) {
-      LOG_WARN("failed to remove alias exprs", K(ret));
-    } else if (final_aggr_resolver == &cur_resolver_) {
-      // do nothing
-    } else if(OB_FAIL(remove_alias_exprs(reinterpret_cast<ObRawExpr *&>(aggr_expr)))) {
-      LOG_WARN("failed to remove alias exprs", K(ret));
+      final_aggr = aggr_expr;
+    } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(expr_factory,
+                                                           final_aggr_resolver->get_subquery(),
+                                                           aggr_expr,
+                                                           final_aggr))) {
+      LOG_WARN("failed to get exec param expr", K(ret));
     }
   }
-  return ret;
-}
-
-int ObAggrExprPushUpAnalyzer::analyze_aggr_param_exprs(ObIArray<ObRawExpr*> &param_exprs)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_exprs.count(); ++i) {
-    ObRawExpr *&param_expr = param_exprs.at(i);
-    if (OB_FAIL(analyze_aggr_param_expr(param_expr))) {
-      LOG_WARN("analyze aggr param expr failed", K(ret));
-    }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if(OB_FAIL(remove_alias_exprs())) {
+    LOG_WARN("failed to remove alias exprs", K(ret));
+  } else if (final_aggr_resolver == &cur_resolver_) {
+    // do nothing
+  } else if(OB_FAIL(remove_alias_exprs(reinterpret_cast<ObRawExpr *&>(aggr_expr)))) {
+    LOG_WARN("failed to remove alias exprs", K(ret));
   }
   return ret;
 }
@@ -115,56 +96,52 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_exprs(ObIArray<ObRawExpr*> &par
  * the aggr expr maybe pulled up into outer stmt (both Oracle and MySQL mode)
  * @return
  */
-int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr)
+int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
+                                                      bool is_root /* = false*/,
+                                                      bool is_child_stmt /* = false*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param expr in aggregate is null");
-  } else if (param_expr->get_expr_level() == cur_level_ &&
-             (param_expr->is_column_ref_expr() ||
-              T_REF_ALIAS_COLUMN == param_expr->get_expr_type())) {
-    has_cur_layer_column_ = true;
-  }
-  while (OB_SUCC(ret) && T_REF_ALIAS_COLUMN == param_expr->get_expr_type()) {
-    if (OB_ISNULL(param_expr = static_cast<ObAliasRefRawExpr*>(param_expr)->get_ref_expr())) {
-      //去掉alias expr
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("alias ref expr is null", K(ret));
+  } else if (!is_root) {
+    if (!is_child_stmt) {
+      if (param_expr->is_column_ref_expr() ||
+          T_REF_ALIAS_COLUMN == param_expr->get_expr_type()) {
+        has_cur_layer_column_ = true;
+      }
     }
-  }
-  if (OB_SUCC(ret) && param_expr->is_exec_param_expr()) {
-    if (OB_FAIL(exec_columns_.push_back(static_cast<ObExecParamRawExpr *>(param_expr)))) {
-      LOG_WARN("failed to push back exec columns", K(ret));
+    while (OB_SUCC(ret) && T_REF_ALIAS_COLUMN == param_expr->get_expr_type()) {
+      if (OB_ISNULL(param_expr = static_cast<ObAliasRefRawExpr*>(param_expr)->get_ref_expr())) {
+        //去掉alias expr
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alias ref expr is null", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && param_expr->is_exec_param_expr()) {
+      if (OB_FAIL(exec_columns_.push_back(static_cast<ObExecParamRawExpr *>(param_expr)))) {
+        LOG_WARN("failed to push back exec columns", K(ret));
+      }
+    }
+
+    // the following checks whether an aggr expr takes another aggr as its param.
+    if (OB_SUCC(ret) &&
+        !is_child_stmt &&
+        param_expr->is_aggr_expr() &&
+        !static_cast<ObAggFunRawExpr *>(param_expr)->is_nested_aggr()) {
+      //在聚集函数中含有同层级的聚集函数，这个对于mysql不允许的
+      //select count(select count(t1.c1) from t) from t1;
+      //在上面的例子中，count(t1.c1)推上去了，和最外层的count()处于同一级
+      //在分析子查询的聚集函数上推的时候不会报错
+      //在分析外层的聚集函数上推的时候报错发现了含有聚集函数中出现了同层嵌套，需要报错
+      ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+      LOG_WARN("aggregate nested in the same level", K(*param_expr));
     }
   }
 
-  // the following checks whether an aggr expr takes another aggr as its param.
-  if (OB_SUCC(ret) &&
-      param_expr->is_aggr_expr() &&
-      param_expr->get_expr_level() == cur_level_) {
-    //在聚集函数中含有同层级的聚集函数，这个对于mysql不允许的
-    //select count(select count(t1.c1) from t) from t1;
-    //在上面的例子中，count(t1.c1)推上去了，和最外层的count()处于同一级
-    //在分析子查询的聚集函数上推的时候不会报错
-    //在分析外层的聚集函数上推的时候报错发现了含有聚集函数中出现了同层嵌套，需要报错
-    ret = OB_ERR_INVALID_GROUP_FUNC_USE;
-    LOG_WARN("aggregate nested in the same level", K(*param_expr));
-  }
-
-  if (OB_SUCC(ret) &&
-      param_expr->get_expr_level() >= 0 &&
-      !param_expr->is_exec_param_expr()) {
-    if (OB_FAIL(level_exprs_checker_.add_expr(param_expr))) {
-      LOG_WARN("add expr to level exprs failed", K(ret));
-    }
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_expr->get_param_count(); ++i) {
     ObRawExpr *&param = param_expr->get_param_expr(i);
-    if (OB_ISNULL(param)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param expr is null");
-    } else if (OB_FAIL(SMART_CALL(analyze_aggr_param_expr(param)))) {
+    if (OB_FAIL(SMART_CALL(analyze_aggr_param_expr(param, false, is_child_stmt)))) {
       LOG_WARN("analyze child expr failed", K(ret));
     }
   }
@@ -184,8 +161,6 @@ int ObAggrExprPushUpAnalyzer::analyze_child_stmt(ObSelectStmt *child_stmt)
   if (OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child stmt is null");
-  } else if (OB_FAIL(child_stmts_.push_back(child_stmt))) {
-    LOG_WARN("add child stmt failed", K(ret));
   } else if (OB_FAIL(child_stmt->get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
   }
@@ -193,7 +168,7 @@ int ObAggrExprPushUpAnalyzer::analyze_child_stmt(ObSelectStmt *child_stmt)
     ObRawExpr *expr = NULL;
     if (OB_FAIL(relation_exprs.at(i).get(expr))) {
       LOG_WARN("failed to get expr", K(ret));
-    } else if (OB_FAIL(analyze_aggr_param_expr(expr))) {
+    } else if (OB_FAIL(analyze_aggr_param_expr(expr, false, true))) {
       LOG_WARN("failed to analyze aggr param expr", K(ret));
     } else if (OB_FAIL(relation_exprs.at(i).set(expr))) {
       LOG_WARN("failed to set expr", K(ret));
@@ -213,46 +188,47 @@ int ObAggrExprPushUpAnalyzer::analyze_child_stmt(ObSelectStmt *child_stmt)
   return ret;
 }
 
-/**
- * @brief ObAggrExprPushUpAnalyzer::get_final_aggr_level
- * if the aggr expr uses current_level value, then it belongs to the current stmt
- * otherwise, check whether aggr expr uses any outer stmt value, it belongs to the the most-inner outer stmt.
- * otherwise, it still belongs to the current stmt
- * @return
- */
-int32_t ObAggrExprPushUpAnalyzer::get_final_aggr_level() const
+int ObAggrExprPushUpAnalyzer::get_min_level_resolver(ObSelectResolver *&resolver)
 {
-  int32_t cur_aggr_level = cur_resolver_.get_current_level();
-  int32_t final_aggr_level = has_cur_layer_column_ ? cur_aggr_level : -1;
-  //根据MySQL聚集函数上推的原理，聚集函数的位置决定于查询中引用到的column的位置，上推的层次为
-  //距离当前位置最近的上层位置
-  //select c1 from t1 having c1>(select c1 from t2 having c1 >(select count(t1.c1) from t3))
-  //count(t1.c1)位于第一层查询
-  //select c1 from t1 having c1>(select c1 from t2 having c1 >(select count(t1.c1 + t2.c1) from t3))
-  //count(t1.c1)位于第二层查询
-  for (int32_t i = 0; i < exec_columns_.count(); ++i) {
-    ObExecParamRawExpr *aggr_column = exec_columns_.at(i);
-    int32_t column_level = -1;
-    if (NULL != aggr_column &&
-        NULL != aggr_column->get_ref_expr() &&
-        (aggr_column->get_ref_expr()->is_column_ref_expr() ||
-         (cur_resolver_.get_current_scope() != T_FIELD_LIST_SCOPE && aggr_column->get_ref_expr()->get_expr_type() == T_REF_ALIAS_COLUMN))) {
-      column_level = aggr_column->get_expr_level();
+  int ret = OB_SUCCESS;
+  bool has_column = has_cur_layer_column_;
+  bool is_field_list_scope = (T_FIELD_LIST_SCOPE == cur_resolver_.get_current_scope());
+  ObArray<ObExecParamRawExpr *> my_exec_params;
+  resolver = &cur_resolver_;
+
+  while (OB_SUCC(ret) && !has_column && NULL != resolver) {
+    if (NULL != resolver->get_parent_namespace_resolver() &&
+        resolver->get_parent_namespace_resolver()->is_select_resolver()) {
+      resolver = static_cast<ObSelectResolver *>(resolver->get_parent_namespace_resolver());
+      if (OB_FAIL(get_exec_params(resolver, exec_columns_, my_exec_params))) {
+        LOG_WARN("failed to get my exec params", K(ret));
+      }
+    } else {
+      resolver = NULL;
     }
-    if (column_level >= 0 && column_level <= cur_aggr_level && column_level > final_aggr_level) {
-      final_aggr_level = column_level;
+    for (int64_t i = 0; OB_SUCC(ret) && i < my_exec_params.count(); ++i) {
+      ObRawExpr *ref_expr = NULL;
+      if (OB_ISNULL(my_exec_params.at(i)) ||
+          OB_ISNULL(ref_expr = my_exec_params.at(i)->get_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec param is null", K(ret), K(my_exec_params.at(i)), K(ref_expr));
+      } else if (ref_expr->is_column_ref_expr() ||
+                 (!is_field_list_scope && ref_expr->is_alias_ref_expr())) {
+        has_column = true;
+      }
+    }
+    if (OB_SUCC(ret) && !has_column) {
+      my_exec_params.reuse();
     }
   }
-  if (lib::is_oracle_mode() && final_aggr_level < 0) {
-    //count(const_expr)的情况
-    final_aggr_level = cur_aggr_level;
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && resolver == NULL) {
+    resolver = &cur_resolver_;
   }
-  // in mysql mode if the final_aggr_level < 0, the aggr's params are const. e.g., count(const_expr);
-  return final_aggr_level;
+  return ret;
 }
 
 ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResolver *cur_resolver,
-                                                                      int32_t final_aggr_level)
+                                                                      ObSelectResolver *min_level_resolver)
 {
   ObSelectResolver *final_resolver = NULL;
   if (cur_resolver != NULL) {
@@ -261,7 +237,7 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
      * For oracle mode, if it is in having scope, it will pull subquery up to compute
      * if it is in order scope (and subquery does not appear in where scope), it will pull subquery up to compute
      */
-    if (final_aggr_level >= 0 && cur_resolver->get_current_level() > final_aggr_level
+    if (min_level_resolver != NULL && cur_resolver != min_level_resolver
         && NULL != cur_resolver->get_parent_namespace_resolver()
         && (lib::is_mysql_mode()
             || T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope()
@@ -273,15 +249,15 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
         //MAX(t1.b)中引用了第一层的属性，但是MAX(t1.b)整个表达式保留在union的左支中
       } else {
         ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
-        final_resolver = fetch_final_aggr_resolver(next_resolver, final_aggr_level);
+        final_resolver = fetch_final_aggr_resolver(next_resolver, min_level_resolver);
       }
     }
     if (NULL == final_resolver && cur_resolver->is_select_resolver()) {
       ObSelectResolver *select_resolver = static_cast<ObSelectResolver*>(cur_resolver);
       if (select_resolver->can_produce_aggr()) {
         final_resolver = select_resolver;
-      } else if (lib::is_mysql_mode() && final_aggr_level < 0) {
-        /* bugfix: https://work.aone.alibaba-inc.com/issue/36773892
+      } else if (lib::is_mysql_mode() && min_level_resolver == NULL) {
+        /* bugfix:
         * in mysql, a const aggr_expr(e.g., count(const_expr)), belongs to the nearest legal level.
         * 
         * select 1 from t1 where  (select 1 from t1 group by pk having  (select 1 from t1 where count(1)));
@@ -292,7 +268,7 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
         */
         ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
         if (NULL != next_resolver) {
-          final_resolver = fetch_final_aggr_resolver(next_resolver, final_aggr_level);
+          final_resolver = fetch_final_aggr_resolver(next_resolver, min_level_resolver);
         }
       }
     }
@@ -300,32 +276,37 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
   return final_resolver;
 }
 
-int ObAggrExprPushUpAnalyzer::push_up_aggr_column(int32_t final_aggr_level)
+int ObAggrExprPushUpAnalyzer::push_up_aggr_column(ObSelectResolver *final_resolver)
 {
   int ret = OB_SUCCESS;
-  //在没有上推前的aggregate function所在的level,在这个层的本身或者父查询都的列都需要被推回到standard_group_checker_中
-  int32_t old_aggr_level = cur_resolver_.get_current_level();
-  for (int32_t i = 0; OB_SUCC(ret) && i < exec_columns_.count(); ++i) {
-    ObExecParamRawExpr *upper_column = exec_columns_.at(i);
-    ObRawExpr *ref_expr = NULL;
-    if (OB_ISNULL(upper_column) ||
-        OB_ISNULL(ref_expr = upper_column->get_ref_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("aggr_column is null", K(ret), K(upper_column));
-    } else if (ref_expr->is_column_ref_expr()) {
-      ObColumnRefRawExpr *column_ref = static_cast<ObColumnRefRawExpr*>(ref_expr);
-      int32_t column_level = column_ref->get_expr_level();
-      if (column_level <= old_aggr_level && column_level != final_aggr_level) {
-        //聚集函数中如果引用了和聚集同层的column，这些column是不受only full group by约束和having约束的
-        ObDMLResolver *cur_resolver = &cur_resolver_;
-        //get the real resolver that produce this column
-        for (; OB_SUCC(ret) && cur_resolver != NULL && cur_resolver->get_current_level() > column_level;
-            cur_resolver = cur_resolver->get_parent_namespace_resolver()) {}
-        if (cur_resolver != NULL && cur_resolver->is_select_resolver()) {
-          ObSelectResolver *select_resolver = static_cast<ObSelectResolver*>(cur_resolver);
-          if (OB_FAIL(select_resolver->add_unsettled_column(column_ref))) {
-            LOG_WARN("add unsettled column to select resolver failed", K(ret));
-          }
+  ObSelectResolver *resolver = final_resolver;
+  ObArray<ObExecParamRawExpr *> exec_params;
+  if (OB_ISNULL(final_resolver)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("final resolver is null", K(ret), K(final_resolver));
+  }
+  while (OB_SUCC(ret) && NULL != resolver) {
+    if (NULL != resolver->get_parent_namespace_resolver() &&
+        resolver->get_parent_namespace_resolver()->is_select_resolver()) {
+      resolver = static_cast<ObSelectResolver *>(resolver->get_parent_namespace_resolver());
+    } else {
+      resolver = NULL;
+    }
+    if (NULL != resolver) {
+      exec_params.reuse();
+      if (OB_FAIL(get_exec_params(resolver, exec_columns_, exec_params))) {
+        LOG_WARN("failed to get exec params", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < exec_params.count(); ++i) {
+        ObExecParamRawExpr *upper_column = exec_params.at(i);
+        ObRawExpr *ref_expr = NULL;
+        if (OB_ISNULL(upper_column) || OB_ISNULL(ref_expr = upper_column->get_ref_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("upper column is null", K(ret), K(upper_column));
+        } else if (!ref_expr->is_column_ref_expr()) {
+          // do nothing
+        } else if (OB_FAIL(resolver->add_unsettled_column(static_cast<ObColumnRefRawExpr *>(ref_expr)))) {
+          LOG_WARN("failed to add unsettle column", K(ret));
         }
       }
     }
@@ -335,95 +316,21 @@ int ObAggrExprPushUpAnalyzer::push_up_aggr_column(int32_t final_aggr_level)
 
 int ObAggrExprPushUpAnalyzer::push_up_subquery_in_aggr(
     ObSelectResolver &final_resolver,
-    const ObIArray<ObExecParamRawExpr *> &exec_params)
+    const ObIArray<ObQueryRefRawExpr *> &query_refs)
 {
   int ret = OB_SUCCESS;
-  //当aggr expr被上推后, aggr expr中的subquery也跟随发生了变化，被提升到了上推后的stmt中
-  //在本层只存在上推后的aggr expr的引用
   ObSelectStmt *cur_stmt = cur_resolver_.get_select_stmt();
   ObSelectStmt *final_stmt = final_resolver.get_select_stmt();
-
   if (OB_ISNULL(cur_stmt) || OB_ISNULL(final_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cur_stmt or final_stmt is null", K(cur_stmt), K(final_stmt));
+    LOG_WARN("cur_stmt or final_stmt is null", K(ret), K(cur_stmt), K(final_stmt));
   } else if (&cur_resolver_ != &final_resolver) {
-    //发生了提升
-    ObIArray<ObQueryRefRawExpr*> &query_refs = cur_stmt->get_subquery_exprs();
-    ObArray<ObQueryRefRawExpr*> remain_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < query_refs.count(); ++i) {
-      ObQueryRefRawExpr *query_ref = query_refs.at(i);
-      if (OB_ISNULL(query_ref) || OB_ISNULL(query_ref->get_ref_stmt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query_ref is null", K(query_ref), K(i));
-      } else if (query_ref->get_expr_level() != cur_stmt->get_current_level()
-          && query_ref->get_expr_level() != final_stmt->get_current_level()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query_ref expr level is invalid", K(query_ref->get_expr_level()),
-                 K(cur_stmt->get_current_level()), K(final_stmt->get_current_level()));
-      } else if (query_ref->get_expr_level() == final_stmt->get_current_level()) {
-        //current stmt中的query ref被上推了，从当前stmt的索引中移除，并加入到上推后的stmt中
-        if (OB_FAIL(final_stmt->add_subquery_ref(query_ref))) {
-          LOG_WARN("add subquery reference to final stmt failed", K(ret));
-        } else if (OB_FAIL(query_ref->get_ref_stmt()->adjust_view_parent_namespace_stmt(final_stmt))) {
-          LOG_WARN("adjust view parent namespace stmt failed", K(ret));
-        } else if (OB_FAIL(query_ref->add_exec_param_exprs(exec_params))) {
-          LOG_WARN("failed to add exec param exprs", K(ret));
-        }
-      } else if (OB_FAIL(remain_exprs.push_back(query_ref))) {
-        LOG_WARN("store query ref expr failed", K(ret));
+      if (OB_FAIL(cur_stmt->remove_subquery_expr(query_refs.at(i)))) {
+        LOG_WARN("failed to remove subquery expr", K(ret));
+      } else if (OB_FAIL(final_stmt->add_subquery_ref(query_refs.at(i)))) {
+        LOG_WARN("failed to add query ref", K(ret));
       }
-    }
-    if (OB_SUCC(ret) && remain_exprs.count() < query_refs.count()) {
-      //保留下来的query ref减少，所以发生了subquery跟随aggr上推的问题，那么需要调整cur_stmt中的序列
-      cur_stmt->get_subquery_exprs().reset();
-      for (int64_t i = 0; OB_SUCC(ret) && i < remain_exprs.count(); ++i) {
-        if (OB_FAIL(cur_stmt->add_subquery_ref(remain_exprs.at(i)))) {
-          LOG_WARN("add subquery reference failed", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObAggrExprPushUpAnalyzer::adjust_query_level(int32_t final_aggr_level)
-{
-  int ret = OB_SUCCESS;
-  int32_t old_aggr_level = cur_resolver_.get_current_level();
-  int32_t ascending_level = final_aggr_level - old_aggr_level;
-  //聚集函数发生了上推，aggregate function中的子查询的等级也会被提升，所以需要对level进行调整
-  for (int64_t i = 0; OB_SUCC(ret) && ascending_level < 0 && i < level_exprs_.count(); ++i) {
-    if (OB_ISNULL(level_exprs_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("level expr is null");
-    } else if (level_exprs_.at(i)->get_expr_level() >= 0 && level_exprs_.at(i)->get_expr_level() >= old_aggr_level) {
-      level_exprs_.at(i)->set_expr_level(level_exprs_.at(i)->get_expr_level() + ascending_level);
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && ascending_level < 0 && i < child_stmts_.count(); ++i) {
-    //TODO: (yuming)对于子查询被提升了，除了要调整child_stmt的level，还要将child stmt从当前stmt中移除，并加入到提升后的stmt中
-    if (OB_ISNULL(child_stmts_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("child stmt is null");
-    } else if (child_stmts_.at(i)->get_current_level() > old_aggr_level) {
-      child_stmts_.at(i)->set_current_level(child_stmts_.at(i)->get_current_level() + ascending_level);
-    }
-  }
-  return ret;
-}
-
-int ObAggrExprPushUpAnalyzer::get_exec_params(const int32_t expr_level,
-                                              ObIArray<ObExecParamRawExpr *> &exec_params)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < exec_columns_.count(); ++i) {
-    if (OB_ISNULL(exec_columns_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec param is null", K(ret));
-    } else if (exec_columns_.at(i)->get_expr_level() != expr_level) {
-      // do nothing
-    } else if (OB_FAIL(exec_params.push_back(exec_columns_.at(i)))) {
-      LOG_WARN("failed to push back exec params", K(ret));
     }
   }
   return ret;
@@ -505,7 +412,26 @@ int ObAggrExprPushUpAnalyzer::remove_alias_exprs(ObRawExpr* &expr)
       LOG_WARN("failed to decorrelate expr", K(ret));
     }
   }
+  return ret;
+}
 
+int ObAggrExprPushUpAnalyzer::get_exec_params(ObDMLResolver *resolver,
+                                              ObIArray<ObExecParamRawExpr *> &all_exec_params,
+                                              ObIArray<ObExecParamRawExpr *> &my_exec_params)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *query_ref = NULL;
+  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref = resolver->get_subquery())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_exec_params.count(); ++i) {
+    if (!ObRawExprUtils::find_expr(query_ref->get_exec_params(), all_exec_params.at(i))) {
+      // do nothing
+    } else if (OB_FAIL(my_exec_params.push_back(all_exec_params.at(i)))) {
+      LOG_WARN("failed to push back exec param", K(ret));
+    }
+  }
   return ret;
 }
 

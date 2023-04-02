@@ -46,9 +46,8 @@ public:
   int fill(const LSN &lsn,
            const char *data,
            const int64_t data_len);
-  int fill_padding(const LSN &lsn,
-                   const int64_t padding_len);
-  int wait(const LSN &lsn, const int64_t data_len);
+  int fill_padding_body(const LSN &lsn,
+                        const int64_t log_body_size);
   int get_log_buf(const LSN &lsn, const int64_t total_len, LogWriteBuf &log_buf);
   bool can_handle_new_log(const LSN &lsn,
                           const int64_t total_len) const;
@@ -64,6 +63,7 @@ public:
   int inc_update_reuse_lsn(const LSN &new_reuse_lsn);
   // set reuse_lsn, used for truncate case(trucate/rebuild)
   int set_reuse_lsn(const LSN &new_reuse_lsn);
+  void get_reuse_lsn(LSN &reuse_lsn) const { return get_reuse_lsn_(reuse_lsn); }
   TO_STRING_KV("log_group_buffer: start_lsn", start_lsn_, "reuse_lsn", reuse_lsn_, "reserved_buffer_size",
       reserved_buffer_size_, "available_buffer_size", available_buffer_size_);
 private:

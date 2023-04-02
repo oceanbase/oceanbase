@@ -33,6 +33,7 @@ public:
         is_resolving_view_ = true;
         params_.is_from_create_view_ = params.is_from_create_view_;
         params_.is_from_create_table_ = params.is_from_create_table_;
+        params_.is_specified_col_name_ = params.is_specified_col_name_;
       }
   virtual ~ObViewTableResolver() {}
 

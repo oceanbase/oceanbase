@@ -25,6 +25,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "pl/ob_pl_allocator.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {
@@ -38,14 +39,14 @@ namespace pl
 {
 int64_t ObUserDefinedType::get_member_count() const
 {
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
 const ObPLDataType *ObUserDefinedType::get_member(int64_t i) const
 {
   UNUSEDx(i);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return NULL;
 }
 
@@ -69,7 +70,7 @@ int ObUserDefinedType::generate_copy(
   bool in_notfound, bool in_warning, uint64_t package_id) const
 {
   UNUSEDx(generator, ns, allocator, src, dest, in_notfound, in_warning, package_id);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -77,7 +78,7 @@ int ObUserDefinedType::get_size(
   const ObPLINS &ns, ObPLTypeSize type, int64_t &size) const
 {
   UNUSEDx(ns, type, size);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -87,7 +88,7 @@ int ObUserDefinedType::init_session_var(
   common::ObObj &obj) const
 {
   UNUSEDx(resolve_ctx, obj_allocator, exec_ctx, default_expr, default_construct, obj);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -95,7 +96,7 @@ int ObUserDefinedType::free_session_var(
   const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const
 {
   UNUSEDx(resolve_ctx, obj_allocator, obj);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -103,7 +104,7 @@ int ObUserDefinedType::free_data(
   const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const
 {
   UNUSEDx(resolve_ctx, data_allocator, data);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -111,7 +112,7 @@ int ObUserDefinedType::get_serialize_size(
     const ObPLResolveCtx &resolve_ctx, char *&src, int64_t &size) const
 {
   UNUSEDx(resolve_ctx, src, size);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -120,7 +121,7 @@ int ObUserDefinedType::serialize(
     char *&src, char* dst, int64_t dst_len, int64_t &dst_pos) const
 {
   UNUSEDx(resolve_ctx, src, dst, dst_len, dst_pos);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -130,7 +131,7 @@ int ObUserDefinedType::deserialize(
     const char* src, const int64_t src_len, int64_t &src_pos, char *&dst) const
 {
   UNUSEDx(resolve_ctx, allocator, src, src_len, src_pos, dst);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -143,7 +144,7 @@ int ObUserDefinedType::add_package_routine_schema_param(
   UNUSEDx(
     resolve_ctx, block_ns,package_name,
     param_name, mode, position, level, sequence, routine_info);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -151,7 +152,7 @@ int ObUserDefinedType::get_all_depended_user_type(
   const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS &current_ns) const
 {
   UNUSEDx(resolve_ctx, current_ns);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -160,7 +161,7 @@ int ObUserDefinedType::init_obj(
   common::ObObj &obj, int64_t &init_size) const
 {
   UNUSEDx(schema_guard, allocator, obj, init_size);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -170,7 +171,7 @@ int ObUserDefinedType::serialize(
   char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const
 {
   UNUSEDx(schema_guard, tz_info, type, src, dst, dst_len, dst_pos);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -182,14 +183,14 @@ int ObUserDefinedType::deserialize(
 {
   UNUSEDx(
     schema_guard, allocator, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
 int ObUserDefinedType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
 {
   UNUSEDx(ctx, src, dst);
-  LOG_WARN("Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
   return OB_NOT_SUPPORTED;
 }
 
@@ -1125,10 +1126,8 @@ int ObRecordType::get_serialize_size(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0) {
-    OX (size += record->get_serialize_size());
-    OX (size += serialization::encoded_length(record->get_count()));
-  }
+  OX (size += record->get_serialize_size());
+  OX (size += serialization::encoded_length(record->get_count()));
 
   char *data = reinterpret_cast<char*>(record->get_element());
   for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
@@ -1146,10 +1145,8 @@ int ObRecordType::serialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0) {
-    OX (record->serialize(dst, dst_len, dst_pos));
-    OZ (serialization::encode(dst, dst_len, dst_pos, record->get_count()));
-  }
+  OX (record->serialize(dst, dst_len, dst_pos));
+  OZ (serialization::encode(dst, dst_len, dst_pos, record->get_count()));
 
   char *data = reinterpret_cast<char*>(record->get_element());
   for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
@@ -1168,12 +1165,10 @@ int ObRecordType::deserialize(
   int ret = OB_SUCCESS;
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(dst);
   CK (OB_NOT_NULL(record));
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0) {
-    int64_t count = OB_INVALID_COUNT;
-    OX (record->deserialize(src, src_len, src_pos));
-    OZ (serialization::decode(src, src_len, src_pos, count));
-    OX (record->set_count(count));
-  }
+  int64_t count = OB_INVALID_COUNT;
+  OX (record->deserialize(src, src_len, src_pos));
+  OZ (serialization::decode(src, src_len, src_pos, count));
+  OX (record->set_count(count));
 
   dst = reinterpret_cast<char*>(record->get_element());
   for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
@@ -1396,7 +1391,6 @@ int ObPLComposite::deep_copy(ObPLComposite &src,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate composite memory failed", K(ret));
       }
-      LOG_INFO("src size is: ", K(src.get_init_size()), K(src));
       OX (new(composite)ObPLRecord(src.get_id(), static_cast<ObPLRecord&>(src).get_count()));
     } else {
       OX (composite = static_cast<ObPLRecord*>(dest));
@@ -1481,7 +1475,7 @@ int ObPLComposite::assign(ObPLComposite *src, ObIAllocator *allocator)
   }
     break;
   default: {
-    LOG_WARN("unexpected composite to get init size", K(get_type()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected composite to get init size", K(get_type()));
   }
   }
   return size;
@@ -1501,7 +1495,7 @@ int64_t ObPLComposite::get_init_size() const
 
 
   default: {
-    LOG_WARN("unexpected composite to get init size", K(get_type()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected composite to get init size", K(get_type()));
   }
   }
   return size;
@@ -1542,7 +1536,7 @@ void ObPLComposite::print() const
     }
       break;
     default: {
-      LOG_WARN("unexpected composite to print", K(get_type()));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected composite to print", K(get_type()));
     }
     }
 }
@@ -1613,7 +1607,7 @@ int ObPLRecord::deep_copy(ObPLRecord &src,
   const ObRecordType *record_type = NULL;
   if (NULL != ns) {
     OZ (ns->get_user_type(get_id(), user_type, NULL));
-    CK (OB_NOT_NULL(user_type));
+    OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(get_id()), K(src.get_id()));
     CK (user_type->is_record_type());
     OX (record_type = static_cast<const ObRecordType*>(user_type));
   }
@@ -1733,8 +1727,16 @@ int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator)
       CK (OB_NOT_NULL(new_objs = reinterpret_cast<ObObj*>(data)));
       CK (OB_NOT_NULL(old_objs = reinterpret_cast<ObObj*>(src->get_data())));
       for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
+        ObObj old_obj = old_objs[i];
         new (&new_objs[i])ObObj();
-        OZ (ObPLComposite::copy_element(old_objs[i], new_objs[i], *coll_allocator));
+        if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+          old_obj.set_type(ObExtendType);
+          CK (old_obj.is_pl_extend());
+        }
+        OZ (ObPLComposite::copy_element(old_obj, new_objs[i], *coll_allocator));
+        if (old_objs[i].is_invalid_type() && src->is_of_composite()) {
+          new_objs[i].set_type(ObMaxType);
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1831,7 +1833,11 @@ int ObPLCollection::delete_collection_elem(int64_t index)
     ObObj *obj = static_cast<ObObj *>(get_data());
     // data的type设置为max表示被delete
     if (index < get_count()) {
-      obj[index].set_type(ObMaxType);
+      if (OB_FAIL(ObUserDefinedType::destruct_obj(obj[index], NULL))) {
+        LOG_WARN("failed to destruct obj", K(ret), K(obj[index]), K(index));
+      } else {
+        obj[index].set_type(ObMaxType);
+      }
     } else {
       ret = OB_ARRAY_OUT_OF_RANGE;
       LOG_WARN("type with step large than 1 is oversize", K(index), K(get_count()));
@@ -2027,6 +2033,8 @@ void ObPLCollection::print() const
       OX (composite->print());
     } else if (obj.is_varchar_or_char() && obj.get_data_length() > 100) {
       LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K("xxx...xxx"));
+    } else if (obj.is_invalid_type()) {
+      LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K("deleted element"), K(obj));
     } else {
       LOG_INFO("ObPLCollection Data", K(i), K(get_count()), K(obj));
     }

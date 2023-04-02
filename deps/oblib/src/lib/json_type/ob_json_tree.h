@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains interface support for the json tree abstraction.
  */
 
 #ifndef OCEANBASE_SQL_OB_JSON_TREE
@@ -18,6 +19,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/number/ob_number_v2.h" // for number::ObNumber
 #include "lib/timezone/ob_time_convert.h" // for ObTime
+#include "lib/timezone/ob_timezone_info.h"
 #include <rapidjson/error/en.h>
 #include <rapidjson/error/error.h>
 #include <rapidjson/memorystream.h>
@@ -57,6 +59,7 @@ public:
   }
   bool get_boolean() const override;
   double get_double() const override;
+  float get_float() const override;
   int64_t get_int() const override;
   uint64_t get_uint() const override;
   const char *get_data() const override;
@@ -150,6 +153,10 @@ public:
   }
   ~ObJsonObjectPair() {}
   OB_INLINE common::ObString get_key() const { return key_; }
+  OB_INLINE void set_key(const common::ObString &new_key)
+  {
+    key_.assign_ptr(new_key.ptr(), new_key.length());
+  }
   OB_INLINE void set_value(ObJsonNode *value) { value_ = value; }
   OB_INLINE ObJsonNode *get_value() const { return value_; }
   int64_t to_string(char *buf, const int64_t buf_len) const
@@ -187,13 +194,13 @@ public:
   OB_INLINE void set_serialize_size(uint64_t size) { serialize_size_ = size; }
   OB_INLINE uint32_t depth() const override
   {
-    uint64_t max_child = 0;
+    uint32_t max_child = 0;
     uint64_t count = element_count();
     ObJsonNode *child_node = NULL;
     for (uint64_t i = 0; i < count; i++) {
       child_node = get_value(i);
       if (OB_NOT_NULL(child_node)) {
-        max_child = max(max_child, static_cast<uint64_t>(child_node->depth()));
+        max_child = max(max_child, child_node->depth());
       }
     }
     return max_child + 1;
@@ -249,7 +256,14 @@ public:
   // @param [in] key    The key.
   // @param [in] value  The Json node.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int add(const common::ObString &key, ObJsonNode *value);
+  int add(const common::ObString &key, ObJsonNode *value, bool with_unique_key = false);
+
+  // Rename key in current object if exist.
+  //
+  // @param [in] old_key  The old key name.
+  // @param [in] new_key  The new key name.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int rename_key(const common::ObString &old_key, const common::ObString &new_key);
 
   // Merges all elements on the other to the end of the current object
   //
@@ -308,13 +322,13 @@ public:
   OB_INLINE uint64_t element_count() const override { return node_vector_.size(); }
   OB_INLINE uint32_t depth() const override
   {
-    uint64_t max_child = 0;
+    uint32_t max_child = 0;
     uint64_t size = element_count();
     ObJsonNode *child_node = NULL;
     for (uint64_t i = 0; i < size; i++) {
       child_node = node_vector_[i];
       if (OB_NOT_NULL(child_node)) {
-        max_child = max(max_child, static_cast<uint64_t>(child_node->depth()));
+        max_child = max(max_child, child_node->depth());
       }
     }
     return max_child + 1;
@@ -431,7 +445,7 @@ public:
         "json decimal, prec_ = %d, scale_ = %d", prec_, scale_);
     return pos;
   }
-  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_DECIMAL; }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_DECIMAL; }
   OB_INLINE void set_value(number::ObNumber value) { value_ = value; }
   OB_INLINE number::ObNumber value() const { return value_; }
   OB_INLINE void set_precision(ObPrecision prec) { prec_ = prec; }
@@ -466,7 +480,7 @@ public:
     databuff_printf(buf, buf_len, pos, "json double value = %lf", value_);
     return pos;
   }
-  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_DOUBLE; }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_DOUBLE; }
   OB_INLINE void set_value(double value) { value_ = value; }
   OB_INLINE double value() const { return value_; }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(double); }
@@ -491,7 +505,7 @@ public:
     databuff_printf(buf, buf_len, pos, "json int value = %ld", value_);
     return pos;
   }
-  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_INT; }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_INT; }
   OB_INLINE void set_value(int64_t value) { value_ = value; }
   OB_INLINE int64_t value() const { return value_; }
   OB_INLINE uint64_t get_serialize_size()
@@ -509,7 +523,8 @@ class ObJsonUint : public ObJsonNumber
 public:
   explicit ObJsonUint(uint64_t value)
       : ObJsonNumber(),
-        value_(value)
+        value_(value),
+        is_string_length_(false)
   {
   }
   virtual ~ObJsonUint() {}
@@ -522,6 +537,8 @@ public:
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_UINT; }
   OB_INLINE void set_value(uint64_t value) { value_ = value; }
   OB_INLINE uint64_t value() const { return value_; }
+  OB_INLINE void set_is_string_length(bool value) { is_string_length_ = value; }
+  OB_INLINE bool get_is_string_length() const { return is_string_length_; }
   OB_INLINE uint64_t get_serialize_size()
   {
     return serialization::encoded_length_vi64(value_);
@@ -529,6 +546,7 @@ public:
   ObJsonNode *clone(ObIAllocator* allocator) const;
 private:
   uint64_t value_;
+  bool is_string_length_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonUint);
 };
 
@@ -537,7 +555,9 @@ class ObJsonString : public ObJsonScalar
 public:
   explicit ObJsonString(const char *str, uint64_t length)
       : ObJsonScalar(),
-        str_(length, str)
+        str_(length, str),
+        ext_(0),
+        is_null_to_str_(false)
   {
   }
   virtual ~ObJsonString() {}
@@ -551,14 +571,20 @@ public:
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_STRING; }
   OB_INLINE void set_value(const char *str, uint64_t length) { str_.assign_ptr(str, length); }
   OB_INLINE const common::ObString &value() const { return str_; }
+  OB_INLINE void set_is_null_to_str(bool value) { is_null_to_str_ = value; }
+  OB_INLINE bool get_is_null_to_str() const { return is_null_to_str_; }
   OB_INLINE uint64_t length() const { return str_.length(); }
   OB_INLINE uint64_t get_serialize_size()
   {
     return serialization::encoded_length_vi64(length()) + length();
   }
   ObJsonNode *clone(ObIAllocator* allocator) const;
+  void set_ext(uint64_t type) { ext_ = type; }
+  uint64_t get_ext() { return ext_; }
 private:
   common::ObString str_;
+  uint64_t ext_;
+  bool is_null_to_str_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonString);
 };
 
@@ -566,7 +592,13 @@ class ObJsonNull : public ObJsonScalar
 {
 public:
   ObJsonNull()
-      : ObJsonScalar()
+      : ObJsonScalar(),
+      is_not_null_(false)
+  {
+  }
+  ObJsonNull(bool is_not_null)
+      : ObJsonScalar(),
+      is_not_null_(is_not_null)
   {
   }
   virtual ~ObJsonNull() {}
@@ -578,20 +610,17 @@ public:
   }
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_NULL; }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(char); }
+  OB_INLINE bool is_not_null() { return is_not_null_;}
   ObJsonNode *clone(ObIAllocator* allocator) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObJsonNull);
+  bool is_not_null_;
 };
 
 class ObJsonDatetime : public ObJsonScalar
 {
 public:
-  explicit ObJsonDatetime(const ObTime &time, ObObjType field_type)
-      : ObJsonScalar(),
-        value_(time),
-        field_type_(field_type)
-  {
-  }
+  explicit ObJsonDatetime(const ObTime &time, ObObjType field_type);
   explicit ObJsonDatetime(ObJsonNodeType type, const ObTime &time);
   virtual ~ObJsonDatetime() {}
   int64_t to_string(char *buf, const int64_t buf_len) const
@@ -602,15 +631,16 @@ public:
     databuff_printf(buf, buf_len, pos, "filed type:%d", field_type_);
     return pos;
   }
-  ObJsonNodeType json_type() const;
+  ObJsonNodeType json_type() const { return json_type_; };
   OB_INLINE ObObjType field_type() const { return field_type_; }
   OB_INLINE void set_field_type(ObObjType field_type) { field_type_ = field_type; }
+  OB_INLINE void set_json_type(ObJsonNodeType json_type);
   OB_INLINE ObTime value() const { return value_; }
   OB_INLINE void set_value(ObTime value) { value_ = value; }
   OB_INLINE uint64_t get_serialize_size()
   {
     uint64_t size = 0;
-    if (json_type() == ObJsonNodeType::J_DATE) {
+    if (json_type() == ObJsonNodeType::J_DATE || json_type() == ObJsonNodeType::J_ORACLEDATE) {
       size = sizeof(int32_t);
     } else {
       size = sizeof(int64_t);
@@ -621,6 +651,7 @@ public:
 private:
   ObTime value_;
   ObObjType field_type_;
+  ObJsonNodeType json_type_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonDatetime);
 };
 
@@ -676,12 +707,176 @@ public:
   }
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_BOOLEAN; }
   OB_INLINE void set_value(bool value) { value_ = value; }
-  OB_INLINE bool value() const { return value_; }
+  OB_INLINE bool value() const
+  {
+    bool bool_ret = (value_ != 0);
+    return bool_ret;
+  }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(char); }
   ObJsonNode *clone(ObIAllocator* allocator) const;
 private:
   bool value_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonBoolean);
+};
+
+class ObJsonODecimal : public ObJsonDecimal
+{
+public:
+  explicit ObJsonODecimal(const number::ObNumber &value, ObPrecision prec = -1, ObScale scale = -1)
+    :ObJsonDecimal(value, prec, scale) {}
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_ODECIMAL; }
+};
+
+class ObJsonOFloat : public ObJsonNumber
+{
+public:
+  explicit ObJsonOFloat(float value)
+          : ObJsonNumber(),
+            value_(value)
+  {
+  }
+  virtual ~ObJsonOFloat() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    databuff_printf(buf, buf_len, pos, "json float value = %f", value_);
+    return pos;
+  }
+  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_OFLOAT; }
+  OB_INLINE void set_value(float value) { value_ = value; }
+  OB_INLINE float value() const { return value_; }
+  OB_INLINE uint64_t get_serialize_size() { return sizeof(float); }
+  ObJsonNode *clone(ObIAllocator* allocator) const;
+private:
+  float value_;
+  DISALLOW_COPY_AND_ASSIGN(ObJsonOFloat);
+};
+
+class ObJsonOInt : public ObJsonInt
+{
+public:
+  explicit ObJsonOInt(int64_t value)
+      : ObJsonInt(value)
+  {
+  }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_OINT; }
+};
+
+class ObJsonOLong : public ObJsonUint
+{
+public:
+  explicit ObJsonOLong(uint64_t value)
+      : ObJsonUint(value)
+  {
+  }
+  OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_OLONG; }
+};
+
+class ObJsonODouble : public ObJsonDouble
+{
+public:
+  explicit ObJsonODouble(double value)
+      : ObJsonDouble(value)
+  {
+  }
+  OB_INLINE virtual ObJsonNodeType json_type() const override { return ObJsonNodeType::J_ODOUBLE; }
+};
+
+class ObJsonOInterval : public ObJsonScalar
+{
+public:
+  explicit ObJsonOInterval(const char *str, uint64_t length, ObObjType field_type)
+      : ObJsonScalar(),
+        str_val_(length, str),
+        field_type_(field_type),
+        val_()
+  {
+  }
+  virtual ~ObJsonOInterval() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    if (field_type_ == ObIntervalYMType) {
+      databuff_printf(buf, buf_len, pos, "json intervalymtype");
+    } else {
+      databuff_printf(buf, buf_len, pos, "json intervaldstype");
+    }
+    pos += str_val_.to_string(buf + pos, buf_len - pos);
+    return pos;
+  }
+  int parse();
+
+  OB_INLINE ObJsonNodeType json_type() const override
+  {
+    return field_type_ == ObIntervalYMType ? ObJsonNodeType::J_OYEARMONTH : ObJsonNodeType::J_ODAYSECOND;
+  }
+
+  OB_INLINE const common::ObString &value() const { return str_val_; }
+  OB_INLINE uint64_t length() const { return str_val_.length(); }
+  OB_INLINE uint64_t get_serialize_size()
+  {
+    return serialization::encoded_length_vi64(length()) + length();
+  }
+  ObJsonNode *clone(ObIAllocator* allocator) const;
+
+private:
+  ObString str_val_;
+  ObObjType field_type_;
+  union IntervalValue {
+    ObIntervalYMValue ym_;
+    ObIntervalDSValue ds_;
+    IntervalValue() {}
+  } val_;
+};
+
+class ObJsonORawString : public ObJsonScalar
+{
+public:
+  explicit ObJsonORawString(const char *str, uint64_t length, ObJsonNodeType node_type)
+      : ObJsonScalar(),
+        str_val_(length, str),
+        json_type_(node_type)
+  {
+    if (node_type == ObJsonNodeType::J_OBINARY) {
+      field_type_ = ObHexStringType;
+    } else if (node_type == ObJsonNodeType::J_OOID) {
+      field_type_ = ObHexStringType;
+    } else if (node_type == ObJsonNodeType::J_ORAWHEX) {
+      field_type_ = ObRawType;
+    } else { // J_ORAWID
+      field_type_ = ObURowIDType;
+    }
+  }
+  virtual ~ObJsonORawString() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    if (json_type_ == ObJsonNodeType::J_OBINARY) {
+      databuff_printf(buf, buf_len, pos, "json binary ");
+    } else if (json_type_ == ObJsonNodeType::J_OOID) {
+      databuff_printf(buf, buf_len, pos, "json oid ");
+    } else if (json_type_ == ObJsonNodeType::J_ORAWHEX) {
+      databuff_printf(buf, buf_len, pos, "json rawhex ");
+    } else {
+      databuff_printf(buf, buf_len, pos, "json rawid ");
+    }
+
+    pos += str_val_.to_string(buf + pos, buf_len - pos);
+    return pos;
+  }
+  OB_INLINE ObJsonNodeType json_type() const override { return json_type_; }
+  OB_INLINE void set_value(const char *str, uint64_t length) { str_val_.assign_ptr(str, length); }
+  OB_INLINE const common::ObString &value() const { return str_val_; }
+  OB_INLINE uint64_t length() const { return str_val_.length(); }
+  OB_INLINE uint64_t get_serialize_size()
+  {
+    return serialization::encoded_length_vi64(length()) + length();
+  }
+  ObJsonNode *clone(ObIAllocator* allocator) const;
+private:
+  ObString str_val_;
+  ObJsonNodeType json_type_;
+  ObObjType field_type_;
 };
 
 // Object element comparison function.

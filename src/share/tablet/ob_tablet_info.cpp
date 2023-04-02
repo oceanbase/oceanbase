@@ -28,7 +28,9 @@ ObTabletReplica::ObTabletReplica()
       server_(),
       snapshot_version_(0),
       data_size_(0),
-      required_size_(0)
+      required_size_(0),
+      report_scn_(0),
+      status_(SCN_STATUS_MAX)
 {
 }
 
@@ -46,6 +48,8 @@ void ObTabletReplica::reset()
   snapshot_version_ = 0;
   data_size_ = 0;
   required_size_ = 0;
+  report_scn_ = 0;
+  status_ = SCN_STATUS_MAX;
 }
 
 int ObTabletReplica::assign(const ObTabletReplica &other)
@@ -59,6 +63,8 @@ int ObTabletReplica::assign(const ObTabletReplica &other)
     snapshot_version_ = other.snapshot_version_;
     data_size_ = other.data_size_;
     required_size_ = other.required_size_;
+    report_scn_ = other.report_scn_;
+    status_ = other.status_;
   }
   return ret;
 }
@@ -70,7 +76,9 @@ int ObTabletReplica::init(
     const common::ObAddr &server,
     const int64_t snapshot_version,
     const int64_t data_size,
-    const int64_t required_size)
+    const int64_t required_size,
+    const int64_t report_scn,
+    const ScnStatus status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(
@@ -79,10 +87,12 @@ int ObTabletReplica::init(
       || !server.is_valid()
       || snapshot_version < 0
       || data_size < 0
-      || required_size < 0)) {
+      || required_size < 0
+      || report_scn < 0
+      || !is_status_valid(status))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init with invalid arguments", KR(ret),
-        K(tenant_id), K(tablet_id), K(ls_id), K(server), K(snapshot_version), K(data_size), K(required_size));
+    LOG_WARN("init with invalid arguments", KR(ret), K(tenant_id), K(tablet_id), K(ls_id),
+        K(server), K(snapshot_version), K(data_size), K(required_size), K(report_scn), K(status));
   } else {
     tenant_id_ = tenant_id;
     tablet_id_ = tablet_id;
@@ -91,6 +101,8 @@ int ObTabletReplica::init(
     snapshot_version_ = snapshot_version;
     data_size_ = data_size;
     required_size_ = required_size;
+    report_scn_ = report_scn;
+    status_ = status;
   }
   return ret;
 }

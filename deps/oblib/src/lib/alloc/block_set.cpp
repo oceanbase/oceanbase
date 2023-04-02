@@ -43,6 +43,11 @@ BlockSet::~BlockSet()
   reset();
 }
 
+bool BlockSet::check_has_unfree()
+{
+  return clist_ != NULL;
+}
+
 void BlockSet::reset()
 {
   while (NULL != clist_) {
@@ -64,12 +69,12 @@ void BlockSet::reset()
   cache_shared_lock_.reset();
 }
 
-void BlockSet::set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator, const ObMemAttr &attr)
+void BlockSet::set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
 {
   if (&allocator != tallocator_) {
     reset();
     tallocator_ = &allocator;
-    attr_ = attr;
+    attr_ = ObMemAttr(allocator.get_tenant_id(), nullptr, allocator.get_ctx_id());
   }
 }
 
@@ -163,23 +168,13 @@ void BlockSet::free_block(ABlock *const block)
       }
 
       ABlock *head = NULL != prev_block && !prev_block->in_use_ && !prev_block->is_washed_ ? prev_block : block;
-      
+
       // head won't been NULL,
       if (head != NULL) {
         head->in_use_ = false;
-        bool all_blocks_unused = false;
         // copy a temp
         chunk->mark_unused_blk_offset_bit(chunk->blk_offset(head));
-        if (0 != chunk->washed_size_) {
-          auto blk_bs = chunk->blk_bs_;
-          blk_bs.combine(chunk->unused_blk_bs_,
-                [](int64_t left, int64_t right) { return (left ^ right); });
-          all_blocks_unused = -1 == blk_bs.min_bit_ge(0);
-        } else {
-          all_blocks_unused = -1 == chunk->blk_bs_.min_bit_ge(1);
-        }
-        
-        if (all_blocks_unused) {
+        if (chunk->is_all_blks_unused()) {
           if (0 != chunk->washed_size_) {
             int offset = 0;
             do {
@@ -269,7 +264,7 @@ ABlock* BlockSet::get_free_block(const int cls, const ObMemAttr &attr)
     AChunk *chunk = block->chunk();
     chunk->unmark_unused_blk_offset_bit(chunk->blk_offset(block));
   }
-  
+
   return block;
 }
 
@@ -343,7 +338,7 @@ void BlockSet::free_chunk(AChunk *const chunk)
   abort_unless(NULL != chunk->next_);
   abort_unless(NULL != chunk->prev_);
   abort_unless(NULL != clist_);
-
+  abort_unless(chunk->is_all_blks_unused());
   if (chunk == clist_) {
     clist_ = clist_->next_;
   }
@@ -354,17 +349,16 @@ void BlockSet::free_chunk(AChunk *const chunk)
     chunk->next_->prev_ = chunk->prev_;
     chunk->prev_->next_ = chunk->next_;
   }
-
-  const uint64_t all_size = AChunkMgr::aligned(chunk->alloc_bytes_);
+  uint64_t payload = 0;
+  const uint64_t hold = chunk->hold(&payload);
   bool freed = false;
-  if (INTACT_ACHUNK_SIZE == all_size) {
+  if (INTACT_ACHUNK_SIZE == hold) {
     LockGuard lock(cache_shared_lock_);
     freed = chunk_free_list_.push(chunk);
   }
   if (!freed) {
     if (OB_NOT_NULL(tallocator_)) {
-      uint64_t payload = 0;
-      UNUSED(ATOMIC_FAA(&total_hold_, -chunk->hold(&payload)));
+      UNUSED(ATOMIC_FAA(&total_hold_, -hold));
       UNUSED(ATOMIC_FAA(&total_payload_, -payload));
       if (chunk->washed_size_ != 0) {
         tallocator_->update_wash_stat(-1, -chunk->washed_blks_, -chunk->washed_size_);
@@ -372,11 +366,6 @@ void BlockSet::free_chunk(AChunk *const chunk)
       tallocator_->free_chunk(chunk, attr_);
     }
   }
-}
-
-ObTenantCtxAllocator &BlockSet::get_tenant_ctx_allocator() const
-{
-  return *tallocator_;
 }
 
 int64_t BlockSet::sync_wash(int64_t wash_size)
@@ -420,7 +409,7 @@ int64_t BlockSet::sync_wash(int64_t wash_size)
               result = ::madvise(data, len, MADV_DONTNEED);
             } while (result == -1 && errno == EAGAIN);
             if (-1 == result) {
-              _OB_LOG(WARN, "madvise failed, errno: %d", errno);
+              _OB_LOG_RET(WARN, OB_ERR_SYS, "madvise failed, errno: %d", errno);
               has_ignore = true;
             } else {
               take_off_free_block(block, cls, chunk);

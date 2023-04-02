@@ -83,7 +83,7 @@ public:
   void reset();
   bool is_valid() const;
   int check_read_info_valid();
-  int has_lob_column_out(const bool is_get, bool &has_lob_column) const;
+  int refresh_lob_column_out_status();
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
   const ObTableReadInfo *get_read_info(const bool is_get = false) const
   {
@@ -127,6 +127,8 @@ public:
   }
   OB_INLINE bool need_fill_group_idx() const
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
+  OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
+  { return ss_rowkey_prefix_cnt_; }
   OB_INLINE void disable_blockscan()
   { pd_blockscan_ = 0; }
   OB_INLINE bool enable_pd_blockscan() const
@@ -139,6 +141,8 @@ public:
   { return use_iter_pool_; }
   OB_INLINE void set_use_iter_pool_flag()
   { use_iter_pool_ = 1; }
+  OB_INLINE bool has_lob_column_out() const
+  { return has_lob_column_out_; }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
@@ -156,6 +160,13 @@ public:
   bool is_same_schema_column_;
   bool vectorized_enabled_;
   bool has_virtual_columns_;
+  // use the flag to optimize blockscan for tables with text columns in mysql mode
+  // fuse row cache will be disabled when a table contains lob columns
+  // so we can generate from the request cols in readinfo without considering fuse row cache
+  bool has_lob_column_out_;
+  bool is_for_foreign_check_;
+  bool limit_prefetch_;
+  int64_t ss_rowkey_prefix_cnt_;
   union {
     struct {
       int32_t pd_blockscan_:1;
@@ -187,6 +198,7 @@ public:
                             const ObTableReadInfo &full_read_info,
                             const share::schema::ObTableSchemaParam &schema_param,
                             const common::ObIArray<int32_t> *out_cols_project);
+  int get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);
   // used for index back when query
   OB_INLINE int64_t get_out_col_cnt() const { return iter_param_.get_out_col_cnt(); }
   OB_INLINE int64_t get_max_out_col_cnt() const { return iter_param_.get_max_out_col_cnt(); }

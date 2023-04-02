@@ -170,7 +170,7 @@ public:
       const ObITable::TableKey &table_key,
       const ObCopyMacroRangeInfo &copy_macro_range_info,
       const int64_t data_version,
-      const int64_t backfill_tx_log_ts);
+      const share::SCN backfill_tx_scn);
   int get_next_macro_block(
       blocksstable::ObBufferReader &data,
       ObCopyMacroBlockHeader &copy_macro_block_header);
@@ -271,7 +271,6 @@ private:
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       obrpc::ObCopyTabletInfo &tablet_info);
-
 private:
   bool is_inited_;
   ObArray<common::ObTabletID> tablet_id_array_;
@@ -364,7 +363,7 @@ private:
   int get_tablet_meta_(
       const common::ObTabletID &tablet_id,
       ObMigrationTabletParam &tablet_meta);
-  int may_update_tablet_meta_(
+  int update_tablet_meta_if_restore_major_(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle,
       ObMigrationTabletParam &tablet_meta);

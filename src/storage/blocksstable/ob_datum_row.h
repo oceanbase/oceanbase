@@ -309,6 +309,7 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE int64_t get_deep_copy_size() const;
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
   OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len) const;
+  OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -545,12 +546,12 @@ OB_INLINE int ObStorageDatum::from_buf_enhance(const char *buf, const int64_t bu
 {
   int ret = common::OB_SUCCESS;
 
-  if (OB_UNLIKELY(nullptr == buf || buf_len < 0)) {
+  if (OB_UNLIKELY(nullptr == buf || buf_len < 0 || buf_len > UINT32_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to transfer from buf", K(ret), KP(buf), K(buf_len));
   } else {
     reuse();
-    len_ = buf_len;
+    len_ = static_cast<uint32_t>(buf_len);
     if (buf_len > 0) {
       ptr_ = buf;
     }
@@ -565,10 +566,7 @@ OB_INLINE int ObStorageDatum::from_obj_enhance(const common::ObObj &obj)
   int ret = common::OB_SUCCESS;
 
   reuse();
-  if (obj.has_lob_header()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "should not have lob header", K(ret), K(obj));
-  } else if (obj.is_ext()) {
+  if (obj.is_ext()) {
     set_ext_value(obj.get_ext());
   } else if (OB_FAIL(from_obj(obj))) {
     STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret), K(obj));
@@ -582,10 +580,7 @@ OB_INLINE int ObStorageDatum::from_obj_enhance(const common::ObObj &obj)
 OB_INLINE int ObStorageDatum::to_obj_enhance(common::ObObj &obj, const common::ObObjMeta &meta) const
 {
   int ret = common::OB_SUCCESS;
-  if (has_lob_header()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "should not have lob header", K(ret), K(*this));
-  } else if (is_outrow()) {
+  if (is_outrow()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "lob should not set outrow in datum", K(ret), K(*this), K(obj), K(meta));
   } else if (is_ext()) {
@@ -626,7 +621,7 @@ OB_INLINE bool ObStorageDatum::operator==(const ObStorageDatum &other) const
     bret = ObDatum::binary_equal(*this, other);
   }
   if (!bret) {
-    STORAGE_LOG(WARN, "obj and datum no equal", K(other), K(*this));
+    STORAGE_LOG(DEBUG, "obj and datum no equal", K(other), K(*this));
   }
   return bret;
 
@@ -644,7 +639,7 @@ OB_INLINE bool ObStorageDatum::operator==(const common::ObObj &other) const
     bret = *this == datum;
   }
   if (!bret) {
-    STORAGE_LOG(WARN, "obj and datum no equal", K(other), K(datum), KPC(this));
+    STORAGE_LOG(DEBUG, "obj and datum no equal", K(other), K(datum), KPC(this));
   }
   return bret;
 }
@@ -675,6 +670,11 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len) 
   }
 
   return pos;
+}
+
+OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const
+{
+  return OBJ_DATUM_STRING == map_type && sizeof(uint64_t) == len_ && is_local_buf();
 }
 
 struct ObGhostRowUtil {

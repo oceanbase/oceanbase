@@ -16,6 +16,8 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/hash/ob_hashmap.h"
 #include "common/object/ob_object.h"
+#include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/engine/ob_exec_context.h"
 
 #ifndef OCEANBASE_SQL_ENGINE_CMD_LOAD_DATA_UTILS_H_
 #define OCEANBASE_SQL_ENGINE_CMD_LOAD_DATA_UTILS_H_
@@ -148,7 +150,13 @@ public:
   static int build_insert_sql_string_head(ObLoadDupActionType insert_mode,
                                           const common::ObString &table_name,
                                           const common::ObIArray<common::ObString> &insert_keys,
-                                          common::ObSqlString &insertsql_keys);
+                                          common::ObSqlString &insertsql_keys,
+                                          bool need_gather_opt_stat = false);
+
+  static int check_need_opt_stat_gather(ObExecContext &ctx,
+                                        ObLoadDataStmt &load_stmt,
+                                        bool &need_opt_stat_gather);
+
   static int append_values_in_remote_process(int64_t table_column_count,
                                              int64_t append_values_count,
                                              const ObExprValueBitSet &expr_bitset,
@@ -249,7 +257,7 @@ public:
   {
     bool ret_bool = false;
     if (OB_UNLIKELY(!is_inited_)) {
-      SQL_ENG_LOG(ERROR, "ObKmpSeparatorDetector not inited.");
+      SQL_ENG_LOG_RET(ERROR, common::OB_NOT_INIT, "ObKmpSeparatorDetector not inited.");
     } else {
       while (matched_pos_ > 0 && c != str_[matched_pos_]) {
         matched_pos_ = next_[matched_pos_];
@@ -284,6 +292,7 @@ struct ObLoadDataGID
     gid.id = ATOMIC_AAF(&GlobalLoadDataID, 1);
   }
   ObLoadDataGID() : id(-1) {}
+  void reset() { id = -1; }
   bool is_valid() const { return id  > 0; }
   uint64_t hash() const { return common::murmurhash(&id, sizeof(id), 0); }
   bool operator==(const ObLoadDataGID &other) const { return id == other.id; }
@@ -296,9 +305,11 @@ struct ObLoadDataGID
 
 struct ObLoadDataStat
 {
-  ObLoadDataStat() : ref_cnt_(0),
+  ObLoadDataStat() : allocator_(ObModIds::OB_SQL_LOAD_DATA),
+                     ref_cnt_(0),
                      tenant_id_(0),
                      job_id_(0),
+                     job_type_(),
                      table_name_(),
                      file_path_(),
                      table_column_(0),
@@ -310,13 +321,15 @@ struct ObLoadDataStat
                      estimated_remaining_time_(0),
                      total_bytes_(0),
                      read_bytes_(0),
-                     processed_bytes_(0),
-                     processed_rows_(0),
+                     parsed_bytes_(0),
+                     parsed_rows_(0),
                      total_shuffle_task_(0),
                      total_insert_task_(0),
                      shuffle_rt_sum_(0),
                      insert_rt_sum_(0),
-                     total_wait_secs_(0) {}
+                     total_wait_secs_(0),
+                     max_allowed_error_rows_(0),
+                     detected_error_rows_(0) {}
   int64_t aquire() {
     return ATOMIC_AAF(&ref_cnt_, 1);
   }
@@ -325,9 +338,11 @@ struct ObLoadDataStat
   }
   int64_t get_ref_cnt() { return ATOMIC_LOAD(&ref_cnt_); }
 
+  common::ObArenaAllocator allocator_;
   volatile int64_t ref_cnt_;
   int64_t tenant_id_;
   int64_t job_id_;
+  common::ObString job_type_; // normal / direct
   common::ObString table_name_;
   common::ObString file_path_;
   int64_t table_column_;
@@ -338,16 +353,42 @@ struct ObLoadDataStat
   int64_t start_time_;
   int64_t estimated_remaining_time_;
   int64_t total_bytes_;
-  int64_t read_bytes_;  //bytes read to memory
-  int64_t processed_bytes_;
-  int64_t processed_rows_;
+  volatile int64_t read_bytes_;  //bytes read to memory
+  volatile int64_t parsed_bytes_;
+  volatile int64_t parsed_rows_;
   int64_t total_shuffle_task_;
   int64_t total_insert_task_;
   int64_t shuffle_rt_sum_;
   int64_t insert_rt_sum_;
   int64_t total_wait_secs_;
+  int64_t max_allowed_error_rows_;
+  int64_t detected_error_rows_;
+  struct {
+    volatile int64_t received_rows_; // received from client
+    int64_t last_commit_segment_id_;
+    common::ObString status_; // none / inited / loading / frozen / merging / commit / error / abort
+    common::ObString trans_status_; // none / inited / running / frozen / commit / error / abort
+  } coordinator;
 
-  TO_STRING_KV(K(job_id_), K(table_name_), K(total_bytes_), K(processed_bytes_));
+  struct {
+    volatile int64_t processed_rows_;
+    int64_t last_commit_segment_id_;
+    common::ObString status_;
+    common::ObString trans_status_;
+  } store;
+
+  TO_STRING_KV(K(tenant_id_), K(job_id_), K(job_type_),
+      K(table_name_), K(file_path_), K(table_column_), K(file_column_),
+      K(batch_size_), K(parallel_), K(load_mode_),
+      K(start_time_), K(estimated_remaining_time_),
+      K(total_bytes_), K(read_bytes_), K(parsed_bytes_),
+      K(parsed_rows_), K(total_shuffle_task_), K(total_insert_task_),
+      K(shuffle_rt_sum_), K(insert_rt_sum_), K(total_wait_secs_),
+      K(max_allowed_error_rows_), K(detected_error_rows_),
+      K(coordinator.received_rows_), K(coordinator.last_commit_segment_id_),
+      K(coordinator.status_), K(coordinator.trans_status_),
+      K(store.processed_rows_), K(store.last_commit_segment_id_),
+      K(store.status_), K(store.trans_status_));
 };
 
 class ObGetAllJobStatusOp
@@ -359,12 +400,58 @@ public:
 public:
   void reset();
   int operator()(common::hash::HashMapPair<ObLoadDataGID, ObLoadDataStat*> &entry);
-  ObLoadDataStat* next_job_status(void);
-  bool end(void);
+  int get_next_job_status(ObLoadDataStat *&job_status);
 
 private:
   common::ObSEArray<ObLoadDataStat *, 10> job_status_array_;
   int32_t current_job_index_;
+};
+
+class ObLoadDataStatGuard
+{
+public:
+  ObLoadDataStatGuard() : stat_(nullptr) {}
+  ObLoadDataStatGuard(const ObLoadDataStatGuard &rhs) : stat_(nullptr)
+  {
+    aquire(rhs.stat_);
+  }
+  ~ObLoadDataStatGuard()
+  {
+    release();
+  }
+
+  void aquire(ObLoadDataStat *stat)
+  {
+    release();
+    stat_ = stat;
+    if (nullptr != stat_) {
+      stat_->aquire();
+    }
+  }
+
+  void release()
+  {
+    if (nullptr != stat_) {
+      stat_->release();
+      stat_ = nullptr;
+    }
+  }
+
+  ObLoadDataStat *get() const { return stat_; }
+
+  // ObLoadDataStat *operator->() { return stat_; }
+  // const ObLoadDataStat *operator->() const { return stat_; }
+
+  ObLoadDataStatGuard &operator=(const ObLoadDataStatGuard &rhs)
+  {
+    aquire(rhs.stat_);
+    return *this;
+  }
+
+  TO_STRING_KV(KPC_(stat));
+
+private:
+  ObLoadDataStat *stat_;
 };
 
 class ObGlobalLoadDataStatMap
@@ -377,6 +464,7 @@ public:
   int unregister_job(const ObLoadDataGID &id, ObLoadDataStat *&job_status);
   int get_job_status(const ObLoadDataGID &id, ObLoadDataStat *&job_status);
   int get_all_job_status(ObGetAllJobStatusOp &job_status_op);
+  int get_job_stat_guard(const ObLoadDataGID &id, ObLoadDataStatGuard &guard);
 private:
   typedef common::hash::ObHashMap<ObLoadDataGID, ObLoadDataStat*,
           common::hash::SpinReadWriteDefendMode> HASH_MAP;

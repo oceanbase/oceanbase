@@ -27,7 +27,7 @@ OB_SERIALIZE_MEMBER(ObBackupDataLSAttrDesc, backup_scn_, ls_attr_array_);
 
 bool ObBackupDataLSAttrDesc::is_valid() const
 {
-  return backup_scn_ > 0 && !ls_attr_array_.empty();
+  return backup_scn_.is_valid() && !ls_attr_array_.empty();
 }
 
 /*
@@ -61,7 +61,17 @@ OB_SERIALIZE_MEMBER(ObBackupDataTabletToLSDesc, backup_scn_, tablet_to_ls_);
 
 bool ObBackupDataTabletToLSDesc::is_valid() const
 {
-  return backup_scn_ > 0 && !tablet_to_ls_.empty();
+  return backup_scn_.is_valid() && !tablet_to_ls_.empty();
+}
+
+/*
+ *------------------------------ObBackupDeletedTabletToLSDesc----------------------------
+ */
+OB_SERIALIZE_MEMBER(ObBackupDeletedTabletToLSDesc, deleted_tablet_to_ls_);
+
+bool ObBackupDeletedTabletToLSDesc::is_valid() const
+{
+  return true;
 }
 
 /*
@@ -501,6 +511,59 @@ int ObBackupDataStore::read_tablet_to_ls_info(const ObLSID &ls_id, const int64_t
   return ret;
 }
 
+int ObBackupDataStore::write_deleted_tablet_info(const ObBackupDeletedTabletToLSDesc &deleted_tablet_info)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString full_path;
+  share::ObBackupPath path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_deleted_tablet_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, deleted_tablet_info))) {
+    LOG_WARN("fail to write single file", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_deleted_tablet_info(const ObLSID &ls_id, ObIArray<ObTabletID> &deleted_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  deleted_tablet_ids.reset();
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  ObBackupDeletedTabletToLSDesc deleted_tablet_info;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_deleted_tablet_info_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get tenant ls attr info path", K(ret));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, deleted_tablet_info))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup deleted file not exist", K(ret));
+    } else {
+      LOG_WARN("failed to read single file", K(ret), K(full_path));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablet_info.deleted_tablet_to_ls_.count(); ++i) {
+      const ObBackupDataTabletToLSInfo &info = deleted_tablet_info.deleted_tablet_to_ls_.at(i);
+      if (info.ls_id_ == ls_id) {
+        if (OB_FAIL(deleted_tablet_ids.assign(info.tablet_id_list_))) {
+          LOG_WARN("failed to assign", K(ret), K(info));
+        }
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupDataStore::write_tenant_backup_set_infos(const ObTenantBackupSetInfosDesc &tenant_backup_set_infos)
 {
   int ret = OB_SUCCESS;
@@ -526,8 +589,8 @@ int ObBackupDataStore::write_backup_set_placeholder(
     const bool is_inner,
     const bool is_start, 
     const bool is_succeed,
-    const share::ObBackupSCN &replay_scn, 
-    const share::ObBackupSCN &min_restore_scn)
+    const SCN &replay_scn,
+    const SCN &min_restore_scn)
 {
   int ret = OB_SUCCESS;
   ObExternBackupSetPlaceholderDesc placeholder;
@@ -672,8 +735,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
     const bool is_inner, 
     const bool is_start, 
     const bool is_succeed, 
-    const share::ObBackupSCN &replay_scn, 
-    const share::ObBackupSCN &min_restore_scn, 
+    const SCN &replay_scn,
+    const SCN &min_restore_scn,
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -704,8 +767,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
 
 int ObBackupDataStore::get_backup_set_array(
     const common::ObString &passwd_array,
-    const share::ObBackupSCN &restore_scn, 
-    share::ObBackupSCN &restore_start_scn, 
+    const SCN &restore_scn,
+    SCN &restore_start_scn,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
@@ -725,18 +788,18 @@ int ObBackupDataStore::get_backup_set_array(
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
       LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
-    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list, 
+    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list,
         global_max_backup_set_id, restore_start_scn))) {
       LOG_WARN("fail to do get backup set array", K(ret), K(op));
-    } 
+    }
   }
   return ret;
 }
 
 int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
-    const share::ObBackupSCN &restore_scn, const ObBackupSetFilter &op, 
+    const SCN &restore_scn, const ObBackupSetFilter &op,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
-    int64_t &cur_max_backup_set_id, share::ObBackupSCN &restore_start_scn)
+    int64_t &cur_max_backup_set_id, SCN &restore_start_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t OB_BACKUP_MAX_BACKUP_SET_ID = 5000;
@@ -876,7 +939,7 @@ int ObBackupDataStore::get_max_sys_ls_retry_id(const share::ObBackupPath &backup
   if (backup_path.is_empty() || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(backup_path), K(ls_id));
-  } else if (OB_FAIL(prefix_op.init(sys_data_prefix, strlen(sys_data_prefix)))) {
+  } else if (OB_FAIL(prefix_op.init(sys_data_prefix, static_cast<int32_t>(strlen(sys_data_prefix))))) {
     LOG_WARN("failed to init dir prefix", K(ret), K(sys_data_prefix));
   } else if (OB_FAIL(util.list_directories(backup_path.get_obstr(), backup_set_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret), K(backup_path), K(backup_set_dest_));

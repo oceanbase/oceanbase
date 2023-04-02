@@ -48,12 +48,12 @@ namespace transaction
 class ObTxCycleTwoPhaseCommitter
 {
 public:
-  ObTxCycleTwoPhaseCommitter() : collected_() {}
+  ObTxCycleTwoPhaseCommitter() : collected_(), self_id_(-1) {}
   ~ObTxCycleTwoPhaseCommitter() {}
   void reset()
   {
     collected_.reset();
-    set_upstream_state(ObTxState::INIT);
+    self_id_ = -1;
   }
   // two_phase_commit triggers the underlying two phase commit progress.
   //
@@ -82,7 +82,7 @@ public:
   // was before invoking the method.
   int handle_2pc_req(const ObTwoPhaseCommitMsgType msg_type);
   int handle_2pc_resp(const ObTwoPhaseCommitMsgType msg_type,
-                      const uint8_t participant_id);
+                      const int64_t participant_id);
 
   static int handle_orphan_2pc_req(const ObTwoPhaseCommitMsgType recv_msg_type,
                                    ObTwoPhaseCommitMsgType& send_msg_type,
@@ -121,25 +121,25 @@ public:
   //
   // two phase commit normal message handler.
   int handle_2pc_prepare_request();
-  int handle_2pc_prepare_response(const uint8_t participant_id);
+  int handle_2pc_prepare_response(const int64_t participant_id);
   int handle_2pc_commit_request();
   int handle_2pc_abort_request();
-  int handle_2pc_commit_response(const uint8_t participant_id);
-  int handle_2pc_abort_response(const uint8_t participant_id);
+  int handle_2pc_commit_response(const int64_t participant_id);
+  int handle_2pc_abort_response(const int64_t participant_id);
 
   // Oceanbase's optimized two phase commit protocol
   //
   // In our optimized protocol, we use precommit msg to reduce single machine
   // read latency and clear msg to reduce SQL commit latency.
   int handle_2pc_pre_commit_request();
-  int handle_2pc_pre_commit_response(const uint8_t participant_id);
+  int handle_2pc_pre_commit_response(const int64_t participant_id);
   int handle_2pc_clear_request();
-  int handle_2pc_clear_response(const uint8_t participant_id);
+  int handle_2pc_clear_response(const int64_t participant_id);
 
   // message handler for special usage
   // only persist redo and commit info
   int handle_2pc_prepare_redo_request();
-  int handle_2pc_prepare_redo_response(const uint8_t participant_id);
+  int handle_2pc_prepare_redo_response(const int64_t participant_id);
 
   // two phase commit orphan message handler message handler
   //
@@ -186,7 +186,7 @@ public:
   int recover_from_tx_table();
 
   int try_enter_pre_commit_state();
-  int enter_pre_commit_state();
+  int on_pre_commit();
 
   // Two phase committer user should implement its own state handler on its own.
   // For ObTxCtx, we use the handler to implements the concurrent control
@@ -207,6 +207,12 @@ public:
   virtual int on_commit() = 0;
   virtual int on_abort() = 0;
   virtual int on_clear() = 0;
+
+  // 1. when recive a new request msg, the participant will enter into the next phase.
+  // 2. invoke do_xxx to execute all in-memory operation with the next phase
+  // 3. set upstream_state at last
+  // 4. retry submit log if upstream_state is larger than downstream_state
+  int drive_self_2pc_phase(ObTxState next_phase);
 
   // for xa
   virtual int reply_to_scheduler_for_sub2pc(int64_t msg_type) = 0;
@@ -261,15 +267,18 @@ public:
   //     node waits for the node's 2pc state response before responsing its 2pc
   //     state to his parent node.
   //
-  // Detailed design is in https://yuque.antfin.com/ob/transaction/tkcto4
-  virtual int64_t get_participants_size() = 0;
-  virtual uint64_t get_participant_id() = 0;
+  // Detailed design is in
+  virtual int64_t get_downstream_size() const = 0;
+  virtual int64_t get_self_id() = 0;
   // is_root returns whether it is the root participant in the cycle two phase
   // commit
-  virtual bool is_root() const = 0;
+  bool is_root() const { return Ob2PCRole::ROOT == get_2pc_role(); }
   // is_leaf returns whether it is the leaf participant in the cycle two phase
   // commit
-  virtual bool is_leaf() const = 0;
+  bool is_leaf() const { return Ob2PCRole::LEAF == get_2pc_role(); }
+  bool is_internal() const { return Ob2PCRole::INTERNAL == get_2pc_role(); }
+  virtual Ob2PCRole get_2pc_role() const = 0;
+
   // is_2pc_logging returns whether it is waiting for the success of two phase
   // commit asynchronous logging. Because of the asynchronization of the
   // logging, We almost view the unfinished logging as the state transition all
@@ -284,11 +293,14 @@ public:
   // If you are interested in the application, see handle_2pc_prepare_request
   // and apply_prepare_log.
   virtual bool is_2pc_logging() const = 0;
-  // 
+
+  //durable state, set by applying log
   virtual ObTxState get_downstream_state() const = 0;
   virtual int set_downstream_state(const ObTxState state) = 0;
+  //in-memory state, set by msg
   virtual ObTxState get_upstream_state() const = 0;
   virtual int set_upstream_state(const ObTxState state) = 0;
+
   // for xa
   bool is_prepared_sub2pc()
   {
@@ -309,9 +321,9 @@ public:
   // Implementer need implement its own msg according to all ObTwoPhaseCommitMsgType.
   // While it should not guarantee anything except best effort property and interface
   // adaption for hande_msg
-  virtual int post_msg(const ObTwoPhaseCommitMsgType& msg_type) = 0;
+  int post_downstream_msg(const ObTwoPhaseCommitMsgType msg_type);
   virtual int post_msg(const ObTwoPhaseCommitMsgType& msg_type,
-                       const uint8_t participant_id) = 0;
+                       const int64_t participant_id) = 0;
   // whether the processing of current two phase commit is sub part of a global transaction
   // TODO, refine in 4.1
   virtual bool is_sub2pc() const = 0;
@@ -325,16 +337,18 @@ public:
 private:
   // Inner method for handle_2pc_xxx_request/response for clearity
   int handle_2pc_prepare_redo_request_impl_();
-  int handle_2pc_prepare_redo_response_impl_(const uint8_t participant_id);
+  int handle_2pc_prepare_redo_response_impl_(const int64_t participant_id);
   int handle_2pc_prepare_request_impl_();
   int handle_2pc_pre_commit_request_impl_();
   int handle_2pc_commit_request_impl_();
   int handle_2pc_abort_request_impl_();
   int handle_2pc_clear_request_impl_();
-  int handle_2pc_prepare_response_impl_(const uint8_t participant_id);
-  int handle_2pc_pre_commit_response_impl_(const uint8_t participant);
-  int handle_2pc_ack_response_impl_(const uint8_t participant_id);
-  int handle_2pc_abort_response_impl_(const uint8_t participant_id);
+  int handle_2pc_prepare_response_impl_(const int64_t participant_id);
+  int handle_2pc_pre_commit_response_impl_(const int64_t participant);
+  int handle_2pc_ack_response_impl_(const int64_t participant_id);
+  int handle_2pc_abort_response_impl_(const int64_t participant_id);
+
+  virtual int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type) = 0;
 
   // Because the post_msg is best effect, we need retry to post the msg under
   // exception.
@@ -342,17 +356,17 @@ private:
   //  NB: We should take both upstream and downstream into consideration.
   int decide_downstream_msg_type_(bool &need_submit, ObTwoPhaseCommitMsgType &msg_type);
   int retransmit_downstream_msg_();
-  int retransmit_downstream_msg_(const uint8_t participant);
   int retransmit_upstream_msg_(const ObTxState state);
+  int retransmit_downstream_msg_(const int64_t participant);
 
   // Because the submit_log may fail, we need retry to submit the log under
   // exception.
-  int decide_downstream_log_type_(bool &need_submit, ObTwoPhaseCommitLogType &log_type);
-  int resubmit_downstream_log_();
+  int decide_2pc_log_type_(bool &need_submit, ObTwoPhaseCommitLogType &log_type);
+  int submit_2pc_log_();
 
   // Means we collect all downstream responses
   bool all_downstream_collected_();
-  int collect_downstream_(const uint8_t participant);
+  int collect_downstream_(const int64_t participant);
 
 protected:
   // colloected_ is the bit set for storing responses from participants
@@ -360,6 +374,10 @@ protected:
   //  NB: We introduce the rule that the bit set is cleaned up each time state
   //      is transferred.
   common::ObBitSet<> collected_;
+
+  int64_t self_id_;
+  //set by xa or dup table
+  // bool no_need_submit_prepare_log_;
 };
 
 bool is_2pc_request_msg(const ObTwoPhaseCommitMsgType msg_type);

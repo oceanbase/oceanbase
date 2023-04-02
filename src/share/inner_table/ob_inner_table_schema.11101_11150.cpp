@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_macro_define.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -2943,14 +2944,14 @@ int ObInnerTableSchema::all_virtual_io_quota_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("category", //column_name
+    ADD_COLUMN_SCHEMA("group_id", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      256, //column_length
+      sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

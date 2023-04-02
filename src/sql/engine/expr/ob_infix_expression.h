@@ -91,7 +91,8 @@ public:
 
   // Only called in ObAggregateExpression, because it try to evaluate
   // T_OP_AGG_PARAM_LIST which return multi values.
-  int calc_row(common::ObExprCtx &expr_ctx, const common::ObNewRow &row, ObItemType aggr_func, common::ObNewRow &res_row) const;
+  int calc_row(common::ObExprCtx &expr_ctx, const common::ObNewRow &row, ObItemType aggr_func,
+               const ObExprResType &res_type, common::ObNewRow &res_row) const;
 
   int generate_idx_for_regexp_ops(int16_t &cur_regexp_op_count);
 

@@ -30,6 +30,7 @@
 #include "logservice/logrouteservice/ob_log_route_service.h" // ObLogRouteService
 #include "ob_log_ls_callback.h"
 #include "ob_log_systable_helper.h"
+#include "ob_log_fetching_mode.h"
 
 namespace oceanbase
 {
@@ -53,12 +54,17 @@ public:
   virtual void configure(const ObLogConfig &cfg) = 0;
 
   // Add LS
-  virtual int add_ls(const TenantLSID &tls_id,
-      const int64_t start_tstamp_ns,
-      const palf::LSN &start_lsn) = 0;
+  virtual int add_ls(
+      const TenantLSID &tls_id,
+      const ObLogFetcherStartParameters &start_parameters) = 0;
 
   // Recycle LS
   virtual int recycle_ls(const TenantLSID &tls_id) = 0;
+
+  // Remove LS
+  virtual int remove_ls(const TenantLSID &tls_id) = 0;
+
+  virtual int wait_for_all_ls_to_be_removed(const int64_t timeout) = 0;
 
   virtual int64_t get_part_trans_task_count() const = 0;
 
@@ -67,6 +73,28 @@ public:
   virtual int get_fs_container_mgr(IObFsContainerMgr *&fs_container_mgr) = 0;
 
   virtual int get_log_route_service(logservice::ObLogRouteService *&log_route_service) = 0;
+
+  virtual int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool) = 0;
+
+  // Checks if the sys progress of specified tenant exceeds the timestamp
+  // For LogMetaDataService:
+  // 1. At startup time, it need to build the baseline data for the startup timestamp,
+  //    so we need to ensure that we have fetched all logs.
+  // 2. We can use the check_progress function to determine that the log is complete,
+  //    including the data dictionary baseline data and the incremental data that needs to be replayed.
+  //
+  // @param  [in]   tenant_id    Tenant ID
+  // @param  [in]   timestamp    The timestamp which you want to  check
+  // @param  [out]  is_exceeded  Returns whether it was exceeded
+  // @param  [out]  cur_progress Returns current progress
+  //
+  // @retval OB_SUCCESS          success
+  // @retval Other error codes   Failed
+  virtual int check_progress(
+      const uint64_t tenant_id,
+      const int64_t timestamp,
+      bool &is_exceeded,
+      int64_t &cur_progress) = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -95,16 +123,16 @@ public:
   virtual ~ObLogFetcher();
 
   int init(
-      IObLogDmlParser *dml_parser,
+      const bool is_loading_data_dict_baseline_data,
+      const ClientFetchingMode fetching_mode,
+      const ObBackupPathString &archive_dest,
+      IObLogFetcherDispatcher *dispatcher,
       IObLogSysLsTaskHandler *sys_ls_handler,
-      IObLogErrHandler *err_handler,
-      ObLogSysTableHelper &systable_helper,
       TaskPool *task_pool,
       IObLogEntryTaskPool *log_entry_task_pool,
-      IObLogCommitter *committer,
       ObISQLClient *proxy,
+      IObLogErrHandler *err_handler,
       const int64_t cluster_id,
-      const common::ObRegion &prefer_region,
       const ObLogConfig &cfg,
       const int64_t start_seq);
 
@@ -119,11 +147,15 @@ public:
   virtual void mark_stop_flag();
   virtual void configure(const ObLogConfig &cfg);
 
-  virtual int add_ls(const TenantLSID &tls_id,
-      const int64_t start_tstamp_ns,
-      const palf::LSN &start_lsn);
+  virtual int add_ls(
+      const TenantLSID &tls_id,
+      const ObLogFetcherStartParameters &start_parameters);
 
   virtual int recycle_ls(const TenantLSID &tls_id);
+
+  virtual int remove_ls(const TenantLSID &tls_id);
+
+  virtual int wait_for_all_ls_to_be_removed(const int64_t timeout);
 
   virtual int64_t get_part_trans_task_count() const
   { return ATOMIC_LOAD(&PartTransDispatcher::g_part_trans_task_count); }
@@ -133,6 +165,14 @@ public:
   virtual int get_fs_container_mgr(IObFsContainerMgr *&fs_container_mgr);
 
   virtual int get_log_route_service(logservice::ObLogRouteService *&log_route_service);
+
+  virtual int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool);
+
+  virtual int check_progress(
+      const uint64_t tenant_id,
+      const int64_t timestamp,
+      bool &is_exceeded,
+      int64_t &cur_progress);
 
 private:
   static void *misc_thread_func_(void *);
@@ -183,6 +223,10 @@ private:
 
 private:
   bool                          is_inited_;
+  bool                          is_loading_data_dict_baseline_data_;
+  ClientFetchingMode            fetching_mode_;
+  ObBackupPathString            archive_dest_;
+  archive::LargeBufferPool      large_buffer_pool_;
   TaskPool                      *task_pool_;
   IObLogSysLsTaskHandler        *sys_ls_handler_;
   IObLogErrHandler              *err_handler_;
@@ -201,7 +245,7 @@ private:
   ObLogFetcherDeadPool          dead_pool_;
   ObLSWorker                    stream_worker_;
   ObFsContainerMgr              fs_container_mgr_;
-  ObLogFetcherDispatcher        dispatcher_;
+  IObLogFetcherDispatcher       *dispatcher_;
   ObLogClusterIDFilter          cluster_id_filter_;
 
   pthread_t                     misc_tid_;                // Fetcher misc thread

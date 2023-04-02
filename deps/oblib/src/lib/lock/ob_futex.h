@@ -18,25 +18,22 @@
 #include "lib/list/ob_dlist.h"
 #include <linux/futex.h>
 #include "lib/ob_abort.h"
-#define futex(...) syscall(SYS_futex,__VA_ARGS__)
+
+extern "C" {
+extern int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout);
+}
+
+#define futex(...) futex_hook(__VA_ARGS__)
+
 inline int futex_wake(volatile int *p, int val)
 {
-  return static_cast<int>(futex((int *)p, FUTEX_WAKE_PRIVATE, val, NULL, NULL, 0));
+  return futex((uint32_t *)p, FUTEX_WAKE_PRIVATE, val, NULL);
 }
 
 inline int futex_wait(volatile int *p, int val, const timespec *timeout)
 {
   int ret = 0;
-  if (0 != futex((int *)p, FUTEX_WAIT_PRIVATE, val, timeout, NULL, 0)) {
-    ret = errno;
-  }
-  return ret;
-}
-
-inline int futex_wait_until(volatile int *p, int val, const timespec *timeout, int wait_mask)
-{
-  int ret = 0;
-  if (0 != futex((int *)p, FUTEX_WAIT_BITSET_PRIVATE, val, timeout, NULL, wait_mask)) {
+  if (0 != futex((uint32_t *)p, FUTEX_WAIT_PRIVATE, val, timeout)) {
     ret = errno;
   }
   return ret;

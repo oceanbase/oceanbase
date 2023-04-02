@@ -15,6 +15,7 @@
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -46,11 +47,11 @@ public:
   void destroy();
   // add ls checkpoint freeze task
   // @param [in] data_checkpoint, the data_checkpoint of this task.
-  // @param [in] rec_log_ts, freeze all the memtable whose rec_log_ts is
+  // @param [in] rec_scn, freeze all the memtable whose rec_scn is
   // smaller than this one.
   int add_ls_freeze_task(
       ObDataCheckpoint *data_checkpoint,
-      int64_t rec_log_ts);
+      share::SCN rec_scn);
 
   int do_minor_freeze();
 

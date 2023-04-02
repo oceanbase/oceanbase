@@ -21,11 +21,11 @@ namespace share
 using namespace std;
 
 ObArchivePiece::ObArchivePiece() :
-  interval_(0),
-  genesis_ts_(0),
+  interval_us_(0),
   base_piece_id_(0),
   piece_id_(0)
 {
+  genesis_scn_.set_min();
 }
 
 ObArchivePiece::~ObArchivePiece()
@@ -33,60 +33,65 @@ ObArchivePiece::~ObArchivePiece()
   reset();
 }
 
-ObArchivePiece::ObArchivePiece(const int64_t timestamp, const int64_t interval_us, const int64_t genesis_ts, const int64_t base_piece_id)
+ObArchivePiece::ObArchivePiece(const SCN &scn, const int64_t interval_us, const SCN &genesis_scn, const int64_t base_piece_id)
 {
-  const int64_t interval =  interval_us * 1000L;
-  if (timestamp < 0 || interval < ONE_SECOND || genesis_ts < 0 || base_piece_id < 1) {
-    LOG_ERROR("invalid argument", K(timestamp), K(interval), K(genesis_ts), K(base_piece_id));
+  if (!scn.is_valid() || interval_us < ONE_SECOND || !genesis_scn.is_valid() || base_piece_id < 1) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid argument", K(scn), K(interval_us), K(genesis_scn), K(base_piece_id));
   } else {
-    interval_ = interval;
-    genesis_ts_ = genesis_ts;
+    interval_us_ = interval_us;
+    genesis_scn_ = genesis_scn;
     base_piece_id_ = base_piece_id;
-    piece_id_ = (timestamp - genesis_ts_) / std::max(interval_, 1L) + base_piece_id_;
+    piece_id_ = (scn.convert_to_ts() - genesis_scn_.convert_to_ts()) / interval_us_ + base_piece_id_;
   }
 }
 
 void ObArchivePiece::reset()
 {
-  interval_ = ONE_DAY;
-  genesis_ts_ = 0;
+  interval_us_ = ONE_DAY;
+  genesis_scn_.reset();
   base_piece_id_ = 0;
   piece_id_ = 0;
 }
 
-int ObArchivePiece::set(const int64_t piece_id, const int64_t interval_us, const int64_t genesis_ts, const int64_t base_piece_id)
+int ObArchivePiece::set(const int64_t piece_id,
+                        const int64_t interval_us,
+                        const SCN &genesis_scn,
+                        const int64_t base_piece_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t interval =  interval_us * 1000L;
-  if (piece_id < 0 || interval <= 0 || genesis_ts < 0 || base_piece_id < 1) {
+  if (piece_id < 0 || interval_us < ONE_SECOND || !genesis_scn.is_valid() || base_piece_id < 1) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(piece_id), K(interval), K(genesis_ts), K(base_piece_id));
+    LOG_WARN("invalid argument", K(ret), K(piece_id), K(interval_us), K(genesis_scn), K(base_piece_id));
   } else {
     piece_id_ = piece_id;
-    interval_ = interval;
-    genesis_ts_ = genesis_ts;
-    base_piece_id_ =base_piece_id;
+    interval_us_ = interval_us;
+    genesis_scn_ = genesis_scn;
+    base_piece_id_ = base_piece_id;
   }
   return ret;
 }
 
 bool ObArchivePiece::is_valid() const
 {
-  return interval_ >= ONE_SECOND
-    && genesis_ts_ >= 0
+  return interval_us_ >= ONE_SECOND
+    && genesis_scn_.is_valid()
     && base_piece_id_ > 0;
 }
 
-int64_t ObArchivePiece::get_piece_lower_limit()
+int ObArchivePiece::get_piece_lower_limit(SCN &scn)
 {
-  //return convert_timestamp_();
-  return (piece_id_ - base_piece_id_) * interval_ + genesis_ts_;
+  int ret = OB_SUCCESS;
+  int64_t ts = (piece_id_ - base_piece_id_) * interval_us_  + genesis_scn_.convert_to_ts();
+  if (OB_FAIL(scn.convert_from_ts(ts))) {
+    LOG_WARN("failed to convert_for_logservice", KPC(this), K(ret), K(ts));
+  }
+  return ret;
 }
 
 ObArchivePiece &ObArchivePiece::operator=(const ObArchivePiece &other)
 {
-  interval_ = other.interval_;
-  genesis_ts_ = other.genesis_ts_;
+  interval_us_ = other.interval_us_;
+  genesis_scn_ = other.genesis_scn_;
   base_piece_id_ = other.base_piece_id_;
   piece_id_ = other.piece_id_;
   return *this;
@@ -101,8 +106,8 @@ ObArchivePiece &ObArchivePiece::operator++()
 // 不同interval piece不可比
 bool ObArchivePiece::operator==(const ObArchivePiece &other) const
 {
-  if (interval_ != other.interval_) {
-    LOG_ERROR("different piece interval, can not compare", KPC(this), K(other));
+  if (interval_us_ != other.interval_us_) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "different piece interval, can not compare", KPC(this), K(other));
   }
   return piece_id_ == other.piece_id_;
 }
@@ -114,8 +119,8 @@ bool ObArchivePiece::operator!=(const ObArchivePiece &other) const
 
 bool ObArchivePiece::operator>(const ObArchivePiece &other) const
 {
-  if (interval_ != other.interval_) {
-    LOG_ERROR("different piece interval, can not compare", KPC(this), K(other));
+  if (interval_us_ != other.interval_us_) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "different piece interval, can not compare", KPC(this), K(other));
   }
   return piece_id_ > other.piece_id_;
 }

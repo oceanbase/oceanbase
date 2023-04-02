@@ -20,7 +20,7 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObExprToBase64 : public ObFuncExprOperator
+class ObExprToBase64 : public ObStringExprOperator
 {
 public:
   explicit ObExprToBase64(common::ObIAllocator &alloc);

@@ -103,6 +103,7 @@ public:
       const int64_t prealloc_page_count)
   {
     int ret = common::OB_SUCCESS;
+    const int64_t start_ts = get_timestamp();
     if (OB_UNLIKELY(inited_)) {
       ret = common::OB_INIT_TWICE;
       OBLOG_LOG(WARN, "already init", KR(ret));
@@ -128,8 +129,10 @@ public:
     } else {
       task_large_allocator_.set_label(common::ObModIds::OB_LOG_PART_TRANS_TASK_LARGE);
       allow_dynamic_alloc_ = allow_dynamic_alloc;
+      const int64_t cost_ts_usec = get_timestamp() - start_ts;
       inited_ = true;
-      OBLOG_LOG(INFO, "task_pool init success");
+      OBLOG_LOG(INFO, "task_pool init success", K(prealloc_page_count), K(prealloc_pool_size),
+          K(trans_task_page_size), K(cost_ts_usec));
     }
     return ret;
   }
@@ -267,7 +270,7 @@ private:
     TaskType *ret_task = NULL;
     int64_t alloc_size = static_cast<int64_t>(sizeof(TaskType));
     if (OB_ISNULL(ret_task = static_cast<TaskType*>(alloc_->alloc(alloc_size)))) {
-      OBLOG_LOG(WARN, "failed to alloc task", K(ret_task), K(alloc_size));
+      OBLOG_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "failed to alloc task", K(ret_task), K(alloc_size));
     } else {
       new(ret_task)TaskType();
       ret_task->set_pool(this);
@@ -394,7 +397,7 @@ private:
   {
     if (NULL != prealloc_pages_) {
       if (prealloc_page_pool_.get_total() < prealloc_page_cnt_) {
-        OBLOG_LOG(WARN, "part trans task prealloc pages are not reverted all",
+        OBLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "part trans task prealloc pages are not reverted all",
             K_(prealloc_page_cnt), "pool_size", prealloc_page_pool_.get_total());
       }
 

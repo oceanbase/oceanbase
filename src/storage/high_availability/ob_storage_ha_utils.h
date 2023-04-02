@@ -16,6 +16,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace storage
 {
 
@@ -24,14 +28,16 @@ class ObStorageHAUtils
 public:
   static int check_tablet_replica_validity(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client);
+  static int get_server_version(uint64_t &server_version);
+  static int check_server_version(const uint64_t server_version);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
-    int64_t &compaction_scn);
+    share::SCN &compaction_scn);
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const int64_t compaction_scn, common::ObISQLClient &sql_client);
+    const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
 };
 
 } // end namespace storage

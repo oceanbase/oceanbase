@@ -11,7 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "lib/utility/ob_simple_rate_limiter.h"
+#include "lib/oblog/ob_syslog_rate_limiter.h"
 
 //using namespace ::oblib;
 using namespace oceanbase::lib;

@@ -204,6 +204,7 @@ protected:
       const int64_t timeout,
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
+      const concurrent_control::ObWriteFlag write_flag,
       ObStoreCtxGuard &ctx_guard);
   int check_read_allowed_(
       const share::ObLSID &ls_id,
@@ -211,7 +212,7 @@ protected:
       const ObStoreAccessType access_type,
       const ObTableScanParam &scan_param,
       ObStoreCtxGuard &ctx_guard,
-      int64_t user_specified_snapshot);
+      share::SCN user_specified_snapshot);
   int check_read_allowed_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,

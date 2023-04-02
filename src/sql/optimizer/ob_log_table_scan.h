@@ -26,8 +26,6 @@ class Path;
 
 class ObLogTableScan : public ObLogicalOperator
 {
-  // ObLogTableLookup has a log tsc to read remote data table.
-  friend class ObLogTableLookup;
 public:
   ObLogTableScan(ObLogPlan &plan)
       : ObLogicalOperator(plan),
@@ -36,7 +34,7 @@ public:
         index_table_id_(common::OB_INVALID_ID ),
         session_id_(0),
         is_index_global_(false),
-        is_global_index_back_(false),
+        is_spatial_index_(false),
         use_das_(false),
         index_back_(false),
         is_multi_part_table_scan_(false),
@@ -50,6 +48,8 @@ public:
         filter_before_index_back_(),
         table_partition_info_(NULL),
         ranges_(),
+        ss_ranges_(),
+        is_skip_scan_(),
         limit_count_expr_(NULL),
         limit_offset_expr_(NULL),
         sample_info_(),
@@ -75,7 +75,10 @@ public:
         use_batch_(false),
         access_path_(NULL),
         tablet_id_expr_(NULL),
-        calc_part_id_expr_(NULL)
+        calc_part_id_expr_(NULL),
+        global_index_back_table_partition_info_(NULL),
+        has_index_scan_filter_(false),
+        has_index_lookup_filter_(false)
   {
   }
 
@@ -134,8 +137,6 @@ public:
       ObSchemaUtils::get_real_table_mappings_tid(index_table_id_) : index_table_id_;
   }
 
-  inline bool get_is_global_index_back() const
-  { return is_global_index_back_; }
 
   /**
    *  Get pre query range
@@ -172,8 +173,14 @@ public:
   inline void set_is_index_global(bool is_index_global)
   { is_index_global_ = is_index_global; }
 
-  inline void set_is_global_index_back(bool is_global_index_back)
-  { is_global_index_back_ = is_global_index_back; }
+  /*
+   * set is spatial index
+   */
+  inline void set_is_spatial_index(bool is_spatial_index)
+  { is_spatial_index_ = is_spatial_index; }
+
+  inline bool get_is_spatial_index() const
+  { return is_spatial_index_; }
 
   /**
    *  Set scan direction
@@ -237,8 +244,11 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_access_exprs()
   { return access_exprs_; }
 
-  ObRawExpr* get_real_expr(const ObRawExpr *col) const;
+// removal it in cg layer, up to opt layer.
+  inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
+  { return ddl_output_column_ids_; }
 
+  ObRawExpr* get_real_expr(const ObRawExpr *col) const;
   /**
    *  Get pushdown aggr expressions
    */
@@ -265,7 +275,6 @@ public:
    * */
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
 
-  virtual int compute_property(Path *path);
 
   virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
   int re_est_cost(EstimateCostInfo &param, double &card, double &index_back_cost, double &cost);
@@ -300,11 +309,11 @@ public:
   inline const ObTablePartitionInfo *get_table_partition_info() const { return table_partition_info_; }
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info) { table_partition_info_ = table_partition_info; }
 
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
-
   bool is_index_scan() const { return ref_table_id_ != index_table_id_; }
   bool is_table_whole_range_scan() const { return !is_index_scan() && (NULL == pre_query_range_ ||
                                                   (1 == ranges_.count() && ranges_.at(0).is_whole_range())); }
+  void set_skip_scan(bool is_skip_scan) { is_skip_scan_ = is_skip_scan; }
+  bool is_skip_scan() const { return is_skip_scan_; }
   virtual bool is_table_scan() const override { return true; }
   bool is_whole_range_scan() const {return NULL == pre_query_range_
                                             || (1 == ranges_.count() && ranges_.at(0).is_whole_range()); }
@@ -314,9 +323,9 @@ public:
   void set_is_multi_part_table_scan(bool multi_part_tsc)
   { is_multi_part_table_scan_ = multi_part_tsc; }
   bool get_is_multi_part_table_scan() { return is_multi_part_table_scan_; }
-  int set_query_ranges(ObRangesArray ranges);
-  virtual int inner_replace_generated_agg_expr(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs);
+  int set_query_ranges(ObIArray<ObNewRange> &ranges, ObIArray<ObNewRange> &ss_ranges);
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs) override;
   inline common::ObIArray<bool> &get_filter_before_index_flags() { return filter_before_index_back_; }
   inline const common::ObIArray<bool> &get_filter_before_index_flags() const { return filter_before_index_back_; }
   inline ObRawExpr *get_limit_expr() { return limit_count_expr_; }
@@ -397,6 +406,7 @@ public:
   virtual int generate_access_exprs();
   void set_use_batch(bool use_batch) { use_batch_ = use_batch; }
   bool use_batch() const { return use_batch_; }
+  // only use group_id_expr_ when use_batch() is true.
   inline const ObRawExpr *get_group_id_expr() const { return group_id_expr_; }
   int extract_bnlj_param_idxs(common::ObIArray<int64_t> &bnlj_params);
 
@@ -408,19 +418,36 @@ public:
   const common::ObIArray<ObRawExpr*> &get_part_exprs() const { return part_exprs_; }
   inline const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
   int init_calc_part_id_expr();
-  int copy_part_expr_pre(CopyPartExprCtx &ctx) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  int get_plan_object_info(PlanText &plan_text,
+                           ObSqlPlanItem &plan_item);
+  inline ObTablePartitionInfo *get_global_index_back_table_partition_info() { return global_index_back_table_partition_info_; }
+  inline const ObTablePartitionInfo *get_global_index_back_table_partition_info() const { return global_index_back_table_partition_info_; }
+  inline void set_global_index_back_table_partition_info(ObTablePartitionInfo *global_index_back_table_partition_info) { global_index_back_table_partition_info_ = global_index_back_table_partition_info; }
+  inline bool has_index_scan_filter() { return has_index_scan_filter_; }
+  inline void set_has_index_scan_filter(bool has_index_scan_filter) { has_index_scan_filter_ = has_index_scan_filter; }
+  inline bool has_index_lookup_filter() { return has_index_lookup_filter_; }
+  inline void set_has_index_lookup_filter(bool has_index_lookup_filter) { has_index_lookup_filter_ = has_index_lookup_filter; }
+  int generate_ddl_output_column_ids();
+  int replace_gen_col_op_exprs(
+    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs);
+  int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                             ObIArray<ObRawExpr*> &scan_pushdown_filters,
+                                             ObIArray<ObRawExpr*> &lookup_pushdown_filters);
+  int replace_index_back_pushdown_filters(
+                    const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>  >&to_replace_exprs);
+  int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
+                                      uint64_t scan_table_id);
+  int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
+  static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
   int pick_out_startup_filters();
   int filter_before_index_back_set();
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
-  virtual int print_outline(planText &plan_text);
-  int print_outline_data(planText &plan_text);
-  int print_used_hint(planText &plan_text);
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
   int print_range_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int print_filter_before_indexback_annotation(char *buf, int64_t buf_len, int64_t &pos);
   int print_limit_offset_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
@@ -428,7 +455,7 @@ private: // member functions
   virtual int explain_index_selection_info(char *buf, int64_t &buf_len, int64_t &pos);
   int generate_necessary_rowkey_and_partkey_exprs();
   int add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_exprs);
-  int replace_gen_column(ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
+  int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
@@ -436,7 +463,7 @@ protected: // memeber variables
   uint64_t index_table_id_;
   uint64_t session_id_; //for temporary table, record session id
   bool is_index_global_;
-  bool is_global_index_back_;
+  bool is_spatial_index_;
   // TODO yuming: tells whether the table scan uses shared data access or not
   // mainly designed for code generator
   bool use_das_;
@@ -463,18 +490,23 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
   // for oracle-mapping, map access expr to a real column expr
   common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
   // aggr func pushdwon to table scan
   common::ObSEArray<ObAggFunRawExpr *, 4, common::ModulePageAllocator, true> pushdown_aggr_exprs_;
   // whether a filter can be evaluated before index back
   common::ObSEArray<bool, 4, common::ModulePageAllocator, true> filter_before_index_back_;
-
+// // removal these in cg layer, up to opt layer.
+  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ddl_output_column_ids_;
+// removal these in cg layer, up to opt layer end.
   // table partiton locations
   ObTablePartitionInfo *table_partition_info_; //this member is not in copy_without_child,
                                                //because its used in EXCHANGE stage, and
                                                //copy_without_child used before this
   ObRangesArray ranges_;//For explain. Code generator and executor cannot use this.
+  ObRangesArray ss_ranges_;//For explain. Code generator and executor cannot use this.
+  bool is_skip_scan_;
 
   // limit params from upper limit op
   ObRawExpr *limit_count_expr_;
@@ -516,6 +548,13 @@ protected: // memeber variables
   AccessPath *access_path_;
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
   ObRawExpr *calc_part_id_expr_;
+
+  // begin for global index lookup
+  ObTablePartitionInfo *global_index_back_table_partition_info_;
+  bool has_index_scan_filter_;
+  bool has_index_lookup_filter_;
+  // end for global index lookup
+
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

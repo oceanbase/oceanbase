@@ -92,12 +92,12 @@ public:
                          const common::ObString &cluster_str,
                          const common::sqlclient::dblink_param_ctx &param_ctx) override
   { UNUSEDx(tenant_id, dblink_id, server, db_tenant, db_user, db_pass, db_name, conn_str, param_ctx); return OB_SUCCESS; }
-  virtual int acquire_dblink(uint64_t dblink_id,common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0, int64_t timeout_sec = 0)
-  { UNUSEDx(dblink_id, dblink_conn, sessid, timeout_sec); return OB_SUCCESS; }
+  virtual int acquire_dblink(uint64_t dblink_id, const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0, int64_t timeout_sec = 0)
+  { UNUSEDx(dblink_id, param_ctx, dblink_conn, sessid, timeout_sec); return OB_SUCCESS; }
   virtual int release_dblink(common::sqlclient::ObISQLConnection *dblink_conn, uint32_t sessid = 0)
   { UNUSEDx(dblink_conn, sessid); return OB_SUCCESS; }
-  virtual int do_acquire_dblink(uint64_t dblink_id, common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0)
-  { UNUSEDx(dblink_id, dblink_conn, sessid); return OB_SUCCESS; }
+  virtual int do_acquire_dblink(uint64_t dblink_id, const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0)
+  { UNUSEDx(dblink_id, param_ctx, dblink_conn, sessid); return OB_SUCCESS; }
   virtual int try_connect_dblink(common::sqlclient::ObISQLConnection *dblink_conn, int64_t timeout_sec = 0) { UNUSEDx(dblink_conn, timeout_sec); return OB_SUCCESS; }
 
   void dump_used_conn_list();

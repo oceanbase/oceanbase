@@ -20,6 +20,7 @@
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "observer/ob_rpc_processor_simple.h"
 #include "share/scheduler/ob_dag_scheduler.h"
+#include "share/scn.h"
 #include "storage/ob_storage_rpc.h"
 #include "ob_storage_ha_struct.h"
 #include "ob_physical_copy_task.h"
@@ -46,7 +47,7 @@ public:
 public:
   uint64_t tenant_id_;
   ObMigrationOpArg arg_;
-  int64_t local_clog_checkpoint_ts_;
+  share::SCN local_clog_checkpoint_scn_;
   int64_t local_rebuild_seq_;
 
   int64_t start_ts_;
@@ -64,7 +65,7 @@ public:
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
       K_(arg),
-      K_(local_clog_checkpoint_ts),
+      K_(local_clog_checkpoint_scn),
       K_(local_rebuild_seq),
       K_(start_ts),
       K_(finish_ts),
@@ -233,16 +234,15 @@ private:
   int deal_with_local_ls_();
   int update_ls_();
   int generate_tablets_migration_dag_();
+  int report_ls_meta_table_();
   int choose_src_();
   int fetch_ls_info_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &member_addr, obrpc::ObCopyLSInfo &ls_info);
-  int get_local_ls_checkpoint_ts_(int64_t &local_checkpoint_ts);
+  int get_local_ls_checkpoint_scn_(share::SCN &local_checkpoint_scn);
   int try_remove_member_list_();
   int get_tablet_id_array_(common::ObIArray<common::ObTabletID> &tablet_id_array);
   int check_ls_need_copy_data_(bool &need_copy);
   int deal_local_restore_ls_(bool &need_generate_dag);
-  int try_remove_unneeded_tablets_();
-
   int record_server_event_();
 
 private:
@@ -417,10 +417,13 @@ private:
       common::ObIArray<ObTabletGroupMigrationDag *> &tablet_group_dag_array);
   int build_tablet_group_info_();
   int generate_tablet_group_dag_();
+  int try_remove_unneeded_tablets_();
+  int try_offline_ls_();
   int record_server_event_();
 
 private:
   static const int64_t MAX_TABLET_GROUP_SIZE = 2 * 1024L * 1024L * 1024L; //2G
+  static const int64_t MAX_TABLET_COUNT = 100;
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObMigrationCtx *ctx_;

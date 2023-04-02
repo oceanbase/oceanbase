@@ -76,13 +76,15 @@ public:
         aggr_stage_(ObThreeStageAggrStage::NONE_STAGE),
         three_stage_info_(),
         rollup_adaptive_info_(),
-        force_push_down_(false)
+        force_push_down_(false),
+        use_hash_aggr_(false),
+        has_push_down_(false),
+        use_part_sort_(false)
   {}
   virtual ~ObLogGroupBy()
   {}
 
   //const char* get_name() const;
-  virtual int32_t get_explain_name_length() const;
   virtual int get_explain_name_internal(char *buf,
                                         const int64_t buf_len,
                                         int64_t &pos);
@@ -135,8 +137,8 @@ public:
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int inner_est_cost(double child_card, 
-                     double &child_ndv, 
+  int inner_est_cost(double child_card,
+                     double &child_ndv,
                      double &per_dop_ndv,
                      double &op_cost);
   int get_child_est_info(double &child_card, double &child_ndv, double &selectivity);
@@ -144,8 +146,9 @@ public:
   virtual bool is_block_op() const override
   { return (MERGE_AGGREGATE != get_algo() && !is_adaptive_aggregate())
         || ObRollupStatus::ROLLUP_DISTRIBUTOR == rollup_adaptive_info_.rollup_status_; }
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
 
+  virtual int compute_const_exprs() override;
+  virtual int compute_equal_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_op_ordering() override;
   double get_distinct_card() const { return distinct_card_; }
@@ -198,23 +201,22 @@ public:
   { return ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_; }
   inline void set_force_push_down(bool force_push_down)
   { force_push_down_ = force_push_down; }
+  void set_group_by_outline_info(bool use_hash_aggr, bool has_push_down, bool use_part_sort = false)
+  { use_hash_aggr_ = use_hash_aggr; has_push_down_ = has_push_down; use_part_sort_ = use_part_sort; }
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
 private:
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
-  virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs);
+  virtual int inner_replace_op_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   int create_fd_item_from_select_list(ObFdItemSet *fd_item_set);
   virtual int compute_one_row_info() override;
-  virtual int print_outline(planText &plan);
-  int print_used_hint(planText &plan_text);
-  int print_outline_data(planText &plan_text);
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;
@@ -234,6 +236,10 @@ private:
   // for rollup distributor and collector
   ObRollupAdaptiveInfo rollup_adaptive_info_;
   bool force_push_down_; // control by _aggregation_optimization_settings
+  // use print outline
+  bool use_hash_aggr_;
+  bool has_push_down_;
+  bool use_part_sort_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

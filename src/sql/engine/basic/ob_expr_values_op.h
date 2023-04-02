@@ -31,6 +31,7 @@ public:
   ObExprValuesSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObOpSpec(alloc, type),
       values_(alloc),
+      is_strict_json_desc_(alloc),
       str_values_array_(alloc),
       err_log_ct_def_(alloc),
       contain_ab_param_(0),
@@ -38,7 +39,7 @@ public:
   { }
 
   int64_t get_value_count() const { return values_.count(); }
-
+  int64_t get_is_strict_json_desc_count() const { return is_strict_json_desc_.count(); }
   virtual int serialize(char *buf,
                         int64_t buf_len,
                         int64_t &pos,
@@ -49,6 +50,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesSpec);
 public:
   common::ObFixedArray<ObExpr *, common::ObIAllocator> values_;
+  common::ObFixedArray<bool, common::ObIAllocator> is_strict_json_desc_;
   common::ObFixedArray<ObStrValues, common::ObIAllocator> str_values_array_;
   ObErrLogCtDef err_log_ct_def_;
   int64_t contain_ab_param_;
@@ -76,6 +78,9 @@ private:
                               ObObjMeta &src_obj_meta,
                               ObExpr *src_expr,
                               int64_t group_idx);
+  int eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
+                                         ObObjMeta &src_obj_meta,
+                                         ObExpr *dst_expr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesOp);
 

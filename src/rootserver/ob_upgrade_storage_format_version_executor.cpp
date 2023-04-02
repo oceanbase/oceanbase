@@ -303,7 +303,7 @@ int ObUpgradeStorageFormatVersionExecutor::check_schema_sync()
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor is stop", K(ret));
-      } else if (OB_FAIL(ObUpgradeUtils::check_schema_sync(is_sync))) {
+      } else if (OB_FAIL(ObUpgradeUtils::check_schema_sync(OB_INVALID_TENANT_ID, is_sync))) {
         LOG_WARN("fail to check schema sync", K(ret));
       } else if (is_sync) {
         break;

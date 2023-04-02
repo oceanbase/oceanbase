@@ -20,6 +20,8 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/backup/ob_backup_index_cache.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "share/scn.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -42,7 +44,7 @@ static void make_random_meta_type(backup::ObBackupMetaType &meta_type)
   meta_type = BACKUP_SSTABLE_META;
 }
 
-static void make_random_logic_id(common::ObLogicMacroBlockId &logic_id)
+static void make_random_logic_id(blocksstable::ObLogicMacroBlockId &logic_id)
 {
   logic_id.tablet_id_ = random(1, 10000000);
   logic_id.data_seq_ = random(1, 10000000);
@@ -101,8 +103,8 @@ static void make_random_table_key(storage::ObITable::TableKey &table_key)
 {
   table_key.table_type_ = storage::ObITable::MINOR_SSTABLE;
   make_random_tablet_id(table_key.tablet_id_);
-  table_key.log_ts_range_.start_log_ts_ = 1;
-  table_key.log_ts_range_.end_log_ts_ = 100;
+  table_key.scn_range_.start_scn_.convert_for_gts(1);
+  table_key.scn_range_.end_scn_.convert_for_gts(100);
 }
 
 static void make_random_pair(ObBackupMacroBlockIDPair &pair)
@@ -121,14 +123,14 @@ static void make_random_cache_key(ObBackupIndexCacheKey &cache_key)
   make_random_offset(block_desc.offset_);
   make_random_length(block_desc.length_);
   cache_key.mode_ = BACKUP_MODE;
-  cache_key.tenant_id_ = 1002;
+  cache_key.tenant_id_ = 1;
   make_random_backup_set_id(cache_key.backup_set_id_);
   make_random_ls_id(cache_key.ls_id_);
   cache_key.backup_data_type_.type_ = share::ObBackupDataType::BACKUP_SYS;
   cache_key.block_desc_ = block_desc;
 }
 
-static int make_random_buffer(common::ObIAllocator &allocator, 
+static int make_random_buffer(common::ObIAllocator &allocator,
     blocksstable::ObBufferReader &buffer)
 {
   int ret = OB_SUCCESS;
@@ -158,7 +160,7 @@ static bool cmp(const common::ObIArray<T> &lhs_list, const common::ObIArray<T> &
   LOG_INFO("compare summary", "lhs_count", lhs_list.count(), "rhs_count", rhs_list.count());
   if (lhs_list.count() != rhs_list.count()) {
     bret = false;
-    LOG_WARN("count not match", K(lhs_list.count()), K(rhs_list.count()));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "count not match", K(lhs_list.count()), K(rhs_list.count()));
   } else {
     for (int64_t i = 0; i < lhs_list.count(); ++i) {
       const T &lhs = lhs_list.at(i);
@@ -167,7 +169,7 @@ static bool cmp(const common::ObIArray<T> &lhs_list, const common::ObIArray<T> &
         bret = true;
       } else {
         bret = false;
-        LOG_WARN("value not match", K(lhs), K(rhs));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "value not match", K(lhs), K(rhs));
         break;
       }
     }

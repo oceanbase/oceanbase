@@ -15,6 +15,7 @@
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 #include "share/ob_zone_info.h"
 #include "share/ob_errno.h"
+#include "share/ob_freeze_info_proxy.h"
 
 namespace oceanbase
 {
@@ -50,7 +51,7 @@ int ObTenantMajorMergeStrategy::filter_merging_zones(common::ObIArray<common::Ob
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else {
     HEAP_VAR(ObZoneMergeInfo, merge_info) {
-      int64_t global_broadcast_scn = 0;
+      SCN global_broadcast_scn;
       if (OB_FAIL(zone_merge_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
         LOG_WARN("fail to get get_global_broadcast_scn", KR(ret), K_(tenant_id));
       }
@@ -63,7 +64,7 @@ int ObTenantMajorMergeStrategy::filter_merging_zones(common::ObIArray<common::Ob
             ret = OB_SUCCESS;
             LOG_WARN("zone not exist, maybe dropped, treat as success");
           }
-        } else if (merge_info.broadcast_scn_ == global_broadcast_scn) {
+        } else if (merge_info.broadcast_scn() == global_broadcast_scn) {
           if (OB_FAIL(to_merge_zones.remove(i))) {
             LOG_WARN("fail to remove to merge zone", KR(ret), K_(tenant_id), K(i));
           } else {

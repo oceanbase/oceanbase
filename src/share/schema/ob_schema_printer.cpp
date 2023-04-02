@@ -211,7 +211,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                                       col->get_accuracy(),
                                       col->get_extended_type_info(),
                                       default_length_semantics,
-                                      buf, buf_len, pos))) {
+                                      buf, buf_len, pos,
+                                      col->get_geo_type()))) {
             SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(col->get_data_type()), K(*col), K(ret));
           } else if (is_oracle_mode) {
             int64_t end = pos;
@@ -266,6 +267,9 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
           }
         }
         if (OB_SUCC(ret) && col->is_generated_column()) {
+          lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
+            lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+          lib::CompatModeGuard tmpCompatModeGuard(compat_mode);
           if (OB_FAIL(print_generated_column_definition(*col, buf, buf_len, table_schema, pos))) {
             SHARE_SCHEMA_LOG(WARN, "print generated column definition fail", K(ret));
           }
@@ -286,6 +290,14 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
             if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NULL"))) {
               SHARE_SCHEMA_LOG(WARN, "fail to print NULL", K(ret));
             }
+          }
+        }
+        // adapt mysql geometry column format:`g` linestring NOT NULL /*!80003 SRID 4326 */
+        if (OB_SUCC(ret) && !is_oracle_mode && ob_is_geometry(col->get_data_type())) {
+          uint32_t srid = col->get_srid();
+          if (!col->is_default_srid()
+              && OB_FAIL(databuff_printf(buf, buf_len, pos, " /*!80003 SRID %u */", srid))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print geometry srid", K(ret), K(srid));
           }
         }
         if (OB_SUCC(ret) && !is_oracle_mode && !col->is_generated_column()) {
@@ -419,8 +431,7 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
   sql::ObRawExprFactory expr_factory(allocator);
   sql::ObRawExpr *expr = NULL;
   ObTimeZoneInfo tz_infos;
-  sql::ObRawExprPrinter raw_printer;
-  raw_printer.init(buf, buf_len, &pos, &tz_infos);
+  sql::ObRawExprPrinter raw_printer(buf, buf_len, &pos, &schema_guard_, &tz_infos);
   SMART_VAR(sql::ObSQLSessionInfo, session) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " GENERATED ALWAYS AS ("))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print keywords", K(ret));
@@ -432,7 +443,7 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
       SHARE_SCHEMA_LOG(WARN, "fail to init session", K(ret));
     } else if (OB_FAIL(session.load_default_sys_variable(false, false))) {
       SHARE_SCHEMA_LOG(WARN, "session load default system variable failed", K(ret));
-      /* bug: https://work.aone.alibaba-inc.com/issue/29573244
+      /* bug:
         构建ObRawExpr对象,当 expr_str = "CONCAT(first_name,' ',last_name)"
         避免错误的打印成： CONCAT(first_name,\' \',last_name) */
     } else if(OB_FAIL(sql::ObRawExprUtils::build_generated_column_expr(NULL,
@@ -507,7 +518,6 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
     const bool is_alter_table_add, ObSQLMode sql_mode, const ObTimeZoneInfo *tz_info) const
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "index is not exist", K(ret));
@@ -538,6 +548,10 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " FULLTEXT KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
         }
+      } else if (index_schema->is_spatial_index()) {
+          if (OB_FAIL(databuff_printf(buf, buf_len, pos, " SPATIAL KEY "))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print SPATIAL KEY", K(ret));
+          }
       } else {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print KEY", K(ret));
@@ -846,6 +860,43 @@ int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_sche
   return ret;
 }
 
+int ObSchemaPrinter::print_spatial_index_column(const ObTableSchema &table_schema,
+                                                const ObColumnSchemaV2 &column,
+                                                char *buf,
+                                                int64_t buf_len,
+                                                int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObObjType type = column.get_meta_type().get_type();
+
+  if (ObVarcharType != type && ObUInt64Type != type) {
+    STORAGE_LOG(WARN, "Invalid type for spatial index column", K(ret), K(type));
+  } else if (ObVarcharType == column.get_meta_type().get_type()) {
+    // do nothing
+  } else { // ObUInt64Type, cellid column
+    bool is_oracle_mode = false;
+    ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+    uint64_t geo_col_id = column.get_geo_col_id();
+    const ObColumnSchemaV2 *geo_col = table_schema.get_column_schema(geo_col_id);
+    ObString new_col_name;
+    if (OB_ISNULL(geo_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The geo column schema is null, ", K(ret), K(geo_col_id));
+    } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to get compat mode", KR(ret), K(table_schema));
+    } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+        allocator, geo_col->get_column_name_str(), new_col_name, is_oracle_mode))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to generate new name with escape character",
+        K(ret), K(column.get_column_name_str()));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+        (is_oracle_mode ? "\"%s\")" : "`%s`)"), new_col_name.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(new_col_name));
+    }
+  }
+
+  return ret;
+}
+
 int ObSchemaPrinter::print_prefix_index_column(const ObColumnSchemaV2 &column,
                                                bool is_last,
                                                char *buf,
@@ -962,6 +1013,14 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
                                               buf_len,
                                               pos))) {
         LOG_WARN("print fulltext index column failed", K(ret));
+      }
+    } else if (column.is_spatial_generated_column()) {
+      if (OB_FAIL(print_spatial_index_column(table_schema,
+                                             column,
+                                             buf,
+                                             buf_len,
+                                             pos))) {
+        LOG_WARN("print spatial index column failed", K(ret));
       }
     } else if (column.is_prefix_column()) {
       if (OB_FAIL(print_prefix_index_column(column, is_last, buf, buf_len, pos))) {
@@ -3795,6 +3854,7 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
                                               const ObStmtNodeTree *param_list,
                                               const ObStmtNodeTree *return_type,
                                               const ObString &body,
+                                              const ObString &clause,
                                               char* buf,
                                               const int64_t& buf_len,
                                               int64_t &pos,
@@ -3815,16 +3875,18 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
   OX (routine_type = routine_info->is_procedure() ? "PROCEDURE" : "FUNCTION");
   OZ (databuff_printf(buf, buf_len, pos,
                       lib::is_oracle_mode() ?
-                      "CREATE OR REPLACE%s%.*s %s \"%.*s\".\"%.*s\"\n" :
-                      "CREATE DEFINER =%s %.*s %s `%.*s`.`%.*s`\n",
+                      "CREATE OR REPLACE%s%.*s %s " :
+                      "CREATE DEFINER =%s %.*s %s ",
                       routine_info->is_noneditionable() ? " NONEDITIONABLE" : "",
                       routine_info->get_priv_user().length(),
                       routine_info->get_priv_user().ptr(),
-                      routine_type,
+                      routine_type));
+  OZ (databuff_printf(buf, buf_len, pos,
+                      lib::is_oracle_mode() ? "\"%.*s\".\"%.*s\"\n" : "`%.*s`.`%.*s`\n",
                       db_schema->get_database_name_str().length(),
                       db_schema->get_database_name_str().ptr(),
                       routine_info->get_routine_name().length(),
-                      routine_info->get_routine_name().ptr()), routine_type, db_name, routine_info);
+                      routine_info->get_routine_name().ptr()), K(routine_type), K(db_name), K(routine_info));
   if (OB_SUCC(ret) && routine_info->get_param_count() > 0) {
     OZ (databuff_printf(buf, buf_len, pos, "(\n"));
     OZ (print_routine_definition_param(*routine_info, param_list, buf, buf_len, pos, tz_info));
@@ -3841,16 +3903,30 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
     OZ (print_routine_param_type(routine_param, return_type, buf, buf_len, pos, tz_info));
   }
   if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    if (routine_info->is_no_sql()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nNO SQL"));
+    } else if (routine_info->is_reads_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nREADS SQL DATA"));
+    } else if (routine_info->is_modifies_sql_data()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nMODIFIES SQL DATA"));
+    }
     OZ (databuff_printf(buf, buf_len, pos, "%s",
-        routine_info->is_deterministic() ? "\nDETERMINISTIC\n" : ""));
+        routine_info->is_deterministic() ? "\nDETERMINISTIC" : ""));
+    OZ (databuff_printf(buf, buf_len, pos, "%s",
+        routine_info->is_invoker_right() ? "\nINVOKER" : ""));
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info->get_comment())) {
-      OZ (databuff_printf(buf, buf_len, pos, "%s%.*s%s\n","COMMENT `",
+      OZ (databuff_printf(buf, buf_len, pos, "\n%s%.*s%s\n","COMMENT `",
           routine_info->get_comment().length(),
           routine_info->get_comment().ptr(),
           "`"));
     }
   }
-  OZ (databuff_printf(buf, buf_len, pos, lib::is_oracle_mode() ? " IS\n%.*s" : " %.*s", body.length(), body.ptr()));
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && !clause.empty()) {
+    OZ (databuff_printf(buf, buf_len, pos, " %.*s\n", clause.length(), clause.ptr()));
+  }
+  OZ (databuff_printf(buf, buf_len, pos,
+      lib::is_oracle_mode() ? (routine_info->is_aggregate() ? "\nAGGREGATE USING %.*s" : " IS\n%.*s")
+                              : " %.*s", body.length(), body.ptr()));
   return ret;
 }
 
@@ -3869,16 +3945,19 @@ int ObSchemaPrinter::print_routine_definition(
     ret = OB_ERR_SP_DOES_NOT_EXIST;
     SHARE_SCHEMA_LOG(WARN, "Unknow routine", K(ret), K(routine_id));
   } else if (lib::is_mysql_mode()) {
-    OZ (print_routine_definition(routine_info, NULL, NULL, routine_info->get_routine_body(), buf, buf_len, pos, tz_info));
+    ObString clause;
+    OZ (print_routine_definition(routine_info, NULL, NULL, routine_info->get_routine_body(), clause, buf, buf_len, pos, tz_info));
   } else { // oracle mode
     ObString routine_body = routine_info->get_routine_body();
     ObString actully_body;
+    ObString routine_clause;
     ObStmtNodeTree *parse_tree = NULL;
     const ObStmtNodeTree *routine_tree = NULL;
     ObArenaAllocator allocator;
     pl::ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN);
-    const ObStmtNodeTree *param_list = NULL;
-    const ObStmtNodeTree *return_type = NULL;
+    ObStmtNodeTree *param_list = NULL;
+    ObStmtNodeTree *return_type = NULL;
+    ObStmtNodeTree *clause_list = NULL;
     CK (!routine_body.empty());
     OZ (parser.parse_routine_body(routine_body, parse_tree, false));
     CK (OB_NOT_NULL(parse_tree));
@@ -3901,6 +3980,7 @@ int ObSchemaPrinter::print_routine_definition(
     CK (OB_NOT_NULL(routine_tree));
     LOG_INFO("print routine define", K(routine_tree->type_), K(routine_info->is_function()), K(routine_body));
     CK (routine_info->is_function() ? T_SF_SOURCE == routine_tree->type_
+                                      || T_SF_AGGREGATE_SOURCE == routine_tree->type_
                                     : T_SP_SOURCE == routine_tree->type_);
     CK (routine_info->is_function() ? 6 == routine_tree->num_child_
                                     : 4 == routine_tree->num_child_);
@@ -3909,10 +3989,14 @@ int ObSchemaPrinter::print_routine_definition(
     OX (actully_body = routine_info->is_function() ?
           ObString(routine_tree->children_[5]->str_len_, routine_tree->children_[5]->str_value_)
         : ObString(routine_tree->children_[3]->str_len_, routine_tree->children_[3]->str_value_));
+    OX (clause_list = routine_info->is_function() ? routine_tree->children_[3] : routine_tree->children_[2]);
+    if (OB_SUCC(ret) && OB_NOT_NULL(clause_list)) {
+      OX (routine_clause = ObString(clause_list->str_len_, clause_list->str_value_));
+    }
     OX (param_list = routine_tree->children_[1]);
     OX (return_type = (routine_info->is_function() ? routine_tree->children_[2] : NULL));
     CK (!actully_body.empty());
-    OZ (print_routine_definition(routine_info, param_list, return_type, actully_body, buf, buf_len, pos, tz_info));
+    OZ (print_routine_definition(routine_info, param_list, return_type, actully_body, routine_clause, buf, buf_len, pos, tz_info));
   }
   return ret;
 }
@@ -4159,7 +4243,7 @@ int ObSchemaPrinter::print_simple_trigger_definition(const ObTriggerInfo &trigge
       OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
       OV (T_TG_SIMPLE_DML == trigger_define_node->type_,
             OB_ERR_UNEXPECTED, trigger_define_node->type_);
-      OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
+      OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[4]));
 
       OZ (BUF_PRINTF("\n%.*s",
                     (int)(trigger_body_node->str_len_),

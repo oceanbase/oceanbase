@@ -40,12 +40,12 @@ round(a + 0.4)
 drop table t1;
 select floor(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(null)	5	23	0	Y	32768	0	63
+def					floor(null)	5	17	0	Y	32768	0	63
 floor(null)
 NULL
 select ceil(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(null)	5	23	0	Y	32768	0	63
+def					ceil(null)	5	17	0	Y	32768	0	63
 ceil(null)
 NULL
 select floor(-123);
@@ -251,7 +251,7 @@ insert into tbl1 values(6,'now2','haha3',-10.4256,'2014-05-04 12:00:00',0.253);
 insert into tbl1 values(7,'now3','haha4',0.6256,'2014-05-04 12:00:00',1.677);
 select floor(i4),floor(i5) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(i4)	5	23	3	Y	32768	0	63
+def					floor(i4)	5	17	3	Y	32768	0	63
 def					floor(i5)	8	5	3	Y	32768	0	63
 floor(i4)	floor(i5)
 1	-11
@@ -263,31 +263,31 @@ floor(i4)	floor(i5)
 0	1
 select max(floor(i4)),max(floor(i5)) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					max(floor(i4))	5	23	1	Y	32768	0	63
+def					max(floor(i4))	5	17	1	Y	32768	0	63
 def					max(floor(i5))	8	5	1	Y	32768	0	63
 max(floor(i4))	max(floor(i5))
 5	3
 select min(floor(i4)),min(floor(i5)) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					min(floor(i4))	5	23	3	Y	32768	0	63
+def					min(floor(i4))	5	17	3	Y	32768	0	63
 def					min(floor(i5))	8	5	3	Y	32768	0	63
 min(floor(i4))	min(floor(i5))
 -11	-11
 select max(ceil(i4)),max(ceil(i5)) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					max(ceil(i4))	5	23	1	Y	32768	0	63
+def					max(ceil(i4))	5	17	1	Y	32768	0	63
 def					max(ceil(i5))	8	5	1	Y	32768	0	63
 max(ceil(i4))	max(ceil(i5))
 6	4
 select min(ceil(i4)),min(ceil(i5)) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					min(ceil(i4))	5	23	3	Y	32768	0	63
+def					min(ceil(i4))	5	17	3	Y	32768	0	63
 def					min(ceil(i5))	8	5	3	Y	32768	0	63
 min(ceil(i4))	min(ceil(i5))
 -10	-10
 select avg(ceil(i4)),avg(ceil(i5)) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					avg(ceil(i4))	5	23	6	Y	32768	4	63
+def					avg(ceil(i4))	5	21	6	Y	32768	4	63
 def					avg(ceil(i5))	246	11	7	Y	32768	4	63
 avg(ceil(i4))	avg(ceil(i5))
 0.2857	-0.2857
@@ -299,7 +299,7 @@ avg(ceil(i5))	avg(floor(i5))
 -0.2857	-1.2857
 select sum(ceil(i4)),sum(ceil(i5)) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					sum(ceil(i4))	5	23	1	Y	32768	0	63
+def					sum(ceil(i4))	5	17	1	Y	32768	0	63
 def					sum(ceil(i5))	246	6	2	Y	32768	0	63
 sum(ceil(i4))	sum(ceil(i5))
 2	-2
@@ -317,13 +317,13 @@ ceil(count(ceil(i4)))	floor(count(ceil(i5)))
 7	7
 select ceil(avg(ceil(i4))),floor(avg(ceil(i5))) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(avg(ceil(i4)))	5	23	1	Y	32768	0	63
+def					ceil(avg(ceil(i4)))	5	17	1	Y	32768	0	63
 def					floor(avg(ceil(i5)))	8	9	2	Y	32768	0	63
 ceil(avg(ceil(i4)))	floor(avg(ceil(i5)))
 1	-1
 select ceil(avg(ceil(i4))),ceil(avg(ceil(i5))) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(avg(ceil(i4)))	5	23	1	Y	32768	0	63
+def					ceil(avg(ceil(i4)))	5	17	1	Y	32768	0	63
 def					ceil(avg(ceil(i5)))	8	9	1	Y	32768	0	63
 ceil(avg(ceil(i4)))	ceil(avg(ceil(i5)))
 1	0
@@ -426,7 +426,7 @@ i1	v2	i3	i4	d4	i5
 6	now2	haha3	-10.4256	2014-05-04 12:00:00.000000	0.253
 select floor(i4) abc from tbl1 order by abc desc;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abc	5	23	3	Y	32768	0	63
+def					abc	5	17	3	Y	32768	0	63
 abc
 5
 1
@@ -437,7 +437,7 @@ abc
 -11
 select floor(v2) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(v2)	5	23	1	Y	32768	0	63
+def					floor(v2)	5	17	1	Y	32768	0	63
 floor(v2)
 0
 0
@@ -456,7 +456,7 @@ Warning	1292	Truncated incorrect DOUBLE value: 'now2'
 Warning	1292	Truncated incorrect DOUBLE value: 'now3'
 select floor(i3) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(i3)	5	23	1	Y	32768	0	63
+def					floor(i3)	5	17	1	Y	32768	0	63
 floor(i3)
 0
 0
@@ -475,7 +475,7 @@ Warning	1292	Truncated incorrect DOUBLE value: 'haha3'
 Warning	1292	Truncated incorrect DOUBLE value: 'haha4'
 select floor(d4) from tbl1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(d4)	5	25	14	Y	32768	0	63
+def					floor(d4)	5	17	14	Y	32768	0	63
 floor(d4)
 20140504120000
 20140504120000
@@ -491,8 +491,8 @@ insert into tbl2 values(2,'2.5');
 insert into tbl2 values(3,'-3.2');
 select floor(v2),ceil(v2) from tbl2;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(v2)	5	23	2	Y	32768	0	63
-def					ceil(v2)	5	23	2	Y	32768	0	63
+def					floor(v2)	5	17	2	Y	32768	0	63
+def					ceil(v2)	5	17	2	Y	32768	0	63
 floor(v2)	ceil(v2)
 1	1
 2	3

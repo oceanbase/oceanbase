@@ -20,6 +20,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "common/ob_clock_generator.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "lib/geo/ob_s2adapter.h"
 #include <fstream>
 #undef protected
 #undef private
@@ -290,6 +291,13 @@ protected:
   void get_query_range(const char *expr, const char *&json_expr);
   void get_query_range_filter(const char *sql_expr, const char *&json_expr, char *buf, int64_t &pos, const int64_t cols_num);
   void get_query_range_collation(const char *expr, const char *&json_expr, char *buf, int64_t &pos);
+  inline bool is_min_to_max_range(const ObQueryRangeArray &ranges)
+  {
+    return 1 == ranges.count() &&
+           NULL != ranges.at(0) &&
+           ranges.at(0)->start_key_.is_min_row() &&
+           ranges.at(0)->end_key_.is_max_row();
+  }
 };
 
 ObQueryRangeTest::ObQueryRangeTest()
@@ -500,7 +508,7 @@ void ObQueryRangeTest::get_query_range(const char *sql_expr, const char *&json_e
   resolve_expr(final_sql, expr, range_columns, params, CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_GENERAL_CI);
   OB_ASSERT(expr);
   //_OB_LOG(INFO,"-----%s\n", final_sql);
-  _OB_LOG(WARN, "expr: %s", CSJ(expr));
+  _OB_LOG(INFO, "expr: %s", CSJ(expr));
   query_range.reset();
   OB_LOG(INFO, "get query range sql", K(final_sql));
   OK(pre_query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_));
@@ -529,7 +537,7 @@ void ObQueryRangeTest::get_query_range(const char *sql_expr, const char *&json_e
   } else {
     databuff_printf(buf, BUF_LEN, pos, "query range need to deep copy\n");
   }
-  OK(query_range.is_min_to_max_range(flag, NULL));
+  flag = is_min_to_max_range(ranges);
   if (flag) {
     databuff_printf(buf, BUF_LEN, pos, "is min_to_max_range\n");
   } else {
@@ -585,7 +593,7 @@ void ObQueryRangeTest::get_query_range_filter(const char *sql_expr, const char *
     OK(query_range.get_tablet_ranges(allocator, exec_ctx_, ranges, get_methods, NULL));
   }
 
-  OK(query_range.is_min_to_max_range(flag, NULL));
+  flag = is_min_to_max_range(ranges);
   if (flag) {
     databuff_printf(buf, BUF_LEN, pos, "is min_to_max_range\n");
   } else {
@@ -635,8 +643,7 @@ void ObQueryRangeTest::get_query_range_collation(const char *sql_expr, const cha
       OK(query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_));
       OK(query_range.final_extract_query_range(exec_ctx_, NULL));
       OK(query_range.get_tablet_ranges(ranges, get_methods, dtc_params));
-      bool flag = false;
-      OK(query_range.is_min_to_max_range(flag, NULL));
+      bool flag = is_min_to_max_range(ranges);
       if (flag) {
         databuff_printf(buf, BUF_LEN, pos, "is min_to_max_range\n");
       } else {
@@ -1199,6 +1206,112 @@ TEST_F(ObQueryRangeTest, single_key_cost_time)
 //  OK(query_range.get_tablet_ranges(double_range_columns_, ranges, NULL));
 //  _OB_LOG(INFO, "insert_query_ranges----------%s", to_cstring(ranges));
 //}
+
+/*
+在ObQueryRange中添加ut的临时接口用于序列化和反序列化的测试
+  MbrFilterArray &ut_get_mbr_filter() { return mbr_filters_; }
+  ColumnIdInfoMap &ut_get_columnId_map() { return columnId_map_; }
+*/
+TEST_F(ObQueryRangeTest, serialize_geo_queryrange)
+{
+  ObQueryRange pre_query_range;
+  ObQueryRange dec_query_range;
+  ObQueryRange copy_query_range;
+  MbrFilterArray &mbr_array = pre_query_range.ut_get_mbr_filter();
+  ColumnIdInfoMap &pre_srid_map = pre_query_range.ut_get_columnId_map();
+  ObArenaAllocator tmp_allocator;
+  ObWrapperAllocator wrap_allocator(tmp_allocator);
+  ColumnIdInfoMapAllocer map_alloc(OB_MALLOC_NORMAL_BLOCK_SIZE, wrap_allocator);
+  OK(pre_srid_map.create(OB_DEFAULT_SRID_BUKER, &map_alloc, &wrap_allocator));
+  ObSpatialMBR pre_mbr;
+  pre_mbr.x_min_ = 30;
+  pre_mbr.x_max_ = 60;
+  pre_mbr.y_min_ = 60;
+  pre_mbr.y_max_ = 90;
+  pre_mbr.mbr_type_ = ObGeoRelationType::T_INTERSECTS;
+  OK(mbr_array.push_back(pre_mbr));
+  ObGeoColumnInfo info1;
+  info1.srid_ = 0;
+  info1.cellid_columnId_ = 17;
+  ObGeoColumnInfo info2;
+  info2.srid_ = 4326;
+  info2.cellid_columnId_ = 18;
+  OK(pre_srid_map.set_refactored(16, info1));
+  OK(pre_srid_map.set_refactored(17, info2));
+  char buf[512 * 1024] = {'\0'};
+  int64_t pos = 0;
+  int64_t data_len = 0;
+  OK(pre_query_range.serialize(buf, sizeof(buf), pos));
+  data_len = pos;
+  pos = 0;
+  OK(dec_query_range.deserialize(buf, data_len, pos));
+  MbrFilterArray &dec_mbr_array = dec_query_range.ut_get_mbr_filter();
+  ColumnIdInfoMap &dec_srid_map = dec_query_range.ut_get_columnId_map();
+
+  FOREACH_X(it, dec_mbr_array, it != dec_mbr_array.end()) {
+    EXPECT_EQ(pre_mbr.x_min_, it->x_min_);
+    EXPECT_EQ(pre_mbr.x_max_, it->x_max_);
+    EXPECT_EQ(pre_mbr.y_min_, it->y_min_);
+    EXPECT_EQ(pre_mbr.y_max_, it->y_max_);
+    EXPECT_EQ(pre_mbr.mbr_type_, it->mbr_type_);
+  }
+
+  ObGeoColumnInfo value_tmp;
+  ColumnIdInfoMap::const_iterator iter = pre_srid_map.begin();
+  while (iter != pre_srid_map.end()) {
+    OK(dec_srid_map.get_refactored(iter->first, value_tmp));
+    EXPECT_EQ(iter->second.srid_, value_tmp.srid_);
+    EXPECT_EQ(iter->second.cellid_columnId_, value_tmp.cellid_columnId_);
+    iter++;
+  }
+
+  OK(copy_query_range.deep_copy(pre_query_range));
+  MbrFilterArray &copy_mbr_array = dec_query_range.ut_get_mbr_filter();
+  ColumnIdInfoMap &copy_srid_map = dec_query_range.ut_get_columnId_map();
+
+  FOREACH_X(it, copy_mbr_array, it != copy_mbr_array.end()) {
+    EXPECT_EQ(pre_mbr.x_min_, it->x_min_);
+    EXPECT_EQ(pre_mbr.x_max_, it->x_max_);
+    EXPECT_EQ(pre_mbr.y_min_, it->y_min_);
+    EXPECT_EQ(pre_mbr.y_max_, it->y_max_);
+    EXPECT_EQ(pre_mbr.mbr_type_, it->mbr_type_);
+  }
+
+  ColumnIdInfoMap::const_iterator it = pre_srid_map.begin();
+  while (it != pre_srid_map.end()) {
+    OK(copy_srid_map.get_refactored(it->first, value_tmp));
+    EXPECT_EQ(it->second.srid_, value_tmp.srid_);
+    EXPECT_EQ(it->second.cellid_columnId_, value_tmp.cellid_columnId_);
+    it++;
+  }
+}
+
+TEST_F(ObQueryRangeTest, serialize_geo_keypart)
+{
+  // build geo keypart
+  ObKeyPart pre_key_part(allocator_);
+  OK(pre_key_part.create_geo_key());
+  ObObj wkb;
+  // ST_GeomFromText('POINT(5 5)')
+  char hexstring[25] ={'\x01', '\x01', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+                       '\x00', '\x00', '\x00', '\x14', '\x40', '\x00', '\x00', '\x00',
+                       '\x00', '\x00', '\x00', '\x14', '\x40', '\x00', '\x00', '\x00',
+                       '\x00'};
+  wkb.set_string(ObGeometryType ,hexstring, 25);
+  OK(ob_write_obj(allocator_, wkb, pre_key_part.geo_keypart_->wkb_));
+  pre_key_part.geo_keypart_->geo_type_ = ObGeoRelationType::T_DWITHIN;
+  char buf[512 * 1024] = {'\0'};
+  int64_t pos = 0;
+  int64_t data_len = 0;
+  // test serialize and deserialize
+  OK(pre_key_part.serialize(buf, sizeof(buf), pos));
+  data_len = pos;
+  pos = 0;
+  ObKeyPart dec_key_part(allocator_);
+  OK(dec_key_part.deserialize(buf, data_len, pos));
+  EXPECT_EQ(dec_key_part.geo_keypart_->wkb_, pre_key_part.geo_keypart_->wkb_);
+  EXPECT_EQ(dec_key_part.geo_keypart_->geo_type_, pre_key_part.geo_keypart_->geo_type_);
+}
 
 int main(int argc, char **argv)
 {

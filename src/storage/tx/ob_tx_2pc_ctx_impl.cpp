@@ -12,12 +12,45 @@
 
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_committer_define.h"
 
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace transaction
 {
+
+Ob2PCRole ObPartTransCtx::get_2pc_role() const
+{
+  Ob2PCRole role = Ob2PCRole::UNKNOWN;
+
+  if (exec_info_.upstream_.is_valid()) {
+    if (exec_info_.upstream_ == ls_id_) {
+      role = Ob2PCRole::ROOT;
+    } else if (exec_info_.incremental_participants_.empty()) {
+      // not root & downstream is empty
+      // root must not be leaf, because the distributed txn must be composed by
+      // more than one participants.
+      role = Ob2PCRole::LEAF;
+    } else {
+      role = Ob2PCRole::INTERNAL;
+    }
+  }
+
+  return role;
+}
+
+int64_t ObPartTransCtx::get_self_id()
+{
+  int ret = OB_SUCCESS;
+  if (self_id_ == -1) {
+    if (OB_FAIL(find_participant_id_(ls_id_, self_id_))) {
+      TRANS_LOG(ERROR, "find participant id failed", K(ret), K(*this));
+    }
+  }
+  return self_id_;
+}
 
 int ObPartTransCtx::restart_2pc_trans_timer_()
 {
@@ -42,14 +75,26 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
   int ret = OB_SUCCESS;
   no_need_submit_log = false;
 
-  // common operation
-  if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
-    no_need_submit_log = true;
-    if (OB_FAIL(dup_table_tx_redo_sync_())) {
-      TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));
+  if (OB_SUCC(ret)) {
+    if (sub_state_.is_force_abort()) {
+      if (OB_FAIL(compensate_abort_log_())) {
+        TRANS_LOG(WARN, "compensate abort log failed", K(ret), K(ls_id_), K(trans_id_),
+                  K(get_downstream_state()), K(get_upstream_state()), K(sub_state_));
+      } else {
+        ret = OB_TRANS_KILLED;
+      }
     }
-  } else if (OB_FAIL(generate_prepare_version_())) {
-    TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
+      no_need_submit_log = true;
+      if (OB_FAIL(dup_table_tx_redo_sync_())) {
+        TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));
+      }
+    } else if (OB_FAIL(generate_prepare_version_())) {
+      TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -71,6 +116,7 @@ int ObPartTransCtx::on_prepare()
 
   return ret;
 }
+
 
 /* Why do we need to execute wait_gts_elapse_commit_version_ successfully before post
  * the pre-commit message;
@@ -139,8 +185,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
 int ObPartTransCtx::do_commit()
 {
   int ret = OB_SUCCESS;
-  int64_t gts = 0;
-  int64_t local_max_read_version = 0;
+  SCN gts, local_max_read_version;
 
   if (is_local_tx_()) {
     if (OB_FAIL(get_gts_(gts))) {
@@ -158,7 +203,7 @@ int ObPartTransCtx::do_commit()
       mt_ctx_.before_prepare(gts);
       if (OB_FAIL(get_local_max_read_version_(local_max_read_version))) {
         TRANS_LOG(ERROR, "get local max read version failed", KR(ret), K(*this));
-      } else if (OB_FAIL(ctx_tx_data_.set_commit_version(std::max(gts, local_max_read_version)))) {
+      } else if (OB_FAIL(ctx_tx_data_.set_commit_version(SCN::max(gts, local_max_read_version)))) {
         TRANS_LOG(ERROR, "set tx data commit version failed", K(ret));
       }
     }
@@ -183,7 +228,7 @@ int ObPartTransCtx::do_commit()
     } else if (is_root() && OB_FAIL(coord_prepare_info_arr_.assign(exec_info_.prepare_log_info_arr_))) {
       TRANS_LOG(WARN, "assign coord_prepare_info_arr_ for root failed", K(ret));
     } else if (is_root()) {
-      check_and_response_scheduler_(OB_SUCCESS);
+      check_and_response_scheduler_(ObTxState::COMMIT, OB_SUCCESS);
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(restart_2pc_trans_timer_())) {
@@ -192,32 +237,35 @@ int ObPartTransCtx::do_commit()
   return ret;
 }
 
-int ObPartTransCtx::check_and_response_scheduler_(int result)
+int ObPartTransCtx::check_and_response_scheduler_(ObTxState next_phase, int result)
 {
   int ret = OB_SUCCESS;
-  ret = E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_EARLY_RESPONSE_SCHEDULER) OB_SUCCESS;
   if (!is_sub2pc() && OB_FAIL(ret)) {
     // when error inject, response scheduler delayed to CLEAR state
-    if (ObTxState::CLEAR == get_upstream_state()) {
-      TRANS_LOG(INFO, "response scheduler in clear state", K(ret), K(*this));
+    if (ObTxState::CLEAR == next_phase) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(INFO, "response scheduler in clear state", K(ret), K(*this));
+      }
       ret = OB_SUCCESS;
     } else {
+      TRANS_LOG(INFO, "response scheduler in 2pc", K(ret), K(result), KPC(this));
       return OB_SUCCESS;
     }
   } else {
     // general path, won't response scheduler in CLEAR state
-    if (ObTxState::CLEAR == get_upstream_state()) {
+    if (ObTxState::CLEAR == next_phase) {
       return OB_SUCCESS;
     }
   }
 
   if (is_sub2pc()) {
     // TODO, according to part trans action
-    if (ObTxState::COMMIT == get_upstream_state()) {
+    if (ObTxState::COMMIT == next_phase) {
       if (OB_FAIL(reply_to_scheduler_for_sub2pc(SUBCOMMIT_RESP))) {
         TRANS_LOG(ERROR, "fail to reply sub commit", K(ret), K(*this));
       }
-    } else if (ObTxState::ABORT == get_upstream_state() || ObTxState::ABORT == get_downstream_state()) {
+    } else if (ObTxState::ABORT == next_phase || ObTxState::ABORT == get_downstream_state()) {
       if (OB_FAIL(reply_to_scheduler_for_sub2pc(SUBROLLBACK_RESP))) {
         TRANS_LOG(ERROR, "fail to reply sub rollback", K(ret), K(*this));
       }
@@ -228,11 +276,15 @@ int ObPartTransCtx::check_and_response_scheduler_(int result)
       ret = OB_SUCCESS;
     }
   }
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(INFO, "response scheduler in 2pc", K(ret), K(result), KPC(this));
+  }
   return ret;
 }
 
 
-int ObPartTransCtx::update_local_max_commit_version_(const int64_t &commit_version)
+int ObPartTransCtx::update_local_max_commit_version_(const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);
@@ -262,7 +314,7 @@ int ObPartTransCtx::do_abort()
     // do nothing
   } else {
     if (is_root()) {
-      check_and_response_scheduler_(OB_TRANS_KILLED);
+      check_and_response_scheduler_(ObTxState::ABORT, OB_TRANS_KILLED);
     }
   }
 
@@ -274,7 +326,7 @@ int ObPartTransCtx::on_abort()
   int ret = OB_SUCCESS;
 
   if (is_sub2pc() && is_root()) {
-    check_and_response_scheduler_(OB_TRANS_KILLED);
+    check_and_response_scheduler_(ObTxState::ABORT, OB_TRANS_KILLED);
   }
   if (OB_FAIL(on_dist_end_(false /*commit*/))) {
     TRANS_LOG(WARN, "transaciton end error", KR(ret), "context", *this);
@@ -291,7 +343,7 @@ int ObPartTransCtx::do_clear()
 
   if (is_root()) {
     // response scheduler after all participant commit log sycned
-    check_and_response_scheduler_(OB_SUCCESS);
+    check_and_response_scheduler_(ObTxState::CLEAR, OB_SUCCESS);
   }
   // currently do nothing
 
@@ -307,21 +359,6 @@ int ObPartTransCtx::on_clear()
   (void)set_exiting_();
 
   return ret;
-}
-
-bool ObPartTransCtx::need_request_gts_()
-{
-  bool bret = false;
-
-  if (!is_leaf()) {
-    if (0 != exec_info_.participants_.count()
-        && ls_id_ == exec_info_.participants_[0]) {
-      bret = true;
-    } else {
-      bret = false;
-    }
-  }
-  return bret;
 }
 
 int ObPartTransCtx::reply_to_scheduler_for_sub2pc(int64_t msg_type)

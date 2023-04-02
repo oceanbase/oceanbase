@@ -27,6 +27,8 @@
 #include "sql/engine/px/ob_px_scheduler.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/exchange/ob_px_ms_receive_op.h"
+#include "sql/engine/px/ob_sqc_ctx.h"
+#include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase
 {
@@ -127,7 +129,10 @@ ObPxReceiveOp::ObPxReceiveOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     proxy_first_buffer_cache_(nullptr),
     ch_info_(),
     stored_rows_(NULL),
-    bf_rpc_proxy_()
+    bf_rpc_proxy_(),
+    bf_ctx_idx_(0),
+    bf_send_idx_(0),
+    each_group_size_(0)
 {}
 
 int ObPxReceiveOp::inner_open()
@@ -197,7 +202,7 @@ int ObPxReceiveOp::init_dfc(ObDtlDfoKey &key)
     bool force_block = false;
 #ifdef ERRSIM
     int ret = OB_SUCCESS;
-    ret = E(EventTable::EN_FORCE_DFC_BLOCK) ret;
+    ret = OB_E(EventTable::EN_FORCE_DFC_BLOCK) ret;
     force_block = (OB_HASH_NOT_EXIST == ret);
     LOG_TRACE("Worker init dfc", K(key), K(dfc_.is_receive()), K(force_block), K(ret));
     ret = OB_SUCCESS;
@@ -225,7 +230,11 @@ int ObPxReceiveOp::init_channel(
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObDtlDfoKey key;
   LOG_TRACE("Try to get channel infomation from SQC");
-  if (OB_FAIL(recv_input.get_data_ch(task_ch_set, phy_plan_ctx->get_timeout_timestamp(), ch_info_))) {
+  uint64_t min_cluster_version = 0;
+  CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(recv_input.get_data_ch(task_ch_set, phy_plan_ctx->get_timeout_timestamp(), ch_info_))) {
     LOG_WARN("Fail to get data dtl channel", K(ret));
   } else if (OB_FAIL(recv_input.get_dfo_key(key))) {
     LOG_WARN("Failed to get dfo key", K(ret));
@@ -245,6 +254,7 @@ int ObPxReceiveOp::init_channel(
     loop.register_processor(px_row_msg_proc)
         .register_interrupt_processor(interrupt_proc);
     loop.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
+    loop.set_query_timeout_ts(ctx_.get_physical_plan_ctx()->get_timeout_timestamp());
     ObPxSQCProxy *ch_provider = reinterpret_cast<ObPxSQCProxy *>(recv_input.get_ch_provider());
     int64_t batch_id = ctx_.get_px_batch_id();
     const bool use_interm_result = ch_provider->get_recieve_use_interm_result();
@@ -258,6 +268,7 @@ int ObPxReceiveOp::init_channel(
       } else {
         ch->set_audit(enable_audit);
         ch->set_interm_result(use_interm_result);
+        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
         ch->set_ignore_error(recv_input.is_ignore_vtable_error());
         ch->set_batch_id(batch_id);
         ch->set_operator_owner();
@@ -285,7 +296,11 @@ int ObPxReceiveOp::link_ch_sets(ObPxTaskChSet &ch_set,
   int64_t hash_val = 0;
   int64_t offset = 0;
   const int64_t DTL_CHANNEL_SIZE = sizeof(ObDtlRpcChannel) > sizeof(ObDtlLocalChannel) ? sizeof(ObDtlRpcChannel) : sizeof(ObDtlLocalChannel);
-  if (OB_FAIL(channels.reserve(ch_set.count()))) {
+   uint64_t min_cluster_version = 0;
+  CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(channels.reserve(ch_set.count()))) {
     LOG_WARN("fail reserve channels", K(ret), K(ch_set.count()));
   } else if (OB_FAIL(dfc->reserve(ch_set.count()))) {
     LOG_WARN("fail reserve dfc channels", K(ret), K(ch_set.count()));
@@ -335,6 +350,10 @@ int ObPxReceiveOp::link_ch_sets(ObPxTaskChSet &ch_set,
         ob_free(buf);
       }
     }
+  }
+  if (OB_SUCC(ret) && ObInitChannelPieceMsgCtx::enable_dh_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0)
+      && OB_FAIL(send_channel_ready_msg(reinterpret_cast<ObPxReceiveOpInput*>(input_)->get_child_dfo_id()))) {
+    LOG_WARN("failed to send channel ready msg", K(ret));
   }
   LOG_TRACE("Data ch set all linked and ready to add to msg loop",
             "count", ch_set.count(), K(ret));
@@ -400,11 +419,10 @@ int ObPxReceiveOp::drain_exch()
     } else if (OB_FAIL(active_all_receive_channel())) {
       LOG_WARN("failed to active all receive channel", K(ret));
     }
-    if (OB_SUCC(ret)) {
-      LOG_TRACE("drain px receive", K(get_spec().id_), K(ret), K(lbt()));
-      dfc_.drain_all_channels();
-      exch_drained_ = true;
-    } else if (OB_ITER_END == ret) {
+    LOG_TRACE("drain px receive", K(get_spec().id_), K(ret), K(lbt()));
+    dfc_.drain_all_channels();
+    exch_drained_ = true;
+    if (OB_ITER_END == ret) {
       /**
        * active_all_receive_channel有拿行的操作，可能会产生OB_ITER_END，
        * 所以这里错误码是OB_ITER_END，我们已经达到了drain的目的，将错误码
@@ -429,6 +447,32 @@ int ObPxReceiveOp::active_all_receive_channel()
   return ret;
 }
 
+int ObPxReceiveOp::get_bf_ctx(int64_t idx, ObJoinFilterDataCtx &bf_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(spec_);
+  if (idx < 0 || idx >= spec.bloom_filter_id_array_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null unexpected", K(ret));
+  } else {
+    int64_t filter_id = spec.bloom_filter_id_array_.at(idx); // get filter id by idx
+    int64_t i = 0;
+    oceanbase::common::ObIArray<oceanbase::sql::ObJoinFilterDataCtx> &bf_ctx_array = ctx_.get_bloom_filter_ctx_array();
+    const int64_t bf_ctx_count = bf_ctx_array.count();
+    while (i < bf_ctx_count) {
+      if (filter_id == bf_ctx_array.at(i).filter_data_->filter_id_) { // find bloom filter ctx in exec context by filter id
+        bf_ctx = bf_ctx_array.at(i);
+        break;
+      }
+      ++i;
+    }
+    if (i == bf_ctx_count) {
+      LOG_DEBUG("can not find bloom filter ctx in exec context", K(ret), K(idx), K(filter_id));
+    }
+  }
+  return ret;
+}
+
 int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
 {
   const int64_t max_cnt = std::min(max_row_cnt, spec_.max_batch_size_);
@@ -436,6 +480,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
   int64_t idx = 0;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_size(max_cnt);
+  const ObIArray<ObExpr *> *all_exprs = nullptr;
   for (; idx < max_cnt && OB_SUCC(ret); idx++) {
     batch_info_guard.set_batch_idx(idx);
     if (OB_FAIL(inner_get_next_row())) {
@@ -447,7 +492,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
       break;
     } else {
       // deep copy
-      const ObIArray<ObExpr *> *all_exprs = (static_cast<const ObPxReceiveSpec &>(get_spec())).get_all_exprs();
+      all_exprs = (static_cast<const ObPxReceiveSpec &>(get_spec())).get_all_exprs();
       if (NULL != all_exprs) {
         for (int64_t i = 0; OB_SUCC(ret) && i < all_exprs->count(); i++) {
           ObExpr *e = all_exprs->at(i);
@@ -480,6 +525,12 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
   if (OB_SUCC(ret)) {
     brs_.size_ = idx;
     brs_.end_ = idx < max_cnt;
+    // set project flag to prevent duplcated expression calculation
+    if (NULL != all_exprs) {
+      FOREACH_CNT(e, *(all_exprs)) {
+        (*e)->get_eval_info(eval_ctx_).projected_ = 1;
+      }
+    }
   }
   return ret;
 }
@@ -497,6 +548,94 @@ int ObPxReceiveOp::erase_dtl_interm_result()
       key.batch_id_ = ctx_.get_px_batch_id();
       if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
         LOG_TRACE("fail to release recieve internal result", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxReceiveSpec::register_to_datahub(ObExecContext &ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_sqc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null unexpected", K(ret));
+  } else {
+    void *buf = ctx.get_allocator().alloc(sizeof(ObInitChannelWholeMsg::WholeMsgProvider));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      ObInitChannelWholeMsg::WholeMsgProvider *provider =
+        new (buf)ObInitChannelWholeMsg::WholeMsgProvider();
+      ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
+      if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), DH_INIT_CHANNEL_PIECE_MSG, *provider))) {
+        LOG_WARN("fail add whole msg provider", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxReceiveSpec::register_init_channel_msg(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_sqc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null unexpected", K(ret));
+  } else {
+    ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
+    OZ (sqc_ctx.init_channel_msg_cnts_.push_back({id_, 0}));
+  }
+  return ret;
+}
+
+int ObPxReceiveOp::send_channel_ready_msg(int64_t child_dfo_id)
+{
+  int ret = OB_SUCCESS;
+  bool send_piece = true;
+  bool need_wait_whole_msg = false;
+  ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+  if (IS_PX_COORD(get_spec().get_type())) {
+    // do nothing
+  } else if (OB_ISNULL(handler)) {
+    if (!IS_PX_COORD(get_spec().get_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("px receive do not have sqc handler", K(get_spec().get_type()), K(ret));
+    }
+  } else {
+    ObPxSQCProxy &proxy = handler->get_sqc_proxy();
+    if (!proxy.get_recieve_use_interm_result()) {
+      bool merge_finish = false;
+      int64_t *curr_piece_cnt_ptr = nullptr;
+      if (OB_FAIL(proxy.sqc_ctx_.get_init_channel_msg_cnt(get_spec().id_, curr_piece_cnt_ptr))) {
+        LOG_WARN("failed to get curr piece cnt", K(ret));
+      } else if (OB_ISNULL(curr_piece_cnt_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null piece cnt ptr got", K(ret));
+      } else if (proxy.get_task_count() == ATOMIC_AAF(curr_piece_cnt_ptr, 1)) {
+        merge_finish = true;
+      } else if (proxy.get_task_count() < *curr_piece_cnt_ptr) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("piece count exceeded task count", K(proxy.get_task_count()), K(*curr_piece_cnt_ptr), K(ret));
+      }
+      LOG_TRACE("1 receive is ready", K(merge_finish), K(ATOMIC_LOAD(curr_piece_cnt_ptr)), K(get_spec().id_), K(lbt()));
+      if (OB_SUCC(ret) && merge_finish) {
+        ObInitChannelPieceMsg piece;
+        piece.piece_count_ = ATOMIC_LOAD(curr_piece_cnt_ptr);
+        piece.op_id_ = get_spec().id_;
+        piece.thread_id_ = GETTID();
+        piece.source_dfo_id_ = proxy.get_dfo_id();
+        piece.target_dfo_id_ = child_dfo_id;
+        const ObInitChannelWholeMsg *whole_msg = nullptr;
+        if (OB_FAIL(proxy.get_dh_msg(get_spec().id_,
+                                    dtl::DH_INIT_CHANNEL_PIECE_MSG,
+                                    piece,
+                                    whole_msg,
+                                    ctx_.get_physical_plan_ctx()->get_timeout_timestamp(),
+                                    send_piece,
+                                    need_wait_whole_msg))) {
+          LOG_WARN("failed to send piece msg", K(ret));
+        }
       }
     }
   }
@@ -565,70 +704,124 @@ int ObPxFifoReceiveOp::inner_get_next_batch(const int64_t max_row_cnt)
   return ret;
 }
 
+int ObPxReceiveOp::prepare_send_bloom_filter()
+{
+  int ret = OB_SUCCESS;
+  ObJoinFilterDataCtx temp_bf_ctx; // just for declare a reference, don't use temp_bf_ctx to do anything else
+  ObJoinFilterDataCtx &bf_ctx = temp_bf_ctx;
+  const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(get_spec());
+  while(OB_SUCC(ret) && bf_ctx_idx_ < spec.bloom_filter_id_array_.count()) {
+    if (OB_FAIL(get_bf_ctx(bf_ctx_idx_++, bf_ctx))) {
+      // get_bf_ctx will find a valid bf_ctx, if not will report -4016
+      // bf_ctx_idx_++ means it need get next one bf_ctx at next fetch_rows
+      LOG_WARN("failed to get bloom filter context", K(bf_ctx_idx_), K(ret));
+    } else if (bf_ctx.filter_ready_ && OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx_, // bf_ctx.filter_ready_ promise that only one thread will run mark_rpc_filter()
+                                                                            bf_ctx,
+                                                                            each_group_size_))) {
+      LOG_WARN("fail to send rpc bloom filter", K(bf_ctx_idx_), K(each_group_size_), K(ret));
+    } else {
+      LOG_DEBUG("succ to mark rpc filter", K(bf_ctx_idx_), K(spec.bloom_filter_id_array_.count()), K(each_group_size_),
+                K(bf_ctx.filter_ready_));
+    }
+  }
+  return ret;
+}
+
 int ObPxReceiveOp::try_send_bloom_filter()
 {
   int ret = OB_SUCCESS;
   ObPxReceiveOpInput *recv_input = reinterpret_cast<ObPxReceiveOpInput*>(input_);
   ObPxSQCProxy *sqc_proxy = reinterpret_cast<ObPxSQCProxy *>(recv_input->get_ch_provider());
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  if (sqc_proxy->bloom_filter_ready()) {
-    int64_t start_time = ObTimeUtility::current_time();
-    ObPxBFSendBloomFilterArgs args;
-    OZ(args.bloom_filter_.init(&sqc_proxy->get_filter_data()->filter_));
-    if (OB_SUCC(ret)) {
-      args.bf_key_.init(sqc_proxy->get_filter_data()->tenant_id_,
-          sqc_proxy->get_filter_data()->filter_id_,
-          sqc_proxy->get_filter_data()->server_id_,
-          sqc_proxy->get_filter_data()->execution_id_);
-      args.expect_bloom_filter_count_ = sqc_proxy->get_filter_data()->bloom_filter_count_;
-      args.current_bloom_filter_count_ = 1;
-      args.phase_ = ObSendBFPhase::FIRST_LEVEL;
-      args.timeout_timestamp_ = phy_plan_ctx->get_timeout_timestamp();
-    }
-    if (OB_SUCC(ret)) {
-      common::ObIArray<dtl::ObDtlChannel *> &channels = sqc_proxy->get_filter_channels();
-      common::ObIArray<BloomFilterIndex> &filter_index_array = sqc_proxy->get_filter_indexes();
-      args.expect_phase_count_ = channels.count();
-      int64_t filter_idx = 0;
-      while (sqc_proxy->get_filter_channel_idx() < filter_index_array.count() && OB_SUCC(ret)) {
-        filter_idx = ATOMIC_FAA(&sqc_proxy->get_filter_channel_idx(), 1);
-        if (filter_idx < filter_index_array.count()) {
-          args.next_peer_addrs_.reuse();
-          auto channel_filter_idx = filter_index_array.at(filter_idx);
-          args.bloom_filter_.set_begin_idx(channel_filter_idx.begin_idx_);
-          args.bloom_filter_.set_end_idx(channel_filter_idx.end_idx_);
-          for (int i = 0; OB_SUCC(ret) && i < channel_filter_idx.channel_ids_.count(); ++i) {
-            OZ(args.next_peer_addrs_.push_back(channels.at(channel_filter_idx.channel_ids_.at(i))->get_peer()));
-          }
-          if (OB_FAIL(ret)) {
-          } else if (channel_filter_idx.channel_id_ >= channels.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected channel id", K(channel_filter_idx.channel_id_), K(channels.count()));
-          } else if (OB_FAIL(bf_rpc_proxy_.to(channels.at(channel_filter_idx.channel_id_)->get_peer())
-                      .by(sqc_proxy->get_filter_data()->tenant_id_)
-                      .timeout(phy_plan_ctx->get_timeout_timestamp())
-                      .compressed(sqc_proxy->get_bf_compress_type())
-                      .send_bloom_filter(args, NULL))) {
-            LOG_WARN("fail to send bloom filter", K(ret));
+  common::ObIArray<ObBloomFilterSendCtx> &bf_send_ctx_array = sqc_proxy->get_bf_send_ctx_array();
+  int64_t bfsendctxcount = bf_send_ctx_array.count();
+  while (OB_SUCC(ret) && bf_send_idx_ < bf_send_ctx_array.count()) {
+    if (bf_send_ctx_array.at(bf_send_idx_).bloom_filter_ready()) {
+      int64_t start_time = ObTimeUtility::current_time();
+      ObBloomFilterSendCtx &bf_send_ctx = bf_send_ctx_array.at(bf_send_idx_);
+      ObPxBFSendBloomFilterArgs args;
+      OZ(args.bloom_filter_.init(&bf_send_ctx.get_filter_data()->filter_));
+      if (OB_SUCC(ret)) {
+        args.bf_key_.init(bf_send_ctx.get_filter_data()->tenant_id_,
+            bf_send_ctx.get_filter_data()->filter_id_,
+            bf_send_ctx.get_filter_data()->server_id_,
+            bf_send_ctx.get_filter_data()->px_sequence_id_);
+        args.expect_bloom_filter_count_ = bf_send_ctx.get_filter_data()->bloom_filter_count_;
+        args.current_bloom_filter_count_ = 1;
+        args.phase_ = ObSendBFPhase::FIRST_LEVEL;
+        args.timeout_timestamp_ = phy_plan_ctx->get_timeout_timestamp();
+      }
+      if (OB_SUCC(ret)) {
+        common::ObIArray<BloomFilterIndex> &filter_index_array = bf_send_ctx.get_filter_indexes();
+        ObPxBloomFilterChSet &bf_chset = bf_send_ctx.get_bf_ch_set();
+        int64_t ch_info_count = bf_chset.count();
+        args.expect_phase_count_ = ch_info_count;
+        int64_t filter_idx = 0;
+        while (bf_send_ctx.get_filter_channel_idx() < filter_index_array.count() && OB_SUCC(ret)) {
+          filter_idx = ATOMIC_FAA(&bf_send_ctx.get_filter_channel_idx(), 1);
+          if (filter_idx < filter_index_array.count()) {
+            args.next_peer_addrs_.reuse();
+            auto channel_filter_idx = filter_index_array.at(filter_idx);
+            args.bloom_filter_.set_begin_idx(channel_filter_idx.begin_idx_);
+            args.bloom_filter_.set_end_idx(channel_filter_idx.end_idx_);
+            ObDtlChannelInfo chan_info; // just for declare a reference, don't use chan_info to do anything else
+            ObDtlChannelInfo &ch_info = chan_info;
+            for (int i = 0; OB_SUCC(ret) && i < channel_filter_idx.channel_ids_.count(); ++i) {
+              if (OB_FAIL(bf_chset.get_channel_info(channel_filter_idx.channel_ids_.at(i), ch_info))) {
+                LOG_WARN("failed get ObDtlChannelInfo", K(channel_filter_idx.channel_ids_.at(i)), K(i), K(ret));
+              } else if (OB_FAIL(args.next_peer_addrs_.push_back(ch_info.peer_))) {
+                LOG_WARN("failed push back peer addr", K(i), K(ret));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (channel_filter_idx.channel_id_ >= ch_info_count) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected channel id", K(channel_filter_idx.channel_id_), K(ch_info_count));
+            } else if (OB_FAIL(bf_chset.get_channel_info(channel_filter_idx.channel_id_, ch_info))) {
+                LOG_WARN("failed get ObDtlChannelInfo", K(channel_filter_idx.channel_id_), K(ret));
+            } else if (OB_FAIL(bf_rpc_proxy_.to(ch_info.peer_)
+                        .by(bf_send_ctx.get_filter_data()->tenant_id_)
+                        .timeout(phy_plan_ctx->get_timeout_timestamp())
+                        .compressed(bf_send_ctx.get_bf_compress_type())
+                        .send_bloom_filter(args, NULL))) {
+              LOG_WARN("fail to send bloom filter", K(ret));
+            }
           }
         }
+        op_monitor_info_.otherstat_1_value_ = ObTimeUtility::current_time() - start_time;
+        bf_send_ctx.set_bloom_filter_ready(false); // all piece of bloom filter was sent, this thread sent the last one piece
       }
-      op_monitor_info_.otherstat_1_value_ = ObTimeUtility::current_time() - start_time;
-      sqc_proxy->set_bloom_filter_ready(false);
     }
+    ++bf_send_idx_;
   }
   return ret;
+}
+
+// Routine "do_clear_datum_eval_flag" behave almost the same as
+// "ObOperator::do_clear_datum_eval_flag" except explicitly clear
+// projected flag under batch_result mode(vectorization)
+void ObPxReceiveOp::do_clear_datum_eval_flag()
+{
+  FOREACH_CNT(e, spec_.calc_exprs_) {
+    if ((*e)->is_batch_result()) {
+      (*e)->get_evaluated_flags(eval_ctx_).unset(eval_ctx_.get_batch_idx());
+      (*e)->get_eval_info(eval_ctx_).projected_ = 0;
+    } else {
+      (*e)->get_eval_info(eval_ctx_).clear_evaluated_flag();
+    }
+  }
 }
 
 int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
 {
   int ret = OB_SUCCESS;
   // 从channel sets 读取数据，并向上迭代
+  const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(get_spec());
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (need_send_bloom_filter() && OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx_))) {
-    LOG_WARN("fail to send rpc bloom filter", K(ret));
+  } else if (!ctx_.get_bloom_filter_ctx_array().empty() && OB_FAIL(prepare_send_bloom_filter())) {
+    LOG_WARN("fail to prepare send bloom filter", K(ret));
   } else if (OB_FAIL(try_send_bloom_filter())) {
     LOG_WARN("fail to try send bloom filter", K(ret));
   }
@@ -640,6 +833,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
       ret = get_rows_from_channels(row_cnt, timeout_ts - get_timestamp());
       if (OB_SUCCESS == ret) {
         metric_.mark_first_out();
+        metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
         LOG_DEBUG("Got one row from channel", K(ret));
         break; // got one row
       } else if (OB_ITER_END == ret) {
@@ -647,7 +841,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
           op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
           op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
         }
-        metric_.mark_last_out();
+        metric_.mark_eof();
         LOG_TRACE("Got eof row from channel", K(ret));
         break;
       } else if (OB_EAGAIN == ret) {
@@ -710,7 +904,9 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
       clear_evaluated_flag();
       clear_dynamic_const_parent_flag();
       if (!is_vectorized()) {
-        if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_, eval_ctx_))) {
+        if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                             MY_SPEC.dynamic_const_exprs_,
+                                             eval_ctx_))) {
           LOG_WARN("get next row from row reader failed", K(ret));
         } else {
           got_row = true;
@@ -718,8 +914,12 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
         }
       } else {
         int64_t read_rows = 0;
-        if (OB_FAIL(row_reader_.get_next_batch(MY_SPEC.child_exprs_, eval_ctx_,
-                                               row_cnt, read_rows, stored_rows_))) {
+        if (OB_FAIL(row_reader_.get_next_batch(MY_SPEC.child_exprs_,
+                                               MY_SPEC.dynamic_const_exprs_,
+                                               eval_ctx_,
+                                               row_cnt,
+                                               read_rows,
+                                               stored_rows_))) {
           LOG_WARN("get next batch failed", K(ret));
         } else {
           got_row = true;

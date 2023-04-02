@@ -28,8 +28,14 @@ namespace transaction
 namespace tablelock
 {
 
-ObLockMemtableMgr::ObLockMemtableMgr()
-{}
+ObLockMemtableMgr::ObLockMemtableMgr() : ObIMemtableMgr(LockType::OB_QSYNC_LOCK, &lock_def_)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_def_.init(lib::ObMemAttr(MTL_ID(), "LockMemtableMgr")))) {
+    LOG_WARN("lock memtable mgr lock init error", K(ret), "tenant_id", MTL_ID());
+  }
+  UNUSED(ret);
+}
 
 int ObLockMemtableMgr::init(
     const common::ObTabletID &tablet_id,
@@ -47,6 +53,9 @@ int ObLockMemtableMgr::init(
              OB_ISNULL(t3m)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), KP(freezer), KP(t3m));
+  } else if (!lock_def_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock memtable mgr lock not init", K(ret), K(tablet_id), K(ls_id));
   } else {
     ls_id_ = ls_id;
     freezer_ = freezer;
@@ -65,18 +74,17 @@ void ObLockMemtableMgr::destroy()
 
 void ObLockMemtableMgr::reset()
 {
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   reset_tables();
   freezer_ = NULL;
   is_inited_ = false;
 }
 
-int ObLockMemtableMgr::create_memtable(
-    const int64_t last_replay_log_ts,
-    const int64_t schema_version,
-    const bool for_replay)
+int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
+                                       const int64_t schema_version,
+                                       const bool for_replay)
 {
-  UNUSED(last_replay_log_ts);
+  UNUSED(clog_checkpoint_scn);
   UNUSED(schema_version);
   UNUSED(for_replay);
 
@@ -87,12 +95,13 @@ int ObLockMemtableMgr::create_memtable(
   ObLockMemtable *memtable = nullptr;
   ObLSTxService *ls_tx_svr = nullptr;
 
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
 
   table_key.table_type_ = ObITable::LOCK_MEMTABLE;
   table_key.tablet_id_ = LS_LOCK_TABLET;
-  table_key.log_ts_range_.start_log_ts_ = 1; // fake
-  table_key.log_ts_range_.end_log_ts_ = 2; // fake
+
+  table_key.scn_range_.start_scn_ = SCN::base_scn();//fake
+  table_key.scn_range_.end_scn_ = SCN::plus(table_key.scn_range_.start_scn_, 1);//fake
 
   if (get_memtable_count_() > 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -183,7 +192,7 @@ int ObLockMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  LOG_INFO("lock memtable mgr release head memtable", KP(imemtable));
+  LOG_INFO("lock memtable mgr release head memtable", KP(imemtable), K(force));
   ObLockMemtable *memtable = static_cast<ObLockMemtable *>(imemtable);
   if (get_memtable_count_() > 0 && force) {
     // for force
@@ -194,7 +203,8 @@ int ObLockMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
         LOG_WARN("unregister from common checkpoint failed", K(tmp_ret), K_(ls_id), K(memtable));
       }
       release_head_memtable();
-      FLOG_INFO("succeed to release head lock table memtable", K(ret), K_(ls_id), KP(imemtable));
+      FLOG_INFO("succeed to release head lock table memtable", K(ret),
+                K_(ls_id), KP(imemtable), K(memtable_head_), K(memtable_tail_));
     }
   } else if (!force) {
     // just for flush

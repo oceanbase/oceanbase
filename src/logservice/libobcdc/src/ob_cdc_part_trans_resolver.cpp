@@ -730,7 +730,7 @@ int ObCDCPartTransResolver::handle_commit_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid trans_type", KR(ret), K_(tls_id), K(tx_id), K(commit_log), K(lsn));
   } else if (OB_UNLIKELY(OB_INVALID_VERSION ==
-      (trans_commit_version = get_trans_commit_version_(submit_ts, commit_log.get_commit_version())))) {
+      (trans_commit_version = get_trans_commit_version_(submit_ts, commit_log.get_commit_version().get_val_for_logservice())))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid trans_commit_version", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts), K(commit_log));
   } else if (!serve_info.is_served(trans_commit_version)) {
@@ -804,7 +804,8 @@ int ObCDCPartTransResolver::handle_commit_(
       (transaction::TransType)commit_log.get_trans_type(),
       commit_log.get_ls_log_info_arr(),
       lsn,
-      submit_ts))) {
+      submit_ts,
+      part_trans_dispatcher_.is_data_dict_dispatcher()))) {
     LOG_ERROR("commit PartTransTask failed", KR(ret), K_(tls_id), K(tx_id), K(trans_commit_version),
         K(lsn), K(submit_ts), K(commit_log), KPC(part_trans_task));
   }

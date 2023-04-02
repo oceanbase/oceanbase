@@ -14,7 +14,7 @@
 #define OCEANBASE_TRANSACTION_OB_LS_TX_SERVICE
 
 #include "lib/ob_errno.h"
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
 #include "share/ob_ls_id.h"
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "storage/ob_i_store.h"
@@ -25,7 +25,10 @@
 
 namespace oceanbase
 {
-
+namespace share
+{
+class SCN;
+}
 namespace storage
 {
 class ObLS;
@@ -53,7 +56,13 @@ class ObLSTxService : public logservice::ObIReplaySubHandler,
                       public logservice::ObICheckpointSubHandler
 {
 public:
-  ObLSTxService(ObLS *parent) : parent_(parent), tenant_id_(0), ls_id_(), mgr_(NULL), trans_service_(NULL) {
+  ObLSTxService(ObLS *parent)
+      : parent_(parent),
+        tenant_id_(0),
+        ls_id_(),
+        mgr_(NULL),
+        trans_service_(NULL),
+        rwlock_(common::ObLatchIds::CLOG_CKPT_RWLOCK) {
     reset_();
   }
   ~ObLSTxService() {}
@@ -80,11 +89,12 @@ public:
                          const bool read_latest,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;
-  int get_read_store_ctx(const int64_t snapshot_version,
+  int get_read_store_ctx(const share::SCN &snapshot_version,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;
   int get_write_store_ctx(transaction::ObTxDesc &tx,
                           const transaction::ObTxReadSnapshot &snapshot,
+                          const concurrent_control::ObWriteFlag write_flag,
                           storage::ObStoreCtx &store_ctx) const;
   int revert_store_ctx(storage::ObStoreCtx &store_ctx) const;
   // Freeze process needs to traverse trans ctx to submit redo log
@@ -92,7 +102,7 @@ public:
   // submit next log when all trx in frozen memtable have submitted log
   int traverse_trans_to_submit_next_log();
   // check schduler status for gc
-  int check_scheduler_status(int64_t &min_start_scn, transaction::MinStartScnStatus &status);
+  int check_scheduler_status(share::SCN &min_start_scn, transaction::MinStartScnStatus &status);
 
   // for ls gc
   // @return OB_SUCCESS, all the tx of this ls cleaned up
@@ -126,16 +136,16 @@ public:
   // get the obj lock op iterator from tx of this ls.
   int iterate_tx_obj_lock_op(transaction::tablelock::ObLockOpIterator &iter) const;
 public:
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn);
 
-  int replay_start_working_log(const transaction::ObTxStartWorkingLog &log, int64_t log_ts_ns);
+  int replay_start_working_log(const transaction::ObTxStartWorkingLog &log, share::SCN &log_ts_ns);
   void switch_to_follower_forcedly();
   int switch_to_leader();
   int switch_to_follower_gracefully();
   int resume_leader();
 
-  int64_t get_rec_log_ts();
-  int flush(int64_t rec_log_ts);
+  share::SCN get_rec_scn() override;
+  int flush(share::SCN &recycle_scn) override;
   int flush_ls_inner_tablet(const ObTabletID &tablet_id);
 
   int get_common_checkpoint_info(
@@ -153,7 +163,7 @@ public:
                                    const checkpoint::ObCommonCheckpoint* common_checkpoint);
   // undertake dump
   int traversal_flush();
-  virtual int64_t get_ls_weak_read_ts();
+  virtual share::SCN get_ls_weak_read_ts();
   int check_in_leader_serving_state(bool& bool_ret);
 
   transaction::ObTxRetainCtxMgr *get_retain_ctx_mgr();
@@ -168,7 +178,10 @@ private:
 
   // responsible for maintenance checkpoint unit that write TRANS_SERVICE_LOG_BASE_TYPE clog
   checkpoint::ObCommonCheckpoint *common_checkpoints_[checkpoint::ObCommonCheckpointType::MAX_BASE_TYPE];
-  common::ObSpinLock lock_;
+  typedef common::SpinRWLock RWLock;
+  typedef common::SpinRLockGuard  RLockGuard;
+  typedef common::SpinWLockGuard  WLockGuard;
+  RWLock rwlock_;
 };
 
 }

@@ -91,6 +91,8 @@ protected:
   int close_table_for_each();
 
   int check_insert_affected_row();
+  virtual void record_err_for_load_data(int err_ret, int row_num) override;
+  virtual int check_need_exec_single_row() override;
 protected:
   InsRtDef2DArray ins_rtdefs_; //see the comment of InsCtDef2DArray
 private:

@@ -17,9 +17,12 @@
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "storage/backup/ob_backup_task.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/backup/ob_backup_struct.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
+using namespace oceanbase::blocksstable;
 
 namespace oceanbase {
 namespace backup {
@@ -256,18 +259,25 @@ int ObBackupDataFileTrailer::check_valid() const
 
 /* ObBackupMacroBlockId */
 
-ObBackupMacroBlockId::ObBackupMacroBlockId() : logic_id_(), macro_block_id_()
+ObBackupMacroBlockId::ObBackupMacroBlockId()
+ : logic_id_(), macro_block_id_(),
+   nested_offset_(0), nested_size_(0)
 {}
 
-bool ObBackupMacroBlockId::is_valid()
+bool ObBackupMacroBlockId::is_valid() const
 {
-  return logic_id_.is_valid() && macro_block_id_.is_valid();
+  return logic_id_.is_valid() &&
+         macro_block_id_.is_valid() &&
+         nested_offset_ >= 0 &&
+         nested_size_ >= 0;
 }
 
 void ObBackupMacroBlockId::reset()
 {
   logic_id_.reset();
   macro_block_id_.reset();
+  nested_offset_ = 0;
+  nested_size_ = 0;
 }
 
 /* ObBackupPhysicalID */
@@ -295,7 +305,7 @@ bool ObBackupPhysicalID::is_valid() const
 }
 
 int ObBackupPhysicalID::get_backup_macro_block_index(
-    const common::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const
+    const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const
 {
   int ret = OB_SUCCESS;
   macro_index.reset();
@@ -727,7 +737,7 @@ void ObBackupMacroBlockIDMapping::reuse()
 }
 
 int ObBackupMacroBlockIDMapping::prepare_tablet_sstable(
-    const storage::ObITable::TableKey &table_key, const common::ObIArray<common::ObLogicMacroBlockId> &list)
+    const storage::ObITable::TableKey &table_key, const common::ObIArray<blocksstable::ObLogicMacroBlockId> &list)
 {
   int ret = OB_SUCCESS;
   static const int64_t bucket_count = 1000;
@@ -742,7 +752,7 @@ int ObBackupMacroBlockIDMapping::prepare_tablet_sstable(
   } else {
     table_key_ = table_key;
     for (int64_t i = 0; OB_SUCC(ret) && i < list.count(); ++i) {
-      const common::ObLogicMacroBlockId &logic_id = list.at(i);
+      const blocksstable::ObLogicMacroBlockId &logic_id = list.at(i);
       ObBackupMacroBlockIDPair id_pair;
       id_pair.logic_id_ = logic_id;
       id_pair.physical_id_ = ObBackupPhysicalID::get_default();
@@ -1195,7 +1205,7 @@ void ObBackupLSTaskInfo::reset()
 /* ObBackupSkippedTablet */
 
 ObBackupSkippedTablet::ObBackupSkippedTablet()
-    : task_id_(), tenant_id_(), turn_id_(), retry_id_(), tablet_id_(), ls_id_(), backup_set_id_()
+    : task_id_(), tenant_id_(), turn_id_(), retry_id_(), tablet_id_(), ls_id_(), backup_set_id_(), skipped_type_()
 {}
 
 ObBackupSkippedTablet::~ObBackupSkippedTablet()
@@ -1204,7 +1214,7 @@ ObBackupSkippedTablet::~ObBackupSkippedTablet()
 bool ObBackupSkippedTablet::is_valid() const
 {
   return task_id_ > 0 && OB_INVALID_ID != tenant_id_ && turn_id_ > 0 && retry_id_ >= 0 && tablet_id_.is_valid() &&
-         ls_id_.is_valid() && backup_set_id_ > 0;
+         ls_id_.is_valid() && backup_set_id_ > 0 && skipped_type_.is_valid();
 }
 
 /* ObBackupReportCtx */

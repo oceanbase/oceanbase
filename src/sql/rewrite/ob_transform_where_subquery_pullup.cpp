@@ -140,7 +140,7 @@ int ObWhereSubQueryPullup::transform_one_expr(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL pointer error", K(ret));
-  //bug:https://work.aone.alibaba-inc.com/issue/25356955 暂时禁掉含有rownum的condition
+  //bug:
   } else if (expr->has_flag(CNT_ROWNUM)) {
     /*do nothing */
   } else if (OB_FAIL(gather_transform_params(stmt, expr, trans_param))) {
@@ -193,6 +193,7 @@ int ObWhereSubQueryPullup::gather_transform_params(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret) && trans_param.can_be_transform_) {
+    OPT_TRACE("try to pullup subquery expr:", expr);
     if (OB_FAIL(check_transform_validity(stmt, expr, trans_param))) {
       LOG_WARN("failed to check can be pulled up ", K(*expr), K(ret));
     } else {
@@ -263,7 +264,6 @@ int ObWhereSubQueryPullup::check_limit(const ObItemType op_type,
     bool is_null_value = false;
     int64_t limit_value = 0;
     if (OB_FAIL(ObTransformUtils::get_limit_value(subquery->get_limit_expr(),
-                                                  subquery,
                                                   &plan_ctx->get_param_store(),
                                                   ctx_->exec_ctx_,
                                                   ctx_->allocator_,
@@ -299,6 +299,7 @@ int ObWhereSubQueryPullup::check_transform_validity(ObDMLStmt *stmt,
     LOG_WARN("check basic valid failed", K(ret));
   } else if (!trans_param.can_be_transform_) {
     /*do nothing*/
+    OPT_TRACE("subquery can not pullup");
   } else if (!trans_param.is_correlated_) {//check 2
     /*do nothing*/
   } else if (OB_FAIL(can_be_unnested(expr->get_expr_type(),
@@ -308,11 +309,14 @@ int ObWhereSubQueryPullup::check_transform_validity(ObDMLStmt *stmt,
     LOG_WARN("failed to check subquery can be unnested", K(ret));
   } else if (can_unnest) {
     /*do nothing*/
-  } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(*trans_param.subquery_, 
-                                                                trans_param.can_be_transform_))) {
+  } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(
+                       *trans_param.subquery_expr_,
+                       *trans_param.subquery_,
+                       trans_param.can_be_transform_))) {
     LOG_WARN("failed to check can unnest with spj", K(ret));
   } else if (!trans_param.can_be_transform_) {
     /*do nothing*/
+    OPT_TRACE("subquery can not unnest, but subquery has none pullup correlated expr, will not transform");
   } else {
     trans_param.need_create_spj_ = true;
   }
@@ -351,71 +355,83 @@ int ObWhereSubQueryPullup::check_basic_validity(ObDMLStmt *stmt,
     LOG_WARN("failed to check hint", K(ret));
   } else if (!is_valid) {
     // do nothing
+    OPT_TRACE("hint reject transform");
   } else if (stmt->get_table_items().empty()) {
     // do not transform if the main query is from dual, eg:
     // select 1 from dual where 1 >any (select c1 from t1);
     is_valid = false;
-  } else if ((expr->has_flag(IS_WITH_ANY) || expr->has_flag(IS_WITH_ALL)) && // todo: need now??
-              trans_param.left_hand_->has_hierarchical_query_flag()) {
-    //左侧含有层次查询flag, 为避免改写后谓词下压引起执行问题，现有层次查询实现中禁掉
-    is_valid = false;
+    OPT_TRACE("stmt do not have table item");
   } else if ((T_OP_EXISTS == expr->get_expr_type() || T_OP_NOT_EXISTS == expr->get_expr_type())
              && !trans_param.is_correlated_) {
     is_valid = false;
+    OPT_TRACE("not correlated exists subquery no need pullup");
   } else if (subquery->is_set_stmt()) {
     if (!trans_param.is_correlated_) {
       is_valid = true;
     } else {
       ObIArray<ObSelectStmt*> &set_queries = subquery->get_set_query();
       for (int64_t i = 0; is_valid && OB_SUCC(ret) && i < set_queries.count(); ++i) {
-        if (OB_FAIL(check_subquery_validity(set_queries.at(i), 
+        if (OB_FAIL(check_subquery_validity(trans_param.subquery_expr_,
+                                            set_queries.at(i),
                                             trans_param.is_correlated_, 
                                             is_valid))) {
           LOG_WARN("failed to check subquery valid", K(ret));
         }
       }
     }
-  } else if (OB_FAIL(check_subquery_validity(subquery, 
-                     trans_param.is_correlated_, 
-                     is_valid))) {
+  } else if (OB_FAIL(check_subquery_validity(trans_param.subquery_expr_,
+                                             subquery,
+                                             trans_param.is_correlated_,
+                                             is_valid))) {
     LOG_WARN("failed to check subquery valid", K(ret));
   }
   return ret;
 }
 
-int ObWhereSubQueryPullup::check_subquery_validity(ObSelectStmt *subquery, bool is_correlated, bool &is_valid)
+int ObWhereSubQueryPullup::check_subquery_validity(ObQueryRefRawExpr *query_ref,
+                                                   ObSelectStmt *subquery,
+                                                   bool is_correlated,
+                                                   bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
   bool check_status = false;
-  if (OB_ISNULL(subquery)) {
+  if (OB_ISNULL(query_ref) || OB_ISNULL(subquery)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
+    LOG_WARN("unexpect null stmt", K(ret), K(query_ref), K(subquery));
   } else if (0 == subquery->get_from_item_size()) {
     is_valid = false;
+    OPT_TRACE("subquery do not have table item");
   } else if (OB_FAIL(subquery->has_ref_assign_user_var(check_status))) {
     LOG_WARN("failed to check stmt has assignment ref user var", K(ret));
   } else if (check_status) {
     is_valid = false;
+    OPT_TRACE("subquery has user var");
   } else if (OB_FAIL(ObTransformUtils::is_select_item_contain_subquery(subquery, check_status))) {
     LOG_WARN("failed to check select item contain subquery", K(subquery), K(ret));
   } else if (check_status) {
     is_valid = false;
+    OPT_TRACE("subquery`s select expr contain subquery");
   } else if (!is_correlated) {
     // do nothing
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(subquery, check_status))) {
+  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(*query_ref,
+                                                                     subquery,
+                                                                     check_status))) {
     LOG_WARN("failed to is joined table conditions correlated", K(ret));
   } else if (check_status) {
     is_valid = false;
-  } else if (OB_FAIL(is_where_subquery_correlated(*subquery, check_status))) {
+    OPT_TRACE("subquery`s on condition is correlated");
+  } else if (OB_FAIL(is_where_subquery_correlated(query_ref->get_exec_params(), *subquery, check_status))) {
     LOG_WARN("failed to check select item contain subquery", K(subquery), K(ret));
   } else if (check_status) {
     is_valid = false;
-  } else if (OB_FAIL(ObTransformUtils::check_if_subquery_contains_correlated_table_item(*subquery,
-                                                                      check_status))) {
+    OPT_TRACE("subquery`s where condition contain correlated subquery");
+  } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(
+                       *query_ref, *subquery, check_status))) {
     LOG_WARN("failed to check if subquery contain correlated subquery", K(ret));
   } else if (check_status) {
     is_valid = false;
+    OPT_TRACE("subquery`s table item is correlated");
   }
   return ret;
 }
@@ -425,7 +441,8 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObSelectStmt *subquery, bool 
 *   eg:select c2 from t1 where c2 not in
 *                       (select c2 from t2 where t2.c2 not in (select 1 from t3 where t1.c3 = 1));
 */
-int ObWhereSubQueryPullup::is_where_subquery_correlated(const ObSelectStmt &subquery,
+int ObWhereSubQueryPullup::is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                                        const ObSelectStmt &subquery,
                                                         bool &is_correlated)
 {
   int ret = OB_SUCCESS;
@@ -435,9 +452,10 @@ int ObWhereSubQueryPullup::is_where_subquery_correlated(const ObSelectStmt &subq
     if (OB_ISNULL(conds.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL pointer error", K(conds.at(i)), K(ret));
-    } else if (conds.at(i)->has_flag(CNT_SUB_QUERY) &&
-               conds.at(i)->get_expr_levels().has_member(subquery.get_current_level() - 1)) {
-      is_correlated = true;
+    } else if (!conds.at(i)->has_flag(CNT_SUB_QUERY)) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::is_correlated_expr(exec_params, conds.at(i), is_correlated))) {
+      LOG_WARN("failed to check is correlated expr", K(ret));
     }
   }
   return ret;
@@ -463,7 +481,9 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
                                                                    ctx_))) {
     LOG_WARN("failed to add const param constraints", K(ret));
   } else if (trans_param.need_create_spj_) {
-    if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(subquery, ctx_))) {
+    if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(*query_ref,
+                                                                         subquery,
+                                                                         ctx_))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
     } else {
       query_ref->set_ref_stmt(subquery);
@@ -489,7 +509,7 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
 int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
                                                               ObSelectStmt *subquery,
                                                               ObRawExpr *expr,
-                                                              ObQueryRefRawExpr *subquery_expr)
+                                                              ObQueryRefRawExpr *query_ref)
 {
   int ret = OB_SUCCESS;
   TableItem *right_table = NULL;
@@ -506,7 +526,7 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     LOG_WARN("right_table should not be null", K(ret), K(right_table));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), expr))) {
     LOG_WARN("failed to remove condition expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), subquery_expr))) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), query_ref))) {
     LOG_WARN("failed to remove subquery expr", K(ret));
   } else {
     // select * from t1 where exists (select 1 from t2 where t1.c1 = c1 and c2 = 2 limit 1);
@@ -521,8 +541,8 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     ObSEArray<ObRawExpr*, 4> column_exprs;
     ObSEArray<ObRawExpr*, 4> upper_column_exprs;
     ObRawExprCopier copier(*ctx_->expr_factory_);
-    if (OB_FAIL(ObTransformUtils::get_correlated_conditions(subquery->get_condition_exprs(),
-                                                            subquery->get_current_level() - 1, 
+    if (OB_FAIL(ObTransformUtils::get_correlated_conditions(query_ref->get_exec_params(),
+                                                            subquery->get_condition_exprs(),
                                                             candi_semi_conds))) {
       LOG_WARN("failed to get semi conditions", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(candi_semi_conds,
@@ -561,15 +581,14 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(subquery->pullup_stmt_level())) {
-      LOG_WARN("failed to pullup stmt level", K(ret));
-    } else if (OB_FAIL(subquery->adjust_view_parent_namespace_stmt(
-                         stmt->get_parent_namespace_stmt()))) {
-      LOG_WARN("failed to adjust view parent namespace stmt", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::decorrelate(semi_conds, stmt->get_current_level()))) {
+    if (OB_FAIL(ObTransformUtils::decorrelate(semi_conds, query_ref->get_exec_params()))) {
       LOG_WARN("failed to decorrelate semi conditions", K(ret));
     } else if (OB_FAIL(generate_semi_info(stmt, expr, right_table, semi_conds, info))) {
       LOG_WARN("failed to generate semi info", K(ret));
+    } else if (OB_FAIL(stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(subquery->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(subquery->formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("formalize child stmt failed", K(ret));
     }
@@ -641,7 +660,7 @@ int ObWhereSubQueryPullup::fill_semi_left_table_ids(ObDMLStmt *stmt,
       if (OB_ISNULL(cond_expr = info->semi_conditions_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (OB_FAIL(cond_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+      } else if (OB_FAIL(cond_expr->pull_relation_id())) {
         LOG_WARN("pull expr relation ids failed", K(ret), K(*cond_expr));
       } else if (OB_FAIL(left_rel_ids.add_members(cond_expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
@@ -789,36 +808,17 @@ int ObWhereSubQueryPullup::generate_anti_condition(ObDMLStmt *stmt,
 int ObWhereSubQueryPullup::make_null_test(ObDMLStmt *stmt, ObRawExpr *in_expr, ObRawExpr *&out_expr)
 {
   int ret = OB_SUCCESS;
-  ObOpRawExpr *null_test = NULL;
-  ObConstRawExpr *null_expr = NULL;
   ObRawExprFactory *expr_factory = NULL;
-  //FIXME: third_arg = a is base table column && a is not null column && b is null @yeti
-  //by now, we cant access schema info here. fix later
-  ObConstRawExpr *third_arg = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(in_expr) || OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(stmt), K(in_expr), KP_(ctx), KP(expr_factory));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_OP_IS, null_test))) {
-    LOG_WARN("failed to create a new expr", K(ret));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_NULL, null_expr))) {
-    LOG_WARN("failed to create a new expr", K(ret));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(T_BOOL, third_arg))) {
-    LOG_WARN("failed to create a new expr", K(ret));
-  } else if (OB_ISNULL(null_test) || OB_ISNULL(null_expr) || OB_ISNULL(third_arg)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to store expr", KP(null_test), KP(null_expr), KP(third_arg), K(ret));
-  } else {
-    ObObj val;
-    val.set_null();
-    null_expr->set_value(val);
-    val.set_bool(false);
-    third_arg->set_value(val);
-    null_test->set_relation_ids(in_expr->get_relation_ids());
-    if (OB_FAIL(null_test->set_param_exprs(in_expr, null_expr, third_arg))) {
-      LOG_WARN("fail to set_param_expr", K(in_expr), K(null_expr), K(third_arg), K(ret));
-    } else {
-      out_expr = null_test;
-    }
+  } else if (ObRawExprUtils::build_is_not_null_expr(*expr_factory,
+                                                    in_expr,
+                                                    false/*is_not_null*/,
+                                                    out_expr)) {
+    LOG_WARN("failed to create is null expr", K(ret));
+  } else if (OB_FAIL(out_expr->add_relation_ids(in_expr->get_relation_ids()))) {
+    LOG_WARN("failed to add relation ids", K(ret));
   }
   return ret;
 }
@@ -876,16 +876,13 @@ int ObWhereSubQueryPullup::generate_conditions(ObDMLStmt *stmt,
           LOG_WARN("failed to create anti join condition", K(ret));
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(cmp_expr->pull_relation_id_and_levels(subquery->get_current_level()))) {
-            LOG_WARN("pull expr relation ids failed", K(ret));
-          } else if (cmp_expr->get_expr_levels().has_member(
-                       subquery->get_current_level() - 1)) {
-            if (OB_FAIL(semi_conds.push_back(cmp_expr))) {
-              LOG_WARN("failed to push back semi conditions", K(ret));
-            }
-          } else {
+          if (left_arg->is_const_expr() && !right_arg->has_flag(CNT_DYNAMIC_PARAM)) {
             if (OB_FAIL(right_conds.push_back(cmp_expr))) {
               LOG_WARN("failed to push back right table conditions", K(ret));
+            }
+          } else {
+            if (OB_FAIL(semi_conds.push_back(cmp_expr))) {
+              LOG_WARN("failed to push back semi join conditions", K(ret));
             }
           }
         }
@@ -924,16 +921,14 @@ int ObWhereSubQueryPullup::generate_conditions(ObDMLStmt *stmt,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(cmp_expr->formalize(ctx_->session_info_))) {
           LOG_WARN("failed to formalize expr", K(ret));
-        } else if (OB_FAIL(cmp_expr->pull_relation_id_and_levels(subquery->get_current_level()))) {
-          LOG_WARN("failed to pull expr relation ids", K(ret));
-        } else if (cmp_expr->get_expr_levels().has_member(
-                     subquery->get_current_level() - 1)) {
-          if (OB_FAIL(semi_conds.push_back(cmp_expr))) {
-            LOG_WARN("failed to push back semi conditions", K(ret));
-          }
-        } else {
+        } else if (left_hand->is_const_expr() &&
+                   !right_vector->has_flag(CNT_DYNAMIC_PARAM)) {
           if (OB_FAIL(right_conds.push_back(cmp_expr))) {
             LOG_WARN("failed to push back right table conditions", K(ret));
+          }
+        } else {
+          if (OB_FAIL(semi_conds.push_back(cmp_expr))) {
+            LOG_WARN("failed to push back semi conditions", K(ret));
           }
         }
       }
@@ -1015,20 +1010,18 @@ int ObWhereSubQueryPullup::pullup_non_correlated_subquery_as_view(ObDMLStmt *stm
     LOG_WARN("failed to remove condition expr", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), subquery_expr))) {
     LOG_WARN("failed to remove subquery expr", K(ret));
-  } else if (OB_FAIL(subquery->pullup_stmt_level())) {
-    LOG_WARN("failed to pullup stmt level", K(ret));
-  } else if (OB_FAIL(subquery->adjust_view_parent_namespace_stmt(
-                                          stmt->get_parent_namespace_stmt()))) {
-    LOG_WARN("failed to adjust view parent namespace stmt", K(ret));
   } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *table_item,
                                                                stmt, column_exprs))) {
     LOG_WARN("failed to create columns for view", K(ret));
-  } else if (OB_FAIL(generate_conditions(stmt, column_exprs, subquery,
-                                         expr, new_conditions, new_conditions))) {
+  } else if (OB_FAIL(generate_conditions(stmt, column_exprs, subquery, expr, new_conditions, new_conditions))) {
     //首先根据left_hand和subquery的targetlist生成新的条件
     LOG_WARN("failed to generate new condition exprs", K(ret));
   } else if (OB_FAIL(generate_semi_info(stmt, expr, table_item, new_conditions, info))) {
     LOG_WARN("generate semi info failed", K(ret));
+  } else if (OB_FAIL(stmt->adjust_subquery_list())) {
+    LOG_WARN("failed to adjust subquery list", K(ret));
+  } else if (OB_FAIL(subquery->adjust_subquery_list())) {
+    LOG_WARN("failed to adjust subquery list", K(ret));
   } else if (OB_FAIL(subquery->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("formalize child stmt failed", K(ret));
   }
@@ -1156,7 +1149,6 @@ int ObWhereSubQueryPullup::get_single_set_subquery(ObDMLStmt &stmt,
                                                    ObIArray<SingleSetParam> &queries)
 {
   int ret = OB_SUCCESS;
-  const int32_t current_level = stmt.get_current_level();
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
@@ -1202,7 +1194,7 @@ int ObWhereSubQueryPullup::get_single_set_subquery(ObDMLStmt &stmt,
 
 int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
                                                    ObRawExpr *root_expr,
-                                                   ObQueryRefRawExpr *subquery_expr,
+                                                   ObQueryRefRawExpr *query_ref,
                                                    bool in_where_cond,
                                                    ObIArray<SingleSetParam> &queries)
 {
@@ -1214,22 +1206,24 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   ObSelectStmt *subquery = NULL;
   SingleSetParam param;
   bool is_valid = true;
-  if (OB_ISNULL(root_expr) || OB_ISNULL(subquery_expr) || 
-      OB_ISNULL(subquery = subquery_expr->get_ref_stmt())) {
+  OPT_TRACE("try to pullup single set subquery:", query_ref);
+  if (OB_ISNULL(root_expr) || OB_ISNULL(query_ref) ||
+      OB_ISNULL(subquery = query_ref->get_ref_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret), K(subquery));
   } else if (OB_FAIL(check_hint_allowed_unnest(stmt, *subquery, is_valid))) {
     LOG_WARN("failed to check hint", K(ret));
   } else if (!is_valid) {
     // do nothing
+    OPT_TRACE("hint reject transform");
   } else if (!subquery->is_spj() || subquery->has_subquery()) {
     is_valid = false;
+    OPT_TRACE("subquery is not spj or has subquery");
   } else if (OB_FAIL(subquery->get_column_exprs(columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(append(targets, columns))) {
     LOG_WARN("failed to append targets", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(subquery->get_condition_exprs(),
-                                                          subquery->get_current_level(),
                                                           const_exprs))) {
     LOG_WARN("failed to compute const exprs", K(ret));
   }
@@ -1240,52 +1234,41 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
       LOG_WARN("failed to push back const column", K(ret));
     }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < subquery->get_table_size(); ++i) {
-    bool is_correlated = false;
-    if (OB_ISNULL(subquery->get_table_item(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table item is null", K(ret));
-    } else if (!subquery->get_table_item(i)->is_generated_table()) {
-      // do nothing
-    } else if (OB_ISNULL(subquery->get_table_item(i)->ref_query_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ref query is null", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::is_correlated_subquery(*subquery->get_table_item(i)->ref_query_,
-                                                                is_correlated))) {
-      LOG_WARN("failed to check is correlated subquery", K(ret));
-    } else if (is_correlated) {
-      is_valid = false;
-    }
-  }
   //1.检查是否是single set query
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(ObTransformUtils::check_stmt_unique(subquery, ctx_->session_info_,
                                                     ctx_->schema_checker_, const_columns,
                                                     true /* strict */, is_valid))) {
       LOG_WARN("failed to check stmt unique", K(ret));
+    } else if (!is_valid) {
+      OPT_TRACE("not single set subquery");
     }
   }
   //2.check from item correlated
   if (OB_SUCC(ret) && is_valid) {
     bool is_correlated = false;
-    if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(subquery, is_correlated))) {
+    if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(*query_ref, subquery, is_correlated))) {
       LOG_WARN("failed to is joined table conditions correlated", K(ret));
     } else if (is_correlated) {
       is_valid = false;
-    } else if (OB_FAIL(ObTransformUtils::check_if_subquery_contains_correlated_table_item(*subquery, is_correlated))) {
+      OPT_TRACE("subquery contain correlated on condition");
+    } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(*query_ref,
+                                                                  *subquery,
+                                                                  is_correlated))) {
       LOG_WARN("failed to check if subquery contain correlated subquery", K(ret));
     } else if (is_correlated) {
       is_valid = false;
+      OPT_TRACE("subquery contain correlated table item");
     }
   }
   //3.检查是否以outer join上拉子查询
   if (OB_SUCC(ret) && is_valid) {
     bool is_null_reject = false;
     ObSEArray<const ObRawExpr *, 1> tmp;
-    param.query_ref_expr_ = subquery_expr;
+    param.query_ref_expr_ = query_ref;
     if (!in_where_cond) {
       param.use_outer_join_ = true;
-    } else if (OB_FAIL(tmp.push_back(subquery_expr))) {
+    } else if (OB_FAIL(tmp.push_back(query_ref))) {
       LOG_WARN("failed to push back query", K(ret));
     } else if (OB_FAIL(ObTransformUtils::is_null_reject_condition(root_expr,
                                                                   tmp,
@@ -1297,12 +1280,13 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
     //outer join不支持上拉semi info，否则有正确性问题
     if (param.use_outer_join_ && subquery->get_semi_info_size() > 0) {
       is_valid = false;
+      OPT_TRACE("subquery has semi info");
     }
   }
   if (OB_SUCC(ret) && is_valid && param.use_outer_join_) {
-    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < subquery_expr->get_param_count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < query_ref->get_param_count(); ++i) {
       ObRawExpr *param = NULL;
-      if (OB_ISNULL(param = subquery_expr->get_param_expr(i))) {
+      if (OB_ISNULL(param = query_ref->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param expr is null", K(ret));
       } else {
@@ -1332,7 +1316,6 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
       }
     }
     if (OB_SUCC(ret) && find) {
-      ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_ISNULL(ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid input", K(ret));
@@ -1345,13 +1328,18 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
         //find not null column, do nothing
       } else {
         is_valid = false;
+        OPT_TRACE("subquery has null propagate select expr, but not found not null column");
       }
     }
   }
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(queries.push_back(param))) {
       LOG_WARN("failed to push back single set query param", K(ret));
+    } else {
+      OPT_TRACE("subquery will pullup");
     }
+  } else {
+    OPT_TRACE("subquery can not pullup");
   }
   return ret;
 }
@@ -1397,15 +1385,8 @@ int ObWhereSubQueryPullup::unnest_single_set_subquery(ObDMLStmt *stmt,
       LOG_WARN("failed to merge tables to parent stmt", K(ret));
     } else if (OB_FAIL(trans_from_list(stmt, subquery, param.use_outer_join_))) {
       LOG_WARN("failed to transform from list", K(ret));
-    } else if (OB_FAIL(subquery->pullup_stmt_level())) {
-      LOG_WARN("failed to pullup stmt level", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::decorrelate(subquery))) {
+    } else if (OB_FAIL(ObTransformUtils::decorrelate(subquery, query_expr->get_exec_params()))) {
       LOG_WARN("failed to decorrelate subquery", K(ret));
-    } else if (OB_FAIL(subquery->adjust_view_parent_namespace_stmt(
-                         stmt->get_parent_namespace_stmt()))) {
-      LOG_WARN("failed to adjust view parent namespace stmt", K(ret));
-    } else if (OB_FAIL(append(stmt->get_deduced_exprs(), subquery->get_deduced_exprs()))) {
-      LOG_WARN("failed to append deduced expr", K(ret));
     } else if (OB_FAIL(append(stmt->get_part_exprs(), subquery->get_part_exprs()))) {
       LOG_WARN("failed to append part expr", K(ret));
     } else if (OB_FAIL(append(stmt->get_check_constraint_items(),
@@ -1416,10 +1397,10 @@ int ObWhereSubQueryPullup::unnest_single_set_subquery(ObDMLStmt *stmt,
     } else if (OB_FAIL(stmt->get_stmt_hint().merge_stmt_hint(subquery->get_stmt_hint(),
                                                              LEFT_HINT_DOMINATED))) {
       LOG_WARN("failed to merge subquery stmt hint", K(ret));
-    } else if (OB_FAIL(stmt->replace_inner_stmt_expr(query_refs, select_list))) {
-      LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), query_expr))) {
       LOG_WARN("remove expr failed", K(ret));
+    } else if (OB_FAIL(stmt->replace_relation_exprs(query_refs, select_list))) {
+      LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
@@ -1488,8 +1469,15 @@ int ObWhereSubQueryPullup::wrap_case_when(ObSelectStmt &child_stmt,
                                                               case_when_expr,
                                                               ctx_))) {
       LOG_WARN("failed to build case when expr", K(ret));
-    } else {
-      expr = case_when_expr;
+    } else if (OB_ISNULL(case_when_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("case when expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
+                                                               ctx_->session_info_,
+                                                               *case_when_expr,
+                                                               expr->get_result_type(),
+                                                               expr))) {
+      LOG_WARN("failed to add cast expr above", K(ret));
     }
   }
   return ret;

@@ -200,7 +200,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
              K(params_.allocator_), K(params_.schema_checker_),
              K(params_.session_info_), K(params_.query_ctx_), KP(params_.expr_factory_));
   } else if (T_SP_PRE_STMTS == parse_tree.type_) {
-    pl::ObPLPackageGuard package_guard(sql::PACKAGE_RESV_HANDLE);
+    pl::ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
     pl::ObPLResolver resolver(*(params_.allocator_),
                               *(params_.session_info_),
                               *(params_.schema_checker_->get_schema_guard()),
@@ -396,6 +396,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(SwitchTenant);
         break;
       }
+      case T_RECOVER: {
+        REGISTER_STMT_RESOLVER(RecoverTenant);
+        break;
+      }
       case T_REPORT_REPLICA: {
         REGISTER_STMT_RESOLVER(ReportReplica);
         break;
@@ -486,6 +490,18 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_MIGRATE_UNIT: {
         REGISTER_STMT_RESOLVER(MigrateUnit);
+        break;
+      }
+      case T_ADD_ARBITRATION_SERVICE: {
+        REGISTER_STMT_RESOLVER(AddArbitrationService);
+        break;
+      }
+      case T_REMOVE_ARBITRATION_SERVICE: {
+        REGISTER_STMT_RESOLVER(RemoveArbitrationService);
+        break;
+      }
+      case T_REPLACE_ARBITRATION_SERVICE: {
+        REGISTER_STMT_RESOLVER(ReplaceArbitrationService);
         break;
       }
       case T_RUN_JOB: {
@@ -660,7 +676,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_RESTORE_PREVIEW:
       case T_SHOW_QUERY_RESPONSE_TIME:
       case T_SHOW_STATUS:
-      case T_SHOW_CREATE_TRIGGER: {
+      case T_SHOW_CREATE_TRIGGER:
+      case T_SHOW_SEQUENCES: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }

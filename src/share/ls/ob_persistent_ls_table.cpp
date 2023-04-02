@@ -95,11 +95,13 @@ int ObPersistentLSTable::get(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const ObLSTable::Mode mode,
     ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
   const bool filter_flag_replica = true;
   const bool lock_replica = false;
+  UNUSED(mode);
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPersistentLSTable not init", KR(ret));
@@ -315,9 +317,12 @@ int ObPersistentLSTable::construct_ls_info(
   return ret;
 }
 
-int ObPersistentLSTable::update(const ObLSReplica &replica)
+int ObPersistentLSTable::update(
+    const ObLSReplica &replica,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
+  UNUSED(inner_table_only);
   DEBUG_SYNC(BEFORE_UPDATE_LS_META_TABLE);
   const bool lock_replica = replica.is_strong_leader();
   AutoTransProxy proxy(*sql_proxy_);
@@ -498,7 +503,7 @@ int ObPersistentLSTable::set_role_(
     LOG_WARN("convert leader_server ip to string failed", KR(ret), K(leader_server));
   } else if (OB_FAIL(sql.assign_fmt(
         "UPDATE %s "
-        "SET gmt_modified = now(6), role = ("
+        "SET role = ("
         "CASE WHEN svr_ip = '%s' AND svr_port = %d THEN %d "
         "ELSE %d end), proposal_id = ("
         "CASE WHEN svr_ip = '%s' AND svr_port = %d THEN proposal_id "
@@ -531,13 +536,10 @@ int ObPersistentLSTable::update_replica_(
     LOG_WARN("fill dml splicer failed", KR(ret), K(replica));
   } else {
     ObDMLExecHelper exec(sql_client, sql_tenant_id);
-    if (OB_FAIL(dml.add_gmt_modified())) {
-      LOG_WARN("add gmt modified to dml sql failed", KR(ret));
-    } else if (OB_FAIL(exec.exec_insert_update(table_name, dml, affected_rows))) {
+    if (OB_FAIL(exec.exec_insert_update(table_name, dml, affected_rows))) {
       //insert_update means if row exist update, if not exist insert
       LOG_WARN("execute update failed", KR(ret), K(replica));
-    } else if (is_zero_row(affected_rows) || affected_rows > 2) {
-      // only insert on duplicate key update (insert_update) check affected single row
+    } else if (OB_UNLIKELY(affected_rows < 0 || affected_rows > 2)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected affected_rows", KR(ret), K(affected_rows));
     }
@@ -715,9 +717,11 @@ int ObPersistentLSTable::construct_ls_infos_(
 int ObPersistentLSTable::remove(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    const ObAddr &server)
+    const ObAddr &server,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
+  UNUSED(inner_table_only);
   char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   ObSqlString sql;
   const uint64_t sql_tenant_id = get_private_table_exec_tenant_id(tenant_id);

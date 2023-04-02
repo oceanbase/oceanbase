@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"                      // Serialization
 #include "lib/ob_name_def.h"
 #include "lib/utility/ob_print_utils.h"         // Print*
+#include "share/scn.h"                                // SCN
 #include "lsn.h"                                // LSN
 
 namespace oceanbase
@@ -43,9 +44,9 @@ public:
   int generate(const bool is_raw_write,
                const bool is_padding_log,
                const LogWriteBuf &log_write_buf,
-               int64_t data_len,
-               int64_t max_timestamp,
-               int64_t log_id,
+               const int64_t data_len,
+               const share::SCN &max_scn,
+               const int64_t log_id,
                const LSN &committed_end_lsn,
                const int64_t &log_proposal_id,
                int64_t &data_checksum);
@@ -54,7 +55,7 @@ public:
   LogGroupEntryHeader& operator=(const LogGroupEntryHeader &header);
   int32_t get_data_len() const { return group_size_; }
   int64_t get_accum_checksum() const { return accumulated_checksum_; }
-  int64_t get_max_timestamp() const { return max_ts_; }
+  const share::SCN &get_max_scn() const { return max_scn_; }
   int64_t get_log_id() const { return log_id_; }
   const int64_t &get_log_proposal_id() const { return proposal_id_; }
   const LSN &get_committed_end_lsn() const { return committed_end_lsn_; }
@@ -85,7 +86,7 @@ public:
 
   int truncate(const char *buf,
                const int64_t data_len,
-               const int64_t cut_ts,
+               const share::SCN &cut_scn,
                const int64_t pre_accum_checksum);
 
   NEED_SERIALIZE_AND_DESERIALIZE;
@@ -95,7 +96,7 @@ public:
                "group_size", group_size_,
                "proposal_id", proposal_id_,
                "committed_lsn", committed_end_lsn_,
-               "max_ts", max_ts_,
+               "max_scn", max_scn_,
                "accumulated_checksum", accumulated_checksum_,
                "log_id", log_id_,
                "flag", flag_);
@@ -121,7 +122,7 @@ private:
   static constexpr int64_t PADDING_LOG_DATA_CHECKSUM = 0;  // padding log的data_checksum为0
 private:
   // Binary visualization, for LogGroupEntryHeader, its' magic number
-  // is 0x4752, means GH(group header)
+  // is 0x4752, means GR(group header)
   int16_t magic_;
   // Upgrade compatible
   int16_t version_;
@@ -131,8 +132,8 @@ private:
   int64_t proposal_id_;
   // The max committed log offset before this log
   LSN committed_end_lsn_;
-  // The max timestamp of this log
-  int64_t max_ts_;
+  // The max scn of this log
+  share::SCN max_scn_;
   // The accumulated checksum before this log, including this log,
   // not including log header
   int64_t accumulated_checksum_;

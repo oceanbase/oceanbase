@@ -129,22 +129,22 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
       for (i = 0; OB_SUCC(ret) && i < max_table_num; ++i) {
         table_node = lib::is_oracle_mode() ? parse_tree.children_[TABLE_LIST_NODE]
             : parse_tree.children_[TABLE_LIST_NODE]->children_[i];
+        ObString dblink_name;
+        bool has_reverse_link = false;
+        bool has_dblink_node = false;
         if (NULL == table_node) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "table_node is null", K(ret));
-        } else if (table_node->num_child_ >= 3 && 
-                   NULL != table_node->children_[2] && 
-                   T_IDENT == table_node->children_[2]->type_ &&
-                   NULL != table_node->children_[2]->str_value_) {
-          // Check whether the child nodes of table_node have dblink ParseNode,
-          // If so, error will be reported.
-          if (0 != table_node->children_[2]->str_len_) { // To match the error reporting behavior of Oracle
+        } else if (OB_FAIL(resolve_dblink_name(table_node, dblink_name, has_reverse_link, has_dblink_node))) {
+          SQL_RESV_LOG(WARN, "failed to resolv dblink name", K(ret));
+        } else if (has_dblink_node) {
+          if (has_reverse_link || !dblink_name.empty()) {
             ret = OB_ERR_DDL_ON_REMOTE_DATABASE;
-            SQL_RESV_LOG(WARN, "drop table on remote database by dblink.", K(ret));
+            SQL_RESV_LOG(WARN, "drop table on remote database by dblink", K(ret));
             LOG_USER_ERROR(OB_ERR_DDL_ON_REMOTE_DATABASE);
           } else {
             ret = OB_ERR_DATABASE_LINK_EXPECTED;
-            SQL_RESV_LOG(WARN, "miss database link.", K(ret));
+            SQL_RESV_LOG(WARN, "database link name expected", K(ret));
             LOG_USER_ERROR(OB_ERR_DATABASE_LINK_EXPECTED);
           }
         } else {

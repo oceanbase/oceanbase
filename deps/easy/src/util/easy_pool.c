@@ -82,7 +82,7 @@ void easy_pool_clear(easy_pool_t *pool)
 
 void easy_pool_destroy(easy_pool_t *pool)
 {
-    EASY_STAT_TIME_GUARD((ev_malloc_count++, ev_malloc_time += cost), "easy_pool_destroy");
+    EASY_STAT_TIME_GUARD(ev_malloc_count, ev_malloc_time);
     easy_pool_clear(pool);
     assert(pool->ref == 0);
 #ifdef EASY_DEBUG_MAGIC
@@ -93,7 +93,7 @@ void easy_pool_destroy(easy_pool_t *pool)
 
 void *easy_pool_alloc_ex(easy_pool_t *pool, uint32_t size, int align)
 {
-    EASY_STAT_TIME_GUARD((ev_malloc_count++, ev_malloc_time += cost), "easy_pool_alloc: size=%d", size);
+    EASY_STAT_TIME_GUARD(ev_malloc_count, ev_malloc_time);
     uint8_t                 *m;
     easy_pool_t             *p;
     int                     dsize;

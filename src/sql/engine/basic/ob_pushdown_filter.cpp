@@ -18,6 +18,7 @@
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -162,12 +163,19 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
   } else if (ObRawExpr::EXPR_COLUMN_REF != child->get_expr_class()) {
     need_check = false;
   } else {
+    const ObObjMeta &col_meta = child->get_result_meta();
     for (int64_t i = 1; OB_SUCC(ret) && need_check && i < raw_expr->get_param_count(); i++) {
       if (OB_ISNULL(child = raw_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null child expr", K(ret), K(i));
       } else {
+        const ObObjMeta &param_meta = child->get_result_meta();
         need_check = child->is_const_expr();
+        if (need_check && !param_meta.is_null()) {
+          const ObCmpOp cmp_op = sql::ObRelationalExprOperator::get_cmp_op(raw_expr->get_expr_type());
+          obj_cmp_func cmp_func = nullptr;
+          need_check = ObObjCmpFuncs::can_cmp_without_cast(col_meta, param_meta, cmp_op, cmp_func);
+        }
       }
     }
   }
@@ -720,14 +728,14 @@ int ObPushdownFilterExecutor::find_evaluated_datums(
     ObExpr *expr, const ObIArray<ObExpr*> &calc_exprs, ObIArray<ObExpr*> &eval_exprs)
 {
   int ret = OB_SUCCESS;
-  if (0 < expr->arg_cnt_ && is_contain(calc_exprs, expr)) {
+  if (is_contain(calc_exprs, expr)) {
     if (OB_FAIL(eval_exprs.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     }
-  }
-  for (uint32_t i = 0; i < expr->arg_cnt_ && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(find_evaluated_datums(expr->args_[i], calc_exprs, eval_exprs))) {
-      LOG_WARN("failed to find evaluated datums", K(ret));
+    for (uint32_t i = 0; i < expr->arg_cnt_ && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(find_evaluated_datums(expr->args_[i], calc_exprs, eval_exprs))) {
+        LOG_WARN("failed to find evaluated datums", K(ret));
+      }
     }
   }
   return ret;
@@ -819,6 +827,16 @@ int ObPushdownFilterExecutor::init_filter_param(
           } else if (!def_cell.is_nop_value()) {
             if (OB_FAIL(default_datum.from_obj(def_cell))) {
               LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
+            } else if (col_params.at(idx)->get_meta_type().is_lob_storage() && !def_cell.is_null()) {
+              // lob def value must have no lob header when not null
+              // When do lob pushdown, should add lob header for default value
+              ObString data = default_datum.get_string();
+              ObString out;
+              if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, data, out))) {
+                LOG_WARN("failed to fill lob header for column.", K(idx), K(def_cell), K(data));
+              } else {
+                default_datum.set_string(out);
+              }
             }
           }
           if (OB_FAIL(ret)) {
@@ -1078,9 +1096,13 @@ int ObBlackFilterExecutor::filter(ObObj *objs, int64_t col_cnt, bool &filtered)
     ObEvalCtx &eval_ctx = op_.get_eval_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < filter_.column_exprs_.count(); ++i) {
       filter_.column_exprs_.at(i)->get_eval_info(eval_ctx).projected_ = true;
-      ObDatum &expr_datum = filter_.column_exprs_.at(i)->locate_datum_for_write(eval_ctx);
+      ObExpr * const &expr = filter_.column_exprs_.at(i);
+      ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
       if (OB_FAIL(expr_datum.from_obj(objs[i]))) {
         LOG_WARN("Failed to convert object from datum", K(ret), K(objs[i]));
+      } else if (is_lob_storage(objs[i].get_type()) &&
+                 OB_FAIL(ob_adjust_lob_datum(objs[i], expr->obj_meta_, allocator_, expr_datum))) {
+        LOG_WARN("adjust lob datum failed", K(ret), K(objs[i]), K(expr->obj_meta_));
       }
     }
     if (OB_SUCC(ret) && OB_FAIL(filter(eval_ctx, filtered))) {
@@ -1129,7 +1151,12 @@ int ObBlackFilterExecutor::init_evaluated_datums()
     }
     FOREACH_CNT_X(e, eval_exprs, OB_SUCC(ret)) {
       eval_infos_[n_eval_infos_++] = &(*e)->get_eval_info(op_.get_eval_ctx());
-      datum_eval_flags_[n_datum_eval_flags_++] = &(*e)->get_evaluated_flags(op_.get_eval_ctx());
+      if (op_.is_vectorized() && (*e)->is_batch_result()) {
+        datum_eval_flags_[n_datum_eval_flags_++] = &(*e)->get_evaluated_flags(op_.get_eval_ctx());
+      }
+    }
+    if (OB_SUCC(ret)) {
+      clear_evaluated_infos();
     }
   }
   return ret;
@@ -1404,28 +1431,68 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     access_exprs_(alloc),
     max_batch_size_(0),
     pushdown_filters_(alloc),
-    filters_before_index_back_(alloc),
     pd_storage_flag_(0),
     pd_storage_filters_(alloc),
-    pd_storage_index_back_filters_(alloc),
     pd_storage_aggregate_output_(alloc)
 {
 }
 
-OB_SERIALIZE_MEMBER(ObPushdownExprSpec,
-                    calc_exprs_,
-                    access_exprs_,
-                    max_batch_size_,
-                    pushdown_filters_,
-                    filters_before_index_back_,
-                    pd_storage_flag_,
-                    pd_storage_filters_,
-                    pd_storage_index_back_filters_,
-                    pd_storage_aggregate_output_);
+OB_DEF_SERIALIZE(ObPushdownExprSpec)
+{
+  int ret = OB_SUCCESS;
+  ExprFixedArray fake_filters_before_index_back(CURRENT_CONTEXT->get_allocator());
+  ObPushdownFilter fake_pd_storage_index_back_filters(CURRENT_CONTEXT->get_allocator());
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              calc_exprs_,
+              access_exprs_,
+              max_batch_size_,
+              pushdown_filters_,
+              fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
+              pd_storage_flag_,
+              pd_storage_filters_,
+              fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
+              pd_storage_aggregate_output_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObPushdownExprSpec)
+{
+  int ret = OB_SUCCESS;
+  ExprFixedArray fake_filters_before_index_back(CURRENT_CONTEXT->get_allocator());
+  ObPushdownFilter fake_pd_storage_index_back_filters(CURRENT_CONTEXT->get_allocator());
+  LST_DO_CODE(OB_UNIS_DECODE,
+              calc_exprs_,
+              access_exprs_,
+              max_batch_size_,
+              pushdown_filters_,
+              fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
+              pd_storage_flag_,
+              pd_storage_filters_,
+              fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
+              pd_storage_aggregate_output_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
+{
+  int64_t len = 0;
+  ExprFixedArray fake_filters_before_index_back(CURRENT_CONTEXT->get_allocator());
+  ObPushdownFilter fake_pd_storage_index_back_filters(CURRENT_CONTEXT->get_allocator());
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              calc_exprs_,
+              access_exprs_,
+              max_batch_size_,
+              pushdown_filters_,
+              fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
+              pd_storage_flag_,
+              pd_storage_filters_,
+              fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
+              pd_storage_aggregate_output_);
+  return len;
+}
 
 ObPushdownOperator::ObPushdownOperator(ObEvalCtx &eval_ctx, const ObPushdownExprSpec &expr_spec)
   : pd_storage_filters_(nullptr),
-    pd_storage_index_back_filters_(nullptr),
     eval_ctx_(eval_ctx),
     expr_spec_(expr_spec)
 {
@@ -1442,17 +1509,6 @@ int ObPushdownOperator::init_pushdown_storage_filter()
                                                 *this))) {
         LOG_WARN("failed to create filter executor", K(ret));
       } else if (OB_ISNULL(pd_storage_filters_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("filter executor is null", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(expr_spec_.pd_storage_index_back_filters_.get_pushdown_filter())) {
-      if (OB_FAIL(filter_exec_constructor.apply(
-                  expr_spec_.pd_storage_index_back_filters_.get_pushdown_filter(),
-                  pd_storage_index_back_filters_,
-                  *this))) {
-        LOG_WARN("failed to create filter executor", K(ret));
-      } else if (OB_ISNULL(pd_storage_index_back_filters_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter executor is null", K(ret));
       }

@@ -178,6 +178,10 @@ public:
                                  bool force_local_retry = false,
                                  bool is_inner_sql = false,
                                  bool is_from_pl = false);
+  void set_packet_retry(const int err) {
+    retry_type_ = RETRY_TYPE_PACKET;
+    retry_err_code_ = err;
+  }
   void clear_state_before_each_retry(sql::ObQueryRetryInfo &retry_info)
   {
     retry_type_ = RETRY_TYPE_NONE;
@@ -286,6 +290,7 @@ private:
   static void trx_can_not_serialize_proc(ObRetryParam &v);
   static void try_lock_row_conflict_proc(ObRetryParam &v);
   static void location_error_proc(ObRetryParam &v);
+  static void nonblock_location_error_proc(ObRetryParam &v);
   static void location_error_nothing_readable_proc(ObRetryParam &v);
   static void peer_server_status_uncertain_proc(ObRetryParam &v);
   static void schema_error_proc(ObRetryParam &v);
@@ -293,6 +298,8 @@ private:
   static void long_wait_retry_proc(ObRetryParam &v);
   static void short_wait_retry_proc(ObRetryParam &v);
   static void force_local_retry_proc(ObRetryParam &v);
+  static void switch_consumer_group_retry_proc(ObRetryParam &v);
+  static void timeout_proc(ObRetryParam &v);
 
 
   // processors for inner SQL error codes only

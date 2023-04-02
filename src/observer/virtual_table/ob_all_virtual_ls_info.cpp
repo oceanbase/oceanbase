@@ -162,7 +162,7 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // weak_read_timestamp
-          cur_row_.cells_[i].set_uint64(ls_info.weak_read_timestamp_ < 0 ? 0 : ls_info.weak_read_timestamp_);
+          cur_row_.cells_[i].set_uint64(ls_info.weak_read_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // need_rebuild
@@ -170,9 +170,8 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
-          //TODO: SCN
           // clog_checkpoint_ts
-          cur_row_.cells_[i].set_uint64(ls_info.checkpoint_ts_ < 0 ? 0 : ls_info.checkpoint_ts_);
+          cur_row_.cells_[i].set_uint64(!ls_info.checkpoint_scn_.is_valid() ? 0 : ls_info.checkpoint_scn_.get_val_for_tx());
           break;
         case OB_APP_MIN_COLUMN_ID + 10:
           // clog_checkpoint_lsn
@@ -185,6 +184,10 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
         case OB_APP_MIN_COLUMN_ID + 12:
           // rebuild_seq
           cur_row_.cells_[i].set_int(ls_info.rebuild_seq_);
+          break;
+        case OB_APP_MIN_COLUMN_ID + 13:
+          // clog_checkpoint_ts
+          cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_tx());
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

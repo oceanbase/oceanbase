@@ -19,6 +19,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace memtable
 {
 
@@ -26,7 +27,7 @@ ObTxCallbackList::ObTxCallbackList(ObTransCallbackMgr &callback_mgr)
   : head_(),
     length_(0),
     batch_checksum_(),
-    checksum_log_ts_(0),
+    checksum_scn_(SCN::min_scn()),
     checksum_(0),
     tmp_checksum_(0),
     callback_mgr_(callback_mgr),
@@ -41,7 +42,7 @@ void ObTxCallbackList::reset()
   head_.set_next(&head_);
   checksum_ = 0;
   tmp_checksum_ = 0;
-  checksum_log_ts_ = 0;
+  checksum_scn_ = SCN::min_scn();
   batch_checksum_.reset();
   length_ = 0;
 }
@@ -149,20 +150,20 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   SpinLockGuard guard(latch_);
 
   ObRemoveCallbacksForFastCommitFunctor functor(calc_need_remove_count_for_fast_commit_());
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "remove callbacks for fast commit wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
-    ensure_checksum_(functor.get_checksum_last_log_ts());
-    has_remove = OB_INVALID_TIMESTAMP != functor.get_checksum_last_log_ts();
+    ensure_checksum_(functor.get_checksum_last_scn());
+    has_remove = SCN::min_scn() != functor.get_checksum_last_scn();
   }
 
   return ret;
 }
 
-int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove)
+int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove, const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
@@ -176,21 +177,21 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable
         return false;
       }
     }, // condition for stop
-    [memtable_for_remove](ObITransCallback *callback) -> bool {
-      if (callback->get_log_ts() > memtable_for_remove->get_key().get_end_log_ts()) {
+    [max_applied_scn](ObITransCallback *callback) -> bool {
+      if (callback->get_scn() > max_applied_scn) {
         return true;
       } else {
         return false;
       }
     },
     false /*need_remove_data*/);
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "remove callbacks for remove memtable wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_release_memtable_callback_remove_cnt(functor.get_remove_cnt());
-    ensure_checksum_(functor.get_checksum_last_log_ts());
+    ensure_checksum_(functor.get_checksum_last_scn());
     if (functor.get_remove_cnt() > 0) {
       TRANS_LOG(INFO, "remove callbacks for remove memtable", KP(memtable_for_remove),
                 K(functor), K(*this));
@@ -213,15 +214,16 @@ int ObTxCallbackList::remove_callbacks_for_rollback_to(const int64_t to_seq_no)
         return false;
       }
     }, true/*need_remove_data*/);
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "remove callback by rollback wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_rollback_to_callback_remove_cnt(functor.get_remove_cnt());
-    ensure_checksum_(functor.get_checksum_last_log_ts());
+    ensure_checksum_(functor.get_checksum_last_scn());
     TRANS_LOG(DEBUG, "remove callbacks for rollback to", KP(to_seq_no), K(functor), K(*this));
   }
+
 
   return ret;
 }
@@ -281,18 +283,18 @@ int ObTxCallbackList::get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyA
   return ret;
 }
 
-int ObTxCallbackList::tx_calc_checksum_before_log_ts(const int64_t log_ts)
+int ObTxCallbackList::tx_calc_checksum_before_scn(const SCN scn)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
 
-  ObCalcChecksumFunctor functor(log_ts);
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  ObCalcChecksumFunctor functor(scn);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "calc checksum  failed", K(ret));
   } else {
-    ensure_checksum_(functor.get_checksum_last_log_ts());
+    ensure_checksum_(functor.get_checksum_last_scn());
     TRANS_LOG(INFO, "calc checksum before log ts", K(functor), K(*this));
   }
 
@@ -306,12 +308,12 @@ int ObTxCallbackList::tx_calc_checksum_all()
   SpinLockGuard guard(latch_);
 
   ObCalcChecksumFunctor functor;
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "calc checksum wont report error", K(ret), K(functor));
   } else {
-    ensure_checksum_(INT64_MAX);
+    ensure_checksum_(SCN::max_scn());
   }
 
   return ret;
@@ -383,20 +385,20 @@ int ObTxCallbackList::tx_print_callback()
   return ret;
 }
 
-int ObTxCallbackList::replay_fail(const int64_t log_timestamp)
+int ObTxCallbackList::replay_fail(const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObRemoveSyncCallbacksWCondFunctor functor(
     // condition for remove
-    [log_timestamp](ObITransCallback *callback) -> bool {
-      if (log_timestamp == callback->get_log_ts()) {
+    [scn](ObITransCallback *callback) -> bool {
+      if (scn == callback->get_scn()) {
         return true;
       } else {
         return false;
       }
     }, // condition for stop
-    [log_timestamp](ObITransCallback *callback) -> bool {
-      if (log_timestamp != callback->get_log_ts()) {
+    [scn](ObITransCallback *callback) -> bool {
+      if (scn != callback->get_scn()) {
         return true;
       } else {
         return false;
@@ -411,39 +413,39 @@ int ObTxCallbackList::replay_fail(const int64_t log_timestamp)
     TRANS_LOG(ERROR, "replay fail failed", K(ret), K(functor));
   } else {
     TRANS_LOG(INFO, "replay callbacks failed and remove callbacks succeed",
-              K(functor), K(*this), K(log_timestamp));
+              K(functor), K(*this), K(scn));
   }
 
   return OB_SUCCESS;
 }
 
-void ObTxCallbackList::get_checksum_and_log_ts(uint64_t &checksum, int64_t &checksum_log_ts)
+void ObTxCallbackList::get_checksum_and_scn(uint64_t &checksum, SCN &checksum_scn)
 {
   SpinLockGuard guard(latch_);
   checksum = batch_checksum_.calc();
-  checksum_log_ts = checksum_log_ts_;
-  TRANS_LOG(INFO, "get checksum and checksum_log_ts", KPC(this), K(checksum), K(checksum_log_ts));
+  checksum_scn = checksum_scn_;
+  TRANS_LOG(INFO, "get checksum and checksum_scn", KPC(this), K(checksum), K(checksum_scn));
 }
 
-void ObTxCallbackList::update_checksum(const uint64_t checksum, const int64_t checksum_log_ts)
+void ObTxCallbackList::update_checksum(const uint64_t checksum, const SCN checksum_scn)
 {
   SpinLockGuard guard(latch_);
   batch_checksum_.set_base(checksum);
-  ATOMIC_STORE(&checksum_log_ts_, checksum_log_ts);
-  TRANS_LOG(INFO, "update checksum and checksum_log_ts", KPC(this), K(checksum), K(checksum_log_ts));
+  checksum_scn_.atomic_set(checksum_scn);
+  TRANS_LOG(INFO, "update checksum and checksum_scn", KPC(this), K(checksum), K(checksum_scn));
 }
 
-void ObTxCallbackList::ensure_checksum_(const int64_t log_ts)
+void ObTxCallbackList::ensure_checksum_(const SCN scn)
 {
-  if (OB_INVALID_TIMESTAMP == log_ts) {
+  if (SCN::min_scn() == scn) {
     // Case1: no callback is invovled
-  } else if (log_ts < checksum_log_ts_) {
+  } else if (scn < checksum_scn_) {
     // Case2: no checksum is calculated
-  } else if (INT64_MAX == log_ts) {
-    checksum_log_ts_ = INT64_MAX;
+  } else if (SCN::max_scn() == scn) {
+    checksum_scn_ = SCN::max_scn();
     ATOMIC_STORE(&checksum_, batch_checksum_.calc() ? : 1);
   } else {
-    checksum_log_ts_ = log_ts + 1;
+    checksum_scn_ = SCN::plus(scn, 1);
     ATOMIC_STORE(&tmp_checksum_, batch_checksum_.calc() ? : 1);
   }
 }
@@ -459,7 +461,7 @@ DEF_TO_STRING(ObTxCallbackList)
   J_OBJ_START();
   J_KV(KPC(get_trans_ctx()),
        K_(length),
-       K_(checksum_log_ts),
+       K_(checksum_scn),
        K_(checksum),
        K_(tmp_checksum));
   J_OBJ_END();

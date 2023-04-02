@@ -98,7 +98,11 @@ int ObProto20Utils::do_packet_encode(ObProtoEncodeParam &param) {
       ObEasyBuffer easy_buffer(*param.ez_buf_);
 
       //SET_OB_LOG_TRACE_MODE();    // prevent printing log
+      int32_t old_len = param.seri_size_;
       ret = param.pkt_->encode(easy_buffer.last(), easy_buffer.write_avail_size(), param.seri_size_);
+      if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+        param.conn_->pkt_rec_wrapper_.record_send_mysql_pkt(*param.pkt_, param.seri_size_ - old_len);
+      }
       //if (((OB_SIZE_OVERFLOW != ret) && (OB_BUF_NOT_ENOUGH != ret) && (common::OB_SUCCESS != ret))
       //     || ((IS_LOG_ENABLED(INFO) && (OB_LOG_NEED_TO_PRINT(DEBUG))))) {
       //  PRINT_OB_LOG_TRACE_BUF(INFO);
@@ -138,6 +142,9 @@ inline int ObProto20Utils::do_proto20_packet_encode(ObProtoEncodeParam &param)
     switch (proto20_context.next_step_) {
       case START_TO_FILL_STEP: {
         proto20_context.next_step_ = RESERVE_HEADER_STEP;
+        if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+          param.conn_->pkt_rec_wrapper_.begin_seal_obp20_pkt();
+        }
         break;
       }
       case RESERVE_HEADER_STEP: {
@@ -181,29 +188,18 @@ inline int ObProto20Utils::do_proto20_packet_encode(ObProtoEncodeParam &param)
         proto20_context.curr_proto20_packet_start_pos_ += (param.ez_buf_->last - param.ez_buf_->pos);
 
         // reset extra info
-        if (param.proto20_context_->has_extra_info_) {
-          if(OB_ISNULL(param.extra_info_ecds_)) {
-            // do nothing
-          } else {
-            param.extra_info_ecds_->reset();
-          }
-
-          if(OB_ISNULL(param.extra_info_kvs_)) {
-            // do nothing
-          } else {
-            param.extra_info_kvs_->reset();
-          }
-          param.proto20_context_->has_extra_info_ = false;
-        }
-
-        if (param.is_large_packet_cached_avail()) {
-          // next packet will encode from beginning
-          param.ez_buf_->pos = param.ez_buf_->last;
-          // continue to encode next split packet
-          proto20_context.next_step_ = START_TO_FILL_STEP;
+        if (param.proto20_context_->has_extra_info_ && !is_the_last_packet(param) && OB_FAIL(reset_extra_info(param))) {
+          LOG_WARN("failed to reset extra info encoders", K(ret));
         } else {
-          param.need_flush_ = true; // fill succ, flush
-          need_break = true;
+          if (param.is_large_packet_cached_avail()) {
+            // next packet will encode from beginning
+            param.ez_buf_->pos = param.ez_buf_->last;
+            // continue to encode next split packet
+            proto20_context.next_step_ = START_TO_FILL_STEP;
+          } else {
+            param.need_flush_ = true; // fill succ, flush
+            need_break = true;
+          }
         }
         break;
       }
@@ -310,7 +306,7 @@ int ObProto20Utils::encode_new_extra_info(char *buffer, int64_t length, int64_t 
       ret = OB_SIZE_OVERFLOW;
       OB_LOG(WARN,"buffer size overflow", K(ret), K(pos), K(length));
     } else {
-      MEMSET(buffer+pos, 0x00, length-pos);
+      //MEMSET(buffer+pos, 0x00, length-pos);
       pos += 4;
 
       for (int64_t i = 0; OB_SUCC(ret) && i < extra_info->count(); i++) {
@@ -320,7 +316,8 @@ int ObProto20Utils::encode_new_extra_info(char *buffer, int64_t length, int64_t 
           LOG_ERROR("invalid encoder", K(ecd), K(i), K(ret));
         } else if (OB_FAIL(ecd->serialize(buffer, length, pos))) {
           LOG_WARN("fail to serialize key", K(ret));
-       } else {
+        } else if (FALSE_IT(ecd->is_serial_ = true)) {
+        } else {
           LOG_TRACE("encode extra_info val", KPHEX(buffer+org_pos, pos-org_pos),
                                                               K(pos), K(org_pos));
         }
@@ -465,6 +462,9 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
         easy_buffer.write(seri_size);
         param.is_pkt_encoded_ = true;
         // noting break, wait to encode next one
+        if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+          param.conn_->pkt_rec_wrapper_.record_send_mysql_pkt(*param.pkt_, seri_size);
+        }
         need_break = true;
       } else if (split_count > 1) {
         if (OB_FAIL(param.save_large_packet(easy_buffer.last(), seri_size))) {
@@ -476,6 +476,10 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
             easy_buffer.write(ObProtoEncodeParam::PROTO20_SPLIT_LEN);
             if (OB_FAIL(param.add_pos(ObProtoEncodeParam::PROTO20_SPLIT_LEN))) {
               LOG_ERROR("fail to add pos", K(ObProtoEncodeParam::PROTO20_SPLIT_LEN), K(ret));
+            }
+            if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+              param.conn_->pkt_rec_wrapper_.record_send_mysql_pkt(*param.pkt_,
+                                                ObProtoEncodeParam::PROTO20_SPLIT_LEN);
             }
           }
           proto20_context.next_step_ = FILL_TAILER_STEP;
@@ -555,16 +559,14 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
 
   flag.st_flags_.OB_IS_LAST_PACKET = (ObProto20Utils::is_the_last_packet(param) ? 1 : 0);
   flag.st_flags_.OB_IS_NEW_EXTRA_INFO = proto20_context.is_new_extra_info_;
+  flag.st_flags_.OB_TXN_FREE_ROUTE = proto20_context.txn_free_route_ ? 1 : 0;
   uint16_t reserved = 0;
   uint16_t header_checksum = 0;
   int64_t pos = 0;
   char *start = easy_buffer.begin();
-  observer::ObSMConnection *conn = NULL;
   if (OB_ISNULL(param.req_)) {
     LOG_ERROR("request is null");
-  } else if (FALSE_IT(conn = reinterpret_cast<observer::ObSMConnection *>(
-    SQL_REQ_OP.get_sql_session(param.req_)))) {
-  } else if (FALSE_IT(packet_seq = conn->proto20_pkt_context_.proto20_last_pkt_seq_ + 1)) {
+  } else if (FALSE_IT(packet_seq = param.conn_->proto20_pkt_context_.proto20_last_pkt_seq_ + 1)) {
   } else if (OB_UNLIKELY(compress_len > OB_MYSQL_MAX_PAYLOAD_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid compress_len", K(compress_len), K(OB_MYSQL_MAX_PAYLOAD_LENGTH), K(ret));
@@ -591,8 +593,12 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   } else if (OB_FAIL(ObMySQLUtil::store_int2(start, proto20_context.header_len_, reserved, pos))) {
     LOG_ERROR("fail to store int2", K(ret));
   } else {
-    ++conn->proto20_pkt_context_.proto20_last_pkt_seq_;
+    ++param.conn_->proto20_pkt_context_.proto20_last_pkt_seq_;
     // calc header checksum
+    if (param.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+      param.conn_->pkt_rec_wrapper_.end_seal_obp20_pkt((uint32_t)(payload_len), flag, packet_seq, 0,
+                                      request_id, compress_len, compress_seq);
+    }
     if (!proto20_context.is_checksum_off_) {
       header_checksum = ob_crc16(0, reinterpret_cast<uint8_t *>(start), pos);
     }
@@ -600,7 +606,7 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
       LOG_ERROR("fail to store int2", K(ret));
     } else {
       proto20_context.next_step_ = FILL_DONE_STEP;
-      LOG_DEBUG("fill proto20 header succ", K(compress_len), K(compress_seq), K(uncompress_len),
+      LOG_TRACE("fill proto20 header succ", K(compress_len), K(compress_seq), K(uncompress_len),
                 K(magic_num), K(version), K(connid), K(request_id), K(packet_seq), K(payload_len),
                 K(flag.flags_), K(reserved), K(header_checksum));
     }
@@ -646,6 +652,49 @@ inline bool ObProto20Utils::has_extra_info(const ObProtoEncodeParam &param)
   }
 
   return bret;
+}
+
+int ObProto20Utils::reset_extra_info(ObProtoEncodeParam &param) {
+  int ret = OB_SUCCESS;
+
+  if(OB_ISNULL(param.proto20_context_)) {
+    // do nothing
+  } else if (param.proto20_context_->is_new_extra_info_) {
+    if(OB_ISNULL(param.extra_info_ecds_)) {
+      // do nothing
+    } else {
+      ObSEArray<Obp20Encoder*, 1> tmp_ecds;
+      for (int64_t i = 0; OB_SUCC(ret) && i < param.extra_info_ecds_->count(); i++) {
+        if (OB_ISNULL(param.extra_info_ecds_->at(i))) {
+          // do nothing
+        } else if (!param.extra_info_ecds_->at(i)->is_serial_
+            && OB_FAIL(tmp_ecds.push_back(param.extra_info_ecds_->at(i)))) {
+          LOG_WARN("failed to push back encoders", K(ret), K(i));
+        }
+      }
+      if (OB_FAIL(ret)) {
+       // do nothing
+      } else {
+        param.extra_info_ecds_->reset();
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_ecds.count(); i++) {
+          if (OB_FAIL(param.extra_info_ecds_->push_back(tmp_ecds.at(i)))) {
+            LOG_WARN("failed to push back encoders", K(ret), K(i));
+          }
+        }
+        if (0 == param.extra_info_ecds_->count()) {
+          param.proto20_context_->has_extra_info_ = false;
+        }
+      }
+    }
+  } else {
+    if (OB_ISNULL(param.extra_info_kvs_)) {
+      // do nothing
+    } else {
+      param.extra_info_kvs_->reset();
+      param.proto20_context_->has_extra_info_ = false;
+    }
+  }
+  return ret;
 }
 
 } //end of namespace obmysql

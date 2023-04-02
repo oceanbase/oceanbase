@@ -57,8 +57,16 @@ const int64_t OB_DAS_MAX_PACKET_SIZE = 2 * 1024 * 1024l - 8 * 1024;
  * it can be considered that the DAS request will send at most one RPC request to each zone.
  * so OB_DAS_MAX_TOTAL_PACKET_SIZE was defined as:
  */
-const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 3 * OB_DAS_MAX_PACKET_SIZE;
+const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 2 * OB_DAS_MAX_PACKET_SIZE;
+const int64_t OB_DAS_MAX_META_TENANT_PACKET_SIZE = 1 * 1024 * 1024l - 8 * 1024;
 }  // namespace das
+
+enum class ObDasTaskStatus: uint8_t
+{
+  UNSTART = 0,
+  FAILED,
+  FINISHED
+};
 
 enum ObDASOpType
 {

@@ -143,7 +143,7 @@ int ObSchemaHistoryRecycler::idle()
 void ObSchemaHistoryRecycler::wakeup()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(common::OB_NOT_INIT, "not init");
   } else {
     idling_.wakeup();
   }
@@ -532,7 +532,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
       if (OB_FAIL(check_inner_stat())) {
         LOG_WARN("schema history recycler is stopped", KR(ret));
       } else {
-        int64_t specific_merged_version = -1;
+        SCN spec_frozen_scn;
         for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
           const uint64_t tenant_id = tenant_ids.at(i);
           ObFreezeInfoProxy freeze_info_proxy(tenant_id);
@@ -545,19 +545,19 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
           } else if (!global_info.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid global merge info", KR(ret), K(global_info));
-          } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(*sql_proxy_, global_info.last_merged_scn_, 
+          } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(*sql_proxy_, global_info.last_merged_scn(),
               frozen_status_arr))) {
             LOG_WARN("fail to get all freeze info", KR(ret), K(global_info));
           } else if (frozen_status_arr.count() < reserved_num + 1) {
             ret = OB_EAGAIN;
             LOG_WARN("not exist enough frozen_scn to reserve", KR(ret), K(reserved_num), K(frozen_status_arr));
-          } else if (FALSE_IT(specific_merged_version = frozen_status_arr.at(reserved_num).frozen_scn_)) {
+          } else if (FALSE_IT(spec_frozen_scn = frozen_status_arr.at(reserved_num).frozen_scn_)) {
           } else if (OB_FAIL(freeze_info_proxy.get_freeze_schema_info(*sql_proxy_, tenant_id,
-                     specific_merged_version, schema_version))) {
-            LOG_WARN("fail to get specific_merged_version", KR(ret), K(tenant_id), K(specific_merged_version));
+                     spec_frozen_scn, schema_version))) {
+            LOG_WARN("fail to get freeze schema info", KR(ret), K(tenant_id), K(spec_frozen_scn));
           } else if (!schema_version.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("schema version is invalid", KR(ret), K(tenant_id), K(specific_merged_version));
+            LOG_WARN("schema version is invalid", KR(ret), K(tenant_id), K(spec_frozen_scn));
           } else {
             int64_t specific_schema_version = schema_version.schema_version_;
             if (OB_FAIL(fill_recycle_schema_versions(
@@ -566,7 +566,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
                        KR(ret), K(tenant_id), K(specific_schema_version));
             }
             LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version by major version",
-                     KR(ret), K(tenant_id), K(specific_merged_version), K(specific_schema_version));
+                     KR(ret), K(tenant_id), K(spec_frozen_scn), K(specific_schema_version));
           }
         }
       }
@@ -942,6 +942,17 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
       ret = OB_SUCCESS;
     }
 
+    // --------------------------- rls ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_policy, OB_ALL_RLS_POLICY_HISTORY_TNAME,
+                         rls_policy_id);
+    RECYCLE_SECOND_SCHEMA(rls_sec_column, OB_ALL_RLS_SECURITY_COLUMN_HISTORY_TNAME,
+                          rls_policy_id, column_id);
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_group, OB_ALL_RLS_GROUP_HISTORY_TNAME,
+                         rls_group_id);
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, rls_context, OB_ALL_RLS_CONTEXT_HISTORY_TNAME,
+                         rls_context_id);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",
@@ -1240,7 +1251,7 @@ bool ObRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(recycler_)
       || NONE == mode_) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version), K_(mode),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version), K_(mode),
              KP_(table_name), KP_(schema_key_name), KP_(sql_proxy), KP_(recycler));
   }
   return bret;
@@ -1733,7 +1744,7 @@ bool ObSecondRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(schema_key_name), KP_(second_schema_key_name),
              KP_(sql_proxy), KP_(recycler));
   }
@@ -1849,7 +1860,7 @@ bool ObThirdRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(schema_key_name), KP_(second_schema_key_name),
              KP_(third_schema_key_name), KP_(sql_proxy), KP_(recycler));
   }
@@ -2035,7 +2046,7 @@ bool ObSystemVariableRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(sql_proxy), KP_(recycler));
   }
   return bret;
@@ -2272,7 +2283,7 @@ bool ObObjectPrivRecycleSchemaExecutor::is_valid() const
       || OB_ISNULL(sql_proxy_)
       || OB_ISNULL(recycler_)) {
     bret = false;
-    LOG_WARN("invalid argument", K(bret), K_(tenant_id), K_(schema_version),
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", K(bret), K_(tenant_id), K_(schema_version),
              KP_(table_name), KP_(sql_proxy), KP_(recycler));
   }
   return bret;

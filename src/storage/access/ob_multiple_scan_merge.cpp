@@ -177,7 +177,7 @@ int ObMultipleScanMerge::construct_iters()
         STORAGE_LOG(WARN, "Fail to get access param", K(i), K(ret), K(*table));
       } else if (!use_cache_iter) {
         if (OB_FAIL(table->scan(*iter_pram, *access_ctx_, *range_, iter))) {
-          STORAGE_LOG(WARN, "Fail to get iterator, ", K(*iter_pram), K(*access_ctx_), K(ret), K(i));
+          STORAGE_LOG(WARN, "Fail to get iterator", K(ret), K(i), K(*iter_pram));
         } else if (OB_FAIL(iters_.push_back(iter))) {
           iter->~ObStoreRowIterator();
           STORAGE_LOG(WARN, "Fail to push iter to iterator array, ", K(ret), K(i));
@@ -200,7 +200,6 @@ int ObMultipleScanMerge::construct_iters()
 
 void ObMultipleScanMerge::reset()
 {
-  ObMultipleMerge::reset();
   if (nullptr != access_ctx_ && nullptr != access_ctx_->stmt_allocator_) {
     if (nullptr != simple_merge_) {
       simple_merge_->~ObScanSimpleMerger();
@@ -219,6 +218,7 @@ void ObMultipleScanMerge::reset()
   consumer_cnt_ = 0;
   range_ = NULL;
   cow_range_.reset();
+  ObMultipleMerge::reset();
 }
 
 void ObMultipleScanMerge::reuse()

@@ -11,15 +11,16 @@
  */
 
 #include "log_group_entry.h"
+#include "log_entry_header.h"
 #include "lib/oblog/ob_log_module.h"      // LOG*
 #include "lib/ob_errno.h"                 // ERROR NUMBER
 #include "lib/checksum/ob_crc64.h"        // ob_crc64
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
-using namespace common;
 LogGroupEntry::LogGroupEntry() : header_(), buf_(NULL)
 {
 }
@@ -70,13 +71,20 @@ void LogGroupEntry::reset()
 
 bool LogGroupEntry::check_integrity() const
 {
-  int64_t data_len = header_.get_data_len();
-  return header_.check_integrity(buf_, data_len);
+  int64_t unused_data_checksum = -1;
+  return check_integrity(unused_data_checksum);
 }
 
-int LogGroupEntry::truncate(const int64_t upper_limit_ts, const int64_t pre_accum_checksum)
+bool LogGroupEntry::check_integrity(int64_t &data_checksum) const
 {
-  return header_.truncate(buf_, get_data_len(), upper_limit_ts, pre_accum_checksum);
+  int64_t data_len = header_.get_data_len();
+  return header_.check_integrity(buf_, data_len, data_checksum);
+}
+
+
+int LogGroupEntry::truncate(const SCN &upper_limit_scn, const int64_t pre_accum_checksum)
+{
+  return header_.truncate(buf_, get_data_len(), upper_limit_scn, pre_accum_checksum);
 }
 
 DEFINE_SERIALIZE(LogGroupEntry)
@@ -134,5 +142,17 @@ DEFINE_GET_SERIALIZE_SIZE(LogGroupEntry)
   return size;
 }
 
+int LogGroupEntry::get_log_min_scn(SCN &min_scn) const
+{
+  int ret = OB_SUCCESS;
+  LogEntryHeader header;
+  int64_t pos = 0;
+  if (false == header_.is_padding_log() && OB_FAIL(header.deserialize(buf_, header_.get_data_len(), pos))) {
+    PALF_LOG(ERROR, "deserialize failed", K(ret), K(header_), K(pos));
+  } else {
+    min_scn = true == header_.is_padding_log() ? header_.get_max_scn() : header.get_scn();
+  }
+  return ret;
+}
 } // end namespace palf
 } // end namespace oceanbase

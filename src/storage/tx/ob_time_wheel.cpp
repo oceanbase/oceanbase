@@ -283,7 +283,7 @@ int TimeWheelBase::scan()
           const int64_t end = ObTimeUtility::current_time();
           //task执行完之后，ctx内存可能已经释放，此时不能再打印task对象信息；
           if (end - start >= WARN_RUNTIME_US) {
-            TRANS_LOG(WARN, "timer task use too much time", K(end), K(start), "delta", end - start);
+            TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task use too much time", K(end), K(start), "delta", end - start);
           }
         }
       }
@@ -314,9 +314,9 @@ TimeWheelBase *TimeWheelBase::alloc(const char *name)
   TimeWheelBase *base = NULL;
   void *ptr = share::mtl_malloc(sizeof(TimeWheelBase), name);
   if (OB_ISNULL(ptr)) {
-    TRANS_LOG(ERROR, "alloc TimeWheelBase failed");
+    TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc TimeWheelBase failed");
   } else if (OB_ISNULL(base = new(ptr) TimeWheelBase())) {
-    TRANS_LOG(ERROR, "construct TimeWheelBase failed");
+    TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "construct TimeWheelBase failed");
     share::mtl_free(ptr);
     ptr = NULL;
   }
@@ -473,9 +473,9 @@ void ObTimeWheel::destroy()
   if (is_inited_) {
     if (is_running_) {
       if (OB_SUCCESS != (tmp_ret = stop())) {
-        TRANS_LOG(WARN, "ObTimeWheel stop error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "ObTimeWheel stop error", K(tmp_ret));
       } else if (OB_SUCCESS != (tmp_ret = wait())) {
-        TRANS_LOG(WARN, "ObTimeWheel wait error", K(tmp_ret));
+        TRANS_LOG_RET(WARN, tmp_ret, "ObTimeWheel wait error", K(tmp_ret));
       } else {
         // do nothing
       }

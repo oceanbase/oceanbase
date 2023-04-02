@@ -144,8 +144,10 @@ int ObDictEncoder::build_dict()
     LOG_WARN("not init", K(ret));
   } else {
     if (need_sort_) {
+      bool has_lob_header = is_lob_storage(column_type_.get_type());
       sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
-          column_type_.get_type(), column_type_.get_collation_type());
+          column_type_.get_type(), column_type_.get_collation_type(), column_type_.get_scale(),
+          lib::is_oracle_mode(), has_lob_header);
       ObCmpFunc cmp_func;
       cmp_func.cmp_func_ = lib::is_oracle_mode()
           ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
@@ -277,6 +279,7 @@ int ObDictEncoder::store_dict(const ObDatum &datum, char *buf, int64_t &len)
       case ObJsonSC:
       case ObOTimestampSC:
       case ObIntervalSC:
+      case ObGeometrySC:
         MEMCPY(buf, datum.ptr_, datum.len_);
         len = datum.len_;
         break;
@@ -312,7 +315,7 @@ bool ObDictEncoder::DictCmp::operator()(
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
   } else if (OB_UNLIKELY(nullptr == lhs.header_ || nullptr == rhs.header_)) {
     ret_ = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K_(ret), KP(lhs.header_), KP(rhs.header_));
+    LOG_WARN_RET(ret_, "invalid argument", K_(ret), KP(lhs.header_), KP(rhs.header_));
   } else {
     int cmp_ret = cmp_func_.cmp_func_(*lhs.header_->datum_, *rhs.header_->datum_);
     res = cmp_ret < 0;

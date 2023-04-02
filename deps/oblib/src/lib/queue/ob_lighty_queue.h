@@ -19,28 +19,30 @@
 #include "lib/alloc/alloc_struct.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/lock/ob_futex.h"
+#include "lib/queue/ob_fixed_queue.h"
 
 namespace oceanbase
 {
 namespace common
 {
+struct ObLightyCond
+{
+public:
+  ObLightyCond(): n_waiters_(0) {}
+  ~ObLightyCond() {}
+
+  void signal();
+  uint32_t get_seq() { return ATOMIC_LOAD(&futex_.uval()); }
+  void wait(const uint32_t cmp, const int64_t timeout);
+private:
+  lib::ObFutex futex_;
+  uint32_t n_waiters_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObLightyCond);
+};
+
 class ObLightyQueue
 {
-  struct ObLightyCond
-  {
-  public:
-    ObLightyCond(): n_waiters_(0) {}
-    ~ObLightyCond() {}
-
-    void signal();
-    uint32_t get_seq() { return ATOMIC_LOAD(&futex_.uval()); }
-    void wait(const uint32_t cmp, const int64_t timeout);
-  private:
-    lib::ObFutex futex_;
-    uint32_t n_waiters_;
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ObLightyCond);
-  };
 public:
   typedef ObLightyCond Cond;
   ObLightyQueue(): capacity_(0), n_cond_(0), data_(NULL), cond_(NULL), push_(0), pop_(0) {}
@@ -80,6 +82,32 @@ private:
   uint64_t pop_ CACHE_ALIGNED;
 };
 
+class LightyQueue
+{
+public:
+  typedef ObLightyCond Cond;
+  LightyQueue() {}
+  ~LightyQueue() { destroy(); }
+public:
+  int init(const uint64_t capacity,
+           const lib::ObLabel &label = ObModIds::OB_LIGHTY_QUEUE,
+           const uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
+  void destroy() { queue_.destroy(); }
+  void reset();
+  int64_t size() const { return queue_.get_total(); }
+  int64_t curr_size() const { return queue_.get_total(); }
+  int64_t max_size() const { return queue_.capacity(); }
+  bool is_inited() const { return queue_.is_inited(); }
+  int push(void *data, const int64_t timeout = 0);
+  int pop(void *&data, const int64_t timeout = 0);
+  int multi_pop(void **data, const int64_t data_count, int64_t &avail_count, const int64_t timeout = 0);
+private:
+  typedef ObFixedQueue<void> Queue;
+  Queue queue_;
+  Cond cond_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(LightyQueue);
+};
 }; // end namespace common
 }; // end namespace oceanbase
 

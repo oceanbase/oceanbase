@@ -60,26 +60,54 @@ int ObRoutePolicy::strong_sort_replicas(ObIArray<CandidateReplica>& candi_replic
   return ret;
 }
 
-int ObRoutePolicy::filter_replica(ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx)
+int ObRoutePolicy::filter_replica(const ObAddr &local_server,
+                                  const ObLSID &ls_id,
+                                  ObIArray<CandidateReplica>& candi_replicas,
+                                  ObRoutePolicyCtx &ctx)
 {
   int ret = OB_SUCCESS;
   ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
-  for (int64_t i = 0; OB_SUCC(ret) && i < candi_replicas.count(); ++i) {
+  bool need_break = false;
+  for (int64_t i = 0; !need_break && OB_SUCC(ret) && i < candi_replicas.count(); ++i) {
     CandidateReplica &cur_replica = candi_replicas.at(i);
-    if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
-        || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
-        || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
-        || cur_replica.attr_.start_service_time_ == 0
-        || cur_replica.attr_.server_stop_time_ != 0
-        || (0 == cur_replica.get_property().get_memstore_percent()
-            && is_follower(cur_replica.get_role()))) { // 作为Follower的D副不能选择
-      cur_replica.is_filter_ = true;
+    bool can_read = true;
+    bool is_local = cur_replica.get_server() == local_server;
+
+    if (is_local && OB_FAIL(ObSqlTransControl::check_ls_readable(ctx.tenant_id_,
+                                                     ls_id,
+                                                     cur_replica.get_server(),
+                                                     ctx.max_read_stale_time_,
+                                                     can_read))) {
+      LOG_WARN("fail to check ls readable", K(ctx), K(cur_replica), K(ret));
+    } else {
+      LOG_TRACE("check ls readable", K(ctx), K(ls_id), K(cur_replica.get_server()), K(can_read));
+      if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
+          || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
+          || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
+          || cur_replica.attr_.start_service_time_ == 0
+          || cur_replica.attr_.server_stop_time_ != 0
+          || (0 == cur_replica.get_property().get_memstore_percent()
+              && is_follower(cur_replica.get_role()))// 作为Follower的D副不能选择
+          || !can_read) {
+        cur_replica.is_filter_ = true;
+      }
+
+      // if is local replica and can read, filter all replicas and only select this replica.
+      if (is_local && !cur_replica.is_filter_) {
+        for (int64_t j = 0; j < candi_replicas.count(); ++j) {
+          candi_replicas.at(i).is_filter_ = true;
+        }
+        cur_replica.is_filter_ = false;
+        need_break = true;
+      }
     }
   }
   return ret;
 }
 
-int ObRoutePolicy::calculate_replica_priority(ObIArray<CandidateReplica>& candi_replicas,
+int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
+                                              const ObLSID &ls_id,
+                                              ObIArray<CandidateReplica>& candi_replicas,
                                               ObRoutePolicyCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -88,7 +116,7 @@ int ObRoutePolicy::calculate_replica_priority(ObIArray<CandidateReplica>& candi_
     LOG_WARN("not init", K(ret));
   } else if (candi_replicas.count() <= 1) {//do nothing
   } else if (WEAK == ctx.consistency_level_) {
-    if (OB_FAIL(filter_replica(candi_replicas, ctx))) {
+    if (OB_FAIL(filter_replica(local_server, ls_id, candi_replicas, ctx))) {
       LOG_WARN("fail to filter replicas", K(candi_replicas), K(ctx), K(ret));
     } else if (OB_FAIL(weak_sort_replicas(candi_replicas, ctx))) {
       LOG_WARN("fail to sort replicas", K(candi_replicas), K(ctx), K(ret));
@@ -219,7 +247,7 @@ int ObRoutePolicy::select_replica_with_priority(const ObRoutePolicyCtx &route_po
   bool same_priority = true;
   ReplicaAttribute priority_attr;
   for (int64_t i = 0; OB_SUCC(ret) && same_priority && i < replica_array.count(); ++i) {
-    if (replica_array.at(i).is_usable()) {
+    if (replica_array.at(i).is_usable()/*+满足max_read_stale_time事务延迟*/) {
       if (has_found) {
         if (priority_attr == replica_array.at(i).attr_) {
           if (OB_FAIL(phy_part_loc_info.add_priority_replica_idx(i))) {
@@ -421,7 +449,7 @@ bool ObRoutePolicy::is_same_idc(const share::ObServerLocality &locality1, const 
   if (locality1.get_region().is_empty() || locality2.get_region().is_empty()) {
     //如果没有为集群设置REGION，则无法判断是否在同一REGION
     ret_bool = false;
-    LOG_WARN("cluster region is not set", K(locality1), K(locality2));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "cluster region is not set", K(locality1), K(locality2));
   } else if (locality1.get_idc().is_empty() || locality2.get_idc().is_empty()) {
     //如果没有为zone设置IDC，则无法判断是否在同一IDC
     ret_bool = false;
@@ -441,7 +469,7 @@ bool ObRoutePolicy::is_same_region(const share::ObServerLocality &locality1, con
   if (locality1.get_region().is_empty() || locality2.get_region().is_empty()) {
     //如果没有为集群设置REGION，则无法判断是否在同一REGION
     ret_bool = false;
-    LOG_WARN("cluster region is not set", K(locality1), K(locality2));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "cluster region is not set", K(locality1), K(locality2));
   } else if (locality1.get_region() == locality2.get_region()) {
     ret_bool = true;
   }

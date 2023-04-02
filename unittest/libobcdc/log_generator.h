@@ -102,9 +102,12 @@ public:
     const bool is_padding_log = (palf::LOG_PADDING == log_type);
     int64_t log_entry_header_size = entry_header.get_serialize_size();
     int64_t ts = get_timestamp();
+    share::SCN scn;
 
-    if (OB_FAIL(entry_header.generate_header(buf, buf_len, ts))) {
-      LOG_ERROR("generate_header failed", KR(ret), K(buf), K(buf_len), K(ts));
+    if (OB_FAIL(scn.convert_for_logservice(ts))) {
+      LOG_ERROR("fail to convert ts", KR(ret), K(ts));
+    } else if (OB_FAIL(entry_header.generate_header(buf, buf_len, scn))) {
+      LOG_ERROR("generate_header failed", KR(ret), K(buf), K(buf_len), K(scn));
     } else {
       log_entry.header_ = entry_header;
       log_entry.buf_ = buf;
@@ -141,10 +144,13 @@ public:
     logservice::ObLogBaseHeader log_base_header(logservice::ObLogBaseType::GC_LS_LOG_BASE_TYPE, logservice::ObReplayBarrierType::NO_NEED_BARRIER, 1);
     const int64_t serizlize_size = log_base_header.get_serialize_size();
     char *buf = static_cast<char*>(allocator_.alloc(serizlize_size));
+    share::SCN scn;
 
-    if (OB_FAIL(log_base_header.serialize(buf, serizlize_size, pos))) {
+    if (OB_FAIL(scn.convert_for_logservice(ts))) {
+      LOG_ERROR("fail to convert ts", KR(ret), K(ts));
+    } else if (OB_FAIL(log_base_header.serialize(buf, serizlize_size, pos))) {
       LOG_ERROR("serialize log_base_header failed", KR(ret), K(buf), K(serizlize_size), K(pos));
-    } else if (OB_FAIL(entry_header.generate_header(buf, serizlize_size, ts))) {
+    } else if (OB_FAIL(entry_header.generate_header(buf, serizlize_size, scn))) {
       LOG_ERROR("generate_header for offline log_entry failed", KR(ret));
     } else {
       log_entry.buf_ = buf;
@@ -193,7 +199,7 @@ private:
 int ObTxLogBlockBuilder::next_log_block()
 {
   int ret = OB_SUCCESS;
-  ObTxLogBlockHeader block_header(cluster_id_, log_entry_no_, tx_id_);
+  ObTxLogBlockHeader block_header(cluster_id_, log_entry_no_, tx_id_, common::ObAddr());
   tx_log_block_.reset();
 
   if (OB_FAIL(tx_log_block_.init(tx_id_, block_header))) {
@@ -292,6 +298,8 @@ void ObTxLogGenerator::gen_prepare_log()
 void ObTxLogGenerator::gen_commit_log()
 {
   int64_t commit_ts = get_timestamp();
+  share::SCN commit_version;
+  commit_version.convert_for_logservice(commit_ts);
   uint64_t checksum = 0;
   share::ObLSArray inc_ls_arr;
   ObTxBufferNodeArray mds_arr;
@@ -305,7 +313,7 @@ void ObTxLogGenerator::gen_commit_log()
   }
 
   ObTxCommitLog commit_log(
-      commit_ts,
+      commit_version,
       checksum,
       inc_ls_arr,
       mds_arr,

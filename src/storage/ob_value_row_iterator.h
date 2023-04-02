@@ -66,7 +66,8 @@ public:
   int init_dml_access_param(
       ObRelativeTable &data_table,
       const ObDMLBaseParam &dml_param,
-      const common::ObIArray<uint64_t> &out_col_ids);
+      const common::ObIArray<uint64_t> &out_col_ids,
+      const bool skip_read_lob = false);
   ObTableAccessParam &get_access_param() { return access_param_; }
   ObTableAccessContext &get_access_ctx() { return access_ctx_; }
   void set_relative_table(ObRelativeTable *relative_table) { relative_table_ = relative_table; }

@@ -116,7 +116,7 @@ int ObSSTableRowExister::exist_block_row(ObSSTableReadHandle &read_handle, ObDat
     } else {
       if (!found) {
         store_row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
-        if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->query_flag_.is_use_bloomfilter_cache()) {
+        if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->query_flag_.is_use_bloomfilter_cache() && !sstable_->is_small_sstable()) {
           (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
               MTL_ID(),
               iter_param_->table_id_,

@@ -126,6 +126,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       process_ok = true;
 
       OMPKEOF eofp;
+      bool need_send_eof = false;
       const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       uint16_t warning_count = 0;
       if (OB_ISNULL(warnings_buf)) {
@@ -154,9 +155,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
             && OB_FAIL(sender_.update_last_pkt_pos())) {
         LOG_WARN("failed to update last packet pos", K(ret));
       }
-      if (OB_SUCC(ret) && !result.get_is_com_filed_list() &&
-          OB_FAIL(sender_.response_packet(eofp, &result.get_session()))) {
-        LOG_WARN("response packet fail", K(ret));
+      if (OB_SUCC(ret) && !result.get_is_com_filed_list()) {
+        need_send_eof = true;
       }
       // for obproxy
       if (OB_SUCC(ret)) {
@@ -167,8 +167,18 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
           ok_param.affected_rows_ = 0;
           ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
           ok_param.has_more_result_ = result.has_more_result();
-          if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
-            LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+          if (need_send_eof) {
+            if (OB_FAIL(sender_.send_ok_packet(session_, ok_param, &eofp))) {
+              LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+            }
+          } else {
+            if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
+              LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
+            }
+          }
+        } else {
+          if (need_send_eof && OB_FAIL(sender_.response_packet(eofp, &result.get_session()))) {
+            LOG_WARN("response packet fail", K(ret));
           }
         }
       }
@@ -229,10 +239,15 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       !admission_fail_and_need_retry
       && OB_BATCHED_MULTI_STMT_ROLLBACK != ret) {
     //OB_BATCHED_MULTI_STMT_ROLLBACK如果是batch stmt rollback错误，不要返回给客户端，退回到mpquery上重试
-    int sret = OB_SUCCESS;
-    bool is_partition_hit = session_.get_err_final_partition_hit(ret);
-    if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
-      LOG_WARN("send error packet fail", K(sret), K(ret));
+    if (ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
+      // The error of batch optimization execution does not need to send error packet here,
+      // because the upper layer will force a fallback to a single line execution retry
+    } else {
+      int sret = OB_SUCCESS;
+      bool is_partition_hit = session_.get_err_final_partition_hit(ret);
+      if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
+        LOG_WARN("send error packet fail", K(sret), K(ret));
+      }
     }
   }
   ObActiveSessionGuard::get_stat().in_sql_execution_ = false;

@@ -74,7 +74,7 @@ public:
                     const bool log_for_lock_node);
   int search_unsubmitted_dup_tablet_redo();
   int log_submitted(const ObCallbackScope &callbacks);
-  int sync_log_succ(const int64_t log_ts, const ObCallbackScope &callbacks);
+  int sync_log_succ(const share::SCN scn, const ObCallbackScope &callbacks);
   void sync_log_fail(const ObCallbackScope &callbacks);
   ObITransCallback *get_generate_cursor() { return (ObITransCallback *)*generate_cursor_; }
 
@@ -85,11 +85,13 @@ private:
   int fill_row_redo(ObITransCallbackIterator &cursor,
                     ObMutatorWriter &mmw,
                     RedoDataNode &redo,
-                    const bool log_for_lock_node);
+                    const bool log_for_lock_node,
+                    bool &fake_fill);
   int fill_table_lock_redo(ObITransCallbackIterator &cursor,
                            ObMutatorWriter &mmw,
                            TableLockRedoDataNode &redo,
-                           const bool log_for_lock_node);
+                           const bool log_for_lock_node,
+                           bool &fake_fill);
   bool check_dup_tablet_(const ObITransCallback * callback_ptr) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedoLogGenerator);

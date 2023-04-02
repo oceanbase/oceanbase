@@ -233,5 +233,6 @@ int main(int argc, char **argv)
 
   PALF_LOG(INFO, "palf bench begin");
   ::testing::InitGoogleTest(&argc, argv);
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

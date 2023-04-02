@@ -14,7 +14,6 @@
 #include <algorithm>                                    // std::sort
 #include <cstdio>                                       // renameat
 #include <fcntl.h>                                      // ::open
-#include "lib/lock/ob_spin_lock.h"
 #include "lib/ob_define.h"                              // some constexpr
 #include "lib/ob_errno.h"                               // OB_SUCCESS...
 #include "lib/container/ob_se_array_iterator.h"         // ObSEArrayIterator
@@ -22,6 +21,7 @@
 #include "share/ob_errno.h"                             // OB_NO_SUCH_FILE_OR_DIRECTORY
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "lsn.h"                                        // LSN
+#include "log_io_uitls.h"                               // openat_with_retry
 
 namespace oceanbase
 {
@@ -32,10 +32,13 @@ namespace palf
 LogBlockMgr::LogBlockMgr() : curr_writable_handler_(),
                              curr_writable_block_id_(LOG_INVALID_BLOCK_ID),
                              log_block_size_(LOG_INVALID_LSN_VAL),
+                             block_id_cache_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
                              min_block_id_(LOG_INVALID_BLOCK_ID),
                              max_block_id_(LOG_INVALID_BLOCK_ID),
                              log_block_pool_(NULL),
                              dir_fd_(-1),
+                             align_size_(-1),
+                             align_buf_size_(-1),
                              is_inited_(false)
 {
 }
@@ -47,6 +50,8 @@ LogBlockMgr::~LogBlockMgr()
 
 int LogBlockMgr::init(const char *log_dir,
                       const block_id_t initial_block_id,
+                      const int64_t align_size,
+                      const int64_t align_buf_size,
                       int64_t log_block_size,
                       ILogBlockPool *log_block_pool)
 {
@@ -58,9 +63,9 @@ int LogBlockMgr::init(const char *log_dir,
   } else if (-1 == (dir_fd_ = ::open(log_dir, O_DIRECTORY | O_RDONLY))) {
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "::open failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(curr_writable_handler_.init(dir_fd_, log_block_size))) {
+  } else if (OB_FAIL(curr_writable_handler_.init(dir_fd_, log_block_size, align_size, align_buf_size))) {
     PALF_LOG(ERROR, "init curr_writable_handler_ failed", K(ret), K(log_dir));
-  } else if (OB_FAIL(do_scan_dir_(log_dir, initial_block_id))) {
+  } else if (OB_FAIL(do_scan_dir_(log_dir, initial_block_id, log_block_pool))) {
     PALF_LOG(ERROR, "do_scan_dir_ failed", K(ret), K(log_dir));
   } else if (OB_FAIL(try_recovery_last_block_(log_dir))) {
     PALF_LOG(ERROR, "try_recovery_last_block_ failed", K(ret), KPC(this));
@@ -68,6 +73,8 @@ int LogBlockMgr::init(const char *log_dir,
     MEMCPY(log_dir_, log_dir, OB_MAX_FILE_NAME_LENGTH);
     log_block_size_ = log_block_size;
     log_block_pool_ = log_block_pool;
+    align_size_ = align_size;
+    align_buf_size_ = align_buf_size;
     is_inited_ = true;
     PALF_LOG(INFO, "LogBlockMgr init success", K(ret), K(log_dir_), K(log_block_size));
   }
@@ -92,7 +99,12 @@ void LogBlockMgr::destroy()
 {
   PALF_LOG(INFO, "destroy LogBlockMgr success");
   is_inited_ = false;
-  dir_fd_ = -1;
+  align_size_ = -1;
+  align_buf_size_ = -1;
+  if (-1 != dir_fd_) {
+    close_with_ret(dir_fd_);
+    dir_fd_ = -1;
+  }
   log_block_pool_ = NULL;
   curr_writable_handler_.destroy();
   curr_writable_block_id_ = LOG_INVALID_BLOCK_ID;
@@ -122,7 +134,7 @@ int LogBlockMgr::switch_next_block(const block_id_t next_block_id)
     ObSpinLockGuard guard(block_id_cache_lock_);
     // NB: just only set 'max_block_id_' is continous with 'prev_block_id'.
     max_block_id_ = next_block_id + 1;
-    PALF_LOG(INFO, "switch_next_block success", K(curr_writable_handler_), K(next_block_id));
+    PALF_LOG(INFO, "switch_next_block success", KPC(this));
   }
   return ret;
 }
@@ -140,7 +152,7 @@ int LogBlockMgr::pwrite(const block_id_t block_id,
   } else if (block_id != curr_writable_block_id_) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "unexpected error, the block_id is not same with curr_writable_handler_",
-        K(ret), KPC(this), K(block_id));
+        K(ret), K(block_id), KPC(this));
   } else if (OB_FAIL(curr_writable_handler_.pwrite(offset, buf, buf_len))) {
     PALF_LOG(ERROR, "LogBlockHandler pwrite failed", K(ret), KPC(this),
         K(block_id), K(offset));
@@ -258,6 +270,64 @@ int LogBlockMgr::load_block_handler(const block_id_t block_id, const offset_t of
   return ret;
 }
 
+int LogBlockMgr::create_tmp_block_handler(const block_id_t block_id)
+{
+  int ret = OB_SUCCESS;
+	char tmp_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+	if (OB_FAIL(block_id_to_tmp_string(block_id, tmp_block_path, OB_MAX_FILE_NAME_LENGTH))) {
+		PALF_LOG(ERROR, "block_id_to_tmp_string failed", K(ret), KPC(this), K(block_id));
+	} else if (OB_FAIL(curr_writable_handler_.close())) {
+    PALF_LOG(ERROR, "curr_writable_handler_ close success");
+  } else if (FALSE_IT(curr_writable_handler_.destroy())) {
+  } else if (OB_FAIL(curr_writable_handler_.init(dir_fd_, log_block_size_, align_size_, align_buf_size_))) {
+    PALF_LOG(ERROR, "curr_writable_handler_ init failed", K(ret), KPC(this));
+  } else if (OB_FAIL(log_block_pool_->create_block_at(dir_fd_, tmp_block_path, log_block_size_))) {
+  } else if (OB_FAIL(curr_writable_handler_.open(tmp_block_path))) {
+    PALF_LOG(ERROR, "create_tmp_block failed", K(ret), KPC(this), K(block_id));
+  } else {
+		curr_writable_block_id_ = block_id;
+		PALF_LOG(INFO, "create_tmp_block_handler success", K(ret), KPC(this), K(block_id));
+  }
+  return ret;
+}
+
+int LogBlockMgr::delete_block_from_back_to_front_until(const block_id_t block_id)
+{
+  return delete_block_from_back_to_front_until_(block_id);
+}
+
+int LogBlockMgr::rename_tmp_block_handler_to_normal(const block_id_t block_id)
+{
+  int ret = OB_SUCCESS;
+	// 1. rename "block_id.tmp" to "block_id.flashback"
+	// 2. delete "block_id", make sure each block has returned into BlockPool
+	// 3. rename "block_id.flashback" to "block_id"
+	// NB: for restart, the block which named 'block_id.flashback' must be renamed to 'block_id'
+	char tmp_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+	char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+	char flashback_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  if (block_id != curr_writable_block_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "block_id is not same as curr_writable_handler_, unexpected error",
+        K(ret), K(block_id), K(curr_writable_block_id_), KPC(this));
+  } else if (OB_FAIL(block_id_to_string(block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
+		PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id));
+  } else if (OB_FAIL(block_id_to_tmp_string(block_id, tmp_block_path, OB_MAX_FILE_NAME_LENGTH))) {
+		PALF_LOG(ERROR, "block_id_to_tmp_string failed", K(ret), K(block_id));
+  } else if (OB_FAIL(block_id_to_flashback_string(block_id, flashback_block_path, OB_MAX_FILE_NAME_LENGTH))) {
+		PALF_LOG(ERROR, "block_id_to_flashback_string failed", K(ret), K(block_id));
+	} else if (OB_FAIL(do_rename_and_fsync_(tmp_block_path, flashback_block_path))) {
+    PALF_LOG(ERROR, "do_rename_and_fsync_ failed", K(ret), KPC(this));
+	} else if(OB_FAIL(do_delete_block_(block_id))) {
+		PALF_LOG(ERROR, "do_delete_block_ failed", K(ret), KPC(this), K(block_id));
+	} else if (OB_FAIL(do_rename_and_fsync_(flashback_block_path, block_path))) {
+    PALF_LOG(ERROR, "do_rename_and_fsync_ failed", K(ret), KPC(this));
+  } else {
+    PALF_LOG(INFO, "rename_tmp_block_handler_to_normal success", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 // step1: firstly, delete each block after lsn.block_id_;
 // step2: secondly, truncate data in curr_lsn_;
 // step3: keep last dio_aligned_buf_.
@@ -268,6 +338,88 @@ int LogBlockMgr::load_block_handler(const block_id_t block_id, const offset_t of
 // TODO by runlin: 即使truncate_prefix_block的工作由GC线程完成, 也不应该存在并发
 int LogBlockMgr::do_truncate_(const block_id_t block_id,
                               const offset_t offset)
+{
+  int ret = OB_SUCCESS;
+	char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  if (OB_FAIL(delete_block_from_back_to_front_until_(block_id))) {
+    PALF_LOG(ERROR, "delete_block_from_back_to_front_until_ failed", K(ret), KPC(this),
+        K(block_id), K(offset));
+  } else if (block_id != curr_writable_block_id_) {
+		ret = OB_ERR_UNEXPECTED;
+		PALF_LOG(ERROR, "unexpected error, block id is not same sa curr_writable_block_id_", K(ret),
+				KPC(this), K(block_id));
+	} else if (OB_FAIL(block_id_to_string(block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
+    PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id), KPC(this));
+  } else if (OB_FAIL(curr_writable_handler_.close())) {
+    PALF_LOG(ERROR, "close curr_writable_handler_ failed", K(ret), K(block_id), KPC(this));
+  } else if (OB_FAIL(curr_writable_handler_.open(block_path))) {
+    PALF_LOG(ERROR, "open block after delete_block_from_back_to_front_until_ failed",
+        K(ret), K(block_id), KPC(this));
+  } else if (OB_FAIL(curr_writable_handler_.truncate(offset))) {
+    PALF_LOG(WARN, "truncate curr_writable_handler_ failed", K(ret), K(block_id), K(offset));
+  } else if (OB_FAIL(check_after_truncate_(block_path, offset))) {
+    PALF_LOG(ERROR, "check_after_truncate_ failed", K(ret), K(block_id), K(offset));
+  } else if (OB_FAIL(curr_writable_handler_.load_data(offset))) {
+    PALF_LOG(WARN, "load_data failed", K(ret), K(block_id), K(offset));
+  } else {
+    PALF_LOG(INFO, "do_truncate_ success", K(ret), K(block_id), K(offset), K(min_block_id_), K(max_block_id_));
+  }
+
+  return ret;
+}
+
+int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t offset)
+{
+  int ret = OB_SUCCESS;
+  int fd = -1;
+  char *buf = NULL;
+  const int buf_len = 8*1024;
+  char *expected_data = NULL;
+  offset_t read_offset = lower_align(offset, LOG_DIO_ALIGN_SIZE);
+  const int backoff = offset - read_offset;
+  // The min length of PADDING is 4K, therefore, read_offset may be 64MB-4KB,
+  // in_read_size is 4K, otherwise, in_read_size is 8K.
+  const int in_read_size = MIN(buf_len, log_block_size_-read_offset);
+  OB_ASSERT(backoff < LOG_DIO_ALIGN_SIZE);
+  if (OB_FAIL(openat_with_retry(dir_fd_, block_path, LOG_READ_FLAG, FILE_OPEN_MODE, fd))) {
+    PALF_LOG(ERROR, "openat_with_retry failed", KPC(this), K(block_path));
+  } else if (NULL == (expected_data = \
+      reinterpret_cast<char*>(ob_malloc(buf_len, "LogBlockMgr")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(ERROR, "malloc failed", KPC(this));
+  } else if (FALSE_IT(memset(expected_data, 0, buf_len))) {
+  } else if (NULL == (buf = \
+      reinterpret_cast<char*>(ob_malloc_align(LOG_DIO_ALIGN_SIZE, buf_len, "LogBlockMgr")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(ERROR, "malloc failed", KPC(this));
+  } else if (in_read_size!= (ob_pread(fd, buf, in_read_size, read_offset))) {
+    ret = convert_sys_errno();
+    PALF_LOG(ERROR, "ob_pread failed", KPC(this), K(fd), K(offset));
+    // TODO by runlin: after support reuse block, need use another method.
+  } else if (0 != MEMCMP(buf+backoff, expected_data, in_read_size-backoff)) {
+    ret = OB_ERR_UNEXPECTED;
+    while (OB_FAIL(ret)) {
+      PALF_LOG(ERROR, "after truncate, data is not zero", KPC(this), K(fd), K(offset),
+          KP(buf), KP(expected_data), K(in_read_size), K(backoff));
+      usleep(1000*1000);
+    }
+  } else {
+    PALF_LOG(INFO, "check_after_truncate_ success", KPC(this), K(block_path), K(offset));
+  }
+
+  if (-1 != fd && OB_FAIL(close_with_ret(fd))) {
+    PALF_LOG(ERROR, "close_with_ret failed", KPC(this), K(block_path));
+  }
+  if (NULL != buf) {
+    ob_free_align(buf);
+  }
+  if (NULL != expected_data) {
+    ob_free(expected_data);
+  }
+  return ret;
+}
+
+int LogBlockMgr::delete_block_from_back_to_front_until_(const block_id_t block_id)
 {
   int ret = OB_SUCCESS;
   // NB: [min_block_id_, max_block_id_) is the real range;
@@ -281,25 +433,7 @@ int LogBlockMgr::do_truncate_(const block_id_t block_id,
     if (OB_FAIL(do_delete_block_(curr_block_id))) {
       PALF_LOG(WARN, "do_delete_block_ failed", K(ret), K(curr_block_id));
     } else {
-      PALF_LOG(INFO, "do_truncate_ need delete_block", K(block_id), K(curr_block_id));
-    }
-  }
-  // truncate last block
-  if (OB_SUCC(ret)) {
-    char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
-    if (OB_FAIL(block_id_to_string(block_id, block_path, OB_MAX_FILE_NAME_LENGTH))) {
-      PALF_LOG(ERROR, "block_id_to_string failed", K(ret), K(block_id));
-    } else if (OB_FAIL(curr_writable_handler_.close())) {
-      PALF_LOG(WARN, "close curr_writable_handler_ failed", K(ret), K(block_id), K(offset));
-    } else if (OB_FAIL(curr_writable_handler_.open(block_path))) {
-      PALF_LOG(WARN, "open block failed", K(ret), K(block_id), K(offset));
-    } else if (OB_FAIL(curr_writable_handler_.truncate(offset))) {
-      PALF_LOG(WARN, "truncate curr_writable_handler_ failed", K(ret), K(block_id), K(offset));
-    } else if (OB_FAIL(curr_writable_handler_.load_data(offset))) {
-      PALF_LOG(WARN, "load_data failed", K(ret), K(block_id), K(offset));
-    } else {
-      curr_writable_block_id_ = block_id;
-      PALF_LOG(INFO, "do_truncate_ success", K(ret), K(block_id), K(curr_block_id), K(offset), K(min_block_id_), K(max_block_id_));
+			curr_writable_block_id_ = block_id;
     }
   }
   return ret;
@@ -316,24 +450,24 @@ int LogBlockMgr::do_delete_block_(const block_id_t block_id)
     PALF_LOG(WARN, "block_id_to_tmp_string failed", K(ret), K(log_dir_), K(block_id));
   } else if (OB_FAIL(do_rename_and_fsync_(block_path, tmp_block_path))) {
     PALF_LOG(ERROR, "do_rename_and_fsync_ failed", K(ret), K(log_dir_), K(block_id));
-  } else if (OB_FAIL(reuse_block_at(dir_fd_, tmp_block_path))) {
-    PALF_LOG(ERROR, "reuse_block_at failed", K(ret), KPC(this));
   } else if (OB_FAIL(log_block_pool_->remove_block_at(dir_fd_, tmp_block_path))) {
     PALF_LOG(ERROR, "remove_block_at failed", K(ret), KPC(this), K(block_id));
   } else {
-    PALF_LOG(INFO, "do_delete_block_ success", K(ret), K(block_path));
+    PALF_LOG(INFO, "do_delete_block_ success", K(ret), KPC(this));
   }
   return ret;
 }
 
-int LogBlockMgr::do_scan_dir_(const char *dir, const block_id_t initial_block_id)
+int LogBlockMgr::do_scan_dir_(const char *dir,
+                              const block_id_t initial_block_id,
+                              ILogBlockPool *log_block_pool)
 {
   int ret = OB_SUCCESS;
   if (LOG_INVALID_BLOCK_ID != min_block_id_ || LOG_INVALID_BLOCK_ID != max_block_id_) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "unexpected error, the cache data must be invalid", K(ret), K(min_block_id_), K(max_block_id_));
   } else {
-    GetBlockIdRangeFunctor functor(dir);
+    TrimLogDirectoryFunctor functor(dir, log_block_pool);
     if (OB_FAIL(scan_dir(dir, functor))) {
       PALF_LOG(WARN, "scan_dir failed", K(ret), K(dir));
     } else {

@@ -75,7 +75,7 @@ bool ObLSLocationUpdateTask::operator ==(const ObLSLocationUpdateTask &other) co
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {
@@ -153,7 +153,7 @@ bool ObTabletLSUpdateTask::operator ==(const ObTabletLSUpdateTask &other) const
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {
@@ -196,6 +196,24 @@ void ObLSLocationTimerTask::runTimerTask()
   // ignore ret
   if (OB_FAIL(ls_loc_service_.schedule_ls_timer_task())) {
     LOG_WARN("fail to schedule ls location timer task", KR(ret));
+  }
+}
+
+ObLSLocationByRpcTimerTask::ObLSLocationByRpcTimerTask(
+    ObLSLocationService &ls_loc_service)
+    : ls_loc_service_(ls_loc_service)
+{
+}
+
+void ObLSLocationByRpcTimerTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_loc_service_.renew_all_ls_locations_by_rpc())) {
+    LOG_WARN("fail to renew_all_ls_location by rpc", KR(ret));
+  }
+  // ignore ret
+  if (OB_FAIL(ls_loc_service_.schedule_ls_by_rpc_timer_task())) {
+    LOG_WARN("fail to schedule ls location by rpc timer task", KR(ret));
   }
 }
 
@@ -266,7 +284,7 @@ bool ObVTableLocUpdateTask::operator ==(const ObVTableLocUpdateTask &other) cons
 {
   bool equal = false;
   if (!is_valid() || !other.is_valid()) {
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (this == &other) { // same pointer
     equal = true;
   } else {

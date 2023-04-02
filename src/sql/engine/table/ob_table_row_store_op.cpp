@@ -192,7 +192,7 @@ int ObTableRowStoreOp::inner_get_next_row()
 int ObTableRowStoreOp::fetch_stored_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(row_store_it_.get_next_row_skip_const(eval_ctx_, MY_SPEC.output_))) {
+  if (OB_FAIL(row_store_it_.get_next_row(eval_ctx_, MY_SPEC.output_))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next stored row failed", K(ret));
     }

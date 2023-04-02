@@ -215,6 +215,8 @@ private:
    // Usually need to override get_cast_mode() of ObExprOperator which works for non_static engine
    common::ObCastMode cast_mode_;
    sql::ObRawExpr *raw_expr_;
+   //used to switch params in subquery comparison operators
+   int64_t cur_row_idx_;
 };
 
 class ObISqlExpression

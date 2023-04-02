@@ -52,6 +52,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
+  dml_param_.direct_insert_task_id_ = rtdef.direct_insert_task_id_;
   if (OB_FAIL(as->insert_rows(ls_id,
                               tablet_id,
                               *tx_desc_,
@@ -62,6 +63,10 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("insert rows to access service failed", K(ret));
     }
+  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_spatial_index())
+      && 0 == affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows after do insert", K(affected_rows), K(ret));
   }
   return ret;
 }
@@ -70,7 +75,9 @@ ObDASInsertOp::ObDASInsertOp(ObIAllocator &op_alloc)
   : ObIDASTaskOp(op_alloc),
     ins_ctdef_(nullptr),
     ins_rtdef_(nullptr),
-    result_(nullptr)
+    result_(nullptr),
+    affected_rows_(0),
+    is_duplicated_(false)
 {
 }
 
@@ -108,6 +115,7 @@ int ObDASInsertOp::insert_rows()
     }
   } else {
     ins_rtdef_->affected_rows_ += affected_rows;
+    affected_rows_ = affected_rows;
   }
   return ret;
 }
@@ -161,6 +169,7 @@ int ObDASInsertOp::insert_row_with_fetch()
         } else {
           LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
           ins_rtdef_->is_duplicated_ = true;
+          is_duplicated_ = true;
         }
       }
     }
@@ -216,6 +225,7 @@ int ObDASInsertOp::insert_row_with_fetch()
             } else {
               LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
               ins_rtdef_->is_duplicated_ = true;
+              is_duplicated_ = true;
             }
           } else {
             // 需要释放iter的内存， 否则会内存泄漏
@@ -291,18 +301,18 @@ int ObDASInsertOp::decode_task_result(ObIDASTaskResult *task_result)
       } else {
         result_ = insert_result;
         ins_rtdef_->affected_rows_ += insert_result->get_affected_rows();
-        ins_rtdef_->is_duplicated_ = ins_rtdef_->is_duplicated_ || insert_result->is_duplicated();
+        ins_rtdef_->is_duplicated_ |= insert_result->is_duplicated();
       }
     } else {
       result_ = insert_result;
       ins_rtdef_->affected_rows_ += insert_result->get_affected_rows();
-      ins_rtdef_->is_duplicated_ = ins_rtdef_->is_duplicated_ || insert_result->is_duplicated();
+      ins_rtdef_->is_duplicated_ |= insert_result->is_duplicated();
     }
   }
   return ret;
 }
 
-int ObDASInsertOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASInsertOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
 #if !defined(NDEBUG)
@@ -316,12 +326,13 @@ int ObDASInsertOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_mor
       if (OB_FAIL(store_conflict_row(ins_result))) {
         LOG_WARN("fail to fetch conflict row", K(ret));
       } else {
-        ins_result.set_affected_rows(ins_rtdef_->affected_rows_);
-        ins_result.set_is_duplicated(ins_rtdef_->is_duplicated_);
+        ins_result.set_affected_rows(affected_rows_);
+        ins_result.set_is_duplicated(is_duplicated_);
         has_more = false;
+        memory_limit -= ins_result.get_result_buffer().get_mem_used();
       }
     } else {
-      ins_result.set_affected_rows(ins_rtdef_->affected_rows_);
+      ins_result.set_affected_rows(affected_rows_);
       has_more = false;
     }
   }
@@ -350,12 +361,12 @@ int ObDASInsertOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
   return ret;
 }
 
-int ObDASInsertOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full)
+int ObDASInsertOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full)
 {
   int ret = OB_SUCCESS;
   bool added = false;
   buffer_full = false;
-  if (OB_FAIL(insert_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, added, true))) {
+  if (OB_FAIL(insert_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
     LOG_WARN("try add row to insert buffer failed", K(ret), K(row), K(insert_buffer_));
   } else if (!added) {
     buffer_full = true;
@@ -387,7 +398,9 @@ int ObDASInsertResult::get_next_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObNewRow *result_row = NULL;
   if (OB_FAIL(result_newrow_iter_.get_next_row(result_row))) {
-    LOG_WARN("get next row from result iter failed", K(ret));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next row from result iter failed", K(ret));
+    }
   } else {
     row = result_row;
   }
@@ -431,7 +444,7 @@ void ObDASInsertResult::reset()
   output_types_ = nullptr;
 }
 
-int ObDASInsertResult::init(const ObIDASTaskOp &op)
+int ObDASInsertResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
   const ObDASInsertOp &ins_op = static_cast<const ObDASInsertOp&>(op);
@@ -445,11 +458,25 @@ int ObDASInsertResult::init(const ObIDASTaskOp &op)
     tenant_id = MTL_ID();
     // replace和insert_up拉回冲突数据的das_write_buff暂时不需要带pay_load
     if (!result_buffer_.is_inited()
-        && OB_FAIL(result_buffer_.init(ins_op.op_alloc_, 0 /*row_extend_size*/, tenant_id, "DASInsRsultBuffer"))) {
+        && OB_FAIL(result_buffer_.init(alloc, 0 /*row_extend_size*/, tenant_id, "DASInsRsultBuffer"))) {
       LOG_WARN("init result buffer failed", K(ret));
     }
   }
   return OB_SUCCESS;
+}
+
+int ObDASInsertResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 != result_buffer_.get_row_cnt())) {
+    ret = OB_NOT_SUPPORTED;
+  } else {
+    affected_rows_ = 0;
+    is_duplicated_ = false;
+    result_buffer_.~ObDASWriteBuffer();
+    new(&result_buffer_) ObDASWriteBuffer();
+  }
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER((ObDASInsertResult, ObIDASTaskResult),

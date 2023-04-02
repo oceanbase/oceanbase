@@ -26,21 +26,19 @@ select * from t1;
 
 explain insert into t2 (c1, c2) values ('0', '1');
 Query Plan
-===========================================
-|ID|OPERATOR          |NAME|EST. ROWS|COST|
--------------------------------------------
-|0 |DISTRIBUTED INSERT|    |1        |13  |
-|1 | EXPRESSION       |    |1        |1   |
-===========================================
-
-Outputs & filters: 
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |1       |13          |
+|1 | EXPRESSION       |    |1       |1           |
+==================================================
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t2: ({t2: (t2.c1, t2.c2)})}]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,t2.c1.nextval(column_conv(INT,PS:(11,0),NOT NULL,__values.c1)))], [column_conv(INT,PS:(11,0),NULL,__values.c2)])
   1 - output([__values.c1], [__values.c2]), filter(nil)
       values({'0', '1'})
-
 
 insert into t2 (c1, c2) values (NULL, '1');
 insert into t2 (c1, c2) values (0, '2');

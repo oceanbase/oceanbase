@@ -140,7 +140,7 @@ inline void *ObAsanAllocator::alloc(const int64_t size)
   void *buffer = ::malloc(real_size);
   if (OB_LIKELY(nullptr != buffer)) {
     AllocNode *new_node = new(buffer) AllocNode(this);
-    new_node->size_ = real_size;
+    new_node->size_ = static_cast<uint32_t>(real_size);
     ret = (void *)new_node->data_;
     add_node(new_node);
     alloc_bytes_ += real_size;

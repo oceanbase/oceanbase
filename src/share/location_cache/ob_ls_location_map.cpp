@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -32,7 +32,7 @@ int ObLSLocationMap::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLSLocationMap init twice", KR(ret));
   } else if (OB_ISNULL(buckets_lock_ =
-     (share::ObQSyncLock*)ob_malloc(sizeof(share::ObQSyncLock) * BUCKETS_CNT, mem_attr))) {
+     (common::ObQSyncLock*)ob_malloc(sizeof(common::ObQSyncLock) * BUCKETS_CNT, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate ObQSyncLock memory, ", KR(ret), LITERAL_K(BUCKETS_CNT));
   } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObLSLocation*) * BUCKETS_CNT, mem_attr))) {
@@ -40,7 +40,7 @@ int ObLSLocationMap::init()
     LOG_WARN("Fail to allocate ObLSLocation memory, ", KR(ret), LITERAL_K(BUCKETS_CNT));
   } else {
     for (int64_t i = 0 ; i < BUCKETS_CNT; ++i) {
-      new(buckets_lock_ + i) share::ObQSyncLock();
+      new(buckets_lock_ + i) common::ObQSyncLock();
       if (OB_FAIL((buckets_lock_ + i)->init(mem_attr))) {
         LOG_WARN("buckets_lock_ init fail", K(ret), K(OB_SERVER_TENANT_ID));
         for (int64_t j = 0 ; j <= i; ++j) {
@@ -70,7 +70,7 @@ void ObLSLocationMap::destroy()
     ObLSLocation *ls_location = nullptr;
     ObLSLocation *next_ls = nullptr;
     for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-      share::ObQSyncLockWriteGuard guard(buckets_lock_[i]);
+      ObQSyncLockWriteGuard guard(buckets_lock_[i]);
       ls_location = ls_buckets_[i];
       while (OB_NOT_NULL(ls_location)) {
         next_ls = (ObLSLocation*)ls_location->next_;
@@ -93,9 +93,14 @@ void ObLSLocationMap::destroy()
   size_ = 0;
 }
 
+
+// 1. from_rpc = true, it means leader from ls_location may be merged to current location.
+// 2. from_rpc = false, it means leader from current location may be remained in ls_location.
+// when ls has no leader, location cache will remain the last leader info.
 int ObLSLocationMap::update(
+    const bool from_rpc,
     const ObLSLocationCacheKey &key,
-    const ObLSLocation &ls_location)
+    ObLSLocation &ls_location)
 {
   int ret = OB_SUCCESS;
   ObLSLocation *curr = NULL;
@@ -105,7 +110,7 @@ int ObLSLocationMap::update(
     LOG_WARN("ObLSLocationMap not init", KR(ret), K(ls_location));
   } else {
     int64_t pos = key.hash() % BUCKETS_CNT;
-    share::ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
     curr = ls_buckets_[pos];
     while (OB_NOT_NULL(curr)) {
       if (curr->get_cache_key() == key) {
@@ -131,8 +136,16 @@ int ObLSLocationMap::update(
         ls_buckets_[pos] = tmp;
         ATOMIC_INC(&size_);
       }
-    } else if (OB_FAIL(curr->deep_copy(ls_location))) { // update
-      LOG_WARN("ls location deep copy error", KR(ret), K(ls_location));
+    } else if (from_rpc) {
+      if (OB_FAIL(curr->merge_leader_from(ls_location))) {
+        LOG_WARN("fail to merge leader from ls", KR(ret), KPC(curr), K(ls_location));
+      }
+    } else {
+      if (OB_FAIL(ls_location.merge_leader_from(*curr))) {
+        LOG_WARN("fail to merge leader from ls", KR(ret), K(ls_location), KPC(curr));
+      } else if (OB_FAIL(curr->deep_copy(ls_location))) {
+        LOG_WARN("ls location deep copy error", KR(ret), K(ls_location));
+      }
     }
   }
 
@@ -152,7 +165,7 @@ int ObLSLocationMap::get(
     LOG_WARN("ObLSLocationMap not init", KR(ret), K(key));
   } else {
     pos = key.hash() % BUCKETS_CNT;
-    share::ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
+    ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
     ls_location = ls_buckets_[pos];
     while (OB_NOT_NULL(ls_location)) {
       if (ls_location->get_cache_key() == key) {
@@ -188,7 +201,7 @@ int ObLSLocationMap::del(const ObLSLocationCacheKey &key)
   } else {
     int64_t pos = key.hash() % BUCKETS_CNT;
     //remove ls from map
-    share::ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
     ls_location = ls_buckets_[pos];
     while (OB_NOT_NULL(ls_location)) {
       if (ls_location->get_cache_key() == key) {
@@ -224,7 +237,7 @@ int ObLSLocationMap::check_and_generate_dead_cache(ObLSLocationArray &arr)
   // ignore ret code
   for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
     ls_location = ls_buckets_[i];
-    share::ObQSyncLockWriteGuard guard(buckets_lock_[i]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[i]);
     // foreach bucket
     while (OB_NOT_NULL(ls_location)) {
       if (common::ObClockGenerator::getClock() - ls_location->get_last_access_ts()
@@ -245,7 +258,7 @@ int ObLSLocationMap::get_all(ObLSLocationArray &arr)
   ObLSLocation *ls_location = NULL;
   for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
     ls_location = ls_buckets_[i];
-    share::ObQSyncLockReadGuard guard(buckets_lock_[i]);
+    ObQSyncLockReadGuard guard(buckets_lock_[i]);
     // foreach bucket
     while (OB_NOT_NULL(ls_location) && OB_SUCC(ret)) {
       if (OB_FAIL(arr.push_back(*ls_location))) {

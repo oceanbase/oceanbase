@@ -96,7 +96,7 @@ public:
 
   // 预分配执行过程中需要的内存, 包括frame memory和expr_ctx memory
   // @param exec_ctx 执行期context，初始化其成员：frames_, frame_cnt_, expr_ctx_arr_
-  int pre_alloc_exec_memory(ObExecContext &exec_ctx) const;
+  int pre_alloc_exec_memory(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL) const;
 
   // 分配frame内存, 并将所有frame指针按每个frame idx的序存放到frames数组中
   // @param [in] exec_allocator 执行期分配期

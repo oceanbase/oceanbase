@@ -37,7 +37,7 @@ const char* ObCacheRefHandleMgr::handle_name(const CacheRefHandleID handle_id)
     "cli_query_handle",
     "outline_exec_handle",
     "plan_explain_handle",
-    "asyn_baseline_handle",
+    "check_evolution_plan_handle",
     "load_baseline_handle",
     "ps_exec_handle",
     "gv_sql_handle",
@@ -63,6 +63,7 @@ const char* ObCacheRefHandleMgr::handle_name(const CacheRefHandleID handle_id)
     "lc_node_wr_handle",
     "lc_ref_cache_obj_stat_handle",
     "plan_baseline_handle",
+    "tableapi_node_handle"
   };
   static_assert(sizeof(handle_names)/sizeof(const char*) == MAX_HANDLE, "invalid handle name array");
   if (handle_id < MAX_HANDLE) {

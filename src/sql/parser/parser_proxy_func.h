@@ -33,4 +33,4 @@ extern void right_to_die_or_duty_to_live_c();
 #endif // __cplusplus
 #endif // SQL_PARSER_COMPILATION
 
-#endif // !PASER_ALLOC_FUNC_H_
+#endif // !PARSER_ALLOC_FUNC_H_

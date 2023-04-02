@@ -12,8 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link.h"
-#include "sql/optimizer/ob_log_plan.h"
-//#include "sql/ob_sql_utils.h"
+#include "sql/ob_sql_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -29,21 +28,40 @@ ObLogLink::ObLogLink(ObLogPlan &plan)
     allocator_(plan.get_allocator()),
     stmt_fmt_buf_(NULL),
     stmt_fmt_len_(0),
+    is_reverse_link_(false),
+    tm_dblink_id_(OB_INVALID_ID),
     param_infos_()
 {}
+
+int ObLogLink::compute_sharding_info()
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    strong_sharding_ = opt_ctx->get_local_sharding();
+  }
+  return ret;
+}
+
+int ObLogLink::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  set_parallel(1);
+  set_server_cnt(1);
+  return ret;
+}
 
 int ObLogLink::est_cost()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator *child = NULL;
-  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(child), K(ret));
-  } else {
-    card_ = child->get_card();
-    op_cost_ = 0;
-    cost_ = op_cost_ + child->get_cost();
-  }
+  card_ = 0;
+  op_cost_ = 0;
+  cost_ = 0;
+  width_ = 0;
   return ret;
 }
 
@@ -81,37 +99,25 @@ int ObLogLink::print_link_stmt(char *buf, int64_t buf_len)
   return ret;
 }
 
-int ObLogLink::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type)
-{
-  UNUSED(type);
-  int ret = OB_SUCCESS;
-  int64_t len = 0;
-  if (type != EXPLAIN_BASIC && OB_FAIL(BUF_PRINTF(", dblink_id=%lu,", get_dblink_id()))) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      link_stmt="))) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else if (OB_FAIL(print_link_stmt(buf + pos, buf_len - pos))) {
-    LOG_WARN("failed to print link stmt", K(ret));
-  } else {
-    pos += stmt_fmt_len_;
-  }
-  return ret;
-}
-
-int ObLogLink::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
+int ObLogLink::get_plan_item_info(PlanText &plan_text,
+                                  ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(link_ctx.spell_link(static_cast<const ObSelectStmt *>(get_stmt()),
-                                  &stmt_fmt_buf_,
-                                  stmt_fmt_len_,
-                                  get_op_ordering(),
-                                  output_exprs_,
-                                  startup_exprs_,
-                                  filter_exprs_))) {
-    LOG_WARN("dblink fail to reverse spell link", K(dblink_id_), K(ret));
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
   } else {
-    LOG_WARN("dblink stmt", K(ObString(stmt_fmt_len_, stmt_fmt_buf_)));
-    link_ctx.reset();
+    BEGIN_BUF_PRINT;
+    if (false && OB_FAIL(BUF_PRINTF(",dblink_id=%lu,", get_dblink_id()))) { // explain basic will print dlbink id, dblink id will change every time when case run
+      LOG_WARN("BUF_PRINTF failed", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("link_stmt="))) {
+      LOG_WARN("BUF_PRINTF failed", K(ret));
+    } else if (OB_FAIL(print_link_stmt(buf + pos, buf_len - pos))) {
+      LOG_WARN("failed to print link stmt", K(ret));
+    } else {
+      pos += stmt_fmt_len_;
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -140,6 +146,88 @@ int ObLogLink::gen_link_stmt_param_infos()
     } else {
       param_pos += param_len;
     }
+  }
+  return ret;
+}
+
+int ObLogLink::mark_exec_params(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    common::ObIArray<ObQueryRefRawExpr*> &subquery_exprs = stmt->get_subquery_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i ++) {
+      ObQueryRefRawExpr *expr = subquery_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < expr->get_exec_params().count(); j ++) {
+          ObExecParamRawExpr *param_expr = NULL;
+          if (OB_ISNULL(param_expr = expr->get_exec_params().at(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else {
+            param_expr->set_ref_same_dblink(true);
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i ++) {
+      OZ(SMART_CALL(mark_exec_params(child_stmts.at(i))));
+    }
+  }
+  return ret;
+}
+
+int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
+{
+  int ret = OB_SUCCESS;
+  const ObLogPlan *plan = get_plan();
+  if (NULL == stmt) {
+    stmt = get_stmt();
+  }
+  ObString sql;
+  ObObjPrintParams print_param;
+  print_param.for_dblink_ = 1;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
+  ObSQLSessionInfo *session = NULL;
+  int64_t session_query_timeout_us = 0;
+  int64_t hint_query_timeout_us = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(plan) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(session = opt_ctx->get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(opt_ctx), KP(stmt), KP(session), KP(plan), K(ret));
+  } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(hint_query_timeout_us = query_ctx->get_query_hint_for_update().get_global_hint().query_timeout_)) {
+  } else if (OB_FAIL(session->get_query_timeout(session_query_timeout_us))) {
+    LOG_WARN("failed to get session query timeout", K(ret));
+  } else if (-1 == hint_query_timeout_us &&
+             FALSE_IT(query_ctx->get_query_hint_for_update().get_global_hint().merge_query_timeout_hint(session_query_timeout_us))) {
+    // do nothing
+  } else if (OB_FAIL(mark_exec_params(const_cast<ObDMLStmt*>(stmt)))) {
+    LOG_WARN("failed to mark exec params", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(plan->get_allocator(), stmt, sql, opt_ctx->get_schema_guard(), print_param))) {
+    LOG_WARN("failed to reconstruct link sql", KP(stmt), KP(plan), K(get_dblink_id()), K(ret));
+  } else {
+    stmt_fmt_buf_ = sql.ptr();
+    stmt_fmt_len_ = sql.length();
+    LOG_DEBUG("loglink succ to reconstruct link sql", K(sql));
+  }
+  if (-1 == hint_query_timeout_us) { // restore query_timeout_hint
+    query_ctx->get_query_hint_for_update().get_global_hint().reset_query_timeout_hint();
   }
   return ret;
 }

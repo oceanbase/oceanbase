@@ -22,6 +22,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace memtable
 {
 
@@ -92,11 +93,18 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
       if (!iter->need_fill_redo() || !iter->need_submit_log()) {
       } else if (iter->is_logging_blocked()) {
         ret = (data_node_count == 0) ? OB_BLOCK_FROZEN : OB_EAGAIN;
+        if (OB_BLOCK_FROZEN == ret) {
+          // To prevent unnecessary submit_log actions for freeze
+          // Becasue the first callback is linked to a logging_blocked memtable
+          transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(mem_ctx_->get_trans_ctx());
+          part_ctx->set_block_frozen_memtable(static_cast<memtable::ObMemtable *>(iter->get_memtable()));
+        }
       } else {
+        bool fake_fill = false;
         if (MutatorType::MUTATOR_ROW == iter->get_mutator_type()) {
-          ret = fill_row_redo(cursor, mmw, redo, log_for_lock_node);
+          ret = fill_row_redo(cursor, mmw, redo, log_for_lock_node, fake_fill);
         } else if (MutatorType::MUTATOR_TABLE_LOCK == iter->get_mutator_type()) {
-          ret = fill_table_lock_redo(cursor, mmw, table_lock_redo, log_for_lock_node);
+          ret = fill_table_lock_redo(cursor, mmw, table_lock_redo, log_for_lock_node, fake_fill);
         } else {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "mutator row type not expected.", K(ret));
@@ -125,7 +133,9 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
           }
           callbacks.end_ = cursor;
 
-          data_node_count++;
+          if (!fake_fill) {
+            data_node_count++;
+          }
           data_size += iter->get_data_size();
           max_seq_no = max(max_seq_no, iter->get_seq_no());
         }
@@ -201,7 +211,7 @@ int ObRedoLogGenerator::log_submitted(const ObCallbackScope &callbacks)
   return ret;
 }
 
-int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScope &callbacks)
+int ObRedoLogGenerator::sync_log_succ(const SCN scn, const ObCallbackScope &callbacks)
 {
   // no need to submit log
   // since the number of log callback is enough now
@@ -218,8 +228,8 @@ int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScop
     do {
       ObITransCallback *iter = (ObITransCallback *)*cursor;
       if (iter->need_fill_redo()) {
-        iter->set_log_ts(log_ts);
-        if (OB_TMP_FAIL(iter->log_sync_cb(log_ts))) {
+        iter->set_scn(scn);
+        if (OB_TMP_FAIL(iter->log_sync_cb(scn))) {
           if (OB_SUCC(ret)) {
             ret = tmp_ret;
           }
@@ -228,7 +238,7 @@ int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScop
           redo_sync_succ_cnt_ += 1;
         }
       } else {
-        TRANS_LOG(ERROR, "sync_log_succ error", K(ret), K(iter), K(iter->need_fill_redo()), K(log_ts));
+        TRANS_LOG(ERROR, "sync_log_succ error", K(ret), K(iter), K(iter->need_fill_redo()), K(scn));
       }
     } while (cursor != callbacks.end_ && !FALSE_IT(cursor++));
   }
@@ -270,12 +280,12 @@ void ObRedoLogGenerator::sync_log_fail(const ObCallbackScope &callbacks)
 int ObRedoLogGenerator::fill_row_redo(ObITransCallbackIterator &cursor,
                                       ObMutatorWriter &mmw,
                                       RedoDataNode &redo,
-                                      const bool log_for_lock_node)
+                                      const bool log_for_lock_node,
+                                      bool &fake_fill)
 {
   int ret = OB_SUCCESS;
 
   ObMvccRowCallback *riter = (ObMvccRowCallback *)*cursor;
-  bool fake_fill = false;
 
   if (blocksstable::ObDmlFlag::DF_LOCK == riter->get_dml_flag()) {
     if (!log_for_lock_node) {
@@ -313,16 +323,17 @@ int ObRedoLogGenerator::fill_row_redo(ObITransCallbackIterator &cursor,
 int ObRedoLogGenerator::fill_table_lock_redo(ObITransCallbackIterator &cursor,
                                              ObMutatorWriter &mmw,
                                              TableLockRedoDataNode &redo,
-                                             const bool log_for_lock_node)
+                                             const bool log_for_lock_node,
+                                             bool &fake_fill)
 {
   int ret = OB_SUCCESS;
 
   ObOBJLockCallback *titer = (ObOBJLockCallback *)*cursor;
   if (!log_for_lock_node && !titer->must_log()) {
-    // do nothing
+    fake_fill = true;
   } else if (OB_FAIL(titer->get_redo(redo))) {
     TRANS_LOG(ERROR, "get_redo failed.", K(ret));
-   } else if (OB_FAIL(mmw.append_table_lock_kv(mem_ctx_->get_max_table_version(),
+  } else if (OB_FAIL(mmw.append_table_lock_kv(mem_ctx_->get_max_table_version(),
                                               redo))) {
     if (OB_BUF_NOT_ENOUGH != ret) {
       TRANS_LOG(WARN, "fill table lock redo fail", K(ret));

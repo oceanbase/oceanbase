@@ -15,6 +15,7 @@
 
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -44,8 +45,10 @@ class ObExprCGCtx
 public:
   ObExprCGCtx(common::ObIAllocator &allocator,
               ObSQLSessionInfo *session,
-              share::schema::ObSchemaGetterGuard *schema_guard)
-    : allocator_(&allocator), session_(session), schema_guard_(schema_guard)
+              share::schema::ObSchemaGetterGuard *schema_guard,
+              const uint64_t cur_cluster_version)
+    : allocator_(&allocator), session_(session),
+      schema_guard_(schema_guard), cur_cluster_version_(cur_cluster_version)
   {}
 
 private:
@@ -55,6 +58,7 @@ public:
   common::ObIAllocator *allocator_;
   ObSQLSessionInfo *session_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
+  uint64_t cur_cluster_version_;
 };
 
 class ObRawExpr;
@@ -89,16 +93,19 @@ public:
                        ObSQLSessionInfo *session,
                        share::schema::ObSchemaGetterGuard *schema_guard,
                        const int64_t original_param_cnt,
-                       int64_t param_cnt)
+                       int64_t param_cnt,
+                       const uint64_t cur_cluster_version)
     : allocator_(allocator),
       original_param_cnt_(original_param_cnt),
       param_cnt_(param_cnt),
-      op_cg_ctx_(allocator_, session, schema_guard),
+      op_cg_ctx_(allocator_, session, schema_guard, cur_cluster_version),
       flying_param_cnt_(0),
       batch_size_(0),
       rt_question_mark_eval_(false),
-      need_flatten_gen_col_(true)
-  {}
+      need_flatten_gen_col_(true),
+      cur_cluster_version_(cur_cluster_version)
+  {
+  }
   virtual ~ObStaticEngineExprCG() {}
 
   //将所有raw exprs展开后, 生成ObExpr
@@ -156,6 +163,7 @@ public:
                                     const RowDesc &row_desc,
                                     ObIAllocator &alloctor,
                                     ObSQLSessionInfo *session,
+                                    share::schema::ObSchemaGetterGuard *schema_gaurd,
                                     ObTempExpr *&temp_expr);
 
   static int init_temp_expr_mem_size(ObTempExpr &temp_expr);
@@ -196,9 +204,6 @@ private:
   // alloc stack overflow check exprs.
   int alloc_so_check_exprs(const common::ObIArray<ObRawExpr *> &raw_exprs,
                            ObExprFrameInfo &expr_info);
-  // add stack overflow check expr above %e
-  int add_so_check_expr_above(common::ObIArray<ObExpr> &exprs,
-                              ObExpr *e);
 
   // calculate res_buf_len_ for exprs' datums
   int calc_exprs_res_buf_len(const common::ObIArray<ObRawExpr *> &raw_exprs);
@@ -349,7 +354,7 @@ private:
                                 ObPreCalcExprFrameInfo &expr_info);
 
   // total datums size: header + reserved data
-  int get_expr_datums_size(const ObExpr &expr) {
+  int64_t get_expr_datums_size(const ObExpr &expr) {
     return get_expr_datums_header_size(expr) + reserve_datums_buf_len(expr);
   }
 
@@ -359,7 +364,7 @@ private:
   // - EvalInfo instance
   // - EvalFlag(BitVector) instance + BitVector data
   // - SkipBitmap(BitVector) + BitVector data
-  int get_expr_datums_header_size(const ObExpr &expr) {
+  int64_t get_expr_datums_header_size(const ObExpr &expr) {
     return get_datums_header_size(expr) + sizeof(ObEvalInfo) +
            2 * get_expr_skip_vector_size(expr);
   }
@@ -413,6 +418,7 @@ private:
   bool rt_question_mark_eval_;
   //is code generate temp expr witch used in table location
   bool need_flatten_gen_col_;
+  uint64_t cur_cluster_version_;
 };
 
 } // end namespace sql

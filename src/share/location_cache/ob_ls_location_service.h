@@ -69,7 +69,9 @@ public:
   virtual ~ObLSLocationService();
   int init(
       ObLSTableOperator &lst,
-      schema::ObMultiVersionSchemaService &schema_service);
+      schema::ObMultiVersionSchemaService &schema_service,
+      share::ObRsMgr &rs_mgr,
+      obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   int start();
   // Get ls location synchronously
   //
@@ -100,7 +102,7 @@ public:
       const ObLSID &ls_id,
       const bool force_renew,
       common::ObAddr &leader);
-  
+
   // Get leader of ls. If not hit in cache or leader not exist,
   // it will renew location and try to get leader again until abs_retry_timeout.
   //
@@ -159,10 +161,14 @@ public:
   int reload_config();
   // For ObLSLocationTimerTask. Renew all ls location by __all_ls_meta_table.
   int renew_all_ls_locations();
+  // For ObLSLocationByRpcTimerTask. Renew all ls location's leader info by rpc.
+  int renew_all_ls_locations_by_rpc();
   // Clear dead cache.
   int check_and_clear_dead_cache();
   // Schedule renew all ls timer task.
   int schedule_ls_timer_task();
+  // Schedule renew all ls by rpc timer task.
+  int schedule_ls_by_rpc_timer_task();
   // Schedule dump ls location cache timer task.
   int schedule_dump_cache_timer_task();
   // Dump all ls locations in cache.
@@ -173,6 +179,8 @@ public:
       const ObLSID &ls_id);
 
 private:
+  int check_inner_stat_() const;
+
   int get_from_cache(
       const int64_t cluster_id,
       const uint64_t tenant_id,
@@ -189,27 +197,37 @@ private:
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       const bool can_erase,
-      const ObLSLocation &location);
+      ObLSLocation &location);
   int erase_location(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id);
   int build_tenant_ls_info_hash(ObTenantLsInfoHashMap &hash);
+
+  int construct_rpc_dests_(common::ObIArray<common::ObAddr> &addrs);
+  int detect_ls_leaders_(
+      const common::ObIArray<common::ObAddr> &dests,
+      common::ObArray<share::ObLSLeaderLocation> &leaders);
 private:
   static const int64_t OB_LOCATION_CACHE_BUCKET_NUM = 512;
-  static const int64_t RENEW_LS_LOCATION_INTERVAL_US = 100 * 1000L; // 100ms
+  static const int64_t RENEW_LS_LOCATION_INTERVAL_US = 1000 * 1000L; // 1s
+  static const int64_t RENEW_LS_LOCATION_BY_RPC_INTERVAL_US = 1000 * 1000L; // 1s
   static const int64_t DUMP_CACHE_INTERVAL_US = 10 * 1000 * 1000L; // 10s
 
   bool inited_;
   bool stopped_;
   ObLSTableOperator *lst_;
   schema::ObMultiVersionSchemaService *schema_service_;
+  ObRsMgr *rs_mgr_;
+  obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
   ObLSLocationMap inner_cache_;              // Stores location of log streams in all tenants.
   ObLSLocationUpdateQueueSet local_async_queue_set_;
   ObLSLocationUpdateQueueSet remote_async_queue_set_;
   common::ObTimer ls_loc_timer_;            // process ls_loc_timer_task
+  common::ObTimer ls_loc_by_rpc_timer_;     // process ls_loc_by_rpc_timer_task
   common::ObTimer dump_log_timer_;          // process dump_cache_timer_task
   ObLSLocationTimerTask ls_loc_timer_task_; // task for renewing ls location cache regularly
+  ObLSLocationByRpcTimerTask ls_loc_by_rpc_timer_task_;  // task for renewing ls location cache regularly by rpc
   ObDumpLSLocationCacheTimerTask dump_cache_timer_task_; // task for dumping all content in inner_cache_
   int64_t last_cache_clear_ts_;
   //TODO: need semaphore to limit concurrency

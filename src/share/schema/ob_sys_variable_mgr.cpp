@@ -131,7 +131,7 @@ int ObSysVariableMgr::init()
 void ObSysVariableMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("sys_variable manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "sys_variable manger not init");
   } else {
     sys_variable_infos_.clear();
     sys_variable_map_.clear();

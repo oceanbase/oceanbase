@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -211,7 +212,7 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
       if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, res_buf_len))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret), K(res_buf_len));
-      } else {
+      } else if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
         ObDataBuffer data_buf(res_buf, res_buf_len);
         if (OB_FAIL(ObCharset::charset_convert(data_buf, src, src_cs_type, dst_cs_type, dst,
                                                ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
@@ -223,6 +224,61 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
           } else {
             res_datum.set_string(dst);
           }
+        }
+      } else { // text tc
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        ObTextStringIter src_iter(expr.args_[0]->datum_meta_.type_,
+                                  src_cs_type,
+                                  src_param->get_string(),
+                                  expr.args_[0]->obj_meta_.has_lob_header());
+        ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+        int64_t src_byte_len = 0;
+        int64_t buf_size = 0;
+        if (ob_is_string_tc(expr.datum_meta_.type_)
+            && (src.length() == 0
+               || ObCharset::charset_type_by_coll(src_cs_type) == ObCharset::charset_type_by_coll(dst_cs_type)
+               || ObCharset::charset_type_by_coll(dst_cs_type) == CHARSET_BINARY)) {
+          dst = src; // no need convert
+        } else if (OB_FAIL(src_iter.init(0, NULL, &calc_alloc))) {
+          LOG_WARN("init src_iter failed ", K(ret), K(src_iter));
+        } else if (OB_FAIL(src_iter.get_byte_len(src_byte_len))) {
+          LOG_WARN("get input byte len failed");
+        } else if (OB_FAIL(output_result.init(src_byte_len * ObCharset::MAX_MB_LEN))) {
+          LOG_WARN("init stringtext result failed");
+        } else if (src_byte_len == 0) {
+          output_result.set_result();
+        } else if (OB_FAIL(output_result.get_reserved_buffer(res_buf, buf_size))) {
+          LOG_WARN("stringtext result reserve buffer failed");
+        } else {
+          ObTextStringIterState state;
+          ObString src_block_data;
+          while (OB_SUCC(ret)
+                && buf_size > 0
+                && (state = src_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+            ObDataBuffer data_buf(res_buf, buf_size);
+            if (OB_FAIL(ObCharset::charset_convert(data_buf, src_block_data, src_cs_type, dst_cs_type, dst,
+                                                  (ObCharset::REPLACE_UNKNOWN_CHARACTER
+                                                    | ObCharset::COPY_STRING_ON_SAME_CHARSET)))) {
+              LOG_WARN("fail to convert input string", K(src_block_data), K(src_cs_type), K(dst_cs_type),
+                      KPHEX(src_block_data.ptr(), src_block_data.length()), K(buf_size));
+            } else if (OB_FAIL(output_result.lseek(dst.length(), 0))) {
+              LOG_WARN("result lseek failed", K(ret));
+            } else {
+              res_buf += dst.length();
+              buf_size -= dst.length();
+            }
+          }
+          if (OB_SUCC(ret)) {
+            output_result.get_result_buffer(dst);
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (dst.empty()) {
+          // initcap is only for oracle mode. set res be null when string length is 0.
+          res_datum.set_null();
+        } else {
+          res_datum.set_string(dst);
         }
       }
     }

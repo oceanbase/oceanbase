@@ -17,7 +17,10 @@
 
 namespace oceanbase
 {
-
+namespace share
+{
+class SCN;
+}
 namespace storage
 {
 class ObLS;
@@ -37,7 +40,7 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const int64_t ts_ns) override final;
+             const share::SCN &scn) override final;
 
   // for role change
   void switch_to_follower_forcedly() override final;
@@ -46,8 +49,8 @@ public:
   int resume_leader() override final;
 
   // for checkpoint
-  int flush(int64_t rec_log_ts) override final;
-  int64_t get_rec_log_ts() override final;
+  int flush(share::SCN &scn) override final;
+  share::SCN get_rec_scn() override final;
 
 private:
   bool is_inited_;

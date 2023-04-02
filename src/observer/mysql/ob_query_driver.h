@@ -71,10 +71,17 @@ public:
                                    common::ObCharsetType charset_type, 
                                    common::ObIAllocator &allocator);
   int convert_lob_locator_to_longtext(common::ObObj& value, sql::ObResultSet &result);
+  int process_lob_locator_results(common::ObObj& value, sql::ObResultSet &result);
   int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result);
+  int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result);
   static int convert_lob_locator_to_longtext(common::ObObj& value, 
                                              bool is_use_lob_locator, 
                                              common::ObIAllocator *allocator);
+  static int process_lob_locator_results(common::ObObj& value,
+                                         bool is_use_lob_locator,
+                                         bool is_support_outrow_locator_v2,
+                                         common::ObIAllocator *allocator,
+                                         const sql::ObSQLSessionInfo *session_info);
   static int convert_string_charset(const common::ObString &in_str, 
                                     const common::ObCollationType in_cs_type,
                                     const common::ObCollationType out_cs_type, 
@@ -82,7 +89,10 @@ public:
   static int convert_lob_value_charset(common::ObObj& value, 
                                        common::ObCharsetType charset_type, 
                                        common::ObIAllocator &allocator);
-
+  static int convert_text_value_charset(ObObj& value,
+                                        ObCharsetType charset_type,
+                                        ObIAllocator &allocator,
+                                        const sql::ObSQLSessionInfo *session_info);
 private:
   int convert_field_charset(common::ObIAllocator& allocator,
       const common::ObCollationType& from_collation,

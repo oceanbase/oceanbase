@@ -215,7 +215,6 @@ int ObLogSet::compute_fd_item_set()
                                                       fd_item,
                                                       true,
                                                       select_exprs,
-                                                      get_stmt()->get_current_level(),
                                                       select_exprs))) {
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
@@ -295,6 +294,8 @@ int ObLogSet::compute_sharding_info()
   int ret = OB_SUCCESS;
   ObLogicalOperator *first_child = NULL;
   ObLogicalOperator *second_child = NULL;
+  is_partition_wise_ = (set_dist_algo_ == DistAlgo::DIST_PARTITION_WISE ||
+                        set_dist_algo_ == DistAlgo::DIST_EXT_PARTITION_WISE);
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child)) ||
       OB_ISNULL(second_child = get_child(ObLogicalOperator::second_child))) {
@@ -308,26 +309,40 @@ int ObLogSet::compute_sharding_info()
                                     dup_table_pos_,
                                     strong_sharding_))) {
       LOG_WARN("failed to compute basic sharding info", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      inherit_sharding_index_ = 0;
+    }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == set_dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
-  } else if (DistAlgo::DIST_PARTITION_WISE == set_dist_algo_ &&
+  } else if ((DistAlgo::DIST_PARTITION_WISE == set_dist_algo_ ||
+              DistAlgo::DIST_EXT_PARTITION_WISE == set_dist_algo_) &&
             (ObSelectStmt::UNION == set_op_) && !is_set_distinct()) {
     is_partition_wise_ = true;
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+  } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
+    is_partition_wise_ = false;
+    strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+  } else if (DistAlgo::DIST_NONE_HASH == set_dist_algo_) {
+    is_partition_wise_ = false;
+    strong_sharding_ = first_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
+  } else if (DistAlgo::DIST_HASH_NONE == set_dist_algo_) {
+    is_partition_wise_ = false;
+    strong_sharding_ = second_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (DistAlgo::DIST_NONE_ALL == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = first_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else if (DistAlgo::DIST_ALL_NONE == set_dist_algo_) {
     is_partition_wise_ = false;
     strong_sharding_ = second_child->get_strong_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::second_child;
   } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
     LOG_WARN("failed to compute sharding info", K(ret));
-  } else {
-    is_partition_wise_ = (set_dist_algo_ == DistAlgo::DIST_PARTITION_WISE);
-  }
+  } else { /*do nothing*/ }
   return ret;
 }
 
@@ -340,9 +355,6 @@ int ObLogSet::is_my_set_expr(const ObRawExpr *expr, bool &bret)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect NULL pointer", K(stmt), K(expr));
   } else if (!expr->is_set_op_expr()) {
-    bret = false;
-  } else if (static_cast<const ObSetOpRawExpr *>(expr)->get_expr_level() !=
-             stmt->get_current_level()) {
     bret = false;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !bret && i < stmt->get_select_item_size(); ++i) {
@@ -486,10 +498,11 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
 {
   int ret = OB_SUCCESS;
   double op_cost = op_cost_;
-  card = card_;
+  double need_row_count = card_;
   cost = cost_;
+  card = card_;
   if (param.need_row_count_ >= 0 && param.need_row_count_ < card_) {
-    card = param.need_row_count_;
+    need_row_count = param.need_row_count_;
   }
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -497,9 +510,26 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
   } else if (param.need_row_count_ >= get_card() || std::fabs(get_card()) < OB_DOUBLE_EPSINON) {
     /*do nothing*/
   } else if (HASH_SET == set_algo_) {
-    /*do nothing*/
+    card = 0.0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
+      double child_cost = 0.0;
+      double child_card = 0.0;
+      param.need_row_count_ = -1;
+      if (OB_ISNULL(get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(get_child(i)->re_est_cost(param, child_card, child_cost))) {
+        LOG_WARN("failed to re-est cost", K(ret));
+      } else {
+        card += child_card;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      card = card > need_row_count ? need_row_count : card;
+    }
   } else {
     cost = 0.0;
+    card = 0.0;
     ObSEArray<ObBasicCostInfo, 4> children_cost_info;
     ObCostMergeSetInfo cost_info(children_cost_info,
                                  get_set_op(),
@@ -507,7 +537,7 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
     for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
       double child_cost = 0.0;
       double child_card = 0.0;
-      param.need_row_count_ = card;
+      param.need_row_count_ = need_row_count;
       if (OB_ISNULL(get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -515,6 +545,7 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
         LOG_WARN("failed to re-est cost", K(ret));
       } else {
         cost += child_cost;
+        card += child_card;
         ObBasicCostInfo info(child_card,
                              child_cost,
                              get_child(i)->get_width());
@@ -530,6 +561,7 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
         LOG_WARN("failed to cost merge set", K(ret));
       } else {
         cost += op_cost;
+        card = card > need_row_count ? need_row_count : card;
       }
     }
   }
@@ -570,7 +602,7 @@ int ObLogSet::allocate_granule_pre(AllocGIContext &ctx)
     LOG_TRACE("no exchange above, do nothing", K(ctx));
   } else if (!ctx.is_in_partition_wise_state()
              && !ctx.is_in_pw_affinity_state()
-             && is_partition_wise_) {
+             && DistAlgo::DIST_PARTITION_WISE == set_dist_algo_) {
     /**
      *        (partition wise join below)
      *                   |
@@ -588,6 +620,14 @@ int ObLogSet::allocate_granule_pre(AllocGIContext &ctx)
      */
     ctx.set_in_partition_wise_state(this);
     LOG_TRACE("in find partition wise state", K(ctx));
+  } else if (DistAlgo::DIST_SET_PARTITION_WISE == set_dist_algo_) {
+    if (!ctx.is_in_partition_wise_state() &&
+        !ctx.is_in_pw_affinity_state()) {
+      ctx.set_in_partition_wise_state(this);
+      if (OB_FAIL(ctx.set_pw_affinity_state())) {
+        LOG_WARN("set affinity state failed", K(ret), K(ctx));
+      }
+    }
   } else if (ctx.is_in_partition_wise_state()) {
     /**
      *       (partition wise join below)
@@ -669,33 +709,6 @@ int ObLogSet::allocate_granule_post(AllocGIContext &ctx)
   return ret;
 }
 
-int ObLogSet::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else {
-    bool is_parent_distinct = false;
-    is_parent_distinct = LOG_DISTINCT == get_parent()->get_type();
-    if (!is_parent_distinct && 
-        LOG_SORT  == get_parent()->get_type() &&
-        NULL != get_parent()->get_parent()) {
-      is_parent_distinct = LOG_DISTINCT == get_parent()->get_parent()->get_type();
-    }
-    if (OB_FAIL(link_ctx.spell_set(static_cast<const ObSelectStmt *>(get_stmt()),
-                                          this,
-                                          startup_exprs_,
-                                          filter_exprs_,
-                                          set_op_,
-                                          is_distinct_,
-                                          is_parent_distinct
-                                          ))) {
-      LOG_WARN("dblink fail to reverse spell set", K(dblink_id_), K(ret));
-    }
-  }
-  return ret;
-}
-
 uint64_t ObLogSet::hash(uint64_t seed) const
 {
   seed = do_hash(is_distinct_, seed);
@@ -731,6 +744,7 @@ int ObLogSet::extra_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
   }
   return ret;
 }
+
 
 int ObLogSet::estimate_row_count(double &rows)
 {
@@ -779,18 +793,38 @@ int ObLogSet::allocate_startup_expr_post()
   return ret;
 }
 
-int ObLogSet::print_outline(planText &plan_text)
+int ObLogSet::print_outline_data(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  if (USED_HINT == plan_text.outline_type_ && OB_FAIL(print_used_hint(plan_text))) {
-    LOG_WARN("fail to print used hint", K(ret));
-  } else if (OUTLINE_DATA == plan_text.outline_type_ && OB_FAIL(print_outline_data(plan_text))) {
-    LOG_WARN("fail to print outline data", K(ret));
-  }
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  const ObDMLStmt *stmt = NULL;
+  ObString qb_name;
+  ObPQSetHint hint;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
+  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
+    LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
+  } else if (HASH_SET == set_algo_ &&
+             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
+                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
+                                ObHint::get_hint_name(T_USE_HASH_SET),
+                                qb_name.length(), qb_name.ptr()))) {
+    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(construct_pq_set_hint(hint))) {
+    LOG_WARN("fail to construct pq set hint", K(ret));
+  } else if (hint.get_dist_methods().empty() && hint.get_left_branch().empty()) {
+    /*do nothing*/
+  } else if (OB_FALSE_IT(hint.set_qb_name(qb_name))) {
+  } else if (hint.print_hint(plan_text)) {
+    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
+  } else { /*do nothing*/ }
   return ret;
 }
 
-int ObLogSet::print_used_hint(planText &plan_text)
+int ObLogSet::print_used_hint(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_plan())) {
@@ -838,37 +872,6 @@ int ObLogSet::get_used_pq_set_hint(const ObPQSetHint *&used_hint)
       }
     }
   }
-  return ret;
-}
-
-int ObLogSet::print_outline_data(planText &plan_text)
-{
-  int ret = OB_SUCCESS;
-  char *buf = plan_text.buf;
-  int64_t &buf_len = plan_text.buf_len;
-  int64_t &pos = plan_text.pos;
-  const ObDMLStmt *stmt = NULL;
-  ObString qb_name;
-  ObPQSetHint hint;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
-  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
-    LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
-  } else if (HASH_SET == set_algo_ &&
-             OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\")",
-                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
-                                ObHint::get_hint_name(T_USE_HASH_SET),
-                                qb_name.length(), qb_name.ptr()))) {
-    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
-  } else if (OB_FAIL(construct_pq_set_hint(hint))) {
-    LOG_WARN("fail to construct pq set hint", K(ret));
-  } else if (hint.get_dist_methods().empty() && hint.get_left_branch().empty()) {
-    /*do nothing*/
-  } else if (OB_FALSE_IT(hint.set_qb_name(qb_name))) {
-  } else if (hint.print_hint(plan_text)) {
-    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
-  } else { /*do nothing*/ }
   return ret;
 }
 

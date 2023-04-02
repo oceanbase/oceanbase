@@ -34,6 +34,9 @@ public:
       common::ObIArray<share::ObLSID> &ls_id_array);
 
 private:
+  int query_and_set_tenant_ls_info_(
+      const uint64_t tenant_id);
+
   int query_tenant_ls_info_(
       const uint64_t tenant_id,
       ObLogSysTableHelper::TenantLSIDs &tenant_ls_ids);

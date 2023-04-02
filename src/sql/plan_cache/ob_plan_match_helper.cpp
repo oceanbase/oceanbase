@@ -316,7 +316,7 @@ int ObPlanMatchHelper::check_partition_constraint(
       } else if (loc_cons.at(i).is_subpartition_single()) {
         // is_subpartition_single requires that each primary partition of the current
         // secondary partition table involves only one secondary partition
-        ObSqlBitSet<> part_ids;
+        ObSEArray<int64_t, 4> part_ids;
         for (int64_t j = 0; OB_SUCC(ret) && is_match && j < phy_part_loc_info_list.count(); ++j) {
           ObTabletID cur_tablet_id =
               phy_part_loc_info_list.at(j).get_partition_location().get_tablet_id();
@@ -324,10 +324,22 @@ int ObPlanMatchHelper::check_partition_constraint(
           int64_t cur_subpart_id = OB_INVALID_ID;
           if (OB_FAIL(table_schema->get_part_id_by_tablet(cur_tablet_id, cur_part_id, cur_subpart_id))) {
             LOG_WARN("failed to get part id by tablet", K(ret));
-          } else if (part_ids.has_member(cur_part_id)) {
-            is_match = false;
-          } else if (OB_FAIL(part_ids.add_member(cur_part_id))) {
-            LOG_WARN("failed to add member", K(ret));
+          } else {
+            for (int64_t k = 0; OB_SUCC(ret) && is_match && k < part_ids.count(); ++k) {
+              if (part_ids.at(k) == cur_part_id) {
+                is_match = false;
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (!is_match) {
+              // do nothing
+            } else if (OB_FAIL(part_ids.push_back(cur_part_id))) {
+              LOG_WARN("failed to add member", K(ret));
+            } else {
+              // do nothing
+            }
           }
         }
       }
@@ -352,57 +364,35 @@ int ObPlanMatchHelper::check_inner_constraints(
   if (strict_cons.count() >0 || non_strict_cons.count() > 0) {
     const int64_t tbl_count = phy_tbl_infos.count();
     ObSEArray<PwjTable, 4> pwj_tables;
-    SMART_VARS_2((ObPwjComparer, strict_pwj_comparer, true),
-                 (ObPwjComparer, non_strict_pwj_comparer, false)) {
+    SMART_VARS_2((ObStrictPwjComparer, strict_pwj_comparer),
+                 (ObNonStrictPwjComparer, non_strict_pwj_comparer)) {
       if (OB_FAIL(pwj_tables.prepare_allocate(tbl_count))) {
         LOG_WARN("failed to prepare allocate pwj tables", K(ret));
       }
 
-      /**
-       * 遍历严格pwj约束和非严格pwj约束，并生成可以做partition wise join的partition id的映射。
-       * 因为可能存在如下形式的约束
-       * strict_pwj_cons = [0,1], [2,3]
-       * non_strict_pwj_cons = [0,2]
-       * 如果先遍历strict_pwj_cons，再遍历non_strict_pwj_cons，就可能出现一种情况：
-       *    遍历strict_pwj_cons后，pwj_map中设置了[part_array0,part_array1,part_array2,part_array3]的映射，
-       *    但是遍历non_strict_pwj_cons时发现partition_array2需要调整，那么就要递归地调整所有与其相关的array，
-       *    调整提来很复杂。
-       * 按照基表的顺序在strict_pwj_cons和non_strict_pwj_cons中分别遍历则可以规避这种情况：
-       *    遍历以0开头的所有约束，会在pwj_map中设置[part_array0,part_array1,part_array2]的映射；
-       *    遍历以1开头的所有约束，发现没有相关的约束；
-       *    遍历以2开头的所有约束，需要在pwj_map中设置part_array3，由于part_array2已经设置过了，因此
-       *        按照part_array2生成的part_array3的映射不需要再做调整
-       *    遍历以3开头的所有约束，发现没有相关的约束
-       */
-      for (int64_t i = 0; OB_SUCC(ret) && i < tbl_count; ++i) {
-        // 遍历严格约束中以i开始的约束
-        for (int64_t j = 0; OB_SUCC(ret) && j < strict_cons.count(); ++j) {
-          const ObPlanPwjConstraint &pwj_cons = strict_cons.at(j);
-          if (OB_UNLIKELY(pwj_cons.count() <= 1)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
-          } else if (pwj_cons.at(0) == i) {
-            if (OB_FAIL(check_pwj_cons(pc_ctx, pwj_cons, phy_tbl_infos,
-                                       pwj_tables, strict_pwj_comparer,
-                                       pwj_map, is_same))) {
-              LOG_WARN("failed to check pwj cons", K(ret));
-            }
-          }
+      for (int64_t i = 0; OB_SUCC(ret) && is_same && i < strict_cons.count(); ++i) {
+        const ObPlanPwjConstraint &pwj_cons = strict_cons.at(i);
+        if (OB_UNLIKELY(pwj_cons.count() <= 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
+        } else if (OB_FAIL(check_strict_pwj_cons(pc_ctx, pwj_cons, phy_tbl_infos,
+                                                 strict_pwj_comparer, pwj_map, is_same))) {
+          LOG_WARN("failed to check strict pwj cons", K(ret));
+        } else {
+          LOG_DEBUG("succ to check strict pwj cons", K(is_same));
         }
+      }
 
-        // 遍历非严格约束中以i开始的约束
-        for (int64_t j = 0; OB_SUCC(ret) && j < non_strict_cons.count(); ++j) {
-          const ObPlanPwjConstraint &pwj_cons = non_strict_cons.at(j);
-          if (OB_UNLIKELY(pwj_cons.count() <= 1)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
-          } else if (pwj_cons.at(0) == i) {
-            if (OB_FAIL(check_pwj_cons(pc_ctx, pwj_cons, phy_tbl_infos,
-                                       pwj_tables, non_strict_pwj_comparer,
-                                       pwj_map, is_same))) {
-              LOG_WARN("failed to check pwj cons", K(ret));
-            }
-          }
+      for (int64_t i = 0; OB_SUCC(ret) && is_same && i < non_strict_cons.count(); ++i) {
+        const ObPlanPwjConstraint &pwj_cons = non_strict_cons.at(i);
+        if (OB_UNLIKELY(pwj_cons.count() <= 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected pwj constraint", K(ret), K(pwj_cons));
+        } else if (OB_FAIL(check_non_strict_pwj_cons(pwj_cons, phy_tbl_infos,
+                                                     non_strict_pwj_comparer, is_same))) {
+          LOG_WARN("failed to check non strict pwj cons", K(ret));
+        } else {
+          LOG_DEBUG("succ to check non strict pwj cons", K(is_same));
         }
       }
     }
@@ -413,12 +403,11 @@ int ObPlanMatchHelper::check_inner_constraints(
   return ret;
 }
 
-int64_t ObPlanMatchHelper::check_pwj_cons(
+int ObPlanMatchHelper::check_strict_pwj_cons(
         const ObPlanCacheCtx &pc_ctx,
         const ObPlanPwjConstraint &pwj_cons,
-        const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
-        ObIArray<PwjTable> &pwj_tables,
-        ObPwjComparer &pwj_comparer,
+        const ObIArray<ObCandiTableLoc> &phy_tbl_infos,
+        ObStrictPwjComparer &pwj_comparer,
         PWJTabletIdMap &pwj_map,
         bool &is_same) const
 {
@@ -449,49 +438,53 @@ int64_t ObPlanMatchHelper::check_pwj_cons(
     const uint64_t tenant_id = GET_MY_SESSION(pc_ctx.exec_ctx_)->get_effective_tenant_id();
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < pwj_cons.count(); ++i) {
       const int64_t table_idx = pwj_cons.at(i);
-      PwjTable &table = pwj_tables.at(table_idx);
-      bool need_set_refactored = false;
-      if (OB_INVALID_ID == table.ref_table_id_) {
-        // pwj table no init
-        need_set_refactored = true;
-        const ObCandiTableLoc &phy_tbl_info = phy_tbl_infos.at(table_idx);
-        share::schema::ObSchemaGetterGuard *schema_guard = pc_ctx.sql_ctx_.schema_guard_;
-        const share::schema::ObTableSchema *table_schema = NULL;
-        if (OB_ISNULL(schema_guard)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(schema_guard->get_table_schema(
-                   tenant_id, phy_tbl_info.get_ref_table_id(), table_schema))) {
-          LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(phy_tbl_info.get_ref_table_id()));
-        } else if (OB_ISNULL(table_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(table.init(*table_schema, phy_tbl_info))) {
-          LOG_WARN("failed to init pwj table with table schema", K(ret));
-        }
-      } else {
-        // pwj table already init, table's ordered partition ids should use
-        // partition id array in pwj map
-        TabletIdArray tablet_id_array;
-        if (OB_FAIL(pwj_map.get_refactored(table_idx, tablet_id_array))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            LOG_WARN("get refactored not find partition id array", K(ret));
-          } else {
-            LOG_WARN("failed to get refactored", K(ret));
-          }
-        } else if (OB_FAIL(table.ordered_tablet_ids_.assign(tablet_id_array))) {
-          LOG_WARN("failed to assign partition id array", K(ret));
-        }
+      PwjTable pwj_table;
+      const ObCandiTableLoc &phy_tbl_info = phy_tbl_infos.at(table_idx);
+      share::schema::ObSchemaGetterGuard *schema_guard = pc_ctx.sql_ctx_.schema_guard_;
+      const share::schema::ObTableSchema *table_schema = NULL;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(
+                 tenant_id, phy_tbl_info.get_ref_table_id(), table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(phy_tbl_info.get_ref_table_id()));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(pwj_table.init(*table_schema, phy_tbl_info))) {
+        LOG_WARN("failed to init pwj table with table schema", K(ret));
+      } else if (OB_FAIL(pwj_comparer.add_table(pwj_table, is_same))) {
+        LOG_WARN("failed to add table", K(ret));
+      } else if (is_same &&
+                 OB_FAIL(pwj_map.set_refactored(table_idx, pwj_comparer.get_tablet_id_group().at(i)))) {
+        LOG_WARN("failed to set refactored", K(ret));
       }
+    }
+  }
+  return ret;
+}
 
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(pwj_comparer.add_table(table, is_same))) {
-          LOG_WARN("failed to add table", K(ret));
-        } else if (is_same && need_set_refactored &&
-                   OB_FAIL(pwj_map.set_refactored(table_idx, pwj_comparer.get_tablet_id_group().at(i)))) {
-          LOG_WARN("failed to set refactored", K(ret));
-        }
-      }
+int ObPlanMatchHelper::check_non_strict_pwj_cons(const ObPlanPwjConstraint &pwj_cons,
+                                                 const ObIArray<ObCandiTableLoc> &phy_tbl_infos,
+                                                 ObNonStrictPwjComparer &pwj_comparer,
+                                                 bool &is_same) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<common::ObAddr, 8> server_list;
+  // non strict partition wise join constraint, request all tables in same group have at least
+  // one partition on same server. Each table's partition count may be different.
+  pwj_comparer.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && is_same && i < pwj_cons.count(); ++i) {
+    const int64_t table_idx = pwj_cons.at(i);
+    PwjTable pwj_table;
+    server_list.reuse();
+    const ObCandiTableLoc &table_loc = phy_tbl_infos.at(table_idx);
+    if (OB_FAIL(table_loc.get_all_servers(server_list))) {
+      LOG_WARN("failed to get all servers", K(ret));
+    } else if (OB_FAIL(pwj_table.init(server_list))) {
+      LOG_WARN("failed to init pwj table with table schema", K(ret));
+    } else if (OB_FAIL(pwj_comparer.add_table(pwj_table, is_same))) {
+      LOG_WARN("failed to add table", K(ret));
     }
   }
   return ret;

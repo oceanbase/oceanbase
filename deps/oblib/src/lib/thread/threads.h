@@ -54,10 +54,10 @@ class Threads
 public:
   explicit Threads(int64_t n_threads = 1)
       : n_threads_(n_threads),
+        init_threads_(n_threads),
         threads_(nullptr),
         stack_size_(global_thread_stack_size),
         stop_(true),
-        thread_max_tasks_(INT64_MAX),
         run_wrapper_(nullptr),
         cgroup_(INVALID_CGROUP)
   {}
@@ -81,6 +81,7 @@ public:
   int do_set_thread_count(int64_t n_threads);
   int set_thread_count(int64_t n_threads);
   int inc_thread_count(int64_t inc = 1);
+  int thread_recycle();
 
   int init();
   // IRunWrapper 用于创建多租户线程时指定租户上下文
@@ -95,14 +96,7 @@ public:
   virtual void wait();
   void destroy();
 
-  pid_t get_tid() const
-  {
-    OB_ASSERT(n_threads_ > 0);
-    return threads_[0]->get_tid();
-  }
 public:
-  void set_thread_max_tasks(uint64_t cnt);
-
   template <class Functor>
   int submit(const Functor &func)
   {
@@ -111,16 +105,26 @@ public:
     return ret;
   }
   ThreadCGroup get_cgroup() { return cgroup_; }
+  virtual bool has_set_stop() const
+  {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
+    return ATOMIC_LOAD(&stop_);
+  }
+  bool &has_set_stop()
+  {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
+    return stop_;
+  }
 protected:
-  virtual bool has_set_stop() const { return ATOMIC_LOAD(&stop_); }
-  bool &has_set_stop() { return stop_; }
   int64_t get_thread_count() const { return n_threads_; }
   uint64_t get_thread_idx() const { return thread_idx_; }
+  void set_thread_idx(int64_t idx) { thread_idx_ = idx; }
 
 private:
   virtual void run(int64_t idx);
   virtual void run1() {}
 
+  int do_thread_recycle();
   /// \brief Create thread with start entry \c entry.
   int create_thread(Thread *&thread, std::function<void()> entry);
 
@@ -130,12 +134,12 @@ private:
 private:
   static thread_local uint64_t thread_idx_;
   int64_t n_threads_;
+  int64_t init_threads_;
   Thread **threads_;
   int64_t stack_size_;
   bool stop_;
   // protect for thread count changing.
   common::SpinRWLock lock_;
-  int64_t thread_max_tasks_;
   // tenant ctx
   IRunWrapper *run_wrapper_;
   // thread cgroups

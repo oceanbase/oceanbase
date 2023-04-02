@@ -31,6 +31,7 @@ MULTI_VERSION_EXTRA_ROWKEY_DEF(MAX_EXTRA_ROWKEY, 0, NULL, NULL)
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/ob_table_store_stat_mgr.h"
 #include "storage/memtable/mvcc/ob_mvcc_acc_ctx.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -79,22 +80,6 @@ public:
             access_type == ObStoreAccessType::TABLE_LOCK);
   }
 };
-
-enum ObMergeType
-{
-  INVALID_MERGE_TYPE = -1,
-  MINI_MINOR_MERGE = 0,  // mini minor merge, compaction several mini sstable into one larger mini sstable
-  BUF_MINOR_MERGE = 1,
-  HISTORY_MINI_MINOR_MERGE = 2,
-  MINI_MERGE = 3,  // mini merge, only flush memtable
-  MAJOR_MERGE = 4,
-  MINOR_MERGE = 5,
-  DDL_KV_MERGE = 6,
-  BACKFILL_TX_MERGE = 7,
-  MERGE_TYPE_MAX,
-};
-
-const char *merge_type_to_str(const ObMergeType &merge_type);
 
 enum ObMergeLevel
 {
@@ -185,21 +170,21 @@ public:
       const int64_t schema_rowkey_col_cnt,
       const bool is_multi_version)
   {
-    int ret = -1;
+    int64_t index = -1;
     if (is_multi_version) {
-      ret = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::TRANS_VERSION_COL;
+      index = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::TRANS_VERSION_COL;
     }
-    return ret;
+    return index;
   }
   static int64_t get_sql_sequence_col_store_index(
       const int64_t schema_rowkey_col_cnt,
       const bool is_multi_version)
   {
-    int ret = -1;
+    int64_t index = -1;
     if (is_multi_version) {
-      ret = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::SQL_SEQUENCE_COL;
+      index = schema_rowkey_col_cnt + ObMultiVersionExtraRowkeyIds::SQL_SEQUENCE_COL;
     }
-    return ret;
+    return index;
   }
 
   static int add_extra_rowkey_cols(ObColDescIArray &store_out_cols);
@@ -239,19 +224,27 @@ struct ObStoreRowLockState
 {
 public:
   ObStoreRowLockState()
-      : is_locked_(false), trans_version_(0), lock_trans_id_(),
-        lock_data_sequence_(0), is_delayed_cleanout_(false),
-        mvcc_row_(NULL)
-  {}
+    : is_locked_(false),
+    trans_version_(share::SCN::min_scn()),
+    lock_trans_id_(),
+    lock_data_sequence_(0),
+    lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
+    is_delayed_cleanout_(false),
+    mvcc_row_(NULL) {}
   void reset();
-  TO_STRING_KV(K_(is_locked), K_(trans_version), K_(lock_trans_id),
-               K_(lock_data_sequence), K_(is_delayed_cleanout),
+  TO_STRING_KV(K_(is_locked),
+               K_(trans_version),
+               K_(lock_trans_id),
+               K_(lock_data_sequence),
+               K_(lock_dml_flag),
+               K_(is_delayed_cleanout),
                KP_(mvcc_row));
 
   bool is_locked_;
-  int64_t trans_version_;
+  share::SCN trans_version_;
   transaction::ObTransID lock_trans_id_;
   int64_t lock_data_sequence_;
+  blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
   memtable::ObMvccRow *mvcc_row_;
 };
@@ -275,7 +268,7 @@ public:
   {
     return row_val_.get_deep_copy_size();
   }
-  TO_YSON_KV(OB_ID(row), row_val_, Y_(capacity));
+  TO_YSON_KV(OB_ID(row), row_val_, OB_Y_(capacity));
   int64_t to_string(char *buffer, const int64_t length) const;
   /*
    *multi version row section
@@ -420,11 +413,11 @@ struct ObStoreCtx
   int init_for_read(const share::ObLSID &ls_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
-                    const int64_t snapshot_version);
+                    const share::SCN &snapshot_version);
   int init_for_read(const storage::ObLSHandle &ls_handle,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
-                    const int64_t snapshot_version);
+                    const share::SCN &snapshot_version);
   void force_print_trace_log();
   TO_STRING_KV(KP(this),
                K_(ls_id),
@@ -434,7 +427,8 @@ struct ObStoreCtx
                KP_(table_iter),
                K_(table_version),
                K_(mvcc_acc_ctx),
-               K_(log_ts));
+               K_(tablet_stat),
+               K_(replay_log_scn));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
   common::ObTabletID tablet_id_;
@@ -442,7 +436,8 @@ struct ObStoreCtx
   int64_t table_version_;                          // used to update memtable's max_schema_version
   int64_t timeout_;
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
-  int64_t log_ts_;                                 // used in replay pass log_ts
+  storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
+  share::SCN replay_log_scn_;                         // used in replay pass log_ts
 };
 
 
@@ -488,38 +483,6 @@ OB_INLINE bool ObStoreRow::is_valid() const
   }
 
   return bool_ret;
-}
-
-
-OB_INLINE bool is_major_merge(const ObMergeType &merge_type)
-{
-  return MAJOR_MERGE == merge_type;
-}
-OB_INLINE bool is_mini_merge(const ObMergeType &merge_type)
-{
-  return MINI_MERGE == merge_type;
-}
-OB_INLINE bool is_mini_minor_merge(const ObMergeType &merge_type)
-{
-  return MINOR_MERGE == merge_type || MINI_MINOR_MERGE == merge_type || HISTORY_MINI_MINOR_MERGE == merge_type;
-}
-OB_INLINE bool is_multi_version_minor_merge(const ObMergeType &merge_type)
-{
-  return MINOR_MERGE == merge_type || MINI_MERGE == merge_type || MINI_MINOR_MERGE == merge_type
-      || HISTORY_MINI_MINOR_MERGE == merge_type || BACKFILL_TX_MERGE == merge_type;
-}
-OB_INLINE bool is_history_mini_minor_merge(const ObMergeType &merge_type)
-{
-  return HISTORY_MINI_MINOR_MERGE == merge_type;
-}
-OB_INLINE bool is_buf_minor_merge(const ObMergeType &merge_type)
-{
-  return BUF_MINOR_MERGE == merge_type;
-}
-
-OB_INLINE bool is_backfill_tx_merge(const ObMergeType &merge_type)
-{
-  return BACKFILL_TX_MERGE == merge_type;
 }
 
 } // storage

@@ -22,6 +22,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_snapshot_table_proxy.h"
 #include "share/ob_zone_info.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -41,22 +42,22 @@ class ObTenantFreezeInfoMgr
 public:
 
   struct FreezeInfo {
-    int64_t freeze_ts;
+    int64_t freeze_version;
     int64_t schema_version;
     int64_t cluster_version;
 
-    FreezeInfo() : freeze_ts(-1), schema_version(-1), cluster_version(0) {}
-    FreezeInfo(const int64_t ts, const int64_t schema_ver, const int64_t cluster_ver)
-      : freeze_ts(ts), schema_version(schema_ver), cluster_version(cluster_ver) {}
+    FreezeInfo() : freeze_version(-1), schema_version(-1), cluster_version(0) {}
+    FreezeInfo(const int64_t &freeze_ver, const int64_t schema_ver, const int64_t cluster_ver)
+      : freeze_version(freeze_ver), schema_version(schema_ver), cluster_version(cluster_ver) {}
     FreezeInfo &operator =(const FreezeInfo &o)
     {
-      freeze_ts = o.freeze_ts;
+      freeze_version = o.freeze_version;
       schema_version = o.schema_version;
       cluster_version = o.cluster_version;
       return *this;
     }
-    void reset() { freeze_ts = -1; schema_version = -1; cluster_version = 0; }
-    TO_STRING_KV(K(freeze_ts), K(schema_version), K(cluster_version));
+    void reset() { freeze_version = -1; schema_version = -1; cluster_version = 0; }
+    TO_STRING_KV(K(freeze_version), K(schema_version), K(cluster_version));
   };
 
   struct NeighbourFreezeInfo {
@@ -84,14 +85,16 @@ public:
   void stop();
   void destroy();
 
-  int64_t get_latest_frozen_timestamp();
+  int64_t get_latest_frozen_version();
 
   int get_freeze_info_behind_major_snapshot(const int64_t major_snapshot, common::ObIArray<FreezeInfo> &freeze_infos);
   int get_freeze_info_by_snapshot_version(const int64_t snapshot_version, FreezeInfo &freeze_info);
+  // get first freeze info larger than snapshot
   int get_freeze_info_behind_snapshot_version(const int64_t snapshot_version, FreezeInfo &freeze_info);
 
   int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfo &info);
 
+  int64_t get_min_reserved_snapshot_for_tx();
   int get_min_reserved_snapshot(
       const ObTabletID &tablet_id,
       const int64_t merged_version,
@@ -131,12 +134,13 @@ private:
   typedef common::RWLock::WLockGuard WLockGuard;
 
   static const int64_t RELOAD_INTERVAL = 1L * 1000L * 1000L;
+  static const int64_t UPDATE_LS_RESERVED_SNAPSHOT_INTERVAL = 10L * 1000L * 1000L;
   static const int64_t MAX_GC_SNAPSHOT_TS_REFRESH_TS = 10L * 60L * 1000L * 1000L;
   static const int64_t FLUSH_GC_SNAPSHOT_TS_REFRESH_TS =
       common::MODIFY_GC_SNAPSHOT_INTERVAL + 10L * 1000L * 1000L;
   static const int64_t MIN_DEPENDENT_FREEZE_INFO_GAP = 2;
 
-  int get_latest_freeze_ts(int64_t &freeze_ts);
+  int get_latest_freeze_version(int64_t &freeze_version);
   int64_t get_next_idx() { return 1L - cur_idx_; }
   void switch_info() { cur_idx_ = get_next_idx(); }
   int get_info_nolock(const int64_t idx, FreezeInfo &freeze_info);
@@ -152,7 +156,7 @@ private:
   int get_freeze_info_behind_snapshot_version_(
       const int64_t snapshot_version,
       FreezeInfo &freeze_info);
-
+  int try_update_reserved_snapshot();
   class ReloadTask : public common::ObTimerTask
   {
   public:
@@ -169,14 +173,25 @@ private:
                         common::ObIArray<FreezeInfo> &freeze_info);
 
     bool inited_;
+    bool check_tenant_status_;
     ObTenantFreezeInfoMgr &mgr_;
     common::ObISQLClient *sql_proxy_;
     share::ObSnapshotTableProxy snapshot_proxy_;
     int64_t last_change_ts_;
   };
 
+  class UpdateLSResvSnapshotTask : public common::ObTimerTask
+  {
+  public:
+    UpdateLSResvSnapshotTask(ObTenantFreezeInfoMgr &mgr) : mgr_(mgr) {}
+    virtual void runTimerTask();
+  private:
+    ObTenantFreezeInfoMgr &mgr_;
+  };
+
 private:
   ReloadTask reload_task_;
+  UpdateLSResvSnapshotTask update_reserved_snapshot_task_;
   common::ObSEArray<FreezeInfo, 8> info_list_[2];
   common::ObSEArray<share::ObSnapshotInfo, 8> snapshots_[2]; // snapshots_ maintains multi_version_start for index and others
   common::RWLock lock_;
@@ -195,7 +210,9 @@ private:
       ret = common::OB_ERR_UNEXPECTED;                                             \
       STORAGE_LOG(ERROR, "failed to get tenant freeze info mgr from mtl", K(ret)); \
     } else if (OB_FAIL(mgr->func(args))) {                                         \
-      STORAGE_LOG(WARN, "failed to execute func", K(ret));                         \
+      if (OB_ENTRY_NOT_EXIST != ret) {                                             \
+        STORAGE_LOG(WARN, "failed to execute func", K(ret));                       \
+      }                                                                            \
     }                                                                              \
     ret;                                                                           \
   })

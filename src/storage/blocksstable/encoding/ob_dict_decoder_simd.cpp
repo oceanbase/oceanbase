@@ -109,7 +109,7 @@ struct DictCmpRefAVX512Func_T<2, CMP_TYPE>
         result.reinterpret_data<uint16_t>()[i] = cmp_res_ref;
         LOG_DEBUG("[SIMD filter] batch filter result",
             K(i), K(result.reinterpret_data<uint16_t>()[i]),
-            "ref_arr:", common::ObArrayWrap<uint16_t>(ref_arr + i * 32, 16));
+            "ref_arr:", common::ObArrayWrap<uint16_t>(ref_arr + i * 16, 16));
       }
 
       for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {
@@ -130,7 +130,7 @@ struct DictCmpRefAVX512Func_T<2, CMP_TYPE>
         result.reinterpret_data<uint16_t>()[i] = cmp_res_ref & (~cmp_res_cnt);
         LOG_DEBUG("[SIMD filter] batch filter result",
             K(i), K(result.reinterpret_data<uint16_t>()[i]),
-            "ref_arr:", common::ObArrayWrap<uint16_t>(ref_arr + i * 32, 16));
+            "ref_arr:", common::ObArrayWrap<uint16_t>(ref_arr + i * 16, 16));
       }
 
       for (int64_t row_id = row_cnt / 16 * 16; row_id < row_cnt; ++row_id) {

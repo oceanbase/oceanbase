@@ -21,6 +21,7 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -228,26 +229,57 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   ObDatum *text = NULL;
   ObDatum *from = NULL;
   ObDatum *to = NULL;
+  bool is_clob = expr.args_[0]->datum_meta_.is_clob();
+  bool is_lob_res = ob_is_text_tc(expr.datum_meta_.type_);
   if (OB_FAIL(expr.eval_param_value(ctx, text, from, to))) {
     LOG_WARN("evaluate parameters failed", K(ret));
   } else if (text->is_null()
              || (is_mysql && from->is_null())
              || (is_mysql && NULL != to && to->is_null())) {
     expr_datum.set_null();
-  } else if (expr.args_[0]->datum_meta_.is_clob()
-             && (0 == text->len_)) {
+  } else if (is_clob && (0 == text->len_)) {
     expr_datum.set_datum(*text);
-  } else if (OB_FAIL(replace(res,
-                             text->get_string(),
-                             !from->is_null() ? from->get_string() : ObString(),
-                             (NULL != to && !to->is_null()) ? to->get_string() : ObString(),
-                             alloc))) {
-    LOG_WARN("do replace failed", K(ret));
-  } else {
-    if (res.empty() && !is_mysql && !expr.args_[0]->datum_meta_.is_clob()) {
-      expr_datum.set_null();
+  } else if (!is_lob_res) { // non text tc inputs
+    if (OB_FAIL(replace(res,
+                        text->get_string(),
+                        !from->is_null() ? from->get_string() : ObString(),
+                        (NULL != to && !to->is_null()) ? to->get_string() : ObString(),
+                        alloc))) {
+      LOG_WARN("do replace failed", K(ret));
     } else {
-      expr_datum.set_string(res);
+      if (res.empty() && !is_mysql && !expr.args_[0]->datum_meta_.is_clob()) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(res);
+      }
+    }
+  } else { // tc inputs
+    ObString text_data;
+    ObString to_data;
+    ObString from_data;
+    text_data = text->get_string();
+    from_data = from->get_string();
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *text,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), text_data))) {
+      LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *from,
+                       expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), from_data))) {
+      LOG_WARN("failed to get string data", K(ret), K(expr.args_[1]->datum_meta_));
+    } else if (NULL == to) {
+      to_data.reset();
+    } else if (OB_FALSE_IT(to_data = to->get_string())) {
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *to,
+                       expr.args_[2]->datum_meta_, expr.args_[2]->obj_meta_.has_lob_header(), to_data))) {
+      LOG_WARN("failed to get string data", K(ret), K(expr.args_[2]->datum_meta_));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(replace(res, text_data, from_data, to_data, temp_allocator))) {
+        LOG_WARN("do replace for lob resutl failed", K(ret), K(expr.datum_meta_.type_));
+      } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, expr_datum, res))) {
+        LOG_WARN("set lob result failed", K(ret));
+      }
     }
   }
   return ret;

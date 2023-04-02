@@ -138,6 +138,7 @@ int TestTabletCreateMemtable::build_table_handle(
   int ret = OB_SUCCESS;
 
   ObTabletCreateSSTableParam param;
+  param.ddl_scn_.set_min();
   param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
   param.table_key_.table_id_ = 1;
   param.table_key_.tablet_id_ = common::ObTabletID(1);

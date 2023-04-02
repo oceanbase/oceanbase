@@ -30,10 +30,8 @@ DEFINE_SERIALIZE(ObBatchPacket)
   } else {
     MEMCPY(buf + pos, buf_, size_);
     pos += size_;
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100) {
-      if (OB_FAIL(src_addr_.serialize(buf, buf_len, pos))) {
-        CLOG_LOG(WARN, "failed to serialize addr", K_(src_addr), K(ret));
-      }
+    if (OB_FAIL(src_addr_.serialize(buf, buf_len, pos))) {
+      CLOG_LOG(WARN, "failed to serialize addr", K_(src_addr), K(ret));
     }
   }
   return ret;
@@ -51,10 +49,8 @@ DEFINE_DESERIALIZE(ObBatchPacket)
     pos += size_;
     // In order to support IPv6, used ObAddr for version 2.2 and abover
     if (pos < data_len) {
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100) {
-        if (OB_FAIL(src_addr_.deserialize(buf, data_len, pos))) {
-          CLOG_LOG(WARN, "failed to deserialize addr", K_(src_addr), K(ret));
-        }
+      if (OB_FAIL(src_addr_.deserialize(buf, data_len, pos))) {
+        CLOG_LOG(WARN, "failed to deserialize addr", K_(src_addr), K(ret));
       }
     }
   }
@@ -66,9 +62,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObBatchPacket)
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, size_, id_, src_);
   len += size_;
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100) {
-    len += src_addr_.get_serialize_size();
-  }
+  len += src_addr_.get_serialize_size();
   return len;
 }
 
@@ -95,7 +89,7 @@ public:
   {
     const ObAddr &dst = ObBatchRpcProxy::AsyncCB<OB_BATCH>::dst_;
     const int error = this->get_error();
-    RPC_LOG(WARN, "batch rpc timeout", K(dst), K(error));
+    RPC_LOG_RET(WARN, OB_TIMEOUT, "batch rpc timeout", K(dst), K(error));
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(BatchCallBack);

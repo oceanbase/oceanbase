@@ -14,12 +14,14 @@
 #define OCEANBASE_ARCHIVE_OB_LOG_STREAM_MGR_H_
 
 #include "lib/hash/ob_link_hashmap.h"   // ObLinkHashMap
+#include "ob_archive_define.h"
 #include "share/ob_ls_id.h"             // ObLSID
 #include "share/ob_thread_pool.h"       // ObThreadPool
 #include "common/ob_role.h"             // ObRole
 #include "common/ob_queue_thread.h"     // ObCond
 #include "ob_ls_task.h"                 // ObLSArchiveTask
 #include "ob_start_archive_helper.h"    // StartArchiveHelper
+#include "share/scn.h"        // SCn
 #include <cstdint>
 
 namespace oceanbase
@@ -34,7 +36,6 @@ namespace logservice
 {
 class ObLogService;
 }
-
 namespace archive
 {
 class ObArchiveAllocator;
@@ -58,7 +59,7 @@ typedef common::ObLinkHashMap<ObLSID, ObLSArchiveTask> LSArchiveMap;
  * */
 class ObArchiveLSMgr : public share::ObThreadPool
 {
-  static const int64_t THREAD_RUN_INTERVAL = 60 * 1000 * 1000L;
+  static const int64_t THREAD_RUN_INTERVAL = 1 * 1000 * 1000L;
   static const int64_t DEFAULT_PRINT_INTERVAL = 30 * 1000 * 1000L;
 public:
   ObArchiveLSMgr();
@@ -79,23 +80,23 @@ public:
   void stop();
   void wait();
   void destroy();
-  int set_archive_info(const int64_t round_start_ts,
-      const int64_t piece_interval, const int64_t genesis_ts, const int64_t base_piece_id);
+  int set_archive_info(const share::SCN &round_start_scn,
+      const int64_t piece_interval, const share::SCN &genesis_scn, const int64_t base_piece_id);
   void clear_archive_info();
   void notify_start();
   void notify_stop();
   int revert_ls_task(ObLSArchiveTask *task);
   int get_ls_guard(const ObLSID &id, ObArchiveLSGuard &guard);
-  int authorize_ls_archive_task(const ObLSID &id, const int64_t epoch, const int64_t start_ts);
+  int authorize_ls_archive_task(const ObLSID &id, const int64_t epoch, const share::SCN &start_scn);
   void reset_task();
   int64_t get_ls_task_count() const { return ls_map_.count(); }
-  int mark_fata_error(const ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
+  int mark_fatal_error(const ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
   int print_tasks();
 
 private:
   void run1();
   void do_thread_task_();
-  void gc_stale_ls_task_(const bool is_in_doing);
+  void gc_stale_ls_task_(const ArchiveKey &key, const bool is_in_doing);
   void add_ls_task_();
   int check_ls_archive_task_valid_(const ArchiveKey &key, ObLS *ls, bool &exist);
   int add_task_(const ObLSID &id, const ArchiveKey &key, const int64_t epoch);
@@ -107,9 +108,9 @@ private:
 private:
   bool                  inited_;
   uint64_t              tenant_id_;
-  int64_t               round_start_ts_;
+  share::SCN             round_start_scn_;
   int64_t               piece_interval_;
-  int64_t               genesis_ts_;
+  share::SCN             genesis_scn_;
   int64_t               base_piece_id_;
   LSArchiveMap          ls_map_;
 

@@ -252,6 +252,15 @@ int DmlRedoLogNode::set_data_info(char *data, int64_t data_len)
   return ret;
 }
 
+void RedoSortedProgress::set_sorted_row_seq_no(const int64_t row_seq_no)
+{
+  if (row_seq_no < ATOMIC_LOAD(&sorted_row_seq_no_)) {
+    // TODO PDML may cause row_seq_no rollback
+    LOG_WARN_RET(OB_STATE_NOT_MATCH, "row_seq_no rollbacked! check if PDML sence", K(row_seq_no), K_(sorted_row_seq_no));
+  }
+  ATOMIC_STORE(&sorted_row_seq_no_, row_seq_no);
+}
+
 int SortedRedoLogList::push(const bool is_data_in_memory,
     RedoLogMetaNode *node)
 {
@@ -320,6 +329,7 @@ void SortedRedoLogList::init_iterator()
   cur_dispatch_redo_ = head_;
   cur_sort_redo_ = head_;
   cur_sort_stmt_ = NULL; // row not format and stmt should be null
+  sorted_progress_.reset();
 }
 
 int SortedRedoLogList::next_dml_redo(RedoLogMetaNode *&dml_redo_meta, bool &is_last_redo)
@@ -337,8 +347,9 @@ int SortedRedoLogList::next_dml_redo(RedoLogMetaNode *&dml_redo_meta, bool &is_l
     RedoLogMetaNode *next_redo = cur_dispatch_redo_->get_next();
     dml_redo_meta = cur_dispatch_redo_;
     cur_dispatch_redo_ = next_redo;
-    dispatched_redo_count_++; // Theoretically no concurrent call of this function
-    is_last_redo = (dispatched_redo_count_ == node_num_);
+    // Theoretically no concurrent call of this function
+    sorted_progress_.inc_dispatched_redo_count();
+    is_last_redo = is_dispatch_finish();
   }
 
   return ret;
@@ -389,6 +400,7 @@ int SortedRedoLogList::next_dml_stmt(ObLink *&dml_stmt_task)
           // 1. found dml_stmt_task and it is the last stmt of cur_sort_redo
           // 2. cur_sort_redo doesn't has any row
           cur_sort_redo_ = cur_sort_redo_->get_next();
+          sorted_progress_.inc_sorted_redo_count();
         }
       }
     }

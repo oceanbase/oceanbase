@@ -96,7 +96,7 @@ void ObKVCacheMap::destroy()
     if (is_inited_) {
       GlobalHazardVersionGuard hazard_guard(global_hazard_version_);
       if (OB_UNLIKELY(OB_SUCCESS != hazard_guard.get_ret())) {
-        COMMON_LOG(WARN, "Fail to acquire version", K(hazard_guard.get_ret()));
+        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Fail to acquire version", K(hazard_guard.get_ret()));
       } else {
         for (int64_t i = 0; i < bucket_num_; i++) {
           Node *&bucket_ptr = get_bucket_node(i);
@@ -198,6 +198,7 @@ int ObKVCacheMap::put(
         } else {
           new_node = new (buf) Node();
           // set new node
+          new_node->tenant_id_ = inst.tenant_id_;
           new_node->inst_ = &inst;
           new_node->hash_code_ = hash_code;
           new_node->seq_num_ = mb_handle->handle_ref_.get_seq_num();
@@ -492,7 +493,7 @@ int ObKVCacheMap::erase_all(const int64_t cache_id)
   return ret;
 }
 
-int ObKVCacheMap::erase_tenant(const uint64_t tenant_id)
+int ObKVCacheMap::erase_tenant(const uint64_t tenant_id, const bool force_erase)
 {
   int ret = OB_SUCCESS;
 
@@ -531,10 +532,11 @@ int ObKVCacheMap::erase_tenant(const uint64_t tenant_id)
         }
       }
     } // hazard version guard
-    int temp_ret = global_hazard_version_.retire();
-    if (OB_SUCCESS != temp_ret) {
-      COMMON_LOG(WARN, "Fail to retire global hazard version", K(temp_ret));
-    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(global_hazard_version_.retire(force_erase ? tenant_id : OB_INVALID_TENANT_ID))) {
+    COMMON_LOG(WARN, "Fail to retire global hazard version", K(ret), K(tenant_id), K(force_erase));
   }
 
   return ret;
@@ -801,6 +803,7 @@ int ObKVCacheMap::internal_data_move(Node *&prev, Node *&old_iter, Node *&bucket
     new_node = new(buf) Node();
 
     // set new node
+    new_node->tenant_id_ = old_iter->tenant_id_;
     new_node->inst_ = old_iter->inst_;
     new_node->hash_code_ = old_iter->hash_code_;
     new_node->seq_num_ = new_mb_handle->get_seq_num();

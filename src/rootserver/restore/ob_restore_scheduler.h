@@ -26,6 +26,7 @@ namespace oceanbase
 {
 namespace share
 {
+class SCN;
 class ObLSTableOperator;
 struct ObLSAttr;
 struct ObHisRestoreJobPersistInfo;
@@ -43,24 +44,19 @@ public:
 public:
   ObRestoreService();
   virtual ~ObRestoreService();
-  static int mtl_init(ObRestoreService *&ka);
-  int init(share::schema::ObMultiVersionSchemaService *schema_service,
-           common::ObMySQLProxy *sql_proxy,
-           obrpc::ObCommonRpcProxy *rpc_proxy,
-           obrpc::ObSrvRpcProxy *srv_rpc_proxy,
-           share::ObLSTableOperator *lst_operator,
-           const common::ObAddr &self_addr);
+  int init();
   virtual void do_work() override;
   void destroy();
+  DEFINE_MTL_FUNC(ObRestoreService)
 public:
-  virtual int64_t get_rec_log_ts() override { return INT64_MAX;}
-  virtual int flush(int64_t rec_log_ts) override { return OB_SUCCESS; }
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns) override
+  virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}
+  virtual int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn) override
   {
     UNUSED(buffer);
     UNUSED(nbytes);
     UNUSED(lsn);
-    UNUSED(ts_ns);
+    UNUSED(scn);
     return OB_SUCCESS;
   }
   enum TenantRestoreStatus
@@ -131,9 +127,15 @@ private:
       const common::ObIArray<share::ObLSAttr> &ls_attr_array);
   int check_all_ls_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
   int try_get_tenant_restore_history_(const share::ObPhysicalRestoreJob &job_info,
-                                       share::ObHisRestoreJobPersistInfo &history_info);
+                                      share::ObHisRestoreJobPersistInfo &history_info,
+                                      bool &restore_tenant_exist);
   int check_tenant_can_restore_(const uint64_t tenant_id);
   int reset_schema_status_(const uint64_t tenant_id);
+  int may_update_restore_concurrency_(const uint64_t new_tenant_id,
+      const share::ObPhysicalRestoreJob &job_info);
+  int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);
+  int update_restore_concurrency_(const common::ObString &tenant_name, const uint64_t tenant_id,
+      const int64_t restore_concurrency);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

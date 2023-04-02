@@ -17,7 +17,6 @@
 
 #include "common/object/ob_object.h"
 
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_plan_cache_callback.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"
@@ -34,7 +33,6 @@ namespace observer
 {
 ObAllPlanCacheBase::ObAllPlanCacheBase()
     : ObVirtualTableIterator(),
-      pcm_(NULL),
       tenant_id_array_(),
       tenant_id_array_idx_(0)
 {
@@ -48,7 +46,6 @@ ObAllPlanCacheBase::~ObAllPlanCacheBase()
 
 void ObAllPlanCacheBase::reset()
 {
-  pcm_ = NULL;
   tenant_id_array_.reset();
   tenant_id_array_idx_ = 0;
 }
@@ -200,7 +197,7 @@ int ObAllPlanCacheStat::fill_cells(ObPlanCache &plan_cache)
       break;
     }
     case ASYN_BASELINE: {
-      SET_REF_HANDLE_COL(ASYN_BASELINE_HANDLE);
+      SET_REF_HANDLE_COL(CHECK_EVOLUTION_PLAN_HANDLE);
       break;
     }
     case LOAD_BASELINE: {
@@ -338,14 +335,11 @@ int ObAllPlanCacheStat::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
   int ret = OB_SUCCESS;
   // sys tenant show all tenant plan cache stat
   if (is_sys_tenant(effective_tenant_id_)) {
-    ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_ids);
-    if (OB_ISNULL(pcm_)) {
-      ret = OB_INVALID_ARGUMENT;
-      SERVER_LOG(WARN, "invalid args", KP(pcm_));
-    } else if (OB_FAIL(pcm_->get_plan_cache_map().foreach_refactored(op))) {
-      SERVER_LOG(WARN, "fail to travese map", K(ret));
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
+      SERVER_LOG(WARN, "failed to add tenant id", K(ret));
     }
   } else {
+    tenant_ids.reset();
     // user tenant show self tenant stat
     if (OB_FAIL(tenant_ids.push_back(effective_tenant_id_))) {
       SERVER_LOG(WARN, "fail to push back effective_tenant_id_", KR(ret), K(effective_tenant_id_),
@@ -366,30 +360,19 @@ int ObAllPlanCacheStat::inner_open()
 int ObAllPlanCacheStat::get_row_from_tenants()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == pcm_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
+  if (tenant_id_array_idx_ < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "invalid tenant_id_array index", K(ret), K(tenant_id_array_idx_));
+  } else if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
+    ret = OB_ITER_END;
   } else {
-    if (tenant_id_array_idx_ < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "invalid tenant_id_array index", K(ret), K(tenant_id_array_idx_));
-    } else if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
-      ret = OB_ITER_END;
-    } else {
-      uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
-      ObPlanCache *plan_cache = pcm_->get_plan_cache(tenant_id);
-      if (OB_UNLIKELY(NULL == plan_cache)) {
-        SERVER_LOG(WARN, "invalid plan cache", K(ret), K(tenant_id));
-      } else if (!plan_cache->is_valid()) {
-        // do nothing
+    uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
+    MTL_SWITCH(tenant_id) {
+      ObPlanCache *plan_cache = MTL(ObPlanCache*);
+      if (OB_FAIL(fill_cells(*plan_cache))) {
+        SERVER_LOG(WARN, "fail to fill cells", K(ret), K(cur_row_));
       } else {
-        if (OB_FAIL(fill_cells(*plan_cache))) {
-          SERVER_LOG(WARN, "fail to fill cells", K(ret), K(cur_row_));
-        } else {
-          SERVER_LOG(DEBUG, "add plan cache", K(tenant_id));
-        }
-        // release the plan cache
-        plan_cache->dec_ref_count();
+        SERVER_LOG(DEBUG, "add plan cache", K(tenant_id));
       }
       ++tenant_id_array_idx_;
     }

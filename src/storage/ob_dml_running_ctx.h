@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"
 #include "storage/ob_i_store.h"
 #include "storage/ob_relative_table.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -64,7 +65,7 @@ private:
   int prepare_relative_table(
       const share::schema::ObTableSchemaParam &schema,
       ObTabletHandle &tablet_handle,
-      const int64_t read_snapshot);
+      const share::SCN &read_snapshot);
   int check_schema_version(share::schema::ObMultiVersionSchemaService &schema_service,
                            const uint64_t tenant_id,
                            const uint64_t table_id,

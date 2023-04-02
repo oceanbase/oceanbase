@@ -18,6 +18,7 @@
 #include "lib/utility/ob_serialization_helper.h"
 #include "lib/utility/serialization.h"
 #include "lib/utility/utility.h"
+#include "share/scn.h"
 #include "ob_block_manager.h"
 #include "ob_data_buffer.h"
 #include "share/config/ob_server_config.h"
@@ -611,7 +612,7 @@ int ObRecordHeaderV3::check_header_checksum() const
 
   if (0 != checksum) {
     ret = OB_PHYSIC_CHECKSUM_ERROR;
-    LOG_ERROR("record check checksum failed", K(ret), K(*this));
+    LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg", "record check checksum failed", K(ret), K(*this));
   }
   return ret;
 }
@@ -628,7 +629,7 @@ int ObRecordHeaderV3::check_payload_checksum(const char *buf, const int64_t len)
     const int64_t data_checksum = ob_crc64_sse42(buf, len);
     if (data_checksum != data_checksum_) {
       ret = OB_PHYSIC_CHECKSUM_ERROR;
-      LOG_ERROR("checksum error", K(ret), K(data_checksum_), K(data_checksum));
+      LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg", "checksum error", K(ret), K(data_checksum_), K(data_checksum));
     }
   }
   return ret;
@@ -792,17 +793,17 @@ int ObRecordHeaderV3::deserialize(const char *buf, int64_t buf_len, int64_t &pos
 }
 
 ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
-  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_log_ts_(0)
+  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_scn_(SCN::min_scn())
 {
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
 {
-  return table_key_.is_valid() && data_buffer_.ptr() != nullptr
-         && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE && logic_id_.is_valid() && start_log_ts_ > 0;
+  return table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
+         && logic_id_.is_valid() && start_scn_.is_valid_and_not_min();
 }
 
-OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_, start_log_ts_);
+OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_, start_scn_);
 
 constexpr uint8_t ObColClusterInfoMask::BYTES_TYPE_TO_LEN[];
 

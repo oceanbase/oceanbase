@@ -67,12 +67,12 @@ using std::isnan;
     LOG_WARN("invalid arguments", a, b);        \
   }
 
-// Reference document: https://yuque.antfin-inc.com/ob/sql/mlikp0
+// Reference document:
 // Check every argument and stop to print if anyone of them is false
 #define CK(...)                                                         \
   if (OB_SUCC(ret)) { CONCAT(CK_, ARGS_NUM(__VA_ARGS__))(__VA_ARGS__) }
 
-// Reference document: https://yuque.antfin-inc.com/ob/sql/mlikp0
+// Reference document:
 // execute an instruction
 #define OX(statement)                           \
   if (OB_SUCC(ret)) {                           \
@@ -82,7 +82,7 @@ using std::isnan;
 
 /*
 
-  参考文档：https://yuque.antfin-inc.com/ob/sql/mlikp0
+  参考文档：
 
   This better be the last macro we ever need to define in the
   O-series, hence 'Z'.
@@ -558,12 +558,26 @@ enum ObDmlEventType
   DE_DELETING = (1 << 2)
 };
 
+const char *const NORMAL_MODE_STR = "normal";
 const char *const FLASHBACK_MODE_STR = "physical_flashback";
+const char *const ARBITRATION_MODE_STR = "arbitration";
 const char *const FLASHBACK_VERIFY_MODE_STR = "physical_flashback_verify";
 const char *const DISABLED_CLUSTER_MODE_STR = "disabled_cluster";
 const char *const DISABLED_WITH_READONLY_CLUSTER_MODE_STR = "disabled_with_readonly_cluster";
 
 static const int64_t MODIFY_GC_SNAPSHOT_INTERVAL = 2 * 1000 * 1000; //2s
+
+//reserved table id for information schema
+const uint64_t OB_ALL_VIRTUAL_PARAMETERS_OLD_TID = 12037; // "PARAMETERS_OLD"
+const uint64_t OB_ALL_VIRTUAL_TABLE_CONSTRAINTS_OLD_TID = 12005; // "TABLE_CONSTRAINTS_OLD"
+const uint64_t OB_ALL_VIRTUAL_REFERENTIAL_CONSTRAINTS_OLD_TID = 12177; // "REFERENTIAL_CONSTRAINTS_OLD"
+const uint64_t OB_ALL_VIRTUAL_CHECK_CONSTRAINTS_OLD_TID = 12235; // "CHECK_CONSTRAINTS_OLD"
+const uint64_t OB_ALL_VIRTUAL_TRIGGERS_OLD_TID = 12221; // "TRIGGERS_OLD"
+const uint64_t OB_TABLE_PRIVILEGES_OLD_TID = 12002;  // not used anymore for "TABLE_PRIVILEGES" has a new table id
+const uint64_t OB_USER_PRIVILEGES_OLD_TID = 12003;   // not used anymore for "USER_PRIVILEGES" has a new table id
+const uint64_t OB_SCHEMA_PRIVILEGES_OLD_TID = 12004; // not used anymore for "SCHEMA_PRIVILEGES" has a new table id
+const uint64_t OB_PARTITIONS_OLD_TID = 12007;        // not used anymore for "PARTITIONS" has a new table id
+//end of reserved table id for information schema
 
 ////////////////typedef
 typedef common::ObSEArray<int64_t, 8> PartitionIdArray;

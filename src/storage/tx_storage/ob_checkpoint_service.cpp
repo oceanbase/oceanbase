@@ -24,10 +24,12 @@
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/palf_env.h"
 #include "logservice/palf/lsn.h"
+#include "logservice/archiveservice/ob_archive_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 
 namespace oceanbase
 {
+using namespace share;
 using namespace palf;
 namespace storage
 {
@@ -106,10 +108,10 @@ void ObCheckPointService::wait()
 
 int ObCheckPointService::add_ls_freeze_task(
     ObDataCheckpoint *data_checkpoint,
-    int64_t rec_log_ts)
+    SCN rec_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(freeze_thread_.add_task(data_checkpoint, rec_log_ts))) {
+  if (OB_FAIL(freeze_thread_.add_task(data_checkpoint, rec_scn))) {
     STORAGE_LOG(WARN, "logstream freeze task failed", K(ret));
   }
   return ret;
@@ -144,6 +146,11 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
       ObDataCheckpoint *data_checkpoint = nullptr;
+      palf::LSN checkpoint_lsn;
+      palf::LSN archive_lsn;
+      SCN unused_archive_scn;
+      bool archive_force_wait = false;
+      bool archive_ignore = false;
       if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
         STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -158,6 +165,24 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
       } else if (OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
         STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls->get_ls_id()));
+      } else if (OB_FAIL(MTL(archive::ObArchiveService*)->get_ls_archive_progress(ls->get_ls_id(),
+              archive_lsn, unused_archive_scn, archive_force_wait, archive_ignore))) {
+        STORAGE_LOG(WARN, "get ls archive progress failed", K(ret), K(ls->get_ls_id()));
+      } else {
+        checkpoint_lsn = ls->get_clog_base_lsn();
+        if (! archive_force_wait || archive_ignore || archive_lsn >= checkpoint_lsn) {
+          // do nothing
+        } else {
+          STORAGE_LOG(TRACE, "archive_lsn small than checkpoint_lsn, set base_lsn with archive_lsn",
+              K(archive_lsn), K(checkpoint_lsn), KPC(ls));
+          checkpoint_lsn = archive_lsn;
+        }
+        if (OB_FAIL(ls->get_log_handler()->advance_base_lsn(checkpoint_lsn))) {
+          ARCHIVE_LOG(WARN, "advance base lsn failed", K(ret), K(checkpoint_lsn));
+        } else {
+          FLOG_INFO("[CHECKPOINT] advance palf base lsn successfully",
+              K(checkpoint_lsn), K(ls->get_ls_id()));
+        }
       }
     }
     if (ret == OB_ITER_END) {
@@ -275,7 +300,7 @@ int ObCheckPointService::flush_if_need_(bool need_flush)
       ret = OB_SUCCESS;
     }
   }
-  
+
   return ret;
 }
 
@@ -355,10 +380,7 @@ int ObCheckPointService::do_minor_freeze()
     ObLS *ls = nullptr;
     int ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      ObCheckpointExecutor *checkpoint_executor = nullptr;
-      if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
-        STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
-      } else if (OB_SUCCESS != (tmp_ret = (checkpoint_executor->advance_checkpoint_by_flush(INT64_MAX)))) {
+      if (OB_SUCCESS != (tmp_ret = (ls->advance_checkpoint_by_flush(SCN::max_scn())))) {
         STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", K(tmp_ret), K(ls->get_ls_id()));
       }
     }

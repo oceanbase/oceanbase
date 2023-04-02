@@ -37,8 +37,10 @@ ObRsReentrantThread::~ObRsReentrantThread()
 
 void ObRsReentrantThread::update_last_run_timestamp() 
 {
+  auto time = ObTimeUtility::current_time();
+  IGNORE_RETURN lib::Thread::update_loop_ts(time);
   if (ATOMIC_LOAD(&last_run_timestamp_) != -1) {
-    ATOMIC_STORE(&last_run_timestamp_, ObTimeUtility::current_time());
+    ATOMIC_STORE(&last_run_timestamp_, time);
   }
 }
 
@@ -124,19 +126,22 @@ int64_t ObRsReentrantThread::get_last_run_timestamp() const
 void ObRsReentrantThread::check_alert(const ObRsReentrantThread &thread)
 { 
   if (thread.need_monitor_check()) {
-    const pid_t thread_id = thread.get_tid();
+    const pid_t thread_id = syscall(__NR_gettid); // only called by thread self
     const char *thread_name = thread.get_thread_name();
     int64_t last_run_timestamp = thread.get_last_run_timestamp();
     int64_t last_run_interval = ObTimeUtility::current_time() - last_run_timestamp;
     int64_t schedule_interval = thread.get_schedule_interval();
     int64_t check_interval = schedule_interval + MAX_THREAD_SCHEDULE_OVERRUN_TIME;
-    LOG_ERROR("rs_monitor_check : thread hang", K(thread_id), K(thread_name), K(last_run_timestamp), 
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "rs_monitor_check : thread hang", K(thread_id), K(thread_name), K(last_run_timestamp),
         KTIME(last_run_timestamp), K(last_run_interval), K(check_interval), K(schedule_interval));
+    LOG_DBA_WARN(OB_ERR_ROOTSERVICE_THREAD_HUNG, "msg", "rootservice backgroud thread may be hung",
+                 K(thread_id), K(thread_name), K(last_run_timestamp), KTIME(last_run_timestamp),
+                 K(last_run_interval), K(check_interval), K(schedule_interval));
   }
 }
 
 CheckThreadSet::CheckThreadSet() 
-  : arr_(), rwlock_()
+  : arr_(), rwlock_(ObLatchIds::THREAD_HANG_CHECKER_LOCK)
 {
 }
 
@@ -205,7 +210,7 @@ void CheckThreadSet::loop_operation(void (*func)(const ObRsReentrantThread&))
   SpinRLockGuard guard(rwlock_);
   for (int i = 0; i < arr_.count(); i++) {
     if (OB_ISNULL(arr_[i])) {
-      LOG_WARN("rs_monitor_check : arr[i] is NULL", K(i));
+      LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "rs_monitor_check : arr[i] is NULL", K(i));
       continue;
     }
     func(*(arr_[i]));

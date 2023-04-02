@@ -25,14 +25,11 @@ void ObMergeStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObMergeS
 int ObMergeStmtPrinter::do_print()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_, buf_len_, pos_, print_params_);
+    expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
     } 
@@ -48,6 +45,8 @@ int ObMergeStmtPrinter::print()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret),
              K(stmt_), K(buf_), K(pos_));
+  } else if (print_params_.print_with_cte_ && OB_FAIL(print_cte_define())) {
+    LOG_WARN("failed to print cte", K(ret));
   } else {
     const ObMergeStmt *merge_stmt = static_cast<const ObMergeStmt *>(stmt_);
     const TableItem *target_table = NULL;
@@ -60,6 +59,10 @@ int ObMergeStmtPrinter::print()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("target table or source table is null",
                K(ret), K(target_table), K(source_table));
+    }
+    if (OB_SUCC(ret) && (print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
+        OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
     }
     DATA_PRINTF("merge ");
     if (OB_SUCC(ret) && print_hint()) {

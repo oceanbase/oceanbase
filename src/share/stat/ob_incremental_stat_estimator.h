@@ -36,6 +36,10 @@ public:
                                              int64_t part_id,
                                              int64_t subpart_cnt,
                                              bool is_gather_part);
+
+  static int drive_global_stat_by_direct_load(ObExecContext &ctx,
+                                              ObIArray<ObOptTableStat*> &part_tab_stats,
+                                              ObIArray<ObOptColumnStat*> &part_column_stats);
 private:
 
   static int drive_global_stat_from_part_stats(ObExecContext &ctx,
@@ -50,6 +54,7 @@ private:
 
   static int do_derive_part_stats_from_subpart_stats(
     ObExecContext &ctx,
+    ObIAllocator &alloc,
     const ObTableStatParam &param,
     const ObIArray<ObOptStat> &no_regather_subpart_opt_stats,
     const ObIArray<ObOptStat> &gather_opt_stats,
@@ -70,7 +75,13 @@ private:
                                    int64_t col_cnt,
                                    ObIArray<ObOptStat> &all_opt_stats);
 
+  static int generate_all_opt_stat(ObIArray<ObOptTableStat*> &table_stats,
+                                   ObIArray<ObOptColumnStat*> &column_stats,
+                                   int64_t col_cnt,
+                                   ObIArray<ObOptStat> &all_opt_stats);
+
   static int do_derive_global_stat(ObExecContext &ctx,
+                                   ObIAllocator &alloc,
                                    const ObTableStatParam &param,
                                    ObIArray<ObOptStat> &part_opt_stats,
                                    bool need_drive_hist,
@@ -80,6 +91,7 @@ private:
                                    ObOptStat &global_opt_stat);
 
   static int derive_global_tbl_stat(ObExecContext &ctx,
+                                    ObIAllocator &alloc,
                                     const ObTableStatParam &param,
                                     const StatLevel &approx_level,
                                     const int64_t partition_id,
@@ -87,6 +99,7 @@ private:
                                     ObOptStat &global_opt_stat);
 
   static int derive_global_col_stat(ObExecContext &ctx,
+                                    ObIAllocator &alloc,
                                     const ObTableStatParam &param,
                                     ObIArray<ObOptStat> &part_opt_stats,
                                     bool need_drive_hist,
@@ -104,13 +117,15 @@ private:
                                      ObHistogram &histogram,
                                      bool &need_gather_hybrid_hist);
 
-  static int get_no_regather_partition_stats(const ObTableStatParam &param,
+  static int get_no_regather_partition_stats(const uint64_t tenant_id,
+                                             const uint64_t table_id,
+                                             const ObIArray<uint64_t> &column_ids,
                                              const ObIArray<int64_t> &no_regather_partition_ids,
                                              ObIArray<ObOptTableStat> &no_regather_table_stats,
                                              ObIArray<ObOptColumnStatHandle> &no_regather_col_handles,
                                              ObIArray<ObOptStat> &part_opt_stats);
 
-  static int get_column_ids(const ObTableStatParam &param,
+  static int get_column_ids(const ObIArray<ObColumnStatParam> &column_params,
                             ObIArray<uint64_t> &column_ids);
 
   static int gen_part_param(const ObTableStatParam &param,
@@ -121,6 +136,16 @@ private:
                                            ObIArray<ObOptTableStat> &no_regather_table_stats,
                                            ObIArray<ObOptColumnStatHandle> &no_regather_col_handles,
                                            ObIArray<ObOptStat> &subpart_opt_stats);
+
+  static int gen_opt_stat_param_by_direct_load(ObExecContext &ctx,
+                                               ObIAllocator &alloc,
+                                               const uint64_t table_id,
+                                               ObTableStatParam &param);
+
+  static int write_all_opt_stats_by_dircet_load(ObExecContext &ctx,
+                                                const ObTableStatParam &param,
+                                                ObIArray<ObOptTableStat *> &all_tstats,
+                                                ObIArray<ObOptColumnStat *> &all_cstats);
 
 };
 

@@ -33,7 +33,9 @@ public:
   static int get_tablet_loc_by_id(const ObTabletID &tablet_id,
                                   ObDASTableLoc &table_loc,
                                   ObDASTabletLoc *&tablet_loc);
-  static int check_nested_sql_mutating(common::ObTableID ref_table_id, ObExecContext &exec_ctx);
+  static int check_nested_sql_mutating(common::ObTableID ref_table_id,
+                                       ObExecContext &exec_ctx,
+                                       bool is_reading = false);
   static ObDASTabletLoc *get_related_tablet_loc(const ObDASTabletLoc &tablet_loc,
                                                 common::ObTableID related_table_id);
   static int build_table_loc_meta(common::ObIAllocator &allocator,
@@ -55,6 +57,12 @@ public:
                                    const common::ObAccuracy &col_accuracy,
                                    common::ObIAllocator &allocator,
                                    common::ObObj &value);
+  static int generate_spatial_index_rows(ObIAllocator &allocator,
+                                         const ObDASDMLBaseCtDef &das_ctdef,
+                                         const ObString &wkb_str,
+                                         const IntFixedArray &row_projector,
+                                         const ObDASWriteBuffer::DmlRow &dml_row,
+                                         ObSpatIndexRow &spat_rows);
 };
 }  // namespace sql
 }  // namespace oceanbase

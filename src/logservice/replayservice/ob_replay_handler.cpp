@@ -16,6 +16,8 @@
 
 namespace oceanbase
 {
+using namespace palf;
+using namespace share;
 namespace logservice
 {
 ObReplayHandler::ObReplayHandler(storage::ObLS *ls)
@@ -70,7 +72,7 @@ int ObReplayHandler::replay(const ObLogBaseType &type,
                             const void *buffer,
                             const int64_t nbytes,
                             const palf::LSN &lsn,
-                            const int64_t ts_ns)
+                            const SCN &scn)
 {
   int ret = OB_SUCCESS;
 
@@ -78,11 +80,11 @@ int ObReplayHandler::replay(const ObLogBaseType &type,
   if (!is_valid_log_base_type(type)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(type));
-  } else if (NULL == handlers_[type]) {
+  } else if (OB_ISNULL(handlers_[type])) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "invalid base_log_type", K(type));
   } else {
-    ret = handlers_[type]->replay(buffer, nbytes, lsn, ts_ns);
+    ret = handlers_[type]->replay(buffer, nbytes, lsn, scn);
   }
 
   return ret;

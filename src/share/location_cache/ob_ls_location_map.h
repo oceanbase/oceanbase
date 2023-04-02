@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -14,7 +14,7 @@
 #define OCEANBASE_SHARE_OB_LS_LOCATION_MAP
 
 #include "share/location_cache/ob_location_struct.h"
-#include "share/lock/ob_qsync_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 
 namespace oceanbase
 {
@@ -65,7 +65,9 @@ public:
   ~ObLSLocationMap() { destroy(); }
   void destroy();
   int init();
-  int update(const ObLSLocationCacheKey &key, const ObLSLocation &ls_location);
+  int update(const bool from_rpc,
+             const ObLSLocationCacheKey &key,
+             ObLSLocation &ls_location);
   int get(const ObLSLocationCacheKey &key, ObLSLocation &location) const;
   int del(const ObLSLocationCacheKey &key);
   int check_and_generate_dead_cache(ObLSLocationArray &arr);
@@ -79,7 +81,7 @@ private:
   int64_t size_;
   ObLSLocation **ls_buckets_;
   const static int64_t BUCKETS_CNT = 1 << 8;
-  share::ObQSyncLock *buckets_lock_;
+  common::ObQSyncLock *buckets_lock_;
 };
 
 

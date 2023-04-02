@@ -160,6 +160,8 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
   remote_task.set_session(ctx.get_my_session());
   remote_task.set_query_schema_version(task_exec_ctx.get_query_tenant_begin_schema_version(),
                                        task_exec_ctx.get_query_sys_begin_schema_version());
+  LOG_TRACE("print schema_version", K(task_exec_ctx.get_query_tenant_begin_schema_version()),
+      K(task_exec_ctx.get_query_sys_begin_schema_version()));
   remote_task.set_remote_sql_info(&plan_ctx->get_remote_sql_info());
   ObDASTabletLoc *first_tablet_loc = DAS_CTX(ctx).get_table_loc_list().get_first()->get_first_tablet_loc();
   if (OB_ISNULL(session = ctx.get_my_session())) {

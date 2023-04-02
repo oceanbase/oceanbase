@@ -19,6 +19,7 @@
 #include "share/ob_inner_kv_table_operator.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_compatible.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -29,7 +30,6 @@ namespace share
 const int64_t OB_START_LOG_ARCHIVE_ROUND_ID = 0;
 
 // TODO: replace to real scn type later.
-typedef uint64_t ARCHIVE_SCN_TYPE;
 
 // archive state machine
 struct ObArchiveRoundState
@@ -43,6 +43,8 @@ struct ObArchiveRoundState
     INTERRUPTED,
     STOPPING,
     STOP,
+    SUSPENDING,
+    SUSPEND,
     MAX_STATUS
   };
 
@@ -89,6 +91,8 @@ struct ObArchiveRoundState
   PROPERTY_DECLARE_STATUS(stopping, Status::STOPPING);
   PROPERTY_DECLARE_STATUS(stop, Status::STOP);
   PROPERTY_DECLARE_STATUS(interrupted, Status::INTERRUPTED);
+  PROPERTY_DECLARE_STATUS(suspending, Status::SUSPENDING);
+  PROPERTY_DECLARE_STATUS(suspend, Status::SUSPEND);
 
 #undef PROPERTY_DECLARE_STATUS
 
@@ -154,9 +158,9 @@ struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
   int64_t dest_id_; // archive dest identification.
   int64_t round_id_;
   ObArchiveRoundState state_;
-  ARCHIVE_SCN_TYPE start_scn_; // unit: us
-  ARCHIVE_SCN_TYPE checkpoint_scn_; // unit: us
-  ARCHIVE_SCN_TYPE max_scn_; // unit: us
+  SCN start_scn_;
+  SCN checkpoint_scn_;
+  SCN max_scn_;
   ObArchiveCompatible compatible_;
 
   int64_t base_piece_id_;
@@ -178,13 +182,12 @@ struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
     incarnation_ = OB_START_INCARNATION;
     dest_id_ = 0;
     round_id_ = 0;
-    start_scn_ = 0;
-    checkpoint_scn_ = 0;
-    max_scn_ = 0;
     base_piece_id_ = 0;
     used_piece_id_ = 0;
     piece_switch_interval_ = 0;
-
+    start_scn_ = share::SCN::min_scn();
+    checkpoint_scn_ = share::SCN::min_scn();
+    max_scn_ = share::SCN::min_scn();
     frozen_input_bytes_ = 0;
     frozen_output_bytes_ = 0;
     active_input_bytes_ = 0;
@@ -319,9 +322,9 @@ struct ObTenantArchiveHisRoundAttr final : public ObIInnerTableRow
   Key key_;
   int64_t incarnation_;
   int64_t dest_id_;
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
-  ARCHIVE_SCN_TYPE max_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
+  SCN max_scn_;
   ObArchiveCompatible compatible_;
 
   int64_t base_piece_id_;
@@ -340,13 +343,12 @@ struct ObTenantArchiveHisRoundAttr final : public ObIInnerTableRow
   {
     incarnation_ = OB_START_INCARNATION;
     dest_id_ = 0;
-    start_scn_ = 0;
-    checkpoint_scn_ = 0;
-    max_scn_ = 0;
     base_piece_id_ = 0;
     used_piece_id_ = 0;
     piece_switch_interval_ = 0;
-
+    start_scn_ = share::SCN::min_scn();
+    checkpoint_scn_ = share::SCN::min_scn();
+    max_scn_ = share::SCN::min_scn();
     input_bytes_ = 0;
     output_bytes_ = 0;
     deleted_input_bytes_ = 0;
@@ -585,10 +587,10 @@ public:
   int64_t incarnation_;
   int64_t dest_no_;
   int64_t file_count_;
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
-  ARCHIVE_SCN_TYPE max_scn_;
-  ARCHIVE_SCN_TYPE end_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
+  SCN max_scn_;
+  SCN end_scn_;
   ObArchiveCompatible compatible_;
 
   int64_t input_bytes_;
@@ -606,16 +608,14 @@ public:
     incarnation_ = OB_START_INCARNATION;
     dest_no_ = -1;
     file_count_ = 0;
-    start_scn_ = 0;
-    checkpoint_scn_ = 0;
-    max_scn_ = 0;
-    end_scn_ = 0;
     input_bytes_ = 0;
     output_bytes_ = 0;
     cp_file_id_ = 0;
     cp_file_offset_ = 0;
-
-    file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_MAX;
+    start_scn_ = share::SCN::min_scn();
+    checkpoint_scn_ = share::SCN::min_scn();
+    max_scn_ = share::SCN::min_scn();
+    end_scn_ = share::SCN::min_scn();
   }
 
   // Return if primary key valid.
@@ -750,9 +750,9 @@ struct ObLSArchivePersistInfo final : public ObIInnerTableRow
 
   Key key_;
   int64_t incarnation_;
-  ARCHIVE_SCN_TYPE start_scn_;        // piece start ts
+  SCN start_scn_;        // piece start ts
   uint64_t start_lsn_;                // piece start lsn
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
+  SCN checkpoint_scn_;
   uint64_t lsn_;
   int64_t archive_file_id_;
   int64_t archive_file_offset_;
@@ -820,8 +820,8 @@ struct ObArchiveLSPieceSummary
   int64_t incarnation_;
   ObArchiveRoundState state_;
 
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
   uint64_t min_lsn_;
   uint64_t max_lsn_;
   int64_t input_bytes_;
@@ -840,8 +840,8 @@ struct ObLSDestRoundSummary
   struct OnePiece
   {
     int64_t piece_id_;
-    ARCHIVE_SCN_TYPE start_scn_;
-    ARCHIVE_SCN_TYPE checkpoint_scn_;
+    SCN start_scn_;
+    SCN checkpoint_scn_;
     uint64_t min_lsn_;
     uint64_t max_lsn_;
     int64_t input_bytes_;
@@ -857,8 +857,8 @@ struct ObLSDestRoundSummary
   ObLSID ls_id_;
   bool is_deleted_; // mark deleted ls.
   ObArchiveRoundState state_;
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
   // Ordered by pieceid.
   common::ObArray<OnePiece> piece_list_;
 
@@ -894,6 +894,34 @@ struct ObDestRoundSummary
   TO_STRING_KV(K_(tenant_id), K_(dest_id), K_(round_id), K_(ls_round_list));
 };
 
+struct ObArchiveLSMetaType final
+{
+  // NB: the enum type is not only the type of ls meta, but also will be its subdir,
+  // so pay attention to give the type an appropriate name while the length of its name
+  // 'SMALLER' than then MAX_TYPE_LEN
+  static const int64_t MAX_TYPE_LEN = 100;
+  enum Type : int64_t
+  {
+    INVALID_TYPE = 0,
+    // add task type here
+    SCHEMA_META = 1,
+    MAX_TYPE,
+  };
+
+  Type type_;
+  ObArchiveLSMetaType() : type_(Type::INVALID_TYPE) {}
+  explicit ObArchiveLSMetaType(const Type type) : type_(type) {}
+
+  bool is_valid() const;
+  uint64_t hash() const { return static_cast<uint64_t>(type_); }
+  int compare(const ObArchiveLSMetaType &other) const;
+  bool operator==(const ObArchiveLSMetaType &other) const { return 0 == compare(other); }
+  bool operator!=(const ObArchiveLSMetaType &other) const { return !operator==(other); }
+  const char *get_type_str() const;
+  int get_next_type();
+
+  TO_STRING_KV("type", get_type_str());
+};
 }
 }
 

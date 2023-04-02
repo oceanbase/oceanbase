@@ -34,20 +34,6 @@ const char *ObLogMonitoringDump::get_name() const
   return monitoring_name_[0];
 }
 
-int ObLogMonitoringDump::print_my_plan_annotation(char *buf,
-                                                  int64_t &buf_len,
-                                                  int64_t &pos,
-                                                  ExplainType type)
-{
-  int ret = OB_SUCCESS;
-  // print access
-  UNUSED(buf);
-  UNUSED(buf_len);
-  UNUSED(pos);
-  UNUSED(type);
-  return ret;
-}
-
 int ObLogMonitoringDump::est_cost()
 {
   int ret = OB_SUCCESS;

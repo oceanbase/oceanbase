@@ -42,6 +42,7 @@ int ObExprRandomBytes::calc_result_type1(ObExprResType &type,
   static const int64_t MAX_RAND_BYTES = 1024;
   type.set_varbinary();
   type.set_collation_type(CS_TYPE_BINARY);
+  type.set_collation_level(CS_LEVEL_COERCIBLE);
   type.set_length(MAX_RAND_BYTES);
   return ret;
 }

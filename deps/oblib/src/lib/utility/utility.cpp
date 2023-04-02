@@ -87,6 +87,7 @@ char *lbt(void **addrs, int32_t size)
 void hex_dump(const void *data, const int32_t size,
               const bool char_type /*= true*/, const int32_t log_level /*= OB_LOG_LEVEL_DEBUG*/)
 {
+  int ret = OB_SUCCESS;
   if (OB_LOGGER.get_log_level() < log_level) { return; }
   /* dumps size bytes of *data to stdout. Looks like:
    * [0000] 75 6E 6B 6E 6F 77 6E 20
@@ -124,10 +125,10 @@ void hex_dump(const void *data, const int32_t size,
     if (n % 16 == 0) {
       /* line completed */
       if (char_type)
-        _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s  %s\n",
+        _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s  %s\n",
                           pthread_self(), addrstr, hexstr, charstr);
       else
-        _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s\n",
+        _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s\n",
                           pthread_self(), addrstr, hexstr);
       hexstr[0] = 0;
       charstr[0] = 0;
@@ -142,10 +143,10 @@ void hex_dump(const void *data, const int32_t size,
   if (strlen(hexstr) > 0) {
     /* print rest of buffer if not empty */
     if (char_type)
-      _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s  %s\n",
+      _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s  %s\n",
                         pthread_self(), addrstr, hexstr, charstr);
     else
-      _OB_NUM_LEVEL_LOG(log_level, "[%ld] [%4.4s]   %-50.50s\n",
+      _OB_NUM_LEVEL_LOG(log_level, OB_SUCCESS, "[%ld] [%4.4s]   %-50.50s\n",
                         pthread_self(), addrstr, hexstr);
   }
 }
@@ -412,10 +413,10 @@ const char *inet_ntoa_s(char *buffer, size_t n, const uint32_t ip)
 const char *time2str(const int64_t time_us, const char *format)
 {
   // FIXME: To Be Removed
-  static const int32_t BUFFER_SIZE = 1024;
+  static const int32_t BUFFER_SIZE = 256;
+  thread_local char buffer[4 * BUFFER_SIZE];
   RLOCAL(uint64_t, i);
-  char *buffer = (char*)GET_TSI_MULT(ByteBuf<10 * BUFFER_SIZE>, 5);
-  uint64_t cur = i++ % 10;
+  uint64_t cur = i++ % 4;
   buffer[cur * BUFFER_SIZE] = '\0';
   struct tm time_struct;
   int64_t time_s = time_us / 1000000;
@@ -448,7 +449,7 @@ int mem_chunk_serialize(char *buf, int64_t len, int64_t &pos, const char *data, 
   if (NULL == buf || len <= 0 || pos < 0 || pos > len || NULL == data || 0 > data_len) {
     err = OB_INVALID_ARGUMENT;
   } else if (OB_SUCCESS != (err = serialization::encode_i64(buf, len, tmp_pos, data_len))) {
-    _OB_LOG(ERROR, "encode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, data_len,
+    _OB_LOG_RET(ERROR, err, "encode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, data_len,
             err);
   } else if (tmp_pos + data_len > len) {
     err = OB_SERIALIZE_ERROR;
@@ -468,7 +469,7 @@ int mem_chunk_deserialize(const char *buf, int64_t len, int64_t &pos, char *data
   if (NULL == buf || len <= 0 || pos < 0 || pos > len || NULL == data || data_len < 0) {
     err = OB_INVALID_ARGUMENT;
   } else if (OB_SUCCESS != (err = serialization::decode_i64(buf, len, tmp_pos, &real_len))) {
-    _OB_LOG(ERROR, "decode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, real_len,
+    _OB_LOG_RET(ERROR, err, "decode_i64(buf=%p, len=%ld, pos=%ld, i=%ld)=>%d", buf, len, tmp_pos, real_len,
             err);
   } else if (real_len > data_len || tmp_pos + real_len > len) {
     err = OB_DESERIALIZE_ERROR;
@@ -562,52 +563,52 @@ int replace_str(char *src_str, const int64_t src_str_buf_size,
 
 int get_ethernet_speed(const char *devname, int64_t &speed)
 {
-  int rc = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   if (NULL == devname) {
+    ret = OB_INVALID_ARGUMENT;
     _OB_LOG(WARN, "invalid devname %p", devname);
-    rc = OB_INVALID_ARGUMENT;
   } else {
-    rc = get_ethernet_speed(ObString::make_string(devname), speed);
+    ret = get_ethernet_speed(ObString::make_string(devname), speed);
   }
-  return rc;
+  return ret;
 }
 
 int get_ethernet_speed(const ObString &devname, int64_t &speed)
 {
-  int rc = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   bool exist = false;
   char path[OB_MAX_FILE_NAME_LENGTH];
   static int dev_file_exist = 1;
   if (0 == devname.length()) {
+    ret = OB_INVALID_ARGUMENT;
     _OB_LOG(WARN, "empty devname");
-    rc = OB_INVALID_ARGUMENT;
   } else {
     IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s", devname.length(), devname.ptr());
-    if (OB_SUCCESS != (rc = FileDirectoryUtils::is_exists(path, exist)) || !exist) {
+    if (OB_SUCCESS != (ret = FileDirectoryUtils::is_exists(path, exist)) || !exist) {
       if (dev_file_exist) {
       _OB_LOG(WARN, "path %s not exist", path);
        dev_file_exist = 0;
       }
-      rc = OB_FILE_NOT_EXIST;
+      ret = OB_FILE_NOT_EXIST;
     }
   }
-  if (OB_SUCCESS != rc)
+  if (OB_SUCCESS != ret)
   {}
   else {
     CharArena alloc;
     ObString str;
     IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s/bonding/",
                            devname.length(), devname.ptr());
-    if (OB_SUCCESS != (rc = FileDirectoryUtils::is_exists(path, exist))) {
-      LIB_LOG(WARN, "check net file if exists failed.", K(rc));
+    if (OB_SUCCESS != (ret = FileDirectoryUtils::is_exists(path, exist))) {
+      LIB_LOG(WARN, "check net file if exists failed.", K(ret));
     } else if (exist) {
       IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s/bonding/slaves",
                              devname.length(), devname.ptr());
-      if (OB_SUCCESS != (rc = load_file_to_string(path, alloc, str))) {
-        _OB_LOG(WARN, "load file %s failed, rc %d", path, rc);
+      if (OB_SUCCESS != (ret = load_file_to_string(path, alloc, str))) {
+        _OB_LOG(WARN, "load file %s failed, ret %d", path, ret);
       } else if (0 == str.length()) {
         _OB_LOG(WARN, "can't get slave ethernet");
-        rc = OB_ERROR;
+        ret = OB_ERROR;
       } else {
         int len = 0;
         while (len < str.length() && !isspace(str.ptr()[len])) {
@@ -619,16 +620,16 @@ int get_ethernet_speed(const ObString &devname, int64_t &speed)
       IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s/speed",
                              devname.length(), devname.ptr());
     }
-    if (OB_SUCCESS == rc) {
-      if (OB_SUCCESS != (rc = load_file_to_string(path, alloc, str))) {
-        _OB_LOG(WARN, "load file %s failed, rc %d", path, rc);
+    if (OB_SUCCESS == ret) {
+      if (OB_SUCCESS != (ret = load_file_to_string(path, alloc, str))) {
+        _OB_LOG(WARN, "load file %s failed, ret %d", path, ret);
       } else {
         speed = atoll(str.ptr());
         speed = speed * 1024 * 1024 / 8;
       }
     }
   }
-  return rc;
+  return ret;
 }
 
 int deep_copy_obj(ObIAllocator &allocator, const ObObj &src, ObObj &dst)
@@ -678,8 +679,8 @@ bool is_case_space_equal(const char *s1, int64_t s1_len, const char *s2, int64_t
   //Check input
   if (NULL == s1 || NULL == s2 || s1_len < 0 || s2_len < 0) {
     result = false;
-    _OB_LOG(ERROR,
-            "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT,
+                "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
   } else if (s1 != s2) { //If s1 == s2,return 1
     while (1) {
       //Left trim
@@ -745,8 +746,8 @@ bool is_n_case_space_equal(const char *s1, int64_t s1_len, const char *s2, int64
   //Check input
   if (NULL == s1 || NULL == s2 || s1_len < 0 || s2_len < 0) {
     result = false;
-    _OB_LOG(ERROR,
-            "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
+    _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT,
+                "Invalid argument, input arguments include NULL pointer or string length is less than zero.");
   } else if (s1 != s2) { //If s1 == s2,return 1
     while (1) {
       //Left trim
@@ -1187,7 +1188,7 @@ static int read_pid(const char *pidfile, long &pid)
   if (fd < 0) {
     LOG_ERROR("can't open pid file", KCSTRING(pidfile), K(errno));
     ret = OB_FILE_NOT_EXIST;
-  } else if (read(fd, buf, sizeof(buf)) <= 0) {
+  } else if (read(fd, buf, sizeof(buf) - 1) <= 0) {
     LOG_ERROR("fail to read pid from file", KCSTRING(pidfile), K(errno));
     ret = OB_IO_ERROR;
   } else {
@@ -1839,7 +1840,6 @@ int ob_atoll(const char *str, int64_t &res)
   return ret;
 }
 
-//ref: https://www.cnblogs.com/westfly/p/5139645.html
 struct tm *ob_localtime(const time_t *unix_sec, struct tm *result)
 {
   static const int HOURS_IN_DAY = 24;
@@ -1938,6 +1938,55 @@ int is_dir_empty(const char *dirname, bool &is_empty)
   }
   return ret;
 }
+
+static int64_t get_cpu_cache_size(int sysconf_name, const char *sysfs_path, int64_t default_value)
+{
+  int64_t cache_size = sysconf(sysconf_name);
+  if (OB_UNLIKELY(cache_size <= 0)) {
+    FILE *file = nullptr;
+    file = fopen(sysfs_path, "r");
+    if (file) {
+      fscanf(file, "%ld", &cache_size);
+      fclose(file);
+      cache_size *= 1024;
+    }
+    if (OB_UNLIKELY(nullptr == file || cache_size <= 0)) {
+      int ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "failed to read cpu cache size in file", KP(file), K(cache_size));
+      cache_size = default_value;
+    }
+  }
+  return cache_size;
+}
+
+int64_t get_level1_dcache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index0/size";
+  static int64_t l1_dcache_size = get_cpu_cache_size(_SC_LEVEL1_DCACHE_SIZE, path, 32768/*default L1 dcache size : 32K*/);
+  return l1_dcache_size;
+}
+
+int64_t get_level1_icache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index1/size";
+  static int64_t l1_icache_size = get_cpu_cache_size(_SC_LEVEL1_ICACHE_SIZE, path, 32768/*default L1 icache size : 32K*/);
+  return l1_icache_size;
+}
+
+int64_t get_level2_cache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index2/size";
+  static int64_t l2_cache_size = get_cpu_cache_size(_SC_LEVEL2_CACHE_SIZE, path, 524288/*default L2 cache size : 512K*/);
+  return l2_cache_size;
+}
+
+int64_t get_level3_cache_size()
+{
+  const char *path = "/sys/devices/system/cpu/cpu0/cache/index3/size";
+  static int64_t l3_cache_size = get_cpu_cache_size(_SC_LEVEL3_CACHE_SIZE, path, 8388608/*default L3 cache size : 8192K*/);
+  return l3_cache_size;
+}
+
 
 } // end namespace common
 } // end namespace oceanbase

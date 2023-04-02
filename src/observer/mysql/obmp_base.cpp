@@ -44,6 +44,8 @@
 #include "observer/mysql/ob_query_driver.h"
 #include "share/config/ob_server_config.h"
 #include "storage/tx/ob_trans_define.h"
+#include "share/ob_lob_access_utils.h"
+#include "sql/monitor/flt/ob_flt_utils.h"
 
 namespace oceanbase
 {
@@ -142,10 +144,12 @@ int ObMPBase::after_process(int error_code)
         // slow query will flush cache
         FLUSH_TRACE();
       }
+    } else if (common::OB_SUCCESS != error_code) {
+      FLUSH_TRACE();
     } else if (can_force_print(error_code)) {
       // 需要打印TRACE日志的错误码添加在这里
       int process_ret = error_code;
-      NG_TRACE_EXT(process_ret, Y(process_ret));
+      NG_TRACE_EXT(process_ret, OB_Y(process_ret));
       FORCE_PRINT_TRACE(THE_TRACE, "[err query]");
     } else if (THIS_WORKER.need_retry()) {
       if (OB_TRY_LOCK_ROW_CONFLICT != error_code) {
@@ -155,7 +159,6 @@ int ObMPBase::after_process(int error_code)
       PRINT_TRACE(THE_TRACE);
     }
   }
-  ObActiveSessionGuard::get_stat().exec_phase_ = 0;
   return ret;
 }
 
@@ -245,12 +248,12 @@ int ObMPBase::load_system_variables(const ObSysVariableSchema &sys_variable_sche
 
 int ObMPBase::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt)
 {
-  return packet_sender_.send_ok_packet(session, ok_param);
+  return packet_sender_.send_ok_packet(session, ok_param, pkt);
 }
 
-int ObMPBase::send_eof_packet(const ObSQLSessionInfo &session, const ObMySQLResultSet &result)
+int ObMPBase::send_eof_packet(const ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param)
 {
-  return packet_sender_.send_eof_packet(session, result);
+  return packet_sender_.send_eof_packet(session, result, ok_param);
 }
 
 int ObMPBase::create_session(ObSMConnection *conn, ObSQLSessionInfo *&sess_info)
@@ -320,13 +323,10 @@ int ObMPBase::revert_session(ObSQLSessionInfo *sess_info)
 
 int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
                                const ObMultiStmtItem &multi_stmt_item,
-                               sql::ObSQLSessionInfo &session,
-                               bool &use_trace_log) const
+                               sql::ObSQLSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session.is_use_trace_log(use_trace_log))) {
-    LOG_WARN("fail to get use_trace_log", K(ret));
-  } else if (!packet_sender_.is_conn_valid()) {
+  if (!packet_sender_.is_conn_valid()) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
   } else {
@@ -344,12 +344,12 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
     session.set_rpc_tenant_id(THIS_WORKER.get_rpc_tenant());
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
 
-    if (0 == multi_stmt_item.get_seq_num() && !session.is_in_transaction()) {
+    if (0 == multi_stmt_item.get_seq_num()) {
       // 第一条sql
-      // 并且还没开启事务时，这条sql才能二次路由
       ctx.can_reroute_sql_ = (pkt.can_reroute_pkt() && get_conn()->is_support_proxy_reroute());
     }
-    LOG_TRACE("recorded sql reroute flag", K(ctx.can_reroute_sql_));
+    ctx.is_protocol_weak_read_ = pkt.is_weak_read();
+    LOG_TRACE("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_));
   }
   return ret;
 }
@@ -357,7 +357,6 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
 //外层调用会忽略do_after_process的错误码，因此这里将set_session_state的错误码返回也没有意义。
 //因此这里忽略set_session_state错误码，warning buffer的reset和trace log 记录的流程不收影响。
 int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
-                               bool use_session_trace,
                                sql::ObSqlCtx &ctx,
                                bool async_resp_used) const
 {
@@ -372,43 +371,59 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
   }
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);
+  return ret;
+}
+
+int ObMPBase::record_flt_trace(sql::ObSQLSessionInfo &session) const
+{
+  int ret = OB_SUCCESS;
   //trace end
   if (lib::is_diagnose_info_enabled()) {
     NG_TRACE(query_end);
 
-    if (use_session_trace) {
+    if (session.is_use_trace_log()) {
       //不影响正常逻辑
-      if (false == ctx.is_show_trace_stmt_) {//show trace语句的trace log不能show，保留之前执行语句的
-        if (NULL != session.get_trace_buf()) {
-          if (nullptr != THE_TRACE) {
-            (void)session.get_trace_buf()->assign(*THE_TRACE);
-          }
-        }
+      // show trace will always show last request info
+      if (OB_FAIL(ObFLTUtils::clean_flt_show_trace_env(session))) {
+        LOG_WARN("failed to clean flt show trace env", K(ret));
       }
-      FORCE_PRINT_TRACE(THE_TRACE, "[show trace]");
-    } else if (ctx.force_print_trace_) {
-      // query with TRACE_LOG hint can also use SHOW TRACE after its execution
-      if (NULL != session.get_trace_buf()) {
-        if (nullptr != THE_TRACE) {
-          (void)session.get_trace_buf()->assign(*THE_TRACE);
-        }
+    } else {
+      // not need to record
+      ObString trace_id;
+      trace_id.reset();
+      if (OB_FAIL(session.set_last_flt_trace_id(trace_id))) {
+        LOG_WARN("failed to reset last flt trace id", K(ret));
       }
-      FORCE_PRINT_TRACE(THE_TRACE, "[trace hint]");
     }
   }
+  ObFLTUtils::clean_flt_env(session);
   return ret;
 }
 
 int ObMPBase::setup_user_resource_group(
     ObSMConnection &conn,
     const uint64_t tenant_id,
-    const uint64_t user_id)
+    sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   uint64_t group_id = 0;
-  if (!is_valid_tenant_id(tenant_id)) {
+  uint64_t user_id = session->get_user_id();
+  if (OB_INVALID_ID != session->get_expect_group_id()) {
+    // Session->expected_group_id_ is set when hit plan cache or resolve a query, and find that
+    // expcted group is consistent with current group.
+    // Set group_id of req_ so that the req_ will be put in the corresponding queue when do packet retry.
+    if (NULL != req_) {
+      req_->set_group_id(session->get_expect_group_id());
+    }
+    // also set conn.group_id_. It means use current consumer group when execute next query for first time.
+    conn.group_id_ = session->get_expect_group_id();
+    // reset to invalid because session.expected_group_id is single_use.
+    session->set_expect_group_id(OB_INVALID_ID);
+  } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid tenant", K(tenant_id), K(ret));
+  } else if (conn.group_id_ == OBCG_DIAG_TENANT) {
+    // OBCG_DIAG_TENANT was set in check_update_tenant_id, DO NOT overlap it.
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
               tenant_id, user_id, group_id))) {
     LOG_WARN("fail get group id by user", K(user_id), K(tenant_id), K(ret));
@@ -431,7 +446,7 @@ int ObMPBase::check_and_refresh_schema(uint64_t login_tenant_id,
 
   if (login_tenant_id != effective_tenant_id) {
     // do nothing
-    // https://aone.alibaba-inc.com/issue/18698167
+    //
   } else if (OB_ISNULL(gctx_.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null schema service", K(ret), K(gctx_));
@@ -500,20 +515,28 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(session.get_character_set_results(charset_type))) {
         LOG_WARN("fail to get result charset", K(ret));
-      } else if (ob_is_string_type(value.get_type())
-                  && CS_TYPE_INVALID != value.get_collation_type()
-                  && OB_FAIL(value.convert_string_value_charset(charset_type,
-                      THIS_WORKER.get_sql_arena_allocator()))) {
-        LOG_WARN("convert string value charset failed", K(ret), K(value));
-      } else if (value.is_clob_locator()
-                  && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type,
-                              THIS_WORKER.get_sql_arena_allocator()))) {
-        LOG_WARN("convert lob value charset failed", K(ret));
-      }
-      if (OB_SUCC(ret) && OB_FAIL(ObQueryDriver::convert_lob_locator_to_longtext(value,
+      } else {
+        if (ob_is_string_tc(value.get_type())
+            && CS_TYPE_INVALID != value.get_collation_type()
+            && OB_FAIL(value.convert_string_value_charset(charset_type,
+                  THIS_WORKER.get_sql_arena_allocator()))) {
+          LOG_WARN("convert string value charset failed", K(ret), K(value));
+        } else if (value.is_clob_locator()
+                    && OB_FAIL(ObQueryDriver::convert_lob_value_charset(value, charset_type,
+                                THIS_WORKER.get_sql_arena_allocator()))) {
+          LOG_WARN("convert lob value charset failed", K(ret));
+        } else if (ob_is_text_tc(value.get_type())
+                    && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type,
+                                THIS_WORKER.get_sql_arena_allocator(), &session))) {
+          LOG_WARN("convert text value charset failed", K(ret));
+        }
+        if (OB_SUCC(ret) && OB_FAIL(ObQueryDriver::process_lob_locator_results(value,
                                     session.is_client_use_lob_locator(),
-                                    &THIS_WORKER.get_sql_arena_allocator()))) {
-        LOG_WARN("convert lob locator to longtext failed", K(ret));
+                                    session.is_client_support_lob_locatorv2(),
+                                    &THIS_WORKER.get_sql_arena_allocator(),
+                                    &session))) {
+          LOG_WARN("convert lob locator to longtext failed", K(ret));
+        }
       }
     }
 
@@ -529,5 +552,6 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
   }
   return ret;
 }
+
 } // namespace observer
 } // namespace oceanbase

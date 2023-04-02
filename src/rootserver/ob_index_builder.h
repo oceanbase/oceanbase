@@ -29,6 +29,7 @@ class ObMySQLProxy;
 namespace share
 {
 class ObReplicaFilterHolder;
+class SCN;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -55,7 +56,6 @@ public:
   virtual ~ObIndexBuilder();
 
   int create_index(const obrpc::ObCreateIndexArg &arg,
-                   const int64_t frozen_version,
                    obrpc::ObAlterTableRes &res);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
 
@@ -63,22 +63,18 @@ public:
   // if not all index table updated return OB_EAGAIN.
   int do_create_index(
       const obrpc::ObCreateIndexArg &arg,
-      const int64_t frozen_version,
       obrpc::ObAlterTableRes &res);
   int do_create_global_index(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &table_schema,
-      const int64_t frozen_version,
       obrpc::ObAlterTableRes &res);
   int do_create_local_index(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &table_schema,
-      const int64_t frozen_version,
       obrpc::ObAlterTableRes &res);
   int generate_schema(const obrpc::ObCreateIndexArg &arg,
-                      const int64_t frozen_version,
                       share::schema::ObTableSchema &data_schema,
                       const bool global_index_without_column_info,
                       share::schema::ObTableSchema &index_schema);
@@ -109,7 +105,6 @@ private:
   };
 
   int set_basic_infos(const obrpc::ObCreateIndexArg &arg,
-                      const int64_t frozen_version,
                       const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &schema);
   int set_index_table_columns(const obrpc::ObCreateIndexArg &arg,

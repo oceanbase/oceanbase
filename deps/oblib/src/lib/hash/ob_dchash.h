@@ -245,15 +245,16 @@ public:
   friend class Handle;
 public:
   DCHash(IArrayAlloc& alloc, int64_t min_size, int64_t max_size):
-      alloc_(alloc), root_(0), tail_(UINT64_MAX), cur_array_(NULL),
+      lock_(common::ObLatchIds::HASH_MAP_LOCK), alloc_(alloc), root_(0),
+      tail_(UINT64_MAX), cur_array_(NULL),
       min_size_(min_size), max_size_(max_size), target_size_(min_size)
   {
     if (OB_UNLIKELY(min_size_ < BATCH_SIZE)) {
-      _OB_LOG(ERROR, "min_size(%ld) is smaller than BATCH_SIZE(%u)", min_size_, BATCH_SIZE);
+      _OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "min_size(%ld) is smaller than BATCH_SIZE(%u)", min_size_, BATCH_SIZE);
       min_size_ = BATCH_SIZE;
     }
     if (OB_UNLIKELY(min_size_ > max_size_)) {
-      OB_LOG(ERROR, "bad min/max size", K(min_size_), K(max_size_));
+      OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "bad min/max size", K(min_size_), K(max_size_));
     }
   }
   ~DCHash() { destroy(); }
@@ -276,23 +277,23 @@ public:
   }
 
   int insert(const key_t& key, Node* node) {
+#ifdef ENABLE_DEBUG_LOG
     common::ObTimeGuard tg("dc_hash::insert", 100 * 1000);
+#endif
     int err = 0;
     HashNode* pre = NULL;
     Node key_node(key);
     {
       Handle handle(*this, err, 1);
-      tg.click();
       if (0 == (err = handle.search_pre(key_node.hash_, pre))) {
-        tg.click();
         err = _ol_insert((Node*)pre, node);
-        tg.click();
       }
     }
-    tg.click();
+#ifdef ENABLE_DEBUG_LOG
     if (tg.get_diff() > 100000) {
       _OB_LOG(INFO, "ObDCHash insert cost too much time, click diff (%s)", to_cstring(tg));
     }
+#endif
 
     return err;
   }

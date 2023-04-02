@@ -75,10 +75,10 @@ public:
 
 private:
   // initialize ObCharsetUtils (refer to ob_sql_init.h #init_sql_expr_static_var())
-  // fix https://aone.alibaba-inc.com/task/31097866
+  // fix
   // enum,set was developed at the stage when ob only supported utf8, and did not handle enum,set types when supporting other character sets,
   // resulting in incorrect charset when converting enum,set to string. This can lead to garbled data and problems such as compare hang. (Corresponding to server-side modifications.
-  // https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/3930947)
+  //
   int init_ob_charset_utils();
 
   int convert_timestamp_with_timezone_data_util_succ_(const common::ObObjType &target_type,
@@ -115,6 +115,10 @@ private:
       const common::ObCollationType &collation_type,
       common::ObIAllocator &allocator,
       common::ObString &str) const;
+
+  int convert_ob_geometry_to_ewkt_(const common::ObObj &obj,
+      common::ObString &str,
+      common::ObIAllocator &allocator) const;
 
 private:
   bool                          inited_;

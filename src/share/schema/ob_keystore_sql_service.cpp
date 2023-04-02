@@ -84,18 +84,15 @@ int ObKeystoreSqlService::add_keystore(common::ObISQLClient &sql_client,
       SQL_COL_APPEND_VALUE(sql, values, keystore_schema.get_status(), "status", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(
                            exec_tenant_id, keystore_schema.get_master_key_id()), "master_key_id", "%lu");
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2277
-          && OB_INTERNAL_ENCRYPTED_KEY_LENGTH == keystore_schema.get_encrypted_key().length()) {
+      if (OB_INTERNAL_ENCRYPTED_KEY_LENGTH == keystore_schema.get_encrypted_key().length()) {
         SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, "", 0, "master_key");
       } else {
         SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, keystore_schema.get_master_key().ptr(),
                                         keystore_schema.get_master_key().length(), "master_key");
       }
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2277) {
-        SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, keystore_schema.get_encrypted_key().ptr(),
-                                        keystore_schema.get_encrypted_key().length(),
-                                        "encrypted_key");
-      }
+      SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, keystore_schema.get_encrypted_key().ptr(),
+                                      keystore_schema.get_encrypted_key().length(),
+                                      "encrypted_key");
       if (0 == STRCMP(tname[i], OB_ALL_TENANT_KEYSTORE_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, keystore_schema.get_schema_version(), "schema_version", "%ld");
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
@@ -170,12 +167,10 @@ int ObKeystoreSqlService::update_keystore(common::ObISQLClient &sql_client,
           || OB_FAIL(dml.add_column("password", ObHexEscapeSqlStr(keystore_schema.get_password())))
           || OB_FAIL(dml.add_column("status", keystore_schema.get_status()))
           || OB_FAIL(dml.add_column("master_key_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, master_key_id)))
-          || OB_FAIL(dml.add_column("master_key", (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2277
-              && OB_INTERNAL_ENCRYPTED_KEY_LENGTH == keystore_schema.get_encrypted_key().length()) ?
+          || OB_FAIL(dml.add_column("master_key", (OB_INTERNAL_ENCRYPTED_KEY_LENGTH == keystore_schema.get_encrypted_key().length()) ?
               ObString::make_string("") :
               ObHexEscapeSqlStr(keystore_schema.get_master_key())))
-          || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2277
-            && OB_FAIL(dml.add_column("encrypted_key", ObHexEscapeSqlStr(keystore_schema.get_encrypted_key()))))
+          || OB_FAIL(dml.add_column("encrypted_key", ObHexEscapeSqlStr(keystore_schema.get_encrypted_key())))
           || OB_FAIL(dml.add_gmt_modified())) {
         LOG_WARN("add column failed", K(ret));
       }

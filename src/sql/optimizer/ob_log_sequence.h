@@ -25,10 +25,6 @@ namespace sql
   public:
     ObLogSequence(ObLogPlan &plan) : ObLogicalOperator(plan) {}
     virtual ~ObLogSequence() {}
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
     const common::ObIArray<uint64_t> &get_sequence_ids() const
     { return nextval_seq_ids_; }

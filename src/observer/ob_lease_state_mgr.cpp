@@ -199,29 +199,33 @@ int ObLeaseStateMgr::try_report_sys_ls()
     ret = OB_SERVER_IS_STOPPING;
     LOG_WARN("lease manager is stopped", KR(ret));
   } else {
-    MTL_SWITCH(OB_SYS_TENANT_ID) {
+    const uint64_t tenant_id = OB_SYS_TENANT_ID;
+    const ObLSID ls_id = SYS_LS;
+    MTL_SWITCH(tenant_id) {
       bool ls_exist = false;
-      ObLSService *ls_svr = nullptr;
-      if (OB_UNLIKELY(nullptr == (ls_svr = MTL(ObLSService*)))) {
+      ObLSService *ls_svr = NULL;
+      if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant storage ptr is null", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
-      } else if (OB_FAIL(ls_svr->check_ls_exist(SYS_LS, ls_exist))) {
-        LOG_WARN("fail to check log stream exist", KR(ret), K(SYS_LS));
+        LOG_WARN("tenant storage ptr is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ls_svr->check_ls_exist(ls_id, ls_exist))) {
+        LOG_WARN("fail to check log stream exist", KR(ret), K(ls_id));
       } else if (!ls_exist) {
         // core log stream not exist
       } else {
         share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
         share::ObLSReplica ls_replica;
-        if (OB_UNLIKELY(nullptr == ob_service_ || nullptr == lst_operator)) {
+        if (OB_ISNULL(ob_service_) || OB_ISNULL(lst_operator)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ob_service or lst_operator ptr is null",
                    KR(ret), KP(ob_service_), KP(lst_operator));
         } else if (OB_FAIL(ob_service_->fill_ls_replica(
-                OB_SYS_TENANT_ID, SYS_LS, ls_replica))) {
+                   tenant_id, ls_id, ls_replica))) {
           LOG_WARN("fail to fill log stream replica", KR(ret),
-                   "tenant_id", OB_SYS_TENANT_ID, K(ls_replica));
-        } else if (OB_FAIL(lst_operator->update(ls_replica))) {
+                   K(tenant_id), K(ls_replica));
+        } else if (OB_FAIL(lst_operator->update(ls_replica, false/*inner_table_only*/))) {
           LOG_WARN("fail to report sys log stream", KR(ret), K(ls_replica));
+        } else if (OB_FAIL(ob_service_->submit_ls_update_task(tenant_id, ls_id))) {
+          LOG_WARN("fail to add async update task", KR(ret), K(tenant_id), K(ls_id));
         } else {
           LOG_INFO("try report sys log stream succeed");
         }
@@ -230,7 +234,7 @@ int ObLeaseStateMgr::try_report_sys_ls()
       if (OB_TENANT_NOT_IN_SERVER == ret) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("fail to switch tenant", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
       }
     }
   }

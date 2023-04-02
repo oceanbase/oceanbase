@@ -17,8 +17,11 @@
 #include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_log_exchange.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/dblink/ob_dblink_utils.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -31,7 +34,7 @@ using share::schema::ObTableSchema;
 using share::schema::ObColumnSchemaV2;
 using share::schema::ObSchemaGetterGuard;
 
-int ObDelUpdLogPlan::generate_raw_plan()
+int ObDelUpdLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   /*do nothing*/
@@ -90,6 +93,35 @@ int ObDelUpdLogPlan::do_check_fullfill_safe_update_mode(ObLogicalOperator *op, b
 int ObDelUpdLogPlan::prepare_dml_infos()
 {
   return OB_SUCCESS;
+}
+
+int ObDelUpdLogPlan::generate_dblink_raw_plan()
+{
+  int ret = OB_SUCCESS;
+  const ObDelUpdStmt *stmt = get_stmt();
+  ObLogicalOperator *top = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(allocate_link_dml_as_top(top))) {
+    LOG_WARN("failed to allocate link dml as top", K(ret));
+  } else if (OB_FAIL(make_candidate_plans(top))) {
+    LOG_WARN("failed to make candidate plans", K(ret));
+  } else if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt())) {
+    LOG_WARN("failed to set link stmt", K(ret));
+  } else {
+    set_plan_root(top);
+    bool has_reverse_link = false;
+    if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt, has_reverse_link))) {
+      LOG_WARN("failed to exec has_reverse_link", K(ret));
+    } else {
+      uint64_t dblink_id = stmt->get_dblink_id();
+      top->set_dblink_id(dblink_id);
+      static_cast<ObLogLinkDml *>(top)->set_reverse_link(has_reverse_link);
+      static_cast<ObLogLinkDml *>(top)->set_dml_type(stmt->get_stmt_type());
+    }
+  }
+  return ret;
 }
 
 // check_table_rowkey_distinct 从逻辑上看计划是否可能有一行数据被更新多次
@@ -505,7 +537,7 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(get_stmt()), K(ret));
         } else if (OB_FAIL(static_cast<const ObInsertStmt*>(get_stmt())->get_ddl_sort_keys(exch_info.sort_keys_))) {
-          LOG_WARN("failed to get sort ddl sort keys", K(ret));
+          LOG_WARN("fail to get ddl sort key", K(ret));
         } else if (exch_info.dist_method_ == ObPQDistributeMethod::PARTITION_RANGE &&
                    OB_FAIL(exch_info.repart_all_tablet_ids_.assign(target_sharding.get_all_tablet_ids()))) {
           LOG_WARN("failed to get all partition ids", K(ret));
@@ -690,7 +722,7 @@ int ObDelUpdLogPlan::replace_assignment_expr_from_dml_info(const IndexDMLInfo &d
     if (OB_ISNULL(assignment.expr_) || OB_ISNULL(assignment.column_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (expr == assignment.column_expr_ 
+    } else if (expr == assignment.column_expr_
                && OB_NOT_NULL(assignment.expr_)
                && assignment.expr_->get_expr_type() != T_TABLET_AUTOINC_NEXTVAL) {
       expr = assignment.expr_;
@@ -1090,10 +1122,11 @@ int ObDelUpdLogPlan::get_ddl_sort_keys_with_part_expr(ObExchangeInfo &exch_info,
   int ret = OB_SUCCESS;
   sort_keys.reset();
   ObArray<OrderItem> tmp_sort_keys;
-  if (2 != get_stmt()->get_table_size()) {
+  const ObInsertStmt *ins_stmt = static_cast<const ObInsertStmt *>(get_stmt());
+  if (2 != ins_stmt->get_table_size()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, table item size is not as expected", K(ret), "table_item_size", get_stmt()->get_table_size());
-  } else if (OB_FAIL(static_cast<const ObInsertStmt *>(get_stmt())->get_ddl_sort_keys(tmp_sort_keys))) {
+    LOG_WARN("error unexpected, table item size is not as expected", K(ret), "table_item_size", ins_stmt->get_table_size());
+  } else if (OB_FAIL(ins_stmt->get_ddl_sort_keys(tmp_sort_keys))) {
     LOG_WARN("get ddl sort keys failed", K(ret));
   } else if (OB_NOT_NULL(exch_info.calc_part_id_expr_)) {
     OrderItem item;
@@ -1151,6 +1184,9 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
       insert_op->set_replace(insert_stmt->is_replace());
       insert_op->set_ignore(insert_stmt->is_ignore());
       insert_op->set_is_insert_select(insert_stmt->value_from_select());
+      if (OB_NOT_NULL(insert_stmt->get_table_item(0))) {
+        insert_op->set_append_table_id(insert_stmt->get_table_item(0)->ref_id_);
+      }
       if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
         LOG_WARN("failed to get view check exprs", K(ret));
       }
@@ -1401,7 +1437,7 @@ int ObDelUpdLogPlan::prune_virtual_column(IndexDMLInfo &index_dml_info)
       const ObColumnRefRawExpr *col_expr = index_dml_info.column_exprs_.at(i);
       if (lib::is_oracle_mode() && col_expr->is_virtual_generated_column() && !optimizer_context_.has_trigger()) {
         //why need to exclude trigger here?
-        //see the issue: https://work.aone.alibaba-inc.com/issue/41910344
+        //see the issue:
         //key column means it is the rowkey column or part key column or index column
         //outside these scenarios with Oracle mode,
         //DML operator will not touch the virtual column
@@ -1493,9 +1529,17 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   uint64_t index_tid_array[OB_MAX_INDEX_PER_TABLE];
   ObArray<uint64_t> base_column_ids;
   const uint64_t tenant_id = optimizer_context_.get_session_info()->get_effective_tenant_id();
+  bool is_direct_insert = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = optimizer_context_.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is nullptr", K(ret), K(stmt), K(schema_guard));
+  } else if (OB_FAIL(ObTableDirectInsertService::check_direct_insert(optimizer_context_,
+                                                                     *stmt,
+                                                                     is_direct_insert))) {
+    LOG_WARN("failed to check direct insert", KR(ret));
+  } else if (is_direct_insert) {
+    // no need building index
+    index_tid_array_size = 0;
   } else if (OB_FAIL(schema_guard->get_can_write_index_array(tenant_id,
                                                              primary_dml_info.ref_table_id_,
                                                              index_tid_array,
@@ -1611,7 +1655,19 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
   if (OB_SUCC(ret) && !has_tg) {
     uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
     int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
-    if (OB_FAIL(schema_guard->get_can_write_index_array(session_info->get_effective_tenant_id(),
+    bool is_direct_insert = false;
+    const ObDelUpdStmt *stmt = get_stmt();
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", KR(ret), KP(stmt));
+    } else if (OB_FAIL(ObTableDirectInsertService::check_direct_insert(optimizer_context_,
+                                                                      *stmt,
+                                                                      is_direct_insert))) {
+      LOG_WARN("failed to check direct insert", KR(ret));
+    } else if (is_direct_insert) {
+      // no need building index
+      index_cnt = 0;
+    } else if (OB_FAIL(schema_guard->get_can_write_index_array(session_info->get_effective_tenant_id(),
                                                         table_info.ref_table_id_, index_tid, index_cnt, true))) {
       LOG_WARN("failed to get can read index array", K(ret));
     }
@@ -1998,6 +2054,21 @@ int ObDelUpdLogPlan::check_update_part_key(const ObTableSchema* index_schema,
         break;
       }
     }
+  }
+  return ret;
+}
+int ObDelUpdLogPlan::allocate_link_dml_as_top(ObLogicalOperator *&old_top)
+{
+  int ret = OB_SUCCESS;
+  ObLogLinkDml *link_dml = NULL;
+  if (OB_ISNULL(link_dml = static_cast<ObLogLinkDml *>(get_log_op_factory().
+                                  allocate(*this, LOG_LINK_DML)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate link dml operator", K(ret));
+  } else if (OB_FAIL(link_dml->compute_property())) {
+    LOG_WARN("failed to compute property", K(ret));
+  } else {
+    old_top = link_dml;
   }
   return ret;
 }

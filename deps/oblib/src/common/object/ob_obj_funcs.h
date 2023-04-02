@@ -15,6 +15,7 @@
 
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
+#include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "common/object/ob_object.h"
@@ -288,9 +289,31 @@ template <>
       v = 0.0;                                                        \
     } else if (isnan(v)) {                                            \
       v = NAN;                                                        \
-    }                                                                 \
+    } else if (obj.is_fixed_double() && lib::is_mysql_mode()) {       \
+      char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};                   \
+      int64_t len = ob_fcvt(v, static_cast<int>(obj.get_scale()), sizeof(buf) - 1, buf, NULL); \
+      return murmurhash(buf, static_cast<int32_t>(len), ret);            \
+    }                                                       \
     return murmurhash(&v, sizeof(obj.get_##TYPE()), ret);   \
   }                                                                     \
+  template <typename T>                                     \
+  struct ObjHashCalculator<OBJTYPE, T, ObObj>                               \
+  {                                                                             \
+    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {      \
+      VTYPE v = obj.get_##TYPE();                                     \
+      HTYPE v2 = v;                                                     \
+      if (0.0 == v2) {                                                \
+        v2 = 0.0;                                                     \
+      } else if (isnan(v2)) {                                         \
+        v2 = NAN;                                                     \
+      } else if (obj.is_fixed_double() && lib::is_mysql_mode()) {     \
+        char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};                   \
+        int64_t len = ob_fcvt(v2, static_cast<int>(obj.get_scale()), sizeof(buf) - 1, buf, NULL); \
+        return T::hash(buf, static_cast<int32_t>(len), hash);            \
+      }                                                              \
+      return T::hash(&v2, sizeof(v2), hash);                            \
+    }                                                                   \
+  };                                                                    \
   template <typename T, typename P>                                     \
   struct ObjHashCalculator<OBJTYPE, T, P>                               \
   {                                                                             \
@@ -361,10 +384,10 @@ template <>
     UNUSED(params);                                                    \
     int64_t print_len = 0;\
     if (IS_DOUBLE) {\
-      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, length - pos , buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(length - pos) , buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     } else {\
-      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, length - pos, buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(length - pos), buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     }\
     if (OB_UNLIKELY(print_len <=0 || print_len + pos > length)) {\
@@ -376,7 +399,6 @@ template <>
           ret = OB_SIZE_OVERFLOW;\
         } else {\
           buffer[pos++] = (IS_DOUBLE ? 'D' : 'F');\
-          buffer[pos] = '\0';\
         }\
       }\
     }\
@@ -395,10 +417,10 @@ template <>
     } else {                                                                \
       buffer[pos++] = '\'';                                                 \
       if (IS_DOUBLE) {\
-        print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, length - pos , buffer + pos, \
+        print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(length - pos), buffer + pos, \
                                 NULL, lib::is_oracle_mode(), TRUE);\
       } else {\
-        print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, length - pos, buffer + pos, \
+        print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(length - pos), buffer + pos, \
                                 NULL, lib::is_oracle_mode(), TRUE);\
       }\
       if (OB_UNLIKELY(print_len <= 0 || print_len + pos > length)) {\
@@ -434,10 +456,10 @@ template <>
     UNUSED(params);                                                    \
     int64_t print_len = 0;\
     if (IS_DOUBLE) {\
-      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, length - pos , buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(length - pos), buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     } else {\
-      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, length - pos, buffer + pos, \
+      print_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(length - pos), buffer + pos, \
                               NULL, lib::is_oracle_mode(), TRUE);\
     }\
     if (OB_UNLIKELY(print_len <=0 || print_len + pos > length)) {\
@@ -1366,7 +1388,7 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
   {                                                                     \
     UNUSED(params);                                                    \
     int ret = OB_SUCCESS;                                        \
-    ObString str = obj.get_print_string(length - pos);                  \
+    ObString str = obj.get_text_print_string(length - pos);             \
     if (CS_TYPE_BINARY == obj.get_collation_type()) {                   \
       if (!lib::is_oracle_mode() && OB_SUCCESS != (ret = databuff_printf(buffer, \
                                                                         length, pos, "X'"))) { \
@@ -1390,7 +1412,7 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
   {                                                                     \
     UNUSED(params);                                                    \
     int ret = OB_SUCCESS;                                               \
-    ObString str = obj.get_print_string(length - pos);                              \
+    ObString str = obj.get_text_print_string(length - pos);             \
     if (CS_TYPE_BINARY == obj.get_collation_type()) {                   \
       ret = databuff_printf(buffer, length, pos, "'%.*s", str.length(), str.ptr());  \
       if (OB_SUCC(ret)) {                                        \
@@ -1406,7 +1428,10 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
   inline int obj_print_plain_str<OBJTYPE>(const ObObj &obj, char *buffer, int64_t length, \
                                           int64_t &pos, const ObObjPrintParams &params) \
   {                                                                     \
-    return obj_print_plain_str<ObVarcharType>(obj, buffer, length, pos, params); \
+    ObObj tmp_obj = obj; \
+    ObString str = obj.get_text_print_string(length - pos); \
+    tmp_obj.set_lob_value(obj.get_type(), str.ptr(), str.length()); \
+    return obj_print_plain_str<ObVarcharType>(tmp_obj, buffer, length, pos, params); \
   }                                                                     \
   template <>                                                           \
   inline int obj_print_json<OBJTYPE>(const ObObj &obj, char *buf, int64_t buf_len, \
@@ -1417,7 +1442,7 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
     PRINT_META();                                                       \
     BUF_PRINTO(ob_obj_type_str(obj.get_type()));                        \
     J_COLON();                                                          \
-    BUF_PRINTO(obj.get_print_string(buf_len - pos));                    \
+    BUF_PRINTO(obj.get_text_print_string(buf_len - pos));                    \
     J_COMMA();                                                          \
     J_KV(N_COLLATION, ObCharset::collation_name(obj.get_collation_type()));\
     J_COMMA();                                                          \
@@ -1457,6 +1482,11 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
    return len;                                                          \
    }
 
+// ToDo: @gehao
+// 1. SERIALIZE/DESERIALIZE will drop has_lob_header flag. However, only table api use these functions,
+//    and lob locators are removed in table apis. Error may occur if used in other scenes.
+// 2. CS_FUNCS: lob with same content and different lobids will have different crc & hash,
+//    but error occur in farm, not used?
 #define DEF_TEXT_FUNCS(OBJTYPE, TYPE, VTYPE) \
   DEF_TEXT_PRINT_FUNCS(OBJTYPE);             \
   DEF_STRING_CS_FUNCS(OBJTYPE);                 \
@@ -1466,6 +1496,82 @@ DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
 DEF_TEXT_FUNCS(ObTextType, string, ObString);
 DEF_TEXT_FUNCS(ObMediumTextType, string, ObString);
 DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
+
+
+#define DEF_GEO_CS_FUNCS(OBJTYPE)                                    \
+  template <>                                                           \
+  inline int64_t obj_crc64<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &type, sizeof(type));        \
+    ret = ob_crc64_sse42(ret, &cs, sizeof(cs));                         \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline int64_t obj_crc64_v2<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));        \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline void obj_batch_checksum<OBJTYPE>(const ObObj &obj, ObBatchChecksum &bc) \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    bc.fill(&type, sizeof(type));                                       \
+    bc.fill(&cs, sizeof(cs));                                           \
+    bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
+  }                                                                     \
+  template <>                                                           \
+  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  {                                                                     \
+    return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
+  }                                                                     \
+  template <typename T, typename P>                                     \
+  struct ObjHashCalculator<OBJTYPE, T, P>                               \
+  {                                                                             \
+    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {      \
+      int ret = OB_SUCCESS;                                                          \
+      uint64_t hash_res = 0;                                                         \
+      common::ObString str = param.get_string();                                     \
+      common::ObString wkb;                                                          \
+      ObLobLocatorV2 lob(str, false);                                                \
+      if (!lob.is_valid()) {                                                         \
+        COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
+        right_to_die_or_duty_to_live();                                              \
+      } else if (!lob.has_inrow_data()) {                                            \
+        COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(lob));              \
+        hash_res = hash;                                                             \
+      } else if (OB_FAIL(lob.get_inrow_data(wkb))) {                                 \
+        COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(lob));                  \
+        right_to_die_or_duty_to_live();                                              \
+      } else {                                                                       \
+        hash_res = hash;                                                             \
+        if (wkb.length() > 0 && !param.is_null()) {                                  \
+          hash_res = ObCharset::hash(CS_TYPE_BINARY, wkb.ptr(),                      \
+                                     wkb.length(), hash,                             \
+                                     false,  T::is_varchar_hash ? T::hash : NULL);   \
+        }                                                                            \
+      }                                                                              \
+      return hash_res;                                                               \
+    }                                                                                \
+  };                                                                                 \
+  template <>                                                               \
+  inline uint64_t obj_crc64_v3<OBJTYPE>(const ObObj &obj, const uint64_t current)  \
+  {                                                                         \
+    int cs = obj.get_collation_type();                                      \
+    uint64_t ret = ob_crc64_sse42(current, &cs, sizeof(cs));               \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                         \
+
+#define DEF_GEO_FUNCS(OBJTYPE, TYPE, VTYPE)        \
+  DEF_TEXT_PRINT_FUNCS(OBJTYPE);                   \
+  DEF_GEO_CS_FUNCS(OBJTYPE);                       \
+  DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
+
+DEF_GEO_FUNCS(ObGeometryType, string, ObString);
 
 #define DEF_JSON_CS_FUNCS(OBJTYPE)                                    \
   template <>                                                           \
@@ -1498,28 +1604,40 @@ DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
   {                                                                     \
     return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
   }                                                                     \
-  template <typename T, typename P>                                                \
-  struct ObjHashCalculator<OBJTYPE, T, P>                                          \
-  {                                                                                \
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {         \
-      int ret = OB_SUCCESS;                                                        \
-      common::ObString j_bin_str = param.get_string();                             \
-      uint64_t hash_res = 0;                                                       \
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
-      ObIJsonBase *j_base = &j_bin;                                                \
-      if (j_bin_str.length() == 0 || param.is_null()) {                             \
-        hash_res = hash;                                                           \
-      } else if (OB_FAIL(j_bin.reset_iter())) {                                    \
-        COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_bin_str));     \
-        right_to_die_or_duty_to_live();                                            \
-      } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, hash_res))) { \
-        COMMON_LOG(ERROR, "fail to calc hash", K(ret), K(*j_base));                \
-        right_to_die_or_duty_to_live();                                            \
-      }                                                                            \
-                                                                                   \
-      return hash_res;                                                             \
-    }                                                                              \
-  };                                                                               \
+  template <typename T, typename P>                                                  \
+  struct ObjHashCalculator<OBJTYPE, T, P>                                            \
+  {                                                                                  \
+    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {           \
+      int ret = OB_SUCCESS;                                                          \
+      uint64_t hash_res = 0;                                                         \
+      common::ObString str = param.get_string();                                     \
+      common::ObString j_bin_str;                                                    \
+      ObLobLocatorV2 lob(str, false);                                                \
+      if (!lob.is_valid()) {                                                         \
+        COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
+        right_to_die_or_duty_to_live();                                              \
+      } else if (!lob.has_inrow_data()) {                                            \
+        COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(lob));              \
+        hash_res = hash;                                                             \
+      } else if (OB_FAIL(lob.get_inrow_data(j_bin_str))) {                           \
+        COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(lob));                  \
+        right_to_die_or_duty_to_live();                                              \
+      } else {                                                                       \
+        ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
+        ObIJsonBase *j_base = &j_bin;                                                \
+        if (j_bin_str.length() == 0 || param.is_null()) {                            \
+          hash_res = hash;                                                           \
+        } else if (OB_FAIL(j_bin.reset_iter())) {                                    \
+          COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_bin_str));     \
+          right_to_die_or_duty_to_live();                                            \
+        } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, hash_res))) { \
+          COMMON_LOG(ERROR, "fail to calc hash", K(ret), K(*j_base));                \
+          right_to_die_or_duty_to_live();                                            \
+        }                                                                            \
+      }                                                                              \
+      return hash_res;                                                               \
+    }                                                                                \
+  };                                                                                 \
   template <>                                                               \
   inline uint64_t obj_crc64_v3<OBJTYPE>(const ObObj &obj, const uint64_t current)  \
   {                                                                         \
@@ -1545,7 +1663,11 @@ inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
   ObJsonBuffer jbuf(&tmp_allocator);
   ObIJsonBase *j_base = NULL;
   ObJsonInType in_type = ObJsonInType::JSON_BIN;
-  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+  uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+  if (OB_FAIL(obj.get_json_print_data(str, buffer, length, pos))) {
+    COMMON_LOG(WARN, "fail to get json data", K(ret), K(in_type));
+  } else if (str.empty()) { // nothing to print;
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
@@ -1569,7 +1691,7 @@ inline int obj_print_str<ObJsonType>(const ObObj &obj, char *buffer, int64_t len
 }
 template <>
 inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64_t length,
-                                        int64_t &pos, const ObObjPrintParams &params)
+                                           int64_t &pos, const ObObjPrintParams &params)
 {
   UNUSED(params); \
   int ret = OB_SUCCESS;
@@ -1578,7 +1700,11 @@ inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64
   ObIJsonBase *j_base = NULL;
   ObJsonBuffer jbuf(&tmp_allocator);
   ObJsonInType in_type = ObJsonInType::JSON_BIN;
-  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+  uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+  if (OB_FAIL(obj.get_json_print_data(str, buffer, length, pos))) {
+    COMMON_LOG(WARN, "fail to get json data", K(ret), K(in_type));
+  } else if (str.empty()) { // nothing to print;
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
@@ -1593,16 +1719,20 @@ inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64
 }
 template <>
 inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_len,
-                                  int64_t &pos, const ObObjPrintParams &params)
+                                      int64_t &pos, const ObObjPrintParams &params)
 {
   UNUSED(params);
   int ret = OB_SUCCESS;
-  ObString str = obj.get_string();
+  ObString str;
   ObArenaAllocator tmp_allocator;
   ObIJsonBase *j_base = NULL;
   ObJsonInType in_type = ObJsonInType::JSON_BIN;
   ObJsonBuffer jbuf(&tmp_allocator);
-  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+  uint32_t parse_flag = lib::is_mysql_mode() ? 0 : ObJsonParser::JSN_RELAXED_FLAG;
+  if (OB_FAIL(obj.get_json_print_data(str, buf, buf_len, pos))) {
+    COMMON_LOG(WARN, "fail to get json data", K(ret), K(in_type));
+  } else if (str.empty()) { // nothing to print;
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base, parse_flag))) {
     COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
   } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
     COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
@@ -1990,8 +2120,7 @@ template <>
       ret = databuff_printf(buffer, length, pos, "%s", N_UPPERCASE_CUR_TIMESTAMP);
       break;
     default:
-      _OB_LOG(WARN, "ext %ld should not be print as sql", obj.get_ext());
-      ret = OB_INVALID_ARGUMENT;
+      ret = databuff_printf(buffer, length, pos, "%s", "Extend Obj");
       break;
   }
   return ret;
@@ -2128,10 +2257,10 @@ inline int64_t obj_val_get_serialize_size<ObExtendType>(const ObObj &obj)
   int64_t len = 0;
   OB_UNIS_ADD_LEN(obj.get_ext());
   if (obj.is_pl_extend()) {
-    COMMON_LOG(ERROR, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
+    COMMON_LOG_RET(ERROR, OB_NOT_SUPPORTED, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
     return len; //TODO:@ryan.ly: close this feature before composite refactor
     if (NULL == composite_serialize_size_callback) {
-      COMMON_LOG(ERROR, "Unexpected callback", K(OB_ERR_UNEXPECTED), K(obj));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected callback", K(OB_ERR_UNEXPECTED), K(obj));
     } else {
       len += composite_serialize_size_callback(obj);
     }

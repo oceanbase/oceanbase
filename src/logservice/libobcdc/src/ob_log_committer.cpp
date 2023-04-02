@@ -217,7 +217,7 @@ void ObLogCommitter::stop()
       int pthread_ret = pthread_join(commit_pid_, NULL);
 
       if (0 != pthread_ret) {
-        LOG_ERROR("join Committer commit thread fail", K(commit_pid_), KERRNOMSG(pthread_ret));
+        LOG_ERROR_RET(OB_ERR_SYS, "join Committer commit thread fail", K(commit_pid_), KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop Committer commit thread succ");
       }
@@ -229,7 +229,7 @@ void ObLogCommitter::stop()
       int pthread_ret = pthread_join(heartbeat_pid_, NULL);
 
       if (0 != pthread_ret) {
-        LOG_ERROR("join Committer HEARTBEAT thread fail", K(heartbeat_pid_), KERRNOMSG(pthread_ret));
+        LOG_ERROR_RET(OB_ERR_SYS, "join Committer HEARTBEAT thread fail", K(heartbeat_pid_), KERRNOMSG(pthread_ret));
       } else {
         LOG_INFO("stop Committer HEARTBEAT thread succ");
       }
@@ -313,7 +313,7 @@ int ObLogCommitter::push(PartTransTask *task,
     if (OB_FAIL(handle_not_served_trans_(*task))) {
       LOG_ERROR("handle_not_served_trans_ fail", KR(ret), KPC(task));
     }
-  } else if (task->is_ls_table_trans()) {
+  } else if (task->is_ls_op_trans()) {
     if (OB_FAIL(push_ls_table_task_(*task))) {
       LOG_ERROR("push_ls_table_task_ fail", KR(ret), KPC(task));
     }
@@ -417,7 +417,7 @@ int ObLogCommitter::recycle_task_directly_(PartTransTask &task, const bool can_a
     if (OB_NOT_NULL(resource_collector_)
         && OB_SUCCESS != (revert_ret = resource_collector_->revert(&task))) {
       if (OB_IN_STOP_STATE != revert_ret) {
-        LOG_ERROR("revert HEARTBEAT task fail", K(revert_ret), K(task));
+        LOG_ERROR("revert PartTransTask fail", K(revert_ret), K(task));
       }
       ret = OB_SUCCESS == ret ? revert_ret : ret;
     }
@@ -1090,7 +1090,7 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
 
     // Place the Binlog Record chain in the user queue
     // Binlog Record may be recycled at any time
-    if (OB_SUCCESS == ret) {
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(commit_binlog_record_list_(*trans_ctx, cluster_id, valid_part_trans_task_count,
               tenant_id, trans_commit_version))) {
         if (OB_IN_STOP_STATE != ret) {
@@ -1249,8 +1249,13 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(trans_ctx.has_valid_br(stop_flag_))) {
     if (OB_EMPTY_RESULT == ret) {
-      ret = OB_SUCCESS;
-      LOG_DEBUG("trans has no valid br to output, skip this trans", K(trans_ctx));
+      if (0 < trans_ctx.get_total_br_count()) {
+        // unexpected
+        LOG_ERROR("unexpected skiping trans with valid br", KR(ret), K(trans_ctx));
+      } else {
+        LOG_INFO("trans has no valid br to output, skip this trans", KR(ret), K(trans_ctx));
+        ret = OB_SUCCESS;
+      }
     } else {
       LOG_ERROR("failed to wait for valid br", KR(ret), K(trans_ctx));
     }

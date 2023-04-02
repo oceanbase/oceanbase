@@ -47,8 +47,7 @@ public:
                           const common::ObIArray<ObObjectID> *part_ids,
                           const common::ObDataTypeCastParams &dtc_params,
                           const bool is_dml_table,
-                          common::ObIArray<ObRawExpr *> *sort_exprs = NULL,
-                          bool is_link = false);
+                          common::ObIArray<ObRawExpr *> *sort_exprs = NULL);
 
   int get_not_insert_dml_part_sort_expr(const ObDMLStmt &stmt,
                                         common::ObIArray<ObRawExpr *> *sort_exprs) const;

@@ -47,6 +47,7 @@ class ObStandbyTimestampService : public logservice::ObIRoleChangeSubHandler, pu
 public:
   ObStandbyTimestampService() : inited_(false), last_id_(OB_INVALID_VERSION), tenant_id_(OB_INVALID_ID),
                                 epoch_(OB_INVALID_TIMESTAMP), tg_id_(-1),
+                                switch_to_leader_ts_(OB_INVALID_TIMESTAMP),
                                 print_error_log_interval_(3 * 1000 * 1000),
                                 print_id_log_interval_(3 * 1000 * 1000) {}
   virtual ~ObStandbyTimestampService() { destroy(); }
@@ -69,7 +70,7 @@ public:
   int check_leader(bool &leader);
   int get_number(int64_t &gts);
   int64_t get_last_id() const { return last_id_; }
-  TO_STRING_KV(K_(inited), K_(last_id), K_(tenant_id), K_(epoch), K_(self));
+  TO_STRING_KV(K_(inited), K_(last_id), K_(tenant_id), K_(epoch), K_(self), K_(switch_to_leader_ts));
 private:
   int query_and_update_last_id();
   int handle_local_request_(const ObGtsRequest &request, obrpc::ObGtsRpcResult &result);
@@ -81,6 +82,7 @@ private:
   int tg_id_;
   ObGtsResponseRpc rpc_;
   common::ObAddr self_;
+  int64_t switch_to_leader_ts_;
   common::ObTimeInterval print_error_log_interval_;
   common::ObTimeInterval print_id_log_interval_;
 };

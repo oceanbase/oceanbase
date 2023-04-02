@@ -22,6 +22,10 @@
 #include "logservice/palf/log_iterator_storage.h"
 #include "logservice/palf/palf_iterator.h"
 #include "logservice/ob_log_base_header.h"
+#include "logservice/data_dictionary/ob_data_dict_iterator.h"  // ObDataDictIterator
+#include "logservice/restoreservice/ob_remote_log_iterator.h"  // ObRemoteLogIterator
+#include "logservice/restoreservice/ob_remote_log_source.h"    // ObRemoteLogParent
+#include "ob_log_fetching_mode.h"
 #include "ob_log_utils.h"                     // _SEC_
 #include "ob_log_start_lsn_locator.h"         // StartLSNLocateReq
 #include "ob_log_dlist.h"                     // ObLogDList, ObLogDListNode
@@ -30,12 +34,15 @@
 #include "ob_log_part_serve_info.h"           // PartServeInfo
 #include "ob_log_part_trans_dispatcher.h"     // PartTransDispatchInfo
 #include "ob_log_ls_define.h"                 // TenantLSID
+#include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
 
 namespace oceanbase
 {
 namespace libobcdc
 {
 
+using logservice::ObRemoteLogParent;
+using logservice::ObRemoteLogGroupEntryIterator;
 /////////////////////////////// LSFetchCtx /////////////////////////////////
 
 class ObLogConfig;
@@ -50,6 +57,24 @@ typedef ObLogDListNode<LSFetchCtx> FetchTaskListNode;
 // Two-way linked list of fetch log tasks
 typedef ObLogDList<LSFetchCtx> FetchTaskList;
 
+class LSFetchCtxGetSourceFunctor
+{
+public:
+  explicit LSFetchCtxGetSourceFunctor(LSFetchCtx &ctx): ls_fetch_ctx_(ctx) {}
+  int operator()(const ObLSID &id, logservice::ObRemoteSourceGuard &guard);
+private:
+  LSFetchCtx &ls_fetch_ctx_;
+};
+
+class LSFetchCtxUpdateSourceFunctor
+{
+public:
+  explicit LSFetchCtxUpdateSourceFunctor(LSFetchCtx &ctx): ls_fetch_ctx_(ctx) {}
+  int operator()(const ObLSID &id, ObRemoteLogParent *source);
+private:
+  LSFetchCtx &ls_fetch_ctx_;
+};
+
 // LSFetchCtx
 // LS fetch context, managing the fetch status of LS in the fetcher module
 class LSFetchCtx : public FetchTaskListNode
@@ -63,15 +88,23 @@ public:
 
 public:
   void reset();
-  int init(const TenantLSID &tls_id,
-      const int64_t start_tstamp_ns,
-      const palf::LSN &start_lsn,
+  int init(
+      const TenantLSID &tls_id,
+      const ObLogFetcherStartParameters &start_parameters,
+      const bool is_loading_data_dict_baseline_data,
       const int64_t progress_id,
+      const ClientFetchingMode fetching_mode,
+      const ObBackupPathString &archive_dest_str,
       IObCDCPartTransResolver &part_trans_resolver,
       IObLogLSFetchMgr &ls_fetch_mgr);
 
   int append_log(const char *buf, const int64_t buf_len);
   int get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN &lsn);
+  int get_next_remote_group_entry(
+      palf::LogGroupEntry &group_entry,
+      palf::LSN &lsn,
+      const char *&buf,
+      int64_t &buf_size);
   int get_log_entry_iterator(palf::LogGroupEntry &group_entry,
       palf::LSN &start_lsn,
       palf::MemPalfBufferIterator &entry_iter);
@@ -135,12 +168,28 @@ public:
   // Check if relevant information needs to be updated
   bool need_update_svr_list();
   bool need_locate_start_lsn() const;
+  bool need_locate_end_lsn() const;
 
   // Update server list
   int update_svr_list(const bool need_print_info = true);
 
   // locate start LSN
   int locate_start_lsn(IObLogStartLSNLocator &start_lsn_locator);
+
+  // locate end LSN
+  int locate_end_lsn(IObLogStartLSNLocator &start_lsn_locator);
+
+  int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool);
+  ObRemoteLogParent *get_archive_source() { return source_; }
+
+  int init_remote_iter();
+
+  bool is_remote_iter_inited() { return remote_iter_.is_init(); }
+
+  void reset_remote_iter() {
+    remote_iter_.update_source_cb();
+    remote_iter_.reset();
+  }
 
   /// Iterate over the next server in the service log
   /// 1. If the server has completed one round of iteration (all servers have been iterated over), then OB_ITER_END is returned
@@ -227,6 +276,8 @@ public:
     fetch_info_.dispatch_out(reason);
   }
 
+  ClientFetchingMode get_fetching_mode() const { return fetching_mode_; }
+
   // Get the start fetch log time on the current server
   int get_cur_svr_start_fetch_tstamp(const common::ObAddr &svr,
       int64_t &svr_start_fetch_tstamp) const;
@@ -257,6 +308,11 @@ public:
 private:
   int init_group_iterator_(const palf::LSN &start_lsn);
 
+  int init_archive_dest_(const ObBackupPathString &archve_dest_str,
+      ObBackupDest &archive_dest);
+
+  int init_archive_source_(const ObBackupDest &archive_dest);
+
   int dispatch_heartbeat_if_need_();
 
   static const int64_t DEFAULT_SERVER_NUM = 16;
@@ -267,6 +323,7 @@ private:
   int handle_offline_ls_log_(const palf::LogEntry &log_entry, volatile bool &stop_flag);
   int deserialize_log_entry_base_header_(const char *buf, const int64_t buf_len, int64_t &pos,
                                          logservice::ObLogBaseHeader &log_base_header);
+
 
 public:
   ///////////////////////////////// LSProgress /////////////////////////////////
@@ -434,6 +491,8 @@ public:
       K_(progress_id),
       KP_(ls_fetch_mgr),
       KP_(part_trans_resolver),
+      KP_(source),
+      K_(remote_iter),
       K_(last_sync_progress),
       K_(progress),
       K_(fetch_info),
@@ -444,12 +503,21 @@ public:
       KP_(prev));
 
 private:
+  int locate_lsn_(
+      StartLSNLocateReq &lsn_locate_req,
+      const int64_t tstamp_ns,
+      const bool is_start_tstamp,
+      IObLogStartLSNLocator &start_lsn_locator);
+  int set_end_lsn_and_init_dict_iter_(const palf::LSN &start_lsn);
   int get_log_route_service_(logservice::ObLogRouteService *&log_route_service);
+  int get_large_buffer_pool_(archive::LargeBufferPool *&large_buffer_pool);
 
 private:
   FetchStreamType         stype_;
   FetchState              state_;
+  ClientFetchingMode      fetching_mode_;
   bool                    discarded_; // LS is deleted or not
+  bool                    is_loading_data_dict_baseline_data_;
 
   TenantLSID              tls_id_;
   PartServeInfo           serve_info_;
@@ -457,11 +525,17 @@ private:
   IObLogLSFetchMgr        *ls_fetch_mgr_;           // LSFetchCtx manager
   IObCDCPartTransResolver *part_trans_resolver_;    // Partitioned transaction resolvers, one for each partition exclusively
 
+  ObRemoteLogParent             *source_;
+  ObRemoteLogGroupEntryIterator remote_iter_;
+
   // Last synced progress
   int64_t                 last_sync_progress_ CACHE_ALIGNED;
 
   // LS progress
   LSProgress              progress_;
+
+  // Contains data dictionary in log info(Tenant SYS LS)
+  ObLogFetcherStartParameters start_parameters_;
 
   /// fetch log info
   FetchInfo               fetch_info_;
@@ -470,9 +544,13 @@ private:
 
   /// start lsn locator request
   StartLSNLocateReq       start_lsn_locate_req_;
+  /// end lsn locator request
+  StartLSNLocateReq       end_lsn_locate_req_;
 
   palf::MemoryStorage     mem_storage_;
   palf::MemPalfGroupBufferIterator group_iterator_;
+
+  datadict::ObDataDictIterator data_dict_iterator_;
 
   /////////// Stat ////////////
   int64_t                 fetched_log_size_;

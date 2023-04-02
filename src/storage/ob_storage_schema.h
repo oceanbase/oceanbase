@@ -102,13 +102,16 @@ public:
   int init(
       common::ObIAllocator &allocator,
       const share::schema::ObTableSchema &input_schema,
-      const lib::Worker::CompatMode compat_mode);
+      const lib::Worker::CompatMode compat_mode,
+      const bool skip_column_info = false);
   int init(
       common::ObIAllocator &allocator,
-      const ObStorageSchema &old_schema);
+      const ObStorageSchema &old_schema,
+      const bool skip_column_info = false);
   int deep_copy_column_array(
       common::ObIAllocator &allocator,
-      const ObStorageSchema &src_schema);
+      const ObStorageSchema &src_schema,
+      const int64_t copy_array_cnt);
 
   // ObIMultiSourceDataUnit section
   virtual int deep_copy(const ObIMultiSourceDataUnit *src, ObIAllocator *allocator) override;
@@ -147,7 +150,7 @@ public:
   {
     return share::schema::ObTableSchema::is_index_table(table_type_) || is_materialized_view();
   }
-  virtual inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
+  inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 
@@ -178,9 +181,12 @@ public:
 
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
+  int get_orig_default_row(const common::ObIArray<share::schema::ObColDesc> &column_ids,
+                                          blocksstable::ObDatumRow &default_row) const;
+  const ObStorageColumnSchema *get_column_schema(const int64_t column_id) const;
 
   INHERIT_TO_STRING_KV("ObIMultiSourceDataUnit", ObIMultiSourceDataUnit, KP(this), K_(version),
-      K_(is_use_bloomfilter), K_(compat_mode), K_(table_type), K_(index_type),
+      K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
       K_(index_status), K_(row_store_type), K_(schema_version),
       K_(column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
@@ -214,7 +220,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 19;
+  static const int32_t SS_RESERVED_BITS = 18;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -234,6 +240,7 @@ public:
       uint32_t version_             :SS_ONE_BYTE;
       uint32_t compat_mode_         :SS_HALF_BYTE;
       uint32_t is_use_bloomfilter_  :SS_ONE_BIT;
+      uint32_t column_info_simplified_ :SS_ONE_BIT;
       uint32_t reserved_            :SS_RESERVED_BITS;
     };
   };
@@ -294,7 +301,7 @@ bool ObStorageSchema::check_column_array_valid(const common::ObIArray<T> &array)
   for (int64_t i = 0; valid_ret && i < array.count(); ++i) {
     if (!array.at(i).is_valid()) {
       valid_ret = false;
-      STORAGE_LOG(WARN, "column is invalid", K(i), K(array.at(i)));
+      STORAGE_LOG_RET(WARN, OB_INVALID_ERROR, "column is invalid", K(i), K(array.at(i)));
     }
   }
   return valid_ret;

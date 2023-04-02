@@ -21,21 +21,32 @@ namespace sql
   class ObLogWindowFunction : public ObLogicalOperator
   {
   public:
+    enum WindowFunctionRoleType
+    {
+      NORMAL = 0,
+      PARTICIPATOR = 1, // for wf adaptive pushdown
+      CONSOLIDATOR = 2 // for wf adaptive pushdown
+    };
     ObLogWindowFunction(ObLogPlan &plan)
         : ObLogicalOperator(plan),
         single_part_parallel_(false),
         range_dist_parallel_(false),
-        rd_pby_sort_cnt_(0)
+        role_type_(WindowFunctionRoleType::NORMAL),
+        rd_sort_keys_cnt_(0),
+        rd_pby_sort_cnt_(0),
+        wf_aggr_status_expr_(NULL)
     {}
     virtual ~ObLogWindowFunction() {}
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
-
+    virtual int get_explain_name_internal(char *buf,
+                                          const int64_t buf_len,
+                                          int64_t &pos);
+    inline void set_aggr_status_expr(ObOpPseudoColumnRawExpr *wf_aggr_status_expr)
+    { wf_aggr_status_expr_ = wf_aggr_status_expr; }
+    inline ObOpPseudoColumnRawExpr *&get_aggr_status_expr() { return wf_aggr_status_expr_; }
     inline int add_window_expr(ObWinFunRawExpr *win_expr)
     { return win_exprs_.push_back(win_expr); }
     inline ObIArray<ObWinFunRawExpr *> &get_window_exprs() { return win_exprs_; }
+    virtual uint64_t hash(uint64_t seed) const override;
     virtual int est_cost() override;
     virtual int est_width() override;
     virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
@@ -47,22 +58,36 @@ namespace sql
     virtual int allocate_granule_pre(AllocGIContext &ctx) override;
     int get_win_partition_intersect_exprs(ObIArray<ObWinFunRawExpr *> &win_exprs,
                                           ObIArray<ObRawExpr *> &win_part_exprs);
-    virtual int inner_replace_generated_agg_expr(
+    virtual int inner_replace_op_exprs(
         const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
     void set_single_part_parallel(bool v) { single_part_parallel_ = v; }
     bool is_single_part_parallel() const { return single_part_parallel_; }
     void set_ragne_dist_parallel(bool v) { range_dist_parallel_ = v; }
     bool is_range_dist_parallel() const { return range_dist_parallel_; }
     int get_winfunc_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
-    int set_rd_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
+    void set_role_type(WindowFunctionRoleType v) { role_type_ = v; }
+    WindowFunctionRoleType get_role_type() const { return role_type_; }
+    bool is_push_down() { return PARTICIPATOR == role_type_|| CONSOLIDATOR == role_type_; }
+    bool is_participator() { return PARTICIPATOR == role_type_; }
+    bool is_consolidator() { return CONSOLIDATOR == role_type_; }
+    int get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_keys);
+    int set_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
     {
-      return rd_sort_keys_.assign(sort_keys);
+      return sort_keys_.assign(sort_keys);
     }
-    const common::ObIArray<OrderItem> &get_rd_sort_keys() const
+    const common::ObIArray<OrderItem> &get_sort_keys() const
     {
-      return rd_sort_keys_;
+      return sort_keys_;
     }
-
+    void set_rd_sort_keys_cnt(const int64_t cnt) { rd_sort_keys_cnt_ = cnt; }
+    int set_pushdown_info(const common::ObIArray<bool> &pushdown_info)
+    {
+      return pushdown_info_.assign(pushdown_info);
+    }
+    const common::ObIArray<bool> &get_pushdown_info() const
+    {
+      return pushdown_info_;
+    }
     void set_rd_pby_sort_cnt(const int64_t cnt) { rd_pby_sort_cnt_ = cnt; }
     int64_t get_rd_pby_sort_cnt() const { return rd_pby_sort_cnt_; }
 
@@ -70,10 +95,13 @@ namespace sql
     {
       return dist_hint_.assign(dist_hint);
     }
-    virtual int print_outline(planText &plan_text) override;
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+    virtual int print_outline_data(PlanText &plan_text) override;
+    virtual int print_used_hint(PlanText &plan_text) override;
 
   private:
-    ObSEArray<ObWinFunRawExpr *, 4> win_exprs_;
+    ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
 
     // Single partition (no partition by) window function parallel process, need the PX COORD
     // to collect the partial result and broadcast the final result to each worker.
@@ -93,13 +121,22 @@ namespace sql
     // 3. Only the following functions supported: rank,dense_rank,sum,count,min,max
     bool range_dist_parallel_;
 
-    // sort keys for range distributed parallel.
-    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> rd_sort_keys_;
+    //
+    WindowFunctionRoleType role_type_;
+
+    // sort keys needed for window function
+    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
+    // sort keys count for range distributed parallel.
+    int64_t rd_sort_keys_cnt_;
     // the first %rd_pby_sort_cnt_ of %rd_sort_keys_ is the partition by of window function.
     int64_t rd_pby_sort_cnt_;
 
     // for PQ_DISTRIBUTE_WINDOW hint outline
     common::ObSEArray<WinDistAlgo, 8, common::ModulePageAllocator, true> dist_hint_;
+
+    // for reporting window function adaptive pushdown
+    ObOpPseudoColumnRawExpr *wf_aggr_status_expr_;
+    common::ObSEArray<bool, 8, common::ModulePageAllocator, true> pushdown_info_;
   };
 }
 }

@@ -114,7 +114,7 @@ int ObPhysicalRestoreWhiteList::get_format_str(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format str", KR(ret), K(format_str_buf), K(format_str_length));
   } else {
-    str.assign_ptr(format_str_buf, format_str_length - 1);
+    str.assign_ptr(format_str_buf, static_cast<int32_t>(format_str_length - 1));
     LOG_DEBUG("get format white_list str", KR(ret), K(str));
   }
   return ret;
@@ -152,7 +152,7 @@ int ObPhysicalRestoreWhiteList::get_hex_str(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    str.assign_ptr(hex_buf, hex_size);
+    str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
     LOG_DEBUG("get hex white_list str", KR(ret), K(str));
   }
   return ret;
@@ -242,8 +242,9 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(comment),
     K_(restore_start_ts),
     K_(restore_scn),
-    K_(post_cluster_version),
+    K_(post_data_version),
     K_(source_cluster_version),
+    K_(source_data_version),
     K_(restore_option),
     K_(backup_dest),
     K_(description),
@@ -255,6 +256,7 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(compatible),
     K_(kms_info),
     K_(kms_encrypt),
+    K_(concurrency),
     K_(passwd_array),
     K_(multi_restore_path_list),
     K_(white_list)
@@ -277,11 +279,13 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     status_ = other.status_;
     restore_start_ts_ = other.restore_start_ts_;
     restore_scn_ = other.restore_scn_;
-    post_cluster_version_ = other.post_cluster_version_;
+    post_data_version_ = other.post_data_version_;
     source_cluster_version_ = other.source_cluster_version_;
+    source_data_version_ = other.source_data_version_;
     compat_mode_ = other.compat_mode_;
     compatible_ = other.compatible_;
     kms_encrypt_ = other.kms_encrypt_;
+    concurrency_ = other.concurrency_;
 
     if (FAILEDx(deep_copy_ob_string(allocator_, other.comment_, comment_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
@@ -329,9 +333,10 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   comment_.reset();
   restore_start_ts_ = 0;
-  restore_scn_ = 0;
-  post_cluster_version_ = 0;
+  restore_scn_ = SCN::min_scn();
+  post_data_version_ = 0;
   source_cluster_version_ = 0;
+  source_data_version_ = 0;
   restore_option_.reset();
   backup_dest_.reset();
   description_.reset();
@@ -344,6 +349,7 @@ void ObPhysicalRestoreJob::reset()
   compatible_ = 0;
   kms_info_.reset();
   kms_encrypt_ = false;
+  concurrency_ = 0;
 
 
   passwd_array_.reset();
@@ -369,7 +375,7 @@ int ObPhysicalRestoreJob::copy_to(ObSimplePhysicalRestoreJob &simple_job_info) c
     simple_job_info.job_id_ = restore_key_.job_id_;
     simple_job_info.restore_info_.backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH - 1] = '\0';
     simple_job_info.restore_info_.tenant_id_ = backup_tenant_id_;
-    simple_job_info.restore_info_.restore_snapshot_version_ = restore_scn_;
+    simple_job_info.restore_info_.restore_snapshot_version_ = restore_scn_.get_val_for_inner_table_field();
     simple_job_info.restore_info_.restore_start_ts_ = restore_start_ts_;
     simple_job_info.restore_info_.compatible_ = compatible_;
     simple_job_info.restore_info_.cluster_version_ = source_cluster_version_;

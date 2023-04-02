@@ -41,7 +41,7 @@ int ObArchiveIO::push_log(const ObString &uri,
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_LOG_ARCHIVE_BEFORE_PUSH_LOG_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_LOG_ARCHIVE_BEFORE_PUSH_LOG_FAILED) OB_SUCCESS;
   }
 #endif
   if (OB_FAIL(ret)) {

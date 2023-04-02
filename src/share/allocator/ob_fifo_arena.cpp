@@ -10,7 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX COMMON
 #include "ob_fifo_arena.h"
+#ifdef OB_USE_ASAN
+#include <malloc.h>
+#endif
 #include "math.h"
 #include "ob_memstore_allocator_mgr.h"
 #include "share/ob_tenant_mgr.h"
@@ -29,8 +33,12 @@ int64_t ObFifoArena::total_hold_ = 0;
 
 int64_t ObFifoArena::Page::get_actual_hold_size()
 {
+#ifdef OB_USE_ASAN
+  return malloc_usable_size(this);
+#else
   //every time of alloc_page, ruturn a chunk actually
   return ObTenantCtxAllocator::get_obj_hold(this);
+#endif
 }
 
 void ObFifoArena::ObWriteThrottleInfo::reset()
@@ -66,7 +74,8 @@ int ObFifoArena::ObWriteThrottleInfo::check_and_calc_decay_factor(int64_t memsto
   int ret = OB_SUCCESS;
   if (memstore_threshold != memstore_threshold_
       || trigger_percentage != trigger_percentage_
-      ||  alloc_duration != alloc_duration_) {
+      || alloc_duration != alloc_duration_
+      || decay_factor_ <= 0) {
     memstore_threshold_ = memstore_threshold;
     trigger_percentage_ = trigger_percentage;
     alloc_duration_ = alloc_duration;
@@ -85,16 +94,12 @@ int ObFifoArena::init(uint64_t tenant_id)
   int ret = OB_SUCCESS;
   lib::ObMallocAllocator *allocator = lib::ObMallocAllocator::get_instance();
   uint64_t ctx_id = ObCtxIds::MEMSTORE_CTX_ID;
+
   if (OB_ISNULL(allocator)) {
     ret = OB_INIT_FAIL;
     OB_LOG(ERROR, "mallocator instance is NULLL", K(ret));
-  } else if (OB_ISNULL(allocator_ = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id))) {
-    if (OB_FAIL(allocator->create_tenant_ctx_allocator(tenant_id, ctx_id))) {
-      OB_LOG(ERROR, "fail to create tenant allocator", K(tenant_id), K(ctx_id), K(ret));
-    } else if (OB_ISNULL(allocator_ = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(ERROR, "tenant allocator is null", K(tenant_id), K(ctx_id), K(ret));
-    }
+  } else {
+    allocator_ = allocator;
   }
 
   if (OB_SUCC(ret)) {
@@ -139,7 +144,7 @@ void ObFifoArena::shrink_cached_page(int64_t nway)
         if (NULL != ref) {
           // There may be concurrent removal, no need to pay attention to the return value
           UNUSED(ATOMIC_BCAS(paddr, page, NULL));
-          IGNORE_RETURN ATOMIC_FAA(&retired_, page->hold());
+          IGNORE_RETURN ATOMIC_FAA(&retired_, page->get_actual_hold_size());
           release_ref(ref);
         }
       }
@@ -166,7 +171,7 @@ void* ObFifoArena::alloc(int64_t adv_idx, Handle& handle, int64_t size)
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       bool need_switch = false;
-      handle.add_allocated(page->hold());
+      handle.add_allocated(page->get_actual_hold_size());
       ptr = handle.ref_and_alloc(way_id, need_switch, page, size);
       page->frozen();
       retire_page(way_id, handle, page);
@@ -197,7 +202,7 @@ void* ObFifoArena::alloc(int64_t adv_idx, Handle& handle, int64_t size)
           UNUSED(ATOMIC_BCAS(paddr, page, NULL));
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else if (ATOMIC_BCAS(paddr, page, new_page)) {
-          handle.add_allocated(new_page->hold());
+          handle.add_allocated(new_page->get_actual_hold_size());
         } else {
           destroy_page(new_page);
         }
@@ -236,8 +241,8 @@ ObFifoArena::Page* ObFifoArena::alloc_page(int64_t size)
 {
   Page* page = (Page*)allocator_->alloc(size, attr_);
   if (NULL != page) {
-    ATOMIC_FAA(&allocated_, size);
-    ATOMIC_FAA(&total_hold_, size);
+    ATOMIC_FAA(&allocated_, page->get_actual_hold_size());
+    ATOMIC_FAA(&total_hold_, page->get_actual_hold_size());
     ATOMIC_AAF(&hold_, page->get_actual_hold_size());
     page->set(size);
   }
@@ -247,8 +252,8 @@ ObFifoArena::Page* ObFifoArena::alloc_page(int64_t size)
 void ObFifoArena::free_page(Page* page)
 {
   if (NULL != page && NULL != allocator_) {
-    ATOMIC_FAA(&reclaimed_, page->hold());
-    ATOMIC_FAA(&total_hold_, -page->hold());
+    ATOMIC_FAA(&reclaimed_, page->get_actual_hold_size());
+    ATOMIC_FAA(&total_hold_, -page->get_actual_hold_size());
     ATOMIC_FAA(&hold_, -page->get_actual_hold_size());
     allocator_->free(page);
   }
@@ -257,7 +262,7 @@ void ObFifoArena::free_page(Page* page)
 void ObFifoArena::retire_page(int64_t idx, Handle& handle, Page* page)
 {
   if (NULL != page) {
-    ATOMIC_FAA(&retired_, page->hold());
+    ATOMIC_FAA(&retired_, page->get_actual_hold_size());
     handle.add_ref(idx, &page->self_ref_);
   }
 }
@@ -265,63 +270,164 @@ void ObFifoArena::retire_page(int64_t idx, Handle& handle, Page* page)
 void ObFifoArena::destroy_page(Page* page)
 {
   if (NULL != page && NULL != allocator_) {
-    ATOMIC_FAA(&allocated_, -page->hold());
-    ATOMIC_FAA(&total_hold_, -page->hold());
+    ATOMIC_FAA(&allocated_, -page->get_actual_hold_size());
+    ATOMIC_FAA(&total_hold_, -page->get_actual_hold_size());
+    ATOMIC_FAA(&hold_, -page->get_actual_hold_size());
     allocator_->free(page);
   }
 }
 
 bool ObFifoArena::need_do_writing_throttle() const
 {
+  bool need_do_writing_throttle = false;
   int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
-  int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
-  int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
-  bool need_do_writing_throttle = cur_mem_hold > trigger_mem_limit;
+  if (trigger_percentage < 100) {
+    int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
+    int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
+    need_do_writing_throttle = cur_mem_hold > trigger_mem_limit;
+  }
+
   return need_do_writing_throttle;
 }
 
-void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
+void ObFifoArena::speed_limit(const int64_t cur_mem_hold, const int64_t alloc_size)
 {
   int ret = OB_SUCCESS;
   int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
   int64_t trigger_mem_limit = 0;
+  bool need_speed_limit = false;
+  int64_t seq = 0;
+  int64_t throttling_interval = 0;
   if (trigger_percentage < 100) {
     if (OB_UNLIKELY(cur_mem_hold < 0 || alloc_size <= 0 || lastest_memstore_threshold_ <= 0 || trigger_percentage <= 0)) {
       COMMON_LOG(ERROR, "invalid arguments", K(cur_mem_hold), K(alloc_size), K(lastest_memstore_threshold_), K(trigger_percentage));
     } else if (cur_mem_hold > (trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100)) {
+      need_speed_limit = true;
       int64_t alloc_duration = get_writing_throttling_maximum_duration_();
       if (OB_FAIL(throttle_info_.check_and_calc_decay_factor(lastest_memstore_threshold_, trigger_percentage, alloc_duration))) {
         COMMON_LOG(WARN, "failed to check_and_calc_decay_factor", K(cur_mem_hold), K(alloc_size), K(throttle_info_));
-      } else {
-        int64_t throttling_interval = get_throttling_interval(cur_mem_hold, alloc_size, trigger_mem_limit);
-        int64_t cur_ts = ObTimeUtility::current_time();
-        int64_t new_base_ts = ATOMIC_AAF(&last_base_ts_, throttling_interval);
-        int64_t sleep_interval = new_base_ts - cur_ts;
-        if (sleep_interval > 0) {
-          //The playback of a single log may allocate 2M blocks multiple times
-          uint32_t final_sleep_interval =
-              static_cast<uint32_t>(MIN((get_writing_throttling_sleep_interval() + sleep_interval - 1), MAX_WAIT_INTERVAL));
-          get_writing_throttling_sleep_interval() = final_sleep_interval;
-          throttle_info_.record_limit_event(sleep_interval - 1);
-        } else {
-          inc_update(&last_base_ts_, ObTimeUtility::current_time());
-          throttle_info_.reset_period_stat_info();
-          last_reclaimed_ = ATOMIC_LOAD(&reclaimed_);
-        }
-        if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
-          COMMON_LOG(INFO, "report write throttle info", K(alloc_size), K(throttling_interval), K(attr_),
-                     "freed memory(MB):" , (ATOMIC_LOAD(&reclaimed_) - last_reclaimed_) / 1024 / 1024,
-                     "last_base_ts", ATOMIC_LOAD(&last_base_ts_),
-                     K(cur_mem_hold), K(throttle_info_));
-        }
       }
-    } else {/*do nothing*/}
+    }
+    advance_clock();
+    seq = ATOMIC_AAF(&max_seq_, alloc_size);
+    get_seq() = seq;
+    tl_need_speed_limit() = need_speed_limit;
+
+    if (need_speed_limit && REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
+      COMMON_LOG(INFO, "report write throttle info", K(alloc_size), K(attr_), K(throttling_interval),
+                  "max_seq_", ATOMIC_LOAD(&max_seq_), K(clock_),
+                  K(cur_mem_hold), K(throttle_info_), K(seq));
+    }
   }
 }
 
-int64_t ObFifoArena::get_throttling_interval(int64_t cur_mem_hold,
-                                             int64_t alloc_size,
-                                             int64_t trigger_mem_limit)
+bool ObFifoArena::check_clock_over_seq(const int64_t req)
+{
+  advance_clock();
+  int64_t clock = ATOMIC_LOAD(&clock_);
+  return req <= clock;
+}
+
+void ObFifoArena::advance_clock()
+{
+  int64_t cur_ts = ObTimeUtility::current_time();
+  int64_t old_ts = last_update_ts_;
+  if ((cur_ts - last_update_ts_ > ADVANCE_CLOCK_INTERVAL) &&
+       old_ts == ATOMIC_CAS(&last_update_ts_, old_ts, cur_ts)) {
+    int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
+    int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
+    int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
+    int64_t mem_limit = calc_mem_limit(cur_mem_hold, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL);
+    int64_t clock = ATOMIC_LOAD(&clock_);
+    int64_t max_seq = ATOMIC_LOAD(&max_seq_);
+    ATOMIC_SET(&clock_, min(max_seq, clock + mem_limit));
+    if (REACH_TIME_INTERVAL(100 * 1000L)) {
+      COMMON_LOG(INFO, "current clock is ",
+                K(clock_), K(max_seq_), K(mem_limit), K(cur_mem_hold), K(attr_.tenant_id_));
+    }
+  }
+}
+
+int64_t ObFifoArena::expected_wait_time(const int64_t seq) const
+{
+  int64_t expected_wait_time = 0;
+  int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
+  int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
+  int64_t can_assign_in_next_period = calc_mem_limit(hold_, trigger_mem_limit, ADVANCE_CLOCK_INTERVAL);
+  int64_t clock = ATOMIC_LOAD(&clock_);
+  if (seq > clock) {
+    if (can_assign_in_next_period != 0) {
+      expected_wait_time = (seq - clock) * ADVANCE_CLOCK_INTERVAL / can_assign_in_next_period;
+    } else {
+      expected_wait_time = ADVANCE_CLOCK_INTERVAL;
+    }
+  }
+  return expected_wait_time;
+}
+
+// how much memory we can get after dt time.
+int64_t ObFifoArena::calc_mem_limit(const int64_t cur_mem_hold, const int64_t trigger_mem_limit, const int64_t dt) const
+{
+  int ret = OB_SUCCESS;
+  int64_t mem_can_be_assigned = 0;
+
+  int64_t init_seq = 0;
+  int64_t init_page_left_size = 0;
+  double init_page_left_interval = 0;
+  double past_interval = 0;
+  double last_page_interval = 0;
+  double mid_result = 0;
+  double approx_max_chunk_seq = 0;
+  int64_t max_seq = 0;
+  double accumulate_interval = 0;
+  if (cur_mem_hold < trigger_mem_limit) {
+    // there is no speed limit now
+    // we can get all the memory before speed limit
+    mem_can_be_assigned = trigger_mem_limit - cur_mem_hold;
+  } else if (throttle_info_.decay_factor_ <= 0) {
+    mem_can_be_assigned = 0;
+    LOG_WARN("we should limit speed, but the decay factor not calculate now", K(cur_mem_hold), K(trigger_mem_limit), K(dt));
+  } else {
+    init_seq = ((cur_mem_hold - trigger_mem_limit) + MEM_SLICE_SIZE - 1) / (MEM_SLICE_SIZE);
+    init_page_left_size = MEM_SLICE_SIZE - (cur_mem_hold - trigger_mem_limit) % MEM_SLICE_SIZE;
+    init_page_left_interval =  (1.0 * throttle_info_.decay_factor_ * pow(init_seq, 3) *
+                                init_page_left_size / MEM_SLICE_SIZE);
+    past_interval = throttle_info_.decay_factor_ * pow(init_seq, 2) * pow(init_seq + 1, 2) / 4;
+    // there is speed limit
+    if (init_page_left_interval > dt) {
+      last_page_interval = throttle_info_.decay_factor_ * pow(init_seq, 3);
+      mem_can_be_assigned = dt / last_page_interval * MEM_SLICE_SIZE;
+    } else {
+      mid_result = 4.0 * (dt + past_interval - init_page_left_interval) / throttle_info_.decay_factor_;
+      approx_max_chunk_seq = pow(mid_result, 0.25);
+      max_seq = floor(approx_max_chunk_seq);
+      for (int i = 0; i < 2; i++) {
+        if (pow(max_seq, 2) * pow(max_seq + 1, 2) < mid_result) {
+          max_seq = max_seq + 1;
+        }
+      }
+      accumulate_interval = pow(max_seq, 2) * pow(max_seq + 1, 2) * throttle_info_.decay_factor_ / 4 - past_interval + init_page_left_interval;
+      mem_can_be_assigned = init_page_left_size + (max_seq - init_seq) * MEM_SLICE_SIZE;
+      if (accumulate_interval > dt) {
+        last_page_interval = throttle_info_.decay_factor_ * pow(max_seq, 3);
+        mem_can_be_assigned -= (accumulate_interval - dt) / last_page_interval * MEM_SLICE_SIZE;
+      }
+    }
+
+    // defensive code
+    if (pow(max_seq, 2) * pow(max_seq + 1, 2) < mid_result) {
+      LOG_ERROR("unexpected result", K(max_seq), K(mid_result));
+    }
+  }
+  if (mem_can_be_assigned == 0) {
+    LOG_WARN("we can not get memory now", K(mem_can_be_assigned), K(throttle_info_.decay_factor_), K(cur_mem_hold), K(trigger_mem_limit), K(dt));
+  }
+  return mem_can_be_assigned;
+}
+
+int64_t ObFifoArena::get_throttling_interval(const int64_t cur_mem_hold,
+                                             const int64_t alloc_size,
+                                             const int64_t trigger_mem_limit)
 {
   constexpr int64_t MIN_INTERVAL_PER_ALLOC = 20;
   int64_t chunk_cnt = ((alloc_size + MEM_SLICE_SIZE - 1) / (MEM_SLICE_SIZE));

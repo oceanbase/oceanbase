@@ -41,7 +41,7 @@ using namespace oceanbase::diagnose;
 void ObLuaHandler::memory_update(const int size)
 {
   if (0 == size) {
-    OB_LOG(ERROR, "bad param", K(size));
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "bad param", K(size));
   } else if (size > 0) {
     ++alloc_count_;
     alloc_size_ += size;
@@ -60,7 +60,7 @@ void *ObLuaHandler::realloc_functor(void *userdata, void *ptr, size_t osize, siz
     // do nothing
   } else if (OB_NOT_NULL(ret = diagnose::alloc(nsize))) {
     if (OB_NOT_NULL(ptr)) {
-      MEMCPY(ret, ptr, std::min(*(uint64_t *)((char *)ptr - 8), nsize));
+      memmove(ret, ptr, std::min(osize, nsize));
     }
   }
   if (OB_NOT_NULL(ptr)) {
@@ -76,14 +76,14 @@ int ObLuaHandler::process(const char* lua_code)
     OB_LOG(INFO, "Lua code was executed", K(alloc_count_), K(free_count_), K(alloc_size_), K(free_size_));
     lua_State* L = lua_newstate(realloc_functor, nullptr);
     if (OB_ISNULL(L)) {
-      OB_LOG(ERROR, "luastate is NULL");
+      OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "luastate is NULL");
     } else {
       luaL_openlibs(L);
       APIRegister::get_instance().register_api(L);
       try {
         luaL_dostring(L, lua_code);
       } catch (std::exception& e) {
-        _OB_LOG(ERROR, "exception during lua code execution, reason %s", e.what());
+        _OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "exception during lua code execution, reason %s", e.what());
       }
       lua_close(L);
     }

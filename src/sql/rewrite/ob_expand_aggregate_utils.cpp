@@ -85,7 +85,7 @@ int ObExpandAggregateUtils::expand_aggr_expr(ObDMLStmt *stmt,
       } else if (aggr_expr->get_result_type() != replace_expr->get_result_type() &&
                  OB_FAIL(add_cast_expr(ctx, replace_expr, aggr_expr->get_result_type(), replace_expr))) {
         LOG_WARN("failed to add cast expr", K(ret));
-      } else if (OB_FAIL(replace_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+      } else if (OB_FAIL(replace_expr->pull_relation_id())) {
         LOG_WARN("failed to pull relation id and levels", K(ret));
       } else if (OB_FAIL(replace_exprs.push_back(replace_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -99,7 +99,7 @@ int ObExpandAggregateUtils::expand_aggr_expr(ObDMLStmt *stmt,
                  OB_FAIL(static_cast<ObDelUpdStmt*>(stmt)->get_returning_aggr_items().assign(
                                                                                  new_aggr_items))) {
         LOG_WARN("failed to assign expr", K(ret));
-      } else if (OB_FAIL(stmt->replace_inner_stmt_expr(candi_aggr_items, replace_exprs))) {
+      } else if (OB_FAIL(stmt->replace_relation_exprs(candi_aggr_items, replace_exprs))) {
         LOG_WARN("failed to replace stmt expr", K(ret));
       } else {
         trans_happened = true;
@@ -190,7 +190,7 @@ int ObExpandAggregateUtils::expand_window_aggr_expr(ObDMLStmt *stmt,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(add_win_exprs(select_stmt, replace_exprs, new_win_exprs))) {
         LOG_WARN("failed to win exprs", K(ret));
-      } else if (OB_FAIL(select_stmt->replace_inner_stmt_expr(candi_win_items, replace_exprs))) {
+      } else if (OB_FAIL(select_stmt->replace_relation_exprs(candi_win_items, replace_exprs))) {
         LOG_WARN("failed to replace stmt expr");
       } else {
         trans_happened = true;
@@ -231,12 +231,14 @@ int ObExpandAggregateUtils::expand_covar_expr(ObTransformerCtx *ctx,
     ObRawExpr *minus_expr = NULL;
     ObRawExpr *div_sum_expr = NULL;
     if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                             ctx->session_info_,
                                              parma_expr1,
                                              parma_expr2,
                                              parma_expr1,
                                              case_when_expr1))) {
       LOG_WARN("failed to build special case when expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                    ctx->session_info_,
                                                     parma_expr1,
                                                     parma_expr2,
                                                     parma_expr2,
@@ -306,10 +308,6 @@ int ObExpandAggregateUtils::expand_covar_expr(ObTransformerCtx *ctx,
                                                               div_sum_expr))) {
         LOG_WARN("failed to build common binary op expr", K(ret));
       } else {
-        sum_expr1->set_expr_level(aggr_expr->get_expr_level());
-        sum_expr2->set_expr_level(aggr_expr->get_expr_level());
-        sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
-        count_product_expr->set_expr_level(aggr_expr->get_expr_level());
         replace_expr = div_sum_expr;
       }
     } else {
@@ -356,10 +354,6 @@ int ObExpandAggregateUtils::expand_covar_expr(ObTransformerCtx *ctx,
                                                                      div_sum_expr))) {
         LOG_WARN("failed to common binary op expr", K(ret));
       } else {
-        sum_expr1->set_expr_level(aggr_expr->get_expr_level());
-        sum_expr2->set_expr_level(aggr_expr->get_expr_level());
-        sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
-        count_product_expr->set_expr_level(aggr_expr->get_expr_level());
         replace_expr = div_sum_expr;
       }
     }
@@ -402,12 +396,14 @@ int ObExpandAggregateUtils::expand_corr_expr(ObTransformerCtx *ctx,
     if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                    ctx->session_info_,
                                                     parma_expr1,
                                                     parma_expr2,
                                                     parma_expr1,
                                                     case_when_expr1))) {
       LOG_WARN("failed to build special case when expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                    ctx->session_info_,
                                                     parma_expr1,
                                                     parma_expr2,
                                                     parma_expr2,
@@ -417,63 +413,54 @@ int ObExpandAggregateUtils::expand_corr_expr(ObTransformerCtx *ctx,
       LOG_WARN("create ObOpRawExpr failed", K(ret));
     } else if (OB_FAIL(stddev_pop_expr1->add_real_param_expr(case_when_expr1))) {
       LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_stddev_pop_expr(ctx, stddev_pop_expr1, left_multi_expr, new_aggr_items))) {
+      LOG_WARN("fail to expand stddev pop expr", K(ret));
+    } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_STDDEV_POP, stddev_pop_expr2))) {
+      LOG_WARN("create ObOpRawExpr failed", K(ret));
+    } else if (OB_FAIL(stddev_pop_expr2->add_real_param_expr(case_when_expr2))) {
+      LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_stddev_pop_expr(ctx, stddev_pop_expr2,
+                                              right_multi_expr, new_aggr_items))) {
+      LOG_WARN("fail to expand stddev pop expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_MUL,
+                                                                   left_multi_expr,
+                                                                   right_multi_expr,
+                                                                   multi_stddev_expr))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_,
+                                                            ObIntType,
+                                                            0,
+                                                            zero_expr))) {
+      LOG_WARN("failed to build const int expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_NE,
+                                                                   multi_stddev_expr,
+                                                                   zero_expr,
+                                                                   ne_expr))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx->expr_factory_,
+                                                            ne_expr,
+                                                            multi_stddev_expr,
+                                                            null_expr,
+                                                            case_when_expr))) {
+      LOG_WARN("failed to build case when expr", K(ret));
+    } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_COVAR_POP, covar_pop_expr))) {
+      LOG_WARN("create ObOpRawExpr failed", K(ret));
+    } else if (OB_FAIL(covar_pop_expr->add_real_param_expr(parma_expr1))) {
+      LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(covar_pop_expr->add_real_param_expr(parma_expr2))) {
+      LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_covar_expr(ctx, covar_pop_expr, left_div_expr, new_aggr_items))) {
+      LOG_WARN("failed to expand covar expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_DIV,
+                                                                   left_div_expr,
+                                                                   case_when_expr,
+                                                                   div_expr))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
     } else {
-      stddev_pop_expr1->set_expr_level(aggr_expr->get_expr_level());
-      if (OB_FAIL(expand_stddev_pop_expr(ctx, stddev_pop_expr1, left_multi_expr, new_aggr_items))) {
-        LOG_WARN("fail to expand stddev pop expr", K(ret));
-      } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_STDDEV_POP, stddev_pop_expr2))) {
-        LOG_WARN("create ObOpRawExpr failed", K(ret));
-      } else if (OB_FAIL(stddev_pop_expr2->add_real_param_expr(case_when_expr2))) {
-        LOG_WARN("fail to add param expr to agg expr", K(ret));
-      } else {
-        stddev_pop_expr2->set_expr_level(aggr_expr->get_expr_level());
-        if (OB_FAIL(expand_stddev_pop_expr(ctx, stddev_pop_expr2,
-                                           right_multi_expr, new_aggr_items))) {
-          LOG_WARN("fail to expand stddev pop expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                       T_OP_MUL,
-                                                                       left_multi_expr,
-                                                                       right_multi_expr,
-                                                                       multi_stddev_expr))) {
-          LOG_WARN("failed to build common binary op expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_,
-                                                              ObIntType,
-                                                              0,
-                                                              zero_expr))) {
-          LOG_WARN("failed to build const int expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                       T_OP_NE,
-                                                                       multi_stddev_expr,
-                                                                       zero_expr,
-                                                                       ne_expr))) {
-          LOG_WARN("failed to build common binary op expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx->expr_factory_,
-                                                                ne_expr,
-                                                                multi_stddev_expr,
-                                                                null_expr,
-                                                                case_when_expr))) {
-          LOG_WARN("failed to build case when expr", K(ret));
-        } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_COVAR_POP, covar_pop_expr))) {
-          LOG_WARN("create ObOpRawExpr failed", K(ret));
-        } else if (OB_FAIL(covar_pop_expr->add_real_param_expr(parma_expr1))) {
-          LOG_WARN("fail to add param expr to agg expr", K(ret));
-        } else if (OB_FAIL(covar_pop_expr->add_real_param_expr(parma_expr2))) {
-          LOG_WARN("fail to add param expr to agg expr", K(ret));
-        } else {
-          covar_pop_expr->set_expr_level(aggr_expr->get_expr_level());
-          if (OB_FAIL(expand_covar_expr(ctx, covar_pop_expr, left_div_expr, new_aggr_items))) {
-            LOG_WARN("failed to expand covar expr", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                         T_OP_DIV,
-                                                                         left_div_expr,
-                                                                         case_when_expr,
-                                                                         div_expr))) {
-            LOG_WARN("failed to build common binary op expr", K(ret));
-          } else {
-            replace_expr = div_expr;
-          }
-        }
-      }
+      replace_expr = div_expr;
     }
   }
   return ret;
@@ -686,9 +673,6 @@ int ObExpandAggregateUtils::expand_var_expr(ObTransformerCtx *ctx,
                                                               div_minus_expr))) {
         LOG_WARN("failed to build common binary op expr", K(ret));
       } else {
-        sum_expr->set_expr_level(aggr_expr->get_expr_level());
-        sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
-        count_expr->set_expr_level(aggr_expr->get_expr_level());
         replace_expr = div_minus_expr;
       }
     } else {
@@ -735,9 +719,6 @@ int ObExpandAggregateUtils::expand_var_expr(ObTransformerCtx *ctx,
                                                                      div_minus_expr))) {
         LOG_WARN("failed to build common binary op expr", K(ret));
       } else {
-        sum_expr->set_expr_level(aggr_expr->get_expr_level());
-        sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
-        count_expr->set_expr_level(aggr_expr->get_expr_level());
         replace_expr = div_minus_expr;
       }
     }
@@ -839,10 +820,10 @@ int ObExpandAggregateUtils::expand_regr_slope_expr(ObTransformerCtx *ctx,
     } else if (OB_FAIL(covar_pop_expr->add_real_param_expr(parma_expr2))) {
       LOG_WARN("fail to add param expr to agg expr", K(ret));
     } else {
-      covar_pop_expr->set_expr_level(aggr_expr->get_expr_level());
       if (OB_FAIL(expand_covar_expr(ctx, covar_pop_expr, left_div_expr, new_aggr_items))) {
         LOG_WARN("failed to expand covar expr", K(ret));
       } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                      ctx->session_info_,
                                                       parma_expr1,
                                                       parma_expr2,
                                                       parma_expr2,
@@ -853,7 +834,6 @@ int ObExpandAggregateUtils::expand_regr_slope_expr(ObTransformerCtx *ctx,
       } else if (OB_FAIL(var_pop_expr->add_real_param_expr(case_when_expr))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));
       } else {
-        var_pop_expr->set_expr_level(aggr_expr->get_expr_level());
         if (OB_FAIL(expand_var_expr(ctx, var_pop_expr, right_div_expr, new_aggr_items))) {
           LOG_WARN("failed to expand var expr", K(ret));
         } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
@@ -921,12 +901,14 @@ int ObExpandAggregateUtils::expand_regr_intercept_expr(ObTransformerCtx *ctx,
     ObRawExpr *div_expr2 = NULL;
     ObRawExpr *left_multi_expr = NULL;
     if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                             ctx->session_info_,
                                              parma_expr1,
                                              parma_expr2,
                                              parma_expr1,
                                              case_when_expr1))) {
       LOG_WARN("failed to build case when expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                    ctx->session_info_,
                                                     parma_expr1,
                                                     parma_expr2,
                                                     parma_expr2,
@@ -938,73 +920,66 @@ int ObExpandAggregateUtils::expand_regr_intercept_expr(ObTransformerCtx *ctx,
       LOG_WARN("fail to add param expr to agg expr", K(ret));
     } else if (OB_FAIL(regr_slope_expr->add_real_param_expr(parma_expr2))) {
       LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_regr_slope_expr(ctx, regr_slope_expr, left_multi_expr, new_aggr_items))) {
+      LOG_WARN("failed to expand regr slope expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
+                                                              ctx->session_info_,
+                                                              T_FUN_SUM,
+                                                              case_when_expr1,
+                                                              sum_expr1))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr1))) {
+      LOG_WARN("failed to push back aggr item");
+    } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
+                                                              ctx->session_info_,
+                                                              T_FUN_COUNT,
+                                                              case_when_expr1,
+                                                              count_expr1))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr1))) {
+      LOG_WARN("failed to push back aggr item");
+    } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
+                                                              ctx->session_info_,
+                                                              T_FUN_SUM,
+                                                              case_when_expr2,
+                                                              sum_expr2))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr2))) {
+      LOG_WARN("failed to push back aggr item");
+    } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
+                                                              ctx->session_info_,
+                                                              T_FUN_COUNT,
+                                                              case_when_expr2,
+                                                              count_expr2))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr2))) {
+      LOG_WARN("failed to push back aggr item");
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_DIV,
+                                                                   sum_expr1,
+                                                                   count_expr1,
+                                                                   div_expr1))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_DIV,
+                                                                   sum_expr2,
+                                                                   count_expr2,
+                                                                   div_expr2))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_MUL,
+                                                                   left_multi_expr,
+                                                                   div_expr2,
+                                                                   multi_expr))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_MINUS,
+                                                                   div_expr1,
+                                                                   multi_expr,
+                                                                   minus_expr))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
     } else {
-      regr_slope_expr->set_expr_level(aggr_expr->get_expr_level());
-      if (OB_FAIL(expand_regr_slope_expr(ctx, regr_slope_expr, left_multi_expr, new_aggr_items))) {
-        LOG_WARN("failed to expand regr slope expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
-                                                                ctx->session_info_,
-                                                                T_FUN_SUM,
-                                                                case_when_expr1,
-                                                                sum_expr1))) {
-        LOG_WARN("failed to build common aggr expr", K(ret));
-      } else if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr1))) {
-        LOG_WARN("failed to push back aggr item");
-      } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
-                                                                ctx->session_info_,
-                                                                T_FUN_COUNT,
-                                                                case_when_expr1,
-                                                                count_expr1))) {
-        LOG_WARN("failed to build common aggr expr", K(ret));
-      } else if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr1))) {
-        LOG_WARN("failed to push back aggr item");
-      } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
-                                                                ctx->session_info_,
-                                                                T_FUN_SUM,
-                                                                case_when_expr2,
-                                                                sum_expr2))) {
-        LOG_WARN("failed to build common aggr expr", K(ret));
-      } else if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr2))) {
-        LOG_WARN("failed to push back aggr item");
-      } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx->expr_factory_,
-                                                                ctx->session_info_,
-                                                                T_FUN_COUNT,
-                                                                case_when_expr2,
-                                                                count_expr2))) {
-        LOG_WARN("failed to build common aggr expr", K(ret));
-      } else if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr2))) {
-        LOG_WARN("failed to push back aggr item");
-      } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                     T_OP_DIV,
-                                                                     sum_expr1,
-                                                                     count_expr1,
-                                                                     div_expr1))) {
-        LOG_WARN("failed to build common binary op expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                     T_OP_DIV,
-                                                                     sum_expr2,
-                                                                     count_expr2,
-                                                                     div_expr2))) {
-        LOG_WARN("failed to build common binary op expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                     T_OP_MUL,
-                                                                     left_multi_expr,
-                                                                     div_expr2,
-                                                                     multi_expr))) {
-        LOG_WARN("failed to build common binary op expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                     T_OP_MINUS,
-                                                                     div_expr1,
-                                                                     multi_expr,
-                                                                     minus_expr))) {
-        LOG_WARN("failed to build common binary op expr", K(ret));
-      } else {
-        sum_expr1->set_expr_level(aggr_expr->get_expr_level());
-        sum_expr2->set_expr_level(aggr_expr->get_expr_level());
-        count_expr1->set_expr_level(aggr_expr->get_expr_level());
-        count_expr2->set_expr_level(aggr_expr->get_expr_level());
-        replace_expr = minus_expr;
-      }
+      replace_expr = minus_expr;
     }
   }
   return ret;
@@ -1031,6 +1006,7 @@ int ObExpandAggregateUtils::expand_regr_count_expr(ObTransformerCtx *ctx,
     ObAggFunRawExpr *count_expr = NULL;
     ObRawExpr *case_when_expr = NULL;
     if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                             ctx->session_info_,
                                              parma_expr1,
                                              parma_expr2,
                                              parma_expr1,
@@ -1045,7 +1021,6 @@ int ObExpandAggregateUtils::expand_regr_count_expr(ObTransformerCtx *ctx,
     } else if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr))) {
       LOG_WARN("failed to push back aggr item");
     } else {
-      count_expr->set_expr_level(aggr_expr->get_expr_level());
       replace_expr = count_expr;
     }
   }
@@ -1106,12 +1081,14 @@ int ObExpandAggregateUtils::expand_regr_r2_expr(ObTransformerCtx *ctx,
                                                             zero_expr))) {
       LOG_WARN("failed to build const int expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                    ctx->session_info_,
                                                     parma_expr1,
                                                     parma_expr2,
                                                     parma_expr1,
                                                     case_when_expr1))) {
       LOG_WARN("failed to build special case when expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                    ctx->session_info_,
                                                     parma_expr1,
                                                     parma_expr2,
                                                     parma_expr2,
@@ -1121,63 +1098,54 @@ int ObExpandAggregateUtils::expand_regr_r2_expr(ObTransformerCtx *ctx,
       LOG_WARN("failed to create expr", K(ret));
     } else if (OB_FAIL(var_pop_expr1->add_real_param_expr(case_when_expr1))) {
       LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_var_expr(ctx, var_pop_expr1, eq_left_expr1, new_aggr_items))) {
+      LOG_WARN("failed to expand var expr", K(ret));
+    } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_VAR_POP, var_pop_expr2))) {
+      LOG_WARN("failed to create expr", K(ret));
+    } else if (OB_FAIL(var_pop_expr2->add_real_param_expr(case_when_expr2))) {
+      LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_var_expr(ctx, var_pop_expr2, eq_left_expr2, new_aggr_items))) {
+      LOG_WARN("failed to expand var expr", K(ret));
+    } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_CORR, corr_expr))) {
+      LOG_WARN("failed to create expr", K(ret));
+    } else if (OB_FAIL(corr_expr->add_real_param_expr(parma_expr1))) {
+      LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(corr_expr->add_real_param_expr(parma_expr2))) {
+      LOG_WARN("fail to add param expr to agg expr", K(ret));
+    } else if (OB_FAIL(expand_corr_expr(ctx, corr_expr, power_param_expr, new_aggr_items))) {
+      LOG_WARN("failed to expand corr expr", K(ret));
+    } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_SYS_POWER, power_expr))) {
+      LOG_WARN("failed to create expr", K(ret));
+    } else if (OB_FAIL(power_expr->add_param_expr(power_param_expr))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    } else if (OB_FAIL(power_expr->add_param_expr(two_expr))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_EQ,
+                                                                   eq_left_expr1,
+                                                                   zero_expr,
+                                                                   eq_expr1))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx->expr_factory_,
+                                                            eq_expr1,
+                                                            one_expr,
+                                                            power_expr,
+                                                            case_when_expr2))) {
+      LOG_WARN("failed to build case when expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
+                                                                   T_OP_EQ,
+                                                                   eq_left_expr2,
+                                                                   zero_expr,
+                                                                   eq_expr2))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx->expr_factory_,
+                                                            eq_expr2,
+                                                            null_expr,
+                                                            case_when_expr2,
+                                                            case_when_expr1))) {
+      LOG_WARN("failed to build case when expr", K(ret));
     } else {
-      var_pop_expr1->set_expr_level(aggr_expr->get_expr_level());
-      if (OB_FAIL(expand_var_expr(ctx, var_pop_expr1, eq_left_expr1, new_aggr_items))) {
-        LOG_WARN("failed to expand var expr", K(ret));
-      } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_VAR_POP, var_pop_expr2))) {
-        LOG_WARN("failed to create expr", K(ret));
-      } else if (OB_FAIL(var_pop_expr2->add_real_param_expr(case_when_expr2))) {
-        LOG_WARN("fail to add param expr to agg expr", K(ret));
-      } else {
-        var_pop_expr2->set_expr_level(aggr_expr->get_expr_level());
-        if (OB_FAIL(expand_var_expr(ctx, var_pop_expr2, eq_left_expr2, new_aggr_items))) {
-          LOG_WARN("failed to expand var expr", K(ret));
-        } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_CORR, corr_expr))) {
-          LOG_WARN("failed to create expr", K(ret));
-        } else if (OB_FAIL(corr_expr->add_real_param_expr(parma_expr1))) {
-          LOG_WARN("fail to add param expr to agg expr", K(ret));
-        } else if (OB_FAIL(corr_expr->add_real_param_expr(parma_expr2))) {
-          LOG_WARN("fail to add param expr to agg expr", K(ret));
-        } else {
-          corr_expr->set_expr_level(aggr_expr->get_expr_level());
-          if (OB_FAIL(expand_corr_expr(ctx, corr_expr, power_param_expr, new_aggr_items))) {
-            LOG_WARN("failed to expand corr expr", K(ret));
-          } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_SYS_POWER, power_expr))) {
-            LOG_WARN("failed to create expr", K(ret));
-          } else if (OB_FAIL(power_expr->add_param_expr(power_param_expr))) {
-            LOG_WARN("failed to add param expr", K(ret));
-          } else if (OB_FAIL(power_expr->add_param_expr(two_expr))) {
-            LOG_WARN("failed to add param expr", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                         T_OP_EQ,
-                                                                         eq_left_expr1,
-                                                                         zero_expr,
-                                                                         eq_expr1))) {
-            LOG_WARN("failed to build common binary op expr", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx->expr_factory_,
-                                                                  eq_expr1,
-                                                                  one_expr,
-                                                                  power_expr,
-                                                                  case_when_expr2))) {
-            LOG_WARN("failed to build case when expr", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
-                                                                         T_OP_EQ,
-                                                                         eq_left_expr2,
-                                                                         zero_expr,
-                                                                         eq_expr2))) {
-            LOG_WARN("failed to build common binary op expr", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(*ctx->expr_factory_,
-                                                                  eq_expr2,
-                                                                  null_expr,
-                                                                  case_when_expr2,
-                                                                  case_when_expr1))) {
-            LOG_WARN("failed to build case when expr", K(ret));
-          } else {
-            replace_expr = case_when_expr1;
-          }
-        }
-      }
+      replace_expr = case_when_expr1;
     }
   }
   return ret;
@@ -1209,6 +1177,7 @@ int ObExpandAggregateUtils::expand_regr_avg_expr(ObTransformerCtx *ctx,
     ObRawExpr *case_when_expr = NULL;
     ObRawExpr *then_expr = aggr_expr->get_expr_type() == T_FUN_REGR_AVGX ? parma_expr2 : parma_expr1;
     if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                             ctx->session_info_,
                                              parma_expr1,
                                              parma_expr2,
                                              then_expr,
@@ -1237,8 +1206,6 @@ int ObExpandAggregateUtils::expand_regr_avg_expr(ObTransformerCtx *ctx,
                                                                    div_expr))) {
       LOG_WARN("failed to build common binary op expr", K(ret));
     } else {
-      sum_expr->set_expr_level(aggr_expr->get_expr_level());
-      count_expr->set_expr_level(aggr_expr->get_expr_level());
       replace_expr = div_expr;
     }
   }
@@ -1281,7 +1248,6 @@ int ObExpandAggregateUtils::expand_regr_s_expr(ObTransformerCtx *ctx,
     } else if (OB_FAIL(regr_count_expr->add_real_param_expr(parma_expr2))) {
       LOG_WARN("fail to add param expr to agg expr", K(ret));
     } else {
-      regr_count_expr->set_expr_level(aggr_expr->get_expr_level());
       if (OB_FAIL(expand_regr_count_expr(ctx, regr_count_expr, left_multi_expr, new_aggr_items))) {
         LOG_WARN("failed to expand regr count expr", K(ret));
       } else if (aggr_expr->get_expr_type() == T_FUN_REGR_SXX ||
@@ -1289,6 +1255,7 @@ int ObExpandAggregateUtils::expand_regr_s_expr(ObTransformerCtx *ctx,
         ObRawExpr *then_expr = aggr_expr->get_expr_type() == T_FUN_REGR_SXX ?
                                                                 parma_expr2 : parma_expr1;
         if (OB_FAIL(build_special_case_when_expr(*ctx->expr_factory_,
+                                                 ctx->session_info_,
                                                  parma_expr1,
                                                  parma_expr2,
                                                  then_expr,
@@ -1299,7 +1266,6 @@ int ObExpandAggregateUtils::expand_regr_s_expr(ObTransformerCtx *ctx,
         } else if (OB_FAIL(var_pop_expr->add_real_param_expr(case_when_expr))) {
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         } else {
-          var_pop_expr->set_expr_level(aggr_expr->get_expr_level());
           if (OB_FAIL(expand_var_expr(ctx, var_pop_expr, right_multi_expr, new_aggr_items))) {
             LOG_WARN("failed to expand var expr", K(ret));
           } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
@@ -1319,7 +1285,6 @@ int ObExpandAggregateUtils::expand_regr_s_expr(ObTransformerCtx *ctx,
       } else if (OB_FAIL(covar_pop_expr->add_real_param_expr(parma_expr2))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));
       } else {
-        covar_pop_expr->set_expr_level(aggr_expr->get_expr_level());
         if (OB_FAIL(expand_covar_expr(ctx, covar_pop_expr, right_multi_expr, new_aggr_items))) {
           LOG_WARN("failed to expand covar expr", K(ret));
         } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(*ctx->expr_factory_,
@@ -1378,6 +1343,7 @@ bool ObExpandAggregateUtils::is_regr_expr_type(const ObItemType aggr_type)
 }
 
 int ObExpandAggregateUtils::build_special_case_when_expr(ObRawExprFactory &expr_factory,
+                                                         const ObSQLSessionInfo *session,
                                                          ObRawExpr *param_expr1,
                                                          ObRawExpr *param_expr2,
                                                          ObRawExpr *then_expr,
@@ -1389,25 +1355,21 @@ int ObExpandAggregateUtils::build_special_case_when_expr(ObRawExprFactory &expr_
     LOG_WARN("invalid argument", K(param_expr1), K(param_expr2), K(then_expr), K(ret));
   } else {
     ObRawExpr *null_expr = NULL;
-    ObRawExpr *false_expr = NULL;
     ObRawExpr *is_not_expr1 = NULL;
     ObRawExpr *is_not_expr2 = NULL;
     ObRawExpr *and_expr = NULL;
+    ObRawExpr *cast_null_expr = NULL;
     case_when_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::build_null_expr(expr_factory, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(&expr_factory, false_expr, false))) {
-      LOG_WARN("failed to build const bool expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_is_not_expr(expr_factory,
                                                          param_expr1,
                                                          null_expr,
-                                                         false_expr,
                                                          is_not_expr1))) {
       LOG_WARN("failed to build is not expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_is_not_expr(expr_factory,
                                                          param_expr2,
                                                          null_expr,
-                                                         false_expr,
                                                          is_not_expr2))) {
       LOG_WARN("failed to build is not expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory,
@@ -1416,10 +1378,16 @@ int ObExpandAggregateUtils::build_special_case_when_expr(ObRawExprFactory &expr_
                                                                    is_not_expr2,
                                                                    and_expr))) {
       LOG_WARN("failed to build common binary op expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory,
+                                                                session,
+                                                                *null_expr,
+                                                                then_expr->get_result_type(),
+                                                                cast_null_expr))) {
+      LOG_WARN("failed to build cast null expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(expr_factory,
                                                             and_expr,
                                                             then_expr,
-                                                            null_expr,
+                                                            cast_null_expr,
                                                             case_when_expr))) {
       LOG_WARN("failed to build case when expr", K(ret));
     } else {/*do nothing*/}
@@ -1508,8 +1476,6 @@ int ObExpandAggregateUtils::expand_keep_avg_expr(ObTransformerCtx *ctx,
                                                                    div_expr))) {
       LOG_WARN("failed to build common binary op expr", K(ret));
     } else {
-      keep_sum_expr->set_expr_level(aggr_expr->get_expr_level());
-      keep_count_expr->set_expr_level(aggr_expr->get_expr_level());
       replace_expr = div_expr;
     }
   }
@@ -1630,9 +1596,6 @@ int ObExpandAggregateUtils::expand_keep_variance_expr(ObTransformerCtx *ctx,
       LOG_WARN("failed to build common binary op expr", K(ret));
 
     } else {
-      keep_sum_expr->set_expr_level(aggr_expr->get_expr_level());
-      keep_sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
-      keep_count_expr->set_expr_level(aggr_expr->get_expr_level());
       replace_expr = div_minus_expr;
     }
   }
@@ -1667,7 +1630,6 @@ int ObExpandAggregateUtils::expand_keep_stddev_expr(ObTransformerCtx *ctx,
     } else if (OB_FAIL(append(keep_variance_expr->get_order_items_for_update(), order_items))) {
       LOG_WARN("fail to append order items", K(ret));
     } else {
-      keep_variance_expr->set_expr_level(aggr_expr->get_expr_level());
       if (OB_FAIL(expand_keep_variance_expr(ctx, keep_variance_expr,
                                             sqrt_param_expr, new_aggr_items))) {
         LOG_WARN("fail to expand keep variance expr", K(ret));
@@ -1774,7 +1736,6 @@ int ObExpandAggregateUtils::expand_avg_expr(ObTransformerCtx *ctx,
                                                        sum_expr))) {
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
-      sum_expr->set_expr_level(aggr_expr->get_expr_level());
       sum_expr->set_param_distinct(aggr_expr->is_param_distinct());
       if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr))) {
         LOG_WARN("failed to push back aggr item");
@@ -1785,7 +1746,6 @@ int ObExpandAggregateUtils::expand_avg_expr(ObTransformerCtx *ctx,
                                                                 count_expr))) {
         LOG_WARN("failed to build common aggr expr", K(ret));
       } else {
-        count_expr->set_expr_level(aggr_expr->get_expr_level());
         count_expr->set_param_distinct(aggr_expr->is_param_distinct());
         if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr))) {
           LOG_WARN("failed to push back aggr item");
@@ -1841,7 +1801,6 @@ int ObExpandAggregateUtils::expand_oracle_variance_expr(ObTransformerCtx *ctx,
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
       count_expr->set_param_distinct(aggr_expr->is_param_distinct());
-      count_expr->set_expr_level(aggr_expr->get_expr_level());
       if (OB_FAIL(add_aggr_item(new_aggr_items, count_expr))) {
         LOG_WARN("failed to push back aggr item");
       } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(*ctx->expr_factory_, ObNumberType,
@@ -1867,7 +1826,6 @@ int ObExpandAggregateUtils::expand_oracle_variance_expr(ObTransformerCtx *ctx,
                                                                 sum_expr))) {
         LOG_WARN("failed to build common aggr expr", K(ret));
       } else {
-        sum_expr->set_expr_level(aggr_expr->get_expr_level());
         sum_expr->set_param_distinct(aggr_expr->is_param_distinct());
         if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr))) {
           LOG_WARN("failed to push back aggr item");
@@ -1884,7 +1842,6 @@ int ObExpandAggregateUtils::expand_oracle_variance_expr(ObTransformerCtx *ctx,
                                                                   sum_product_expr))) {
           LOG_WARN("failed to build common aggr expr", K(ret));
         } else {
-          sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
           sum_product_expr->set_param_distinct(aggr_expr->is_param_distinct());
           if (OB_FAIL(add_aggr_item(new_aggr_items, sum_product_expr))) {
             LOG_WARN("failed to push back aggr item");
@@ -2040,10 +1997,6 @@ int ObExpandAggregateUtils::expand_mysql_variance_expr(ObTransformerCtx *ctx,
     } else if (OB_FAIL(add_cast_expr(ctx, minus_expr, result_type, cast_minus_expr))) {
       LOG_WARN("failed to add cast expr");
     } else {
-      sum_expr->set_expr_level(aggr_expr->get_expr_level());
-      count_expr->set_expr_level(aggr_expr->get_expr_level());
-      sum_product_expr->set_expr_level(aggr_expr->get_expr_level());
-      count_product_expr->set_expr_level(aggr_expr->get_expr_level());
       replace_expr = cast_minus_expr;
     }
   }
@@ -2075,7 +2028,6 @@ int ObExpandAggregateUtils::expand_stddev_expr(ObTransformerCtx *ctx,
                                                        variance_expr))) {
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
-      variance_expr->set_expr_level(aggr_expr->get_expr_level());
       variance_expr->set_param_distinct(aggr_expr->is_param_distinct());
       if (lib::is_oracle_mode() &&
           OB_FAIL(expand_oracle_variance_expr(ctx, variance_expr,
@@ -2127,7 +2079,6 @@ int ObExpandAggregateUtils::expand_stddev_pop_expr(ObTransformerCtx *ctx,
                                                        var_expr))) {
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
-      var_expr->set_expr_level(aggr_expr->get_expr_level());
       if (OB_FAIL(expand_var_expr(ctx, var_expr,
                                   sqrt_param_expr, new_aggr_items))) {
         LOG_WARN("fail to expand keep variance expr", K(ret));
@@ -2173,7 +2124,6 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObTransformerCtx *ctx,
                                                        var_expr))) {
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
-      var_expr->set_expr_level(aggr_expr->get_expr_level());
       if (OB_FAIL(expand_var_expr(ctx, var_expr,
                                   sqrt_param_expr, new_aggr_items))) {
         LOG_WARN("fail to expand keep variance expr", K(ret));
@@ -2215,8 +2165,6 @@ int ObExpandAggregateUtils::expand_approx_count_distinct_expr(ObTransformerCtx *
   } else if (OB_FAIL(synopsis->get_real_param_exprs_for_update().assign(
                        aggr_expr->get_real_param_exprs()))) {
     LOG_WARN("failed to assign real param expr for synopsis", K(ret));
-  } else if (FALSE_IT(synopsis->set_expr_level(aggr_expr->get_expr_level()))) {
-    // do nothing
   } else if (OB_FAIL(new_aggr_items.push_back(synopsis))) {
     LOG_WARN("failed to push back synopsis", K(ret));
   } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_SYS_ESTIMATE_NDV,

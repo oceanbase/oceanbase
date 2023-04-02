@@ -40,18 +40,18 @@ public:
 
 TEST(TestTimer, timer_task)
 {
-  TestTimerTask task[ObTimer::MAX_TASK_NUM + 1];
+  TestTimerTask task[32 + 1];
   ObTimer timer;
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.start());
   const bool is_repeat = true;
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task[0], 100, is_repeat));
-  for(int i=1; i<ObTimer::MAX_TASK_NUM; ++i)
+  for(int i=1; i<32; ++i)
   {
     ASSERT_EQ(OB_SUCCESS,timer.schedule(task[i], 5000000000, is_repeat));//5000s
   }
   ::usleep(5000);//5ms
-  ASSERT_EQ(OB_ERR_UNEXPECTED, timer.schedule(task[ObTimer::MAX_TASK_NUM], 50000000, is_repeat));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, timer.schedule(task[32], 50000000, is_repeat));
   ::usleep(1000000);//1s
   ASSERT_GT(task[0].task_run_count_, 1);
 }

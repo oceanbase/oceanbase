@@ -34,6 +34,7 @@ ObDelayFreeAllocator::ObDelayFreeAllocator()
     total_size_(0),
     expire_duration_us_(0),
     label_(nullptr),
+    mutex_(ObLatchIds::OB_DELAY_FREE_ALLOCATOR_LOCK),
     inited_(false)
 {
 }
@@ -93,7 +94,7 @@ void *ObDelayFreeAllocator::alloc(const int64_t size)
   int64_t data_size = size + sizeof(DataMeta);
 
   if (!inited_) {
-    LIB_ALLOC_LOG(WARN, "The ObBlockLinkMemoryAllocator has not been inited.");
+    LIB_ALLOC_LOG_RET(WARN, OB_NOT_INIT, "The ObBlockLinkMemoryAllocator has not been inited.");
   } else {
     //alloc memory
     lib::ObMutexGuard guard(mutex_);
@@ -104,13 +105,13 @@ void *ObDelayFreeAllocator::alloc(const int64_t size)
     }
 
     if (NULL == block) {
-      LIB_ALLOC_LOG(ERROR, "cannot malloc first meta memory block.");
+      LIB_ALLOC_LOG_RET(ERROR, OB_ERROR, "cannot malloc first meta memory block.");
     } else if (data_size <= block->remain()) {
       ptr_ret = block->alloc(data_size);
     } else if (NULL != (block = alloc_block(data_size))) {
       ptr_ret = block->alloc(data_size);
     } else {
-      LIB_ALLOC_LOG(ERROR, "cannot malloc memory ", "size", size);
+      LIB_ALLOC_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "cannot malloc memory ", "size", size);
     }
 
     // set meta value
@@ -127,16 +128,16 @@ void *ObDelayFreeAllocator::alloc(const int64_t size)
 void ObDelayFreeAllocator::free(void *ptr)
 {
   if (!inited_) {
-    LIB_ALLOC_LOG(WARN, "The ObBlockLinkMemoryAllocator has not been inited.");
+    LIB_ALLOC_LOG_RET(WARN, OB_NOT_INIT, "The ObBlockLinkMemoryAllocator has not been inited.");
   } else if (NULL == ptr) {
-    LIB_ALLOC_LOG(WARN, "the free ptr is NULL");
+    LIB_ALLOC_LOG_RET(WARN, OB_ERROR, "the free ptr is NULL");
   } else {
     lib::ObMutexGuard guard(mutex_);
     DataMeta *meta = reinterpret_cast<DataMeta *>(ptr) - 1;
     ObDelayFreeMemBlock *block = meta->mem_block_;
 
     if (NULL == block) {
-      LIB_ALLOC_LOG(ERROR, "the free ptr has null mem block ptr");
+      LIB_ALLOC_LOG_RET(ERROR, OB_ERROR, "the free ptr has null mem block ptr");
     } else {
       if (meta->data_len_ > 0) {
         memory_fragment_size_ += meta->data_len_;
@@ -191,9 +192,9 @@ ObDelayFreeMemBlock *ObDelayFreeAllocator::alloc_block(const int64_t data_size)
     }
 
     if (NULL == (ptr = static_cast<char *>(allocator_.alloc(mem_block_size)))) {
-      LIB_ALLOC_LOG(ERROR, "cannot malloc memory of ", "mem_block_size", mem_block_size);
+      LIB_ALLOC_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "cannot malloc memory of ", "mem_block_size", mem_block_size);
     } else if (NULL == (block_ret = new(ptr) ObDelayFreeMemBlock(ptr + mem_block_size))) {
-      LIB_ALLOC_LOG(ERROR, "placement new for MemBlock failed.");
+      LIB_ALLOC_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "placement new for MemBlock failed.");
     } else {
       total_size_ += mem_block_size;
     }
@@ -209,7 +210,7 @@ ObDelayFreeMemBlock *ObDelayFreeAllocator::alloc_block(const int64_t data_size)
 void ObDelayFreeAllocator::free_block(ObDelayFreeMemBlock *block)
 {
   if (NULL == block) {
-    LIB_ALLOC_LOG(WARN, "The free block is NULL.");
+    LIB_ALLOC_LOG_RET(WARN, OB_ERR_UNEXPECTED, "The free block is NULL.");
   } else {
     working_list_.remove(block);
     free_list_.add_last(block);

@@ -167,8 +167,13 @@ int ObRsMgr::ObRemoteClusterIdGetter::operator() (
 /////////////////////
 
 ObRsMgr::ObRsMgr()
-  : inited_(false), srv_rpc_proxy_(NULL),
-    config_(NULL), addr_agent_()
+  : inited_(false),
+    srv_rpc_proxy_(NULL),
+    config_(NULL),
+    addr_agent_(),
+    lock_(common::ObLatchIds::MASTER_RS_CACHE_LOCK),
+    master_rs_(),
+    remote_master_rs_map_()
 {
 }
 
@@ -329,6 +334,7 @@ int ObRsMgr::renew_master_rootserver(const int64_t cluster_id)
   } else if (OB_FAIL(GCTX.lst_operator_->get(cluster_id,
                                         OB_SYS_TENANT_ID,
                                         SYS_LS,
+                                        share::ObLSTable::DEFAULT_MODE,
                                         ls_info))) {
     LOG_WARN("get root log stream failed",
              KR(ret), K(cluster_id),
@@ -362,7 +368,9 @@ int ObRsMgr::renew_master_rootserver(const int64_t cluster_id)
   return ret;
 }
 
-int ObRsMgr::construct_initial_server_list(common::ObIArray<common::ObAddr> &server_list)
+int ObRsMgr::construct_initial_server_list(
+    const bool check_ls_service,
+    common::ObIArray<common::ObAddr> &server_list)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -395,7 +403,9 @@ int ObRsMgr::construct_initial_server_list(common::ObIArray<common::ObAddr> &ser
     }
   }
   // case 3: try get sys_ls's member_list from ObLSService
-  if (OB_SUCC(ret)) {
+  // For RTO scene, get_paxos_member_list() may be blocked and related threads will be hang.
+  // To avoid thread hang when refreshing ls locations by rpc, we don't use member_list of sys tenant's ls.
+  if (OB_SUCC(ret) && check_ls_service) {
     MTL_SWITCH(OB_SYS_TENANT_ID) {
       ObMemberList member_list;
       ObLSService *ls_svr = nullptr;
@@ -414,7 +424,7 @@ int ObRsMgr::construct_initial_server_list(common::ObIArray<common::ObAddr> &ser
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls_handle.get_ls() is nullptr", KR(ret));
       } else if (OB_SUCCESS != (tmp_ret = ls_handle.get_ls()->get_paxos_member_list(member_list, paxos_replica_number))) {
-        LOG_WARN("get member_list from ObLS failed", KR(tmp_ret), "teannt_id", OB_SYS_TENANT_ID,
+        LOG_WARN("get member_list from ObLS failed", KR(tmp_ret), "tenant_id", OB_SYS_TENANT_ID,
                  "log_stream_id", SYS_LS.id(), K(ls_handle));
       }
       if (OB_SUCC(ret)) {

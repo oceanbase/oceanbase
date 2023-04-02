@@ -22,6 +22,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/tablet/ob_tablet_info.h"
 #include "share/ob_column_checksum_error_operator.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -82,10 +83,11 @@ public:
   bool is_same_tablet(const ObTabletReplicaChecksumItem &other) const;
   int verify_checksum(const ObTabletReplicaChecksumItem &other) const;
   int assign_key(const ObTabletReplicaChecksumItem &other);
+  int assign(const ObTabletReplicaChecksumItem &other);
   ObTabletReplicaChecksumItem &operator =(const ObTabletReplicaChecksumItem &other);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(server), K_(row_count),
-      K_(snapshot_version), K_(data_checksum), K_(column_meta));
+      K_(compaction_scn), K_(data_checksum), K_(column_meta));
 
 public:
   uint64_t tenant_id_;
@@ -93,7 +95,7 @@ public:
   common::ObTabletID tablet_id_;
   common::ObAddr server_;
   int64_t row_count_;
-  int64_t snapshot_version_;
+  SCN compaction_scn_;
   int64_t data_checksum_;
   ObTabletReplicaReportColumnMeta column_meta_;
 };
@@ -102,18 +104,28 @@ public:
 class ObTabletReplicaChecksumOperator
 {
 public:
+  // To get a batch of checksum_items
+  // We will get items whose compaction_scn = @compaction_scn
+  //
+  // This function is specifically designed for ObTabletReplicaChecksumIterator.
+  // This function would remove the last several checksum items in some cases.
+  // Please do not call this function in any other place, except ObTabletReplicaChecksumIterator.
   static int batch_get(
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
-      const int64_t batch_cnt,
-      const int64_t snapshot_version,
+      const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
+  // Get a batch of checksum_items
+  // Default: checksum_items' compaction_scn = @compaction_scn
+  // If include_larger_than = true: checksum_items' compaction_scn >= @compaction_scn
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletLSPair> &pairs,
+      const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items);
+      common::ObIArray<ObTabletReplicaChecksumItem> &items,
+      const bool include_larger_than = false);
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObSqlString &sql,
@@ -127,13 +139,46 @@ public:
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const common::ObIArray<share::ObTabletReplica> &tablet_replicas);
+  static int remove_residual_checksum(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObAddr &server,
+      const int64_t limit,
+      int64_t &affected_rows);
+
+  static int get_specified_tablet_checksum(
+      const uint64_t tenant_id,
+      const int64_t ls_id,
+      const int64_t tablet_id,
+      const int64_t snapshot_version,
+      common::ObIArray<ObTabletReplicaChecksumItem> &items);
+
+  static int get_tablet_ls_pairs(
+      const uint64_t tenant_id,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
+      common::ObMySQLProxy &sql_proxy,
+      common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
+
+  static int get_tablet_ls_pairs(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      common::ObMySQLProxy &sql_proxy,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
+
+  static int check_tablet_replica_checksum(
+      const uint64_t tenant_id,
+      const common::ObIArray<ObTabletLSPair> &pairs,
+      const SCN &compaction_scn,
+      common::ObMySQLProxy &sql_proxy);
 
   static int check_column_checksum(
       const uint64_t tenant_id,
-      const schema::ObTableSchema &data_table_schema,
-      const schema::ObTableSchema &index_table_schema,
-      const int64_t global_snapshot_version,
-      common::ObMySQLProxy &sql_proxy);
+      const schema::ObSimpleTableSchemaV2 &data_simple_schema,
+      const schema::ObSimpleTableSchemaV2 &index_simple_schema,
+      const SCN &compaction_scn,
+      common::ObMySQLProxy &sql_proxy,
+      const int64_t expected_epoch);
 
   static int set_column_meta_with_hex_str(
       const ObString &hex_str,
@@ -181,15 +226,17 @@ private:
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
-      const int64_t snapshot_version,
+      const SCN &compaction_scn,
       common::ObSqlString &sql);
 
   static int construct_batch_get_sql_str_(
       const uint64_t tenant_id,
+      const SCN &compaction_scn,
       const common::ObIArray<ObTabletLSPair> &pairs,
       const int64_t start_idx,
       const int64_t end_idx,
-      common::ObSqlString &sql);
+      common::ObSqlString &sql,
+      const bool include_larger_than = false);
 
   static int inner_init_tablet_pair_map_(
       const ObIArray<ObTabletLSPair> &pairs,
@@ -203,25 +250,38 @@ private:
       common::sqlclient::ObMySQLResult &res,
       ObTabletReplicaChecksumItem &item);
 
+  static int innner_verify_tablet_replica_checksum(
+      const common::ObIArray<ObTabletReplicaChecksumItem> &ckm_items);
+
+  static int get_index_and_data_table_schema(
+      schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const uint64_t data_table_id,
+      const schema::ObTableSchema *&index_table_schema,
+      const schema::ObTableSchema *&data_table_schema);
+
   static int check_global_index_column_checksum(
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
-      const int64_t global_snapshot_version,
-      common::ObMySQLProxy &sql_proxy);
+      const SCN &compaction_scn,
+      common::ObMySQLProxy &sql_proxy,
+      const int64_t expected_epoch);
 
   static int check_local_index_column_checksum(
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
-      const int64_t global_snapshot_version,
-      common::ObMySQLProxy &sql_proxy);
+      const SCN &compaction_scn,
+      common::ObMySQLProxy &sql_proxy,
+      const int64_t expected_epoch);
 
   // get column checksum_sum from items and store result in map
   // KV of @column_ckm_sum_map is: <column_id, column_checksum_sum>
   static int get_column_checksum_sum_map_(
       const schema::ObTableSchema &table_schema,
-      const int64_t global_snapshot_version,
+      const SCN &compaction_scn,
       common::hash::ObHashMap<int64_t, int64_t> &column_ckm_sum_map,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
@@ -229,32 +289,39 @@ private:
   // KV of @column_ckm_map is: <column_id, column_checksum>
   static int get_column_checksum_map_(
       const schema::ObTableSchema &table_schema,
-      const int64_t global_snapshot_version,
+      const SCN &compaction_scn,
       common::hash::ObHashMap<int64_t, int64_t> &column_ckm_map,
       const ObTabletReplicaChecksumItem &item);
 
   static int get_tablet_replica_checksum_items_(
       const uint64_t tenant_id,
       common::ObMySQLProxy &mysql_proxy,
-      const schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &tablet_ids,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
+      const SCN &compaction_scn,
+      common::ObIArray<ObTabletLSPair> &tablet_pairs,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
-  static int find_checksum_item_by_id_(
-      const common::ObTabletID &tablet_id,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      const int64_t global_snapshot_version,
-      int64_t &idx);
-
-  static int get_table_all_tablet_id_(
-      const schema::ObTableSchema &table_schema,
+  static int get_table_all_tablet_ids_(
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
       common::ObIArray<common::ObTabletID> &schema_tablet_ids);
 
+  static int find_checksum_item_(
+      const ObTabletLSPair &pair,
+      common::ObIArray<ObTabletReplicaChecksumItem> &items,
+      const SCN &compaction_scn,
+      int64_t &idx);
+
+  static int check_table_all_tablets_ckm_status_(
+      const uint64_t tenant_id,
+      common::ObIArray<ObTabletLSPair> &tablet_pairs,
+      bool &exist_error_status);
+
   static int need_verify_checksum_(
-      const int64_t global_snapshot_version,
+      const SCN &compaction_scn,
+      const schema::ObSimpleTableSchemaV2 &simple_schema,
+      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
       bool &need_verify,
-      common::ObIArray<common::ObTabletID> &schema_tablet_ids,
-      common::ObIArray<ObTabletReplicaChecksumItem> &items);
+      int64_t &ckm_tablet_cnt);
 
   static int compare_column_checksum_(
       const schema::ObTableSchema &data_table_schema,

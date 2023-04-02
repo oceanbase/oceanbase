@@ -33,6 +33,8 @@ class ObLogSchemaGuard;
 class IObLogTenantMgr;
 class ObLogTenant;
 class ObLogTenantGuard;
+class TenantSchemaInfo;
+class DBSchemaInfo;
 class ObLogDDLProcessor
 {
   enum
@@ -57,6 +59,8 @@ public:
 private:
   void mark_stmt_binlog_record_invalid_(DdlStmtTask &stmt_task);
   void mark_all_binlog_records_invalid_(PartTransTask &task);
+
+  // TODO schema
   int get_old_schema_version_(
       const uint64_t tenant_id,
       PartTransTask &task,
@@ -68,6 +72,7 @@ private:
       const int64_t ddl_schema_version,
       int64_t &old_schema_version,
       volatile bool &stop_flag);
+  // schema
   int filter_ddl_stmt_(ObLogTenant &tenant,
       DdlStmtTask &ddl_stmt,
       IObLogTenantMgr &tenant_mgr,
@@ -88,22 +93,38 @@ private:
       ObLogTenant &tenant,
       DdlStmtTask &ddl_stmt,
       const int64_t schema_version,
-      volatile bool &stop_flag);
+      volatile bool &stop_flag,
+      const bool format_with_new_schema = false);
   int commit_ddl_stmt_(ObLogTenant &tenant,
       DdlStmtTask &ddl_stmt,
       const int64_t schema_version,
       volatile bool &stop_flag,
       const char *tenant_name = NULL,
       const char *db_name = NULL,
+      const bool format_with_new_schema = false,
       const bool filter_ddl_stmt = false);
+  // TODO schema
   int get_schemas_for_ddl_stmt_(
       const uint64_t ddl_tenant_id,
       DdlStmtTask &ddl_stmt,
       const int64_t schema_version,
-      ObLogSchemaGuard &schema_guard,
+      const bool format_with_new_schema,
       const char *&tenant_name,
       const char *&db_name,
       volatile bool &stop_flag);
+  int get_schema_info_with_online_schema_(
+      const uint64_t ddl_tenant_id,
+      const int64_t schema_version,
+      DdlStmtTask &ddl_stmt,
+      TenantSchemaInfo &tenant_schema_info,
+      DBSchemaInfo &db_schema_info,
+      volatile bool &stop_flag);
+  int get_schema_info_with_data_dict_(
+      const uint64_t ddl_tenant_id,
+      const bool format_with_new_schema,
+      DdlStmtTask &ddl_stmt,
+      TenantSchemaInfo &tenant_schema_info,
+      DBSchemaInfo &db_schema_info);
   int get_lazy_schema_guard_(
       const uint64_t tenant_id,
       const int64_t version,
@@ -116,9 +137,16 @@ private:
       ObLogSchemaGuard &schema_guard,
       uint64_t &db_id,
       volatile bool &stop_flag);
+  int decide_ddl_stmt_database_id_with_data_dict_(
+      const uint64_t tenant_id,
+      const bool use_new_schema,
+      DdlStmtTask &ddl_stmt,
+      uint64_t &db_id);
   bool is_use_new_schema_version_(
       DdlStmtTask &ddl_stmt,
       const int64_t schema_version);
+  // schema
+
   int set_binlog_record_db_name_(IBinlogRecord &br,
       const int64_t ddl_operation_type,
       const char * const tenant_name,

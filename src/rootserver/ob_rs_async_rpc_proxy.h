@@ -41,15 +41,14 @@ RPC_F(obrpc::OB_PARTITION_CHECK_LOG, obrpc::Int64,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_PARTITION_CHECK_LOG>::Response, ObRpcCheckLogProxy);
 RPC_F(obrpc::OB_NOTIFY_TENANT_SERVER_UNIT_RESOURCE, obrpc::TenantServerUnitConfig,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_NOTIFY_TENANT_SERVER_UNIT_RESOURCE>::Response, ObNotifyTenantServerResourceProxy);
-RPC_F(obrpc::OB_CHECK_FROZEN_VERSION, obrpc::ObCheckFrozenVersionArg,
-    obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_CHECK_FROZEN_VERSION>::Response, ObCheckFrozenVersionProxy);
+RPC_F(obrpc::OB_CHECK_FROZEN_SCN, obrpc::ObCheckFrozenScnArg,
+    obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_CHECK_FROZEN_SCN>::Response, ObCheckFrozenScnProxy);
 RPC_F(obrpc::OB_GET_MIN_SSTABLE_SCHEMA_VERSION, obrpc::ObGetMinSSTableSchemaVersionArg,
     obrpc::ObGetMinSSTableSchemaVersionRes, ObGetMinSSTableSchemaVersionProxy);
 RPC_F(obrpc::OB_DETECT_MASTER_RS_LS, obrpc::ObDetectMasterRsArg,
       obrpc::ObDetectMasterRsLSResult, ObDetectMasterRsLSProxy);
 RPC_F(obrpc::OB_GET_ROOT_SERVER_ROLE, obrpc::ObDetectMasterRsArg,
       obrpc::ObGetRootserverRoleResult, ObGetRootserverRoleProxy);
-RPC_F(obrpc::OB_WRITE_DDL_SSTABLE_COMMIT_LOG, obrpc::ObDDLWriteSSTableCommitLogArg, obrpc::ObDDLWriteCommitLogResult, ObWriteDDLSSTableCommitLogProxy);
 RPC_F(obrpc::OB_CREATE_LS, obrpc::ObCreateLSArg, obrpc::ObCreateLSResult, ObLSCreatorProxy);
 RPC_F(obrpc::OB_CREATE_TABLET, obrpc::ObBatchCreateTabletArg, obrpc::ObCreateTabletBatchRes, ObTabletCreatorProxy);
 RPC_F(obrpc::OB_SET_MEMBER_LIST, obrpc::ObSetMemberListArgV2, obrpc::ObSetMemberListResult, ObSetMemberListProxy);
@@ -62,6 +61,14 @@ RPC_F(obrpc::OB_BATCH_GET_TABLET_AUTOINC_SEQ, obrpc::ObBatchGetTabletAutoincSeqA
     obrpc::ObBatchGetTabletAutoincSeqRes, ObBatchGetTabletAutoincSeqProxy);
 RPC_F(obrpc::OB_BATCH_SET_TABLET_AUTOINC_SEQ, obrpc::ObBatchSetTabletAutoincSeqArg,
     obrpc::ObBatchSetTabletAutoincSeqRes, ObBatchSetTabletAutoincSeqProxy);
+RPC_F(obrpc::OB_GET_LS_SYNC_SCN, obrpc::ObGetLSSyncScnArg, obrpc::ObGetLSSyncScnRes, ObGetLSSyncScnProxy);
+RPC_F(obrpc::OB_INIT_TENANT_CONFIG, obrpc::ObInitTenantConfigArg,
+    obrpc::ObInitTenantConfigRes, ObInitTenantConfigProxy);
+RPC_F(obrpc::OB_GET_LEADER_LOCATIONS, obrpc::ObGetLeaderLocationsArg,
+      obrpc::ObGetLeaderLocationsResult, ObGetLeaderLocationsProxy);
+RPC_F(obrpc::OB_DDL_CHECK_TABLET_MERGE_STATUS, obrpc::ObDDLCheckTabletMergeStatusArg,
+    obrpc::ObDDLCheckTabletMergeStatusResult, ObCheckTabletMergeStatusProxy);
+RPC_F(obrpc::OB_REFRESH_TENANT_INFO, obrpc::ObRefreshTenantInfoArg, obrpc::ObRefreshTenantInfoRes, ObRefreshTenantInfoProxy);
 }//end namespace rootserver
 }//end namespace oceanbase
 

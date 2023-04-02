@@ -18,6 +18,8 @@
 namespace oceanbase {
 namespace sql {
 
+struct ObNotNullContext;
+
 class ObTransformSimplifyExpr : public ObTransformRule
 {
 public:
@@ -34,9 +36,11 @@ private:
   int replace_is_null_condition(ObDMLStmt *stmt, bool &trans_happened);
   int inner_replace_is_null_condition(ObDMLStmt *stmt,
                                       ObRawExpr *&expr,
+                                      ObNotNullContext &not_null_ctx,
                                       bool &trans_happened);
   int do_replace_is_null_condition(ObDMLStmt *stmt,
                                    ObRawExpr *&expr,
+                                   ObNotNullContext &not_null_ctx,
                                    bool &trans_happened);
   int replace_op_null_condition(ObDMLStmt *stmt, bool &trans_happened);
   int replace_cmp_null_condition(ObRawExpr *&expr,
@@ -48,7 +52,6 @@ private:
                         const ObDMLStmt &stmt,
                         const ParamStore &param_store,
                         ObIArray<const ObRawExpr *> &null_expr_lists);
-  int is_expected_table_for_replace(ObDMLStmt *stmt, uint64_t table_id, bool &is_expected);
   int convert_preds_vector_to_scalar(ObDMLStmt *stmt, bool &trans_happened);
   int convert_join_preds_vector_to_scalar(TableItem *table_item, bool &trans_happened);
   int inner_convert_preds_vector_to_scalar(ObRawExpr *expr, ObIArray<ObRawExpr*> &exprs, bool &trans_happened);
@@ -80,9 +83,80 @@ private:
                                    ObCaseOpRawExpr *case_expr,
                                    bool &trans_happened);
 
+  int remove_dummy_nvl(ObDMLStmt *stmt,
+                       bool &trans_happened);
+  int inner_remove_dummy_nvl(ObDMLStmt *stmt,
+                             ObRawExpr *&expr,
+                             ObNotNullContext &not_null_ctx,
+                             bool &trans_happened);
+  int do_remove_dummy_nvl(ObDMLStmt *stmt,
+                          ObRawExpr *&expr,
+                          ObNotNullContext &not_null_ctx,
+                          bool &trans_happened);
+
+  int convert_nvl_predicate(ObDMLStmt *stmt, bool &trans_happened);
+  int inner_convert_nvl_predicate(ObDMLStmt *stmt,
+                                  ObRawExpr *&expr,
+                                  bool &trans_happened);
+  int do_convert_nvl_predicate(ObDMLStmt *stmt,
+                               ObRawExpr *&parent_expr,
+                               ObRawExpr *&nvl_expr,
+                               ObRawExpr *&sibling_expr,
+                               bool nvl_at_left,
+                               bool &trans_happened);
+  int replace_like_condition(ObDMLStmt *stmt,
+                             bool &trans_happened);
+  int check_like_condition(ObRawExpr *&expr,
+                           ObIArray<ObRawExpr *> &old_exprs,
+                           ObIArray<ObRawExpr *> &new_exprs,
+                           ObIArray<ObExprConstraint> &constraints);
+  int do_check_like_condition(ObRawExpr *&expr,
+                              ObIArray<ObRawExpr *> &old_exprs,
+                              ObIArray<ObRawExpr *> &new_exprs,
+                              ObIArray<ObExprConstraint> &constraints);
+
+  int remove_subquery_when_filter_is_false(ObDMLStmt* stmt,
+                                           bool& trans_happened);
+  int try_remove_subquery_in_expr(ObDMLStmt* stmt,
+                                  ObRawExpr*& expr,
+                                  bool& trans_happened);
+  int adjust_subquery_comparison_expr(ObRawExpr *&expr,
+                                      bool is_empty_left,
+                                      bool is_empty_right,
+                                      ObRawExpr* param_expr_left,
+                                      ObRawExpr* param_expr_right);
+  int do_remove_subquery(ObDMLStmt* stmt,
+                         ObRawExpr*& expr,
+                         bool& trans_happened,
+                         bool& is_empty);
+  int is_valid_for_remove_subquery(const ObSelectStmt* stmt,
+                                   bool& is_valid);
+  int is_filter_false(ObSelectStmt* stmt,
+                      bool& is_where_false,
+                      bool& is_having_false,
+                      bool& is_having_true);
+  int is_filter_exprs_false(common::ObIArray<ObRawExpr*>& condition_exprs,
+                            bool& is_false,
+                            bool& is_true);
+  int check_limit_value(ObSelectStmt* stmt,
+                        bool& is_limit_filter_false,
+                        ObRawExpr*& limit_cons);
+  int replace_expr_when_filter_is_false(ObRawExpr*& expr);
+  int build_expr_for_not_empty_set(ObSelectStmt* sub_stmt,
+                                   ObRawExpr*& expr);
+  int build_null_for_empty_set(const ObSelectStmt* sub_stmt,
+                               ObRawExpr*& expr);
+  int build_null_expr_and_cast(const ObRawExpr* expr,
+                               ObRawExpr*& cast_expr);
+
   int flatten_stmt_exprs(ObDMLStmt *stmt, bool &trans_happened);
   int flatten_join_condition_exprs(TableItem *table, bool &trans_happened);
   int flatten_exprs(common::ObIArray<ObRawExpr*> &exprs, bool &trans_happened);
+
+  int transform_is_false_true_expr(ObDMLStmt *stmt, bool &trans_happened);
+  int remove_false_true(common::ObIArray<ObRawExpr*> &exprs, bool &trans_happened);
+  int is_valid_remove_false_true(ObRawExpr *expr, bool &is_valid);
+  int remove_false_true(ObRawExpr *expr, ObRawExpr *&ret_expr, bool &trans_happened);
 };
 
 }

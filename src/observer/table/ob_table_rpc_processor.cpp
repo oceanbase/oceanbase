@@ -27,6 +27,8 @@
 #include "observer/mysql/ob_mysql_request_manager.h"
 #include "share/ob_define.h"
 #include "storage/tx/ob_trans_service.h"
+#include "ob_table_session_pool.h"
+#include "storage/tx/wrs/ob_weak_read_util.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -78,6 +80,8 @@ int ObTableLoginP::process()
     } else if (OB_FAIL(generate_credential(result_.tenant_id_, result_.user_id_, result_.database_id_,
                                            login.ttl_us_, user_token, result_.credential_))) {
       LOG_WARN("failed to generate credential", K(ret), K(login));
+    } else if (OB_FAIL(GCTX.table_service_->get_sess_mgr().update_sess(credential_))) {
+      LOG_WARN("failed to update session pool", K(ret), K_(credential));
     } else {
       result_.reserved1_ = 0;
       result_.reserved2_ = 0;
@@ -178,58 +182,26 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
   return ret;
 }
 
-
-OB_SERIALIZE_MEMBER(ObTableApiCredential,
-                    cluster_id_,
-                    tenant_id_,
-                    user_id_,
-                    database_id_,
-                    expire_ts_,
-                    hash_val_);
-
-ObTableApiCredential::ObTableApiCredential()
-  :cluster_id_(0),
-   tenant_id_(0),
-   user_id_(0),
-   database_id_(0),
-   expire_ts_(0),
-   hash_val_(0)
-{
-
-}
-
-ObTableApiCredential::~ObTableApiCredential()
-{
-
-}
-
-uint64_t ObTableApiCredential::hash(uint64_t seed /*= 0*/) const
-{
-  uint64_t hash_val = murmurhash(&cluster_id_, sizeof(cluster_id_), seed);
-  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
-  hash_val = murmurhash(&user_id_, sizeof(user_id_), hash_val);
-  hash_val = murmurhash(&database_id_, sizeof(database_id_), hash_val);
-  hash_val = murmurhash(&expire_ts_, sizeof(expire_ts_), hash_val);
-  return hash_val;
-}
-
-int ObTableLoginP::generate_credential(uint64_t tenant_id, uint64_t user_id, uint64_t database,
-                                          int64_t ttl_us, uint64_t user_token, ObString &credential_str)
+int ObTableLoginP::generate_credential(uint64_t tenant_id,
+                                       uint64_t user_id,
+                                       uint64_t database,
+                                       int64_t ttl_us,
+                                       uint64_t user_token,
+                                       ObString &credential_str)
 {
   int ret = OB_SUCCESS;
-  ObTableApiCredential credential;
-  credential.cluster_id_ = GCONF.cluster_id;
-  credential.tenant_id_ = tenant_id;
-  credential.user_id_ = user_id;
-  credential.database_id_ = database;
+  credential_.cluster_id_ = GCONF.cluster_id;
+  credential_.tenant_id_ = tenant_id;
+  credential_.user_id_ = user_id;
+  credential_.database_id_ = database;
   if (ttl_us > 0) {
-    credential.expire_ts_ = ObTimeUtility::current_time() + ttl_us;
+    credential_.expire_ts_ = ObTimeUtility::current_time() + ttl_us;
   } else {
-    credential.expire_ts_ = 0;
+    credential_.expire_ts_ = 0;
   }
-  credential.hash_val_ = credential.hash(user_token);
+  credential_.hash_val_ = credential_.hash(user_token);
   int64_t pos = 0;
-  if (OB_FAIL(serialization::encode(credential_buf_, CREDENTIAL_BUF_SIZE, pos, credential))) {
+  if (OB_FAIL(serialization::encode(credential_buf_, CREDENTIAL_BUF_SIZE, pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
   } else {
     credential_str.assign_ptr(credential_buf_, static_cast<int32_t>(pos));
@@ -279,36 +251,24 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const share::schema::ObUserInfo *user_info = NULL;
-  if (OB_ISNULL(gctx_.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service", K(ret));
-  } else if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential_))) {
+  ObTableApiSessGuard guard;
+  const ObTableApiCredential *sess_credetial = nullptr;
+  if (OB_FAIL(serialization::decode(credential_str.ptr(), credential_str.length(), pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), "tenant_id", credential_.tenant_id_);
-  } else if (OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
-    LOG_WARN("fail to get user info", K(ret), K(credential_));
-  } else if (OB_ISNULL(user_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("user info is null", K(ret), K(credential_));
+  } else if (OB_FAIL(gctx_.table_service_->get_sess_mgr().get_sess_info(credential_.tenant_id_,
+                                                                       credential_.user_id_,
+                                                                       guard))) {
+    LOG_WARN("fail to get session info", K(ret), K_(credential));
+  } else if (OB_FAIL(guard.get_credential(sess_credetial))) {
+    LOG_WARN("fail to get credential", K(ret));
+  } else if (sess_credetial->hash_val_ != credential_.hash_val_) {
+    ret = OB_ERR_NO_PRIVILEGE;
+    LOG_WARN("invalid credential", K(ret), K_(credential), K(*sess_credetial));
+  } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
+    ret = OB_ERR_NO_PRIVILEGE;
+    LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(*sess_credetial));
   } else {
-    const uint64_t user_token = user_info->get_passwd_str().hash();
-    uint64_t hash_val = credential_.hash(user_token);
-    uint64_t my_cluster_id = GCONF.cluster_id;
-    if (hash_val != credential_.hash_val_) {
-      ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("invalid credential", K(ret), K_(credential), K(hash_val));
-    } else if (my_cluster_id != credential_.cluster_id_) {
-      ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(my_cluster_id));
-    } else if (user_info->get_is_locked()) { // check whether user is locked.
-      ret = OB_ERR_USER_IS_LOCKED;
-      LOG_WARN("user is locked", K(ret), K(credential_));
-    } else {
-      LOG_DEBUG("user can access", K(credential_));
-    }
+    LOG_DEBUG("user can access", K_(credential));
   }
   return ret;
 }
@@ -334,7 +294,7 @@ int ObTableApiProcessorBase::init_session()
 
   // ensure allocator is constructed before session to
   // avoid coredump at observer exit
-  // https://work.aone.alibaba-inc.com/issue/38530967
+  //
   ObArenaAllocator *allocator = &session_alloc();
   oceanbase::sql::ObSQLSessionInfo &sess = session();
 
@@ -395,6 +355,34 @@ int ObTableApiProcessorBase::get_tablet_by_rowkey(uint64_t table_id, const ObIAr
   return ret;
 }
 
+int ObTableApiProcessorBase::init_read_trans(const ObTableConsistencyLevel consistency_level,
+                                             const ObLSID &ls_id,
+                                             int64_t timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
+  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
+
+  if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid()))) {
+    LOG_WARN("failed to acquire tx desc", K(ret));
+  } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, strong_read, ls_id, timeout_ts))) {
+    LOG_WARN("setup txn snapshot fail", K(ret), KPC_(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
+    txs->release_tx(*trans_desc_);
+    trans_desc_ = NULL;
+  }
+
+  return ret;
+}
+
+void ObTableApiProcessorBase::release_read_trans()
+{
+  if (OB_NOT_NULL(trans_desc_)) {
+    transaction::ObTransService *txs = MTL(transaction::ObTransService*);
+    txs->release_tx(*trans_desc_);
+    trans_desc_ = NULL;
+  }
+}
+
 int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_desc,
                                                 const bool strong_read,
                                                 const share::ObLSID &ls_id,
@@ -411,8 +399,10 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
       LOG_WARN("fail to get global read snapshot", K(ret));
     }
   } else {
-    int64_t weak_read_snapshot = 0;
-    if (OB_FAIL(txs->get_weak_read_snapshot_version(weak_read_snapshot))) {
+    SCN weak_read_snapshot;
+    if (OB_FAIL(txs->get_weak_read_snapshot_version(
+              transaction::ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID()),
+              weak_read_snapshot))) {
       LOG_WARN("fail to get weak read snapshot", K(ret));
     } else {
       tx_snapshot_.init_weak_read(weak_read_snapshot);
@@ -753,7 +743,7 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
       ret = try_process();
       did_local_retry = false;
       // is_partition_change_error(ret) || is_master_changed_error(ret) retry in client
-      // OB_SCHEMA_EAGAIN: https://aone.alibaba-inc.com/task/35541305
+      // OB_SCHEMA_EAGAIN:
       if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret || OB_SCHEMA_EAGAIN == ret)
           && retry_policy_.allow_retry()) {
         int64_t now = ObTimeUtility::current_time();
@@ -953,594 +943,6 @@ void ObTableRpcProcessor<T>::generate_sql_id()
   snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
      "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
 }
-
-////////////////////////////////////////////////////////////////
-ObHTableDeleteExecutor::ObHTableDeleteExecutor(common::ObArenaAllocator &alloc,
-                                               uint64_t table_id,
-                                               ObTabletID tablet_id,
-                                               ObLSID ls_id,
-                                               int64_t timeout_ts,
-                                               ObTableApiProcessorBase *processor,
-                                               ObTableService *table_service,
-                                               ObAccessService *access_service)
-    :table_service_(table_service),
-     access_service_(access_service),
-     query_ctx_(alloc),
-     mutate_ctx_(alloc)
-{
-  query_ctx_.param_table_id() = table_id;
-  query_ctx_.param_tablet_id() = tablet_id;
-  query_ctx_.param_ls_id() = ls_id;
-  query_ctx_.init_param(timeout_ts, processor, &alloc,
-                        false/*ignored*/, table::ObTableEntityType::ET_HKV,
-                        table::ObBinlogRowImageType::MINIMAL/*ignored*/);
-  mutate_ctx_.param_table_id() = table_id;
-  mutate_ctx_.param_tablet_id() = tablet_id;
-  mutate_ctx_.param_ls_id() = ls_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
-                         false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
-                         table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
-  mutations_result_.set_entity_factory(&entity_factory_);
-}
-
-// @see https://hbase.apache.org/apidocs/org/apache/hadoop/hbase/client/Delete.html
-int ObHTableDeleteExecutor::htable_delete(const ObTableBatchOperation &batch_operation, int64_t &affected_rows)
-{
-  int ret = OB_SUCCESS;
-  affected_rows = 0;
-  ObHTableFilter &htable_filter = query_.htable_filter();
-  htable_filter.set_valid(true);
-  if (OB_FAIL(query_.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
-    LOG_WARN("failed to add K", K(ret));
-  } else if (OB_FAIL(query_.add_select_column(ObHTableConstants::CQ_CNAME_STR))) {
-    LOG_WARN("failed to add Q", K(ret));
-  } else if (OB_FAIL(query_.add_select_column(ObHTableConstants::VERSION_CNAME_STR))) {
-    LOG_WARN("failed to add T", K(ret));
-  } else if (OB_FAIL(query_.add_select_column(ObHTableConstants::VALUE_CNAME_STR))) {
-    LOG_WARN("failed to add V", K(ret));
-  } else {
-    query_.set_batch(1);  // mutate for each row
-    query_.set_max_result_size(-1);
-  }
-  ObObj pk_objs_start[3];
-  ObObj pk_objs_end[3];
-  ObNewRange range;
-  range.start_key_.assign(pk_objs_start, 3);
-  range.end_key_.assign(pk_objs_end, 3);
-  range.border_flag_.set_inclusive_start();
-  range.border_flag_.set_inclusive_end();
-
-  const int64_t N = batch_operation.count();
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)  // for each delete
-  {
-    const ObTableOperation &del_op = batch_operation.at(i);
-    const ObITableEntity &entity = del_op.entity();
-    ObHTableCellEntity3 htable_cell(&entity);
-    ObString row = htable_cell.get_rowkey();
-    if (htable_cell.last_get_is_null()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("K is null", K(ret), K(entity));
-      break;
-    }
-    if (0 == i) {
-      // generate scan range by K
-      pk_objs_start[0].set_varbinary(row);
-      pk_objs_start[1].set_min_value();
-      pk_objs_start[2].set_min_value();
-      pk_objs_end[0].set_varbinary(row);
-      pk_objs_end[1].set_max_value();
-      pk_objs_end[2].set_max_value();
-      if (OB_FAIL(query_.add_scan_range(range))) {
-        LOG_WARN("failed to add range", K(ret));
-        break;
-      }
-    }
-    htable_filter.clear_columns();
-    ObString qualifier = htable_cell.get_qualifier();
-    if (htable_cell.last_get_is_null()) {
-      // delete column family, so we need to scan all qualifier
-      // wildcard scan
-    } else if (OB_FAIL(htable_filter.add_column(qualifier))) {
-      LOG_WARN("failed to add column", K(ret));
-      break;
-    }
-    int64_t timestamp = -htable_cell.get_timestamp();        // negative to get the original value
-    if (-ObHTableConstants::LATEST_TIMESTAMP == timestamp) {  // INT64_MAX
-      // delete the most recently added cell
-      htable_filter.set_max_versions(1);
-      htable_filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, ObHTableConstants::INITIAL_MAX_STAMP);
-    } else if (timestamp > 0) {
-      // delete the specific version
-      htable_filter.set_max_versions(1);
-      htable_filter.set_timestamp(timestamp);
-    } else if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) { // -INT64_MAX
-      // delete all version
-      htable_filter.set_max_versions(INT32_MAX);
-      htable_filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, ObHTableConstants::INITIAL_MAX_STAMP);
-    } else {
-      // delete all versions less than or equal to the timestamp
-      htable_filter.set_max_versions(INT32_MAX);
-      htable_filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, (-timestamp)+1);
-    }
-    // execute the query
-    ObTableQueryResultIterator *result_iterator = nullptr;
-    ObTableQueryResult *one_result = nullptr;
-    if (OB_FAIL(execute_query(query_, result_iterator))) {
-    } else {
-      ret = result_iterator->get_next_result(one_result);
-      if (OB_ITER_END == ret) {
-        // empty
-        ret = OB_SUCCESS;
-      } else if (OB_SUCCESS != ret) {
-        LOG_WARN("failed to query", K(ret));
-      } else if (OB_ISNULL(one_result)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("one_result is NULL", K(ret));
-      } else {
-        if (OB_FAIL(generate_delete_cells(*one_result, entity_factory_, mutations_))) {
-          LOG_WARN("failed to delete cells", K(ret));
-        } else if (OB_FAIL(execute_mutation(mutations_, mutations_result_))) {
-          LOG_WARN("failed to execute mutations", K(ret));
-        } else {
-          const int64_t result_num = mutations_result_.count();
-          affected_rows += result_num;
-        }
-      }  // end else
-    }
-    query_ctx_.reset_query_ctx(access_service_);
-    mutate_ctx_.reset_get_ctx();
-  }  // end for each delete op
-  return ret;
-}
-
-int ObHTableDeleteExecutor::execute_query(const table::ObTableQuery &query,
-                                          ObTableQueryResultIterator *&result_iterator)
-{
-  int ret = OB_SUCCESS;
-  one_result_.reset();
-  if (OB_FAIL(table_service_->execute_query(query_ctx_, query,
-                                            one_result_, result_iterator))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to execute query", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObHTableDeleteExecutor::generate_delete_cells(
-    ObTableQueryResult &one_row,
-    table::ObTableEntityFactory<table::ObTableEntity> &entity_factory,
-    ObTableBatchOperation &mutations_out)
-{
-  int ret = OB_SUCCESS;
-  mutations_out.reset();
-  entity_factory.free_and_reuse();
-  one_row.rewind();
-  ObObj rk, cq, ts;
-  ObObj key1, key2, key3;
-  // delete all the selected key-values
-  const ObITableEntity *key_value = nullptr;
-  while (OB_SUCC(ret) && OB_SUCC(one_row.get_next_entity(key_value))) {
-    // for each cell of the row
-    ObHTableCellEntity2 cell(key_value);
-    key1.set_varbinary(cell.get_rowkey());  // K
-    key2.set_varbinary(cell.get_qualifier());  // Q
-    key3.set_int(-cell.get_timestamp());        // T
-    ObITableEntity* new_entity = entity_factory.alloc();
-    if (NULL == new_entity) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("no memory", K(ret));
-    } else if (OB_FAIL(new_entity->add_rowkey_value(key1))) {
-    } else if (OB_FAIL(new_entity->add_rowkey_value(key2))) {
-    } else if (OB_FAIL(new_entity->add_rowkey_value(key3))) {
-    } else if (OB_FAIL(mutations_out.del(*new_entity))) {
-      LOG_WARN("failed to add delete operation", K(ret));
-    } else {
-      LOG_DEBUG("[yzfdebug] delete cell", K(ret), "htable_cell", *new_entity, "kv", *key_value);
-    }
-  }  // end while
-  if (OB_ITER_END == ret) {
-    ret = OB_SUCCESS;
-  }
-  return ret;
-}
-
-int ObHTableDeleteExecutor::execute_mutation(const ObTableBatchOperation &mutations,
-                                             ObTableBatchOperationResult &mutations_result)
-{
-  int ret = OB_SUCCESS;
-  mutations_result.reset();
-  if (OB_FAIL(table_service_->multi_delete(mutate_ctx_, mutations, mutations_result))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to multi_delete", K(ret));
-    }
-  }
-  return ret;
-}
-
-////////////////////////////////////////////////////////////////
-ObHTablePutExecutor::ObHTablePutExecutor(common::ObArenaAllocator &alloc,
-                                         uint64_t table_id,
-                                         common::ObTabletID tablet_id,
-                                         share::ObLSID ls_id,
-                                         int64_t timeout_ts,
-                                         ObTableApiProcessorBase *processor,
-                                         ObTableService *table_service)
-    :table_service_(table_service),
-     mutate_ctx_(alloc)
-{
-  mutate_ctx_.param_table_id() = table_id;
-  mutate_ctx_.param_tablet_id() = tablet_id;
-  mutate_ctx_.param_ls_id() = ls_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
-                         false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
-                         table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
-
-  mutations_result_.set_entity_factory(&entity_factory_);
-}
-
-int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int64_t &affected_rows, int64_t now_ms/*=0*/)
-{
-  int ret = OB_SUCCESS;
-  if (0 == now_ms) {
-    now_ms = -ObHTableUtils::current_time_millis();
-  }
-  // store not set timestamp cell for tmp
-  ObArray<ObObj*> reset_timestamp_obj;
-  //ObString htable_row;
-  const int64_t N = mutations.count();
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
-  {
-    const ObTableOperation &mutation = mutations.at(i);
-    const ObITableEntity &entity = mutation.entity();
-    if (ObTableOperationType::INSERT_OR_UPDATE != mutation.type()) { // for insert_or_update only
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("htable put should use INSERT_OR_UPDATE", K(ret), K(mutation));
-    } else if (entity.get_rowkey_size() != 3) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("htable should be with 3 rowkey columns", K(ret), K(entity));
-    } else {
-      ObRowkey mutate_rowkey = const_cast<ObITableEntity&>(entity).get_rowkey();
-      ObObj &hbase_timestamp = const_cast<ObObj&>(mutate_rowkey.get_obj_ptr()[ObHTableConstants::COL_IDX_T]);  // column T
-      ObHTableCellEntity3 htable_cell(&entity);
-      bool row_is_null = htable_cell.last_get_is_null();
-      int64_t timestamp = htable_cell.get_timestamp();
-      bool timestamp_is_null = htable_cell.last_get_is_null();
-      if (row_is_null || timestamp_is_null) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument for htable put", K(ret), K(row_is_null), K(timestamp_is_null));
-      } else {
-        // update timestamp iff LATEST_TIMESTAMP
-        if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) {
-          hbase_timestamp.set_int(now_ms);
-          reset_timestamp_obj.push_back(&hbase_timestamp);
-        }
-      }
-    }
-  }  // end for
-  if (OB_SUCC(ret)) {
-    // do the multi_put
-    mutations_result_.reset();
-    affected_rows = 0;
-    if (OB_FAIL(table_service_->multi_insert_or_update(mutate_ctx_, mutations, mutations_result_))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to multi_delete", K(ret));
-      }
-      if ( OB_TRANSACTION_SET_VIOLATION == ret ) {
-        // When OB_TRANSACTION_SET_VIOLATION happen, there will not refresh timestamp
-        // and will cover old row data in processor local retry. so here reset timestamp
-        // to origin LATEST_TIMESTAMP in order to retry in local
-        for (int64_t i = 0; i < reset_timestamp_obj.count(); i++) {
-          reset_timestamp_obj.at(i)->set_int(ObHTableConstants::LATEST_TIMESTAMP);
-        }
-      }
-    } else {
-      affected_rows = 1;
-    }
-  }
-  return ret;
-}
-////////////////////////////////////////////////////////////////
-ObHTableIncrementExecutor::ObHTableIncrementExecutor(table::ObTableOperationType::Type type,
-                                                     common::ObArenaAllocator &alloc,
-                                                     uint64_t table_id,
-                                                     common::ObTabletID tablet_id,
-                                                     share::ObLSID ls_id,
-                                                     int64_t timeout_ts,
-                                                     ObTableApiProcessorBase *processor,
-                                                     ObTableService *table_service)
-    :type_(type),
-     table_service_(table_service),
-     mutate_ctx_(alloc)
-{
-  mutate_ctx_.param_table_id() = table_id;
-  mutate_ctx_.param_tablet_id() = tablet_id;
-  mutate_ctx_.param_ls_id() = ls_id;
-  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
-                         false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
-                         table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
-  mutations_result_.set_entity_factory(&entity_factory_);
-}
-
-class ObHTableIncrementExecutor::ColumnIdxComparator
-{
-public:
-  bool operator()(const ColumnIdx &a, const ColumnIdx &b) const
-  {
-    return a.first.compare(b.first) < 0;
-  }
-};
-
-
-int ObHTableIncrementExecutor::sort_qualifier(const table::ObTableBatchOperation &increment)
-{
-  int ret = OB_SUCCESS;
-  const int64_t N = increment.count();
-  if (N <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("empty increment", K(ret));
-  }
-  ObString htable_row;
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
-  {
-    const ObTableOperation &mutation = increment.at(i);
-    const ObITableEntity &entity = mutation.entity();
-    if (type_ != mutation.type()) { // increment or append
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("should use INCREMENT/APPEND", K(ret), K_(type), K(mutation));
-    } else if (entity.get_rowkey_size() != 3) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("htable should be with 3 rowkey columns", K(ret), K(entity));
-    } else {
-      ObHTableCellEntity3 htable_cell(&entity);
-      ObString row = htable_cell.get_rowkey();
-      bool row_is_null = htable_cell.last_get_is_null();
-      ObString qualifier = htable_cell.get_qualifier();
-      bool qualifier_is_null = htable_cell.last_get_is_null();
-      (void)htable_cell.get_timestamp();
-      bool timestamp_is_null = htable_cell.last_get_is_null();
-      if (row_is_null || timestamp_is_null || qualifier_is_null) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument for htable put", K(ret),
-                 K(row_is_null), K(timestamp_is_null), K(qualifier_is_null));
-      } else {
-        if (0 == i) {
-          htable_row = row;  // shallow copy
-        } else if (htable_row != row) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("rowkey not the same", K(ret), K(row), K(htable_row));
-          break;
-        }
-        if (OB_FAIL(columns_.push_back(std::make_pair(qualifier, i)))) {
-          LOG_WARN("failed to push back", K(ret));
-          break;
-        }
-      }
-    }
-  } // end for
-  if (OB_SUCC(ret)) {
-    // sort qualifiers
-    ColumnIdx *end = &columns_.at(columns_.count()-1);
-    ++end;
-    std::sort(&columns_.at(0), end, ColumnIdxComparator());
-  }
-  if (OB_SUCC(ret)) {
-    // check duplicated qualifiers
-    for (int64_t i = 0; OB_SUCCESS == ret && i < N-1; ++i)
-    {
-      if (columns_.at(i).first == columns_.at(i+1).first) {
-        ret = OB_ERR_PARAM_DUPLICATE;
-        LOG_WARN("duplicated qualifiers", K(ret), "cq", columns_.at(i).first, K(i));
-      }
-    } // end for
-  }
-  return ret;
-}
-
-int ObHTableIncrementExecutor::htable_increment(ObTableQueryResult &row_cells,
-                                                const table::ObTableBatchOperation &increment,
-                                                int64_t &affected_rows,
-                                                table::ObTableQueryResult *results)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(sort_qualifier(increment))) {
-    LOG_WARN("failed to sort qualifier", K(ret));
-  }
-  row_cells.rewind();
-  int64_t now_ms = -ObHTableUtils::current_time_millis();
-  ObObj rk, cq, ts;
-  const ObITableEntity *get_value = nullptr;
-  const int64_t N = increment.count();
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
-  {
-    const ObTableOperation &mutation = increment.at(columns_.at(i).second);
-    const ObITableEntity &kv_entity = mutation.entity();
-    ObHTableCellEntity3 kv(&kv_entity);
-    ObString qualifier = kv.get_qualifier();
-    bool need_write = false;
-    int64_t delta_int = 0;
-    ObString delta_str = kv.get_value();
-    bool value_is_null = kv.last_get_is_null();
-    if (value_is_null) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("increment value is invalid", K(ret), K(kv_entity));
-      break;
-    }
-
-    if (type_ == ObTableOperationType::INCREMENT) {
-      if (OB_FAIL(ObHTableUtils::java_bytes_to_int64(delta_str, delta_int))) {
-        LOG_WARN("failed to convert bytes to integer", K(ret), K(delta_str));
-        break;
-      } else {
-        need_write = (0 != delta_int);
-      }
-    } else {  // ObTableOperationType::APPEND
-      need_write = true;  // always apply for APPEND
-    }
-
-    if (nullptr == get_value) {
-      if (OB_FAIL(row_cells.get_next_entity(get_value))) {
-        if (OB_ITER_END == ret) {
-          get_value = nullptr;
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get next", K(ret));
-          break;
-        }
-      }
-    }
-    bool first_write = false;
-    int64_t orig_ts = -1;
-    ObString orig_str;
-    if (nullptr != get_value) {
-      ObHTableCellEntity2 cell(get_value);
-      ObString qualifier2 = cell.get_qualifier();
-      int cmp_ret = ObHTableUtils::compare_qualifier(qualifier, qualifier2);
-      if (0 == cmp_ret) {
-        // qualifier exists
-        orig_str = cell.get_value();
-        orig_ts = cell.get_timestamp();
-        if (type_ == ObTableOperationType::INCREMENT) {
-          int64_t orig_int = 0;
-          if (OB_FAIL(ObHTableUtils::java_bytes_to_int64(orig_str, orig_int))) {
-            LOG_WARN("failed to convert bytes to integer", K(ret), K(orig_str));
-            break;
-          } else {
-            delta_int += orig_int;
-          }
-        } else {  // APPEND
-          // nothing
-        }
-        get_value = nullptr;  // next cell
-      } else {
-        // qualifier not exist, first write
-        first_write = true;
-      }
-    } else {
-      // no more cells from get
-      first_write = true;
-    }
-
-    rk.set_varbinary(kv.get_rowkey());  // K
-    cq.set_varbinary(qualifier);  // Q
-    // generate timestamp
-    if (orig_ts >= 0) {
-      // already exists
-      ts.set_int(std::min(-orig_ts, now_ms));        // T
-    } else {
-      int64_t new_ts = kv.get_timestamp();
-      if (ObHTableConstants::LATEST_TIMESTAMP == new_ts) {
-        ts.set_int(now_ms);
-      } else {
-        ts.set_int(new_ts);
-      }
-    }
-
-    // generate V
-    ObObj value_obj;  // V
-    if (type_ == ObTableOperationType::INCREMENT) {
-      char* bytes = static_cast<char*>(allocator_.alloc(sizeof(int64_t)));
-      if (NULL == bytes) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("no memory", K(ret), KP(bytes));
-      } else if (OB_FAIL(ObHTableUtils::int64_to_java_bytes(delta_int, bytes))) {
-        LOG_WARN("failed to convert bytes", K(ret), K(delta_int));
-      } else {
-        ObString v(sizeof(int64_t), bytes);
-        value_obj.set_varbinary(v);
-      }
-    } else {  // APPEND
-      if (orig_str.empty()) {
-        value_obj.set_varbinary(delta_str);
-      } else {
-        int32_t total_len = orig_str.length() + delta_str.length();
-        char* bytes = static_cast<char*>(allocator_.alloc(total_len));
-        if (NULL == bytes) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("no memory", K(ret), KP(bytes));
-        } else {
-          MEMCPY(bytes, orig_str.ptr(), orig_str.length());
-          MEMCPY(bytes+orig_str.length(), delta_str.ptr(), delta_str.length());
-          ObString new_str(total_len, bytes);
-          value_obj.set_varbinary(new_str);
-        }
-      }
-    }
-
-    // generate entity
-    ObITableEntity* new_entity = nullptr;
-    if (OB_FAIL(ret)) {
-    } else if (nullptr == (new_entity = entity_factory_.alloc())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("no memory", K(ret), KP(new_entity));
-    } else {
-      if (OB_FAIL(new_entity->add_rowkey_value(rk))) {
-      } else if (OB_FAIL(new_entity->add_rowkey_value(cq))) {
-      } else if (OB_FAIL(new_entity->add_rowkey_value(ts))) {
-      } else if (OB_FAIL(new_entity->set_property(ObHTableConstants::VALUE_CNAME_STR, value_obj))) {
-      }
-    }
-
-    if (OB_SUCC(ret) && (need_write || first_write)) {
-      if (OB_FAIL(mutations_.insert_or_update(*new_entity))) {
-        LOG_WARN("failed to add put operation", K(ret));
-      } else {
-        LOG_DEBUG("[yzfdebug] put cell", K(ret), "new_cell", *new_entity, "kv", kv);
-      }
-    }  // end if need_write
-    if (OB_SUCC(ret) && NULL != results) {
-      // Add to results to get returned to the Client. If null, cilent does not want results.
-      ret = add_to_results(*results, rk, cq, ts, value_obj);
-    }
-  }  // end for
-  if (OB_SUCC(ret) && mutations_.count() > 0) {
-    // do the multi_put
-    mutations_result_.reset();
-    affected_rows = 0;
-    if (OB_FAIL(table_service_->multi_insert_or_update(mutate_ctx_, mutations_, mutations_result_))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to multi_delete", K(ret));
-      }
-    } else {
-      affected_rows = 1;
-    }
-  }
-  return ret;
-}
-
-int ObHTableIncrementExecutor::add_to_results(table::ObTableQueryResult &results,
-                                              const ObObj &rk, const ObObj &cq,
-                                              const ObObj &ts, const ObObj &value)
-{
-  int ret = OB_SUCCESS;
-  if (results.get_property_count() <= 0) {
-    if (OB_FAIL(results.add_property_name(ObHTableConstants::ROWKEY_CNAME_STR))) {
-      LOG_WARN("failed to copy name", K(ret));
-    } else if (OB_FAIL(results.add_property_name(ObHTableConstants::CQ_CNAME_STR))) {
-      LOG_WARN("failed to copy name", K(ret));
-    } else if (OB_FAIL(results.add_property_name(ObHTableConstants::VERSION_CNAME_STR))) {
-      LOG_WARN("failed to copy name", K(ret));
-    } else if (OB_FAIL(results.add_property_name(ObHTableConstants::VALUE_CNAME_STR))) {
-      LOG_WARN("failed to copy name", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObObj objs[4];
-    objs[0] = rk;
-    objs[1] = cq;
-    objs[2] = ts;
-    int64_t timestamp = 0;
-    objs[2].get_int(timestamp);
-    objs[2].set_int(-timestamp);  // negate_htable_timestamp
-    objs[3] = value;
-    common::ObNewRow row(objs, 4);
-    if (OB_FAIL(results.add_row(row))) {  // deep copy
-      LOG_WARN("failed to add row to results", K(ret), K(row));
-    }
-  }
-  return ret;
-}
-
 bool oceanbase::observer::is_bad_routing_err(const int err)
 {
   // bad routing check : whether client should refresh location cache

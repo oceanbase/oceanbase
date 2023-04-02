@@ -24,9 +24,12 @@ static const char* TENANT_SWITCHOVER_ARRAY[] =
 {
   "INVALID",
   "NORMAL",
-  "SWITCHING",
+  "SWITCHING TO PRIMARY",
   "PREPARE FLASHBACK",
   "FLASHBACK",
+  "PREPARE SWITCHING TO STANDBY",
+  "SWITCHING TO STANDBY",
+  "PREPARE SWITCHING TO PRIMARY",
 };
 
 OB_SERIALIZE_MEMBER(ObTenantSwitchoverStatus, value_);
@@ -37,7 +40,7 @@ const char* ObTenantSwitchoverStatus::to_str() const
   const char *type_str = "UNKNOWN";
   if (OB_UNLIKELY(value_ >= ARRAYSIZEOF(TENANT_SWITCHOVER_ARRAY)
                   || value_ < INVALID_STATUS)) {
-    LOG_ERROR("fatal error, unknown switchover status", K_(value));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown switchover status", K_(value));
   } else {
     type_str = TENANT_SWITCHOVER_ARRAY[value_];
   }
@@ -58,7 +61,7 @@ ObTenantSwitchoverStatus::ObTenantSwitchoverStatus(const ObString &str)
   }
 
   if (INVALID_STATUS == value_) {
-    LOG_WARN("invalid switchover status", K_(value), K(str));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid switchover status", K_(value), K(str));
   }
 }
 

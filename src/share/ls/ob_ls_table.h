@@ -34,6 +34,14 @@ class ObLSInfo;
 class ObLSTable
 {
 public:
+  // Mode is used to control data source of sys tenant's ls info.
+  // Other tenant's ls infos always come from inner table.
+  enum Mode {
+    DEFAULT_MODE          = 0,  // sys tenant's ls info come from rs
+    INNER_TABLE_ONLY_MODE = 1,  // sys tenant's ls info come from inner table
+    COMPOSITE_MODE        = 2   // sys tenant's ls info come from both rs and inner table
+  };
+public:
   explicit ObLSTable();
   virtual ~ObLSTable();
 
@@ -65,26 +73,31 @@ public:
   // @param [in] cluster_id, belong to which cluster
   // @parma [in] tenant_id, get whose ls info
   // @param [in] ls_id, get which ls info
+  // @param [in] mode, determine data source of sys tenant's ls info
   // @param [out] ls_info, informations about a certain ls
   // TODO: enable cluster_id
   virtual int get(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
+      const ObLSTable::Mode mode,
       ObLSInfo &ls_info) = 0;
 
   // base function to report a new replica
   // @param [in] replica, new replica informations to update
-  virtual int update(const ObLSReplica &replica) = 0;
+  // @param [in] inner_table_only, determine whether the sys tenant's ls info is recorded in inner table or in memory.
+  virtual int update(const ObLSReplica &replica, const bool inner_table_only) = 0;
   // remove ls replica from __all_ls_meta_table
   //
   // @param [in] tenant_id, the tenant which the ls belongs to
   // @param [in] ls_id, the ls which you want to remove
   // @param [in] server, address of the ls replica
+  // @param [in] inner_table_only, determine whether the sys tenant's ls info is recorded in inner table or in memory.
   virtual int remove(
       const uint64_t tenant_id,
       const ObLSID &ls_id,
-      const ObAddr &server) = 0;
+      const ObAddr &server,
+      const bool inner_table_only) = 0;
 
   // check whether have to update a replica
   // @param [in] lhs, the old log stream replica

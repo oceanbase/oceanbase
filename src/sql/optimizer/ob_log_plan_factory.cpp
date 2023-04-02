@@ -47,7 +47,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObSelectLogPlan(ctx, static_cast<const ObSelectStmt*>(&stmt));
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObSelectLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObSelectLogPlan error");
     }
     break;
   }
@@ -56,7 +56,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObDeleteLogPlan(ctx, static_cast<const ObDeleteStmt*>(&stmt));
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObDeleteLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObDeleteLogPlan error");
     }
     break;
   }
@@ -65,7 +65,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObUpdateLogPlan(ctx, static_cast<const ObUpdateStmt*>(&stmt));
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObUpdateLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObUpdateLogPlan error");
     }
     break;
   }
@@ -75,7 +75,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObInsertLogPlan(ctx, static_cast<const ObInsertStmt*>(&stmt));
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObInsertLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObInsertLogPlan error");
     }
     break;
   }
@@ -84,7 +84,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObExplainLogPlan(ctx, &stmt);
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObExplainLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObExplainLogPlan error");
     }
     break;
   }
@@ -101,7 +101,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObMergeLogPlan(ctx, static_cast<const ObMergeStmt*>(&stmt));
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObMergeLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObMergeLogPlan error");
     }
     break;
   }
@@ -110,7 +110,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
     if (NULL != ptr) {
       ret = new (ptr) ObInsertAllLogPlan(ctx, static_cast<const ObInsertAllStmt*>(&stmt));
     } else {
-      SQL_OPT_LOG(WARN, "Allocate ObInsertAllLogPlan error");
+      SQL_OPT_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "Allocate ObInsertAllLogPlan error");
     }
     break;
   }
@@ -120,7 +120,7 @@ ObLogPlan *ObLogPlanFactory::create(ObOptimizerContext &ctx, const ObDMLStmt &st
   if (ret != NULL) {
     int err = OB_SUCCESS;
     if (OB_SUCCESS != (err = plan_store_.store_obj(ret))) {
-      LOG_WARN("store log plan failed", K(err));
+      LOG_WARN_RET(err, "store log plan failed", K(err));
       ret->~ObLogPlan();
       ret = NULL;
     }
@@ -132,9 +132,7 @@ void ObLogPlanFactory::destroy()
 {
   DLIST_FOREACH_NORET(node, plan_store_.get_obj_list()) {
     if (node != NULL && node->get_obj() != NULL) {
-      node->get_obj()->~ObLogPlan();
-      node->get_obj() = NULL;
+      node->get_obj()->destory();
     }
   }
-  plan_store_.destroy();
 }

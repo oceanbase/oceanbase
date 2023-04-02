@@ -34,7 +34,7 @@ public:
                             ObIArray<ObOptColumnStat *> &col_stats);
 
   static int check_range_skew(ObHistType hist_type,
-                              const ObIArray<ObHistBucket> &bkts,
+                              const ObHistogram::Buckets &bkts,
                               int64_t standard_cnt,
                               bool &is_even_distributed);
 
@@ -42,7 +42,17 @@ public:
                                ObIArray<ObOptTableStat*> &table_stats,
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
-                               const bool is_history_stat = false);
+                               const bool is_history_stat = false,
+                               const bool is_online_stat = false);
+
+  static int split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
+                               const uint64_t tenant_id,
+                               ObIArray<ObOptTableStat*> &table_stats,
+                               ObIArray<ObOptColumnStat*> &column_stats,
+                               const bool is_index_stat = false,
+                               const bool is_history_stat = false,
+                               const bool is_online_stat = false,
+                               const ObObjPrintParams &print_params = ObObjPrintParams());
 
   static int batch_write_history_stats(sql::ObExecContext &ctx,
                                        ObIArray<ObOptTableStatHandle> &history_tab_handles,
@@ -52,7 +62,19 @@ public:
 
   static int check_table_read_write_valid(const uint64_t tenant_id, bool &is_valid);
 
-  static bool is_stat_sys_table(const int64_t table_id);
+  static int check_is_stat_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const uint64_t tenant_id,
+                                 const int64_t table_id,
+                                 bool &is_valid);
+
+  static int check_is_sys_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                   const uint64_t tenant_id,
+                                   const int64_t table_id,
+                                   bool &is_valid);
+
+  static bool is_no_stat_virtual_table(const int64_t table_id);
+
+  static bool is_virtual_index_table(const int64_t table_id);
 
   static int parse_granularity(const ObString &granularity,
                                bool &need_global,
@@ -72,6 +94,24 @@ public:
                                             const uint64_t tablet_id,
                                             const ObIArray<PartInfo> &partition_infos,
                                             int64_t &partition_id);
+
+  static int calssify_opt_stat(const ObIArray<ObOptStat> &opt_stats,
+                               ObIArray<ObOptTableStat *> &table_stats,
+                               ObIArray<ObOptColumnStat*> &column_stats);
+  static int merge_tab_stats(
+    const ObTableStatParam &param,
+    const TabStatIndMap &table_stats,
+    common::ObIArray<ObOptTableStatHandle> &history_tab_handles,
+    common::ObIArray<ObOptTableStat*> &dst_table_stat);
+
+  static int merge_col_stats(
+    const ObTableStatParam &param,
+    const ColStatIndMap &column_stats,
+    common::ObIArray<ObOptColumnStatHandle> &history_col_handles,
+    common::ObIArray<ObOptColumnStat*> &dst_column_stat);
+
+  static int check_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id, bool &is_valid);
+  static int get_part_ids_from_param(const ObTableStatParam &param, common::ObIArray<int64_t> &part_ids);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
@@ -79,7 +119,9 @@ private:
                          ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
                          const bool is_index_stat,
-                         const bool is_history_stat);
+                         const bool is_history_stat,
+                         const bool is_online_stat = false,
+                         const ObObjPrintParams &print_params = ObObjPrintParams());
 
 };
 

@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -403,6 +404,338 @@ int ObExprTrim::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
   return ret;
 }
 
+static int text_trim2(ObTextStringIter &str_iter,
+                      ObTextStringDatumResult &output_result,
+                      int64_t trim_type,
+                      const common::ObString &pattern,
+                      const size_t &pattern_len_in_char,
+                      const ObCollationType &cs_type,
+                      const ObFixedArray<size_t, ObIAllocator> &pattern_byte_num,
+                      const ObFixedArray<size_t, ObIAllocator> &pattern_byte_offset)
+{
+  int ret = OB_SUCCESS;
+  ObString output;
+  int64_t total_byte_len = 0;
+  if (OB_FAIL(str_iter.get_byte_len(total_byte_len))) {
+    LOG_WARN("get str_iter byte len failed", K(ret));
+  } else {
+    ObTextStringIterState state;
+    ObString str_data;
+    str_iter.set_reserved_len(pattern_len_in_char);
+    if (trim_type == ObExprTrim::TYPE_LTRIM) {
+      bool found_start = false;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_start) {
+          if (OB_FAIL(ObExprTrim::trim2(output, trim_type, pattern,
+                                        str_data, cs_type, pattern_byte_num, pattern_byte_offset))) {
+            LOG_WARN("do trim2 failed", K(ret));
+          } else if (output.length() != 0) {
+            found_start = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else {
+              output_result.append(output);
+            }
+          }
+        } else {
+          output_result.append(str_data);
+        }
+      }
+    } else if (trim_type == ObExprTrim::TYPE_RTRIM) {
+      bool found_end = false;
+      str_iter.set_backward();
+      char *buf = NULL;
+      int64_t buf_size = 0;
+      int64_t buf_pos = 0;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_end) {
+          if (OB_FAIL(ObExprTrim::trim2(output, trim_type, pattern,
+                                        str_data, cs_type, pattern_byte_num, pattern_byte_offset))) {
+            LOG_WARN("do trim2 failed", K(ret));
+          } else if (output.length() != 0) {
+            found_end = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+              LOG_WARN("stringtext result reserve buffer failed", K(ret));
+            } else if (OB_FAIL(output_result.lseek(result_len, 0))) {
+              LOG_WARN("result lseek failed", K(ret));
+            } else {
+              buf_pos = buf_size - output.length();
+              MEMCPY(buf + buf_pos, output.ptr(), output.length());
+            }
+          }
+        } else {
+          buf_pos -= str_data.length();
+          MEMCPY(buf + buf_pos, str_data.ptr(), str_data.length());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        OB_ASSERT(buf_pos == 0);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid type", K(trim_type), K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+      ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+            str_iter.get_inner_ret() : OB_INVALID_DATA;
+      LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
+    } else if (!output_result.is_init() && OB_FAIL(output_result.init(0))) { // nothing found build empty lob
+      LOG_WARN("init stringtext result for empty lob failed", K(ret));
+    } else {
+      output_result.set_result();
+    }
+  }
+  return ret;
+}
+
+static int text_trim(ObTextStringIter &str_iter,
+                     ObTextStringIter &str_backward_iter,
+                     ObIAllocator &calc_alloc,
+                     ObTextStringDatumResult &output_result,
+                     int64_t trim_type,
+                     const common::ObString &pattern)
+{
+  int ret = OB_SUCCESS;
+  ObString output;
+  int64_t total_byte_len = 0;
+  if (OB_FAIL(str_iter.init(0, NULL, &calc_alloc))) {
+    LOG_WARN("init str_iter failed ", K(ret), K(str_iter));
+  } else if (OB_FAIL(str_iter.get_byte_len(total_byte_len))) {
+    LOG_WARN("get str_iter byte len failed", K(ret));
+  } else {
+    ObTextStringIterState state;
+    ObString str_data;
+    str_iter.set_reserved_byte_len(pattern.length());
+    if (trim_type == ObExprTrim::TYPE_LTRIM) {
+      bool found_start = false;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_start) {
+          if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
+            LOG_WARN("do trim failed", K(ret));
+          } else if (output.length() != 0) {
+            found_start = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else {
+              output_result.append(output);
+            }
+          }
+        } else {
+          output_result.append(str_data);
+        }
+      }
+    } else if (trim_type == ObExprTrim::TYPE_RTRIM) {
+      bool found_end = false;
+      str_iter.set_backward();
+      char *buf = NULL;
+      int64_t buf_size = 0;
+      int64_t buf_pos = 0;
+      while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!found_end) {
+          if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
+            LOG_WARN("do trim failed", K(ret));
+          } else if (output.length() != 0) {
+            found_end = true;
+            str_iter.reset_reserve_len();
+            int64_t result_len = output.length() + (total_byte_len - str_iter.get_accessed_byte_len());
+            if (OB_FAIL(output_result.init(result_len))) {
+              LOG_WARN("init stringtext result failed", K(ret), K(result_len));
+            } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+              LOG_WARN("stringtext result reserve buffer failed", K(ret));
+            } else if (OB_FAIL(output_result.lseek(result_len, 0))) {
+              LOG_WARN("result lseek failed", K(ret));
+            } else {
+              buf_pos = buf_size - output.length();
+              MEMCPY(buf + buf_pos, output.ptr(), output.length());
+            }
+          }
+        } else {
+          buf_pos -= str_data.length();
+          MEMCPY(buf + buf_pos, str_data.ptr(), str_data.length());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        OB_ASSERT(buf_pos == 0);
+      }
+    } else if (trim_type == ObExprTrim::TYPE_LRTRIM) {
+      // find start, if access total length, end
+      bool found_start = false;
+      bool is_finished = false;
+      int64_t start_pos = 0;
+      int64_t end_pos = 0;
+      while (OB_SUCC(ret)
+             && found_start == false
+             && is_finished == false
+             && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+        if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_data))) {
+          LOG_WARN("do trim failed", K(ret));
+        } else if (str_iter.get_accessed_byte_len() == total_byte_len) { // accessed to the end of data
+          is_finished = true;
+          if (OB_FAIL(output_result.init(output.length()))) {
+            LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
+          } else {
+            output_result.append(output);
+          }
+        } else if (output.length() != 0) {
+          found_start = true;
+          str_iter.reset_reserve_len();
+          start_pos = total_byte_len - str_iter.get_accessed_byte_len() + str_data.length();
+          // output not copied
+        }
+      }
+      if (OB_FAIL(ret) || is_finished) {
+      } else {
+        OB_ASSERT(found_start);
+        // find end
+        ObTextStringIterState back_state;
+        if (OB_FAIL(str_backward_iter.init(0, NULL, &calc_alloc))) {
+          LOG_WARN("init str_iter failed ", K(ret), K(str_backward_iter));
+        } else {
+          ObString backward_str_data;
+          ObString backward_output;
+          str_backward_iter.set_backward();
+          str_backward_iter.set_reserved_byte_len(pattern.length());
+          bool found_end = false;
+          while (OB_SUCC(ret)
+             && found_end == false
+             && (back_state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+            if (OB_FAIL(ObExprTrim::trim(backward_output, ObExprTrim::TYPE_RTRIM, pattern, backward_str_data))) {
+              LOG_WARN("do trim failed", K(ret));
+            } else if (backward_output.length() != 0) {
+              found_end = true;
+              end_pos = total_byte_len - str_backward_iter.get_accessed_byte_len() + backward_output.length();
+            }
+          }
+          // copy from start to end
+          int result_len = end_pos - start_pos;
+          if (OB_FAIL(ret)) {
+          } else if (result_len < 0) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("init stringtext result failed", K(ret), K(start_pos), K(end_pos));
+          // } else if (result_len == total_byte_len) {
+          // the same as input if it is a temp lob?
+          } else if (OB_FAIL(output_result.init(result_len))) {
+            LOG_WARN("init stringtext result failed", K(ret), K(output.length()));
+          } else if (OB_FAIL(output_result.append(output))) {
+            // error log
+          } else {
+            result_len -= output.length();
+            while (OB_SUCC(ret) && (state = str_iter.get_next_block(str_data)) == TEXTSTRING_ITER_NEXT) {
+              if (str_data.length() > result_len) {
+                if (OB_FAIL(output_result.append(str_data.ptr(), result_len))) {
+                  // error log
+                } else {
+                  result_len = 0;
+                }
+              } else if (OB_FAIL(output_result.append(str_data))) {
+                // error log
+              } else {
+                result_len -= str_data.length();
+              }
+            }
+            if (OB_SUCC(ret)) {
+              OB_ASSERT(result_len = 0);
+            }
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+      ret = (str_iter.get_inner_ret() != OB_SUCCESS) ?
+            str_iter.get_inner_ret() : OB_INVALID_DATA;
+      LOG_WARN("iter state invalid", K(ret), K(state), K(str_iter));
+    } else if (!output_result.is_init() && OB_FAIL(output_result.init(0))) { // nothing found build empty lob
+      LOG_WARN("init stringtext result for empty lob failed", K(ret));
+    } else {
+      output_result.set_result();
+    }
+  }
+  return ret;
+}
+
+static int eval_trim_inner(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
+                           const int64_t &trim_type, ObString &pattern, bool &res_is_clob,
+                           const ObDatumMeta &str_meta, const bool str_has_lob_header,
+                           const ObDatum &str_datum)
+{
+  int ret = OB_SUCCESS;
+  ObString output;
+  if (2 == expr.arg_cnt_ && (T_FUN_SYS_LTRIM == expr.type_ || T_FUN_SYS_RTRIM == expr.type_)) {
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+    ObCollationType cs_type = expr.datum_meta_.cs_type_;
+    size_t pattern_len_in_char  =
+                  ObCharset::strlen_char(cs_type, pattern.ptr(), pattern.length());
+    ObFixedArray<size_t, ObIAllocator> pattern_byte_num(calc_alloc,  pattern_len_in_char);
+    ObFixedArray<size_t, ObIAllocator> pattern_byte_offset(calc_alloc,  pattern_len_in_char +1);
+    if (OB_FAIL(ObExprUtil::get_mb_str_info(pattern, cs_type,
+                                            pattern_byte_num, pattern_byte_offset))) {
+      LOG_WARN("get_mb_str_info failed", K(ret), K(pattern), K(cs_type), K(pattern_len_in_char));
+    } else if (!res_is_clob && (pattern_byte_num.count() + 1 != pattern_byte_offset.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("size of pattern_byte_num and size of pattern_byte_offset should be same",
+                K(ret), K(pattern_byte_num), K(pattern_byte_offset));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!ob_is_text_tc(str_meta.type_)) {
+      if (OB_FAIL(ObExprTrim::trim2(output, trim_type, pattern,
+                                    str_datum.get_string(), cs_type,
+                                    pattern_byte_num, pattern_byte_offset))) {
+        LOG_WARN("do trim2 failed", K(ret));
+      } else {
+        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
+          expr_datum.set_null();
+        } else {
+          expr_datum.set_string(output);
+        }
+      }
+    } else { // is text tc, trim left or right
+      ObTextStringIter str_iter(str_meta.type_, str_meta.cs_type_, str_datum.get_string(), str_has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+      if (OB_FAIL(str_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("init str_iter failed ", K(ret), K(str_iter));
+      } else if (OB_FAIL(text_trim2(str_iter, output_result, trim_type, pattern, pattern_len_in_char,
+                                    cs_type, pattern_byte_num,  pattern_byte_offset))) {
+        LOG_WARN("text_trim2 failed", K(ret));
+      }
+    }
+  } else {
+    if (!ob_is_text_tc(str_meta.type_)) {
+      if (OB_FAIL(ObExprTrim::trim(output, trim_type, pattern, str_datum.get_string()))) {
+        LOG_WARN("do trim failed", K(ret));
+      } else {
+        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
+          expr_datum.set_null();
+        } else {
+          expr_datum.set_string(output);
+        }
+      }
+    } else { // is text tc, trim left or right or both
+      // Notice: need to access with byte length
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      ObTextStringIter str_forward_iter(str_meta.type_, CS_TYPE_BINARY, str_datum.get_string(), str_has_lob_header);
+      ObTextStringIter str_backward_iter(str_meta.type_, CS_TYPE_BINARY, str_datum.get_string(), str_has_lob_header);
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+      if (OB_FAIL(text_trim(str_forward_iter, str_backward_iter, calc_alloc, output_result,
+                            trim_type, pattern))) {
+        LOG_WARN("text_trim failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprTrim::eval_trim(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
@@ -444,27 +777,71 @@ int ObExprTrim::eval_trim(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
       trim_type = expr.locate_param_datum(ctx, 0).get_int();
     }
 
-    ObString str;
     char default_pattern_buffer[8];
     ObString pattern;
     bool res_is_clob = false;
     if (2 == expr.arg_cnt_ && (T_FUN_SYS_LTRIM == expr.type_ || T_FUN_SYS_RTRIM == expr.type_)) {
-      str = expr.locate_param_datum(ctx, expr.arg_cnt_ - 2).get_string();
+      const ObDatumMeta &str_meta = expr.args_[expr.arg_cnt_ - 2]->datum_meta_;
+      const ObDatum &str_datum = expr.locate_param_datum(ctx, expr.arg_cnt_ - 2);
+      const bool str_has_lob_header = expr.args_[expr.arg_cnt_ - 2]->obj_meta_.has_lob_header();
       pattern = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1).get_string();
       res_is_clob = lib::is_oracle_mode()
                     && ob_is_text_tc(expr.args_[expr.arg_cnt_ - 2]->datum_meta_.type_)
                     && (CS_TYPE_BINARY != expr.args_[expr.arg_cnt_ - 2]->datum_meta_.cs_type_);
+      const ObDatumMeta &pattern_meta = expr.args_[expr.arg_cnt_ - 1]->datum_meta_;
+      const bool pattern_has_lob_header = expr.args_[expr.arg_cnt_ - 1]->obj_meta_.has_lob_header();
+      if (!ob_is_text_tc(pattern_meta.type_)) { // pattern not text tc
+        if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                    res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+          LOG_WARN("failed to eval trim case 1", K(ret));
+        }
+      } else { // pattern is text tc
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        const ObDatum &pattern_datum = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1);
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(calc_alloc, pattern_datum,
+                                                              pattern_meta, pattern_has_lob_header, pattern))) {
+          LOG_WARN("failed to read real pattern", K(ret), K(pattern));
+        } else if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                           res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+          LOG_WARN("failed to eval trim case 1 for text tc pattern", K(ret));
+        }
+      }
     } else {
-      str = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1).get_string();
+      const ObDatumMeta &str_meta = expr.args_[expr.arg_cnt_ - 1]->datum_meta_;
+      const ObDatum &str_datum = expr.locate_param_datum(ctx, expr.arg_cnt_ - 1);
+      const bool str_has_lob_header = expr.args_[expr.arg_cnt_ - 1]->obj_meta_.has_lob_header();
       res_is_clob = lib::is_oracle_mode()
                     && ob_is_text_tc(expr.args_[expr.arg_cnt_ - 1]->datum_meta_.type_)
                     && (CS_TYPE_BINARY != expr.args_[expr.arg_cnt_ - 1]->datum_meta_.cs_type_);
       if (3 == expr.arg_cnt_) {
-        pattern = expr.locate_param_datum(ctx, 1).get_string();
-        if (lib::is_oracle_mode() && 1 < ObCharset::strlen_char(
-                expr.datum_meta_.cs_type_, pattern.ptr(), pattern.length())) {
-          ret = OB_ERR_IN_TRIM_SET;
-          LOG_USER_ERROR(OB_ERR_IN_TRIM_SET);
+        const ObDatumMeta &pattern_meta = expr.args_[1]->datum_meta_;
+        const bool pattern_has_lob_header = expr.args_[1]->obj_meta_.has_lob_header();
+        if (!ob_is_text_tc(pattern_meta.type_)) { // pattern not text tc
+          pattern = expr.locate_param_datum(ctx, 1).get_string();
+          if (lib::is_oracle_mode() && 1 < ObCharset::strlen_char(
+                  expr.datum_meta_.cs_type_, pattern.ptr(), pattern.length())) {
+            ret = OB_ERR_IN_TRIM_SET;
+            LOG_USER_ERROR(OB_ERR_IN_TRIM_SET);
+          } else if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                             res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+            LOG_WARN("failed to eval trim case 2", K(ret));
+          }
+        } else {
+          ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+          ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+          const ObDatum &pattern_datum = expr.locate_param_datum(ctx, 1);
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(calc_alloc, pattern_datum,
+                                                                pattern_meta, pattern_has_lob_header, pattern))) {
+            LOG_WARN("failed to read real pattern", K(ret), K(pattern));
+          } else if (lib::is_oracle_mode() && 1 < ObCharset::strlen_char(
+                  expr.datum_meta_.cs_type_, pattern.ptr(), pattern.length())) {
+            ret = OB_ERR_IN_TRIM_SET;
+            LOG_USER_ERROR(OB_ERR_IN_TRIM_SET);
+          } else if (OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                             res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+            LOG_WARN("failed to eval trim case 2 for text tc pattern", K(ret));
+          }
         }
       } else {
         int64_t out_len = 0;
@@ -478,47 +855,10 @@ int ObExprTrim::eval_trim(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
         } else {
           pattern.assign_ptr(default_pattern_buffer, static_cast<int32_t>(out_len));
         }
-      }
-    }
-
-    ObString output;
-    //2 param for Ltrim or Rtrim
-    if (2 == expr.arg_cnt_ && (T_FUN_SYS_LTRIM == expr.type_ || T_FUN_SYS_RTRIM == expr.type_)) {
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-      ObCollationType cs_type = expr.datum_meta_.cs_type_;
-      size_t pattern_len_in_char  =
-                    ObCharset::strlen_char(cs_type, pattern.ptr(), pattern.length());
-      ObFixedArray<size_t, ObIAllocator> pattern_byte_num(calc_alloc,  pattern_len_in_char);
-      ObFixedArray<size_t, ObIAllocator> pattern_byte_offset(calc_alloc,  pattern_len_in_char +1);
-      if (OB_FAIL(ObExprUtil::get_mb_str_info(pattern, cs_type,
-                                              pattern_byte_num, pattern_byte_offset))) {
-        LOG_WARN("get_mb_str_info failed", K(ret), K(pattern), K(cs_type), K(pattern_len_in_char));
-      } else if (!res_is_clob && (pattern_byte_num.count() + 1 != pattern_byte_offset.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("size of pattern_byte_num and size of pattern_byte_offset should be same",
-                 K(ret), K(pattern_byte_num), K(pattern_byte_offset));
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(trim2(output, trim_type, pattern
-                 , str, cs_type, pattern_byte_num, pattern_byte_offset))) {
-        LOG_WARN("do trim2 failed", K(ret));
-      } else {
-        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
-          expr_datum.set_null();
-        } else {
-          expr_datum.set_string(output);
-        }
-      }
-    } else {
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(trim(output, trim_type, pattern, str))) {
-        LOG_WARN("do trim failed", K(ret));
-      } else {
-        if (output.empty() && lib::is_oracle_mode() && !res_is_clob) {
-          expr_datum.set_null();
-        } else {
-          expr_datum.set_string(output);
+        if (OB_SUCC(ret)
+            && OB_FAIL(eval_trim_inner(expr, ctx, expr_datum, trim_type, pattern,
+                                       res_is_clob, str_meta, str_has_lob_header, str_datum))) {
+          LOG_WARN("failed to eval trim case 3", K(ret));
         }
       }
     }

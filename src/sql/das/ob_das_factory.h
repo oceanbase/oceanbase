@@ -23,6 +23,8 @@ class ObIDASTaskResult;
 class ObIDASTaskOp;
 class ObIDASTaskResult;
 class ObDASTaskArg;
+class ObRpcDasAsyncAccessCallBack;
+class ObDASRef;
 
 class ObDASTaskFactory
 {
@@ -36,6 +38,11 @@ public:
   int create_das_extra_data(ObDASExtraData *&extra_result);
   int create_das_ctdef(ObDASOpType op_type, ObDASBaseCtDef *&ctdef);
   int create_das_rtdef(ObDASOpType op_type, ObDASBaseRtDef *&rtdef);
+  int create_das_async_cb(const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops,
+                          const ObMemAttr &attr,
+                          ObDASRef &das_ref,
+                          ObRpcDasAsyncAccessCallBack *&async_cb,
+                          int64_t timeout_ts);
   static int create_das_ctdef(ObDASOpType op_type, common::ObIAllocator &alloc, ObDASBaseCtDef *&ctdef);
   static int create_das_rtdef(ObDASOpType op_type, common::ObIAllocator &alloc, ObDASBaseRtDef *&rtdef);
   template <typename CtDef>
@@ -62,6 +69,8 @@ private:
   typedef DasResultStore::Iterator DasResultIter;
   typedef common::ObObjStore<ObDASExtraData*, common::ObIAllocator&> DasExtraDataStore;
   typedef DasExtraDataStore::Iterator DasExtraDataIter;
+  typedef common::ObObjStore<ObRpcDasAsyncAccessCallBack*, common::ObIAllocator&> DasAsyncCallBackStore;
+  typedef DasAsyncCallBackStore::Iterator DasAsyncCallBackIter;
   typedef common::ObObjStore<ObDASBaseCtDef*, common::ObIAllocator&> DasCtDefStore;
   typedef DasCtDefStore::Iterator DasCtDefIter;
   typedef common::ObObjStore<ObDASBaseRtDef*, common::ObIAllocator&> DasRtDefStore;
@@ -70,6 +79,7 @@ private:
   DasOpStore das_op_store_;
   DasResultStore das_result_store_;
   DasExtraDataStore das_extra_data_store_;
+  DasAsyncCallBackStore das_async_cb_store_;
   DasCtDefStore ctdef_store_;
   DasRtDefStore rtdef_store_;
   common::ObIAllocator &allocator_;

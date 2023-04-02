@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_storage_free
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -54,11 +55,12 @@ int ObExprJsonStorageFree::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-template <typename T>
-int ObExprJsonStorageFree::calc(const T &data, ObObjType type, ObCollationType cs_type, 
-                                ObIAllocator *allocator, T &res)
+int ObExprJsonStorageFree::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
+                                bool has_lob_header, ObIAllocator *allocator, ObDatum &res)
 {
   INIT_SUCC(ret);
+  ObObjType type = meta.type_;
+  ObCollationType cs_type = meta.cs_type_;
 
   if (type == ObNullType || data.is_null()) {
     res.set_null();
@@ -75,6 +77,8 @@ int ObExprJsonStorageFree::calc(const T &data, ObObjType type, ObCollationType c
     if (j_str.length() == 0) {
       ret = OB_ERR_INVALID_JSON_TEXT;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
         j_in_type, j_base))) {
       if (ret == OB_ERR_INVALID_JSON_TEXT) {
@@ -98,7 +102,6 @@ int ObExprJsonStorageFree::eval_json_storage_free(const ObExpr &expr, ObEvalCtx 
 
   ObDatum *datum = NULL;
   ObExpr *arg = expr.args_[0];
-  ObCollationType cs_type = arg->datum_meta_.cs_type_;
 
   if (OB_ISNULL(arg)) {
     ret = OB_ERR_NULL_VALUE;
@@ -108,8 +111,8 @@ int ObExprJsonStorageFree::eval_json_storage_free(const ObExpr &expr, ObEvalCtx 
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
-    if (OB_FAIL(calc(*datum, arg->datum_meta_.type_, cs_type, &tmp_allocator, res))) {
-      LOG_WARN("fail to calc json free result", K(ret), K(arg->datum_meta_.type_));
+    if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, res))) {
+      LOG_WARN("fail to calc json free result", K(ret), K(arg->datum_meta_));
     }
   }
 

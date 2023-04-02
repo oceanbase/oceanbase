@@ -17,6 +17,7 @@
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -39,10 +40,12 @@ struct ObCheckpointDList
   int unlink(ObFreezeCheckpoint *ob_freeze_checkpoint);
   int insert(ObFreezeCheckpoint *ob_freeze_checkpoint, bool ordered = true);
   void get_iterator(ObCheckpointIterator &iterator);
-  int64_t get_min_rec_log_ts_in_list(bool ordered = true);
-  ObFreezeCheckpoint *get_first_greater(const int64_t rec_log_ts);
+  share::SCN get_min_rec_scn_in_list(bool ordered = true);
+  ObFreezeCheckpoint *get_first_greater(const share::SCN rec_scn);
   int get_freezecheckpoint_info(
     ObIArray<checkpoint::ObFreezeCheckpointVTInfo> &freeze_checkpoint_array);
+  int get_need_freeze_checkpoints(const share::SCN rec_scn,
+                                  ObIArray<ObFreezeCheckpoint*> &freeze_checkpoints);
 
   ObDList<ObFreezeCheckpoint> checkpoint_list_;
 };
@@ -65,7 +68,6 @@ private:
 };
 
 // responsible for maintenance transaction checkpoint unit
-// including data_memtable, tx_data_memtable
 class ObDataCheckpoint : public ObCommonCheckpoint
 {
   friend class ObFreezeCheckpoint;
@@ -73,36 +75,36 @@ class ObDataCheckpoint : public ObCommonCheckpoint
 public:
   ObDataCheckpoint()
     : is_inited_(false),
-      lock_(),
+      lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       ls_(nullptr),
       new_create_list_(),
       active_list_(),
       prepare_list_(),
       ls_frozen_list_(),
-      ls_frozen_list_lock_(),
+      ls_frozen_list_lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       ls_freeze_finished_(true)
   {}
-  ~ObDataCheckpoint() {}
+  ~ObDataCheckpoint() { ls_ = nullptr; }
 
   // used for virtual table
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
   int safe_to_destroy(bool &is_safe_destroy);
-  int64_t get_rec_log_ts() override;
-  // if min_rec_log_ts <= the input rec_log_ts
+  share::SCN get_rec_scn();
+  // if min_rec_scn <= the input rec_scn
   // logstream freeze
-  int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
-  // if min_rec_log_ts <= the input rec_log_ts
+  int flush(share::SCN recycle_scn, bool need_freeze = true);
+  // if min_rec_scn <= the input rec_scn
   // add ls_freeze task
   // logstream freeze optimization
-  int ls_freeze(int64_t rec_log_ts);
+  int ls_freeze(share::SCN rec_scn);
   // logstream_freeze schedule and minor merge schedule
-  void road_to_flush(int64_t rec_log_ts);
+  void road_to_flush(share::SCN rec_scn);
   // ObFreezeCheckpoint register into ObDataCheckpoint
   int add_to_new_create(ObFreezeCheckpoint *ob_freeze_checkpoint);
   // remove from prepare_list when finish minor_merge
   int unlink_from_prepare(ObFreezeCheckpoint *ob_freeze_checkpoint);
-  // timer to tranfer freeze_checkpoint that rec_log_ts is stable from new_create_list to
+  // timer to tranfer freeze_checkpoint that rec_scn is stable from new_create_list to
   // active_list
   int check_can_move_to_active_in_newcreate();
 
@@ -116,7 +118,7 @@ public:
 
   bool is_flushing() const;
 
-  bool has_prepared_flush_checkpoint();
+  bool is_empty();
 
 private:
   // traversal prepare_list to flush memtable
@@ -144,8 +146,19 @@ private:
   void ls_frozen_to_prepare_(int64_t &last_time);
   void print_list_(ObCheckpointDList &list);
   void set_ls_freeze_finished_(bool is_finished);
+  int get_need_flush_tablets_(const share::SCN recycle_scn,
+                              common::ObIArray<ObTabletID> &flush_tablets);
+  int freeze_base_on_needs_(share::SCN recycle_scn);
+  int decide_freeze_clock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
 
   static const int64_t LOOP_TRAVERSAL_INTERVAL_US = 1000L * 50;  // 50ms
+  // when freeze memtable base on needs less than TABLET_FREEZE_PERCENT,
+  // tablet_freeze will be instead of logstream_freeze
+  // to relieve pressure for mini minor merge
+  static const int64_t TABLET_FREEZE_PERCENT = 10;
+  // when nums of memtables that wait to freeze less than MAX_FREEZE_CHECKPOINT_NUM.
+  // logstream_freeze without get_need_flush_tablets
+  static const int64_t MAX_FREEZE_CHECKPOINT_NUM = 50;
   bool is_inited_;
   // avoid leaving out ObFreezeCheckpoint that unlinking and not in any list
   common::ObSpinLock lock_;

@@ -15,8 +15,6 @@
 
 #include "lib/list/ob_dlist.h"
 #include "lib/string/ob_string.h"
-#include "lib/lock/ob_spin_rwlock.h"
-#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/stat/ob_latch_define.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"
@@ -97,6 +95,7 @@ public:
   ObPlanCacheKey &get_plan_cache_key() { return pc_key_; }
   const ObString &get_sql() { return sql_; }
   int deep_copy_sql(const common::ObString &sql);
+  int check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains);
 
   TO_STRING_KV(K_(is_inited));
 
@@ -122,7 +121,7 @@ private:
   common::ObIAllocator *pc_alloc_;
   common::ObString sql_;  // 往plan cache中增加以sql为key的kv对时需要本成员
   common::ObDList<ObPlanCacheValue> pcv_list_;
-  //正常paser时能够识别的常量的个数，用于校验faster parse识别的常量个数与正常parser识别个数是否一致。
+  //正常parser时能够识别的常量的个数，用于校验faster parse识别的常量个数与正常parser识别个数是否一致。
   int64_t normal_parse_const_cnt_;
   int64_t min_cluster_version_;
   // 记录该pcv_set下面挂了多少plan，上限为MAX_PCV_SET_PLAN_NUM

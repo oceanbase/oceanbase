@@ -20,13 +20,14 @@ namespace oceanbase
 namespace transaction
 {
 
-int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx, const bool can_elr)
+int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
-  if (can_elr && can_tenant_elr_) {  // tenant config enable elr
-    tx.set_can_elr(true);
-    TX_STAT_ELR_ENABLE_TRANS_INC(MTL_ID());
-  } else {
+  if (OB_SYS_TENANT_ID != MTL_ID() && MTL_IS_PRIMARY_TENANT()) {
+    if (can_tenant_elr_) {  // tenant config enable elr
+      tx.set_can_elr(true);
+      TX_STAT_ELR_ENABLE_TRANS_INC(MTL_ID());
+    }
     refresh_elr_tenant_config_();
   }
   return ret;
@@ -34,12 +35,13 @@ int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx, const bool can_elr)
 
 void ObTxELRUtil::refresh_elr_tenant_config_()
 {
-  bool need_refresh = ObClockGenerator::getClock()- last_refresh_ts_ > REFRESH_INTERVAL;
+  bool need_refresh = ObClockGenerator::getClock() - last_refresh_ts_ > REFRESH_INTERVAL;
 
   if (OB_UNLIKELY(need_refresh)) {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (OB_LIKELY(tenant_config.is_valid())) {
       can_tenant_elr_ = tenant_config->enable_early_lock_release;
+      last_refresh_ts_ = ObClockGenerator::getClock();
     }
     if (REACH_TIME_INTERVAL(10000000 /* 10s */)) {
       TRANS_LOG(INFO, "refresh tenant config success", "tenant_id", MTL_ID(), K(*this));

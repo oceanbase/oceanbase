@@ -31,14 +31,14 @@ const static int BT_BUF_LEN = 256;
 
 void __attribute__((weak)) has_unfree_callback(char *info)
 {
-  _OB_LOG(ERROR, "HAS UNFREE PTR!!! %s", info);
+  _OB_LOG_RET(ERROR, OB_ERROR, "HAS UNFREE PTR!!! %s", info);
 }
 
 ObjectSet::ObjectSet(__MemoryContext__ *mem_context, const uint32_t ablock_size)
-  : check_unfree_(false), mem_context_(mem_context), locker_(nullptr),
+  : mem_context_(mem_context), locker_(nullptr),
     blk_mgr_(nullptr), blist_(NULL), last_remainder_(NULL),
     bm_(NULL), free_lists_(NULL),
-    dirty_list_mutex_(), dirty_list_(nullptr), dirty_objs_(0),
+    dirty_list_mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK), dirty_list_(nullptr), dirty_objs_(0),
     alloc_bytes_(0), used_bytes_(0), hold_bytes_(0), allocs_(0),
     normal_alloc_bytes_(0), normal_used_bytes_(0),
     normal_hold_bytes_(0), ablock_size_(ablock_size),
@@ -56,7 +56,7 @@ AObject *ObjectSet::alloc_object(
   const uint64_t adj_size = MAX(size, MIN_AOBJECT_SIZE);
   const uint64_t all_size = align_up2(adj_size + AOBJECT_META_SIZE, 16);
 
-  const int64_t ctx_id = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
+  const int64_t ctx_id = blk_mgr_->ctx_id_;
   abort_unless(ctx_id == attr.ctx_id_);
   if (OB_UNLIKELY(common::ObCtxIds::LIBEASY == ctx_id)) {
     do_free_dirty_list();
@@ -279,8 +279,8 @@ void ObjectSet::free_normal_object(AObject *obj)
   normal_used_bytes_ -= obj->nobjs_ * AOBJECT_CELL_BYTES;
 
   AObject *newobj = merge_obj(obj);
-  auto ctx_id = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
-  auto tenant_id = blk_mgr_->get_tenant_ctx_allocator().get_tenant_id();
+  auto ctx_id = blk_mgr_->ctx_id_;
+  auto tenant_id = blk_mgr_->tenant_id_;
   if (newobj->nobjs_ == cells_per_block_) {
     hold_bytes_ -= ablock_size_;
     normal_hold_bytes_ -= ablock_size_;
@@ -372,11 +372,12 @@ void ObjectSet::free_object(AObject *obj)
   abort_unless(obj->in_use_);
 
 #ifdef ERRSIM
-  if (0 != (E(EventTable::EN_RESET_FREE_MEMORY) 0)) {
+  if (0 != (OB_E(EventTable::EN_RESET_FREE_MEMORY) 0)) {
     memset(obj->data_, 0xAA, obj->alloc_bytes_);
   }
 #endif
-  const int64_t ctx_id = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
+  const int64_t ctx_id = blk_mgr_->ctx_id_;
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   if (ctx_id == common::ObCtxIds::LIBEASY) {
     if (locker_->trylock()) {
       do_free_object(obj);
@@ -417,6 +418,7 @@ void ObjectSet::do_free_object(AObject *obj)
   used_bytes_ -= hold;
 
   obj->in_use_ = false;
+  obj->on_malloc_sample_ = false;
   if (!obj->is_large_) {
     free_normal_object(obj);
   } else {
@@ -466,10 +468,12 @@ void ObjectSet::do_free_dirty_list()
   }
 }
 
-void ObjectSet::reset()
+bool ObjectSet::check_has_unfree(const char **first_label)
 {
-  if (check_unfree_ && blist_ != nullptr) {
-    const bool context_check = mem_context_ != nullptr;
+  bool has_unfree = false;
+  if (first_label != NULL) *first_label = NULL;
+
+  if (blist_ != NULL) {
     ABlock *free_list_block = nullptr;
     if (free_lists_ != nullptr) {
       AChunk *chunk = AChunk::ptr2chunk(free_lists_);
@@ -479,34 +483,20 @@ void ObjectSet::reset()
     ABlock *block = blist_;
     // Filter the block to which the freelist itself belongs
     // Check whether the objects of the block are all! in_use (object_set may cache an 8k block)
-    bool has_unfree = false;
-    const static int buf_len = 256;
-    char buf[buf_len] = {'\0'};
     do {
       if (block != free_list_block) {
         AObject *obj = reinterpret_cast<AObject *>(block->data());
         while (true) {
           bool tmp_has_unfree = obj->in_use_;
           if (OB_UNLIKELY(tmp_has_unfree)) {
-            const char *label = (char*)&obj->label_[0];
+            if (first_label != NULL) {
+              *first_label = *first_label ?:(char*)&obj->label_[0];
+            }
             if (!has_unfree) {
-              if (context_check) {
-                const StaticInfo &static_info = mem_context_->get_static_info();
-                const DynamicInfo &dynamic_info = mem_context_->get_dynamic_info();
-                int64_t pos = snprintf(buf, buf_len,
-                                        "context: %p, label: %s, static_id: 0x%lx, " 
-                                        "static_info:{filename: %s, line: %d, function: %s}, "
-                                        "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
-                                        mem_context_, label,
-                                        mem_context_->get_static_id(),
-                                        static_info.filename_, static_info.line_, static_info.function_,
-                                        dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
-                buf[pos] = '\0';
-              }
               has_unfree = true;
             }
           }
-          // It will jump out directly if one case is found is_large indicates that 
+          // It will jump out directly if one case is found is_large indicates that
           // the object occupies a block exclusively, and the effect is equivalent to is_last
           if (has_unfree || obj->is_large_ || obj->is_last(cells_per_block_)) {
             break;
@@ -519,10 +509,33 @@ void ObjectSet::reset()
       }
       block = block->next_;
     } while (block != blist_);
+  }
 
-    if (OB_UNLIKELY(has_unfree)) {
-      has_unfree_callback(buf);
+  return has_unfree;
+}
+
+void ObjectSet::reset()
+{
+  const bool context_check = mem_context_ != nullptr;
+  const static int buf_len = 256;
+  char buf[buf_len] = {'\0'};
+  const char *first_label = NULL;
+  bool has_unfree = check_has_unfree(&first_label);
+  if (has_unfree) {
+    if (context_check) {
+      const StaticInfo &static_info = mem_context_->get_static_info();
+      const DynamicInfo &dynamic_info = mem_context_->get_dynamic_info();
+      int64_t pos = snprintf(buf, buf_len,
+                             "context: %p, label: %s, static_id: 0x%lx, "
+                             "static_info:{filename: %s, line: %d, function: %s}, "
+                             "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
+                             mem_context_, first_label,
+                             mem_context_->get_static_id(),
+                             static_info.filename_, static_info.line_, static_info.function_,
+                             dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
+      buf[pos] = '\0';
     }
+    has_unfree_callback(buf);
   }
 
   while (NULL != blist_) {
@@ -547,8 +560,8 @@ bool ObjectSet::build_free_lists()
 {
   abort_unless(NULL == bm_ && NULL == free_lists_);
   ObMemAttr attr;
-  attr.tenant_id_ = blk_mgr_->get_tenant_ctx_allocator().get_tenant_id();
-  attr.ctx_id_ = blk_mgr_->get_tenant_ctx_allocator().get_ctx_id();
+  attr.tenant_id_ = blk_mgr_->tenant_id_;
+  attr.ctx_id_ = blk_mgr_->ctx_id_;
   attr.label_ = common::ObModIds::OB_OBJ_FREELISTS;
   ABlock *new_block = alloc_block(sizeof (FreeList) * (cells_per_block_ + 1) +
       sizeof (BitMap) + BitMap::buf_len(cells_per_block_ + 1), attr);

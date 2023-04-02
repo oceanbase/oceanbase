@@ -14,6 +14,7 @@
 #define OB_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_READER_H_
 
 #include "ob_imicro_block_reader.h"
+#include "ob_micro_block_hash_index.h"
 #include "ob_row_reader.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 
@@ -23,6 +24,7 @@ using namespace common;
 using namespace storage;
 namespace storage {
 struct PushdownFilterInfo;
+class ObAggCell;
 }
 namespace blocksstable
 {
@@ -74,8 +76,7 @@ public:
   int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      ObMultiVersionRowFlag &flag,
-      transaction::ObTransID &trans_id,
+      const ObRowHeader *&row_header,
       int64_t &version,
       int64_t &sql_sequence);
   // Filter interface for filter pushdown
@@ -92,7 +93,9 @@ public:
     const int64_t *row_ids,
     const int64_t row_cap,
     ObDatumRow &row_buf,
-    common::ObIArray<ObDatum *> &datums);
+    common::ObIArray<ObDatum *> &datums,
+    sql::ExprFixedArray &exprs,
+    sql::ObEvalCtx &eval_ctx);
   virtual int get_row_count(
       int32_t col,
       const int64_t *row_ids,
@@ -104,6 +107,17 @@ public:
     OB_ASSERT(nullptr != header_);
     return header_->column_count_;
   }
+  int get_min_or_max(
+      int32_t col,
+      const share::schema::ObColumnParam *col_param,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObStorageDatum> &agg_info);
+  int get_aggregate_result(
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObDatumRow &row_buf,
+      common::ObIArray<storage::ObAggCell*> &agg_cells);
   OB_INLINE bool single_version_rows() { return nullptr != header_ && header_->single_version_rows_; }
 
 protected:
@@ -127,7 +141,8 @@ class ObMicroBlockGetReader : public ObIMicroBlockFlatReader, public ObIMicroBlo
 public:
   ObMicroBlockGetReader()
       : ObIMicroBlockFlatReader(),
-        ObIMicroBlockGetReader()
+        ObIMicroBlockGetReader(),
+        hash_index_()
   {}
   virtual ~ObMicroBlockGetReader() {}
   virtual int get_row(
@@ -143,8 +158,16 @@ public:
       bool &found) final;
   int locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx);
 protected:
-  int inner_init(const ObMicroBlockData &block_data, const ObTableReadInfo &read_info);
-
+  int inner_init(const ObMicroBlockData &block_data,
+                 const ObTableReadInfo &read_info,
+                 const ObDatumRowkey &rowkey);
+private:
+  int locate_rowkey_fast_path(const ObDatumRowkey &rowkey,
+                              int64_t &row_idx,
+                              bool &need_binary_search,
+                              bool &found);
+private:
+  ObMicroBlockHashIndex hash_index_;
 };
 
 } //end namespace blocksstable

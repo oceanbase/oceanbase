@@ -24,10 +24,11 @@ namespace sql
 class ObDeleteStmtPrinter : public ObDMLStmtPrinter {
 
 public:
-  ObDeleteStmtPrinter() {}
+  ObDeleteStmtPrinter()=delete;
   ObDeleteStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDeleteStmt *stmt,
+                      ObSchemaGetterGuard *schema_guard,
                       common::ObObjPrintParams print_params) :
-    ObDMLStmtPrinter(buf, buf_len, pos, stmt, print_params) {}
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params) {}
   virtual ~ObDeleteStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObDeleteStmt *stmt);

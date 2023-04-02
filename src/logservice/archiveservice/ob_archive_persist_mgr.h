@@ -35,6 +35,7 @@ namespace share
 class ObTenantArchiveRoundAttr;
 class ObLSID;
 class ObLSArchivePersistInfo;
+class SCN;
 }
 
 namespace storage
@@ -68,12 +69,13 @@ struct ObArchivePersistValue : public ArchiveProValue
   typedef common::SpinWLockGuard  WLockGuard;
   ObArchivePersistValue() : info_(), last_update_ts_(OB_INVALID_TIMESTAMP), speed_(0) {}
 
-  int get(ObLSArchivePersistInfo &info);
-  int set(const ObLSArchivePersistInfo &info);
+  void get(bool &is_madatory, int64_t &speed, ObLSArchivePersistInfo &info);
+  int set(const bool is_madatory, const ObLSArchivePersistInfo &info);
 
   ObLSArchivePersistInfo info_;
   int64_t last_update_ts_;
   int64_t speed_;              // Bytes/s
+  bool is_madatory_;
   RWLock rwlock_;
 };
 
@@ -97,6 +99,9 @@ public:
       const ArchiveKey &key,
       ObLSArchivePersistInfo &info);
 
+  // 实时查询租户是否在归档模式
+  int check_tenant_in_archive(bool &in_archive);
+
   // 检查缓存归档进度信息
   int check_and_get_piece_persist_continuous(const ObLSID &id,
       ObLSArchivePersistInfo &info);
@@ -105,7 +110,7 @@ public:
   int load_archive_round_attr(ObTenantArchiveRoundAttr &attr);
 
   // 获取日志流归档进度 for global
-  int get_ls_archive_progress(const ObLSID &id, LSN &lsn, bool &force, bool &ignore);
+  int get_ls_archive_progress(const ObLSID &id, LSN &lsn, share::SCN &scn, bool &force, bool &ignore);
 
   int get_ls_archive_speed(const ObLSID &id, int64_t &speed, bool &force, bool &ignore);
 
@@ -113,7 +118,7 @@ public:
   void persist_and_load();
 
   // 获取日志流创建时间戳
-  int get_ls_create_ts(const share::ObLSID &id, int64_t &timestamp);
+  int get_ls_create_scn(const share::ObLSID &id, share::SCN &scn);
 
 private:
   // 1. 持久化当前server做归档日志流归档进度
@@ -147,7 +152,8 @@ private:
       ObLSArchivePersistInfo &info,
       bool &record_exist);
 
-  int update_local_archive_progress_(const ObLSID &id, const ObLSArchivePersistInfo &info);
+  int load_dest_mode_(bool &is_madatory);
+  int update_local_archive_progress_(const ObLSID &id, const bool is_madatory, const ObLSArchivePersistInfo &info);
 
   int check_round_state_if_do_persist_(const ObTenantArchiveRoundAttr &attr,
       ArchiveKey &key,
@@ -166,9 +172,12 @@ private:
       bool &advanced);
 
   int do_persist_(const ObLSID &id, const bool exist, ObLSArchivePersistInfo &info);
+  int do_wipe_suspend_status_(const ObLSID &id);
 
   bool need_persist_(const ObArchiveRoundState &state) const;
   bool need_stop_status_(const ObArchiveRoundState &state) const;
+  bool need_suspend_status_(const ObArchiveRoundState &state) const;
+  bool need_wipe_suspend_status_(const ObArchiveRoundState &state) const;
 
 private:
   static const int64_t PRINT_INTERVAL = 1 * 1000 * 1000L;
@@ -183,6 +192,7 @@ private:
   bool inited_;
   uint64_t tenant_id_;
   ArchiveKey tenant_key_;
+  int64_t dest_no_;
   ObArchiveRoundState state_;
   mutable RWLock state_rwlock_;
   common::ObMySQLProxy *proxy_;

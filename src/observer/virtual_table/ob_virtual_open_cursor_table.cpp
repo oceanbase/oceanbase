@@ -17,6 +17,7 @@
 #include "observer/ob_server.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -48,21 +49,21 @@ void ObVirtualOpenCursorTable::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObVirtualOpenCursorTable::set_addr(const common::ObAddr &addr)		
-{		
-  int ret = OB_SUCCESS;		
-  char ipbuf[common::OB_IP_STR_BUFF];		
-  if (!addr.ip_to_string(ipbuf, sizeof(ipbuf))) {		
-    SERVER_LOG(ERROR, "ip to string failed");		
-    ret = OB_ERR_UNEXPECTED;		
-  } else {		
-    ObString ipstr = ObString::make_string(ipbuf);		
-    if (OB_FAIL(ob_write_string(*allocator_, ipstr, ipstr_))) {		
-      SERVER_LOG(WARN, "failed to write string", K(ret));		
-    }		
-    port_ = addr.get_port();		
-  }		
-  return ret;		
+int ObVirtualOpenCursorTable::set_addr(const common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  char ipbuf[common::OB_IP_STR_BUFF];
+  if (!addr.ip_to_string(ipbuf, sizeof(ipbuf))) {
+    SERVER_LOG(ERROR, "ip to string failed");
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ObString ipstr = ObString::make_string(ipbuf);
+    if (OB_FAIL(ob_write_string(*allocator_, ipstr, ipstr_))) {
+      SERVER_LOG(WARN, "failed to write string", K(ret));
+    }
+    port_ = addr.get_port();
+  }
+  return ret;
 }
 
 int ObVirtualOpenCursorTable::inner_get_next_row(ObNewRow *&row)
@@ -102,7 +103,7 @@ int ObVirtualOpenCursorTable::inner_get_next_row(ObNewRow *&row)
   return ret;
 }
 
-bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, 
+bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key key,
                                                        ObSQLSessionInfo *sess_info)
 {
   int ret = OB_SUCCESS;
@@ -145,7 +146,7 @@ bool ObVirtualOpenCursorTable::FillScanner::operator()(sql::ObSQLSessionMgr::Key
             && my_session_->get_user_id() == sess_info->get_user_id())) {
       ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
       OZ (fill_cur_plan_cell(*sess_info));
-      for (sql::ObSQLSessionInfo::CursorCache::CursorMap::iterator iter = 
+      for (sql::ObSQLSessionInfo::CursorCache::CursorMap::iterator iter =
               sess_info->get_cursor_cache().pl_cursor_map_.begin();  //ignore ret
             OB_SUCC(ret) && iter != sess_info->get_cursor_cache().pl_cursor_map_.end();
             ++iter) {
@@ -210,7 +211,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
         cur_row_->cells_[i].set_collation_type(default_collation);
         break;
       }
-      case ADDRESS: { 
+      case ADDRESS: {
         // session cursor not set now
         cur_row_->cells_[i].set_null();
         break;
@@ -271,7 +272,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
       }
       case SQL_EXEC_ID: {
         cur_row_->cells_[i].set_null();
-        break; 
+        break;
       }
       case CURSOR_TYPE: {
         cur_row_->cells_[i].set_varchar("SESSION CURSOR CACHED");
@@ -344,7 +345,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_cur_plan_cell(ObSQLSessionInfo &
         cur_row_->cells_[i].set_collation_type(default_collation);
         break;
       }
-      case ADDRESS: { 
+      case ADDRESS: {
         // plan not set now
         cur_row_->cells_[i].set_null();
         break;
@@ -381,7 +382,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_cur_plan_cell(ObSQLSessionInfo &
       }
       case SQL_EXEC_ID: {
         cur_row_->cells_[i].set_null();
-        break; 
+        break;
       }
       case CURSOR_TYPE: {
         cur_row_->cells_[i].set_varchar("OPEN");

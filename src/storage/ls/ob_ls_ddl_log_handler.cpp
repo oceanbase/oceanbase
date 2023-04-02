@@ -20,6 +20,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "logservice/ob_log_base_header.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -45,6 +46,7 @@ int ObLSDDLLogHandler::init(ObLS *ls)
     TCWLockGuard guard(online_lock_);
     is_online_ = true;
     ls_ = ls;
+    last_rec_scn_ = ls_->get_clog_checkpoint_scn();
     is_inited_ = true;
   }
   return ret;
@@ -56,6 +58,7 @@ void ObLSDDLLogHandler::reset()
   is_online_ = false;
   is_inited_ = false;
   ls_ = nullptr;
+  last_rec_scn_.reset();
   ddl_log_replayer_.reset();
 }
 
@@ -134,7 +137,7 @@ int ObLSDDLLogHandler::online()
 int ObLSDDLLogHandler::replay(const void *buffer,
                               const int64_t buf_size,
                               const palf::LSN &lsn,
-                              const int64_t log_ts)
+                              const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
@@ -155,23 +158,22 @@ int ObLSDDLLogHandler::replay(const void *buffer,
     } else {
       switch (ddl_header.get_ddl_clog_type()) {
       case ObDDLClogType::DDL_REDO_LOG: {
-        ret = replay_ddl_redo_log_(log_buf, buf_size, tmp_pos, log_ts);
+        ret = replay_ddl_redo_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
-      case ObDDLClogType::DDL_PREPARE_LOG: {
-        ret = replay_ddl_prepare_log_(log_buf, buf_size, tmp_pos, log_ts);
-        break;
+      case ObDDLClogType::OLD_DDL_COMMIT_LOG: {
+        break; // ignore the old ddl commit log
       }
       case ObDDLClogType::DDL_COMMIT_LOG: {
-        ret = replay_ddl_commit_log_(log_buf, buf_size, tmp_pos, log_ts);
+        ret = replay_ddl_commit_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
       case ObDDLClogType::DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG: {
-        ret = replay_ddl_tablet_schema_version_change_log_(log_buf, buf_size, tmp_pos, log_ts);
+        ret = replay_ddl_tablet_schema_version_change_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
       case ObDDLClogType::DDL_START_LOG: {
-        ret = replay_ddl_start_log_(log_buf, buf_size, tmp_pos, log_ts);
+        ret = replay_ddl_start_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
       default: {
@@ -227,7 +229,7 @@ int ObLSDDLLogHandler::resume_leader()
   return ret;
 }
 
-int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
+int ObLSDDLLogHandler::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
@@ -258,8 +260,9 @@ int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
           ObDDLTableMergeDagParam param;
           param.ls_id_ = ls_->get_ls_id();
           param.tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
-          param.start_log_ts_ = ddl_kv_mgr_handle.get_obj()->get_start_log_ts();
-          param.rec_log_ts_ = rec_log_ts;
+          param.start_scn_ = ddl_kv_mgr_handle.get_obj()->get_start_scn();
+          param.rec_scn_ = rec_scn;
+          LOG_INFO("schedule ddl merge dag", K(param));
           if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
@@ -274,18 +277,17 @@ int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
   return OB_SUCCESS;
 }
 
-int64_t ObLSDDLLogHandler::get_rec_log_ts()
+SCN ObLSDDLLogHandler::get_rec_scn()
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
-  int64_t rec_log_ts = INT64_MAX;
+  SCN rec_scn = SCN::max_scn();
   bool has_ddl_kv = false;
   if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
     while (OB_SUCC(ret)) {
       ObDDLKvMgrHandle ddl_kv_mgr_handle;
-      int64_t min_log_ts = INT64_MAX;
       if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -296,30 +298,29 @@ int64_t ObLSDDLLogHandler::get_rec_log_ts()
       } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid ddl kv mgr handle", K(ret), K(ddl_kv_mgr_handle));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
-        LOG_WARN("failed to check ddl kv", K(ret));
-      } else if (has_ddl_kv) {
-        if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kv_min_log_ts(min_log_ts))) {
-          LOG_WARN("fail to get ddl kv min log ts", K(ret));
-        } else {
-          rec_log_ts = MIN(rec_log_ts, min_log_ts);
-        }
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_rec_scn(rec_scn))) {
+        LOG_WARN("failed to get rec scn", K(ret));
       }
     }
   }
-  return OB_SUCC(ret) ? rec_log_ts : INT64_MAX;
+  if (OB_FAIL(ret)) {
+    rec_scn = SCN::max(last_rec_scn_, ls_->get_clog_checkpoint_scn());
+  } else if (!rec_scn.is_max()) {
+    last_rec_scn_ = SCN::max(last_rec_scn_, rec_scn);
+  }
+  return rec_scn;
 }
 
 int ObLSDDLLogHandler::replay_ddl_redo_log_(const char *log_buf,
                                             const int64_t buf_size,
                                             int64_t pos,
-                                            const int64_t log_ts)
+                                            const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLRedoLog log;
   if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
     LOG_WARN("fail to deserialize ddl redo log", K(ret));
-  } else if (OB_FAIL(ddl_log_replayer_.replay_redo(log, log_ts))) {
+  } else if (OB_FAIL(ddl_log_replayer_.replay_redo(log, log_scn))) {
     if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
       LOG_WARN("fail to replay ddl redo log", K(ret), K(log));
       ret = OB_EAGAIN;
@@ -328,34 +329,16 @@ int ObLSDDLLogHandler::replay_ddl_redo_log_(const char *log_buf,
   return ret;
 }
 
-int ObLSDDLLogHandler::replay_ddl_prepare_log_(const char *log_buf,
+int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
                                                const int64_t buf_size,
                                                int64_t pos,
-                                               const int64_t log_ts)
-{
-  int ret = OB_SUCCESS;
-  ObDDLPrepareLog log;
-  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
-    LOG_WARN("fail to deserialize ddl commit log", K(ret));
-  } else if (OB_FAIL(ddl_log_replayer_.replay_prepare(log, log_ts))) {
-    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
-      LOG_WARN("fail to replay ddl prepare log", K(ret), K(log));
-      ret = OB_EAGAIN;
-    }
-  }
-  return ret;
-}
-
-int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
-                                              const int64_t buf_size,
-                                              int64_t pos,
-                                              const int64_t log_ts)
+                                               const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLCommitLog log;
   if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
     LOG_WARN("fail to deserialize ddl commit log", K(ret));
-  } else if (OB_FAIL(ddl_log_replayer_.replay_commit(log, log_ts))) {
+  } else if (OB_FAIL(ddl_log_replayer_.replay_commit(log, log_scn))) {
     if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
       LOG_WARN("fail to replay ddl commit log", K(ret), K(log));
       ret = OB_EAGAIN;
@@ -367,7 +350,7 @@ int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
 int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *log_buf,
                                                                     const int64_t buf_size,
                                                                     int64_t pos,
-                                                                    const int64_t log_ts)
+                                                                    const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletSchemaVersionChangeLog log;
@@ -387,13 +370,13 @@ int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *
 int ObLSDDLLogHandler::replay_ddl_start_log_(const char *log_buf,
                                              const int64_t buf_size,
                                              int64_t pos,
-                                             const int64_t log_ts)
+                                             const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLStartLog log;
   if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
     LOG_WARN("fail to deserialize ddl redo log", K(ret));
-  } else if (OB_FAIL(ddl_log_replayer_.replay_start(log, log_ts))) {
+  } else if (OB_FAIL(ddl_log_replayer_.replay_start(log, log_scn))) {
     if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
       LOG_WARN("fail to replay ddl redo log", K(ret), K(log));
       ret = OB_EAGAIN;

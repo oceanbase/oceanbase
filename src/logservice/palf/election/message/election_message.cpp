@@ -58,21 +58,21 @@ void print_debug_ts_if_reach_warn_threshold(const ElectionMsgBase &msg, const in
                               res_debug_ts.src_construct_ts_, res_debug_ts.src_serialize_ts_,
                               res_debug_ts.dest_deserialize_ts_, res_debug_ts.dest_process_ts_}) - req_debug_ts.src_construct_ts_;
   if (req_debug_ts.src_serialize_ts_ != 0 && (diff = std::abs(req_debug_ts.src_serialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "request serialize in src too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "request serialize in src too delay");
   } else if (req_debug_ts.dest_deserialize_ts_ != 0 && (diff = std::abs(req_debug_ts.dest_deserialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "request deserialize in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "request deserialize in dest too delay");
   } else if (req_debug_ts.dest_process_ts_ != 0 && (diff = std::abs(req_debug_ts.dest_process_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "request process in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "request process in dest too delay");
   } else if (res_debug_ts.src_construct_ts_ != 0 && (diff = std::abs(res_debug_ts.src_construct_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response construct in src too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response construct in src too delay");
   } else if (res_debug_ts.src_serialize_ts_ != 0 && (diff = std::abs(res_debug_ts.src_serialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response serialize in src too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response serialize in src too delay");
   } else if (res_debug_ts.dest_deserialize_ts_ != 0 && (diff = std::abs(res_debug_ts.dest_deserialize_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response deserialize in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response deserialize in dest too delay");
   } else if (res_debug_ts.dest_process_ts_ != 0 && (diff = std::abs(res_debug_ts.dest_process_ts_ - req_debug_ts.src_construct_ts_)) > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "response process in dest too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "response process in dest too delay");
   } else if (max_diff > recaculated_warn_threshold) {
-    LOG_NONE(WARN, "max_diff too delay");
+    LOG_NONE_RET(WARN, OB_ERR_UNEXPECTED, "max_diff too delay");
   }
   return;
   #undef PRINT_WRAPPER
@@ -142,6 +142,7 @@ ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle(const int64_t i
                                                                  const common::ObAddr &self_addr,
                                                                  const int64_t restart_counter,
                                                                  const int64_t ballot_number,
+                                                                 const uint64_t inner_priority_seed,
                                                                  const LogConfigVersion membership_version) :
 ElectionMsgBase(id,
                 self_addr,
@@ -150,13 +151,18 @@ ElectionMsgBase(id,
                 ElectionMsgType::PREPARE_REQUEST),
 role_(ObRole::INVALID_ROLE),
 is_buffer_valid_(false),
+inner_priority_seed_(inner_priority_seed),
 membership_version_(membership_version)
 { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
 
 ElectionPrepareRequestMsgMiddle::ElectionPrepareRequestMsgMiddle() :
 ElectionMsgBase(),
 role_(ObRole::INVALID_ROLE),
-is_buffer_valid_(false) { memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE); }
+is_buffer_valid_(false),
+inner_priority_seed_(static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED))
+{
+  memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
+}
 
 int ElectionPrepareRequestMsgMiddle::set(const ElectionPriority *priority,
                                    const common::ObRole role) {
@@ -182,6 +188,8 @@ const char *ElectionPrepareRequestMsgMiddle::get_priority_buffer() const { retur
 common::ObRole ElectionPrepareRequestMsgMiddle::get_role() const { return static_cast<common::ObRole>(role_); }
 
 LogConfigVersion ElectionPrepareRequestMsgMiddle::get_membership_version() const { return membership_version_; }
+
+uint64_t ElectionPrepareRequestMsgMiddle::get_inner_priority_seed() const { return inner_priority_seed_; }
 
 ElectionPrepareResponseMsgMiddle::ElectionPrepareResponseMsgMiddle() :
 ElectionMsgBase(),
@@ -251,7 +259,8 @@ ElectionMsgBase(),
 lease_started_ts_on_proposer_(0),
 lease_interval_(0),
 accepted_(false),
-is_buffer_valid_(false)
+is_buffer_valid_(false),
+inner_priority_seed_(static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED))
 {
   memset(priority_buffer_, 0, PRIORITY_BUFFER_SIZE);
 }
@@ -260,6 +269,7 @@ LogConfigVersion ElectionAcceptRequestMsgMiddle::get_membership_version() const 
 
 ElectionAcceptResponseMsgMiddle::
 ElectionAcceptResponseMsgMiddle(const ObAddr &self_addr,
+                                const uint64_t inner_priority_seed,
                                 const LogConfigVersion &membership_version,
                                 const ElectionAcceptRequestMsgMiddle &request) :
 ElectionMsgBase(request.get_id(),
@@ -271,6 +281,7 @@ lease_started_ts_on_proposer_(request.get_lease_start_ts_on_proposer()),
 lease_interval_(request.get_lease_interval()),
 accepted_(false),
 is_buffer_valid_(false),
+inner_priority_seed_(inner_priority_seed),
 responsed_membership_version_(request.get_membership_version()),
 membership_version_(membership_version)
 {
@@ -319,6 +330,8 @@ LogConfigVersion ElectionAcceptResponseMsgMiddle::get_responsed_membership_versi
 LogConfigVersion ElectionAcceptResponseMsgMiddle::get_membership_version() const { return membership_version_; }
 
 ElectionMsgDebugTs ElectionAcceptResponseMsgMiddle::get_request_debug_ts() const { return request_debug_ts_; }
+
+uint64_t ElectionAcceptResponseMsgMiddle::get_inner_priority_seed() const { return inner_priority_seed_; }
 
 ElectionChangeLeaderMsgMiddle::ElectionChangeLeaderMsgMiddle() :
 ElectionMsgBase(),

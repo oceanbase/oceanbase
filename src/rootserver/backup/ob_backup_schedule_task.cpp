@@ -310,7 +310,7 @@ ObBackupDataLSTask::ObBackupDataLSTask()
     ls_id_(),
     turn_id_(OB_BACKUP_INVALID_TURN_ID),
     retry_id_(OB_BACKUP_INVALID_RETRY_ID),
-    start_scn_(OB_INVALID_TIMESTAMP),
+    start_scn_(),
     backup_path_(),
     backup_status_()
 {
@@ -461,13 +461,14 @@ int ObBackupDataLSTask::set_optional_servers_(const ObIArray<common::ObAddr> &bl
   if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_id_, ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_id_, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id_));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() 
+      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
         server.set(replica.get_server(), 0/*high priority*/);
@@ -478,7 +479,7 @@ int ObBackupDataLSTask::set_optional_servers_(const ObIArray<common::ObAddr> &bl
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
+      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
         // if only has one replica. no use black server.
         ObBackupServer server;
@@ -524,8 +525,8 @@ ObBackupComplLogTask::ObBackupComplLogTask()
     backup_type_(),
     backup_date_(OB_INVALID_TIMESTAMP),
     ls_id_(),
-    start_scn_(OB_INVALID_TIMESTAMP),
-    end_scn_(OB_INVALID_TIMESTAMP),
+    start_scn_(),
+    end_scn_(),
     backup_path_(),
     backup_status_()
 {
@@ -816,13 +817,14 @@ int ObBackupBuildIndexTask::set_optional_servers_(const ObIArray<common::ObAddr>
   if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_id, ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() 
+      if (replica.is_in_service() && !replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && !check_replica_in_black_server_(replica, black_servers)) { 
         ObBackupServer server;
         server.set(replica.get_server(), 0/*high priority*/);
@@ -833,7 +835,7 @@ int ObBackupBuildIndexTask::set_optional_servers_(const ObIArray<common::ObAddr>
     }
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplica &replica = replica_array.at(i);
-      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid()
+      if (replica.is_in_service() && replica.is_strong_leader() && replica.is_valid() && !replica.is_in_restore()
           && (replica_array.count() == 1 || !check_replica_in_black_server_(replica, black_servers))) {
         // if only has one replica. no use black server.
         ObBackupServer server;
@@ -967,7 +969,7 @@ int ObBackupCleanLSTask::set_optional_servers_()
     const common::ObIArray<ObLSReplicaLocation> &replica_array = location.get_replica_locations();
     for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
       const ObLSReplicaLocation &replica = replica_array.at(i);
-      if (replica.is_valid()) { 
+      if (replica.is_valid()) {
         ObBackupServer server;
         server.set(replica.get_server(), 1/*high priority*/);
         if (OB_FAIL(servers.push_back(server))) {
@@ -1054,7 +1056,7 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
     } else if (OB_FAIL(task_attr.get_backup_clean_id(id_))) {
       LOG_WARN("failed to get task id", K(ret), K(task_attr)); 
     } else if (OB_FAIL(set_optional_servers_())) {
-      LOG_WARN("failed to set optional servers", K(ret), K(task_attr));  
+      LOG_WARN("failed to set optional servers", K(ret), K(task_attr));
     }
   }
   return ret;

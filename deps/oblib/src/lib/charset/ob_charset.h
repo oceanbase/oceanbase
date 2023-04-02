@@ -24,7 +24,6 @@ namespace oceanbase
 namespace common
 {
 
-// 学习字符集推荐个网站 https://www.qqxiuzi.cn/daohang.htm
 // 我们目前的字符集实现参考MySQL，现在MySQL源码，进入strings目录，
 // 根据文件名后缀可以大体找到对应编码实现
 
@@ -37,15 +36,36 @@ enum ObCharsetType
   CHARSET_GBK = 3,
   CHARSET_UTF16 = 4,
   CHARSET_GB18030 = 5,
+  CHARSET_LATIN1 = 6,
   CHARSET_MAX,
+};
+
+/*
+*AGGREGATE_2CHARSET[CHARSET_UTF8MB4][CHARSET_GBK]=1表示结果为CHARSET_UTF8MB4
+*AGGREGATE_2CHARSET[CHARSET_GBK][CHARSET_UTF8MB4]=2表示结果为CHARSET_UTF8MB4
+*矩阵中只对当前需要考虑的情况填值1&2,其余补0
+*return value means idx of the resule type， 0 means OB_CANT_AGGREGATE_2COLLATIONS
+*there is no possibly to reach AGGREGATE_2CHARSET[CHARSET_UTF8MB4][CHARSET_UTF8MB4] and so on
+*/
+static const int AGGREGATE_2CHARSET[CHARSET_MAX][CHARSET_MAX] = {
+                                //CHARSET_INVALI,CHARSET_UTF8MB4...
+{0,0,0,0,0,0,0},//CHARSET_INVALI
+{0,0,0,0,0,0,0},//CHARSET_BINARY
+{0,0,0,1,2,1,1},//CHARSET_UTF8MB4
+{0,0,2,0,2,2,1},//CHARSET_GBK
+{0,0,1,1,0,1,1},//CHARSET_UTF16
+{0,0,2,1,2,0,1},//CHARSET_GB18030
+{0,0,2,2,2,2,0},//CHARSET_LATIN1
 };
 
 enum ObCollationType
 {
   CS_TYPE_INVALID = 0,
+  CS_TYPE_LATIN1_SWEDISH_CI = 8,
   CS_TYPE_GBK_CHINESE_CI = 28,
   CS_TYPE_UTF8MB4_GENERAL_CI = 45,
   CS_TYPE_UTF8MB4_BIN = 46,
+  CS_TYPE_LATIN1_BIN = 47,
   CS_TYPE_UTF16_GENERAL_CI = 54,
   CS_TYPE_UTF16_BIN = 55,
   CS_TYPE_BINARY = 63,
@@ -67,27 +87,30 @@ enum ObCollationType
   CS_TYPE_GBK_ZH_0900_AS_CS,
   CS_TYPE_UTF16_ZH_0900_AS_CS,
   CS_TYPE_GB18030_ZH_0900_AS_CS,
+  CS_TYPE_latin1_ZH_0900_AS_CS, //invaid, not really used
   //radical-stroke order
   CS_TYPE_RADICAL_BEGIN_MARK,
   CS_TYPE_UTF8MB4_ZH2_0900_AS_CS,
   CS_TYPE_GBK_ZH2_0900_AS_CS,
   CS_TYPE_UTF16_ZH2_0900_AS_CS,
   CS_TYPE_GB18030_ZH2_0900_AS_CS,
+  CS_TYPE_latin1_ZH2_0900_AS_CS ,//invaid
   //stroke order
   CS_TYPE_STROKE_BEGIN_MARK,
   CS_TYPE_UTF8MB4_ZH3_0900_AS_CS,
   CS_TYPE_GBK_ZH3_0900_AS_CS,
   CS_TYPE_UTF16_ZH3_0900_AS_CS,
-  CS_TYPE_GB18030_ZH3_0900_AS_CS,  
+  CS_TYPE_GB18030_ZH3_0900_AS_CS,
+  CS_TYPE_latin1_ZH3_0900_AS_CS, //invaid
   CS_TYPE_MAX
 };
 
 // oracle 模式下字符集名称对应的 ID 值
 // https://docs.oracle.com/cd/B19306_01/server.102/b14200/functions095.htm
-// https://blog.csdn.net/guizicjj/article/details/4434088
 enum ObNlsCharsetId
 {
   CHARSET_INVALID_ID = 0,
+  CHARSET_WE8MSWIN1252_ID=31,
   CHARSET_ZHS16GBK_ID = 852,
   CHARSET_ZHS32GB18030_ID = 854,
   CHARSET_UTF8_ID = 871,
@@ -103,7 +126,8 @@ Coercibility Meaning Example
 2 Implicit collation Column value, stored routine parameter or local variable
 3 System constant such as USER() and VERSION() return value, or system variable
 4 Coercible Literal string
-5 Ignorable NULL or an expression derived from NULL
+5 Numeric or temporal value
+6 Ignorable NULL or an expression derived from NULL
 
 for reasons why, please refer to
 https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
@@ -122,6 +146,7 @@ enum ObCollationLevel
                       // fortunately we didn't need to use it to define array like charset_arr,
                       // and we didn't persist it on storage.
 };
+
 
 struct ObCharsetWrapper
 {
@@ -167,9 +192,11 @@ public:
   static const int32_t MIN_MB_LEN = 1;
 
   static const int32_t MAX_CASE_MULTIPLY = 4;
+  //比如latin1 1byte ,utf8mb4 4byte,转换因子为4，也可以理解为最多使用4字节存储一个字符
+  static const int32_t CharConvertFactorNum = 4;
 
-  static const int64_t VALID_CHARSET_TYPES = 5;
-  static const int64_t VALID_COLLATION_TYPES = 11;
+  static const int64_t VALID_CHARSET_TYPES = 6;
+  static const int64_t VALID_COLLATION_TYPES = 13;
 
   static int init_charset();
   // strntodv2 is an enhanced version of strntod,
@@ -213,7 +240,15 @@ public:
   static size_t scan_str(const char *str,
                          const char *end,
                          int sq);
+  // return position in characters
   static uint32_t instr(ObCollationType collation_type,
+                        const char *str1,
+                        int64_t str1_len,
+                        const char *str2,
+                        int64_t str2_len);
+
+  // return position in bytes
+  static int64_t instrb(ObCollationType collation_type,
                         const char *str1,
                         int64_t str1_len,
                         const char *str2,
@@ -340,7 +375,8 @@ public:
       || CHARSET_UTF8MB4 == charset_type
       || CHARSET_GBK == charset_type
       || CHARSET_UTF16 == charset_type
-      || CHARSET_GB18030 == charset_type;
+      || CHARSET_GB18030 == charset_type
+      || CHARSET_LATIN1 == charset_type;
   }
   static ObCharsetType charset_type_by_coll(ObCollationType coll_type);
   static int charset_name_by_coll(const ObString &coll_name, common::ObString &cs_name);
@@ -397,9 +433,20 @@ public:
   static int strcmp(const ObCollationType collation_type,
                     const ObString &l_str,
                     const ObString &r_str);
+  //these interface is not safe:
   //when invoke this, if ObString a = "134";  this func will core; so avoid passing src as a style
+  //if collation type is gb18030, this func will die
+  //**Please** use toupper and tolower instead of casedn and caseup
   static size_t casedn(const ObCollationType collation_type, ObString &src);
   static size_t caseup(const ObCollationType collation_type, ObString &src);
+
+  static int toupper(const ObCollationType collation_type,
+                     const ObString &src, ObString &dst,
+                     ObIAllocator &allocator);
+  static int tolower(const ObCollationType collation_type,
+                     const ObString &src, ObString &dst,
+                     ObIAllocator &allocator);
+
   static bool case_insensitive_equal(const ObString &one,
                                      const ObString &another,
                                      const ObCollationType &collation_type = CS_TYPE_UTF8MB4_GENERAL_CI);
@@ -436,7 +483,7 @@ public:
                              const uint32_t from_len,
                              const ObCollationType to_type,
                              char *to_str,
-                             uint32_t to_len,
+                             int64_t to_len,
                              uint32_t &result_len,
                              bool trim_incomplete_tail = true,
                              bool report_error = true,

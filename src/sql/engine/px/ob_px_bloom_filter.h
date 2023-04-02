@@ -113,7 +113,6 @@ private:
   GetFunc might_contain_;       // function pointer for might contain
 private:
   common::ObArenaAllocator allocator_;
-  mutable common::ObSpinLock lock_;
 public:
   //无需序列化
    int64_t px_bf_recieve_count_;  // 当前收到bloom filter的个数
@@ -150,19 +149,19 @@ class ObPXBloomFilterHashWrapper
 public:
   ObPXBloomFilterHashWrapper() : tenant_id_(common::OB_INVALID_TENANT_ID),
      filter_id_(common::OB_INVALID_ID), server_id_(common::OB_INVALID_ID),
-     execution_id_(common::OB_INVALID_ID), task_id_(common::OB_INVALID_ID) {}
+     px_sequence_id_(common::OB_INVALID_ID), task_id_(common::OB_INVALID_ID) {}
   explicit ObPXBloomFilterHashWrapper(int64_t tenant_id, int64_t filter_id,
-      int64_t server_id, int64_t execution_id, int64_t task_id) :
+      int64_t server_id, int64_t px_sequence_id, int64_t task_id) :
       tenant_id_(tenant_id), filter_id_(filter_id),
-      server_id_(server_id), execution_id_(execution_id), task_id_(task_id)   {}
+      server_id_(server_id), px_sequence_id_(px_sequence_id), task_id_(task_id)   {}
   ~ObPXBloomFilterHashWrapper(){}
   void init(int64_t tenant_id, int64_t filter_id,
-      int64_t server_id, int64_t execution_id, int64_t task_id = 0)
+      int64_t server_id, int64_t px_sequence_id, int64_t task_id = 0)
   {
     tenant_id_ = tenant_id;
     filter_id_ = filter_id;
     server_id_ = server_id;
-    execution_id_ = execution_id;
+    px_sequence_id_ = px_sequence_id;
     task_id_ = task_id;
   }
   inline bool operator==(const ObPXBloomFilterHashWrapper &other) const
@@ -170,16 +169,16 @@ public:
     return (tenant_id_ == other.tenant_id_ &&
             filter_id_ == other.filter_id_ &&
             server_id_ == other.server_id_ &&
-            execution_id_ == other.execution_id_ &&
+            px_sequence_id_ == other.px_sequence_id_ &&
             task_id_ == other.task_id_);
   }
   inline uint64_t hash() const;
   int64_t tenant_id_;
   int64_t filter_id_;
   int64_t server_id_;
-  int64_t execution_id_;
+  int64_t px_sequence_id_;
   int64_t task_id_;
-  TO_STRING_KV(K_(tenant_id), K_(filter_id), K_(server_id), K_(execution_id), K_(task_id))
+  TO_STRING_KV(K_(tenant_id), K_(filter_id), K_(server_id), K_(px_sequence_id), K_(task_id))
 };
 
 
@@ -190,7 +189,7 @@ inline uint64_t ObPXBloomFilterHashWrapper::hash() const
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&filter_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(&server_id_, sizeof(uint64_t), hash_ret);
-  hash_ret = common::murmurhash(&execution_id_, sizeof(uint64_t), hash_ret);
+  hash_ret = common::murmurhash(&px_sequence_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(&task_id_, sizeof(uint64_t), hash_ret);
   return hash_ret;
 }

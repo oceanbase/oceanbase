@@ -24,7 +24,7 @@ namespace oceanbase
 {
 namespace obrpc
 {
-
+extern int check_arb_white_list(int64_t cluster_id, bool& is_arb);
 class ObRpcSessionHandler;
 class ObRpcStreamCond;
 class ObRpcProcessorBase : public rpc::frame::ObReqProcessor
@@ -36,8 +36,7 @@ public:
       : rpc_pkt_(NULL), sh_(NULL), sc_(NULL), is_stream_(false), is_stream_end_(false),
         bad_routing_(false), preserve_recv_data_(false), preserved_buf_(NULL),
         uncompressed_buf_(NULL), using_buffer_(NULL), send_timestamp_(0), pkt_size_(0), tenant_id_(0),
-        result_compress_type_(common::INVALID_COMPRESSOR),
-        unis_version_(lib::get_unis_global_compat_version())
+        result_compress_type_(common::INVALID_COMPRESSOR)
   {}
 
   virtual ~ObRpcProcessorBase();
@@ -172,11 +171,9 @@ protected:
   int64_t tenant_id_;
   // compress the result if not INVALID_COMPRESSOR
   common::ObCompressorType result_compress_type_;
-  const uint64_t unis_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcProcessorBase);
 }; // end of class ObRpcProcessorBase
-
 } // end of namespace observer
 } // end of namespace oceanbase
 

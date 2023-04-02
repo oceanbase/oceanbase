@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/px/ob_px_sqc_async_proxy.h"
-#include "share/ob_server_blacklist.h"
+#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase {
 using namespace common;
@@ -68,10 +68,8 @@ int ObPxSqcAsyncProxy::launch_all_rpc_request() {
         args.enable_serialize_cache();
       }
       ARRAY_FOREACH_X(sqcs_, idx, count, OB_SUCC(ret)) {
-        if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
-                          share::ObCascadMember(sqcs_.at(idx)->get_exec_addr(), cluster_id),
-                          true /* add_server */,
-                          session_->get_process_query_time()))) {
+        if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(sqcs_.at(idx)->get_exec_addr(),
+                        session_->get_process_query_time()))) {
           ret = OB_RPC_CONNECT_ERROR;
           LOG_WARN("peer no in communication, maybe crashed", K(ret),
                   KPC(sqcs_.at(idx)), K(cluster_id), K(session_->get_process_query_time()));
@@ -185,14 +183,7 @@ int ObPxSqcAsyncProxy::wait_all() {
         if (phy_plan_ctx_->get_timeout_timestamp() -
           ObTimeUtility::current_time() > 0) {
           error_index_ = idx;
-          bool init_sqc_not_send_out = (callback.get_error() == EASY_TIMEOUT_NOT_SENT_OUT
-              || callback.get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
-          if (init_sqc_not_send_out) {
-            // only if it's sure init_sqc msg is not sent to sqc successfully, return OB_RPC_CONNECT_ERROR to retry.
-            ret = OB_RPC_CONNECT_ERROR;
-          } else {
-            ret = OB_PACKET_STATUS_UNKNOWN;
-          }
+          ret = OB_RPC_CONNECT_ERROR;
         } else {
           ret = OB_TIMEOUT;
         }
@@ -210,7 +201,7 @@ int ObPxSqcAsyncProxy::wait_all() {
           if (cb_result.rc_ == OB_ERR_INSUFFICIENT_PX_WORKER) {
             // 没有获得足够的px worker，不需要再做内部SQC的重试，防止死锁
             // SQC如果没有获得足够的worker，外层直接进行query级别的重试
-            // https://work.aone.alibaba-inc.com/issue/28434557
+            //
             LOG_INFO("can't get enough worker resource, and not retry",
                 K(cb_result.rc_), K(*sqcs_.at(idx)));
           }
@@ -256,7 +247,7 @@ void ObPxSqcAsyncProxy::destroy() {
 }
 
 void ObPxSqcAsyncProxy::fail_process() {
-  LOG_WARN(
+  LOG_WARN_RET(OB_SUCCESS,
       "async sqc fails, process the callbacks that have not yet got results",
       K(return_cb_count_), K(callbacks_.count()));
   while (return_cb_count_ < callbacks_.count()) {
@@ -274,7 +265,7 @@ void ObPxSqcAsyncProxy::fail_process() {
     }
     cond_.wait_us(500);
   }
-  LOG_WARN("async sqc fails, all callbacks have been processed");
+  LOG_WARN_RET(OB_SUCCESS, "async sqc fails, all callbacks have been processed");
 }
 
 } // namespace sql

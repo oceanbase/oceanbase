@@ -53,4 +53,9 @@
       _LOG_INFO (args);                                 \
     } while (0)
 
+
+#define FLOG_ERROR_RET(errcode, args...) { int ret = errcode; FLOG_ERROR(args); }
+#define _FLOG_ERROR_RET(errcode, args...) { int ret = errcode; _FLOG_ERROR(args); }
+#define FLOG_WARN_RET(errcode, args...) { int ret = errcode; FLOG_WARN(args); }
+#define _FLOG_WARN_RET(errcode, args...) { int ret = errcode; _FLOG_WARN(args); }
 #endif /* SRC_SHARE_OB_FORCE_PRINT_LOG_H_ */

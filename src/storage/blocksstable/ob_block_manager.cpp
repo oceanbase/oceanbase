@@ -77,7 +77,7 @@ int ObSuperBlockPreadChecker::do_check(void *read_buf, const int64_t read_size)
  * ------------------------------------ObMacroBlockSeqGenerator-------------------------------------
  */
 ObMacroBlockSeqGenerator::ObMacroBlockSeqGenerator()
-  : rewrite_seq_(0), lock_()
+  : rewrite_seq_(0), lock_(common::ObLatchIds::BLOCK_ID_GENERATOR_LOCK)
 {
 }
 
@@ -116,7 +116,7 @@ int ObMacroBlockSeqGenerator::generate_next_sequence(uint64_t &blk_seq)
  * -----------------------------------------ObBlockManager------------------------------------------
  */
 ObBlockManager::ObBlockManager()
-  : lock_(),
+  : lock_(common::ObLatchIds::BLOCK_MANAGER_LOCK),
     bucket_lock_(),
     block_map_(),
     super_block_fd_(),
@@ -173,7 +173,6 @@ int ObBlockManager::init(
   } else if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
     LOG_WARN("fail to init super block buffer holder, ", K(ret));
   } else {
-    timer_.set_run_wrapper(MTL_CTX());
     MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
     mark_cost_time_ = 0;
     sweep_cost_time_= 0;
@@ -500,7 +499,32 @@ int ObBlockManager::get_macro_block_info(const MacroBlockId &macro_id,
   } else {
     macro_block_info.is_free_ = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
     macro_block_info.ref_cnt_ = block_info.mem_ref_cnt_ + block_info.disk_ref_cnt_;
-    macro_block_info.access_time_ = block_info.access_time_;
+    macro_block_info.access_time_ = block_info.last_write_time_;
+  }
+  return ret;
+}
+
+int ObBlockManager::check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const
+{
+  int ret = OB_SUCCESS;
+  is_free = false;
+  BlockInfo block_info;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, ", K(ret), K(macro_id));
+  } else if (OB_FAIL(block_map_.get(macro_id, block_info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get macro id, ", K(ret), K(macro_id));
+    } else {
+      is_free = true;
+      ret = OB_SUCCESS;
+    }
+  } else {
+    is_free = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
   }
   return ret;
 }
@@ -745,6 +769,30 @@ int ObBlockManager::dec_disk_ref(const MacroBlockId &macro_id)
         LOG_ERROR("update block info fail", K(ret), K(macro_id), K(block_info));
       } else {
         LOG_DEBUG("debug ref_cnt: dec_ref in disk", K(ret), K(macro_id), K(block_info), K(lbt()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBlockManager::update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time)
+{
+  int ret = OB_SUCCESS;
+  BlockInfo block_info;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("not init", K(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K(macro_id));
+  } else {
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
+    if (OB_FAIL(block_map_.get(macro_id, block_info))) {
+      LOG_WARN("get block_info fail", K(ret), K(macro_id));
+    } else {
+      block_info.last_write_time_ = update_to_max_time ? INT64_MAX : ObTimeUtility::fast_current_time();
+      if (OB_FAIL(block_map_.insert_or_update(macro_id, block_info))) {
+        LOG_WARN("update block info fail", K(ret), K(macro_id), K(block_info));
       }
     }
   }
@@ -1310,7 +1358,6 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
     read_info.macro_block_id_ = macro_id;
     read_info.offset_ = 0;
     read_info.size_ = blk_mgr_.get_macro_block_size();
-    read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
 
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {
@@ -1390,11 +1437,6 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
         std::max(GCONF._data_storage_io_timeout * 1,
                  max_check_count_per_round * DEFAULT_IO_WAIT_TIME_MS * 1000);
     const int64_t begin_time = ObTimeUtility::current_time();
-#ifdef ERRSIM
-    const int64_t access_time_interval = 0;
-#else
-    const int64_t access_time_interval = ACCESS_TIME_INTERVAL;
-#endif
     int64_t check_count = 0;
 
     for (int64_t i = 0;

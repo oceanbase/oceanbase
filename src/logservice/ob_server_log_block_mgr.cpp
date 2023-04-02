@@ -19,7 +19,6 @@
 #include "lib/ob_define.h"                      // OB_MAX_FILE_NAME_LENGTH
 #include "lib/time/ob_time_utility.h"           // ObTimeUtility
 #include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
-#include "lib/ob_errno.h"                       // errno
 #include "lib/utility/ob_utility.h"             // lower_align
 #include "lib/utility/serialization.h"          // serialization
 #include "lib/file/file_directory_utils.h"      // FileDirectoryUtils
@@ -30,8 +29,9 @@
 #include "palf/log_block_pool_interface.h"      // ILogBlockPool
 #include "palf/log_define.h"                    // block_id_to_string
 #include "observer/ob_server.h"                 // OBSERVER
-#include "observer/ob_server_utils.h"
+#include "observer/ob_server_utils.h"           // get_log_disk_info_in_config
 #include "share/unit/ob_unit_resource.h"        // UNIT_MIN_LOG_DISK_SIZE
+#include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
 namespace oceanbase
 {
@@ -77,6 +77,7 @@ ObServerLogBlockMgr::ObServerLogBlockMgr()
       log_pool_meta_(),
       min_block_id_(0),
       max_block_id_(0),
+      min_log_disk_size_for_all_tenants_(0),
       is_inited_(false)
 {
   memset(log_pool_path_, '\0', OB_MAX_FILE_NAME_LENGTH);
@@ -98,11 +99,14 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
     CLOG_LOG(ERROR, "Invalid argument", K(ret), KPC(this), KP(log_disk_base_path));
   } else if (OB_FAIL(do_init_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_init_ failed", K(ret), KPC(this), K(log_disk_base_path));
-  } else if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(log_pool_path_))) {
-    CLOG_LOG(ERROR, "delete_tmp_file_or_directory_at failed", K(ret), KPC(this));
   } else if (OB_FAIL(do_load_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_load_ failed", K(ret), KPC(this), K(log_disk_base_path));
   } else {
+    get_tenants_log_disk_size_func_ = [this](int64_t &log_disk_size) -> int
+    {
+      log_disk_size = 0;
+      return get_all_tenants_log_disk_size_(log_disk_size);
+    };
     CLOG_LOG(INFO, "ObServerLogBlockMgr init success", KPC(this));
   }
   if (OB_FAIL(ret)) {
@@ -113,19 +117,20 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
 
 void ObServerLogBlockMgr::destroy()
 {
-  CLOG_LOG(WARN, "ObServerLogBlockMgr  destroy", KPC(this));
-  stop();
-  wait();
+  CLOG_LOG_RET(WARN, OB_SUCCESS, "ObServerLogBlockMgr  destroy", KPC(this));
   is_inited_ = false;
+  min_log_disk_size_for_all_tenants_ = 0;
   max_block_id_ = 0;
   min_block_id_ = 0;
+  log_pool_meta_.reset();
   if (true == is_valid_file_desc(meta_fd_)) {
     ::close(meta_fd_);
+    meta_fd_ = -1;
   }
   if (true == is_valid_file_desc(dir_fd_)) {
     ::close(dir_fd_);
+    dir_fd_ = -1;
   }
-  log_pool_meta_.reset();
   if (NULL != log_pool_meta_serialize_buf_) {
     ob_free_align(log_pool_meta_serialize_buf_);
     log_pool_meta_serialize_buf_ = NULL;
@@ -139,27 +144,27 @@ bool ObServerLogBlockMgr::is_reserved() const
   return 0 != log_pool_meta_.curr_total_size_;
 }
 
-void ObServerLogBlockMgr::run1()
-{
-  lib::set_thread_name("LogLoop");
-  run_loop_();
-  CLOG_LOG(INFO, "ObServerLogBlockMgr will stop", KPC(this));
-}
-
-int ObServerLogBlockMgr::reserve(const int64_t new_size_byte)
+int ObServerLogBlockMgr::start(const int64_t new_size_byte)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(resize(new_size_byte))) {
+    CLOG_LOG(WARN, "ObServerLogBlockMGR is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(resize_(new_size_byte))) {
     CLOG_LOG(ERROR, "resize failed", K(ret), KPC(this));
+  } else if (OB_FAIL(get_tenants_log_disk_size_func_(min_log_disk_size_for_all_tenants_))) {
+    CLOG_LOG(WARN, "get_tenants_log_disk_size_func_ failed", K(ret), KPC(this));
+  } else if (min_log_disk_size_for_all_tenants_ > log_pool_meta_.curr_total_size_) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "server log disk is too small to hold all tenants or the count of tenants"
+        " get from MTL is incorrect", K(ret), KPC(this), K(min_log_disk_size_for_all_tenants_));
   } else {
-    CLOG_LOG(INFO, "reserve success", K(ret), KPC(this), K(new_size_byte));
+    CLOG_LOG(INFO, "start success", K(ret), KPC(this), K(new_size_byte));
   }
   return ret;
 }
 
-int ObServerLogBlockMgr::resize(const int64_t new_size_byte)
+int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
@@ -257,25 +262,102 @@ int ObServerLogBlockMgr::remove_block_at(const FileDesc &src_dir_fd,
   int ret = OB_SUCCESS;
   block_id_t dest_block_id = LOG_INVALID_BLOCK_ID;
   char dest_block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(ERROR, "ObServerLogBlockMGR has not inited", K(ret), KPC(this));
-  } else if (OB_FAIL(get_and_inc_max_block_id_guarded_by_lock_(dest_block_id))) {
-    CLOG_LOG(ERROR, "get_and_inc_max_block_id_guarded_by_lock_ failed", K(ret), KPC(this),
-             K(src_dir_fd), K(src_block_path));
-  } else if (OB_FAIL(block_id_to_string(dest_block_id, dest_block_path, OB_MAX_FILE_NAME_LENGTH))) {
-    CLOG_LOG(ERROR, "block_id_to_string failed", K(ret), KPC(this), K(dest_block_id));
-  } else if (OB_FAIL(move_block_not_guarded_by_lock_(dir_fd_, dest_block_path, src_dir_fd,
-                                                     src_block_path))) {
-    CLOG_LOG(ERROR, "move_block_not_guarded_by_lock_ failed", K(ret), KPC(this),
-             K(src_dir_fd), K(src_block_path));
-    // make sure the meta info of both directory has been flushed.
-  } else if (OB_FAIL(fsync_after_rename_(src_dir_fd))) {
-    CLOG_LOG(ERROR, "fsync_after_rename_ failed", K(ret), KPC(this), K(dest_block_id),
-             K(src_dir_fd), K(src_block_path));
+  bool result = true;
+  if (OB_FAIL(is_block_used_for_palf(src_dir_fd, src_block_path, result))) {
+    CLOG_LOG(ERROR, "block_is_used_for_palf failed", K(ret));
+  } else if (false == result) {
+    CLOG_LOG(ERROR, "this block is not used for palf", K(ret), K(src_block_path));
+    ::unlinkat(src_dir_fd, src_block_path, 0);
+  } else if (OB_FAIL(reuse_block_at(src_dir_fd, src_block_path))) {
+    CLOG_LOG(ERROR, "reusle_block_at failed", K(ret), K(src_block_path));
   } else {
-    CLOG_LOG(TRACE, "delete_block_at success", K(ret), KPC(this), K(src_dir_fd),
-             K(src_block_path));
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(ERROR, "ObServerLogBlockMGR has not inited", K(ret), KPC(this));
+    } else if (OB_FAIL(get_and_inc_max_block_id_guarded_by_lock_(dest_block_id))) {
+      CLOG_LOG(ERROR, "get_and_inc_max_block_id_guarded_by_lock_ failed", K(ret), KPC(this),
+               K(src_dir_fd), K(src_block_path));
+    } else if (OB_FAIL(block_id_to_string(dest_block_id, dest_block_path, OB_MAX_FILE_NAME_LENGTH))) {
+      CLOG_LOG(ERROR, "block_id_to_string failed", K(ret), KPC(this), K(dest_block_id));
+    } else if (OB_FAIL(move_block_not_guarded_by_lock_(dir_fd_, dest_block_path, src_dir_fd,
+                                                       src_block_path))) {
+      CLOG_LOG(ERROR, "move_block_not_guarded_by_lock_ failed", K(ret), KPC(this),
+               K(src_dir_fd), K(src_block_path));
+      // make sure the meta info of both directory has been flushed.
+    } else if (OB_FAIL(fsync_after_rename_(src_dir_fd))) {
+      CLOG_LOG(ERROR, "fsync_after_rename_ failed", K(ret), KPC(this), K(dest_block_id),
+               K(src_dir_fd), K(src_block_path));
+    } else {
+      CLOG_LOG(INFO, "delete_block_at success", K(ret), KPC(this), K(src_dir_fd),
+               K(src_block_path));
+    }
+  }
+  return ret;
+}
+
+int ObServerLogBlockMgr::create_tenant(const int64_t log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(resize_lock_);
+  int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
+  if ((tmp_log_disk_size += log_disk_size) > get_total_size_guarded_by_lock_()) {
+    ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
+    CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
+        K(ret), KPC(this), K(log_disk_size));
+  } else {
+    min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
+    CLOG_LOG(INFO, "ObServerLogBlockMGR create_tenant success", KPC(this), K(log_disk_size));
+  }
+  return ret;
+}
+
+void ObServerLogBlockMgr::abort_create_tenant(const int64_t log_disk_size)
+{
+  ObSpinLockGuard guard(resize_lock_);
+  min_log_disk_size_for_all_tenants_ -= log_disk_size;
+  OB_ASSERT(min_log_disk_size_for_all_tenants_ >= 0
+      && min_log_disk_size_for_all_tenants_ <= get_total_size_guarded_by_lock_());
+  CLOG_LOG(INFO, "ObServerLogBlockMGR abort_create_tenant success", KPC(this), K(log_disk_size));
+}
+
+int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size, const int64_t new_log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(resize_lock_);
+  int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
+  tmp_log_disk_size -= old_log_disk_size;
+  if ((tmp_log_disk_size +=new_log_disk_size) > get_total_size_guarded_by_lock_()) {
+    ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
+    CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
+        K(ret), KPC(this),  K(old_log_disk_size), K(new_log_disk_size));
+  } else {
+    min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
+    CLOG_LOG(INFO, "ObServerLogBlockMGR update_tenant success", KPC(this), K(old_log_disk_size), K(new_log_disk_size));
+  }
+  return ret;
+}
+
+void ObServerLogBlockMgr::abort_update_tenant(const int64_t old_log_disk_size, const int64_t new_log_disk_size)
+{
+  ObSpinLockGuard guard(resize_lock_);
+  min_log_disk_size_for_all_tenants_ -= old_log_disk_size;
+  min_log_disk_size_for_all_tenants_ += new_log_disk_size;
+  OB_ASSERT(min_log_disk_size_for_all_tenants_ >= 0
+      && min_log_disk_size_for_all_tenants_ <= get_total_size_guarded_by_lock_());
+  CLOG_LOG(INFO, "ObServerLogBlockMGR abort_update_tenant success", KPC(this), K(old_log_disk_size), K(new_log_disk_size));
+}
+
+int ObServerLogBlockMgr::remove_tenant(const int64_t log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(resize_lock_);
+  if (min_log_disk_size_for_all_tenants_ - log_disk_size < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "unexpected error, min_log_disk_size_for_all_tenants_ is small than zero",
+        K(ret), KPC(this), K(log_disk_size));
+  } else {
+    min_log_disk_size_for_all_tenants_ -= log_disk_size;
+    CLOG_LOG(INFO, "remove tenant from ObServerLogBlockMGR success", KPC(this), K(log_disk_size));
   }
   return ret;
 }
@@ -380,15 +462,16 @@ int ObServerLogBlockMgr::do_load_(const char *log_disk_path)
   int ret = OB_SUCCESS;
   int64_t has_allocated_block_cnt = 0;
   ObTimeGuard time_guard("RestartServerBlockMgr", 1 * 1000 * 1000);
-  if (OB_FAIL(scan_log_disk_dir_(log_disk_path, has_allocated_block_cnt))) {
+  if (OB_FAIL(remove_tmp_file_or_directory_for_tenant_(log_disk_path))) {
+    CLOG_LOG(ERROR, "remove_tmp_file_or_directory_at failed", K(ret), K(log_disk_path));
+  } else if (OB_FAIL(scan_log_disk_dir_(log_disk_path, has_allocated_block_cnt))) {
     CLOG_LOG(ERROR, "scan_log_disk_dir_ failed", K(ret), KPC(this), K(log_disk_path),
              K(has_allocated_block_cnt));
-  } else if (FALSE_IT(time_guard.click("scan_log_disk_dir_"))
+  } else if (FALSE_IT(time_guard.click("scan_log_disk_"))
              || OB_FAIL(scan_log_pool_dir_and_do_trim_())) {
     CLOG_LOG(ERROR, "scan_log_pool_dir_ failed", K(ret), KPC(this), K(log_disk_path));
-  } else if (OB_FAIL(remove_tmp_file_or_directory_for_tenant_(log_disk_path))) {
-    CLOG_LOG(ERROR, "remove_tmp_file_or_directory_at failed", K(ret), K(log_disk_path));
-  } else if (FALSE_IT(time_guard.click("scan_log_pool_dir_")) || OB_FAIL(load_meta_())) {
+  } else if (FALSE_IT(time_guard.click("scan_log_pool_dir_and_do_trim_"))
+             || OB_FAIL(load_meta_())) {
     CLOG_LOG(ERROR, "load_meta_ failed", K(ret), KPC(this), K(log_disk_path));
   } else if (FALSE_IT(time_guard.click("load_meta_"))
              || OB_FAIL(try_continous_to_resize_(has_allocated_block_cnt * BLOCK_SIZE))) {
@@ -556,67 +639,65 @@ bool ObServerLogBlockMgr::check_log_pool_whehter_is_integrity_(
          == has_allocated_block_size_byte + free_size_byte;
 }
 
-void ObServerLogBlockMgr::run_loop_()
+int ObServerLogBlockMgr::try_resize()
 {
   int ret = OB_SUCCESS;
-  while (false == has_set_stop()) {
-    int64_t start_ts = ObTimeUtility::current_time();
-    int64_t log_disk_size = 0;
-    int64_t log_disk_percentage = 0;
-    if (OB_FAIL(observer::ObServerUtils::get_log_disk_info_in_config(log_disk_size,
-                                                                     log_disk_percentage))) {
-      if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-        CLOG_LOG(ERROR, "log disk size is too large", K(ret), KPC(this),
-            K(log_disk_size), K(log_disk_percentage));
-      } else {
-        CLOG_LOG(ERROR, "get_log_disk_info_in_config failed", K(ret), KPC(this),
-            K(log_disk_size), K(log_disk_percentage));
-      }
-    } else if (log_disk_size == get_total_size_guarded_by_lock_()) {
-    } else if (false == check_space_is_enough_(log_disk_size)) {
-      CLOG_LOG(ERROR, "log disk size is not enough to hold all tenants", KPC(this), K(log_disk_size));
-    } else if (OB_FAIL(resize(log_disk_size))) {
-      CLOG_LOG(ERROR, "ObServerLogBlockMGR resize failed", K(ret), KPC(this));
+  int64_t log_disk_size = 0;
+  int64_t log_disk_percentage = 0;
+  if (OB_FAIL(observer::ObServerUtils::get_log_disk_info_in_config(log_disk_size,
+                                                                   log_disk_percentage))) {
+    if (OB_LOG_OUTOF_DISK_SPACE == ret) {
+      CLOG_LOG(ERROR, "log disk size is too large", K(ret), KPC(this),
+          K(log_disk_size), K(log_disk_percentage));
     } else {
-      CLOG_LOG(INFO, "change log_disk_size success", K(ret), K(log_disk_size), KPC(this));
+      CLOG_LOG(ERROR, "get_log_disk_info_in_config failed", K(ret), KPC(this),
+          K(log_disk_size), K(log_disk_percentage));
     }
-    int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-    int64_t sleep_ts = RUN_INTERVAL-cost_ts;
-    ob_usleep(sleep_ts >= 0 ? sleep_ts : 0);
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      CLOG_LOG(INFO, "ObServerLogBlockMGR run loop", K(ret), KPC(this));
-    }
+  } else if (log_disk_size == get_total_size_guarded_by_lock_()) {
+  } else if (false == check_space_is_enough_(log_disk_size)) {
+    CLOG_LOG(ERROR, "log disk size is not enough to hold all tenants", KPC(this), K(log_disk_size));
+  } else if (OB_FAIL(resize_(log_disk_size))) {
+    CLOG_LOG(ERROR, "ObServerLogBlockMGR resize failed", K(ret), KPC(this));
+  } else {
+    CLOG_LOG(INFO, "try_resize success", K(ret), K(log_disk_size), KPC(this));
   }
+  return ret;
 }
 
 bool ObServerLogBlockMgr::check_space_is_enough_(const int64_t log_disk_size) const
 {
   bool bool_ret = false;
-  omt::ObMultiTenant *omt = GCTX.omt_;
-  int64_t tenant_count = 0;
-  int ret = OB_SUCCESS;
   int64_t all_tenants_log_disk_size = 0;
-  auto func = [&all_tenants_log_disk_size] () -> int{
-    int ret = OB_SUCCESS;
-    ObLogService *log_service = MTL(ObLogService*);
-    PalfDiskOptions opts;
-    if (OB_FAIL(log_service->get_palf_disk_options(opts))) {
-      CLOG_LOG(WARN, "get_palf_disk_options failed", K(ret), K(all_tenants_log_disk_size));
-    } else {
-      all_tenants_log_disk_size += opts.log_disk_usage_limit_size_;
-    }
-    return ret;
-  };
-  if (OB_ISNULL(omt)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "omt is nullptr, unexpected error", K(ret), KP(omt));
-  } else if (OB_FAIL(omt->operate_in_each_tenant(func))) {
-    CLOG_LOG(WARN, "operate_in_each_tenant failed", K(ret), K(all_tenants_log_disk_size));
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_tenants_log_disk_size_func_(all_tenants_log_disk_size))) {
+    CLOG_LOG(WARN, "get_tenants_log_disk_size_func_ failed", K(ret), K(all_tenants_log_disk_size));
   } else {
     bool_ret = (all_tenants_log_disk_size <= log_disk_size ? true : false);
     CLOG_LOG(INFO, "check_space_is_enough_ finished", K(all_tenants_log_disk_size), K(log_disk_size));
   }
   return bool_ret;
+}
+
+int ObServerLogBlockMgr::get_all_tenants_log_disk_size_(int64_t &all_tenants_log_disk_size) const
+{
+  int ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  int64_t tenant_count = 0;
+  auto func = [&all_tenants_log_disk_size] () -> int{
+    int ret = OB_SUCCESS;
+    ObLogService *log_service = MTL(ObLogService*);
+    PalfOptions opts;
+    if (OB_FAIL(log_service->get_palf_options(opts))) {
+      CLOG_LOG(WARN, "get_palf_options failed", K(ret), K(all_tenants_log_disk_size));
+    } else {
+      all_tenants_log_disk_size += opts.disk_options_.log_disk_usage_limit_size_;
+    }
+    return ret;
+  };
+  if (OB_FAIL(omt->operate_in_each_tenant(func))) {
+    CLOG_LOG(WARN, "operate_in_each_tenant failed", K(ret), K(all_tenants_log_disk_size));
+  }
+  return ret;
 }
 
 int64_t ObServerLogBlockMgr::get_total_size_guarded_by_lock_()
@@ -1018,17 +1099,13 @@ int ObServerLogBlockMgr::get_has_allocated_blocks_cnt_in_(
       } else if (false == is_dir) {
       } else if (true == std::regex_match(current_file_path, pattern_log)
                  || true == std::regex_match(current_file_path, pattern_meta)) {
-        GetBlockIdRangeFunctor functor(current_file_path);
+        GetBlockCountFunctor functor(current_file_path);
         if (OB_FAIL(palf::scan_dir(current_file_path, functor))) {
           CLOG_LOG(ERROR, "scan_dir failed", K(ret), K(current_file_path));
-        } else if (LOG_INVALID_BLOCK_ID == functor.get_min_block_id()
-                   || LOG_INVALID_BLOCK_ID == functor.get_max_block_id()) {
-          CLOG_LOG(INFO, "empty directory", K(current_file_path));
         } else {
-          has_allocated_block_cnt +=
-              functor.get_max_block_id() - functor.get_min_block_id() + 1;
+          has_allocated_block_cnt += functor.get_block_count();
           CLOG_LOG(INFO, "get_has_allocated_blocks_cnt_in_ success", K(ret),
-                   K(current_file_path), K(has_allocated_block_cnt));
+                   K(current_file_path), "block_cnt", functor.get_block_count());
         }
       } else if (OB_FAIL(get_has_allocated_blocks_cnt_in_(current_file_path,
                                                           has_allocated_block_cnt))) {
@@ -1276,7 +1353,7 @@ int ObServerLogBlockMgr::GetBlockIdListFunctor::func(const dirent *entry)
     if (!is_number) {
       // do nothing, skip invalid block like tmp
     } else {
-      uint32_t block_id = static_cast<uint32_t>(strtol(entry->d_name, nullptr, 10));
+      block_id_t block_id = static_cast<block_id_t>(strtol(entry->d_name, nullptr, 10));
       if (OB_FAIL(block_id_array_.push_back(block_id))) {
         CLOG_LOG(ERROR, "push_back failed", K(ret), K(block_id), K(block_id_array_));
       }

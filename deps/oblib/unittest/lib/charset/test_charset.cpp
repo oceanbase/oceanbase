@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <codecvt>
+#include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
@@ -210,8 +211,8 @@ TEST_F(TestCharset, hash_sort)
   uint64_t ret1 = ObCharset::hash(CS_TYPE_UTF8MB4_GENERAL_CI, a, 3, 0);
   uint64_t ret2 = ObCharset::hash(CS_TYPE_UTF8MB4_GENERAL_CI, b, 3, 0);
   fprintf(stdout, "ret:%lu, ret1:%lu, ret2:%lu\n", ret, ret1, ret2);
-  uint64_t ret3 = ObCharset::hash(CS_TYPE_UTF8MB4_GENERAL_CI, ObString::make_string(b));
-  ASSERT_EQ(ret2, ret3);
+  //uint64_t ret3 = ObCharset::hash(CS_TYPE_UTF8MB4_GENERAL_CI, ObString::make_string(b));
+  ASSERT_EQ(ret1, ret2);
 }
 
 TEST_F(TestCharset, case_mode_equal)
@@ -493,6 +494,76 @@ TEST_F(TestCharset, test_zh2_0900_as_cs)
     str = convert_string("中", coll_type);
     print_sort_key(coll_types[i]);
     */
+  }
+}
+
+
+TEST_F(TestCharset, tolower)
+{
+  ObArenaAllocator allocator;
+  char a1[] = "Variable_name";
+  char a2[] = "Variable_NAME";
+  char a3[] = "variable_name";
+  ObString y1;
+  ObString y2;
+  ObString y3;
+  y1.assign_ptr(a1, strlen(a1));
+  y2.assign_ptr(a2, strlen(a2));
+  y3.assign_ptr(a3, strlen(a3));
+  fprintf(stdout, "ret:%p, %d\n", y1.ptr(), y1.length() );
+  for (int cs_i = CHARSET_INVALID; cs_i < CHARSET_MAX; ++cs_i) {
+    auto charset_type = static_cast<ObCharsetType>(cs_i);
+    if (!ObCharset::is_valid_charset(charset_type) || CHARSET_UTF16 == charset_type || CHARSET_BINARY == charset_type)
+      continue;
+    ObCollationType cs_type = ObCharset::get_default_collation(charset_type);
+    ASSERT_TRUE(ObCharset::is_valid_collation(cs_type));
+    const char *cs_name = ObCharset::charset_name(cs_type);
+
+    ObString y1_res;
+    ASSERT_TRUE(OB_SUCCESS == ObCharset::tolower(cs_type, y1, y1_res, allocator));
+    fprintf(stdout, "charset=%s, src:%.*s, src_lower:%.*s, dst:%.*s\n", cs_name,
+            y1.length(), y1.ptr(), y1_res.length(), y1_res.ptr(), y3.length(), y3.ptr());
+    EXPECT_TRUE(y1_res == y3);
+    ObString y2_res;
+    ASSERT_TRUE(OB_SUCCESS == ObCharset::tolower(cs_type, y2, y2_res, allocator));
+    fprintf(stdout, "charset=%s, src:%.*s, src_lower:%.*s, dst:%.*s\n", cs_name,
+            y2.length(), y2.ptr(), y2_res.length(), y2_res.ptr(), y3.length(), y3.ptr());
+    EXPECT_TRUE(y2_res == y3);
+  }
+}
+
+
+TEST_F(TestCharset, toupper)
+{
+  ObArenaAllocator allocator;
+  char a1[] = "Variable_name";
+  char a2[] = "Variable_NAME";
+  char a3[] = "VARIABLE_NAME";
+  ObString y1;
+  ObString y2;
+  ObString y3;
+  y1.assign_ptr(a1, strlen(a1));
+  y2.assign_ptr(a2, strlen(a2));
+  y3.assign_ptr(a3, strlen(a3));
+  fprintf(stdout, "ret:%p, %d\n", y1.ptr(), y1.length() );
+  for (int cs_i = CHARSET_INVALID; cs_i < CHARSET_MAX; ++cs_i) {
+    auto charset_type = static_cast<ObCharsetType>(cs_i);
+    if (!ObCharset::is_valid_charset(charset_type) || CHARSET_UTF16 == charset_type || CHARSET_BINARY == charset_type)
+      continue;
+    ObCollationType cs_type = ObCharset::get_default_collation(charset_type);
+    ASSERT_TRUE(ObCharset::is_valid_collation(cs_type));
+    const char *cs_name = ObCharset::charset_name(cs_type);
+
+    ObString y1_res;
+    ASSERT_TRUE(OB_SUCCESS == ObCharset::toupper(cs_type, y1, y1_res, allocator));
+    fprintf(stdout, "charset=%s, src:%.*s, src_upper:%.*s, dst:%.*s\n", cs_name,
+            y1.length(), y1.ptr(), y1_res.length(), y1_res.ptr(), y3.length(), y3.ptr());
+    EXPECT_TRUE(y1_res == y3);
+    ObString y2_res;
+    ASSERT_TRUE(OB_SUCCESS == ObCharset::toupper(cs_type, y2, y2_res, allocator));
+    fprintf(stdout, "charset=%s, src:%.*s, src_upper:%.*s, dst:%.*s\n", cs_name,
+            y2.length(), y2.ptr(), y2_res.length(), y2_res.ptr(), y3.length(), y3.ptr());
+    EXPECT_TRUE(y2_res == y3);
   }
 }
 

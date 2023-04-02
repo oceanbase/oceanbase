@@ -150,7 +150,7 @@ void ObConnectResourceMgr::release_tenant_conn_resource(const uint64_t tenant_id
   ObConnectResource *tenant_res = NULL;
   bool has_insert = false;
   if (OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
-    LOG_ERROR("get tenant res map failed", K(ret));
+    LOG_WARN("get tenant res map failed", K(ret));
   } else {
     ObLatchWGuard wr_guard(tenant_res->rwlock_, ObLatchIds::DEFAULT_MUTEX);
     if (OB_UNLIKELY(0 == tenant_res->cur_connections_)) {
@@ -159,6 +159,36 @@ void ObConnectResourceMgr::release_tenant_conn_resource(const uint64_t tenant_id
       tenant_res->cur_connections_--;
     }
   }
+}
+
+int ObConnectResourceMgr::get_tenant_cur_connections(const uint64_t tenant_id,
+                                                     bool &tenant_exists,
+                                                     uint64_t &cur_connections)
+{
+  int ret = OB_SUCCESS;
+  tenant_exists = false;
+  cur_connections = 0;
+  ObTenantUserKey tenant_key(tenant_id, 0);
+  ObConnectResource *tenant_res = NULL;
+  if (OB_FAIL(tenant_res_map_.get(tenant_key, tenant_res))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("get tenant resource failed", K(ret));
+    }
+  } else {
+    tenant_exists = true;
+  }
+  if (OB_SUCC(ret) && tenant_exists) {
+    if (OB_ISNULL(tenant_res)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant resource is null", K(ret));
+    } else {
+      cur_connections = tenant_res->cur_connections_;
+      tenant_res_map_.revert(tenant_res);
+    }
+  }
+  return ret;
 }
 
 // get user resource from hash map, insert if not exist.

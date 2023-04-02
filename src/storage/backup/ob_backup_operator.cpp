@@ -291,8 +291,8 @@ int ObLSBackupOperator::report_tablet_skipped(
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(skipped_tablet));
   } else if (OB_FAIL(fill_backup_skipped_tablet_(skipped_tablet, dml_splicer))) {
     LOG_WARN("failed to fill backup skipped tablet", K(ret), K(skipped_tablet));
-  } else if (OB_FAIL(dml_splicer.splice_update_sql(OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, sql))) {
-    LOG_WARN("failed to splice update sql", K(ret), K(sql));
+  } else if (OB_FAIL(dml_splicer.splice_insert_update_sql(OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, sql))) {
+    LOG_WARN("failed to splice insert update sql", K(ret), K(tenant_id), K(skipped_tablet), K(sql));
   } else if (OB_FAIL(sql_client.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", K(ret), K(sql));
   } else {
@@ -404,6 +404,8 @@ int ObLSBackupOperator::fill_backup_skipped_tablet_(const ObBackupSkippedTablet 
   } else if (OB_FAIL(dml.add_column("ls_id", task_info.ls_id_.id()))) {
     LOG_WARN("failed to add column", K(task_info));
   } else if (OB_FAIL(dml.add_column("backup_set_id", task_info.backup_set_id_))) {
+    LOG_WARN("failed to add column", K(task_info));
+  } else if (OB_FAIL(dml.add_column("skipped_type", task_info.skipped_type_.str()))) {
     LOG_WARN("failed to add column", K(task_info));
   }
   return ret;

@@ -28,7 +28,7 @@
 #define FLT_END_SPAN(span)                                      \
 if (OB_NOT_NULL(span)) {                                        \
   OBTRACE->end_span(span);                                      \
-  if (span->span_id_.is_inited() && OBTRACE->is_auto_flush()) { \
+  if (span->is_inited() && OBTRACE->is_auto_flush()) { \
     FLUSH_TRACE();                                              \
   }                                                             \
 }
@@ -39,15 +39,10 @@ if (OB_NOT_NULL(span)) {                                        \
 #define FLT_SET_TRACE_LEVEL(level) (OBTRACE->set_level(level))
 #define FLT_SET_AUTO_FLUSH(value) (OBTRACE->set_auto_flush(value))
 
-namespace oceanbase
-{
-namespace sql
-{
-class ObFLTSpanMgr;
-extern ObFLTSpanMgr* get_flt_span_manager();
-extern int handle_span_record(char* buf, const int64_t buf_len, ObFLTSpanMgr* flt_span_manager);
-}
-}
+#define FLT_RESTORE_DDL_TRACE_CTX(flt_ctx) (OBTRACE->init(flt_ctx))
+#define FLT_RESTORE_DDL_SPAN(span_type, span_id, start_ts) (OBTRACE->begin_span_by_id(::oceanbase::trace::ObSpanType::span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::span_type), false, span_id, start_ts))
+#define FLT_RELEASE_DDL_SPAN(span) (OBTRACE->release_span(span))
+
 #define FLUSH_TRACE() ::oceanbase::trace::flush_trace();
 
 #define FLTSpanGuard(span_type) ::oceanbase::trace::__ObFLTSpanGuard __##span_type##__LINE__(::oceanbase::trace::ObSpanType::span_type, GET_SPANLEVEL(::oceanbase::trace::ObSpanType::span_type))
@@ -58,6 +53,18 @@ namespace oceanbase
 {
 namespace trace
 {
+static const char* __span_type_mapper[] = {
+#define FLT_DEF_SPAN(name, comment) #name,
+#define __HIGH_LEVEL_SPAN
+#define __MIDDLE_LEVEL_SPAN
+#define __LOW_LEVEL_SPAN
+#include "lib/trace/ob_trace_def.h"
+#undef __LOW_LEVEL_SPAN
+#undef __MIDDLE_LEVEL_SPAN
+#undef __HIGH_LEVEL_SPAN
+#undef FLT_DEF_SPAN
+};
+
 extern void flush_trace();
 
 struct UUID
@@ -98,6 +105,7 @@ struct UUID
 };
 
 struct FltTransCtx {
+  OB_UNIS_VERSION(1);
 public:
   FltTransCtx()
     : trace_id_(), span_id_(), policy_(0)
@@ -110,7 +118,8 @@ public:
   union {
     uint8_t policy_;
     struct {
-      uint8_t level_ : 7;
+      uint8_t level_ : 6;
+      bool enable_show_trace_ : 1;
       bool auto_flush_ : 1;
     };
   };
@@ -118,6 +127,7 @@ public:
 
 struct ObTagCtxBase
 {
+  friend void flush_trace();
   ObTagCtxBase() : next_(nullptr), tag_type_(0) {}
   virtual ~ObTagCtxBase() {}
   virtual int tostring(char* buf, const int64_t buf_len, int64_t& pos)
@@ -138,6 +148,7 @@ struct ObTagCtxBase
     }
     return ret;
   }
+protected:
   ObTagCtxBase* next_;
   uint16_t tag_type_;
 };
@@ -178,6 +189,7 @@ int tag_to_string(char* buf, const int64_t buf_len, int64_t& pos, const T& value
 template <typename T>
 struct ObTagCtx final : public ObTagCtxBase
 {
+  friend struct ObTrace;
   ObTagCtx() {}
   virtual ~ObTagCtx() override {}
   virtual int tostring(char* buf, const int64_t buf_len, int64_t& pos) override
@@ -190,13 +202,18 @@ struct ObTagCtx final : public ObTagCtxBase
     }
     return ret;
   }
+private:
   T data_;
 };
 
 struct ObSpanCtx final : public common::ObDLinkBase<ObSpanCtx>
 {
+  friend struct ObTrace;
+  friend void flush_trace();
+public:
   ObSpanCtx();
-
+  OB_INLINE bool is_inited() const { return span_id_.is_inited(); }
+  UUID get_span_id() const { return span_id_; }
   UUID span_id_;
   ObSpanCtx* source_span_;
   int64_t start_ts_;
@@ -225,6 +242,13 @@ struct ObTrace
   UUID begin();
   void end();
   ObSpanCtx* begin_span(uint32_t span_type, uint8_t level, bool is_follow);
+  // used in ddl task tracing
+  ObSpanCtx* begin_span_by_id(const uint32_t span_type,
+                              const uint8_t level,
+                              const bool is_follow,
+                              const UUID span_id,
+                              const int64_t start_ts);
+  void release_span(ObSpanCtx *&span);
   void end_span(ObSpanCtx* span_id);
   void reset_span();
   template <typename T, typename... Targs>
@@ -246,9 +270,12 @@ struct ObTrace
   OB_INLINE UUID get_trace_id() { return trace_id_; }
   OB_INLINE UUID get_root_span_id() { return root_span_id_; }
   OB_INLINE uint8_t get_policy() { return policy_; }
-  OB_INLINE void set_level(uint8_t level) { level_ = 0x7f & level; }
+  OB_INLINE uint8_t get_level() { return level_; }
+  OB_INLINE void set_level(uint8_t level) { level_ = 0x3f & level; }
   OB_INLINE void set_auto_flush(bool auto_flush) { auto_flush_ = auto_flush; }
   OB_INLINE bool is_auto_flush() { return auto_flush_; }
+  OB_INLINE void set_enable_show_trace(bool enable_show_trace) { enable_show_trace_ = enable_show_trace; }
+  OB_INLINE bool is_enable_show_trace() { return enable_show_trace_; }
   void check_leak_span();
   void reset();
   void dump_span();
@@ -317,7 +344,8 @@ private:
   union {
     uint8_t policy_;
     struct {
-      uint8_t level_ : 7;
+      uint8_t level_ : 6;
+      bool enable_show_trace_ : 1;
       bool auto_flush_ : 1;
     };
   };
@@ -332,7 +360,7 @@ public:
   {
     span_ = OBTRACE->begin_span(span_type, level, false);
 #ifndef NDEBUG
-    if (OB_NOT_NULL(span_) && span_->span_id_.is_inited()) {
+    if (OB_NOT_NULL(span_) && span_->is_inited()) {
       FLT_SET_TAG(span_back_trace, lbt());
     }
 #endif
@@ -347,5 +375,15 @@ int ObTagCtx<char*>::tostring(char* buf, const int64_t buf_len, int64_t& pos);
 
 } // trace
 } // oceanbase
+
+namespace oceanbase
+{
+namespace sql
+{
+class ObFLTSpanMgr;
+extern ObFLTSpanMgr* get_flt_span_manager();
+extern int handle_span_record(char* buf, const int64_t buf_len, ObFLTSpanMgr* flt_span_manager, ::oceanbase::trace::ObSpanCtx* span);
+}
+}
 
 #endif /* _OB_TRACE_H */

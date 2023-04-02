@@ -23,6 +23,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace transaction;
 using namespace common;
 namespace memtable
@@ -40,7 +41,7 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
   reset();
   int64_t lock_for_read_start = ObClockGenerator::getClock();
   ctx_ = &ctx;
-  if (OB_UNLIKELY(INT64_MAX == ctx.get_snapshot_version())) {
+  if (OB_UNLIKELY(!ctx.get_snapshot_version().is_valid())) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_ISNULL(value)) {
     // row not exist
@@ -93,7 +94,7 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   // add barrier snapshot version for defensive check
   if (NULL != version_iter_) {
     if (ctx_->is_weak_read()) {
-      version_iter_->set_safe_read_barrier(ctx_->snapshot_.version_);
+      version_iter_->set_safe_read_barrier(true);
       version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
     }
     if (!flag.is_prewarm()
@@ -145,7 +146,8 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const ObTransID &snapshot_tx_id = ctx_->snapshot_.tx_id_;
   const ObTransID &reader_tx_id = ctx_->tx_id_;
   const int64_t snapshot_seq_no = ctx_->snapshot_.scn_;
-  const int64_t snapshot_version = ctx_->snapshot_.version_;
+
+  const SCN snapshot_version = ctx_->get_snapshot_version();
   const int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
   ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
   const bool read_latest = flag.is_read_latest();
@@ -176,7 +178,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         because inner tx read only care whether tx node rollbacked
     if (is_committed || is_elr) {
       // Case 2: Data is committed, so the state is decided
-      const int64_t data_version = ATOMIC_LOAD(&iter->trans_version_);
+      const SCN data_version = iter->trans_version_.atomic_load();
       if (snapshot_version >= data_version) {
         // Case 2.1 Read the version if it is smaller than read version
         version_iter_ = iter;
@@ -220,7 +222,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         is_delay_cleanout() to check the state and we only cleanout it
     //         when data is delay cleanout
     bool can_read = false;
-    int64_t data_version = INT64_MAX;
+    SCN data_version = SCN::max_scn();
     bool is_determined_state = false;
     // Opt3: we only cleanout tx node who is delay cleanout
     ObCleanoutOp cleanout_op;
@@ -292,7 +294,7 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       if (NULL == version_iter_) {
         ret = OB_ITER_END;
       } else if (OB_FAIL(try_cleanout_tx_node_(version_iter_))) {
-        TRANS_LOG(ERROR, "fail to cleanout tnode", K(ret), K(*version_iter_));
+        TRANS_LOG(WARN, "fail to cleanout tnode", K(ret), K(*version_iter_));
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
       } else if (!(version_iter_->is_aborted()              // skip abort version
@@ -321,6 +323,23 @@ void ObMvccValueIterator::move_to_next_node_()
   } else {
     version_iter_ = version_iter_->prev_;
   }
+}
+
+int ObMvccValueIterator::check_row_locked(ObStoreRowLockState &lock_state)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "not init", KP(this));
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(value_)) {
+    ret = OB_SUCCESS;
+    TRANS_LOG(WARN, "get value iter but mvcc row in it is null", K(ret));
+  } else if (OB_FAIL(value_->check_row_locked(*ctx_, lock_state))){
+    TRANS_LOG(WARN, "check row locked fail", K(ret), KPC(value_), KPC(ctx_), K(lock_state));
+  } else {
+    lock_state.mvcc_row_ = value_;
+  }
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -353,14 +372,14 @@ int ObMvccRowIterator::init(
   if (OB_FAIL(query_engine.scan(
       range.start_key_,  !range.border_flag_.inclusive_start(),
       range.end_key_,    !range.border_flag_.inclusive_end(),
-      ctx.snapshot_.version_,
+      ctx.snapshot_.version_.get_val_for_tx(),
       query_engine_iter_))) {
     TRANS_LOG(WARN, "query engine scan fail", K(ret));
   } else {
     ctx_ = &ctx;
     query_flag_ = query_flag;
     query_engine_ = &query_engine;
-    query_engine_iter_->set_version(ctx.snapshot_.version_);
+    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_tx());
     is_inited_ = true;
   }
   return ret;
@@ -453,7 +472,7 @@ int ObMvccRowIterator::try_purge(const ObTxSnapshot &snapshot_info,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(query_engine_->check_and_purge(key,
                                                     row,
-                                                    snapshot_info.version_,
+                                                    snapshot_info.version_.get_val_for_tx(),
                                                     purged))) {
     STORAGE_LOG(ERROR, "check_and_purge", K(ret), K(key), K(row), K(snapshot_info));
   } else if (purged) {
@@ -463,12 +482,6 @@ int ObMvccRowIterator::try_purge(const ObTxSnapshot &snapshot_info,
   return ret;
 }
 
-int ObMvccRowIterator::get_end_gap_key(const ObTxSnapshot &snapshot_info, const ObStoreRowkey *&key, int64_t& size)
-{
-  ObIQueryEngineIterator *iter = query_engine_iter_;
-  bool is_reverse = iter->is_reverse_scan();
-  return query_engine_->skip_gap(iter->get_key(), key, snapshot_info.version_, is_reverse, size);
-}
 } // namespace memtable
 } // namespace oceanbase
 

@@ -80,41 +80,26 @@ int ObLogSubPlanScan::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogSubPlanScan::print_my_plan_annotation(char *buf,
-                                               int64_t &buf_len,
-                                               int64_t &pos,
-                                               ExplainType type)
+int ObLogSubPlanScan::get_plan_item_info(PlanText &plan_text,
+                                         ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
   // print access
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else { /* Do nothing */ }
-  const ObIArray<ObRawExpr*> &access = get_access_exprs();
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
-  } else { /* Do nothing */ }
-  return ret;
-}
-
-int ObLogSubPlanScan::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *child = get_child(first_child);
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_ISNULL(child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("child is NULL", K(ret));
-  } else if (OB_FAIL(link_ctx.spell_subplan_scan(static_cast<const ObSelectStmt *>(get_stmt()),
-                                                get_output_exprs(),
-                                                child->get_output_exprs(),
-                                                startup_exprs_,
-                                                filter_exprs_,
-                                                subquery_name_))) {
-    LOG_WARN("dblink fail to reverse spell subplan scan", K(dblink_id_), K(ret));
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
+  }
+  if (OB_SUCC(ret)) {
+    const ObString &name = get_subquery_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
   }
   return ret;
 }

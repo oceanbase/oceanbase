@@ -31,7 +31,7 @@ public:
   ObServerConnectionPool();
   ~ObServerConnectionPool();
   int acquire(ObMySQLConnection *&connection, uint32_t sessid);
-  int release(ObMySQLConnection *connection, const bool succ, uint32_t sessid);
+  int release(common::sqlclient::ObISQLConnection *conn, const bool succ, uint32_t sessid = 0) override;
   uint64_t get_busy_count(void) const;
 public:
   int init(ObMySQLConnectionPool *root,
@@ -41,6 +41,7 @@ public:
   void reset();
   void renew();
   int64_t last_renew_time(void) const;
+  void reset_idle_conn_to_sys_tenant();
   void set_server_gone(bool gone);
   const char *get_db_user() const;
   const char *get_db_pass() const;
@@ -49,7 +50,8 @@ public:
   ObMySQLConnectionPool *get_root();
   void close_all_connection();
   void dump();
-  TO_STRING_KV(K_(free_conn_count),
+  TO_STRING_KV(K_(server),
+               K_(free_conn_count),
                K_(busy_conn_count));
   // dblink.
   int init_dblink(uint64_t dblink_id, const ObAddr &server,

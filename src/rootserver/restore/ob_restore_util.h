@@ -53,7 +53,7 @@ public:
   static int get_restore_source(
              const ObIArray<ObString>& tenant_path_array,
              const common::ObString &passwd_array,
-             const uint64_t restore_timestamp_ns,
+             const share::SCN &restore_scn,
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
              ObIArray<share::ObBackupPiecePath> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
@@ -69,6 +69,8 @@ public:
   static int get_restore_ls_palf_base_info(const share::ObPhysicalRestoreJob &job_info,
                                            const share::ObLSID &ls_id,
                                            palf::PalfBaseInfo &palf_base_info);
+  static int check_physical_restore_finish(common::ObISQLClient &proxy, uint64_t tenant_id, bool &is_finish, bool &is_failed);
+
 private:
   static int fill_backup_info_(
              const obrpc::ObPhysicalRestoreTenantArg &arg,
@@ -82,13 +84,13 @@ private:
   static int get_restore_backup_set_array_(
              const ObIArray<ObString> &tenant_path_array,
              const common::ObString &passwd_array,
-             const int64_t restore_timestamp_ns,
-             int64_t &restore_start_log_ts,
+             const share::SCN &restore_scn,
+             share::SCN &restore_start_scn,
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   static int get_restore_log_piece_array_(
              const ObIArray<ObString> &tenant_path_array,
-             const int64_t restore_start_log_ts,
-             const int64_t restore_end_log_ts,
+             const share::SCN &restore_start_scn,
+             const share::SCN &restore_end_scn,
              ObIArray<share::ObBackupPiecePath> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
   static int get_restore_backup_piece_list_(
@@ -106,6 +108,7 @@ private:
   static int do_fill_backup_info_(
              const share::ObBackupSetPath & backup_set_path,
              share::ObPhysicalRestoreJob &job);
+  static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
   static int get_encrypt_backup_dest_format_str(
       const ObArray<ObString> &original_dest_list,
       common::ObArenaAllocator &allocator,

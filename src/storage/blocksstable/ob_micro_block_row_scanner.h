@@ -230,6 +230,10 @@ private:
       bool &can_read,
       int64_t &trans_version,
       bool &is_determined_state);
+  // The store_rowkey is a decoration of the ObObj pointer,
+  // and it will be destroyed when the life cycle of the rowkey_helper is end.
+  // So we have to send it into the function to avoid this situation.
+  int get_store_rowkey(ObStoreRowkey &store_rowkey, ObDatumRowkeyHelper &rowkey_helper);
 private:
   ObDatumRow prev_micro_row_;
   storage::ObNopPos nop_pos_;
@@ -265,11 +269,11 @@ public:
       is_row_queue_ready_(false),
       scan_state_(SCAN_START),
       committed_trans_version_(INT64_MAX),
+      last_trans_state_(INT64_MAX),
       read_trans_id_(),
       last_trans_id_(),
       first_rowkey_flag_(true),
-      have_output_row_flag_(false),
-      is_first_row_filtered_(false)
+      have_output_row_flag_(false)
   {
     for (int i = 0; i < COMPACT_MAX_ROW; ++i) {
       nop_pos_[i] = NULL;
@@ -364,11 +368,11 @@ private:
   bool is_row_queue_ready_;
   ScanState scan_state_;
   int64_t committed_trans_version_;
+  int64_t last_trans_state_;
   transaction::ObTransID read_trans_id_;
   transaction::ObTransID last_trans_id_;
   bool first_rowkey_flag_;
   bool have_output_row_flag_;
-  bool is_first_row_filtered_; //the flag indicate that if the sstable cut the first row
 };
 
 }

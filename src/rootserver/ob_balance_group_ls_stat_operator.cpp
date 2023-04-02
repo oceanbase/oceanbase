@@ -260,7 +260,7 @@ int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
       // commit/abort
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", K(tmp_ret), "is_commit", OB_SUCC(ret));
+        LOG_WARN("trans end failed", K(tmp_ret), "is_commit", OB_SUCCESS == ret);
         ret = (OB_SUCCESS == ret ? tmp_ret : ret);
       }
     }

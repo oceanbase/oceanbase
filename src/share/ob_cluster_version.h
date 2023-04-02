@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace omt
+{
+class ObTenantConfigMgr;
+}
 namespace common
 {
 class ObServerConfig;
@@ -32,8 +36,10 @@ public:
   void destroy();
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
+  int init(const common::ObServerConfig *config,
+           const omt::ObTenantConfigMgr *tenant_config_mgr);
+
   /* cluster version related */
-  int init(const common::ObServerConfig *config);
   int init(const uint64_t cluster_version);
   int refresh_cluster_version(const char *verstr);
   int reload_config();
@@ -44,6 +50,8 @@ public:
   /* data version related */
   int get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version);
   int tenant_need_upgrade(const uint64_t tenant_id, bool &need_upgrade);
+  // ATTENTION!!! this interface only work for unittest
+  void update_data_version(const uint64_t data_version);
   /*------------------------*/
 public:
   static ObClusterVersion &get_instance();
@@ -52,6 +60,7 @@ public:
   static int get_version(const common::ObString &verstr, uint64_t &version);
   static int64_t print_vsn(char *buf, const int64_t buf_len, uint64_t version);
   static int64_t print_version_str(char *buf, const int64_t buf_len, uint64_t version);
+  static bool check_version_valid_(const uint64_t version);
 public:
   static const int64_t MAX_VERSION_ITEM = 16;
   static const int64_t MAJOR_POS       = 0;
@@ -59,11 +68,12 @@ public:
   static const int64_t MAJOR_PATCH_POS = 2;
   static const int64_t MINOR_PATCH_POS = 3;
 private:
-  static bool check_version_valid_(const uint64_t version);
-private:
   bool is_inited_;
   const common::ObServerConfig *config_;
+  const omt::ObTenantConfigMgr *tenant_config_mgr_;
   uint64_t cluster_version_;
+  // ATTENTION!!! this member is only valid for unittest
+  uint64_t data_version_;
 };
 
 #define OB_VSN_MAJOR_SHIFT 32
@@ -160,26 +170,18 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
 #define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_1_0_0
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
-#define GET_UNIS_CLUSTER_VERSION() (::oceanbase::lib::get_unis_compat_version() ?: GET_MIN_CLUSTER_VERSION())
 
-#define IS_CLUSTER_VERSION_BEFORE_1472 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_1472)
-#define IS_CLUSTER_VERSION_BEFORE_2200 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_2200)
-#define IS_CLUSTER_VERSION_BEFORE_2240 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_2240)
-#define IS_CLUSTER_VERSION_BEFORE_3000 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3000)
-#define IS_CLUSTER_VERSION_BEFORE_3100 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3100)
-#define IS_CLUSTER_VERSION_BEFORE_4_0_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_0_0_0)
-
-#define IS_CLUSTER_VERSION_AFTER_2274 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() > CLUSTER_VERSION_2274)
+#define IS_CLUSTER_VERSION_BEFORE_4_1_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_1_0_0)
 
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // 1. After 4.0, each cluster_version is corresponed to a data version.
 // 2. cluster_version and data_version is not compariable.
 // 3. TODO: If you update data_version below, please update DATA_CURRENT_VERSION & ObUpgradeChecker too.
-// For more detail: https://yuque.antfin-inc.com/ob/rootservice/xywr36
 #define DATA_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
 
 // should check returned ret
+#define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_0_0_0
 #define DATA_CURRENT_VERSION DATA_VERSION_4_1_0_0
 #define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))
 #define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))

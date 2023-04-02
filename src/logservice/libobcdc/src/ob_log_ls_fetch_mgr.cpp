@@ -46,7 +46,8 @@ namespace libobcdc
 int64_t ObLogLSFetchMgr::g_print_slowest_ls_num = ObLogConfig::default_print_fetcher_slowest_ls_num;
 
 ObLogLSFetchMgr::ObLogLSFetchMgr() :
-    inited_(false),
+    is_inited_(false),
+    fetcher_(nullptr),
     progress_controller_(NULL),
     part_trans_resolver_factory_(NULL),
     ctx_map_(),
@@ -61,18 +62,21 @@ ObLogLSFetchMgr::~ObLogLSFetchMgr()
   destroy();
 }
 
-int ObLogLSFetchMgr::init(const int64_t max_cached_ls_fetch_ctx_count,
+int ObLogLSFetchMgr::init(
+    const int64_t max_cached_ls_fetch_ctx_count,
     PartProgressController &progress_controller,
-    IObLogPartTransResolverFactory &part_trans_resolver_factory)
+    IObLogPartTransResolverFactory &part_trans_resolver_factory,
+    void *fetcher_host)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(inited_)) {
-    LOG_ERROR("init twice");
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (OB_UNLIKELY(max_cached_ls_fetch_ctx_count <= 0)) {
-    LOG_ERROR("invalid argument", K(max_cached_ls_fetch_ctx_count));
+    LOG_ERROR("init twice", KR(ret));
+  } else if (OB_UNLIKELY(max_cached_ls_fetch_ctx_count <= 0)
+      || OB_ISNULL(fetcher_host)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(max_cached_ls_fetch_ctx_count), K(fetcher_host));
   } else if (OB_FAIL(ctx_map_.init(ObModIds::OB_LOG_PART_FETCH_CTX_MAP))) {
     LOG_ERROR("init LSFetchCtxMap fail", KR(ret));
   } else if (OB_FAIL(ctx_pool_.init(max_cached_ls_fetch_ctx_count,
@@ -85,7 +89,8 @@ int ObLogLSFetchMgr::init(const int64_t max_cached_ls_fetch_ctx_count,
     progress_controller_ = &progress_controller;
     part_trans_resolver_factory_ = &part_trans_resolver_factory;
     start_global_trans_version_ = OB_INVALID_TIMESTAMP;
-    inited_ = true;
+    fetcher_ = fetcher_host;
+    is_inited_ = true;
 
     LOG_INFO("init LS fetch mgr succ", K(max_cached_ls_fetch_ctx_count));
   }
@@ -97,7 +102,8 @@ void ObLogLSFetchMgr::destroy()
 {
   // TODO: recycle all task in map
 
-  inited_ = false;
+  is_inited_ = false;
+  fetcher_ = nullptr;
   progress_controller_ = NULL;
   part_trans_resolver_factory_ = NULL;
   (void)ctx_map_.destroy();
@@ -107,19 +113,24 @@ void ObLogLSFetchMgr::destroy()
   LOG_INFO("destroy LS fetch mgr succ");
 }
 
-int ObLogLSFetchMgr::add_ls(const TenantLSID &tls_id,
-    const int64_t start_tstamp_ns,
-    const palf::LSN &start_lsn)
+int ObLogLSFetchMgr::add_ls(
+    const TenantLSID &tls_id,
+    const ObLogFetcherStartParameters &start_parameters,
+    const bool is_loading_data_dict_baseline_data,
+    const ClientFetchingMode fetching_mode,
+    const ObBackupPathString &archive_dest_str)
 {
   int ret = OB_SUCCESS;
   LSFetchCtx *ctx = NULL;
   int64_t progress_id = -1;
   IObCDCPartTransResolver *part_trans_resolver = NULL;
   char *tls_id_str = NULL;
+  const int64_t start_tstamp_ns = start_parameters.get_start_tstamp_ns();
+  const palf::LSN &start_lsn = start_parameters.get_start_lsn();
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("not init");
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogLSFetchMgr is not init", KR(ret));
   }
   // start timestamp must be valid!
   else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == start_tstamp_ns)) {
@@ -152,7 +163,8 @@ int ObLogLSFetchMgr::add_ls(const TenantLSID &tls_id,
   else if (OB_FAIL(progress_controller_->acquire_progress(progress_id, start_tstamp_ns))) {
     LOG_ERROR("acquire_progress fail", KR(ret), K(start_tstamp_ns));
   // init LSFetchCtx
-  } else if (OB_FAIL(ctx->init(tls_id, start_tstamp_ns, start_lsn, progress_id, *part_trans_resolver, *this))) {
+  } else if (OB_FAIL(ctx->init(tls_id, start_parameters, is_loading_data_dict_baseline_data,
+          progress_id, fetching_mode, archive_dest_str, *part_trans_resolver, *this))) {
     LOG_ERROR("ctx init fail", KR(ret), K(tls_id), K(start_tstamp_ns), K(start_lsn), K(progress_id));
   } else {
     if (OB_FAIL(ctx_map_.insert(tls_id, ctx))) {
@@ -163,9 +175,9 @@ int ObLogLSFetchMgr::add_ls(const TenantLSID &tls_id,
       }
     } else {
       _LOG_INFO("[STAT] [LSFetchMgr] [ADD_LS] tls_id=%s start_lsn=%s start_tstamp_ns=%ld(%s) "
-          "progress_id=%ld fetch_task=%p part_trans_resolver=%p",
+          "progress_id=%ld fetch_task=%p part_trans_resolver=%p start_parameters=%s",
           to_cstring(tls_id), to_cstring(start_lsn), start_tstamp_ns, NTS_TO_STR(start_tstamp_ns),
-          progress_id, ctx, part_trans_resolver);
+          progress_id, ctx, part_trans_resolver, to_cstring(start_parameters));
     }
   }
 
@@ -230,7 +242,7 @@ bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const TenantLSID &tls_id,
   bool bool_ret = false;
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("invalid part fetch ctx", K(ctx), K(tls_id));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid part fetch ctx", K(ctx), K(tls_id));
     bool_ret = false;
   } else {
     _LOG_INFO("[STAT] [LSFetchMgr] [RECYCLE_LS] tls_id=%s "
@@ -251,9 +263,9 @@ int ObLogLSFetchMgr::recycle_ls(const TenantLSID &tls_id)
   int ret = OB_SUCCESS;
   CtxRecycleCond recycle_cond;
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("not init");
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogLSFetchMgr is not init", KR(ret));
   } else if (OB_FAIL(ctx_map_.operate(tls_id, recycle_cond))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       // as expected
@@ -271,9 +283,9 @@ int ObLogLSFetchMgr::remove_ls(const TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("not init");
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogLSFetchMgr is not init", KR(ret));
   } else if (OB_ISNULL(progress_controller_) || OB_ISNULL(part_trans_resolver_factory_)) {
     LOG_ERROR("invalid progress controller", K(progress_controller_), K(part_trans_resolver_factory_));
     ret = OB_INVALID_ERROR;
@@ -322,9 +334,9 @@ int ObLogLSFetchMgr::get_ls_fetch_ctx(const TenantLSID &tls_id, LSFetchCtx *&ctx
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("not init");
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogLSFetchMgr is not init", KR(ret));
   } else if (OB_FAIL(ctx_map_.get(tls_id, ctx))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       // tls_id not exist in map
@@ -384,9 +396,9 @@ void ObLogLSFetchMgr::print_k_slowest_ls()
   int64_t part_num = ctx_map_.count();
   CtxLSProgressCond ls_progress_cond;
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("not init");
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogLSFetchMgr is not init", KR(ret));
   } else if (part_num > 0) {
     if (OB_FAIL(ls_progress_cond.init(part_num))) {
       LOG_ERROR("part progree cond init fail", KR(ret), K(part_num));
@@ -443,9 +455,9 @@ int ObLogLSFetchMgr::set_start_global_trans_version(const int64_t start_global_t
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("not init");
-    ret = OB_INIT_TWICE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogLSFetchMgr is not init", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == start_global_trans_version)) {
     LOG_ERROR("invalid argument", K(start_global_trans_version));
     ret = OB_INVALID_ARGUMENT;

@@ -19,6 +19,7 @@
 #include "ob_archive_define.h"             // DEFAULT_THREAD_RUN_INTERVAL
 #include "share/ob_ls_id.h"        // ObLSID
 #include "logservice/palf/lsn.h"           // LSN
+#include "share/scn.h"           // SCN
 #include <cstdint>
 
 namespace oceanbase
@@ -52,7 +53,7 @@ using oceanbase::logservice::ObLogService;
  * 完整归档文件大小, 比如64M/128M..;
  *
  * 根据每个日志流日志积压数量以及落后程度, 决定每次为日志流产生任务量多少,
- * 由于Sequencer模块本身无法感知到日志流日志offset与log_ts关系, sequencer根据fetcher模块进度
+ * 由于Sequencer模块本身无法感知到日志流日志offset与scn关系, sequencer根据fetcher模块进度
  * 以及已分配任务数量作为归档进度的参考
  *
  * NB: Sequencer产生的单个任务可以包含当前不存在的日志范围, 既start_offset < commit_lsn < end_offset
@@ -98,8 +99,8 @@ private:
   ObArchiveFetcher             *archive_fetcher_;
   ObArchiveLSMgr               *ls_mgr_;
   ObArchiveRoundMgr            *round_mgr_;
-  // 全部日志流最小定序任务log ts
-  int64_t                      min_log_ts_;
+  // 全部日志流最小定序任务scn
+  share::SCN                      min_scn_;
 
   // 添加开启归档/日志流归档任务/以及消费LogFetchTask唤醒sequencer
   common::ObCond               seq_cond_;
@@ -117,18 +118,18 @@ public:
     round_(round),
     succ_count_(0),
     total_count_(0),
-    min_log_ts_(OB_INVALID_TIMESTAMP),
+    min_scn_(),
     id_() {}
   bool operator()(const ObLSID &id, ObLSArchiveTask *ls_archive_task);
-  void get_min_log_info(ObLSID &id, int64_t &min_log_ts);
-  TO_STRING_KV(K_(incarnation), K_(round), K_(succ_count), K_(total_count), K_(min_log_ts), K_(id));
+  void get_min_log_info(ObLSID &id, share::SCN &min_scn);
+  TO_STRING_KV(K_(incarnation), K_(round), K_(succ_count), K_(total_count), K_(min_scn), K_(id));
 
 private:
   int64_t incarnation_;
   int64_t round_;
   int64_t succ_count_;
   int64_t total_count_;
-  int64_t min_log_ts_;
+  share::SCN min_scn_;
   //MaxLogFileInfo  min_log_info_;
   ObLSID id_;
 };

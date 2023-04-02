@@ -105,6 +105,7 @@ public:
 public:
   int init(
       IObLogDdlParser *ddl_parser,
+      ObLogDDLProcessor *ddl_processor,
       IObLogSequencer *committer,
       IObLogErrHandler *err_handler,
       IObLogSchemaGetter *schema_getter,
@@ -171,7 +172,7 @@ private:
   IObLogErrHandler    *err_handler_;
   IObLogSchemaGetter  *schema_getter_;
 
-  ObLogDDLProcessor   ddl_processor_;
+  ObLogDDLProcessor   *ddl_processor_;
 
   // thread id of ddl handler
   pthread_t           handle_pid_;

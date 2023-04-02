@@ -1305,7 +1305,7 @@ bool ObNumber::is_valid_uint64(uint64_t &uint64) const
   uint64_t tmp_int_parts = 0;
   uint64_t tmp_decimal_parts = 0;
   if (OB_UNLIKELY(OB_SUCCESS != check_range(&bret, NULL, tmp_int_parts, tmp_decimal_parts))) {
-    LOG_WARN("can't to check the param range", K(bret));
+    LOG_WARN_RET(OB_ERROR, "can't to check the param range", K(bret));
   } else {
     uint64 = tmp_int_parts;
     bret = bret && (0 == tmp_decimal_parts);//Should not use if-test.
@@ -1320,7 +1320,7 @@ bool ObNumber::is_valid_int64(int64_t &int64) const
   uint64_t tmp_int_parts = 0;
   uint64_t tmp_decimal_parts = 0;
   if (OB_UNLIKELY(OB_SUCCESS != check_range(NULL, &bret, tmp_int_parts, tmp_decimal_parts))) {
-    LOG_WARN("can't to check the param range", K(bret));
+    LOG_WARN_RET(OB_ERROR, "can't to check the param range", K(bret));
   } else {
     int64 = is_negative() ? (-1 * tmp_int_parts) : tmp_int_parts;
     bret = bret && (0 == tmp_decimal_parts);
@@ -1511,7 +1511,7 @@ bool ObNumber::is_valid_int() const
   uint64_t tmp_int_parts = 0;
   uint64_t tmp_decimal_parts = 0;
   if (OB_UNLIKELY(OB_SUCCESS != check_range(NULL, &bret, tmp_int_parts, tmp_decimal_parts))) {
-    LOG_WARN("can't to check the param range", K(bret));
+    LOG_WARN_RET(OB_ERROR, "can't to check the param range", K(bret));
   } else {
     bret = bret && (0 == tmp_decimal_parts);
   }
@@ -1525,7 +1525,7 @@ bool ObNumber::is_int_parts_valid_int64(int64_t &int_parts, int64_t &decimal_par
   uint64_t tmp_int_parts = 0;
   uint64_t tmp_decimal_parts = 0;
   if (OB_UNLIKELY(OB_SUCCESS != check_range(NULL, &bret, tmp_int_parts, tmp_decimal_parts))) {
-    LOG_WARN("can't to check the param range", K(bret));
+    LOG_WARN_RET(OB_ERROR, "can't to check the param range", K(bret));
   } else {
     decimal_parts = tmp_decimal_parts;
     int_parts = is_negative() ? (-1 * tmp_int_parts) : tmp_int_parts;
@@ -3058,7 +3058,7 @@ const char *ObNumber::format() const
   if (OB_ISNULL(buffers)) {
     buffer = nullptr;
   } else if(OB_UNLIKELY(OB_SUCCESS != format(buffer, BUFFER_SIZE, length, -1))) {
-    LOG_ERROR("fail to format buffer");
+    LOG_ERROR_RET(OB_ERROR, "fail to format buffer");
   } else {
     buffer[length] = '\0';
   }
@@ -3597,7 +3597,7 @@ int ObNumber::get_npi_(double n, ObNumber& out, ObIAllocator &alloc, const bool 
 
   const int64_t MAX_DOUBLE_PRINT_SIZE = 512;
   char buf[MAX_DOUBLE_PRINT_SIZE] = {0};
-  (void)ob_gcvt_opt(n, OB_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL, lib::is_oracle_mode(), TRUE);
+  (void)ob_gcvt_opt(n, OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(sizeof(buf) - 1), buf, NULL, lib::is_oracle_mode(), TRUE);
 
   ObNumber n_obnum;
   ObNumber pi = get_pi();
@@ -3637,7 +3637,7 @@ int ObNumber::get_npi_(int64_t n, ObNumber& out, ObIAllocator &alloc, const bool
 }
 
 // 根据前一项的阶乘计算本项阶乘，每次只用乘两个数即可,不需要从头计算
-// 见sin/cos的泰勒展开式https://yuque.antfin-inc.com/ob/sql/eid7bv
+// 见sin/cos的泰勒展开式
 int ObNumber::simple_factorial_for_sincos_(int64_t start, ObIAllocator &allocator, ObNumber &result) const
 {
   int ret = OB_SUCCESS;
@@ -6902,7 +6902,7 @@ bool ObNumber::is_valid_sci_tail_(const char *str,
 void ObNumber::set_one()
 {
   if (OB_ISNULL(digits_)) {
-    _OB_LOG(ERROR, "number digit ptr is null where set to one!");
+    _OB_LOG_RET(ERROR, OB_ERROR, "number digit ptr is null where set to one!");
     right_to_die_or_duty_to_live();
   } else {
     d_.len_ = 1;
@@ -8289,9 +8289,9 @@ uint64_t ObCalcVector::at(const int64_t idx) const
 {
   uint64_t ret_digit = 0;
   if (OB_ISNULL(digits_)) {
-    LOG_ERROR("the pointer is null");
+    LOG_ERROR_RET(OB_ERROR, "the pointer is null");
   } else if (OB_UNLIKELY(idx <0 || idx > length_)) {
-    LOG_ERROR("the param is invalid");
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "the param is invalid");
   } else {
     ret_digit = digits_[idx];
   }
@@ -8399,7 +8399,7 @@ ObCalcVector ObCalcVector::ref(const int64_t start, const int64_t end) const
 {
   ObCalcVector ret_calc_vec;
   if (OB_ISNULL(digits_)) {
-    LOG_ERROR("the pinter is null");
+    LOG_ERROR_RET(OB_ERROR, "the pinter is null");
   } else {
     ret_calc_vec.length_ = end - start + 1;
     ret_calc_vec.digits_ = &digits_[start];

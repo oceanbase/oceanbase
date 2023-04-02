@@ -17,6 +17,7 @@
 #include "lib/container/ob_raw_se_array.h"
 #include "ob_column_checksum_calculator.h"
 #include "ob_partition_merge_iter.h"
+#include "ob_tablet_merge_task.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "storage/memtable/ob_nop_bitmap.h"
@@ -28,10 +29,6 @@ namespace oceanbase
 namespace sql
 {
 struct ObTempExpr;
-}
-namespace storage
-{
-struct ObMergeParameter;
 }
 namespace compaction
 {
@@ -91,16 +88,13 @@ public:
   ObMajorPartitionMergeFuser()
       : ObIPartitionMergeFuser(),
       default_row_(),
-      table_schema_(NULL),
       generated_cols_(allocator_)
   {}
   virtual ~ObMajorPartitionMergeFuser();
   virtual void reset() override;
-  virtual bool is_valid() const override;
   virtual int fuse_row(MERGE_ITER_ARRAY &macro_row_iters) override;
   virtual const char *get_fuser_name() const override { return "ObMajorPartitionMergeFuser"; }
-  INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser,
-                       K_(default_row), KP_(table_schema));
+  INHERIT_TO_STRING_KV("ObIPartitionMergeFuser", ObIPartitionMergeFuser, K_(default_row));
 protected:
   virtual int inner_check_merge_param(const ObMergeParameter &merge_param);
   virtual int inner_init(const ObMergeParameter &merge_param) override;
@@ -110,24 +104,23 @@ protected:
                               const int64_t rowkey_column_cnt) override;
 protected:
   blocksstable::ObDatumRow default_row_;
-  const share::schema::ObTableSchema *table_schema_;
   ObFixedArray<int32_t, ObIAllocator> generated_cols_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMajorPartitionMergeFuser);
 };
 
-class ObBufPartitionMergeFuser : public ObMajorPartitionMergeFuser
+class ObMetaPartitionMergeFuser : public ObMajorPartitionMergeFuser
 {
 public:
-  ObBufPartitionMergeFuser() {}
-  virtual ~ObBufPartitionMergeFuser() {}
-  virtual const char *get_fuser_name() const override { return "ObBufPartitionMergeFuser"; }
+  ObMetaPartitionMergeFuser() {}
+  virtual ~ObMetaPartitionMergeFuser() {}
+  virtual const char *get_fuser_name() const override { return "ObMetaPartitionMergeFuser"; }
   INHERIT_TO_STRING_KV("ObMajorPartitionMergeFuser", ObMajorPartitionMergeFuser,
-      "cur_fuser", "ObBufPartitionMergeFuser");
+      "cur_fuser", "ObMetaPartitionMergeFuser");
 protected:
   virtual int inner_check_merge_param(const ObMergeParameter &merge_param) override;
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObBufPartitionMergeFuser);
+  DISALLOW_COPY_AND_ASSIGN(ObMetaPartitionMergeFuser);
 };
 
 

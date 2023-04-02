@@ -22,6 +22,7 @@ target_include_directories(
   ${DEP_3RD_DIR}/usr/include/
   ${DEP_3RD_DIR}/usr/local/include
   ${DEP_DIR}/include/apr-1/
+  ${DEP_DIR}/include/icu/common
   )
 
 if (OB_USE_CLANG)
@@ -120,9 +121,14 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
+  ${DEP_DIR}/lib/libs2.a
   ${LGPL_DEPS}
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
+  ${DEP_DIR}/lib/libs2.a
+  ${DEP_DIR}/lib/libicui18n.a
+  ${DEP_DIR}/lib/libicustubdata.a
+  ${DEP_DIR}/lib/libicuuc.a
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
   -L${DEP_3RD_DIR}/usr/lib

@@ -28,19 +28,18 @@ namespace sql
 ObExprIsBase::ObExprIsBase(ObIAllocator &alloc,
                            ObExprOperatorType type,
                            const char *name)
-    : ObRelationalExprOperator(alloc, type, name, 3)
+    : ObRelationalExprOperator(alloc, type, name, 2)
 {};
 
-int ObExprIsBase::calc_result_type3(ObExprResType &type,
+int ObExprIsBase::calc_result_type2(ObExprResType &type,
                                     ObExprResType &type1,
                                     ObExprResType &type2,
-                                    ObExprResType &type3,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   ObRawExpr *raw_expr = get_raw_expr();
   ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(raw_expr);
-  if (OB_ISNULL(op_expr) || OB_UNLIKELY(op_expr->get_param_count() != 3)) {
+  if (OB_ISNULL(op_expr) || OB_UNLIKELY(op_expr->get_param_count() != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("op raw expr is null", K(ret), K(op_expr));
   } else if (lib::is_oracle_mode() && type1.is_ext()) {
@@ -55,16 +54,12 @@ int ObExprIsBase::calc_result_type3(ObExprResType &type,
     type.set_result_flag(NOT_NULL_FLAG);
     //is operator第二个参数必须保持原来的NULL或者FALSE, TRUE
     type2.set_calc_type(type2.get_type());
-    type3.set_calc_type(type3.get_type());
 
     ObRawExpr *param2 = op_expr->get_param_expr(1);
     ObConstRawExpr *const_param2 = static_cast<ObConstRawExpr *>(param2);
-    ObRawExpr *param3 = op_expr->get_param_expr(2);
-    ObConstRawExpr *const_param3 = static_cast<ObConstRawExpr *>(param3);
-    if (OB_ISNULL(const_param2) || OB_ISNULL(const_param3)) {
+    if (OB_ISNULL(const_param2)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("second or third child of is expr is null", K(ret), K(const_param2),
-                                                            K(const_param3));
+      LOG_WARN("second child of is expr is null", K(ret), K(const_param2));
     } else if (ObDoubleType == const_param2->get_value().get_type()) {
         type1.set_calc_type(ObDoubleType);
         type1.set_calc_accuracy(type1.get_accuracy());
@@ -77,12 +72,8 @@ int ObExprIsBase::calc_result_type3(ObExprResType &type,
         const ObAccuracy &calc_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[0][ObNumberType];
         type1.set_calc_accuracy(calc_acc);
       }
-    } else {    // is null
-      if (const_param3->get_value().is_true()) {
-        type1.set_calc_type(ObIntType);
-      } else {
-        type1.set_calc_type(type1.get_type());
-      }
+    } else {
+      type1.set_calc_type(type1.get_type());
       // query range extract check the calc type of %type.
       type.set_calc_meta(type1.get_calc_meta());
     }
@@ -92,82 +83,6 @@ int ObExprIsBase::calc_result_type3(ObExprResType &type,
   }
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NO_RANGE_CHECK);
 
-  return ret;
-}
-
-int ObExprIs::calc_with_null(common::ObObj &result,
-                             const ObObj &obj1,
-                             const ObObj &obj2,
-                             const ObObj &obj3,
-                             ObCastCtx &cast_ctx) const
-{
-  int ret = OB_SUCCESS;
-  bool ret_bool = false;
-  UNUSED(obj2);
-  UNUSED(cast_ctx);
-  if (obj3.is_true()) {
-    if(obj1.is_null()) {
-      ret_bool = true;
-    } else {
-      int64_t int_val = 0;
-      EXPR_GET_INT64_V2(obj1, int_val);
-      if (OB_SUCC(ret)) {
-        if (int_val == 0) {
-      ret_bool = true;
-        } else {
-      ret_bool = false;
-        }
-      }
-    }
-  } else {
-    if (lib::is_oracle_mode() && obj1.get_meta().is_ext()) {
-      switch (obj1.get_meta().get_extend_type()) {
-        case pl::PL_RECORD_TYPE: {
-          pl::ObPLRecord *rec = reinterpret_cast<pl::ObPLRecord *>(obj1.get_ext());
-          ret_bool = rec->is_null();
-        }
-          break;
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("check complex value is null not supported", K(ret), K(obj1));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "check complex is null");
-        } break;
-      }
-    } else {
-      ret_bool = obj1.is_null();
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    result.set_int32(static_cast<int32_t>(ret_bool));
-  }
-
-  return ret;
-}
-
-int ObExprIsNot::calc_with_null(ObObj &result,
-                                const ObObj &obj1,
-                                const ObObj &obj2,
-                                const ObObj &obj3,
-                                ObCastCtx &cast_ctx) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(obj2);
-  UNUSED(obj3);
-  UNUSED(cast_ctx);
-  bool ret_bool = false;
-  if (lib::is_oracle_mode() && obj1.get_meta().is_ext()) {
-    switch (obj1.get_meta().get_extend_type()) {
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("check complex value is null not supported", K(ret), K(obj1));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "check complex is null");
-      } break;
-    }
-  } else {
-    ret_bool = !obj1.is_null();
-  }
-  result.set_int32(static_cast<int32_t>(ret_bool));
   return ret;
 }
 
@@ -217,46 +132,6 @@ int ObExprIsNot::calc_collection_is_not_null(const ObExpr &expr,
   return ret;
 }
 
-
-int ObExprIsBase::calc_with_int_internal(ObObj &result,
-                                         const ObObj &obj1,
-                                         const ObObj &obj2,
-                                         ObCastCtx &cast_ctx,
-                                         bool is_not) const
-{
-  int ret = OB_SUCCESS;
-  bool ret_bool = false;
-  if (obj1.is_null()) {
-    ret_bool = is_not;
-  } else if (obj1.is_tinyint()) {
-    ret_bool = is_not ?
-                    obj1.get_bool() != obj2.get_bool() :
-                    obj1.get_bool() == obj2.get_bool();
-  } else {
-    int64_t int_val = 0;
-    EXPR_GET_INT64_V2(obj1, int_val);
-    if (OB_SUCC(ret)) {
-      if ((int_val != 0 && obj2.get_bool() == is_not)
-          || (int_val == 0 && obj2.get_bool() == !is_not)) {
-        ret_bool = false;
-      } else {
-        ret_bool = true;
-      }
-    } else {
-      ret = OB_SUCCESS;
-      if (obj2.get_bool() == is_not) {
-        ret_bool = true;
-      } else {
-        ret_bool = false;
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    result.set_int32(static_cast<int32_t>(ret_bool));
-  }
-  return ret;
-}
-
 int ObExprIsBase::is_infinite_nan(const ObObjType datum_type,
                               ObDatum *datum,
                               bool &ret_bool,
@@ -286,109 +161,22 @@ int ObExprIsBase::is_infinite_nan(const ObObjType datum_type,
   return ret;
 }
 
-int ObExprIs::calc_with_int(ObObj &result,
-                            const ObObj &obj1,
-                            const ObObj &obj2,
-                            ObCastCtx &cast_ctx) const
-{
-  return calc_with_int_internal(result, obj1, obj2, cast_ctx, false);
-}
-
-int ObExprIsNot::calc_with_int(ObObj &result,
-                               const ObObj &obj1,
-                               const ObObj &obj2,
-                               ObCastCtx &cast_ctx) const
-{
-  return calc_with_int_internal(result, obj1, obj2, cast_ctx, true);
-}
-
-int ObExprIs::calc_with_nan(ObObj &result,
-                            const ObObj &obj1,
-                            const ObObj &obj2,
-                            ObCastCtx &cast_ctx) const
-{
-  return calc_with_nan_internal(result, obj1, obj2, cast_ctx, false);
-}
-
-int ObExprIs::calc_with_infinity(ObObj &result,
-                            const ObObj &obj1,
-                            const ObObj &obj2,
-                            ObCastCtx &cast_ctx) const
-{
-  return calc_with_infinity_internal(result, obj1, obj2, cast_ctx, false);
-}
-
-int ObExprIsBase::calc_with_nan_internal(ObObj &result,
-                                         const ObObj &obj1,
-                                         const ObObj &obj2,
-                                         ObCastCtx &cast_ctx,
-                                         bool is_not) const
-{
-  UNUSED(obj2);
-  UNUSED(cast_ctx);
-  int ret = OB_SUCCESS;
-  bool ret_bool = false;
-  if (obj1.is_null()) {
-    result.set_null();
-  } else {
-    if (obj1.is_double()) {
-      ret_bool = is_not ? !isnan(obj1.get_double()) : isnan(obj1.get_double());
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected case", K(obj1.get_type()));
-    }
-    if (OB_SUCC(ret)) {
-      result.set_int32(static_cast<int32_t>(ret_bool));
-    }
-  }
-  return ret;
-}
-
-int ObExprIsBase::calc_with_infinity_internal(ObObj &result,
-                                         const ObObj &obj1,
-                                         const ObObj &obj2,
-                                         ObCastCtx &cast_ctx,
-                                         bool is_not) const
-{
-  UNUSED(obj2);
-  UNUSED(cast_ctx);
-  int ret = OB_SUCCESS;
-  bool ret_bool = false;
-  if (obj1.is_null()) {
-    result.set_null();
-  } else {
-    if (obj1.is_double()) {
-      ret_bool = is_not ? !isinf(obj1.get_double()) : isinf(obj1.get_double());
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected case", K(obj1.get_type()));
-    }
-    if (OB_SUCC(ret)) {
-      result.set_int32(static_cast<int32_t>(ret_bool));
-    }
-  }
-  return ret;
-}
-
 int ObExprIsBase::cg_expr_internal(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
-                                   ObExpr &rt_expr, const ObConstRawExpr *&const_param2,
-                                   const ObConstRawExpr *&const_param3) const
+                                   ObExpr &rt_expr, const ObConstRawExpr *&const_param2) const
 {
  	UNUSED(op_cg_ctx);
   int ret = OB_SUCCESS;
   const ObOpRawExpr *op_raw_expr = static_cast<const ObOpRawExpr*>(&raw_expr);
-  if (rt_expr.arg_cnt_ != 3) {
+  if (rt_expr.arg_cnt_ != 2) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("isnot expr should have 3 params", K(ret), K(rt_expr.arg_cnt_));
+    LOG_WARN("isnot expr should have 2 params", K(ret), K(rt_expr.arg_cnt_));
   } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0])
-            || OB_ISNULL(rt_expr.args_[1]) || OB_ISNULL(rt_expr.args_[2])) {
+            || OB_ISNULL(rt_expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of isnot expr is null", K(ret), K(rt_expr.args_));
   } else {
     const ObRawExpr *param2 = op_raw_expr->get_param_expr(1);
-    const ObRawExpr *param3 = op_raw_expr->get_param_expr(2);
     const_param2 = static_cast<const ObConstRawExpr *>(param2);
-    const_param3 = static_cast<const ObConstRawExpr *>(param3);
   }
   return ret;
 }
@@ -451,14 +239,12 @@ int ObExprIs::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr 
   const ObConstRawExpr *param2 = NULL;
   const ObConstRawExpr *param3 = NULL;
   ObObjType param1_type = ObMaxType;
-  if (OB_FAIL(cg_expr_internal(op_cg_ctx, raw_expr, rt_expr, param2, param3))) {
+  if (OB_FAIL(cg_expr_internal(op_cg_ctx, raw_expr, rt_expr, param2))) {
     LOG_WARN("cg_expr_inner failed", K(ret));
-  } else if (OB_ISNULL(param2) || OB_ISNULL(param3)) {
+  } else if (OB_ISNULL(param2)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("const raw expr param2 or param3 is null", K(param2), K(param3));
+    LOG_WARN("const raw expr param is null", K(param2));
   } else if(FALSE_IT(param1_type = rt_expr.args_[0]->datum_meta_.type_)) {
-  } else if (param3->get_value().is_true()) { // 特殊情况，not null的date或datetime列
-    rt_expr.eval_func_ = ObExprIs::calc_is_date_int_null;
   } else if (param2->get_value().is_null()) {  // c1 is null
     if (lib::is_oracle_mode() && rt_expr.args_[0]->obj_meta_.is_ext()) {
       rt_expr.eval_func_ = ObExprIs::calc_collection_is_null;
@@ -493,17 +279,22 @@ int ObExprIsNot::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObEx
   const ObConstRawExpr *param2 = NULL;
   const ObConstRawExpr *param3 = NULL;
   ObObjType param1_type = ObMaxType;
-  if (OB_FAIL(cg_expr_internal(op_cg_ctx, raw_expr, rt_expr, param2, param3))) {
+  if (OB_FAIL(cg_expr_internal(op_cg_ctx, raw_expr, rt_expr, param2))) {
     LOG_WARN("cg_expr_inner failed", K(ret));
-  } else if (OB_ISNULL(param2) || OB_ISNULL(param3)) {
+  } else if (OB_ISNULL(param2)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("const raw expr param2 or param3 is null", K(param2), K(param3));
+    LOG_WARN("const raw expr param is null", K(param2));
   } else if(FALSE_IT(param1_type = rt_expr.args_[0]->datum_meta_.type_)) {
   } else if (param2->get_value().is_null()) {  // c1 is null
     if (lib::is_oracle_mode() && rt_expr.args_[0]->obj_meta_.is_ext()) {
       rt_expr.eval_func_ = ObExprIsNot::calc_collection_is_not_null;
     } else {
       rt_expr.eval_func_ = ObExprIsNot::calc_is_not_null;
+      // 4.1.0 & 4.0 observers may run in same cluster, plan with batch func from observer(version4.1.0) may serialized to
+      // observer(version4.0.0) to execute, thus batch func is not null only if min_cluster_version>=4.1.0
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+        rt_expr.eval_batch_func_ = ObExprIsNot::calc_batch_is_not_null;
+      }
     }
   } else if (param2->get_value().is_true()) {
     if (OB_FAIL(cg_result_type_class(param1_type, rt_expr.eval_func_, true, true))) {
@@ -527,6 +318,7 @@ int ObExprIsNot::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObEx
   return ret;
 }
 
+// keep this function for compatibility with server before 4.1
 int ObExprIs::calc_is_date_int_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
@@ -606,6 +398,29 @@ int ObExprIsNot::calc_is_not_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   return ret;
 }
 
+int ObExprIsNot::calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
+                                        const ObBitVector &skip, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("calculate batch is not null", K(batch_size));
+  ObDatum *results = expr.locate_batch_datums(ctx);
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
+    LOG_WARN("failed to eval batch args", K(ret), K(batch_size));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      }
+      ObDatum &arg = expr.args_[0]->locate_expr_datum(ctx, i);
+      bool v = !arg.is_null();
+      results[i].set_int32(static_cast<int32_t>(v));
+      eval_flags.set(i);
+    }
+  }
+  return ret;
+}
+
 int ObExprIsNot::calc_is_not_infinite(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
@@ -644,22 +459,6 @@ int ObExprIsNot::calc_is_not_nan(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
     }
   }
   return ret;
-}
-
-int ObExprIsNot::calc_with_nan(ObObj &result,
-                            const ObObj &obj1,
-                            const ObObj &obj2,
-                            ObCastCtx &cast_ctx) const
-{
-  return calc_with_nan_internal(result, obj1, obj2, cast_ctx, true);
-}
-
-int ObExprIsNot::calc_with_infinity(ObObj &result,
-                            const ObObj &obj1,
-                            const ObObj &obj2,
-                            ObCastCtx &cast_ctx) const
-{
-  return calc_with_infinity_internal(result, obj1, obj2, cast_ctx, true);
 }
 
 template <typename T>

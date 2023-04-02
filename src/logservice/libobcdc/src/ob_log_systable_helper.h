@@ -52,10 +52,6 @@ public:
   virtual int build_sql_statement(char *sql_buf, const int64_t mul_statement_buf_len, int64_t &pos) = 0;
 };
 
-bool is_cluster_version_be_equal_or_greater_than_200_();
-bool is_cluster_version_be_equal_or_greater_than_220_();
-bool is_cluster_version_be_equal_or_greater_than_320();
-
 ///////////////////////// QueryClusterIdStrategy /////////////////////////
 // 查询cluster id
 class QueryClusterIdStrategy: public ISQLStrategy
@@ -185,6 +181,7 @@ public:
   static const int64_t ALL_SERVER_DEFAULT_RECORDS_NUM = 32;
 
   struct ClusterInfo;
+  struct TenantInfo;
 
   struct ObServerVersionInfo;
   typedef common::ObSEArray<ObServerVersionInfo, DEFAULT_RECORDS_NUM> ObServerVersionInfoArray;
@@ -220,10 +217,17 @@ public:
   virtual int query_sql_server_list(
       const ObLogSvrBlacklist &server_blacklist,
       common::ObIArray<common::ObAddr> &sql_server_list) = 0;
+
+  virtual int query_tenant_info_list(common::ObIArray<TenantInfo> &tenant_info_list) = 0;
+
+  // query tenant_id list
   virtual int query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list) = 0;
+
+  // query tenant server list based tenant_id
   virtual int query_tenant_sql_server_list(
       const uint64_t tenant_id,
       common::ObIArray<common::ObAddr> &tenant_server_list) = 0;
+
   virtual int query_tenant_status(
       const uint64_t tenant_id,
       share::schema::TenantStatus &tenant_status) = 0;
@@ -309,7 +313,7 @@ public:
      * Error codes
      * - OB_NEED_RETRY: Connection error encountered
      */
-    int get_records(common::ObIArray<uint64_t> &record);
+    int get_records(common::ObIArray<TenantInfo> &record);
 
     /*
      * Error codes
@@ -335,7 +339,7 @@ public:
     int parse_record_from_row_(
         const ObLogSvrBlacklist &server_blacklist,
         common::ObIArray<common::ObAddr> &records);
-    int parse_record_from_row_(common::ObIArray<uint64_t> &records);
+    int parse_record_from_row_(common::ObIArray<TenantInfo> &records);
     int parse_record_from_row_(common::ObIArray<common::ObAddr> &records);
     int parse_record_from_row_(share::schema::TenantStatus &records);
 
@@ -373,6 +377,17 @@ public:
 
     TO_STRING_KV(K_(cluster_id));
   };
+
+  struct TenantInfo {
+  public:
+    TenantInfo(): tenant_id(OB_INVALID_TENANT_ID), tenant_name() {}
+    TenantInfo(const uint64_t id, const ObString &name): tenant_id(id), tenant_name(name) {}
+    TO_STRING_KV(K(tenant_id), K(tenant_name));
+
+    uint64_t tenant_id;
+    ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name;
+  };
+
 
   struct ObServerVersionInfo
   {
@@ -450,6 +465,7 @@ public:
       const ObLogSvrBlacklist &server_blacklist,
       common::ObIArray<ObAddr> &sql_server_list);
   virtual int query_tenant_id_list(common::ObIArray<uint64_t> &tenant_id_list);
+  virtual int query_tenant_info_list(common::ObIArray<TenantInfo> &tenant_info_list);
   virtual int query_tenant_sql_server_list(
       const uint64_t tenant_id,
       common::ObIArray<common::ObAddr> &tenant_server_list);

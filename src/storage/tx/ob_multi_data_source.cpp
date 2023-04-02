@@ -20,6 +20,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "share/ls/ob_ls_operator.h"
+#include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 
 namespace oceanbase
 {
@@ -162,6 +163,10 @@ int ObMulSourceTxDataNotifier::notify(const ObTxBufferNodeArray &array,
         ret = notify_modify_tablet_binding(notify_type, buf, len, tmp_notify_arg);
         break;
       }
+      case ObTxDataSourceType::STANDBY_UPGRADE: {
+        ret = notify_standby_upgrade(notify_type, buf, len, tmp_notify_arg);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         break;
@@ -204,7 +209,7 @@ void ObMulSourceTxDataNotifier::ob_abort_log_cb_notify_(const NotifyType type,
   }
 
   if (need_core) {
-    TRANS_LOG(ERROR, "data source can not return error in log_cb on_success", K(type), K(err_code), K(for_replay));
+    TRANS_LOG_RET(ERROR, OB_ERROR, "data source can not return error in log_cb on_success", K(type), K(err_code), K(for_replay));
     ob_usleep(1000 * 1000);
     ob_abort();
 
@@ -224,18 +229,21 @@ int ObMulSourceTxDataNotifier::notify_table_lock(
   const bool is_replay_multi_source = true;
   const bool is_committed = true;
   int64_t pos = 0;
+  const int64_t curr_timestamp = ObTimeUtility::current_time();
   if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0) || OB_ISNULL(mt_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(buf), K(len), K(mt_ctx));
-  } else if (OB_FAIL(lock_op.deserialize(buf, len, pos))) {
-    TRANS_LOG(WARN, "deserialize lock op failed", K(ret), K(len), KP(buf));
   } else if (NotifyType::TX_END != type) {
     // TABLELOCK only deal with tx_end type, but not redo/prepare/commit/abort.
   } else if (!arg.for_replay_) {
     // TABLELOCK only need deal with replay process, but not apply.
     // the replay process will produce a lock op and will be dealt at trans end.
+  } else if (OB_FAIL(lock_op.deserialize(buf, len, pos))) {
+    TRANS_LOG(WARN, "deserialize lock op failed", K(ret), K(len), KP(buf));
+  } else if (FALSE_IT(lock_op.create_timestamp_ = OB_MIN(curr_timestamp,
+                                                         lock_op.create_timestamp_))) {
   } else if (OB_FAIL(mt_ctx->replay_lock(lock_op,
-                                         arg.log_ts_))) {
+                                         arg.scn_))) {
     TRANS_LOG(WARN, "replay lock failed", K(ret));
   } else {
     // do nothing
@@ -262,6 +270,30 @@ int ObMulSourceTxDataNotifier::notify_ls_table(const NotifyType type,
     TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
   }
   TRANS_LOG(INFO, "ls table notify", KR(ret), K(ls_attr));
+
+  ob_abort_log_cb_notify_(type, ret, arg.for_replay_);
+
+  return ret;
+}
+
+int ObMulSourceTxDataNotifier::notify_standby_upgrade(const NotifyType type,
+                                               const char *buf, const int64_t len,
+                                               const ObMulSourceDataNotifyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  share::ObStandbyUpgrade data_version;
+  int64_t pos = 0;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(buf), K(len), K(type));
+  } else if (OB_FAIL(data_version.deserialize(buf, len, pos))) {
+    TRANS_LOG(WARN, "failed to deserialize data_version", KR(ret), K(buf), K(len));
+  } else if (pos > len) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
+  }
+  TRANS_LOG(INFO, "standby upgrade notify", KR(ret), K(data_version), K(len), K(type));
 
   ob_abort_log_cb_notify_(type, ret, arg.for_replay_);
 
@@ -309,7 +341,7 @@ int ObMulSourceTxDataNotifier::notify_modify_tablet_binding(const NotifyType typ
       break;
     }
     case transaction::NotifyType::ON_REDO: {
-      if (!arg.for_replay_ && OB_FAIL(ObTabletBindingHelper::set_log_ts_for_unbind(modify_arg, arg))) {
+      if (!arg.for_replay_ && OB_FAIL(ObTabletBindingHelper::set_scn_for_unbind(modify_arg, arg))) {
         TRANS_LOG(WARN, "failed to lock tablet binding, retry", K(ret));
       }
       break;

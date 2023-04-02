@@ -42,9 +42,10 @@ int ObDropSequenceResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ObDropSequenceStmt *mystmt = NULL;
 
+  bool if_exists = false;
   if (OB_UNLIKELY(T_DROP_SEQUENCE != parse_tree.type_)
       || OB_ISNULL(parse_tree.children_)
-      || OB_UNLIKELY(1 != parse_tree.num_child_)) {
+      || OB_UNLIKELY(1 != parse_tree.num_child_ && 2 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid param",
              K(parse_tree.type_),
@@ -54,6 +55,13 @@ int ObDropSequenceResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     SQL_RESV_LOG(WARN, "session_info is null.", K(ret));
+  } else if ((2 == parse_tree.num_child_) && OB_NOT_NULL(parse_tree.children_[1])) {
+    if (T_IF_EXISTS != parse_tree.children_[1]->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid type", K(ret), K(parse_tree.children_[1]));
+    } else {
+      if_exists = true;
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -82,6 +90,7 @@ int ObDropSequenceResolver::resolve(const ParseNode &parse_tree)
       mystmt->set_sequence_name(sequence_name);
       mystmt->set_database_name(db_name);
       mystmt->set_tenant_id(session_info_->get_effective_tenant_id());
+      mystmt->set_ignore_exists_error(if_exists);
     }
     if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
       CK (OB_NOT_NULL(schema_checker_));

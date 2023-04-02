@@ -37,7 +37,8 @@ private:
 
 public:  // ObTxDataMemtableMgr
   ObTxDataMemtableMgr()
-    : is_freezing_(false),
+    : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
+      is_freezing_(false),
       ls_id_(0),
       tx_data_table_(nullptr),
       ls_tablet_svr_(nullptr),
@@ -66,11 +67,11 @@ public:  // ObTxDataMemtableMgr
    * @brief Using to create a new active tx data memtable
    *
    * @param[in] clog_checkpoint_ts clog_checkpoint_ts, using to init multiversion_start,
-   * base_version and start_log_ts. The start_log_ts will be modified if this function is called by
+   * base_version and start_scn. The start_scn will be modified if this function is called by
    * freeze().
    * @param[in] schema_version  schema_version, not used
    */
-  virtual int create_memtable(const int64_t clog_checkpoint_ts,
+  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay=false) override;
   /**
@@ -94,9 +95,9 @@ public:  // ObTxDataMemtableMgr
   int get_memtable_range(int64_t &memtable_head, int64_t &memtable_tail);
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
-  virtual int64_t get_rec_log_ts() override;
+  virtual share::SCN get_rec_scn() override;
 
-  virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) override;
 
   virtual ObTabletID get_tablet_id() const override;
 
@@ -120,9 +121,15 @@ protected:
                                      const bool force);
 
 private:  // ObTxDataMemtableMgr
-  int create_memtable_(const int64_t clog_checkpoint_ts, const int64_t schema_version);
+  int create_memtable_(const share::SCN clog_checkpoint_scn,
+                       const int64_t schema_version,
+                       const int64_t buckets_cnt);
 
   int freeze_();
+  int calc_new_memtable_buckets_cnt_(const double load_factory,
+                                     const int64_t old_buckests_cnt,
+                                     int64_t &new_buckest_cnt);
+
   int get_all_memtables_(ObTableHdlArray &handles);
 
   int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles);
@@ -135,6 +142,7 @@ private:  // ObTxDataMemtableMgr
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;
   SliceAllocator *slice_allocator_;
+  common::SpinRWLock lock_def_;
 };
 
 class TxDataMemtableMgrFreezeGuard

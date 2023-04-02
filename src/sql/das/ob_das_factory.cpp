@@ -20,6 +20,8 @@
 #include "sql/das/ob_das_lock_op.h"
 #include "sql/das/ob_das_extra_data.h"
 #include "sql/das/ob_das_def_reg.h"
+#include "sql/das/ob_das_rpc_processor.h"
+#include "sql/das/ob_das_ref.h"
 #include "share/datum/ob_datum_util.h"
 
 #define STORE_DAS_OBJ(obj_store, das_obj, class_name)       \
@@ -180,6 +182,7 @@ ObDASTaskFactory::ObDASTaskFactory(ObIAllocator &allocator)
   : das_op_store_(allocator),
     das_result_store_(allocator),
     das_extra_data_store_(allocator),
+    das_async_cb_store_(allocator),
     ctdef_store_(allocator),
     rtdef_store_(allocator),
     allocator_(allocator)
@@ -274,6 +277,31 @@ int ObDASTaskFactory::create_das_extra_data(ObDASExtraData *&extra_result)
   return ret;
 }
 
+int ObDASTaskFactory::create_das_async_cb(
+    const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops,
+    const ObMemAttr &attr,
+    ObDASRef &das_ref,
+    ObRpcDasAsyncAccessCallBack *&async_cb,
+    int64_t timeout_ts) {
+  int ret = OB_SUCCESS;
+  void *buffer = nullptr;
+  ObDasAsyncRpcCallBackContext *context = nullptr;
+  if (OB_ISNULL(buffer = allocator_.alloc(sizeof(ObDasAsyncRpcCallBackContext)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate das async cb context memory", K(ret), K(sizeof(ObDasAsyncRpcCallBackContext)));
+  } else if (FALSE_IT(context = new (buffer) ObDasAsyncRpcCallBackContext(das_ref, task_ops, timeout_ts))) {
+  } else if (OB_FAIL(context->init(attr))) {
+    LOG_WARN("fail to init das async cb context", K(ret));
+  } else if (OB_ISNULL(buffer = allocator_.alloc(sizeof(ObRpcDasAsyncAccessCallBack)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate das async cb memory", K(ret), K(sizeof(ObRpcDasAsyncAccessCallBack)));
+  } else {
+    async_cb = new (buffer) ObRpcDasAsyncAccessCallBack(context);
+    STORE_DAS_OBJ(das_async_cb_store_, async_cb, ObRpcDasAsyncAccessCallBack);
+  }
+  return ret;
+}
+
 void ObDASTaskFactory::cleanup()
 {
   if (OB_LIKELY(!das_op_store_.empty())) {
@@ -311,6 +339,19 @@ void ObDASTaskFactory::cleanup()
       }
     }
     das_extra_data_store_.clear();
+  }
+  if (OB_UNLIKELY(!das_async_cb_store_.empty())) {
+    for (DasAsyncCallBackIter async_cb_iter = das_async_cb_store_.begin();
+        !async_cb_iter.is_end();
+        ++async_cb_iter) {
+      ObRpcDasAsyncAccessCallBack *async_cb = async_cb_iter.get_item();
+      if (async_cb != nullptr) {
+        async_cb->get_async_cb_context()->~ObDasAsyncRpcCallBackContext();
+        async_cb->~ObRpcDasAsyncAccessCallBack();
+        async_cb = nullptr;
+      }
+    }
+    das_async_cb_store_.clear();
   }
   if (OB_UNLIKELY(!ctdef_store_.empty())) {
     for (DasCtDefIter ctdef_iter = ctdef_store_.begin();

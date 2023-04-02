@@ -15,12 +15,13 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "logservice/ob_log_base_header.h"
+#include "share/scn.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_tablet_autoincrement_service.h"
 
 namespace oceanbase
 {
-
+using namespace palf;
 using namespace share;
 namespace storage
 {
@@ -50,7 +51,7 @@ void ObLSSyncTabletSeqHandler::reset()
 int ObLSSyncTabletSeqHandler::replay(const void *buffer,
                                      const int64_t nbytes,
                                      const palf::LSN &lsn,
-                                     const int64_t ts_ns)
+                                     const SCN &scn)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
@@ -68,7 +69,7 @@ int ObLSSyncTabletSeqHandler::replay(const void *buffer,
   } else if (OB_FAIL(autoinc_seq_handler.replay_update_tablet_autoinc_seq(ls_,
                                                                           log.get_tablet_id(),
                                                                           log.get_autoinc_seq(),
-                                                                          ts_ns))) {
+                                                                          scn))) {
     LOG_WARN("failed to update tablet auto inc seq", K(ret), K(log));
   }
   return ret;
@@ -106,17 +107,16 @@ int ObLSSyncTabletSeqHandler::resume_leader()
   return ret;
 }
 
-int ObLSSyncTabletSeqHandler::flush(int64_t rec_log_ts)
+int ObLSSyncTabletSeqHandler::flush(SCN &scn)
 {
   // TODO
-  UNUSED(rec_log_ts);
+  UNUSED(scn);
   return OB_SUCCESS;
 }
 
-int64_t ObLSSyncTabletSeqHandler::get_rec_log_ts()
+SCN ObLSSyncTabletSeqHandler::get_rec_scn()
 {
-  // TODO
-  return INT64_MAX;
+  return SCN::max_scn();
 }
 
 }

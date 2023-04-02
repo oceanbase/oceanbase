@@ -20,6 +20,7 @@ namespace oceanbase
 {
 
 using namespace common;
+using namespace share;
 
 namespace transaction
 {
@@ -84,8 +85,10 @@ int ObGTSTaskQueue::foreach_task(const MonotonicTs srr,
           }
         }
         if (OB_SUCC(ret)) {
+          SCN scn;
+          scn.convert_for_gts(gts);
           if (GET_GTS == task_type_) {
-            if (OB_FAIL(task->get_gts_callback(srr, gts, receive_gts_ts))) {
+            if (OB_FAIL(task->get_gts_callback(srr, scn, receive_gts_ts))) {
               if (OB_EAGAIN != ret) {
                 TRANS_LOG(WARN, "get gts callback failed", KR(ret), K(srr), K(gts), KP(task));
               }
@@ -93,7 +96,7 @@ int ObGTSTaskQueue::foreach_task(const MonotonicTs srr,
               TRANS_LOG(DEBUG, "get gts callback success", K(srr), K(gts), KP(task));
             }
           } else if (WAIT_GTS_ELAPSING == task_type_) {
-            if (OB_FAIL(task->gts_elapse_callback(srr, gts))) {
+            if (OB_FAIL(task->gts_elapse_callback(srr, scn))) {
               if (OB_EAGAIN != ret) {
                 TRANS_LOG(WARN, "gts elapse callback failed", KR(ret), K(srr), K(gts), KP(task));
               }

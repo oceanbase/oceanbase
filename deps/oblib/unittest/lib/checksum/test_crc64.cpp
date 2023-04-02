@@ -91,7 +91,7 @@ TEST(TestCrc64, test_speed)
     }
     end = get_current_time_us();
     cout << "          ob_crc64(ob_crc64_isal), execut_count = " << COUNT << ", cost_us = " << end - start << " len = " << i
-         << endl;    
+         << endl;
 
     cout << endl;
     cout << endl;

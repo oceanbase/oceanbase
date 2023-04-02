@@ -29,7 +29,7 @@ namespace election
 #define CHECK_SILENCE()\
 do {\
   if (ATOMIC_LOAD(&INIT_TS) < 0) {\
-    ELECT_LOG(ERROR, "INIT_TS is less than 0, may not call GLOBAL_INIT_ELECTION_MODULE yet!", K(*this));\
+    ELECT_LOG_RET(ERROR, common::OB_ERROR, "INIT_TS is less than 0, may not call GLOBAL_INIT_ELECTION_MODULE yet!", K(*this));\
     return;\
   } else if (OB_UNLIKELY(get_monotonic_ts() < ATOMIC_LOAD(&INIT_TS) + MAX_LEASE_TIME)) {\
     ELECT_LOG(INFO, "keep silence for safty, won't send response", K(*this));\
@@ -59,6 +59,7 @@ public:
     if (OB_UNLIKELY(msg.get_ballot_number() < p_acceptor->ballot_number_)) {
       using T = typename ResponseType<RequestMsg>::type;
       T reject_msg = create_reject_message_(p_acceptor->p_election_->get_self_addr(),
+                                            p_acceptor->p_election_->inner_priority_seed_,
                                             p_acceptor->p_election_->get_membership_version_(),
                                             msg);
       reject_msg.set_rejected(p_acceptor->ballot_number_);
@@ -72,17 +73,20 @@ public:
   }
 private:
   static ElectionPrepareResponseMsg create_reject_message_(const common::ObAddr &addr,
+                                                           const uint64_t inner_priority_seed,
                                                            const LogConfigVersion &membership_version,
                                                            const ElectionPrepareRequestMsg &msg)
   {
+    UNUSED(inner_priority_seed),
     UNUSED(membership_version);
     return ElectionPrepareResponseMsg(addr, msg);
   }
   static ElectionAcceptResponseMsg create_reject_message_(const common::ObAddr &addr,
+                                                          const uint64_t inner_priority_seed,
                                                           const LogConfigVersion &membership_version,
                                                           const ElectionAcceptRequestMsg &msg)
   {
-    return ElectionAcceptResponseMsg(addr, membership_version, msg);
+    return ElectionAcceptResponseMsg(addr, inner_priority_seed, membership_version, msg);
   }
 };
 
@@ -104,7 +108,7 @@ void ElectionAcceptor::advance_ballot_number_and_reset_related_states_(const int
     ballot_of_time_window_ = ballot_number_;
     reset_time_window_states_(phase);
   } else {
-    LOG_PHASE(ERROR, phase, "invalid argument");
+    LOG_PHASE_RET(ERROR, OB_INVALID_ARGUMENT, phase, "invalid argument");
   }
   #undef PRINT_WRAPPER
 }
@@ -311,6 +315,7 @@ void ElectionAcceptor::on_accept_request(const ElectionAcceptRequestMsg &accept_
     *us_to_expired = lease_.get_lease_end_ts() - get_monotonic_ts();
     // 3. 构造accept ok消息
     ElectionAcceptResponseMsg accept_res_accept(p_election_->get_self_addr(),
+                                                p_election_->inner_priority_seed_,
                                                 p_election_->get_membership_version_(),
                                                 accept_req);
     (void) p_election_->refresh_priority_();
@@ -340,12 +345,8 @@ int64_t ElectionAcceptor::to_string(char *buf, const int64_t buf_len) const
   common::databuff_printf(buf, buf_len, pos, ", vote_reason:%s", to_cstring(vote_reason_));
   common::databuff_printf(buf, buf_len, pos, ", last_time_window_open_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_time_window_open_ts_));
   if (highest_priority_prepare_req_.is_valid()) {
-    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req_sender:%s",
-                                                  to_cstring(highest_priority_prepare_req_.get_sender()));
-    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req_ballot:%ld",
-                                                  highest_priority_prepare_req_.get_ballot_number());
-    common::databuff_printf(buf, buf_len, pos, ", prepare_req_with_null_priority:%s",
-                                                  to_cstring(!highest_priority_prepare_req_.is_buffer_valid()));
+    common::databuff_printf(buf, buf_len, pos, ", highest_priority_prepare_req:%s",
+                                                  to_cstring(highest_priority_prepare_req_));
   }
   common::databuff_printf(buf, buf_len, pos, ", p_election:0x%lx}", (unsigned long)p_election_);
   return pos;

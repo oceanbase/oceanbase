@@ -157,10 +157,17 @@ void PxWorkerFunctor::operator ()()
     ObPxInterruptGuard px_int_guard(task_arg_.task_.get_interrupt_id().px_interrupt_id_);
     // 环境初始化
     ObCurTraceId::set(env_arg_.get_trace_id());
-    if (OB_LOG_LEVEL_NONE != env_arg_.get_log_level() && enable_trace_log) {
-      ObThreadLogLevelUtils::init(env_arg_.get_log_level());
+    // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
+    if (OB_LOGGER.is_info_as_wdiag()) {
+      ObThreadLogLevelUtils::clear();
+    } else {
+      if (OB_LOG_LEVEL_NONE != env_arg_.get_log_level() && enable_trace_log) {
+        ObThreadLogLevelUtils::init(env_arg_.get_log_level());
+      }
     }
     THIS_WORKER.set_group_id(env_arg_.get_group_id());
+    // When deserialize expr, sql mode will affect basic function of expr.
+    CompatModeGuard mode_guard(env_arg_.is_oracle_mode() ? Worker::CompatMode::ORACLE : Worker::CompatMode::MYSQL);
     MTL_SWITCH(sqc_handler->get_tenant_id()) {
       CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, sqc_handler->get_tenant_id()) {
         if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context,
@@ -305,7 +312,7 @@ int ObPxThreadWorker::run_at(ObPxRpcInitTaskArgs &task_arg, omt::ObPxPool &px_po
   }
   if (OB_FAIL(ret)) {
     LOG_ERROR("Failed to submit px func to thread pool",
-             K(retry_times), "px_pool_size", px_pool.get_pool_size(),  K(ret));
+              K(retry_times), "px_pool_size", px_pool.get_pool_size(),  K(ret));
   }
   LOG_DEBUG("submit px worker to poll", K(env_args.is_oracle_mode()), K(ret));
   return ret;
@@ -470,4 +477,28 @@ void ObPxLocalWorkerFactory::destroy()
 ObPxLocalWorkerFactory::~ObPxLocalWorkerFactory()
 {
   destroy();
+}
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+int ObPxWorker::check_status()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr != session_) {
+    session_->is_terminate(ret);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_timeout()) {
+      ret = OB_TIMEOUT;
+    } else if (IS_INTERRUPTED()) {
+      ObInterruptCode &ic = GET_INTERRUPT_CODE();
+      ret = ic.code_;
+      LOG_WARN("px execution was interrupted", K(ic), K(ret));
+    }
+  }
+  return ret;
 }

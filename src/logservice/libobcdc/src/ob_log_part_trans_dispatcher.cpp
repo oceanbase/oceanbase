@@ -88,7 +88,7 @@ PartTransDispatcher::~PartTransDispatcher()
   // That is, task_queue and task_map should not have tasks from this partition in them
   // If want to clean tasks here, we need to save the tls_id, but for the time being, don't need to save the tls_id in order to optimise memory usage
   if (task_queue_.size() > 0) {
-    LOG_ERROR("task_queue_ is not empty", K(task_queue_.size()), KPC(task_queue_.top()));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "task_queue_ is not empty", K(task_queue_.size()), KPC(task_queue_.top()));
   }
 
   tls_id_.reset();
@@ -277,7 +277,8 @@ int PartTransDispatcher::submit_task(PartTransTask &task)
 int PartTransDispatcher::check_task_ready_(PartTransTask &task, bool &task_is_ready)
 {
   int ret = OB_SUCCESS;
-  if (task.is_dml_trans() || task.is_ddl_trans() || task.is_ls_table_trans() || task.is_trans_type_unknown()) {
+
+  if (task.is_dml_trans() || task.is_ddl_trans() || task.is_ls_op_trans() || task.is_trans_type_unknown()) {
     // trans type should be valid if committed.
     if (OB_SUCC(ret)) {
       task_is_ready = task.is_trans_committed();
@@ -332,7 +333,7 @@ int PartTransDispatcher::dispatch_part_trans(volatile bool &stop_flag, int64_t &
       if (OB_UNLIKELY(! task->is_dml_trans()
             && ! task->is_ddl_trans()
             && ! task->is_ls_heartbeat()
-            && ! task->is_ls_table_trans())) {
+            && ! task->is_ls_op_trans())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid task which is not DML or DDL task", KR(ret), K_(tls_id), K(task_is_ready), KPC(task));
       }
@@ -406,6 +407,8 @@ struct TaskMapCleaner
     const bool is_sys_ls = key.is_sys_ls();
 
     if (key.tls_id_ == tls_id_) {
+      LOG_DEBUG("TaskMapCleaner operator", K(tls_id_), K(val), KPC(val));
+
       if (NULL != val && is_sys_ls) {
         val->revert();
       }
@@ -442,7 +445,10 @@ int PartTransDispatcher::clean_task()
 
   while (NULL != (task = pop_task_queue_()) && OB_SUCCESS == ret) {
     // Delete DML and DDL type transactions from map
-    if (task->is_dml_trans() || task->is_ddl_trans()) {
+    if (task->is_dml_trans()
+        || task->is_ddl_trans()
+        || task->is_ls_op_trans()
+        || task->is_trans_type_unknown()) {
       PartTransID part_trans_id(task->get_tls_id(), task->get_trans_id());
       if (OB_FAIL(task_map_.erase(part_trans_id))) {
         // It is normal for Map not to exist–
@@ -477,16 +483,17 @@ int PartTransDispatcher::clean_task()
 
   if (OB_SUCCESS == ret) {
     if (task_count_only_in_map_ != 0) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("task_count_only_in_map_ != 0 after clean all task, unexcepted error",
           K(task_count_only_in_map_), K_(tls_id), K(task_queue_size),
           "task_map_size", map_cleaner.count_);
-      ret = OB_ERR_UNEXPECTED;
     }
   }
 
   LOG_INFO("part trans resolver clean task", KR(ret), K_(tls_id), K(task_queue_size),
       "task_map_size", map_cleaner.count_,
-      K(task_count_only_in_map_), K(last_dispatch_progress_), K(last_dispatch_log_lsn_));
+      K(task_count_only_in_map_), K(g_part_trans_task_count),
+      K(last_dispatch_progress_), K(last_dispatch_log_lsn_));
 
   return ret;
 }
@@ -565,8 +572,8 @@ int PartTransDispatcher::alloc_task(const PartTransID &part_trans_id, PartTransT
 int PartTransDispatcher::get_task(const PartTransID &trans_id, PartTransTask *&task)
 {
   int ret = OB_SUCCESS;
-
   task = NULL;
+
   if (OB_FAIL(task_map_.get(trans_id, task))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_ERROR("get part trans task fail", KR(ret), K(trans_id));
@@ -583,7 +590,7 @@ int PartTransDispatcher::get_task(const PartTransID &trans_id, PartTransTask *&t
   return ret;
 }
 
-// To eliminate loop dependency issues, bug logging https://work.aone.alibaba-inc.com/issue/21684127
+// To eliminate loop dependency issues, bug logging
 // dispatch_progress information does not use dispatch locks, uses task_queue_ locks, risky when getting dispatch_info
 //
 // 1. get progress based on last dispatch progress

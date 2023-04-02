@@ -237,6 +237,7 @@ public:
                                 common::ObObj &result);
 
   static int parse_method_opt(sql::ObExecContext &ctx,
+                              ObIAllocator *allocator,
                               ObIArray<ObColumnStatParam> &column_params,
                               const ObString &method_opt);
 
@@ -247,7 +248,8 @@ public:
                                        ObIArray<ObColumnStatParam> &column_params,
                                        common::ObIArray<ObString> &record_cols);
 
-  static int parse_partition_name(const share::schema::ObTableSchema *&table_schema,
+  static int parse_partition_name(ObExecContext &ctx,
+                                  const share::schema::ObTableSchema *&table_schema,
                                   const ObObjParam &part_name,
                                   ObTableStatParam &param);
 
@@ -333,6 +335,9 @@ public:
                                      const share::schema::ObTableSchema &schema,
                                      ObIArray<ObColumnStatParam> &column_params);
 
+  static bool check_column_validity(const share::schema::ObTableSchema &tab_schema,
+                                   const share::schema::ObColumnSchemaV2 &col_schema);
+
   static int set_default_column_params(ObIArray<ObColumnStatParam> &column_params);
 
   static int parse_size_clause(const ParseNode *node, MethodOptSizeConf &size_opt);
@@ -359,9 +364,13 @@ public:
                                   common::ObIArray<PartInfo> &part_infos,
                                   common::ObIArray<PartInfo> &subpart_infos,
                                   common::ObIArray<int64_t> &part_ids,
-                                  common::ObIArray<int64_t> &subpart_ids);
+                                  common::ObIArray<int64_t> &subpart_ids,
+                                  OSGPartMap *part_map = NULL);
 
-  static int update_stat_cache(obrpc::ObCommonRpcProxy *proxy,
+  static int get_part_ids_from_schema(const share::schema::ObTableSchema *table_schema,
+                                      common::ObIArray<ObObjectID> &target_part_ids);
+
+  static int update_stat_cache(const uint64_t rpc_tenant_id,
                                const ObTableStatParam &param);
 
   static int parse_set_table_stat_options(ObExecContext &ctx,
@@ -413,12 +422,14 @@ public:
                             ObIArray<PartInfo> &part_infos,
                             ObIArray<PartInfo> &subpart_infos,
                             ObIArray<int64_t> &part_ids,
-                            ObIArray<int64_t> &subpart_ids);
+                            ObIArray<int64_t> &subpart_ids,
+                            OSGPartMap *part_map = NULL);
 
   static int get_subpart_infos(const ObTableSchema &table_schema,
                                const ObPartition *part,
                                ObIArray<PartInfo> &subpart_infos,
-                               ObIArray<int64_t> &subpart_ids);
+                               ObIArray<int64_t> &subpart_ids,
+                               OSGPartMap *part_map = NULL);
 
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
@@ -426,7 +437,8 @@ public:
 
   static int process_not_size_manual_column(sql::ObExecContext &ctx, ObTableStatParam &table_param);
 
-  static int parse_set_partition_name(const share::schema::ObTableSchema *&table_schema,
+  static int parse_set_partition_name(ObExecContext &ctx,
+                                      const share::schema::ObTableSchema *&table_schema,
                                       const ObObjParam &part_name,
                                       ObTableStatParam &param);
 
@@ -462,12 +474,18 @@ public:
   static int set_param_global_part_id(ObExecContext &ctx,
                                       ObTableStatParam &param,
                                       bool is_data_table = false,
-                                      const int64_t data_table_id = -1);
+                                      const int64_t data_table_id = -1,
+                                      share::schema::ObPartitionLevel data_table_level
+                                          = share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO);
+
+  static int get_table_partition_map(const ObTableSchema &table_schema,
+                                     OSGPartMap &part_map);
 
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
-  static int parse_column_info(const ObObjParam &column_name,
+  static int parse_column_info(sql::ObExecContext &ctx,
+                               const ObObjParam &column_name,
                                ObTableStatParam &param);
 
   static int parse_stat_category(const ObString &stat_category);
@@ -480,6 +498,7 @@ private:
                                            ObIArray<uint64_t> &table_ids);
 
   static int get_new_stat_pref(ObExecContext &ctx,
+                               common::ObIAllocator &allocator,
                                ObString &opt_name,
                                ObString &opt_value,
                                bool is_global_prefs,
@@ -490,7 +509,11 @@ private:
                                                const StatTable &stat_table,
                                                double &stale_percent_threshold);
 
-  static void try_caseup(ObCollationType cs_type, ObString &str_val);
+  static int convert_vaild_ident_name(common::ObIAllocator &allocator,
+                                      const common::ObDataTypeCastParams &dtc_params,
+                                      ObString &ident_name,
+                                      bool need_extra_conv = false);
+
 
   static int get_common_table_stale_percent(sql::ObExecContext &ctx,
                                             const uint64_t tenant_id,
@@ -524,6 +547,7 @@ private:
                                    ObIArray<ObAuxTableMetaInfo> &index_infos);
 
   static int get_index_schema(sql::ObExecContext &ctx,
+                              common::ObIAllocator &allocator,
                               const int64_t data_table_id,
                               const bool is_sensitive_compare,
                               ObString &index_name,

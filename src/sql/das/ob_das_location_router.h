@@ -68,6 +68,7 @@ private:
 class DASRelatedTabletMap : public share::schema::IRelatedTabletMap
 {
   friend class ObDASCtx;
+public:
   struct MapEntry
   {
     OB_UNIS_VERSION(1);
@@ -99,6 +100,7 @@ public:
                             common::ObTableID related_table_id,
                             Value &val);
   void clear() { list_.clear(); }
+  RelatedTabletList &get_list() { return list_; }
   TO_STRING_KV(K_(list));
 private:
   //There are usually not many tablets for a query.
@@ -111,11 +113,16 @@ private:
 class ObDASTabletMapper
 {
   friend class ObDASCtx;
+  typedef common::ObList<DASRelatedTabletMap::MapEntry, common::ObIAllocator> RelatedTabletList;
 public:
   ObDASTabletMapper()
     : table_schema_(nullptr),
       vt_svr_pair_(nullptr),
-      related_info_()
+      related_info_(),
+      is_non_partition_optimized_(false),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID),
+      object_id_(OB_INVALID_ID),
+      related_list_(nullptr)
   {
   }
 
@@ -193,6 +200,16 @@ public:
                                const common::ObTableID &dst_table_id,
                                common::ObObjectID &dst_object_id);
   share::schema::RelatedTableInfo &get_related_table_info() { return related_info_; }
+  bool is_non_partition_optimized() const { return is_non_partition_optimized_; }
+  void set_non_partitioned_table_ids(const common::ObTabletID &tablet_id,
+                                     const common::ObObjectID &object_id,
+                                     const RelatedTabletList *related_list)
+  {
+    tablet_id_ = tablet_id;
+    object_id_ = object_id;
+    related_list_ = related_list;
+    is_non_partition_optimized_ = true;
+  }
 private:
   int mock_vtable_related_tablet_id_map(const common::ObIArray<common::ObTabletID> &tablet_ids,
                                         const common::ObIArray<common::ObObjectID> &out_part_ids);
@@ -202,6 +219,10 @@ private:
   const share::schema::ObTableSchema *table_schema_;
   const VirtualSvrPair *vt_svr_pair_;
   share::schema::RelatedTableInfo related_info_;
+  bool is_non_partition_optimized_;
+  ObTabletID tablet_id_;
+  ObObjectID object_id_;
+  const RelatedTabletList *related_list_;
 };
 
 class ObDASLocationRouter

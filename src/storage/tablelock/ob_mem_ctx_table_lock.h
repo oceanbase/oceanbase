@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_TABLELOCK_OB_MEM_CTX_TABLE_LOCK_
 #define OCEANBASE_STORAGE_TABLELOCK_OB_MEM_CTX_TABLE_LOCK_
 
+#include "share/scn.h"
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
@@ -60,14 +61,14 @@ public:
       callback_pool_(allocator),
       lock_list_(),
       is_killed_(false),
-      max_durable_log_ts_(OB_INVALID_TIMESTAMP),
+      max_durable_scn_(),
       memtable_handle_() {}
   ObLockMemCtx() = delete;
   ~ObLockMemCtx() { reset(); }
   int init(storage::ObTableHandleV2 &handle);
   int get_lock_memtable(ObLockMemtable *&memtable);
   void reset();
-  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, int64_t log_ts);
+  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const share::SCN &scn);
 
   int add_lock_record(
       const ObTableLockOp &lock_op,
@@ -78,13 +79,14 @@ public:
   void remove_lock_record(
       ObMemCtxLockOpLinkNode *lock_op);
   int check_lock_need_replay(
-      const int64_t log_ts,
+      const share::SCN &scn,
       const ObTableLockOp &lock_op,
       bool &need_replay);
   int check_lock_exist(
       const ObLockID &lock_id,
       const ObTableLockOwnerID &owner_id,
       const ObTableLockMode mode,
+      const ObTableLockOpType op_type,
       bool &is_exist,
       ObTableLockMode &lock_mode_in_same_trans) const;
   int check_modify_schema_elapsed(
@@ -96,8 +98,8 @@ public:
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   int clear_table_lock(
       const bool is_committed,
-      const int64_t commit_version,
-      const int64_t commit_log_ts);
+      const share::SCN &commit_version,
+      const share::SCN &commit_scn);
   int rollback_table_lock(const int64_t seq_no);
   void *alloc_lock_op_callback();
   void free_lock_op_callback(void *cb);
@@ -114,7 +116,7 @@ private:
   void free_lock_op_(void *op);
   void print() const;
   void rollback_table_lock_(const int64_t seq_no);
-  int commit_table_lock_(const int64_t commit_version, const int64_t commit_log_ts);
+  int commit_table_lock_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void abort_table_lock_();
 private:
   // for performance.
@@ -127,7 +129,7 @@ private:
   // the flag of whether the tx is killed.
   // used by deadlock detector.
   bool is_killed_;
-  int64_t max_durable_log_ts_;
+  share::SCN max_durable_scn_;
   // the lock memtable pointer point to LS lock table's memtable.
   storage::ObTableHandleV2 memtable_handle_;
 };

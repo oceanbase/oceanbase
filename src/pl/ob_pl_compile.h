@@ -51,7 +51,9 @@ public:
 
   int compile(const ObStmtNodeTree *block,
               ObPLFunction &func,
-              ParamStore *params= NULL); //匿名块接口
+              ParamStore *params,
+              bool is_prepare_protocol); //匿名块接口
+
   int compile(const uint64_t id, ObPLFunction &func); //Procedure/Function接口
 
   int analyze_package(const ObString &source, const ObPLBlockNS *parent_ns,
@@ -72,9 +74,15 @@ public:
                                 ObMySQLProxy &sql_proxy,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                 pl::ObPLPackageGuard &package_guard,
-                                const ParamStore *params);
+                                const ParamStore *params,
+                                bool is_prepare_protocol = true);
   int check_package_body_legal(const ObPLBlockNS *parent_ns,
                                       const ObPLPackageAST &package_ast);
+  static int update_schema_object_dep_info(pl::ObPLCompileUnitAST &ast,
+                                           uint64_t tenant_id,
+                                           uint64_t dep_obj_id, uint64_t schema_version,
+                                           uint64_t owner_id,
+                                           share::schema::ObObjectType dep_obj_type);
 private:
   int init_function(const share::schema::ObRoutineInfo *proc, ObPLFunction &func);
 
@@ -95,11 +103,6 @@ private:
   int generate_package_routines(const ObString &exec_env,
                                 ObPLRoutineTable &routine_table,
                                 ObPLPackage &package);
-  int update_schema_object_dep_info(pl::ObPLCompileUnitAST &ast,
-                                    uint64_t tenant_id,
-                                    uint64_t dep_obj_id, uint64_t schema_version,
-                                    uint64_t owner_id,
-                                    share::schema::ObObjectType dep_obj_type);
   static int compile_types(const ObIArray<const ObUserDefinedType*> &types, ObPLCompileUnit &unit);
   static int format_object_name(share::schema::ObSchemaGetterGuard &schema_guard,
                                 const uint64_t tenant_id,
@@ -122,7 +125,7 @@ public:
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,
                        int &ret);
-  
+
   ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                        ObSQLSessionInfo &session_info,
                        share::schema::ObSchemaGetterGuard &schema_guard,

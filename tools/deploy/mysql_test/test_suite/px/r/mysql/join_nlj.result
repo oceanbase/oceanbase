@@ -70,37 +70,41 @@ insert into score values
 (64, 'MA', 87);
 explain select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid != score.sid and stu.sid < 12;
 Query Plan
-================================================================
-|ID|OPERATOR                           |NAME    |EST. ROWS|COST|
-----------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |0        |11  |
-|1 | EXCHANGE OUT DISTR                |:EX10001|0        |11  |
-|2 |  NESTED-LOOP JOIN                 |        |0        |11  |
-|3 |   PX BLOCK ITERATOR               |        |1        |6   |
-|4 |    TABLE SCAN                     |score   |1        |6   |
-|5 |   MATERIAL                        |        |1        |6   |
-|6 |    EXCHANGE IN DISTR              |        |1        |6   |
-|7 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1        |6   |
-|8 |      PX BLOCK ITERATOR            |        |1        |6   |
-|9 |       TABLE SCAN                  |stu     |1        |6   |
-================================================================
-
-Outputs & filters: 
+=======================================================================
+|ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |PX COORDINATOR                     |        |0       |11          |
+|1 | EXCHANGE OUT DISTR                |:EX10001|0       |11          |
+|2 |  NESTED-LOOP JOIN                 |        |0       |11          |
+|3 |   PX BLOCK ITERATOR               |        |1       |6           |
+|4 |    TABLE SCAN                     |score   |1       |6           |
+|5 |   MATERIAL                        |        |1       |6           |
+|6 |    EXCHANGE IN DISTR              |        |1       |6           |
+|7 |     EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |6           |
+|8 |      PX BLOCK ITERATOR            |        |1       |6           |
+|9 |       TABLE SCAN                  |stu     |1       |6           |
+=======================================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(stu.sid, stu.name, stu.cls, score.sid, score.subject, score.score)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(stu.sid, stu.name, stu.cls, score.sid, score.subject, score.score)]), filter(nil), rowset=256, dop=2
-  2 - output([stu.sid], [score.sid], [score.subject], [score.score], [stu.cls], [stu.name]), filter(nil), rowset=256, 
-      conds([stu.sid != score.sid]), nl_params_(nil)
+  1 - output([INTERNAL_FUNCTION(stu.sid, stu.name, stu.cls, score.sid, score.subject, score.score)]), filter(nil), rowset=256
+      dop=2
+  2 - output([stu.sid], [score.sid], [score.subject], [score.score], [stu.cls], [stu.name]), filter(nil), rowset=256
+      conds([stu.sid != score.sid]), nl_params_(nil), batch_join=false
   3 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
-  4 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256, 
+  4 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
       access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
   5 - output([stu.sid], [stu.cls], [stu.name]), filter(nil), rowset=256
   6 - output([stu.sid], [stu.cls], [stu.name]), filter(nil), rowset=256
-  7 - output([stu.sid], [stu.cls], [stu.name]), filter(nil), rowset=256, dop=2
+  7 - output([stu.sid], [stu.cls], [stu.name]), filter(nil), rowset=256
+      dop=2
   8 - output([stu.cls], [stu.sid], [stu.name]), filter(nil), rowset=256
-  9 - output([stu.cls], [stu.sid], [stu.name]), filter([stu.sid < 12]), rowset=256, 
+  9 - output([stu.cls], [stu.sid], [stu.name]), filter([stu.sid < 12]), rowset=256
       access([stu.cls], [stu.sid], [stu.name]), partitions(p[0-5])
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([stu.cls], [stu.sid]), range(MIN,MIN ; MAX,MAX)always true
 select /*+ USE_PX parallel(2) */ * from stu, score where stu.sid != score.sid and stu.sid < 12;
 sid	name	cls	sid	subject	score
 11	a1	1	12	EN	70
@@ -131,35 +135,40 @@ sid	name	cls	sid	subject	score
 11	a1	1	64	MA	87
 explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR                  |        |1        |10  |
-|1 | EXCHANGE OUT DISTR             |:EX10001|1        |9   |
-|2 |  SHARED HASH JOIN              |        |1        |8   |
-|3 |   EXCHANGE IN DISTR            |        |1        |6   |
-|4 |    EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1        |6   |
-|5 |     PX BLOCK ITERATOR          |        |1        |6   |
-|6 |      TABLE SCAN                |score   |1        |6   |
-|7 |   PX BLOCK ITERATOR            |        |1        |2   |
-|8 |    TABLE GET                   |teacher |1        |2   |
-=============================================================
-
-Outputs & filters: 
+====================================================================
+|ID|OPERATOR                        |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1       |10          |
+|1 | EXCHANGE OUT DISTR             |:EX10001|1       |9           |
+|2 |  SHARED HASH JOIN              |        |1       |8           |
+|3 |   EXCHANGE IN DISTR            |        |1       |6           |
+|4 |    EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1       |6           |
+|5 |     PX BLOCK ITERATOR          |        |1       |6           |
+|6 |      TABLE SCAN                |score   |1       |6           |
+|7 |   PX BLOCK ITERATOR            |        |1       |2           |
+|8 |    TABLE GET                   |teacher |1       |2           |
+====================================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256, dop=2
-  2 - output([teacher.subject], [score.subject], [score.sid], [score.score], [teacher.tid], [teacher.name]), filter(nil), rowset=256, 
+  1 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
+      dop=2
+  2 - output([teacher.subject], [score.subject], [score.sid], [score.score], [teacher.tid], [teacher.name]), filter(nil), rowset=256
       equal_conds([teacher.subject = score.subject]), other_conds(nil)
   3 - output([score.subject], [score.sid], [score.score]), filter(nil), rowset=256
-  4 - output([score.subject], [score.sid], [score.score]), filter(nil), rowset=256, dop=2
+  4 - output([score.subject], [score.sid], [score.score]), filter(nil), rowset=256
+      dop=2
   5 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
-  6 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256, 
+  6 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
       access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
   7 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
-  8 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256, 
+  8 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
       access([teacher.tid], [teacher.subject], [teacher.name]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([teacher.tid]), range[1 ; 1],
+      range_cond([teacher.tid = 1])
 select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 sid	subject	score	tid	name	subject
 11	EN	60	1	Miss Zhang	EN

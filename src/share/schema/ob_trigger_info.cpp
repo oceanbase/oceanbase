@@ -49,7 +49,11 @@ OB_SERIALIZE_MEMBER((ObTriggerInfo, ObSimpleTriggerSchema),
                     package_spec_info_,
                     package_body_info_,
                     sql_mode_,
-                    priv_user_);
+                    priv_user_,
+                    order_type_,
+                    ref_trg_db_name_,
+                    ref_trg_name_,
+                    action_order_);
 
 ObTriggerInfo &ObTriggerInfo::operator =(const ObTriggerInfo &other)
 {
@@ -94,6 +98,10 @@ void ObTriggerInfo::reset()
   package_body_info_.reset();
   reset_string(priv_user_);
   sql_mode_ = 0;
+  order_type_ = OT_INVALID;
+  reset_string(ref_trg_db_name_);
+  reset_string(ref_trg_name_);
+  action_order_ = 0;
   ObSimpleTriggerSchema::reset();
 }
 
@@ -151,7 +159,11 @@ int ObTriggerInfo::deep_copy(const ObTriggerInfo &other)
   OX (set_package_comp_flag(other.get_package_comp_flag()));
   OZ (set_package_exec_env(other.get_package_exec_env()));
   OX (set_sql_mode(other.get_sql_mode()));
-  OX (set_trigger_priv_user(other.get_trigger_priv_user()));
+  OZ (set_trigger_priv_user(other.get_trigger_priv_user()));
+  OX (set_order_type(other.get_order_type()));
+  OZ (set_ref_trg_db_name(other.get_ref_trg_db_name()));
+  OZ (set_ref_trg_name(other.get_ref_trg_name()));
+  OX (set_action_order(other.get_action_order()));
   return ret;
 }
 
@@ -168,7 +180,9 @@ int64_t ObTriggerInfo::get_convert_size() const
                          trigger_body_.length() + 1 +
                          priv_user_.length() + 1 +
                          package_spec_info_.get_convert_size() +
-                         package_body_info_.get_convert_size();
+                         package_body_info_.get_convert_size() +
+                         ref_trg_db_name_.length() + 1 +
+                         ref_trg_name_.length();
   convert_size -= (sizeof(ObSimpleTriggerSchema) + sizeof(ObPackageInfo) * 2);
   return convert_size;
 }
@@ -326,52 +340,6 @@ int64_t ObTriggerInfo::get_convert_size() const
   "%.*s \n"
 /************************* mysql mode procedure *************************/
 
-int ObTriggerInfo::gen_package_source(const ObTriggerInfo &trigger_info,
-                                      const ObString &base_object_database,
-                                      const ObString &base_object_name,
-                                      ObString &spec_source,
-                                      ObString &body_source,
-                                      ObIAllocator &alloc)
-{
-  int ret = OB_SUCCESS;
-  ObParser parser(alloc, trigger_info.get_sql_mode());
-  ParseResult parse_result;
-  ParseNode *stmt_list_node = NULL;
-  ParseNode *trigger_source_node = NULL;
-  ParseNode *trigger_define_node = NULL;
-  ParseNode *anonymous_node = NULL;
-  ParseNode *trigger_body_node = NULL;
-  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE),
-      trigger_info.get_trigger_body());
-  // stmt list node.
-  OV (OB_NOT_NULL(stmt_list_node = parse_result.result_tree_));
-  OV (stmt_list_node->type_ == T_STMT_LIST, OB_ERR_UNEXPECTED, stmt_list_node->type_);
-  OV (stmt_list_node->num_child_ == 1, OB_ERR_UNEXPECTED, stmt_list_node->num_child_);
-  OV (OB_NOT_NULL(stmt_list_node->children_));
-  // trigger source node.
-  OV (OB_NOT_NULL(trigger_source_node = stmt_list_node->children_[0]));
-  if (OB_FAIL(ret)) {
-  } else if (T_TG_SOURCE == trigger_source_node->type_) {
-    // trigger define node.
-    OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
-    OV (OB_NOT_NULL(trigger_body_node =
-                    trigger_define_node->children_[lib::is_oracle_mode() ? 3 : 2]));
-  }
-  if (OB_SUCC(ret)) {
-    if (trigger_info.is_simple_dml_type() || trigger_info.is_instead_dml_type()) {
-      OZ (gen_package_source_simple(trigger_info, base_object_database, base_object_name,
-                                    *trigger_body_node,
-                                    ObDataTypeCastParams(), //trigger_body_node is from utf8 sql
-                                    spec_source, body_source, alloc));
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("only simple trigger is supported", K(ret));
-    }
-  }
-  OV (!spec_source.empty() && !body_source.empty(), OB_ERR_UNEXPECTED, spec_source, body_source);
-  return ret;
-}
-
 int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
                                       const uint64_t tg_package_id,
                                       common::ObString &source,
@@ -386,7 +354,6 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
   const ParseNode *trigger_define_node = NULL;
   const ParseNode *trigger_body_node = NULL;
   const ObTriggerInfo *trigger_info = NULL;
-  CK (lib::is_oracle_mode());
   OZ (schema_guard.get_trigger_info(tenant_id, get_package_trigger_id(tg_package_id), trigger_info));
   CK (OB_NOT_NULL(trigger_info));
   if (OB_SUCC(ret)) {
@@ -422,7 +389,11 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
       }
       OV (T_TG_SOURCE == trigger_source_node->type_, trigger_source_node->type_);
       OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
-      OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
+      if (OB_FAIL(ret)) {
+      } else {
+        OV (4 == trigger_define_node->num_child_);
+        OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
+      }
       OZ (schema_guard.get_simple_table_schema(tenant_id, trigger_info->get_base_object_id(), table_schema));
       CK (OB_NOT_NULL(table_schema));
       OZ (schema_guard.get_database_schema(tenant_id, table_schema->get_database_id(), base_db_schema));
@@ -441,6 +412,7 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
       OX (source = is_header ? spec_source : body_source);
     }
   }
+  LOG_INFO("generate trigger package end", K(source), K(ret));
   return ret;
 }
 
@@ -1027,6 +999,102 @@ int ObTriggerInfo::gen_procedure_source(const common::ObString &base_object_data
     OX (procedure_source.assign_ptr(buf, static_cast<int32_t>(pos)));
     LOG_DEBUG("TRIGGER PROCEDURE", K(procedure_source));
   }
+  return ret;
+}
+
+bool ObTriggerInfo::ActionOrderComparator::operator()(const ObTriggerInfo *left, const ObTriggerInfo *right)
+{
+  bool bool_ret = false;
+  if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
+    // ignore
+  } else if (OB_UNLIKELY(NULL == left) || OB_UNLIKELY(NULL == right)) {
+    ret_ = OB_INVALID_ARGUMENT;
+    LOG_WARN_RET(ret_,   "invalid argument", K(ret_), KP(left), KP(right));
+  } else {
+    bool_ret = (left->get_action_order() < right->get_action_order());
+  }
+  return bool_ret;
+}
+
+
+// for rebuild trigger body due to rename table
+int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
+                                              common::ObIAllocator &alloc,
+                                              const common::ObString &base_object_database,
+                                              const common::ObString &base_object_name,
+                                              bool is_oracle_mode)
+{
+  UNUSED(base_object_database);
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t buf_len = 0;
+  int64_t pos = 0;
+  ObParser parser(alloc, trigger_info.get_sql_mode());
+  ParseResult parse_result;
+  ParseNode *stmt_list_node = NULL;
+  const ParseNode *trg_source_node = NULL;
+
+  const ParseNode *trg_def_node = NULL;
+  const ParseNode *dml_event_node = NULL;
+  const ParseNode *base_schema_node = NULL;
+  const ParseNode *base_object_node = NULL;
+
+  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE), trigger_info.get_trigger_body());
+  // stmt list node
+  OV (OB_NOT_NULL(stmt_list_node = parse_result.result_tree_));
+  OV (stmt_list_node->type_ == T_STMT_LIST, OB_ERR_UNEXPECTED, stmt_list_node->type_);
+  OV (stmt_list_node->num_child_ == 1, OB_ERR_UNEXPECTED, stmt_list_node->num_child_);
+  OV (OB_NOT_NULL(stmt_list_node->children_));
+  // trigger source node
+  OV (OB_NOT_NULL(trg_source_node = stmt_list_node->children_[0]));
+
+  OV (2 == trg_source_node->num_child_);
+  OV (OB_NOT_NULL(trg_def_node = trg_source_node->children_[1]));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (is_oracle_mode) {
+    OV (5 == trg_def_node->num_child_);
+    OV (OB_NOT_NULL(dml_event_node = trg_def_node->children_[0]));
+    OV (3 == dml_event_node->num_child_);
+    OV (OB_NOT_NULL(base_schema_node = dml_event_node->children_[2]));
+  } else {
+    OV (4 == trg_def_node->num_child_);
+    OV (OB_NOT_NULL(base_schema_node = trg_def_node->children_[1]));
+  }
+  OV (2 == base_schema_node->num_child_);
+  OV (OB_NOT_NULL(base_object_node = base_schema_node->children_[1]));
+
+  if (OB_SUCC(ret)) {
+    buf_len = trg_def_node->str_len_ - base_object_node->str_len_ + base_object_name.length() + 3;
+    buf = static_cast<char*>(alloc.alloc(buf_len));
+    bool has_delimiter_already = false;
+    int trg_header_len = (int)base_object_node->str_off_;
+    const char *trg_tail_str = (trg_def_node->str_value_ + base_object_node->str_off_ + base_object_node->str_len_);
+    if (is_oracle_mode) {
+      // '\"' is included in base_object_node->str_value_ in oracle mode,
+      // but is not included in base_object_node->str_len_
+      has_delimiter_already = ('\"' == trg_def_node->str_value_[base_object_node->str_off_]);
+    } else {
+      has_delimiter_already = ('`' == trg_def_node->str_value_[base_object_node->str_off_]);
+    }
+    if (has_delimiter_already) {
+      // base object database
+      if (NULL == base_schema_node->children_[0] && !is_oracle_mode) {
+        trg_header_len = trg_header_len - 1;
+      }
+      trg_tail_str = trg_tail_str + 2;
+    }
+    OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
+    OZ (BUF_PRINTF(is_oracle_mode ? "%.*s\"%.*s\"%.*s" : "%.*s`%.*s`%.*s",
+                   trg_header_len,
+                   trg_def_node->str_value_,
+                   base_object_name.length(),
+                   base_object_name.ptr(),
+                   int(trg_def_node->str_len_ - (base_object_node->str_off_ + base_object_node->str_len_)),
+                   trg_tail_str));
+    OZ (trigger_info.set_trigger_body(ObString(buf)));
+  }
+  LOG_INFO("rebuild trigger body end", K(trigger_info), K(base_object_name), K(lbt()), K(ret));
   return ret;
 }
 

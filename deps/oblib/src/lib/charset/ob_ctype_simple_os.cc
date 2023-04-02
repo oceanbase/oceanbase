@@ -832,3 +832,269 @@ size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char
   return frm_end - str;
 }
 
+
+size_t ob_caseup_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+    char* src __attribute__((unused)), size_t srclen __attribute__((unused)),
+    char* dst __attribute__((unused)), size_t dstlen __attribute__((unused))){
+  const char *end = src + srclen;
+  ob_charset_assert(src == dst && srclen == dstlen);
+  for (; src != end; src++) *src = ob_toupper(cs,*src);
+  return srclen;
+}
+
+size_t ob_casedn_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+    char* src __attribute__((unused)), size_t srclen __attribute__((unused)),
+    char* dst __attribute__((unused)), size_t dstlen __attribute__((unused))){
+  char *end = src + srclen;
+  ob_charset_assert(src == dst && srclen == dstlen);
+  for (; src != end; src++) *src = ob_tolower(cs,*src);
+  return srclen;
+}
+
+int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
+                               const uchar *s, size_t slen,
+                               const uchar *t, size_t tlen,
+                               bool is_prefix)
+{
+  size_t len = (slen > tlen) ? tlen : slen;
+  if (is_prefix && slen > tlen) slen = tlen;
+  while (len--) {
+    if(ob_sort_order(cs,*s)!=ob_sort_order(cs,*t)) {
+      return (int)ob_sort_order(cs,*s) - (int)ob_sort_order(cs,*t);
+    }
+    s++;
+    t++;
+  }
+  return slen > tlen ? 1 : slen < tlen ? -1 : 0;
+}
+
+static int ob_strnncollsp_simple(const ObCharsetInfo *cs
+                          __attribute__((unused)),
+                          const uchar *s, size_t slen,
+                          const uchar *t, size_t tlen,
+                          bool diff_if_only_endspace_difference
+                          __attribute__((unused)))
+{
+  size_t len = (slen > tlen) ? tlen : slen;
+  for (size_t i = 0; i < len; i++){
+     if(ob_sort_order(cs,*s)!=ob_sort_order(cs,*t)) {
+        return (int)ob_sort_order(cs,*s) - (int)ob_sort_order(cs,*t);
+     }
+      s++;
+      t++;
+  }
+  int res = 0;
+  if (slen != tlen) {
+    int swap = 1;
+    if (diff_if_only_endspace_difference){
+      res=1;
+    }
+    /*
+      Check the next not space character of the longer key. If it's < ' ',
+      then it's smaller than the other key.
+    */
+    if (slen < tlen) {
+      slen = tlen;
+
+      s = t;
+      swap = -1;
+      res = -res;
+    }
+    /*
+    "a"  == "a "
+    "a\0" < "a"
+    "a\0" < "a "
+    */
+    for (const unsigned char* end = s + slen - len; s < end; s++) {
+      if (ob_sort_order(cs,*s) != ob_sort_order(cs,(int)(' ')))
+        return ob_sort_order(cs,*s) < ob_sort_order(cs,(int)(' ')) ? -swap : swap;
+    }
+  }
+  return res;
+}
+
+
+
+static size_t ob_strnxfrm_simple(const ObCharsetInfo* cs __attribute__((unused)), unsigned char* dst, size_t dstlen,
+    uint nweights, const unsigned char* src, size_t srclen, unsigned int flags, bool* is_valid_unicode)
+{
+  uchar *dst0 = dst;
+  const uchar *end;
+  const uchar *remainder;
+  size_t frmlen;
+  frmlen = dstlen > nweights ? nweights : dstlen;
+  frmlen = frmlen > srclen ? srclen : frmlen;
+  end = src + frmlen;
+  remainder = src + (frmlen % 8);
+  for (; src < remainder;) *dst++ = ob_sort_order(cs,*src++);
+  while(src < end) {
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+    *dst++ = ob_sort_order(cs,*src++);
+  }
+  return ob_strxfrm_pad_desc_and_reverse(cs, dst0, dst, dst0 + dstlen, nweights - srclen, flags, 0);
+}
+
+#define likeconv(s, A) ob_sort_order(cs,A)
+#define INC_PTR(cs, A, B) (A)++
+
+static int ob_wildcmp_8bit_impl(const ObCharsetInfo* cs, const char* str_ptr, const char* str_end_ptr,
+    const char* wild_str, const char* wild_end, int escape_char, int w_one_char, int w_many_char, int recurse_level)
+{
+  int cmp_result = -1;
+
+  while (wild_str != wild_end) {
+    while (*wild_str != w_many_char && *wild_str != w_one_char) {
+      if (*wild_str == escape_char && wild_str + 1 != wild_end) {
+        wild_str++;
+      }
+      if (str_ptr == str_end_ptr || likeconv(cs, *wild_str++) != likeconv(cs, *str_ptr++)) {
+        return 1;
+      }
+      if (wild_str == wild_end) {
+        return str_ptr != str_end_ptr;
+      }
+      cmp_result = 1;
+    }
+    if (*wild_str == w_one_char) {
+      do {
+        if (str_ptr == str_end_ptr) {
+          return (cmp_result);
+        }
+        INC_PTR(cs, str_ptr, str_end_ptr);
+      } while (++wild_str < wild_end && *wild_str == w_one_char);
+      if (wild_str == wild_end) {
+        break;
+      }
+    }
+    if (*wild_str == w_many_char) {
+      unsigned char cmp = 0;
+      wild_str++;
+      for (; wild_str != wild_end; wild_str++) {
+        if (*wild_str == w_many_char) {
+          continue;
+        }
+        if (*wild_str == w_one_char) {
+          if (str_ptr == str_end_ptr) {
+            return (-1);
+          }
+          INC_PTR(cs, str_ptr, str_end_ptr);
+          continue;
+        }
+        break;
+      }
+      if (wild_str == wild_end) {
+        return (0);
+      }
+      if (str_ptr == str_end_ptr) {
+        return (-1);
+      }
+
+      if ((cmp = *wild_str) == escape_char && wild_str + 1 != wild_end) {
+        cmp = *++wild_str;
+      }
+
+      INC_PTR(cs, wild_str, wild_end);
+      cmp = likeconv(cs, cmp);
+      do {
+        while (str_ptr != str_end_ptr && (unsigned char)likeconv(cs, *str_ptr) != cmp) {
+          str_ptr++;
+        }
+        if (str_ptr++ == str_end_ptr) {
+          return -1;
+        }
+        do {
+          int tmp = ob_wildcmp_8bit_impl(
+              cs, str_ptr, str_end_ptr, wild_str, wild_end, escape_char, w_one_char, w_many_char, recurse_level + 1);
+          if (tmp <= 0) {
+            return tmp;
+          }
+        } while (0);
+      } while (str_ptr != str_end_ptr);
+      return -1;
+    }
+  }
+  return str_ptr != str_end_ptr ? 1 : 0;
+}
+
+int ob_wildcmp_8bit(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
+    const char* wildend, int escape, int w_one, int w_many)
+{
+  return ob_wildcmp_8bit_impl(cs, str, str_end, wildstr, wildend, escape, w_one, w_many, 1);
+}
+
+
+uint32_t ob_instr_simple(const ObCharsetInfo* cs , const char* b, size_t b_length,
+    const char* s, size_t s_length, ob_match_t* match, uint nmatch)
+{
+  register const unsigned char *str, *search, *end, *search_end;
+
+  if (s_length <= b_length) {
+    if (!s_length) {
+      if (nmatch) {
+        match->beg = 0;
+        match->end = 0;
+        match->mb_len = 0;
+      }
+      return 1; /* Empty string is always found */
+    }
+
+    str = (const unsigned char*)b;
+    search = (const unsigned char*)s;
+    end = (const unsigned char*)b + b_length - s_length + 1;
+    search_end = (const unsigned char*)s + s_length;
+
+  skip:
+    while (str != end) {
+      if (ob_sort_order(cs,*str++) == ob_sort_order(cs,*search)) {
+        register const unsigned char *i, *j;
+
+        i = str;
+        j = search + 1;
+
+        while (j != search_end)
+          if (ob_sort_order(cs,*i++) != ob_sort_order(cs,*j++))
+            goto skip;
+
+        if (nmatch > 0) {
+          match[0].beg = 0;
+          match[0].end = (size_t)(str - (const unsigned char*)b - 1);
+          match[0].mb_len = match[0].end;
+
+          if (nmatch > 1) {
+            match[1].beg = match[0].end;
+            match[1].end = match[0].end + s_length;
+            match[1].mb_len = match[1].end - match[1].beg;
+          }
+        }
+        return 2;
+      }
+    }
+  }
+  return 0;
+}
+
+
+
+ObCollationHandler ob_collation_8bit_simple_ci_handler = {
+    NULL, /* init */
+    NULL,
+    ob_strnncoll_simple,
+    ob_strnncollsp_simple,
+    ob_strnxfrm_simple,
+    ob_strnxfrmlen_simple,
+    NULL,//varlen
+    ob_like_range_simple,
+    ob_wildcmp_8bit,
+    NULL,//ob_strcasecmp_8bit,
+    ob_instr_simple,
+    ob_hash_sort_simple,
+    ob_propagate_simple};
+
+#undef likeconv
+#undef INC_PTR

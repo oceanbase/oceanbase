@@ -203,8 +203,7 @@ public:
   virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      ObMultiVersionRowFlag &flag,
-      transaction::ObTransID &trans_id,
+      const ObRowHeader *&row_header,
       int64_t &version,
       int64_t &sql_sequence);
   int compare_rowkey(
@@ -260,6 +259,13 @@ public:
       const int64_t row_cap,
       const bool contains_null,
       int64_t &count) override final;
+  int get_min_or_max(
+      int32_t col_id,
+      const int64_t *row_ids,
+      const char **cell_datas,
+      const int64_t row_cap,
+      ObDatum *datum_buf,
+      ObMicroBlockAggInfo<ObDatum> &agg_info);
   virtual int64_t get_column_count() const override
   {
     OB_ASSERT(nullptr != header_);
@@ -294,6 +300,12 @@ private:
                    const int64_t col_begin,
                    const int64_t col_end,
                    ObStorageDatum *datums);
+
+  int get_col_datums(int32_t col_id,
+                     const int64_t *row_ids,
+                     const char **cell_datas,
+                     const int64_t row_cap,
+                     common::ObDatum *col_datums);
   //TODO @hanhui deleted after change rowkey to datum
   int decode_cells(const uint64_t row_id,
                    const int64_t row_len,

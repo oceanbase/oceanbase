@@ -18,37 +18,40 @@ LOG_OP_DEF(LOG_ORDER_BY, "ORDER BY")
 LOG_OP_DEF(LOG_SORT, "SORT")
 LOG_OP_DEF(LOG_TABLE_SCAN, "TABLE SCAN")
 LOG_OP_DEF(LOG_JOIN, "JOIN")
-LOG_OP_DEF(LOG_SUBPLAN_SCAN, "SUBPLAN SCAN") // 10
+LOG_OP_DEF(LOG_SUBPLAN_SCAN, "SUBPLAN SCAN")
 LOG_OP_DEF(LOG_SUBPLAN_FILTER, "SUBPLAN FILTER")
 LOG_OP_DEF(LOG_EXCHANGE, "EXCHANGE")
-LOG_OP_DEF(LOG_FOR_UPD, "FOR UPDATE")
+LOG_OP_DEF(LOG_FOR_UPD, "FOR UPDATE") // 10
 LOG_OP_DEF(LOG_DISTINCT, "DISTINCT")
 LOG_OP_DEF(LOG_SET, "SET")
 LOG_OP_DEF(LOG_UPDATE, "UPDATE")
 LOG_OP_DEF(LOG_DELETE, "DELETE")
 LOG_OP_DEF(LOG_INSERT, "INSERT")
-LOG_OP_DEF(LOG_EXPR_VALUES, "EXPRESSION")  // 20
+LOG_OP_DEF(LOG_EXPR_VALUES, "EXPRESSION")
 LOG_OP_DEF(LOG_VALUES, "VALUES")
 LOG_OP_DEF(LOG_MATERIAL, "MATERIAL")
 LOG_OP_DEF(LOG_WINDOW_FUNCTION, "WINDOW FUNCTION")
-LOG_OP_DEF(LOG_SELECT_INTO, "SELECT INTO")
+LOG_OP_DEF(LOG_SELECT_INTO, "SELECT INTO")  // 20
 LOG_OP_DEF(LOG_TOPK, "TOPK")
 LOG_OP_DEF(LOG_COUNT, "COUNT")
 LOG_OP_DEF(LOG_MERGE, "MERGE")
 LOG_OP_DEF(LOG_GRANULE_ITERATOR, "GRANULE ITERATOR")
-LOG_OP_DEF(LOG_TABLE_LOOKUP, "TABLE LOOKUP")
 LOG_OP_DEF(LOG_JOIN_FILTER, "JOIN FILTER")
 LOG_OP_DEF(LOG_SEQUENCE, "SEQUENCE")
 LOG_OP_DEF(LOG_MONITORING_DUMP, "MONITORING DUMP")
 LOG_OP_DEF(LOG_FUNCTION_TABLE, "FUNCTION_TABLE")
+LOG_OP_DEF(LOG_JSON_TABLE, "JSON_TABLE")
 LOG_OP_DEF(LOG_UNPIVOT, "UNPIVOT")
-LOG_OP_DEF(LOG_LINK, "LINK")
+LOG_OP_DEF(LOG_LINK_SCAN, "LINK SCAN")
+LOG_OP_DEF(LOG_LINK_DML, "LINK DML")
+LOG_OP_DEF(LOG_LINK_TABLE_SCAN, "LINK TABLE SCAN")
 LOG_OP_DEF(LOG_TEMP_TABLE_INSERT, "TEMP TABLE INSERT")
 LOG_OP_DEF(LOG_TEMP_TABLE_ACCESS, "TEMP TABLE ACCESS")
 LOG_OP_DEF(LOG_TEMP_TABLE_TRANSFORMATION, "TEMP TABLE TRANSFORMATION")
 LOG_OP_DEF(LOG_INSERT_ALL, "INSERT ALL")
 LOG_OP_DEF(LOG_ERR_LOG, "ERROR LOGGING")
 LOG_OP_DEF(LOG_STAT_COLLECTOR, "STAT COLLECTOR")
+LOG_OP_DEF(LOG_OPTIMIZER_STATS_GATHERING, "OPTIMIZER STATISTICS GATHERING")
 /* end of logical operator type */
 LOG_OP_DEF(LOG_OP_END, "OP_DEF_END")
 #endif /*LOG_OP_DEF*/
@@ -99,24 +102,68 @@ enum SetAlgo
   HASH_SET
 };
 
+/********
+ * When modifying DistAlgo, the function ob_dist_algo_str
+ * needs to be modified synchronously ！！！
+ ************/
 enum DistAlgo
 {
   DIST_INVALID_METHOD = 0,
   DIST_BASIC_METHOD = (1UL), // represent local/remote join method
   DIST_PULL_TO_LOCAL = (1UL << 1),
-  DIST_HASH_HASH = (1UL << 2),
-  DIST_BROADCAST_NONE = (1UL << 3),
-  DIST_NONE_BROADCAST = (1UL << 4),
-  DIST_BC2HOST_NONE = (1UL << 5),
-  DIST_PARTITION_NONE = (1UL << 6),
-  DIST_NONE_PARTITION = (1UL << 7),
-  DIST_NONE_ALL = (1UL << 8), // all side is allowed for EXPRESSION/DAS
-  DIST_ALL_NONE = (1UL << 9),
-  DIST_PARTITION_WISE = (1UL << 10),
-  DIST_MAX_JOIN_METHOD = (1UL << 11), // represents max join method
+  DIST_HASH_NONE = (1UL << 2),
+  DIST_NONE_HASH = (1UL << 3),
+  DIST_HASH_HASH = (1UL << 4),
+  DIST_BROADCAST_NONE = (1UL << 5),
+  DIST_NONE_BROADCAST = (1UL << 6),
+  DIST_BC2HOST_NONE = (1UL << 7),
+  DIST_PARTITION_NONE = (1UL << 8),
+  DIST_NONE_PARTITION = (1UL << 9),
+  DIST_NONE_ALL = (1UL << 10), // all side is allowed for EXPRESSION/DAS
+  DIST_ALL_NONE = (1UL << 11),
+  DIST_PARTITION_WISE = (1UL << 12), // pure partition wise
+  DIST_EXT_PARTITION_WISE = (1UL << 13), // extended partition wise
+  DIST_MAX_JOIN_METHOD = (1UL << 14), // represents max join method
   // only for set operator
-  DIST_SET_RANDOM = (1UL << 12)
+  DIST_SET_RANDOM = (1UL << 15),
+  DIST_SET_PARTITION_WISE = (1UL << 16) // non-strict set pw with phy_table_location_info_
 };
+
+inline const ObString &ob_dist_algo_str(DistAlgo algo)
+{
+  static const ObString dist_algo_str[] =
+  {
+    "UNKNOWN ALGO",
+    "BASIC",
+    "PULL TO LOCAL",
+    "HASH NONE",
+    "NONE HASH",
+    "HASH HASH",
+    "BROADCAST NONE",
+    "NONE BROADCAST",
+    "BC2HOST NONE",
+    "PARTITION NONE",
+    "NONE PARTITION",
+    "NONE ALL",
+    "ALL NONE",
+    "PARTITION WISE",
+    "EXTEND PARTITION WISE",
+    "UNKNOWN ALGO",
+    "SET RANDOM",
+    "SET PARTITION WISE"
+  };
+  int64_t idx = 0;
+  int64_t value = algo;
+  while (value) {
+    value >>= 1;
+    ++idx;
+  }
+  if (OB_LIKELY(idx >= 0) && OB_LIKELY(idx <= sizeof(dist_algo_str) / sizeof(ObString))) {
+    return dist_algo_str[idx];
+  } else {
+    return dist_algo_str[0];
+  }
+}
 
 inline DistAlgo get_dist_algo(int64_t method)
 {
@@ -136,12 +183,20 @@ inline DistAlgo get_dist_algo(int64_t method)
     return DIST_PARTITION_NONE;
   } else if (method & DIST_NONE_PARTITION) {
     return DIST_NONE_PARTITION;
+  } else if (method & DIST_NONE_HASH) {
+    return DIST_NONE_HASH;
+  } else if (method & DIST_HASH_NONE) {
+    return DIST_HASH_NONE;
   } else if (method & DIST_PARTITION_WISE) {
     return DIST_PARTITION_WISE;
+  } else if (method & DIST_SET_PARTITION_WISE) {
+    return DIST_SET_PARTITION_WISE;
+  } else if (method & DIST_EXT_PARTITION_WISE) {
+    return DIST_EXT_PARTITION_WISE;
   } else if (method & DIST_NONE_ALL) {
     return DIST_NONE_ALL;
   } else if (method & DIST_ALL_NONE) {
-    return DIST_ALL_NONE;        
+    return DIST_ALL_NONE;
   } else if (method & DIST_SET_RANDOM) {
     return DIST_SET_RANDOM;
   } else {
@@ -162,6 +217,9 @@ inline DistAlgo get_opposite_distributed_type(DistAlgo dist_type)
   case DistAlgo::DIST_PARTITION_WISE:
     oppo_type = DistAlgo::DIST_PARTITION_WISE;
     break;
+  case DistAlgo::DIST_EXT_PARTITION_WISE:
+    oppo_type = DistAlgo::DIST_EXT_PARTITION_WISE;
+    break;
   case DistAlgo::DIST_HASH_HASH:
     oppo_type = DistAlgo::DIST_HASH_HASH;
     break;
@@ -174,15 +232,21 @@ inline DistAlgo get_opposite_distributed_type(DistAlgo dist_type)
   case DistAlgo::DIST_NONE_PARTITION:
     oppo_type = DistAlgo::DIST_PARTITION_NONE;
     break;
+  case DistAlgo::DIST_NONE_HASH:
+    oppo_type = DistAlgo::DIST_HASH_NONE;
+    break;
+  case DistAlgo::DIST_HASH_NONE:
+    oppo_type = DistAlgo::DIST_NONE_HASH;
+    break;
   case DistAlgo::DIST_PARTITION_NONE:
     oppo_type = DistAlgo::DIST_NONE_PARTITION;
     break;
   case DistAlgo::DIST_ALL_NONE:
     oppo_type = DistAlgo::DIST_NONE_ALL;
-    break;  
+    break;
   case DistAlgo::DIST_NONE_ALL:
     oppo_type = DistAlgo::DIST_ALL_NONE;
-    break;    
+    break;
   case DistAlgo::DIST_SET_RANDOM:
     oppo_type = DistAlgo::DIST_SET_RANDOM;
     break;
@@ -200,39 +264,6 @@ enum class WinDistAlgo
   RANGE = 2, // range distribute
   LIST = 3 // range + random distribute
 };
-
-#define ADD_DIST_METHOD_WITHOUT_BC2HOST(method) \
-  do {add_join_dist_flag(method, DIST_PULL_TO_LOCAL);         \
-  add_join_dist_flag(method, DIST_HASH_HASH);                 \
-  add_join_dist_flag(method, DIST_BROADCAST_NONE);            \
-  add_join_dist_flag(method, DIST_NONE_BROADCAST);            \
-  add_join_dist_flag(method, DIST_PARTITION_NONE);            \
-  add_join_dist_flag(method, DIST_NONE_PARTITION);            \
-  add_join_dist_flag(method, DIST_PARTITION_WISE);            \
-  } while(0);
-
-#define REMOVE_PX_SPECIFIC_DIST_METHOD(method) \
-  do {remove_join_dist_flag(method, DIST_HASH_HASH);         \
-  remove_join_dist_flag(method, DIST_BROADCAST_NONE);        \
-  remove_join_dist_flag(method, DIST_NONE_BROADCAST);        \
-  remove_join_dist_flag(method, DIST_BC2HOST_NONE);          \
-  remove_join_dist_flag(method, DIST_NONE_RANDOM);           \
-  remove_join_dist_flag(method, DIST_RANDOM_NONE);           \
-  } while(0);
-
-#define UPDATE_CURRENT_JOIN_DIST_METHOD(method, cost, v_method, v_cost) \
-  do { if ((DIST_INVALID_METHOD == method || cost > v_cost) && 0 != v_method) {      \
-    method = v_method;                                             \
-    cost = v_cost;}                                                \
-  } while(0);
-
-#define REMOVE_PX_PARALLEL_DFO_DIST_METHOD(method) \
-  do {remove_join_dist_flag(method, DIST_HASH_HASH);         \
-  remove_join_dist_flag(method, DIST_BROADCAST_NONE);        \
-  remove_join_dist_flag(method, DIST_NONE_BROADCAST);        \
-  remove_join_dist_flag(method, DIST_NONE_RANDOM);           \
-  remove_join_dist_flag(method, DIST_RANDOM_NONE);           \
-  } while(0);
 
 class ObLogPlan;
 class ObLogOperatorFactory

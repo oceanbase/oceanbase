@@ -17,6 +17,8 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -64,22 +66,93 @@ void ObDDLClogCb::try_release()
   }
 }
 
+ObDDLStartClogCb::ObDDLStartClogCb()
+  : is_inited_(false), status_(), lock_tid_(0), ddl_kv_mgr_handle_()
+{
+}
+
+int ObDDLStartClogCb::init(const ObITable::TableKey &table_key,
+                           const int64_t data_format_version,
+                           const int64_t execution_id,
+                           const uint32_t lock_tid,
+                           ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version < 0
+          || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    table_key_ = table_key;
+    data_format_version_ = data_format_version;
+    execution_id_ = execution_id;
+    lock_tid_ = lock_tid;
+    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLStartClogCb::on_success()
+{
+  int ret = OB_SUCCESS;
+  const SCN &start_scn = __get_scn();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ddl_kv_mgr_handle_.get_obj()->ddl_start_nolock(table_key_, start_scn, data_format_version_,
+      execution_id_, SCN::min_scn()/*checkpoint_scn*/))) {
+    LOG_WARN("failed to start ddl in cb", K(ret), K(table_key_), K(start_scn), K(execution_id_));
+  }
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  status_.set_ret_code(ret);
+  status_.set_state(STATE_SUCCESS);
+  try_release();
+  return OB_SUCCESS; // force return success
+}
+
+int ObDDLStartClogCb::on_failure()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  }
+  status_.set_state(STATE_FAILED);
+  try_release();
+  return OB_SUCCESS;
+}
+
+void ObDDLStartClogCb::try_release()
+{
+  if (status_.try_set_release_flag()) {
+  } else {
+    op_free(this);
+  }
+}
+
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
   : is_inited_(false), status_(), ls_id_(), redo_info_(), macro_block_id_(),
-    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false)
+    arena_("ddl_clog_cb", OB_MALLOC_BIG_BLOCK_SIZE), data_buffer_lock_(), is_data_buffer_freed_(false), ddl_kv_mgr_handle_()
 {
 
 }
 
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                 const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
-                                const blocksstable::MacroBlockId &macro_block_id)
+                                const blocksstable::MacroBlockId &macro_block_id,
+                                ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
   } else {
@@ -92,9 +165,10 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
       redo_info_.block_type_ = redo_info.block_type_;
       redo_info_.logic_id_ = redo_info.logic_id_;
       redo_info_.table_key_ = redo_info.table_key_;
-      redo_info_.start_log_ts_ = redo_info.start_log_ts_;
+      redo_info_.start_scn_ = redo_info.start_scn_;
       ls_id_ = ls_id;
       macro_block_id_ = macro_block_id;
+      ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
     }
   }
   return ret;
@@ -131,10 +205,10 @@ int ObDDLMacroBlockClogCb::on_success()
     } else {
       macro_block.block_type_ = redo_info_.block_type_;
       macro_block.logic_id_ = redo_info_.logic_id_;
-      macro_block.log_ts_ = __get_ts_ns();
+      macro_block.scn_ = __get_scn();
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
-      macro_block.ddl_start_log_ts_ = redo_info_.start_log_ts_;
+      macro_block.ddl_start_scn_ = redo_info_.start_scn_;
       if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block))) {
         LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block));
       }
@@ -152,6 +226,66 @@ int ObDDLMacroBlockClogCb::on_failure()
   try_release();
   return OB_SUCCESS;
 }
+
+ObDDLCommitClogCb::ObDDLCommitClogCb()
+  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn()), lock_tid_(0), ddl_kv_mgr_handle_()
+{
+
+}
+
+int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
+                            const common::ObTabletID &tablet_id,
+                            const share::SCN &start_scn,
+                            const uint32_t lock_tid,
+                            ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !start_scn.is_valid_and_not_min()
+      || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(start_scn), K(lock_tid));
+  } else {
+    ls_id_ = ls_id;
+    tablet_id_ = tablet_id;
+    start_scn_ = start_scn;
+    lock_tid_ = lock_tid;
+    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLCommitClogCb::on_success()
+{
+  int ret = OB_SUCCESS;
+  ddl_kv_mgr_handle_.get_obj()->set_commit_scn_nolock(__get_scn());
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  status_.set_ret_code(ret);
+  status_.set_state(STATE_SUCCESS);
+  try_release();
+  return OB_SUCCESS; // force return success
+}
+
+int ObDDLCommitClogCb::on_failure()
+{
+  int ret = OB_SUCCESS;
+  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  status_.set_state(STATE_FAILED);
+  try_release();
+  return OB_SUCCESS;
+}
+
+void ObDDLCommitClogCb::try_release()
+{
+  if (status_.try_set_release_flag()) {
+  } else {
+    op_free(this);
+  }
+}
+
 
 DEFINE_SERIALIZE(ObDDLClogHeader)
 {
@@ -196,25 +330,25 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 }
 
 ObDDLStartLog::ObDDLStartLog()
-  : table_key_(), cluster_version_(0), execution_id_(0)
+  : table_key_(), data_format_version_(0), execution_id_(-1)
 {
 }
 
-int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t cluster_version, const int64_t execution_id)
+int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || cluster_version_ < 0)) {
+  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(cluster_version));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version));
   } else {
     table_key_ = table_key;
-    cluster_version_ = cluster_version;
+    data_format_version_ = data_format_version;
     execution_id_ = execution_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, cluster_version_, execution_id_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()
@@ -235,49 +369,27 @@ int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
 
 OB_SERIALIZE_MEMBER(ObDDLRedoLog, redo_info_);
 
-ObDDLPrepareLog::ObDDLPrepareLog()
-  : table_key_(), start_log_ts_(0)
-{
-}
-
-int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
-                         const int64_t start_log_ts)
-{
-  int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || start_log_ts < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts));
-  } else {
-    table_key_ = table_key;
-    start_log_ts_ = start_log_ts;
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_log_ts_);
-
 ObDDLCommitLog::ObDDLCommitLog()
-  : table_key_(), start_log_ts_(0), prepare_log_ts_(0)
+  : table_key_(), start_scn_(SCN::min_scn())
 {
 }
 
 int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
-                         const int64_t start_log_ts,
-                         const int64_t prepare_log_ts)
+                         const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || start_log_ts <= 0 || prepare_log_ts <= 0) {
+  if (!table_key.is_valid() || !start_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts), K(prepare_log_ts));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn));
   } else {
     table_key_ = table_key;
-    start_log_ts_ = start_log_ts;
-    prepare_log_ts_ = prepare_log_ts;
+    start_scn_ = start_scn;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_log_ts_, prepare_log_ts_);
+OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_);
+
 
 ObTabletSchemaVersionChangeLog::ObTabletSchemaVersionChangeLog()
   : tablet_id_(), schema_version_(-1)

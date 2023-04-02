@@ -16,6 +16,8 @@
 #include <cstdint>
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
+#include "share/scn.h"
+
 namespace oceanbase
 {
 namespace storage
@@ -64,13 +66,13 @@ int common_checkpoint_type_to_string(const ObCommonCheckpointType common_checkpo
 struct ObCommonCheckpointVTInfo
 {
   ObTabletID tablet_id;
-  int64_t rec_log_ts;
+  share::SCN rec_scn;
   int checkpoint_type;
   bool is_flushing;
 
   TO_STRING_KV(
     K(tablet_id),
-    K(rec_log_ts),
+    K(rec_scn),
     K(checkpoint_type),
     K(is_flushing)
   );
@@ -85,12 +87,12 @@ inline bool is_valid_log_base_type(const ObCommonCheckpointType &type)
 // and register into ls_tx_service's common_list
 // the checkpoint units:
 // 1. write TRANS_SERVICE_LOG_BASE_TYPE clog
-// 2. have no freeze operation and rec_log_ts can't become smaller
+// 2. have no freeze operation and rec_scn can't become smaller
 class ObCommonCheckpoint
 {
 public:
-  virtual int64_t get_rec_log_ts() = 0;
-  virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) = 0;
+  virtual share::SCN get_rec_scn() = 0;
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) = 0;
 
   virtual ObTabletID get_tablet_id() const = 0;
   virtual bool is_flushing() const = 0;

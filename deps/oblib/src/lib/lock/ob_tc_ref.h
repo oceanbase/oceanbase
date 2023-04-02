@@ -28,7 +28,7 @@ public:
   {
     total_ref_count_ = MAX_CPU_NUM * ref_count_per_thread_;
     if (OB_ISNULL(ref_ = (int32_t **)ob_malloc_align(64, total_ref_count_ * sizeof(int32_t *), "TCREF"))) {
-      COMMON_LOG(ERROR, "memory alloc failed", K(ref_count_per_thread_), K(total_ref_count_));
+      COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "memory alloc failed", K(ref_count_per_thread_), K(total_ref_count_));
     } else {
       memset(ref_, 0, total_ref_count_ * sizeof(int32_t *));
     }

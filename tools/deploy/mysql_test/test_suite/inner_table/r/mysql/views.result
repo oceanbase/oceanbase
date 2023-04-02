@@ -13,16 +13,16 @@ mysql	time_zone_name
 mysql	time_zone
 show create view views;
 View	Create View	character_set_client	collation_connection
-VIEWS	CREATE VIEW `VIEWS` AS select                    'def' AS TABLE_CATALOG,                    d.database_name as TABLE_SCHEMA,                    t.table_name as TABLE_NAME,                    t.view_definition as VIEW_DEFINITION,                    case t.view_check_option when 1 then 'LOCAL' when 2 then 'CASCADED' else 'NONE' end as CHECK_OPTION,                    case t.view_is_updatable when 1 then 'YES' else 'NO' end as IS_UPDATABLE,                    case t.define_user_id when -1 then 'NONE' else concat(u.user_name, '@', u.host) end as DEFINER,                    'NONE' AS SECURITY_TYPE,                    case t.collation_type when 45 then 'utf8mb4' else 'NONE' end AS CHARACTER_SET_CLIENT,                    case t.collation_type when 45 then 'utf8mb4_general_ci' else 'NONE' end AS COLLATION_CONNECTION                    from oceanbase.__all_table as t                    join oceanbase.__all_database as d                      on t.tenant_id = d.tenant_id and t.database_id = d.database_id                    left join oceanbase.__all_user as u                      on t.tenant_id = u.tenant_id and t.define_user_id = u.user_id and t.define_user_id != -1                    where t.tenant_id = 0                      and t.table_type in (1, 4)                      and d.in_recyclebin = 0                      and d.database_name != '__recyclebin'                      and d.database_name != 'information_schema'                      and d.database_name != 'oceanbase'                      and 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name) 	utf8mb4	utf8mb4_general_ci
+VIEWS	CREATE VIEW `VIEWS` AS select                    cast('def' as CHAR(64)) AS TABLE_CATALOG,                    d.database_name as TABLE_SCHEMA,                    t.table_name as TABLE_NAME,                    t.view_definition as VIEW_DEFINITION,                    case t.view_check_option when 1 then 'LOCAL' when 2 then 'CASCADED' else 'NONE' end as CHECK_OPTION,                    case t.view_is_updatable when 1 then 'YES' else 'NO' end as IS_UPDATABLE,                    cast((case t.define_user_id                          when -1 then 'NONE'                          else concat(u.user_name, '@', u.host) end) as CHAR(288)) as DEFINER,                    cast('NONE' as CHAR(7)) AS SECURITY_TYPE,                    cast((case t.collation_type                          when 45 then 'utf8mb4'                          else 'NONE' end) as CHAR(64)) AS CHARACTER_SET_CLIENT,                    cast((case t.collation_type                          when 45 then 'utf8mb4_general_ci'                          else 'NONE' end) as CHAR(64)) AS COLLATION_CONNECTION                    from oceanbase.__all_table as t                    join oceanbase.__all_database as d                      on t.tenant_id = d.tenant_id and t.database_id = d.database_id                    left join oceanbase.__all_user as u                      on t.tenant_id = u.tenant_id and t.define_user_id = u.user_id and t.define_user_id != -1                    where t.tenant_id = 0                      and t.table_type in (1, 4)                      and d.in_recyclebin = 0                      and d.database_name != '__recyclebin'                      and d.database_name != 'information_schema'                      and d.database_name != 'oceanbase'                      and 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name) 	utf8mb4	utf8mb4_general_ci
 desc views;
 Field	Type	Null	Key	Default	Extra
-TABLE_CATALOG	varchar(3)	NO			
+TABLE_CATALOG	varchar(64)	NO
 TABLE_SCHEMA	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 VIEW_DEFINITION	longtext	NO		NULL	
 CHECK_OPTION	varchar(8)	NO		NULL	
 IS_UPDATABLE	varchar(3)	NO		NULL	
-DEFINER	varchar(257)	NO			
-SECURITY_TYPE	varchar(4)	NO			
-CHARACTER_SET_CLIENT	varchar(7)	NO		NULL	
-COLLATION_CONNECTION	varchar(18)	NO		NULL	
+DEFINER	varchar(288)	NO
+SECURITY_TYPE	varchar(7)	NO
+CHARACTER_SET_CLIENT	varchar(64)	NO
+COLLATION_CONNECTION	varchar(64)	NO

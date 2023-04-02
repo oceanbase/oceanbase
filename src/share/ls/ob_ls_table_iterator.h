@@ -16,6 +16,7 @@
 #include "lib/container/ob_array.h" // ObArray
 #include "share/ls/ob_ls_replica_filter.h" // ObLSReplicaFilterHolder
 #include "share/schema/ob_table_iter.h"//ObTenantIterator
+#include "share/ls/ob_ls_table.h" // ObLSTable::Mode
 
 namespace oceanbase
 {
@@ -29,12 +30,15 @@ class ObLSTableOperator;
 class ObLSInfo;
 
 // This class is used to iterate __all_ls_meta_table for target tenant.
+// Used by ObTenantMetaChecker
 class ObLSTableIterator
 {
 public:
   ObLSTableIterator();
   virtual ~ObLSTableIterator() {}
-  int init(ObLSTableOperator &lst_operator, const uint64_t tenant_id);
+  int init(ObLSTableOperator &lst_operator,
+           const uint64_t tenant_id,
+           const share::ObLSTable::Mode mode);
   int next(ObLSInfo &ls_info);
   ObLSReplicaFilterHolder &get_filters() { return filters_; }
 private:
@@ -46,9 +50,11 @@ private:
   ObLSTableOperator *lst_operator_;
   common::ObArray<ObLSInfo> inner_ls_infos_;
   ObLSReplicaFilterHolder filters_;
+  bool inner_table_only_;
 };
 
-//get all ls of each tenant's __all_ls_meta_table
+// get all ls of each tenant's __all_ls_meta_table
+// used by ObEmptyServerChecker
 class ObAllLSTableIterator
 {
 public:
@@ -72,7 +78,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAllLSTableIterator);
 };
 
-//get all ls of tenant's __all_ls_meta_table
+// get all ls of tenant's __all_ls_meta_table
+// used by ObLostReplicaChecker
 class ObTenantLSTableIterator
 {
 public:

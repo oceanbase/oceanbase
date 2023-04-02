@@ -18,7 +18,6 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/lob/ob_lob_seq.h"
-#include "lib/charset/ob_byteorder.h"
 
 namespace oceanbase
 {
@@ -56,7 +55,7 @@ static void make_seq_id(ObIAllocator* alloc, uint32_t dig_size, char*& seq_buf, 
 
   for (int i = 0; i < dig_size; i++) {
     digits[i] = random();
-    (void)store32be(seq_buf + offset, digits[i]);
+    (void)ObLobSeqId::store32be(seq_buf + offset, digits[i]);
     offset += sizeof(uint32_t);
   }
 

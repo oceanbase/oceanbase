@@ -107,6 +107,14 @@ void ObModifyTenantStmt::set_charset_type(const common::ObCharsetType type)
   modify_tenant_arg_.tenant_schema_.set_charset_type(type);
 }
 
+void ObModifyTenantStmt::set_enable_arbitration_service(const bool enable_arbitration_service)
+{
+  modify_tenant_arg_.tenant_schema_.set_arbitration_service_status(
+      enable_arbitration_service
+      ? share::ObArbitrationServiceStatus(share::ObArbitrationServiceStatus::ENABLING)
+      : share::ObArbitrationServiceStatus(share::ObArbitrationServiceStatus::DISABLING));
+}
+
 void ObModifyTenantStmt::set_collation_type(const common::ObCollationType type)
 {
   modify_tenant_arg_.tenant_schema_.set_collation_type(type);

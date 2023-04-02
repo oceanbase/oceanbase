@@ -37,6 +37,7 @@ public:
     is_update_unique_key_(false),
     is_update_part_key_(false),
     distinct_algo_(T_DISTINCT_NONE),
+    lookup_part_id_expr_(NULL),
     old_part_id_expr_(NULL),
     new_part_id_expr_(NULL),
     old_rowid_expr_(NULL),
@@ -54,6 +55,7 @@ public:
     rowkey_cnt_ = 0;
     column_exprs_.reset();
     column_convert_exprs_.reset();
+    column_old_values_exprs_.reset();
     assignments_.reset();
     need_filter_null_ = false;
     is_primary_index_ = false;
@@ -62,6 +64,7 @@ public:
     is_update_unique_key_ = false;
     is_update_part_key_ = false;
     distinct_algo_ = T_DISTINCT_NONE;
+    lookup_part_id_expr_ = NULL;
     old_part_id_expr_ = NULL;
     new_part_id_expr_ = NULL,
     old_rowid_expr_ = NULL,
@@ -107,6 +110,10 @@ public:
   //real_uk_cnt: strip the shadow primary key in unique index
   int64_t get_real_uk_cnt() const { return rowkey_cnt_ - spk_cnt_; }
   int init_column_convert_expr(const ObAssignments &assignments);
+  int convert_old_row_exprs(const ObIArray<ObColumnRefRawExpr*> &columns,
+                                          ObIArray<ObRawExpr*> &access_exprs,
+                                          int64_t col_cnt = -1);
+  int generate_column_old_values_exprs();
 public:
   // e.g.:
   //   create view V as select * from T1 as T;
@@ -145,10 +152,14 @@ public:
   bool is_update_unique_key_;
   bool is_update_part_key_;
   DistinctType distinct_algo_;
+  ObRawExpr *lookup_part_id_expr_; // for replace and insert_up conflict scene
   ObRawExpr *old_part_id_expr_;
   ObRawExpr *new_part_id_expr_;
   ObRawExpr *old_rowid_expr_;
   ObRawExpr *new_rowid_expr_;
+  // for generated column, the diff between column_exprs_ and column_old_values_exprs_
+  // is virtual generated column is replaced.
+  common::ObSEArray<ObRawExpr*, 64, common::ModulePageAllocator, true> column_old_values_exprs_;
   // local index id related to current dml
   TableIDArray related_index_ids_;
 
@@ -160,12 +171,14 @@ public:
                K_(spk_cnt),
                K_(column_exprs),
                K_(column_convert_exprs),
+               K_(column_old_values_exprs),
                K_(assignments),
                K_(need_filter_null),
                K_(is_primary_index),
                K_(ck_cst_exprs),
                K_(is_update_unique_key),
-               K_(is_update_part_key));
+               K_(is_update_part_key),
+               K_(assignments));
 };
 
 class ObDelUpdLogPlan;
@@ -234,7 +247,7 @@ public:
   { is_index_maintenance_ = is_index_maintenance; }
   bool is_index_maintenance() const { return is_index_maintenance_; }
   // update 拆成 del+ins 时，ins 的 table location 是 uncertain 的，需要全表更新
-  // https://work.aone.alibaba-inc.com/issue/32013820
+  //
   void set_table_location_uncertain(bool uncertain) { table_location_uncertain_ = uncertain; }
   bool is_table_location_uncertain() const { return table_location_uncertain_; }
   void set_pdml_update_split(bool is_pdml_update_split) { is_pdml_update_split_ = is_pdml_update_split; }
@@ -288,7 +301,11 @@ public:
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
   int extract_err_log_info();
   static int generate_errlog_info(const ObDelUpdStmt &stmt, ObErrLogDefine &errlog_define);
-  int copy_part_expr_pre(CopyPartExprCtx &ctx) override;
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  int replace_dml_info_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs,
+        const ObIArray<IndexDMLInfo *> &index_dml_infos);
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
   virtual int generate_multi_part_partition_id_expr() = 0;
@@ -296,6 +313,7 @@ protected:
   int generate_update_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_insert_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_old_calc_partid_expr(IndexDMLInfo &index_info);
+  int generate_lookup_part_id_expr(IndexDMLInfo &index_info);
   int generate_insert_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
   int generate_update_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
 
@@ -317,10 +335,15 @@ protected:
   int generate_pdml_partition_id_expr();
 
   int print_table_infos(const ObString &prefix,
-                        char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
+                        char *buf,
+                        int64_t &buf_len,
+                        int64_t &pos,
+                        ExplainType type);
   int print_assigns(const ObAssignments &assigns,
-                    char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
+                    char *buf,
+                    int64_t &buf_len,
+                    int64_t &pos,
+                    ExplainType type);
   int check_has_trigger(uint64_t tid, bool &has_trg);
   int build_rowid_expr(uint64_t table_id,
                        uint64_t table_ref_id,
@@ -332,7 +355,13 @@ protected:
   static int find_pdml_part_id_producer(ObLogicalOperator &op,
                                         const uint64_t tid,
                                         ObLogicalOperator *&producer);
-  virtual int print_outline(planText &plan) override;
+
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+
+  virtual int print_outline_data(PlanText &plan_text) override;
+
+  virtual int print_used_hint(PlanText &plan_text) override;
 protected:
 
   ObDelUpdLogPlan &my_dml_plan_;
@@ -354,7 +383,7 @@ protected:
   bool need_barrier_; // row movement 场景下为了避免 insert、delete 同时操作同一行，需要加入 barrier
   bool is_first_dml_op_; // 第一个 dml op 可以和 tsc 形成 partition wise 结构，可少分配一个 exchange
   // update 拆成 del+ins 时，ins 的 table location 是 uncertain 的，需要全表更新
-  // https://work.aone.alibaba-inc.com/issue/32013820
+  //
   bool table_location_uncertain_;
   bool is_pdml_update_split_; // 标记delete, insert op是否由update拆分而来
 private:

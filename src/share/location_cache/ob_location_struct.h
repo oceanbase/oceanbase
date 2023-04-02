@@ -22,6 +22,7 @@
 #include "share/ob_ls_id.h"
 #include "share/restore/ob_ls_restore_status.h"
 #include "lib/lock/ob_thread_cond.h"
+#include "share/ob_rs_mgr.h"
 
 namespace oceanbase
 {
@@ -55,10 +56,12 @@ public:
   inline const common::ObRole &get_role() const { return role_; }
   inline int64_t get_sql_port() const { return sql_port_; }
   inline void set_sql_port(const int64_t &sql_port) { sql_port_ = sql_port; }
+  inline void set_proposal_id(const int64_t proposal_id) { proposal_id_ = proposal_id; }
   inline const common::ObReplicaType &get_replica_type() const { return replica_type_; }
   inline void set_replica_type(const common::ObReplicaType &type) { replica_type_ = type; }
   inline const common::ObReplicaProperty &get_property() const { return property_; }
   inline const ObLSRestoreStatus &get_restore_status() const { return restore_status_; }
+  inline int64_t get_proposal_id() const { return proposal_id_; }
   bool is_strong_leader() const { return common::is_strong_leader(role_); }
   bool is_follower() const { return common::is_follower(role_); }
   int assign(const ObLSReplicaLocation &other);
@@ -68,7 +71,8 @@ public:
       const int64_t &sql_port,
       const common::ObReplicaType &replica_type,
       const common::ObReplicaProperty &property,
-      const ObLSRestoreStatus &restore_status);
+      const ObLSRestoreStatus &restore_status,
+      const int64_t proposal_id);
   // make fake location for vtable
   int init_without_check(
       const common::ObAddr &server,
@@ -76,7 +80,8 @@ public:
       const int64_t &sql_port,
       const common::ObReplicaType &replica_type,
       const common::ObReplicaProperty &property,
-      const ObLSRestoreStatus &restore_status);
+      const ObLSRestoreStatus &restore_status,
+      const int64_t proposal_id);
   // set role for tenant_server in __all_virtual_proxy_schema
   void set_role(const common::ObRole &role) { role_ = role; }
   TO_STRING_KV(
@@ -85,7 +90,8 @@ public:
       K_(sql_port),
       K_(replica_type),
       K_(property),
-      K_(restore_status));
+      K_(restore_status),
+      K_(proposal_id));
 private:
   common::ObAddr server_;
   common::ObRole role_;
@@ -93,6 +99,7 @@ private:
   common::ObReplicaType replica_type_;
   common::ObReplicaProperty property_; // memstore_percent is used
   ObLSRestoreStatus restore_status_;
+  int64_t proposal_id_; // only leader's proposal_id_ is useful
 };
 
 class ObLSLocationCacheKey
@@ -109,6 +116,7 @@ public:
        const int64_t cluster_id,
        const uint64_t tenant_id,
        const ObLSID ls_id);
+  int assign(const ObLSLocationCacheKey &other);
   void reset();
   bool operator ==(const ObLSLocationCacheKey &other) const;
   bool operator !=(const ObLSLocationCacheKey &other) const;
@@ -125,6 +133,37 @@ private:
   ObLSID ls_id_;
 };
 
+class ObLSLeaderLocation
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSLeaderLocation() : key_(), location_() {}
+  ObLSLeaderLocation(
+    const ObLSLocationCacheKey &key,
+    const ObLSReplicaLocation &location)
+    : key_(key), location_(location) {}
+  ~ObLSLeaderLocation() {}
+  int init(
+      const int64_t cluster_id,
+      const uint64_t tenant_id,
+      const ObLSID ls_id,
+      const common::ObAddr &server,
+      const common::ObRole &role,
+      const int64_t &sql_port,
+      const common::ObReplicaType &replica_type,
+      const common::ObReplicaProperty &property,
+      const ObLSRestoreStatus &restore_status,
+      const int64_t proposal_id);
+  int assign(const ObLSLeaderLocation &other);
+  void reset();
+  bool is_valid() const;
+  const ObLSLocationCacheKey &get_key() const { return key_; }
+  const ObLSReplicaLocation &get_location() const { return location_; }
+  TO_STRING_KV(K_(key), K_(location));
+private:
+  ObLSLocationCacheKey key_;
+  ObLSReplicaLocation location_;
+};
 
 class ObLSLocation : public common::ObLink
 {
@@ -161,6 +200,7 @@ public:
   int get_leader(ObLSReplicaLocation &leader) const;
   void set_last_access_ts(const int64_t ts) { last_access_ts_ = ts; }
   int64_t get_last_access_ts() const { return last_access_ts_; }
+  int merge_leader_from(const ObLSLocation &new_location);
   static int alloc_new_location(
       common::ObIAllocator &allocator,
       ObLSLocation *&new_location);

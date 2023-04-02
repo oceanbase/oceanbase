@@ -46,7 +46,7 @@ void print_access_storage_log(
         *is_slow = true;
       }
       speed = 1.0 * (double)size / 1024 / 1024 * 1000 * 1000 / (double)cost_ts;
-      _STORAGE_LOG(WARN, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
+      _STORAGE_LOG_RET(WARN, OB_SUCCESS, "access storage op=%s uri=%.*s size=%ld Byte cost_ts=%ld us speed=%.2f MB/s",
         msg, uri.length(), uri.ptr(), size, cost_ts, speed);
     }
   }
@@ -140,7 +140,7 @@ void ObStorageGlobalIns::fin()
 
 void ObStorageGlobalIns::set_io_prohibited(bool prohibited)
 {
-  STORAGE_LOG(WARN, "set_io_prohibited", K_(io_prohibited), K(prohibited));
+  STORAGE_LOG_RET(WARN, OB_SUCCESS, "set_io_prohibited", K_(io_prohibited), K(prohibited));
   io_prohibited_ = prohibited;
 }
 
@@ -238,7 +238,7 @@ int ObStorageUtil::is_exist(const common::ObString &uri, bool &exist)
   exist = false;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_IS_EXIST) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_IS_EXIST) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
     //do nothing
@@ -265,7 +265,7 @@ int ObStorageUtil::get_file_length(const common::ObString &uri, int64_t &file_le
   file_length = -1;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_init()) {
@@ -297,7 +297,7 @@ int ObStorageUtil::del_file(const common::ObString &uri)
   const int64_t start_ts = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_BEFORE_DEL_FILE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_DEL_FILE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_init()) {
@@ -329,7 +329,7 @@ int ObStorageUtil::del_file(const common::ObString &uri)
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_IO_AFTER_DEL_FILE) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_DEL_FILE) OB_SUCCESS;
   }
 #endif
   print_access_storage_log("del_file", uri, start_ts);
@@ -349,7 +349,7 @@ int ObStorageUtil::mkdir(const common::ObString &uri)
 
   STORAGE_LOG(DEBUG, "mkdir", K(uri));
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_BEFORE_MKDIR) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_MKDIR) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_init()) {
@@ -365,7 +365,7 @@ int ObStorageUtil::mkdir(const common::ObString &uri)
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_IO_AFTER_MKDIR) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_MKDIR) OB_SUCCESS;
   }
 #endif
   print_access_storage_log("mkdir", uri, start_ts);
@@ -378,7 +378,7 @@ int ObStorageUtil::list_files(const common::ObString &uri, common::ObBaseDirEntr
   const int64_t start_ts = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
 #endif
 
   if (OB_FAIL(ret)) {
@@ -410,7 +410,7 @@ int ObStorageUtil::write_single_file(const common::ObString &uri, const char *bu
   const int64_t start_ts = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_BEFORE_WRITE_SINGLE_FILE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_BEFORE_WRITE_SINGLE_FILE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (!is_init()) {
@@ -429,7 +429,7 @@ int ObStorageUtil::write_single_file(const common::ObString &uri, const char *bu
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_BACKUP_IO_AFTER_WRITE_SINGLE_FILE) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_BACKUP_IO_AFTER_WRITE_SINGLE_FILE) OB_SUCCESS;
   }
 #endif
   print_access_storage_log("write_single_file", uri, start_ts, size);
@@ -499,7 +499,7 @@ int ObStorageUtil::list_directories(const common::ObString &uri, common::ObBaseD
   const int64_t start_ts = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
 #endif
 
   if (OB_FAIL(ret)) {
@@ -548,7 +548,7 @@ ObStorageReader::ObStorageReader()
 ObStorageReader::~ObStorageReader()
 {
   if (NULL != reader_) {
-    STORAGE_LOG(ERROR, "reader not closed", KCSTRING(uri_));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "reader not closed", KCSTRING(uri_));
   }
 }
 
@@ -560,7 +560,7 @@ int ObStorageReader::open(const common::ObString &uri, void* obj_base_info)
   start_ts_ = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_READER_OPEN) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_READER_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -608,7 +608,7 @@ int ObStorageReader::pread(char *buf,const int64_t buf_size, int64_t offset, int
   read_size = 0;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_READER_PREAD) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_READER_PREAD) OB_SUCCESS;
 #endif
 
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -669,7 +669,7 @@ ObStorageWriter::ObStorageWriter()
 ObStorageWriter::~ObStorageWriter()
 {
   if (NULL != writer_) {
-    STORAGE_LOG(ERROR, "writer not close");
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "writer not close");
   }
 }
 
@@ -681,7 +681,7 @@ int ObStorageWriter::open(const common::ObString &uri, void* obj_base_info)
   start_ts_ = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_WRITE_OPEN) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -726,7 +726,7 @@ int ObStorageWriter::write(const char *buf,const int64_t size)
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_WRITE_WRITE) OB_SUCCESS;
 #endif
 
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -795,7 +795,7 @@ ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
 ObStorageAppender::~ObStorageAppender()
 {
   if (is_opened_ && NULL != appender_) {
-    STORAGE_LOG(ERROR, "appender not close");
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "appender not close");
   }
 }
 
@@ -810,7 +810,7 @@ int ObStorageAppender::open(
   start_ts_ = ObTimeUtility::current_time();
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_APPENDER_OPEN) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_APPENDER_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -862,7 +862,7 @@ int ObStorageAppender::write(const char *buf,const int64_t size)
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
 #endif
 
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -938,7 +938,7 @@ int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
   } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -967,7 +967,7 @@ int64_t ObStorageAppender::get_length()
   int64_t ret_int = -1;
 
   if (OB_ISNULL(appender_)) {
-    STORAGE_LOG(WARN, "appender not opened");
+    STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
   } else {
     ret_int = appender_->get_length();
   }

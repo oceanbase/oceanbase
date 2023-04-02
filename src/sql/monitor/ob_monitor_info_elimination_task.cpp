@@ -30,7 +30,7 @@ int ObMonitorInfoEliminationTask::init(ObMonitorInfoManager *info)
 void ObMonitorInfoEliminationTask::runTimerTask()
 {
   if (OB_ISNULL(monitor_info_)) {
-    SQL_MONITOR_LOG(ERROR, "invalid history info", K(monitor_info_));
+    SQL_MONITOR_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid history info", K(monitor_info_));
   } else {
     monitor_info_->print_memory_size();
     monitor_info_->gc();

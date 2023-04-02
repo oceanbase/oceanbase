@@ -107,7 +107,7 @@ int ObCreateDatabaseResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("invalid parse tree", K(ret));
         } else {
           ObDatabaseResolver<ObCreateDatabaseStmt> resolver;
-          if (OB_FAIL(resolver.resolve_database_options(create_database_stmt, dboption_node))) {
+          if (OB_FAIL(resolver.resolve_database_options(create_database_stmt, dboption_node, session_info_))) {
             LOG_WARN("resolve database option failed", K(ret));
           }
         }

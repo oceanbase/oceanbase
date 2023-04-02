@@ -31,8 +31,6 @@ enum ObAdminDumpsstCmd
   DUMP_SUPER_BLOCK,
   DUMP_MACRO_DATA,
   PRINT_MACRO_BLOCK,
-  DUMP_SSTABLE,
-  DUMP_SSTABLE_META,
   DUMP_MAX,
 };
 
@@ -40,14 +38,16 @@ struct ObDumpMacroBlockContext final
 {
 public:
   ObDumpMacroBlockContext()
-    : first_id_(-1), second_id_(-1), micro_id_(-1)
+    : first_id_(-1), second_id_(-1), micro_id_(-1), tablet_id_(0), scn_(-1)
   {}
   ~ObDumpMacroBlockContext() = default;
   bool is_valid() const { return second_id_ >= 0; }
-  TO_STRING_KV(K(first_id_), K(second_id_), K(micro_id_));
+  TO_STRING_KV(K(first_id_), K(second_id_), K(micro_id_), K_(tablet_id), K_(scn));
   uint64_t first_id_;
   int64_t second_id_;
   int64_t micro_id_;
+  uint64_t tablet_id_;
+  int64_t scn_;
 };
 
 class ObAdminDumpsstExecutor : public ObAdminExecutor
@@ -64,14 +64,13 @@ private:
   void print_macro_meta();
   void print_super_block();
   int dump_macro_block(const ObDumpMacroBlockContext &context);
+  int dump_single_macro_block(const char* buf, const int64_t size);
+  int dump_shared_macro_block(const char* buf, const int64_t size);
   void dump_sstable();
   void dump_sstable_meta();
 
   bool is_quiet_;
-  bool in_csv_;
   ObAdminDumpsstCmd cmd_;
-  storage::ObITable::TableKey table_key_;
-  bool skip_log_replay_;
   bool hex_print_;
   ObDumpMacroBlockContext dump_macro_context_;
   char *key_hex_str_;

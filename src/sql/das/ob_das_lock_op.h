@@ -30,12 +30,12 @@ public:
   virtual int open_op() override;
   virtual int release_op() override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
-  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more) override;
+  virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int init_task_info() override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return lock_ctdef_; }
   virtual ObDASBaseRtDef *get_rtdef() override { return lock_rtdef_; }
-  int write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full);
+  int write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full);
   int64_t get_row_cnt() const { return lock_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASLockCtDef *del_ctdef) { lock_ctdef_ = del_ctdef; }
   void set_das_rtdef(ObDASLockRtDef *del_rtdef) { lock_rtdef_ = del_rtdef; }
@@ -52,6 +52,7 @@ private:
   const ObDASLockCtDef *lock_ctdef_;
   ObDASLockRtDef *lock_rtdef_;
   ObDASWriteBuffer lock_buffer_;
+  int64_t affected_rows_;  // local execute result, no need to serialize
 };
 
 class ObDASLockResult : public ObIDASTaskResult
@@ -60,7 +61,8 @@ class ObDASLockResult : public ObIDASTaskResult
 public:
   ObDASLockResult();
   virtual ~ObDASLockResult();
-  virtual int init(const ObIDASTaskOp &op) override;
+  virtual int init(const ObIDASTaskOp &op, common::ObIAllocator &alloc) override;
+  virtual int reuse() override;
   int64_t get_affected_rows() const { return affected_rows_; }
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,

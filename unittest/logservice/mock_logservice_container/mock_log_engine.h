@@ -420,11 +420,13 @@ public:
   int submit_change_mode_meta_req(
       const common::ObMemberList &member_list,
       const int64_t &msg_proposal_id,
+      const bool is_applied_mode_meta,
       const LogModeMeta &mode_meta)
   {
     int ret = OB_SUCCESS;
     UNUSED(member_list);
     UNUSED(msg_proposal_id);
+    UNUSED(is_applied_mode_meta);
     UNUSED(mode_meta);
     return ret;
   }
@@ -439,7 +441,7 @@ public:
     return ret;
   }
 
-  int submit_get_memberchange_status_req(
+  int submit_config_change_pre_check_req(
       const common::ObAddr &server,
       const LogConfigVersion &config_version,
       const int64_t timeout_ns,
@@ -449,7 +451,9 @@ public:
     UNUSED(server);
     UNUSED(config_version);
     UNUSED(timeout_ns);
-    UNUSED(resp);
+    resp.is_normal_replica_ = true;
+    resp.need_update_config_meta_ = false;
+    resp.max_flushed_end_lsn_ = LSN(PALF_INITIAL_LSN_VAL);
     return ret;
   }
 

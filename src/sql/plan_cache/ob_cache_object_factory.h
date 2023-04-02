@@ -34,7 +34,7 @@ class ObSql;
 class ObCacheObjectFactory
 {
 friend class ObPlanCacheObject;
-friend class ObPlanCacheManager;
+friend class ObPlanCache;
 public:
   static int alloc(ObCacheObjGuard& guard,
                    ObLibCacheNameSpace ns,
@@ -44,7 +44,6 @@ public:
   static void inner_free(ObPlanCache *pc,
                          ObILibCacheObject *&cache_obj,
                          const CacheRefHandleID ref_handle);
-  static ObPlanCache *get_plan_cache(const uint64_t tenant_id);
   template<typename ClassT>
   static void free(ClassT *&cache_obj, const CacheRefHandleID ref_handle)
   {
@@ -106,6 +105,11 @@ public:
   ObILibCacheObject* get_cache_obj() const
   {
     return cache_obj_;
+  }
+
+  CacheRefHandleID get_ref_handle() const
+  {
+    return ref_handle_;
   }
 
   int force_early_release(ObPlanCache *pc);

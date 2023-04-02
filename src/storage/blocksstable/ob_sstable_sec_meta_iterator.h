@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObBlockMetaTree;
+}
 namespace blocksstable
 {
 
@@ -46,6 +50,7 @@ private:
       const ObMacroBlockMetaType meta_type,
       const ObSSTableMeta &sstable_meta);
   void set_iter_end();
+  int adjust_index(const int64_t begin_idx, const int64_t end_idx, const int64_t row_cnt);
   int init_micro_reader(const ObRowStoreType row_store_type, ObIAllocator &allocator);
   int init_by_type(const ObMacroBlockMetaType meta_type);
   OB_INLINE bool is_handle_buffer_empty() const { return curr_handle_idx_ == prefetch_handle_idx_; }
@@ -66,6 +71,7 @@ private:
       bool &is_beyond_range);
   int prefetch_micro_block(int64_t prefetch_depth);
   int open_next_micro_block();
+  int open_meta_root_block();
 
   // TODO: opt with prefetch
   int get_micro_block(
@@ -84,6 +90,7 @@ private:
   ObDataMicroBlockCache *block_cache_;
   ObIMicroBlockReader *micro_reader_;
   ObMicroBlockReaderHelper micro_reader_helper_;
+  storage::ObBlockMetaTree *block_meta_tree_;
   const ObDatumRange *query_range_;
   ObMicroBlockId start_bound_micro_block_;
   ObMicroBlockId end_bound_micro_block_;

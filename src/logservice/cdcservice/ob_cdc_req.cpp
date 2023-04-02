@@ -22,6 +22,8 @@ namespace obrpc
  * Request start LSN by start timestamp.
  *
  */
+OB_SERIALIZE_MEMBER(ObCdcRpcId, client_pid_, client_addr_);
+
 void ObCdcReqStartLSNByTsReq::LocateParam::reset()
 {
   ls_id_.reset();
@@ -42,7 +44,7 @@ bool ObCdcReqStartLSNByTsReq::LocateParam::is_valid() const
 OB_SERIALIZE_MEMBER(ObCdcReqStartLSNByTsReq::LocateParam, ls_id_, start_ts_ns_);
 
 ObCdcReqStartLSNByTsReq::ObCdcReqStartLSNByTsReq()
-    : rpc_ver_(CUR_RPC_VER), params_()
+    : rpc_ver_(CUR_RPC_VER), params_(), client_id_(), flag_(0)
 { }
 
 ObCdcReqStartLSNByTsReq::~ObCdcReqStartLSNByTsReq()
@@ -53,6 +55,7 @@ ObCdcReqStartLSNByTsReq::~ObCdcReqStartLSNByTsReq()
 void ObCdcReqStartLSNByTsReq::reset()
 {
   params_.reset();
+  flag_ = 0;
 }
 
 bool ObCdcReqStartLSNByTsReq::is_valid() const
@@ -114,14 +117,14 @@ ObCdcReqStartLSNByTsReq::get_params() const
 OB_DEF_SERIALIZE(ObCdcReqStartLSNByTsReq)
 {
   int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, rpc_ver_, params_);
+  LST_DO_CODE(OB_UNIS_ENCODE, rpc_ver_, params_, client_id_, flag_);
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObCdcReqStartLSNByTsReq)
 {
   int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, rpc_ver_, params_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, rpc_ver_, params_, client_id_, flag_);
   return len;
 }
 
@@ -130,7 +133,7 @@ OB_DEF_DESERIALIZE(ObCdcReqStartLSNByTsReq)
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE, rpc_ver_);
   if (CUR_RPC_VER == rpc_ver_) {
-    LST_DO_CODE(OB_UNIS_DECODE, params_);
+    LST_DO_CODE(OB_UNIS_DECODE, params_, client_id_, flag_);
   } else {
     ret = OB_NOT_SUPPORTED;
     EXTLOG_LOG(ERROR, "deserialize error, version not match",
@@ -246,7 +249,7 @@ OB_DEF_DESERIALIZE(ObCdcReqStartLSNByTsResp)
  *
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchLogReq, rpc_ver_, ls_id_, start_lsn_,
-                    upper_limit_ts_, client_pid_);
+                    upper_limit_ts_, client_pid_, client_id_, progress_, flag_);
 OB_SERIALIZE_MEMBER(ObCdcFetchStatus,
                     is_reach_max_lsn_,
                     is_reach_upper_limit_ts_,
@@ -261,7 +264,8 @@ OB_DEF_SERIALIZE(ObCdcLSFetchLogResp)
   int ret = OB_SUCCESS;
 
   LST_DO_CODE(OB_UNIS_ENCODE, rpc_ver_, err_, debug_err_,
-              ls_id_, feedback_type_, fetch_status_, next_req_lsn_, log_num_, pos_);
+              ls_id_, feedback_type_, fetch_status_, next_req_lsn_,
+              log_num_, pos_);
 
   if (OB_SUCCESS == ret && pos_ > 0) {
     if (buf_len - pos < pos_) {
@@ -271,6 +275,7 @@ OB_DEF_SERIALIZE(ObCdcLSFetchLogResp)
       pos += pos_;
     }
   }
+  LST_DO_CODE(OB_UNIS_ENCODE, server_progress_);
 
   return ret;
 }
@@ -282,11 +287,14 @@ OB_DEF_SERIALIZE_SIZE(ObCdcLSFetchLogResp)
 
   if (CUR_RPC_VER == rpc_ver_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, rpc_ver_, err_, debug_err_,
-                ls_id_, feedback_type_, fetch_status_, next_req_lsn_, log_num_, pos_);
+                ls_id_, feedback_type_, fetch_status_, next_req_lsn_,
+                log_num_, pos_);
     len += pos_;
+
+    LST_DO_CODE(OB_UNIS_ADD_LEN, server_progress_);
   } else {
     tmp_ret = OB_NOT_SUPPORTED;
-    EXTLOG_LOG(ERROR, "get serialize size error, version not match",
+    EXTLOG_LOG_RET(ERROR, tmp_ret, "get serialize size error, version not match",
                K(tmp_ret), K(rpc_ver_), LITERAL_K(CUR_RPC_VER));
   }
 
@@ -300,7 +308,8 @@ OB_DEF_DESERIALIZE(ObCdcLSFetchLogResp)
   LST_DO_CODE(OB_UNIS_DECODE, rpc_ver_);
   if (CUR_RPC_VER == rpc_ver_) {
     LST_DO_CODE(OB_UNIS_DECODE, err_, debug_err_,
-                ls_id_, feedback_type_, fetch_status_, next_req_lsn_, log_num_, pos_);
+                ls_id_, feedback_type_, fetch_status_, next_req_lsn_,
+                log_num_, pos_);
 
     if (OB_UNLIKELY(! is_valid())) {
       ret = OB_ERR_UNEXPECTED;
@@ -309,6 +318,8 @@ OB_DEF_DESERIALIZE(ObCdcLSFetchLogResp)
       MEMCPY(log_entry_buf_, buf + pos, pos_);
       pos += pos_;
     }
+
+    LST_DO_CODE(OB_UNIS_DECODE, server_progress_);
   } else {
     ret = OB_NOT_SUPPORTED;
     EXTLOG_LOG(ERROR, "deserialize error, version not match",
@@ -325,6 +336,9 @@ void ObCdcLSFetchLogReq::reset()
   start_lsn_.reset();
   upper_limit_ts_ = 0;
   client_pid_ = 0;
+  client_id_.reset();
+  progress_ = OB_INVALID_TIMESTAMP;
+  flag_ = 0;
 }
 
 ObCdcLSFetchLogReq& ObCdcLSFetchLogReq::operator=(const ObCdcLSFetchLogReq &other)
@@ -429,6 +443,7 @@ int ObCdcLSFetchLogResp::assign(const ObCdcLSFetchLogResp &other)
     log_num_ = other.log_num_;
     pos_ = other.pos_;
     log_entry_buf_[0] = '\0';
+    server_progress_ = OB_INVALID_TIMESTAMP;
 
     if (log_num_ > 0 && pos_ > 0) {
       (void)MEMCPY(log_entry_buf_, other.log_entry_buf_, pos_);
@@ -450,6 +465,7 @@ void ObCdcLSFetchLogResp::reset()
   log_num_ = 0;
   pos_ = 0;
   log_entry_buf_[0] = '\0';
+  server_progress_ = OB_INVALID_TIMESTAMP;
 }
 
 /*
@@ -458,7 +474,8 @@ void ObCdcLSFetchLogResp::reset()
  *
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq::MissLogParam, miss_lsn_);
-OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq, rpc_ver_, ls_id_, miss_log_array_, client_pid_);
+OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq, rpc_ver_, ls_id_, miss_log_array_,
+                    client_pid_, client_id_, flag_);
 
 void ObCdcLSFetchMissLogReq::reset()
 {
@@ -466,6 +483,8 @@ void ObCdcLSFetchMissLogReq::reset()
   ls_id_.reset();
   miss_log_array_.reset();
   client_pid_ = 0;
+  client_id_.reset();
+  flag_ = 0;
 }
 
 int ObCdcLSFetchMissLogReq::append_miss_log(const MissLogParam &param)

@@ -29,6 +29,7 @@ ObAllVirtualMinorFreezeInfo::ObAllVirtualMinorFreezeInfo()
     addr_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
     ls_iter_guard_(),
+    diagnose_info_(),
     memtables_info_()
 {
 }
@@ -44,6 +45,7 @@ void ObAllVirtualMinorFreezeInfo::reset()
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   ls_iter_guard_.reset();
+  diagnose_info_.reset();
   memtables_info_.reset();
   memset(ip_buf_, 0, common::OB_IP_STR_BUFF);
   memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
@@ -54,6 +56,7 @@ void ObAllVirtualMinorFreezeInfo::release_last_tenant()
 {
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   ls_iter_guard_.reset();
+  diagnose_info_.reset();
   memtables_info_.reset();
   memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
 }
@@ -103,24 +106,18 @@ int ObAllVirtualMinorFreezeInfo::get_next_ls(ObLS *&ls)
 int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  ObFreezer *freezer = nullptr;
+  ObFreezerStat freeze_stat;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
   } else if (FALSE_IT(start_to_read_ = true)) {
   } else if (ls_iter_guard_.get_ptr() == nullptr && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
     SERVER_LOG(WARN, "get_ls_iter fail", K(ret));
-  } else if (OB_FAIL(get_next_ls(ls))) {
+  } else if (OB_FAIL(get_next_freeze_stat(freeze_stat))) {
     if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "get_next_ls failed", K(ret));
+      SERVER_LOG(WARN, "get_next_freeze_stat failed", K(ret));
     }
-  } else if (NULL == ls) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
-  } else if (FALSE_IT(freezer = ls->get_freezer())) {
-  } else if (freezer->get_stat().is_valid()) {
-    ObFreezerStat& freeze_stat = freezer->get_stat();
+  } else {
     int64_t freeze_clock = 0;
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -150,37 +147,37 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 4:
           // tablet_id
-          cur_row_.cells_[i].set_int(freeze_stat.tablet_id_.id());
+          cur_row_.cells_[i].set_int(freeze_stat.get_tablet_id().id());
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
           // is_force
-          cur_row_.cells_[i].set_varchar(freeze_stat.is_force_ ? "YES" : "NO");
+          cur_row_.cells_[i].set_varchar(freeze_stat.get_is_force() ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
           // freeze_clock
-          freeze_clock = freezer->get_freeze_clock();
+          freeze_clock = freeze_stat.get_freeze_clock();
           cur_row_.cells_[i].set_int(freeze_clock);
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // freeze_snapshot_version
-          cur_row_.cells_[i].set_int(freezer->get_freeze_snapshot_version());
+          cur_row_.cells_[i].set_int(freeze_stat.get_freeze_snapshot_version().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // start_time
-          cur_row_.cells_[i].set_timestamp(freeze_stat.start_time_);
+          cur_row_.cells_[i].set_timestamp(freeze_stat.get_start_time());
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
           // end_time
-          cur_row_.cells_[i].set_timestamp(freeze_stat.end_time_);
+          cur_row_.cells_[i].set_timestamp(freeze_stat.get_end_time());
           break;
         case OB_APP_MIN_COLUMN_ID + 10:
           // ret_code
-          cur_row_.cells_[i].set_int(freeze_stat.ret_code_);
+          cur_row_.cells_[i].set_int(freeze_stat.get_ret_code());
           break;
         case OB_APP_MIN_COLUMN_ID + 11:
           // state
-          switch (freeze_stat.state_) {
+          switch (freeze_stat.get_state()) {
             case ObFreezeState::INVALID:
               cur_row_.cells_[i].set_varchar("INVALID");
               break;
@@ -205,8 +202,10 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 12:
           // diagnose_info
-          cur_row_.cells_[i].set_varchar(freeze_stat.diagnose_info_.get_ob_string());
-          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          if (OB_SUCC(freeze_stat.get_diagnose_info(diagnose_info_))) {
+            cur_row_.cells_[i].set_varchar(diagnose_info_.get_ob_string());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 13:
           // memtables_info
@@ -232,39 +231,93 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
   return ret;
 }
 
-int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
+int ObAllVirtualMinorFreezeInfo::get_next_freeze_stat(ObFreezerStat &freeze_stat)
 {
   int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  ObFreezer *freezer = nullptr;
 
-  memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
-  for (int i = 0; i < memtables_info_.count(); ++i) {
-    if (memtables_info_[i].is_valid()) {
-      // tablet_id
-      strcat(memtables_info_string_, "tablet_id:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].tablet_id_.id()));
-      // start_log_ts
-      strcat(memtables_info_string_, ", start_log_ts:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].start_log_ts_));
-      // end_log_ts
-      strcat(memtables_info_string_, ", end_log_ts:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].end_log_ts_));
-      // write_ref_cnt
-      strcat(memtables_info_string_, ", write_ref_cnt:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].write_ref_cnt_));
-      // unsubmitted_cnt
-      strcat(memtables_info_string_, ", unsubmitted_cnt:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].unsubmitted_cnt_));
-      // unsynced_cnt
-      strcat(memtables_info_string_, ", unsubmitted_cnt:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].unsynced_cnt_));
-      // current_right_boundary
-      strcat(memtables_info_string_, ", current_right_boundary:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].current_right_boundary_));
-      strcat(memtables_info_string_, "; ");
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(get_next_ls(ls))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "get_next_ls failed", K(ret));
+      }
+    } else if (OB_ISNULL(ls)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
+    } else if (FALSE_IT(freezer = ls->get_freezer())) {
+    } else if (OB_ISNULL(freezer)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret));
+    } else if (OB_FAIL(freezer->get_stat().deep_copy_to(freeze_stat))) {
+      SERVER_LOG(WARN, "fail to deep copy", K(ret));
+    } else if (!(freeze_stat.is_valid())) {
+      SERVER_LOG(WARN, "freeze_stat is invalid", KP(ls), KP(freezer));
+    } else {
+      // freeze_stat is valid
+      break;
     }
   }
 
   return ret;
+}
+
+int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
+{
+  int ret = OB_SUCCESS;
+  memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
+  int memtable_info_count = memtables_info_.count();
+  // leave space for '\0'
+  int64_t size = OB_MAX_CHAR_LENGTH - 1;
+
+  for (int i = 0; i < memtable_info_count && size > 0; ++i) {
+    if (memtables_info_[i].is_valid()) {
+      // tablet_id
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[0], to_cstring(memtables_info_[i].tablet_id_.id()), size);
+      // start_scn
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[1], to_cstring(memtables_info_[i].start_scn_), size);
+      // end_scn
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[2], to_cstring(memtables_info_[i].end_scn_), size);
+      // write_ref_cnt
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[3], to_cstring(memtables_info_[i].write_ref_cnt_), size);
+      // unsubmitted_cnt
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[4], to_cstring(memtables_info_[i].unsubmitted_cnt_), size);
+      // unsynced_cnt
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[5], to_cstring(memtables_info_[i].unsynced_cnt_), size);
+      // current_right_boundary
+      append_memtable_info_string(MEMTABLE_INFO_MEMBER[6], to_cstring(memtables_info_[i].current_right_boundary_), size);
+      // end of the memtable_info
+      if (size >= 2) {
+        strcat(memtables_info_string_, "; ");
+        size = size - 2;
+      } else if (size < 0) {
+        SERVER_LOG(WARN, "size is invalid", K(size), K(memtable_info_count), K(memtables_info_string_));
+      }
+    }
+  }
+
+  return ret;
+}
+
+void ObAllVirtualMinorFreezeInfo::append_memtable_info_string(const char *name, const char *str, int64_t &size)
+{
+  if (size > 0) {
+    int64_t name_len = MIN(size, strlen(name));
+    strncat(memtables_info_string_, name, name_len);
+    size = size - name_len;
+
+    int64_t mark_len = MIN(size, 1);
+    strncat(memtables_info_string_, ":", mark_len);
+    size = size - mark_len;
+
+    int64_t str_len = MIN(size, strlen(str));
+    strncat(memtables_info_string_, str, str_len);
+    size = size - str_len;
+
+    mark_len = MIN(size, 1);
+    strncat(memtables_info_string_, " ", mark_len);
+    size = size - mark_len;
+  }
 }
 
 }/* ns observer*/

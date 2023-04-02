@@ -136,7 +136,6 @@ class ObSQLSessionMgr;
 class ObSQLSessionInfo;
 class ObIVirtualTableIteratorFactory;
 class ObRawExpr;
-class planText;
 class ObSQLSessionInfo;
 
 class ObSelectStmt;
@@ -314,7 +313,7 @@ private:
   int last_query_retry_err_;
   // this value include local retry & packet retry
   int64_t retry_cnt_;
-  // for fast fail, https://yuque.antfin-inc.com/ob/product_functionality_review/xdiwhw
+  // for fast fail,
   int64_t query_switch_leader_retry_timeout_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryRetryInfo);
@@ -325,17 +324,26 @@ class ObSqlSchemaGuard
 public:
   ObSqlSchemaGuard()
   { reset(); }
+  ~ObSqlSchemaGuard()
+  { reset(); }
   void set_schema_guard(share::schema::ObSchemaGetterGuard *schema_guard)
   { schema_guard_ = schema_guard; }
   share::schema::ObSchemaGetterGuard *get_schema_guard() const
   { return schema_guard_; }
   void reset();
+  int get_dblink_schema(const uint64_t tenant_id,
+                        const uint64_t dblink_id,
+                        const share::schema::ObDbLinkSchema *&dblink_schema);
   int get_table_schema(uint64_t dblink_id,
                        const common::ObString &database_name,
                        const common::ObString &table_name,
                        const share::schema::ObTableSchema *&table_schema,
-                       uint32_t sessid = 0);
-
+                       sql::ObSQLSessionInfo *session_info,
+                       const ObString &dblink_name,
+                       bool is_reverse_link);
+  int set_link_table_schema(uint64_t dblink_id,
+                            const common::ObString &database_name,
+                            share::schema::ObTableSchema *table_schema);
   int get_table_schema(uint64_t table_id,
                        uint64_t ref_table_id,
                        const ObDMLStmt *stmt,
@@ -352,14 +360,14 @@ public:
   int get_column_schema(uint64_t table_id, uint64_t column_id,
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         bool is_link = false) const;
-  int get_table_schema_version(const uint64_t table_id, int64_t &schema_version, bool is_link = false) const;
+  int get_table_schema_version(const uint64_t table_id, int64_t &schema_version) const;
   int get_can_read_index_array(uint64_t table_id,
                                uint64_t *index_tid_array,
                                int64_t &size,
                                bool with_mv,
                                bool with_global_index = true,
                                bool with_domain_index = true,
-                               bool is_link = false);
+                               bool with_spatial_index = true);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;
   int get_link_column_schema(uint64_t table_id, const common::ObString &column_name,
@@ -371,7 +379,7 @@ public:
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
 private:
   share::schema::ObSchemaGetterGuard *schema_guard_;
-  common::ModulePageAllocator allocator_;
+  common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   uint64_t next_link_table_id_;
 };
@@ -408,6 +416,7 @@ struct ObSpmCacheCtx
   ObSpmCacheCtx()
     : bl_key_()
   {}
+  inline void reset() { bl_key_.reset(); }
   ObBaselineKey bl_key_;
 };
 
@@ -426,15 +435,24 @@ public:
   void reset();
 
   bool handle_batched_multi_stmt() const { return multi_stmt_item_.is_batched_multi_stmt(); }
-  share::ObFeedbackRerouteInfo *get_reroute_info()
+  void reset_reroute_info() {
+    if (nullptr != reroute_info_) {
+      op_reclaim_free(reroute_info_);
+    }
+    reroute_info_ = NULL;
+  }
+  share::ObFeedbackRerouteInfo *get_or_create_reroute_info()
   {
     if (nullptr == reroute_info_) {
       reroute_info_ = op_reclaim_alloc(share::ObFeedbackRerouteInfo);
     }
     return reroute_info_;
   }
+  share::ObFeedbackRerouteInfo *get_reroute_info() {
+    return reroute_info_;
+  }
   // release dynamic allocated memory
-  // https://aone.alibaba-inc.com/issue/19749534
+  //
   void clear();
 public:
   ObMultiStmtItem multi_stmt_item_;
@@ -488,16 +506,23 @@ public:
   common::ObIArray<ObPCParamEqualInfo> *all_equal_param_constraints_;
   common::ObDList<ObPreCalcExprConstraint> *all_pre_calc_constraints_;
   common::ObIArray<ObExprConstraint> *all_expr_constraints_;
+  common::ObIArray<ObPCPrivInfo> *all_priv_constraints_;
   bool is_ddl_from_primary_;//备集群从主库同步过来需要处理的ddl sql语句
   const sql::ObStmt *cur_stmt_;
   const ObPhysicalPlan *cur_plan_;
 
   bool can_reroute_sql_; // 是否可以重新路由
   bool is_sensitive_;    // 是否含有敏感信息，若有则不记入 sql_audit
+  bool is_protocol_weak_read_; // record whether proxy set weak read for this request in protocol flag
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   ObRawExpr *flashback_query_expr_;
   ObSpmCacheCtx spm_ctx_;
   bool is_execute_call_stmt_;
+  bool enable_sql_resource_manage_;
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
+  uint64_t res_map_rule_version_;
+  bool is_text_ps_mode_;
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
 };
@@ -533,7 +558,9 @@ public:
       prepare_param_count_(0),
       is_prepare_stmt_(false),
       has_nested_sql_(false),
-      tz_info_(NULL)
+      tz_info_(NULL),
+      res_map_rule_id_(common::OB_INVALID_ID),
+      res_map_rule_param_idx_(common::OB_INVALID_INDEX)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -570,6 +597,8 @@ public:
     is_prepare_stmt_ = false;
     has_nested_sql_ = false;
     tz_info_ = NULL;
+    res_map_rule_id_ = common::OB_INVALID_ID;
+    res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -624,6 +653,7 @@ public:
   common::ObSArray<ObPCParamEqualInfo, common::ModulePageAllocator, true> all_equal_param_constraints_;
   common::ObDList<ObPreCalcExprConstraint> all_pre_calc_constraints_;
   common::ObSArray<ObExprConstraint, common::ModulePageAllocator, true> all_expr_constraints_;
+  common::ObSArray<ObPCPrivInfo, common::ModulePageAllocator, true> all_priv_constraints_;
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool has_udf_;
@@ -640,6 +670,8 @@ public:
   bool is_prepare_stmt_;
   bool has_nested_sql_;
   const common::ObTimeZoneInfo *tz_info_;
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

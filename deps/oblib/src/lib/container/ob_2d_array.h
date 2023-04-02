@@ -442,7 +442,7 @@ inline T &Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
                     BlockPointerArrayT>::at(int64_t idx)
 {
   if (OB_UNLIKELY(0 > idx || idx >= count_)) {
-    LIB_LOG(ERROR, "invalid idx. Fatal!!!", K(idx), K_(count));
+    LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "invalid idx. Fatal!!!", K(idx), K_(count));
   }
   return *get_obj_pos(idx);
 }
@@ -454,7 +454,7 @@ inline const T &Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
                           BlockPointerArrayT>::at(int64_t idx) const
 {
   if (OB_UNLIKELY(0 > idx || idx >= count_)) {
-    LIB_LOG(ERROR, "invalid idx. Fatal!!!", K(idx), K_(count));
+    LIB_LOG_RET(ERROR, OB_ARRAY_OUT_OF_RANGE, "invalid idx. Fatal!!!", K(idx), K_(count));
   }
   return *get_obj_pos(idx);
 }

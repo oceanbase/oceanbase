@@ -13,14 +13,12 @@
 #ifndef DEV_SRC_SQL_CODE_GENERATOR_OB_TSC_CG_SERVICE_H_
 #define DEV_SRC_SQL_CODE_GENERATOR_OB_TSC_CG_SERVICE_H_
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_table_lookup.h"
 namespace oceanbase
 {
 namespace sql
 {
 class ObStaticEngineCG;
 class ObTableScanSpec;
-class ObTableLookupSpec;
 class ObPushdownExprSpec;
 struct ObTableScanCtDef;
 struct ObDASScanCtDef;
@@ -36,18 +34,17 @@ public:
   int generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef);
   int generate_agent_vt_access_meta(const ObLogTableScan &op, ObTableScanSpec &spec);
   int generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpec &spec);
-  int generate_table_lookup_filter(const ObLogTableLookup &op, ObTableLookupSpec &spec);
   int generate_pd_storage_flag(const ObLogPlan *log_plan,
                                const uint64_t ref_table_id,
                                const ObIArray<ObRawExpr *> &access_exprs,
                                const log_op_def::ObLogOpType op_type,
+                               const bool is_global_index_lookup,
                                ObPushdownExprSpec &pd_spec);
   int generate_table_loc_meta(uint64_t table_loc_id,
                               const ObDMLStmt &stmt,
                               const share::schema::ObTableSchema &table_schema,
                               const ObSQLSessionInfo &session,
                               ObDASTableLocMeta &loc_meta);
-  int generate_ddl_output_column_ids(const ObLogTableScan &op, ObTableScanSpec &spec);
   int generate_das_result_output(const common::ObIArray<uint64_t> &output_cids,
                                  ObDASScanCtDef &scan_ctdef,
                                  const bool include_agg = false);
@@ -58,17 +55,16 @@ private:
   int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
   int extract_das_output_column_ids(const ObLogTableScan &op,
                                     common::ObTableID table_id,
+                                    const ObTableSchema &index_schema,
                                     common::ObIArray<uint64_t> &output_cids);
-  int extract_pushdown_filters(const ObLogTableScan &op,
-                               common::ObIArray<ObRawExpr*> &nonpushdown_filters,
-                               common::ObIArray<ObRawExpr*> &pushdown_filters,
-                               common::ObIArray<ObRawExpr*> &lookup_pushdown_filters);
+
   int extract_das_access_exprs(const ObLogTableScan &op,
                                common::ObTableID scan_table_id,
                                common::ObIArray<ObRawExpr*> &access_exprs);
   //extract these column exprs need by TSC operator, these column will output by DAS scan
   int extract_tsc_access_columns(const ObLogTableScan &op, common::ObIArray<ObRawExpr*> &access_exprs);
   int extract_das_column_ids(const common::ObIArray<ObRawExpr*> &column_exprs, common::ObIArray<uint64_t> &column_ids);
+  int generate_geo_access_ctdef(const ObLogTableScan &op, const ObTableSchema &index_schema, ObArray<ObRawExpr*> &access_exprs);
 private:
   ObStaticEngineCG &cg_;
 };

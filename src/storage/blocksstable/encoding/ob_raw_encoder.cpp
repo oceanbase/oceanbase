@@ -54,14 +54,8 @@ int ObRawEncoder::init(const ObColumnEncodingCtx &ctx,
         K(ret), K(ctx), K(column_index), "row count", rows.count());
   } else {
     column_header_.type_ = type_;
-    if (ctx.is_out_row_column_) {
-      column_header_.set_out_row();
-      store_class_ = ObStringSC;
-      type_store_size_ = get_type_size_map()[ObVarcharType];
-    } else {
-      store_class_ = get_store_class_map()[ob_obj_type_class(column_type_.get_type())];
-      type_store_size_ = get_type_size_map()[column_type_.get_type()];
-    }
+    store_class_ = get_store_class_map()[ob_obj_type_class(column_type_.get_type())];
+    type_store_size_ = get_type_size_map()[column_type_.get_type()];
     if (type_store_size_ > 0) {
       if(type_store_size_ > sizeof(int64_t)) {
         ret = OB_INNER_STAT_ERROR;
@@ -132,6 +126,7 @@ int ObRawEncoder::traverse(const bool force_var_store, bool &suitable)
       case ObStringSC:
       case ObTextSC:
       case ObJsonSC:
+      case ObGeometrySC:
       case ObOTimestampSC:
       case ObIntervalSC: {
           if (force_var_store || fix_data_size_ < 0) {
@@ -219,6 +214,7 @@ int ObRawEncoder::get_var_length(const int64_t row_id, int64_t &length)
         case ObStringSC:
         case ObTextSC:
         case ObJsonSC:
+        case ObGeometrySC:
         case ObOTimestampSC:
         case ObIntervalSC: {
           length = datum.len_;

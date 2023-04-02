@@ -16,6 +16,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "logservice/palf/palf_base_info.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 namespace storage
@@ -54,14 +55,14 @@ int gen_create_ls_arg(const int64_t tenant_id,
   ObReplicaType replica_type = REPLICA_TYPE_FULL;
   ObReplicaProperty property;
   share::ObAllTenantInfo tenant_info;
-  const int64_t create_ts_ns = 0;
+  const share::SCN create_scn = share::SCN::base_scn();
   arg.reset();
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
   palf::PalfBaseInfo palf_base_info;
   if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
     STORAGE_LOG(WARN, "failed to init tenant info", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_ts_ns, compat_mode, false, palf_base_info))) {
-   STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_ts_ns), K(compat_mode), K(palf_base_info));
+  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_scn, compat_mode, false, palf_base_info))) {
+   STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info));
   }
   return ret;
 }
@@ -77,7 +78,6 @@ int gen_create_tablet_arg(const int64_t tenant_id,
   obrpc::ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> index_tablet_ids;
   ObArray<int64_t> index_tablet_schema_idxs;
-  int64_t frozen_timestamp = 0;
   uint64_t table_id = 12345;
   arg.reset();
   share::schema::ObTableSchema table_schema_obj;
@@ -109,10 +109,8 @@ int gen_create_tablet_arg(const int64_t tenant_id,
           false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", KR(ret), K(index_tablet_ids),
         K(tablet_id), K(index_tablet_schema_idxs));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id,
-                                            frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", KR(ret), K(tenant_id), K(ls_id),
-        K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(arg.tablets_.push_back(tablet_info))) {

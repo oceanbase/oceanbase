@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_TRANSACTION_OB_TX_MSG_
 #define OCEANBASE_TRANSACTION_OB_TX_MSG_
 
+#include "share/scn.h"
 #include "share/ob_define.h"
 #include "ob_trans_define.h"
 #include "share/rpc/ob_batch_proxy.h"
@@ -52,7 +53,16 @@ namespace transaction
       /* for others */
       ROLLBACK_SAVEPOINT       = 60,
       KEEPALIVE                = 61,
-      KEEPALIVE_RESP           = 62
+      KEEPALIVE_RESP           = 62,
+      /* for standby read */
+      ASK_STATE                = 63,
+      ASK_STATE_RESP           = 64,
+      COLLECT_STATE            = 65,
+      COLLECT_STATE_RESP       = 66,
+      /* for txn free route  */
+      TX_FREE_ROUTE_PUSH_STATE       = 80,
+      TX_FREE_ROUTE_CHECK_ALIVE      = 81,
+      TX_FREE_ROUTE_CHECK_ALIVE_RESP = 82,
     };
 
     struct ObTxMsg : public obrpc::ObIFill
@@ -204,10 +214,9 @@ namespace transaction
 
     struct ObTxCommitRespMsg : public ObTxMsg {
       ObTxCommitRespMsg() :
-          ObTxMsg(TX_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_COMMIT_RESP)
       {}
-      int64_t commit_version_;
+      share::SCN commit_version_;
       int ret_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(commit_version));
@@ -271,7 +280,7 @@ namespace transaction
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(status));
       OB_UNIS_VERSION(1);
     };
-    
+
     struct Ob2pcPrepareReqMsg : public ObTxMsg
     {
     public:
@@ -292,11 +301,10 @@ namespace transaction
     public:
       Ob2pcPrepareRespMsg() :
           ObTxMsg(TX_2PC_PREPARE_RESP),
-          prepare_version_(OB_INVALID_TIMESTAMP),
           prepare_info_array_()
       {}
     public:
-      int64_t prepare_version_;
+      share::SCN prepare_version_;
       ObLSLogInfoArray prepare_info_array_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(prepare_version), K_(prepare_info_array));
@@ -307,11 +315,10 @@ namespace transaction
     {
     public:
       Ob2pcPreCommitReqMsg() :
-          ObTxMsg(TX_2PC_PRE_COMMIT_REQ),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_2PC_PRE_COMMIT_REQ)
       {}
     public:
-      int64_t commit_version_;
+      share::SCN commit_version_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
       OB_UNIS_VERSION(1);
@@ -321,14 +328,13 @@ namespace transaction
     {
     public:
       Ob2pcPreCommitRespMsg() :
-          ObTxMsg(TX_2PC_PRE_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_2PC_PRE_COMMIT_RESP)
       {}
     public:
       //set commit_version when the root participant 
       //which recover from prepare log recive a pre_commit response 
       //because the coord_state_ will be set as pre_commit
-      int64_t commit_version_;
+      share::SCN commit_version_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
       OB_UNIS_VERSION(1);
@@ -339,11 +345,10 @@ namespace transaction
     public:
       Ob2pcCommitReqMsg() :
           ObTxMsg(TX_2PC_COMMIT_REQ),
-          commit_version_(OB_INVALID_TIMESTAMP),
           prepare_info_array_()
       {}
     public:
-      int64_t commit_version_;
+      share::SCN commit_version_;
       ObLSLogInfoArray prepare_info_array_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version), K_(prepare_info_array));
@@ -353,14 +358,13 @@ namespace transaction
     struct Ob2pcCommitRespMsg : public ObTxMsg
     {
     public:
-      Ob2pcCommitRespMsg() :
-          ObTxMsg(TX_2PC_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
-      {}
+      Ob2pcCommitRespMsg() : ObTxMsg(TX_2PC_COMMIT_RESP) {}
+
     public:
       bool is_valid() const;
-      int64_t commit_version_;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
+      share::SCN commit_version_;
+      share::SCN commit_log_scn_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version), K_(commit_log_scn));
       OB_UNIS_VERSION(1);
     };
 
@@ -368,11 +372,13 @@ namespace transaction
     {
     public:
       Ob2pcAbortReqMsg() :
-          ObTxMsg(TX_2PC_ABORT_REQ)
+        ObTxMsg(TX_2PC_ABORT_REQ),
+        upstream_(share::ObLSID::INVALID_LS_ID)
       {}
     public:
       bool is_valid() const;
-      // INHERIT_TO_STRING_KV("txMsg", ObTxMsg);
+      share::ObLSID upstream_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(upstream));
       OB_UNIS_VERSION(1);
     };
 
@@ -395,6 +401,8 @@ namespace transaction
       {}
     public:
       bool is_valid() const;
+      share::SCN max_commit_log_scn_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(max_commit_log_scn));
       OB_UNIS_VERSION(1);
     };
 
@@ -453,14 +461,70 @@ namespace transaction
     public:
       Ob2pcPrepareVersionRespMsg() :
           ObTxMsg(TX_2PC_PREPARE_VERSION_RESP),
-          prepare_version_(OB_INVALID_TIMESTAMP),
           prepare_info_array_()
       {}
     public:
-      int64_t prepare_version_;
+      share::SCN prepare_version_;
       ObLSLogInfoArray prepare_info_array_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(prepare_version), K_(prepare_info_array));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObAskStateMsg : public ObTxMsg
+    {
+    public:
+      ObAskStateMsg() :
+          ObTxMsg(ASK_STATE),
+          snapshot_()
+      {}
+    public:
+      share::SCN snapshot_;
+
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObAskStateRespMsg : public ObTxMsg
+    {
+    public:
+      ObAskStateRespMsg() :
+          ObTxMsg(ASK_STATE_RESP),
+          state_info_array_()
+      {}
+    public:
+      ObStateInfoArray state_info_array_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(state_info_array));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObCollectStateMsg : public ObTxMsg
+    {
+    public:
+      ObCollectStateMsg() :
+          ObTxMsg(COLLECT_STATE),
+          snapshot_()
+      {}
+    public:
+      share::SCN snapshot_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot));
+      OB_UNIS_VERSION(1);
+    };
+
+    struct ObCollectStateRespMsg : public ObTxMsg
+    {
+    public:
+      ObCollectStateRespMsg() :
+          ObTxMsg(COLLECT_STATE_RESP),
+          state_info_()
+      {}
+    public:
+      ObStateInfo state_info_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(state_info));
       OB_UNIS_VERSION(1);
     };
 
@@ -473,7 +537,7 @@ namespace transaction
             || (20 <= msg_type && 22 >= msg_type)
             || (40 <= msg_type && 49 >= msg_type)
             || (50 <= msg_type && 53 >= msg_type)
-            || (60 <= msg_type && 62 >= msg_type));
+            || (60 <= msg_type && 66 >= msg_type));
       }
 
       static bool is_2pc_msg_type(const int16_t msg_type)

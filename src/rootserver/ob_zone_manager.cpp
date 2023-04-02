@@ -552,11 +552,7 @@ int ObZoneManagerBase::alter_zone(
   ObZone zone = arg.zone_;
   ObRegion my_region = arg.region_;
   ObIDC my_idc = arg.idc_;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1440) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("cannot alter zone during updating to 144", K(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter zone during upgrading to version 1.4.4");
-  } else if (OB_FAIL(check_inner_stat())) {
+  if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (zone.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -953,7 +949,7 @@ ObZoneManager::ObZoneManagerShadowGuard::~ObZoneManagerShadowGuard()
   if (OB_UNLIKELY(OB_SUCCESS != ret_)) {
   } else if (OB_UNLIKELY(OB_SUCCESS !=
       (ret_ = ObZoneManager::copy_infos(zone_mgr_, shadow_)))) {
-    LOG_WARN("copy from shadow_ failed", K(ret_));
+    LOG_WARN_RET(ret_, "copy from shadow_ failed", K(ret_));
   }
 }
 

@@ -41,7 +41,7 @@ OB_SERIALIZE_MEMBER(ObTableLockOp, lock_id_,
                     lock_op_status_,
                     lock_seq_no_,
                     commit_version_,
-                    commit_log_ts_,
+                    commit_scn_,
                     create_timestamp_,
                     create_schema_version_);
 
@@ -96,6 +96,20 @@ int ObLockID::set(const ObLockOBJType &type, const uint64_t obj_id)
     obj_id_ = obj_id;
   }
   hash_value_ = inner_hash();
+  return ret;
+}
+
+int get_lock_id(const ObLockOBJType obj_type,
+                const uint64_t obj_id,
+                ObLockID &lock_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_lock_obj_type_valid(obj_type) || !is_valid_id(obj_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument ", K(ret), K(obj_type), K(obj_id));
+  } else if (OB_FAIL(lock_id.set(obj_type, obj_id))) {
+    LOG_WARN("create lock id failed.", K(ret));
+  }
   return ret;
 }
 
@@ -173,12 +187,12 @@ bool ObTableLockOp::operator ==(const ObTableLockOp &other) const
 void ObTableLockInfo::reset()
 {
   table_lock_ops_.reset();
-  max_durable_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_durable_scn_.reset();
 }
 
 OB_SERIALIZE_MEMBER(ObTableLockInfo,
                     table_lock_ops_,
-                    max_durable_log_ts_);
+                    max_durable_scn_);
 
 } // tablelock
 } // transaction

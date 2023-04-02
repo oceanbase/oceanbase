@@ -96,30 +96,6 @@ int ObInsertStmt::assign(const ObInsertStmt &other)
   return ret;
 }
 
-int ObInsertStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(table_info_.get_relation_exprs(expr_checker))) {
-    LOG_WARN("failed to get relation exprs", K(ret));
-  } else if (OB_FAIL(ObDelUpdStmt::inner_get_relation_exprs(expr_checker))) {
-    LOG_WARN("get delup stmt relation exprs failed", K(ret));
-  }
-  return ret;
-}
-
-int ObInsertStmt::replace_inner_stmt_expr(const ObIArray<ObRawExpr*> &other_exprs,
-                                          const ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(table_info_.replace_exprs(other_exprs,
-                                               new_exprs))) {
-    LOG_WARN("failed to replace exprs", K(ret));
-  }
-  return ret;
-}
-
 int ObInsertStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
 {
   is_modified = table_info_.ref_table_id_ == ref_table_id;
@@ -341,24 +317,6 @@ int ObInsertStmt::get_value_vectors_for_heap_table(common::ObIArray<ObRawExpr*> 
   return ret;
 }
 
-// int ObInsertStmt::expand_exprs(const ObSQLSessionInfo &session)
-// {
-//   int ret = OB_SUCCESS;
-//   if (stmt::T_REPLACE == stmt_type_ || stmt::T_INSERT == stmt_type_) {
-//     // expand returning expr with conv expr in new engine
-//     const common::ObIArray<ObColumnRefRawExpr *> *table_columns = get_table_columns();
-//     CK(NULL != table_columns);
-//     for (int64_t i = 0; OB_SUCC(ret) && i < returning_exprs_.count(); i++) {
-//       for (int64_t j = 0; OB_SUCC(ret) && j < table_columns->count(); j++) {
-//         OZ(ObRawExprUtils::replace_ref_column(returning_exprs_.at(i),
-//                                               table_columns->at(j),
-//                                               column_conv_functions_.at(j)));
-//       }
-//     }
-//   }
-//   return ret;
-// }
-
 int ObInsertStmt::get_ddl_sort_keys(common::ObIArray<OrderItem> &sort_keys) const
 {
   int ret = OB_SUCCESS;
@@ -386,6 +344,7 @@ int ObInsertStmt::get_ddl_sort_keys(common::ObIArray<OrderItem> &sort_keys) cons
       LOG_WARN("get select exprs failed", K(ret));
     } else {
       LOG_INFO("get ddl sort keys", K(sort_keys), K(column_list), K(view_column_list));
+      ObSEArray<uint64_t, 4> column_ids; // the offset in select_items of sortkey
       for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys.count(); ++i) {
         int64_t j = 0;
         for (int64_t j = 0; OB_SUCC(ret) && j < column_list.count(); ++j) {
@@ -393,6 +352,8 @@ int ObInsertStmt::get_ddl_sort_keys(common::ObIArray<OrderItem> &sort_keys) cons
             if (j >= view_column_list.count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("error unexpected, view column list is not as expected", K(ret), K(j), K(view_column_list));
+            } else if (OB_FAIL(column_ids.push_back(j))) {
+              LOG_WARN("fail to push back column ids");
             } else {
               sort_keys.at(i).expr_ = view_column_list.at(j);
             }
@@ -404,22 +365,32 @@ int ObInsertStmt::get_ddl_sort_keys(common::ObIArray<OrderItem> &sort_keys) cons
           LOG_WARN("sort key must be prefix of select list", K(ret), K(sort_keys), K(column_list), K(view_column_list));
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys.count(); ++i) {
-        ObRawExpr *expr = sort_keys.at(i).expr_;
-        int64_t j = 0;
-        for ( ; OB_SUCC(ret) && j < get_column_conv_exprs().count(); ++j) {
-          ObSysFunRawExpr *sys_func_expr = static_cast<ObSysFunRawExpr *>(get_column_conv_exprs().at(j));
-          if (OB_ISNULL(sys_func_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error unexpected, sys func expr is null", K(ret));
-          } else if (ObOptimizerUtil::is_sub_expr(expr, sys_func_expr)) {
-            sort_keys.at(i).expr_ = sys_func_expr;
-            break;
+      if (OB_SUCC(ret)) {
+        const common::ObIArray<ObRawExpr*> &column_conv_exprs = get_column_conv_exprs();
+        const common::ObIArray<ObColumnRefRawExpr*> &value_desc = get_values_desc();
+        const common::ObIArray<ObColumnRefRawExpr*> &column_exprs = table_info_.column_exprs_;
+        for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys.count(); ++i) {
+          if (column_ids.at(i) >= value_desc.count()) {
+            //  ignore, since for geometry, column_list.count() could be bigger than value_desc.count();
+          } else {
+            // the n-th values desc's column id
+            uint64_t column_id = value_desc.at(column_ids.at(i))->get_column_id();
+            // get column_exprs'offset by column_id;
+            bool found = false;
+            for (int64_t j = 0; OB_SUCC(ret) && !found && j < column_exprs.count(); j++) {
+              if (OB_ISNULL(column_exprs.at(j))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("column exprs is null", K(ret));
+              } else if (column_exprs.at(j)->get_column_id() == column_id) {
+                sort_keys.at(i).expr_ = column_conv_exprs.at(j);
+                found = true;
+              }
+            }
+            if (OB_SUCC(ret) && !found) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("can't found column conv expr", K(ret));
+            }
           }
-        }
-        if (OB_SUCC(ret) && j == get_column_conv_exprs().count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, sys func expr must not be nullptr", K(ret), K(get_column_conv_exprs()));
         }
       }
     }

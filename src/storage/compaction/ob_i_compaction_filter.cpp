@@ -19,6 +19,7 @@ namespace oceanbase
 {
 using namespace common;
 using namespace storage;
+using namespace share;
 
 namespace compaction
 {
@@ -78,10 +79,10 @@ int64_t ObICompactionFilter::ObFilterStatistics::to_string(char *buf, const int6
   return pos;
 }
 
-int ObTransStatusFilter::init(const int64_t filter_val, const int64_t filter_col_idx)
+int ObTransStatusFilter::init(const SCN &filter_val, const int64_t filter_col_idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(filter_val <= 0 || filter_col_idx < 0)) {
+  if (OB_UNLIKELY(!filter_val.is_valid() || filter_val.is_min() || filter_col_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(filter_val), K(filter_col_idx));
   } else if (IS_INIT) {
@@ -90,7 +91,7 @@ int ObTransStatusFilter::init(const int64_t filter_val, const int64_t filter_col
   } else {
     filter_val_ = filter_val;
     filter_col_idx_ = filter_col_idx;
-    max_filtered_end_scn_ = 0;
+    max_filtered_end_scn_.set_min();
     is_inited_ = true;
   }
   return ret;
@@ -112,10 +113,13 @@ int ObTransStatusFilter::filter(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("uncommitted row in trans state table or multi version row", K(ret), K(row));
   } else {
-    const int64_t trans_end_scn = row.storage_datums_[filter_col_idx_].get_int();
-    if (trans_end_scn <= filter_val_) {
+    const int64_t trans_end_scn_storage_val = row.storage_datums_[filter_col_idx_].get_int();
+    SCN trans_end_scn;
+    if (OB_FAIL(trans_end_scn.convert_for_tx(trans_end_scn_storage_val))) {
+      LOG_WARN("failed to convert for tx", K(ret), K(trans_end_scn_storage_val));
+    } else if (trans_end_scn <= filter_val_) {
       filter_ret = FILTER_RET_REMOVE;
-      max_filtered_end_scn_ = std::max(max_filtered_end_scn_, trans_end_scn);
+      max_filtered_end_scn_ = SCN::max(max_filtered_end_scn_, trans_end_scn);
       LOG_DEBUG("filter row", K(ret), K(row), K(filter_val_));
     } else {
       filter_ret = FILTER_RET_NOT_CHANGE;

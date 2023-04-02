@@ -596,7 +596,7 @@ bool ObZoneReplicaAttrSet::sort_compare_less_than(const ObZoneReplicaAttrSet *ls
 {
   bool bret = false;
   if (OB_ISNULL(lset) || OB_ISNULL(rset)) {
-    LOG_ERROR("left or right is null", KP(lset), KP(rset));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "left or right is null", KP(lset), KP(rset));
   } else {
     if (lset->zone_set_.count() < rset->zone_set_.count()) {
       bret = true;
@@ -624,7 +624,7 @@ bool ObZoneReplicaAttrSet::sort_compare_less_than(const ObZoneReplicaAttrSet *ls
 bool ObZoneReplicaAttrSet::operator<(
      const ObZoneReplicaAttrSet &that)
 {
-  return sort_compare_less_than(this, &that);  
+  return sort_compare_less_than(this, &that);
 }
 
 int ObZoneReplicaAttrSet::assign(const ObZoneReplicaAttrSet &that)

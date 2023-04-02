@@ -137,13 +137,13 @@ const T *Matrix<T>::get(const int64_t row, const int64_t column) const
   int err = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     err = common::OB_NOT_INIT;
-    RS_LOG(WARN, "matrix not init", K(err));
+    RS_LOG_RET(WARN, err, "matrix not init", K(err));
   } else if (OB_UNLIKELY(row < 0
                          || column < 0
                          || row >= row_count_
                          || column >= column_count_)) {
     err = common::OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(err), K(row), K(column), K(row_count_), K(column_count_));
+    RS_LOG_RET(WARN, err, "invalid argument", K(err), K(row), K(column), K(row_count_), K(column_count_));
   } else {
     const int64_t index = column + row * column_count_;
     ptr_ret = &inner_array_.at(index);
@@ -158,13 +158,13 @@ T *Matrix<T>::get(const int64_t row, const int64_t column)
   int err = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     err = common::OB_NOT_INIT;
-    RS_LOG(WARN, "matrix not init", K(err));
+    RS_LOG_RET(WARN, err, "matrix not init", K(err));
   } else if (OB_UNLIKELY(row < 0
                          || column < 0
                          || row >= row_count_
                          || column >= column_count_)) {
     err = common::OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(err), K(row), K(column), K(row_count_), K(column_count_));
+    RS_LOG_RET(WARN, err, "invalid argument", K(err), K(row), K(column), K(row_count_), K(column_count_));
   } else {
     const int64_t index = column + row * column_count_;
     ptr_ret = &inner_array_.at(index);

@@ -579,7 +579,7 @@ int ObLSBackupCleanTask::do_ls_task()
     }
   }
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_DELETE_HANDLE_LS_TASK) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_DELETE_HANDLE_LS_TASK) OB_SUCCESS;
 #endif
   FLOG_INFO("[BACKUP_CLEAN]finish do ls task", K(ret), K(path), K(*this));
   return ret;
@@ -588,7 +588,11 @@ int ObLSBackupCleanTask::do_ls_task()
 int ObLSBackupCleanTask::delete_backup_piece_ls_files_(const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+  if (OB_FAIL(delete_piece_log_files_(path))) {
+    LOG_WARN("failed to delete log files", K(ret), K(path));
+  } else if (OB_FAIL(delete_piece_ls_meta_files_(path))) {
+    LOG_WARN("failed to delete piece ls meta files", K(ret), K(path));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
   }
   return ret;
@@ -600,10 +604,10 @@ int ObLSBackupCleanTask::delete_complement_log_(const ObBackupPath &path)
   ObBackupPath complement_path;
   if (OB_FAIL(complement_path.init(path.get_ptr()))) {
     LOG_WARN("failed to init complement log path", K(ret), K(path));
-  } else if (OB_FAIL(complement_path.join("complement_log"))) {
-    LOG_WARN("failed to join complement log", K(ret), K(path));
-  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
+  } else if (OB_FAIL(complement_path.join("complement_log", ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join complement log", K(ret), K(complement_path));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(complement_path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup log stream dir files", K(ret), K(complement_path));
   } else {
     LOG_INFO("[BACKUP_CLEAN]success delete complement log", K(complement_path)); 
   } 
@@ -632,7 +636,7 @@ int ObLSBackupCleanTask::delete_sys_data_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(sys_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init major path", K(ret), K(path));
-      } else if (OB_FAIL(sys_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(sys_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join major path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(sys_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -666,7 +670,7 @@ int ObLSBackupCleanTask::delete_major_data_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(major_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init major path", K(ret), K(path));
-      } else if (OB_FAIL(major_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(major_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join major path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(major_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -700,7 +704,7 @@ int ObLSBackupCleanTask::delete_minor_data_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(minor_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init minor path", K(ret), K(path));
-      } else if (OB_FAIL(minor_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(minor_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join minor path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(minor_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -734,7 +738,7 @@ int ObLSBackupCleanTask::delete_meta_info_(const ObBackupPath &path)
         LOG_WARN("file name is null", K(ret));
       } else if (OB_FAIL(meta_path.init(path.get_ptr()))) {
         LOG_WARN("failed to init meta path", K(ret), K(path));
-      } else if (OB_FAIL(meta_path.join(tmp_entry.name_))) {
+      } else if (OB_FAIL(meta_path.join(tmp_entry.name_, ObBackupFileSuffix::NONE))) {
         LOG_WARN("failed to join meta path", K(ret));
       } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(meta_path, backup_dest_.get_storage_info()))) {
         LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
@@ -806,10 +810,56 @@ int ObLSBackupCleanTask::get_set_ls_path_(ObBackupPath &path)
     LOG_WARN("failed to get tenant data backup set dir path", K(ret));
   } else if (OB_FAIL(databuff_printf(log_sream_str, sizeof(log_sream_str), "logstream_%ld", ls_id_.id()))) {
     LOG_WARN("failed to get logsream_str", K(ret));
-  } else if (OB_FAIL(path.join(log_sream_str))) {
+  } else if (OB_FAIL(path.join(log_sream_str, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join log stream dir", K(ret));
   } 
 
+  return ret;
+}
+
+int ObLSBackupCleanTask::delete_piece_log_files_(const ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath log_path;
+  if (OB_FAIL(log_path.init(path.get_ptr()))) {
+    LOG_WARN("failed to init piece log path", K(ret), K(path));
+  } else if (OB_FAIL(log_path.join("log", ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join log", K(ret), K(log_path));
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(log_path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup log stream dir files", K(ret), K(path));
+  } else {
+    LOG_INFO("[BACKUP_CLEAN]success delete log files", K(log_path));
+  }
+  return ret;
+}
+
+int ObLSBackupCleanTask::delete_piece_ls_meta_files_(const ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath meta_path;
+  ObArchiveLSMetaType meta_type;
+  do {
+    meta_path.reset();
+    if (OB_FAIL(meta_type.get_next_type())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("failed to get next type", K(ret), K(meta_type));
+      }
+    } else if (!meta_type.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("meta type is invalid", K(ret), K(meta_type));
+    } else if (OB_FAIL(meta_path.init(path.get_ptr()))) {
+      LOG_WARN("failed to init complement log path", K(ret), K(path));
+    } else if (OB_FAIL(meta_path.join(meta_type.get_type_str(), ObBackupFileSuffix::NONE))) {
+      LOG_WARN("failed to join meta type", K(ret), K(path));
+    } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(meta_path, backup_dest_.get_storage_info()))) {
+      LOG_WARN("failed to delete backup log stream dir files", K(ret), K(meta_path));
+    } else {
+      LOG_INFO("[BACKUP_CLEAN]success delete meta files", K(meta_path));
+    }
+  } while (OB_SUCC(ret));
   return ret;
 }
 
@@ -825,7 +875,7 @@ int ObLSBackupCleanTask::get_piece_ls_path(ObBackupPath &path)
     LOG_WARN("failed to get tenant clog piece dir path", K(ret));
   } else if (OB_FAIL(databuff_printf(log_sream_str, sizeof(log_sream_str), "logstream_%ld", ls_id_.id()))) {
     LOG_WARN("failed to get log_sream_str", K(ret));
-  } else if (OB_FAIL(path.join(log_sream_str))) {
+  } else if (OB_FAIL(path.join(log_sream_str, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join log stream dir", K(ret));
   }
   return ret;

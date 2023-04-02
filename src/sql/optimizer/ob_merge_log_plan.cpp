@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_plan_factory.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_table_scan.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -29,15 +30,16 @@ using namespace sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
 
-int ObMergeLogPlan::generate_raw_plan()
+int ObMergeLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+  const ObMergeStmt *merge_stmt = get_stmt();
+  if (OB_ISNULL(merge_stmt) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
   } else {
-    const ObMergeStmt *merge_stmt = get_stmt();
     LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
+    OPT_TRACE("generate plan for ", get_stmt());
     if (OB_FAIL(generate_plan_tree())) {
       LOG_WARN("failed to generate plan tree for plain select", K(ret));
     } else {
@@ -157,6 +159,9 @@ int ObMergeLogPlan::candi_allocate_merge()
   ObSEArray<CandidatePlan, 8> merge_plans;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
+  OPT_TRACE("start generate normal merge plan");
+  OPT_TRACE("force no multi part:", force_no_multi_part);
+  OPT_TRACE("force multi part:", force_multi_part);
   if (OB_FAIL(calculate_insert_table_location_and_sharding(insert_table_part,
                                                            insert_sharding))) {
     LOG_WARN("failed to calculate insert table location and sharding", K(ret));
@@ -234,6 +239,7 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
   ObTablePartitionInfo *target_table_partition = NULL;
   ObSEArray<CandidatePlan, 8> best_plans;
   const IndexDMLInfo *index_dml_info = NULL;
+  OPT_TRACE("start generate pdml merge plan");
   if (get_stmt()->has_insert_clause()) {
     if (index_dml_infos_.empty() || OB_ISNULL(index_dml_info = index_dml_infos_.at(0))) {
       ret = OB_ERR_UNEXPECTED;
@@ -831,7 +837,8 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
                                                   table_dml_info->ck_cst_exprs_.at(i),
                                                   table_dml_info->ck_cst_exprs_.at(i)))) {
         LOG_WARN("failed to copy on replace expr", K(ret));
-      } else if (OB_FAIL(ObTableAssignment::expand_expr(merge_info.assignments_,
+      } else if (OB_FAIL(ObTableAssignment::expand_expr(optimizer_context_.get_expr_factory(),
+                                                        merge_info.assignments_,
                                                         table_dml_info->ck_cst_exprs_.at(i)))) {
         LOG_WARN("failed to expand expr", K(ret));
       }

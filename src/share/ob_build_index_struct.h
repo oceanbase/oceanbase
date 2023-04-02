@@ -23,19 +23,19 @@ namespace share
 struct ObBuildIndexAppendLocalDataParam
 {
   ObBuildIndexAppendLocalDataParam()
-    : execution_id_(common::OB_INVALID_ID), task_id_(common::OB_INVALID_ID),
+    : execution_id_(-1), task_id_(common::OB_INVALID_ID),
       index_id_(common::OB_INVALID_ID), schema_version_(common::OB_INVALID_VERSION),
       task_cnt_(0)
   {}
   virtual ~ObBuildIndexAppendLocalDataParam() {}
   bool is_valid() const
   {
-    return common::OB_INVALID_ID != execution_id_ && common::OB_INVALID_ID != task_id_
+    return 0 <= execution_id_ && common::OB_INVALID_ID != task_id_
         && common::OB_INVALID_ID != index_id_ && common::OB_INVALID_VERSION != schema_version_
         && 0 != task_cnt_ && task_id_ < task_cnt_;
   }
   TO_STRING_KV(K_(execution_id), K_(task_id), K_(index_id), K_(schema_version), K_(task_cnt));
-  uint64_t execution_id_;
+  int64_t execution_id_;
   uint64_t task_id_;
   uint64_t index_id_;
   int64_t schema_version_;
@@ -45,18 +45,18 @@ struct ObBuildIndexAppendLocalDataParam
 struct ObBuildIndexAppendSSTableParam
 {
   ObBuildIndexAppendSSTableParam()
-    : index_id_(common::OB_INVALID_ID), schema_version_(common::OB_INVALID_VERSION), execution_id_(common::OB_INVALID_ID)
+    : index_id_(common::OB_INVALID_ID), schema_version_(common::OB_INVALID_VERSION), execution_id_(-1)
   {}
   virtual ~ObBuildIndexAppendSSTableParam() {}
   bool is_valid() const
   {
     return common::OB_INVALID_ID != index_id_ && common::OB_INVALID_VERSION != schema_version_
-        && common::OB_INVALID_ID != execution_id_;
+        && 0 <= execution_id_;
   }
   TO_STRING_KV(K_(index_id), K_(schema_version), K_(execution_id));
   uint64_t index_id_;
   int64_t schema_version_;
-  uint64_t execution_id_;
+  int64_t execution_id_;
 };
 
 }  // end namespace share

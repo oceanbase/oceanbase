@@ -42,6 +42,8 @@ public:
                            common::ObStringHolder &reason) const = 0;
   virtual int get_size_of_impl_type() const = 0;
   virtual void placement_new_impl(void *ptr) const = 0;
+  // 跳过RCS直接切主
+  virtual bool has_fatal_failure() const = 0;
 };
 
 }

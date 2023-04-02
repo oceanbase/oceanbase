@@ -44,32 +44,20 @@ __thread Worker *Worker::self_;
 
 Worker::Worker()
     : allocator_(nullptr),
-      req_flag_(false),
+      st_current_priority_(0),
+      session_(nullptr),
+      cur_request_(nullptr),
+      is_blocking_(false),
       worker_level_(INT32_MAX),
       curr_request_level_(0),
       group_id_(0),
       rpc_stat_srv_(nullptr),
-      st_current_priority_(0),
-      session_(nullptr),
       timeout_ts_(INT64_MAX),
       ntp_offset_(0),
       rpc_tenant_id_(0),
-      tidx_(-1),
-      large_token_expired_(0),
       disable_wait_(false)
 {
   worker_node_.get_data() = this;
-  lq_worker_node_.get_data() = this;
-  lq_waiting_worker_node_.get_data() = this;
-  if (OB_ISNULL(self_)) {
-    self_ = this;
-  } else {
-    // Ideally, there won't be worker creating when a routine, or
-    // thread, has a worker, i.e. self_ isn't null. Whereas ObThWorker
-    // which derived from Worker doesn't create instance on the same
-    // routine as it is. So we can't assert self_ is null when new
-    // Worker is initializing right now.
-  }
 }
 
 Worker::~Worker()

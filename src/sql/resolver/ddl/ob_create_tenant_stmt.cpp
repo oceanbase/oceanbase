@@ -90,6 +90,14 @@ void ObCreateTenantStmt::set_primary_zone(const common::ObString &zone)
   create_tenant_arg_.tenant_schema_.set_primary_zone(zone);
 }
 
+void ObCreateTenantStmt::set_enable_arbitration_service(const bool enable_arbitration_service)
+{
+  create_tenant_arg_.tenant_schema_.set_arbitration_service_status(
+      enable_arbitration_service
+      ? share::ObArbitrationServiceStatus(share::ObArbitrationServiceStatus::ENABLING)
+      : share::ObArbitrationServiceStatus(share::ObArbitrationServiceStatus::DISABLED));
+}
+
 void ObCreateTenantStmt::set_if_not_exist(const bool if_not_exist)
 {
   create_tenant_arg_.if_not_exist_ = if_not_exist;

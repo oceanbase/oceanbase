@@ -35,7 +35,8 @@ public:
   void reuse();
   void reset();
   bool is_init() const { return is_inited_; }
-  int fuse_lob_header(common::ObObj &obj);
+  int fuse_disk_lob_header(common::ObObj &obj);
+  ObIAllocator &get_allocator() { return allocator_; }
 private:
   int read_lob_data_impl(blocksstable::ObStorageDatum &datum, ObCollationType coll_type);
 private:

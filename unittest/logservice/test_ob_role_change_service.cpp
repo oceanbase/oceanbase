@@ -15,6 +15,7 @@
 #include "logservice/rcservice/ob_role_change_handler.h"
 #include "logservice/rcservice/ob_role_change_service.h"
 #include "logservice/replayservice/ob_log_replay_service.h"
+#include "share/scn.h"
 #include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
@@ -94,19 +95,19 @@ public:
   virtual bool is_valid() const { return true; }
   virtual int append(const void *buffer,
                      const int64_t nbytes,
-                     const int64_t ref_ts_ns,
+                     const share::SCN &ref_scn,
                      const bool need_nonblock,
                      logservice::AppendCb *cb,
                      palf::LSN &lsn,
-                     int64_t &ts_ns)
+                     share::SCN &scn)
   {
     UNUSED(need_nonblock);
     UNUSED(buffer);
     UNUSED(nbytes);
-    UNUSED(ref_ts_ns);
+    UNUSED(ref_scn);
     UNUSED(cb);
     UNUSED(lsn);
-    UNUSED(ts_ns);
+    UNUSED(scn);
     return OB_SUCCESS;
   }
   virtual int get_role(common::ObRole &role, int64_t &proposal_id) const
@@ -150,6 +151,11 @@ public:
     new_proposal_id_++;
     return OB_SUCCESS;
   }
+  virtual int get_begin_lsn(palf::LSN &begin_lsn) const
+  {
+    begin_lsn = LSN(1, 0);
+    return OB_SUCCESS;
+  }
   virtual int get_end_lsn(palf::LSN &end_lsn) const
   {
     end_lsn = LSN(1, 0);
@@ -159,22 +165,22 @@ public:
   {UNUSED(start_lsn); UNUSED(iter); return OB_SUCCESS;};
   int seek(const palf::LSN &start_lsn, const int64_t iterate_size, palf::PalfGroupBufferIterator &iter)
   {UNUSED(start_lsn); UNUSED(iterate_size); UNUSED(iter); return OB_SUCCESS;};
-  int seek(const int64_t start_ts_ns, palf::PalfGroupBufferIterator &iter)
-  {UNUSED(start_ts_ns); UNUSED(iter); return OB_SUCCESS;};
+  int seek(const share::SCN &start_scn, palf::PalfGroupBufferIterator &iter)
+  {UNUSED(start_scn); UNUSED(iter); return OB_SUCCESS;};
   int set_initial_member_list(const common::ObMemberList &member_list, const int64_t paxos_replica_num)
   {UNUSED(member_list); UNUSED(paxos_replica_num); return OB_SUCCESS;}
-  int locate_by_ts_ns_coarsely(const int64_t ts_ns, palf::LSN &lsn)
-  {UNUSED(ts_ns); UNUSED(lsn); return OB_SUCCESS;}
-  int locate_by_lsn_coarsely(const palf::LSN &lsn, int64_t &ts_ns)
-  {UNUSED(ts_ns); UNUSED(lsn); return OB_SUCCESS;}
+  int locate_by_scn_coarsely(const share::SCN &scn, palf::LSN &lsn)
+  {UNUSED(scn); UNUSED(lsn); return OB_SUCCESS;}
+  int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &scn)
+  {UNUSED(scn); UNUSED(lsn); return OB_SUCCESS;}
   int advance_base_lsn(const palf::LSN &lsn)
   {UNUSED(lsn); return OB_SUCCESS;}
   int get_base_lsn(palf::LSN &lsn)
   {UNUSED(lsn); return OB_SUCCESS;}
-  int get_base_ts_ns(int64_t &base_lsn_ts_ns) const
-  {UNUSED(base_lsn_ts_ns); return OB_SUCCESS;}
-  int get_end_ts_ns(int64_t &ts) const
-  {UNUSED(ts); return OB_SUCCESS;}
+  int get_base_scn(share::SCN &base_lsn_scn) const
+  {UNUSED(base_lsn_scn); return OB_SUCCESS;}
+  int get_end_scn(share::SCN &scn) const
+  {UNUSED(scn); return OB_SUCCESS;}
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const
   {UNUSED(member_list); UNUSED(paxos_replica_num); return OB_SUCCESS;}
   int get_palf_base_info(const palf::LSN &base_lsn, palf::PalfBaseInfo &palf_base_info)

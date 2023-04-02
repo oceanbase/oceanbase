@@ -54,7 +54,7 @@ TEST_F(TestLSLogWriter, submit_start_working_log)
   
   ObTxLogBlock replay_block;
   int64_t replay_hint = 0;
-  int64_t log_ts = 0;
+  share::SCN log_ts;
   std::string log_string;
   ObTxLogHeader log_header;
   ObTxStartWorkingLogTempRef tmp_ref;
@@ -66,7 +66,7 @@ TEST_F(TestLSLogWriter, submit_start_working_log)
   ASSERT_EQ(OB_SUCCESS, ls_log_writer.init(TEST_LS_ID, &tx_log_adapter, (ObLSTxCtxMgr *)&tmp_mgr));
   ASSERT_EQ(OB_SUCCESS, ls_log_writer.submit_start_working_log(test_leader_epoch,log_ts));
   
-  ASSERT_EQ(true, tx_log_adapter.get_log(log_ts, log_string));
+  ASSERT_EQ(true, tx_log_adapter.get_log(log_ts.get_val_for_gts(), log_string));
   ASSERT_EQ(OB_SUCCESS,
             replay_block.init_with_header(log_string.c_str(), log_string.size(), replay_hint, block_header));
   ASSERT_EQ(OB_SUCCESS, replay_block.get_next_log(log_header));

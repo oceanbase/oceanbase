@@ -153,6 +153,36 @@ ObTableMergeOp::ObTableMergeOp(ObExecContext &ctx, const ObOpSpec &spec, ObOpInp
 {
 }
 
+int ObTableMergeOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    ObMergeCtDef *merge_ctdef = MY_SPEC.merge_ctdefs_.at(0);
+    if (!execute_single_row_ && OB_NOT_NULL(merge_ctdef->ins_ctdef_)) {
+      const ObInsCtDef &ins_ctdef = *merge_ctdef->ins_ctdef_;
+      if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
+        execute_single_row_ = true;
+      }
+    }
+
+    if (!execute_single_row_ && OB_NOT_NULL(merge_ctdef->upd_ctdef_)) {
+      const ObUpdCtDef &upd_ctdef = *merge_ctdef->upd_ctdef_;
+      if (has_before_row_trigger(upd_ctdef) || has_after_row_trigger(upd_ctdef)) {
+        execute_single_row_ = true;
+      }
+    }
+
+    if (!execute_single_row_ && OB_NOT_NULL(merge_ctdef->del_ctdef_)) {
+      const ObDelCtDef &del_ctdef = *merge_ctdef->del_ctdef_;
+      if (has_before_row_trigger(del_ctdef) || has_after_row_trigger(del_ctdef)) {
+        execute_single_row_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableMergeOp::inner_open_with_das()
 {
   int ret = OB_SUCCESS;
@@ -171,6 +201,8 @@ int ObTableMergeOp::open_table_for_each()
     LOG_WARN("allocate merge rtdef failed", K(ret), K(MY_SPEC.merge_ctdefs_.count()));
   } else if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(get_spec().rows_, &ctx_, merge_rtdefs_.at(0).rowkey_dist_ctx_))) {
     LOG_WARN("Failed to create hash set", K(ret));
+  } else if (OB_FAIL(ObDMLService::init_ob_rowkey(ctx_.get_allocator(), MY_SPEC.distinct_key_exprs_.count(), merge_rtdefs_.at(0).table_rowkey_))) {
+    LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
   }
   trigger_clear_exprs_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.merge_ctdefs_.count(); ++i) {
@@ -400,11 +432,10 @@ int ObTableMergeOp::check_is_distinct(bool &conflict)
   conflict = false;
   // check whether distinct  only use rowkey
   if (OB_FAIL(ObDMLService::check_rowkey_whether_distinct(MY_SPEC.distinct_key_exprs_,
-                                                          MY_SPEC.distinct_key_exprs_.count(),
-                                                          MY_SPEC.rows_,
                                                           DistinctType::T_HASH_DISTINCT,
                                                           get_eval_ctx(),
                                                           get_exec_ctx(),
+                                                          merge_rtdefs_.at(0).table_rowkey_,
                                                           merge_rtdefs_.at(0).rowkey_dist_ctx_,
                                                           // merge_rtdefs_ length must > 0
                                                           is_distinct))) {
@@ -459,6 +490,8 @@ int ObTableMergeOp::update_row_das()
     ObDASTabletLoc *old_tablet_loc = nullptr;
     ObDASTabletLoc *new_tablet_loc = nullptr;
     ObUpdRtDef &upd_rtdef = merge_rtdefs_.at(i).upd_rtdef_;
+    ObDMLModifyRowNode modify_row(this, merge_ctdef->upd_ctdef_, &upd_rtdef, ObDmlEventType::DE_UPDATING);
+    ObChunkDatumStore::StoredRow* stored_row = nullptr;
     if (OB_ISNULL(merge_ctdef)) {
       // merge_ctdef can't be NULL
       ret = OB_ERR_UNEXPECTED;
@@ -475,14 +508,18 @@ int ObTableMergeOp::update_row_das()
       break;
     } else if (OB_FAIL(calc_update_tablet_loc(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
       LOG_WARN("calc partition key failed", K(ret));
-    } else if (OB_FAIL(TriggerHandle::do_handle_after_row(
-        *this, upd_ctdef->trig_ctdef_, upd_rtdef.trig_rtdef_, ObTriggerEvents::get_update_event()))) {
-      LOG_WARN("failed to handle after trigger", K(ret));
-    } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_))) {
+    } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_,
+                                                modify_row.old_row_, modify_row.new_row_, modify_row.full_row_))) {
       LOG_WARN("insert row with das failed", K(ret));
+    } else if (need_after_row_process(*upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
     } else {
-      affected_rows_++;
+      // do nothing
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    affected_rows_++;
   }
   return ret;
 }
@@ -497,6 +534,7 @@ int ObTableMergeOp::delete_row_das()
     bool is_skipped = false;
     ObDASTabletLoc *tablet_loc = nullptr;
     ObDelRtDef &del_rtdef = merge_rtdefs_.at(i).del_rtdef_;
+    ObDMLModifyRowNode modify_row(this, (merge_ctdef->del_ctdef_), &del_rtdef, ObDmlEventType::DE_DELETING);
     if (OB_ISNULL(merge_ctdef)) {
       // merge_ctdef can't be NULL
       ret = OB_ERR_UNEXPECTED;
@@ -514,8 +552,10 @@ int ObTableMergeOp::delete_row_das()
       // 这里貌似不应该出现is_skipped == true的场景
     } else if (OB_FAIL(calc_delete_tablet_loc(*del_ctdef, del_rtdef, tablet_loc))) {
       LOG_WARN("calc partition key failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::delete_row(*del_ctdef, del_rtdef, tablet_loc, dml_rtctx_))) {
+    } else if (OB_FAIL(ObDMLService::delete_row(*del_ctdef, del_rtdef, tablet_loc, dml_rtctx_, modify_row.old_row_))) {
       LOG_WARN("insert row with das failed", K(ret));
+    } else if (need_after_row_process(*del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+      LOG_WARN("failed to push dml modify row to modified row list", K(ret));
     }
   }
 
@@ -543,6 +583,7 @@ int ObTableMergeOp::do_insert()
       ObInsCtDef *ins_ctdef = NULL;
       ObInsRtDef &ins_rtdef = merge_rtdefs_.at(i).ins_rtdef_;
       ObDASTabletLoc *tablet_loc = nullptr;
+      ObDMLModifyRowNode modify_row(this, (merge_ctdef->ins_ctdef_), &ins_rtdef, ObDmlEventType::DE_INSERTING);
       if (OB_ISNULL(merge_ctdef)) {
         // merge_ctdef can't be NULL
         ret = OB_ERR_UNEXPECTED;
@@ -567,14 +608,11 @@ int ObTableMergeOp::do_insert()
                                                                 tablet_loc->tablet_id_,
                                                                 eval_ctx_))) {
         LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc), KPC(ins_ctdef));
-      } else if (OB_FAIL(ObDMLService::insert_row(*ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::insert_row(*ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, modify_row.new_row_))) {
         LOG_WARN("insert row with das failed", K(ret));
       // TODO(yikang): fix trigger related for heap table
-      } else if (ins_ctdef->is_primary_index_ && OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                            ins_ctdef->trig_ctdef_,
-                                                            ins_rtdef.trig_rtdef_,
-                                                            ObTriggerEvents::get_insert_event()))) {
-        LOG_WARN("failed to handle before trigger", K(ret));
+      } else if (need_after_row_process(*ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       }
     }
 

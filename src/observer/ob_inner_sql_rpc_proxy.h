@@ -40,6 +40,14 @@ public:
     OPERATION_TYPE_REGISTER_MDS = 6,
     OPERATION_TYPE_LOCK_TABLE = 7,
     OPERATION_TYPE_LOCK_TABLET = 8,
+    OPERATION_TYPE_UNLOCK_TABLE = 9,
+    OPERATION_TYPE_UNLOCK_TABLET = 10,
+    OPERATION_TYPE_LOCK_PART = 11,
+    OPERATION_TYPE_UNLOCK_PART = 12,
+    OPERATION_TYPE_LOCK_OBJ = 13,
+    OPERATION_TYPE_UNLOCK_OBJ = 14,
+    OPERATION_TYPE_LOCK_SUBPART = 15,
+    OPERATION_TYPE_UNLOCK_SUBPART = 16,
     OPERATION_TYPE_MAX = 100
   };
 
@@ -48,19 +56,22 @@ public:
       is_oracle_mode_(false), source_cluster_id_(OB_INVALID_CLUSTER_ID),
       worker_timeout_(OB_DEFAULT_SESSION_TIMEOUT),
       query_timeout_(OB_DEFAULT_SESSION_TIMEOUT), trx_timeout_(OB_DEFAULT_SESSION_TIMEOUT),
-      sql_mode_(0), tz_info_wrap_(), ddl_info_(), is_load_data_exec_(false), nls_formats_{} {};
+      sql_mode_(0), tz_info_wrap_(), ddl_info_(), is_load_data_exec_(false), nls_formats_{},
+      use_external_session_(false) {};
   ObInnerSQLTransmitArg(common::ObAddr ctrl_svr, common::ObAddr runner_svr,
                         uint64_t tenant_id, uint64_t conn_id, common::ObString inner_sql,
                         InnerSQLOperationType operation_type, bool is_oracle_mode,
                         const int64_t source_cluster_id, const int64_t worker_timeout,
                         const int64_t query_timeout, const int64_t trx_timeout,
-                        ObSQLMode sql_mode, ObSessionDDLInfo ddl_info, const bool is_load_data_exec)
+                        ObSQLMode sql_mode, ObSessionDDLInfo ddl_info, const bool is_load_data_exec,
+                        const bool use_external_session)
         : ctrl_svr_(ctrl_svr), runner_svr_(runner_svr),
           tenant_id_(tenant_id), conn_id_(conn_id), inner_sql_(inner_sql),
           operation_type_(operation_type), is_oracle_mode_(is_oracle_mode),
           source_cluster_id_(source_cluster_id), worker_timeout_(worker_timeout),
           query_timeout_(query_timeout), trx_timeout_(trx_timeout), sql_mode_(sql_mode),
-          tz_info_wrap_(), ddl_info_(ddl_info), is_load_data_exec_(false), nls_formats_{} {}
+          tz_info_wrap_(), ddl_info_(ddl_info), is_load_data_exec_(is_load_data_exec), nls_formats_{},
+          use_external_session_(use_external_session) {}
   ~ObInnerSQLTransmitArg() {}
 
   const common::ObAddr &get_ctrl_svr() const { return ctrl_svr_; }
@@ -124,6 +135,7 @@ public:
   ObSQLMode get_sql_mode() const { return sql_mode_; }
   bool get_is_load_data_exec() const { return is_load_data_exec_; }
   const ObString *get_nls_formats() const { return nls_formats_; }
+  bool get_use_external_session() const { return use_external_session_; }
 
   TO_STRING_KV(K_(ctrl_svr),
                K_(runner_svr),
@@ -140,7 +152,8 @@ public:
                K_(tz_info_wrap),
                K_(ddl_info),
                K_(is_load_data_exec),
-               K_(nls_formats));
+               K_(nls_formats),
+               K_(use_external_session));
 
 private:
   common::ObAddr ctrl_svr_;
@@ -159,6 +172,7 @@ private:
   ObSessionDDLInfo ddl_info_;
   bool is_load_data_exec_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  bool use_external_session_;
 };
 
 class ObInnerSQLTransmitResult
@@ -259,7 +273,7 @@ public:
   {
     ObInnerSQLTransmitResult *ret_result = NULL;
     if (!result_.is_scanner_inited()) {
-      SQL_EXE_LOG(ERROR, "result_ is not inited");
+      SQL_EXE_LOG_RET(ERROR, common::OB_NOT_INIT, "result_ is not inited");
     } else {
       ret_result = &result_;
     }

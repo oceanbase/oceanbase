@@ -17,6 +17,8 @@
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
+#include "rpc/obmysql/ob_packet_record.h"
+#include "rpc/obmysql/obsm_struct.h"
 
 using namespace oceanbase::common;
 
@@ -70,6 +72,9 @@ static int build_compressed_packet(ObEasyBuffer &src_buf,
   if (OB_ISNULL(context.send_buf_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "send_buf_ is null", K(context), K(ret));
+  } else if (OB_ISNULL(context.conn_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SERVER_LOG(WARN, "conn_ is null", K(context), K(ret));
   } else {
     ObEasyBuffer dst_buf(*context.send_buf_);
     const int64_t comp_buf_size = dst_buf.write_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE;
@@ -111,6 +116,10 @@ static int build_compressed_packet(ObEasyBuffer &src_buf,
                                                static_cast<int32_t>(len_before_compress), pos))) {
       SERVER_LOG(WARN, "failed to store_int3", K(ret));
     } else {
+      if (context.conn_->pkt_rec_wrapper_.enable_proto_dia()) {
+        context.conn_->pkt_rec_wrapper_.end_seal_comp_pkt(
+                          static_cast<uint32_t>(dst_data_size), context.seq_);
+      }
       SERVER_LOG(DEBUG, "succ to build compressed pkt", "comp_len", dst_data_size,
                  "comp_seq", context.seq_, K(len_before_compress), K(next_compress_size),
                  K(src_buf), K(dst_buf), K(context));
@@ -535,7 +544,7 @@ void ObMySQLRequestUtils::wakeup_easy_request(easy_request_t &ez_req, bool &req_
 void ObMySQLRequestUtils::disconnect(easy_request_t &ez_req)
 {
   if (OB_ISNULL(ez_req.ms)) {
-    SERVER_LOG(WARN, "null req input", KP(ez_req.ms));
+    SERVER_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "null req input", KP(ez_req.ms));
   } else {
     easy_connection_destroy_dispatch(ez_req.ms->c);
   }

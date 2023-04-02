@@ -144,26 +144,28 @@ int ObTriggerSqlService::rebuild_trigger_package(const ObTriggerInfo &trigger_in
   ObString spec_source;
   ObString body_source;
   ObArenaAllocator inner_alloc;
-  ObTriggerValues new_values;
   ObDMLExecHelper exec(sql_client, trigger_info.get_exec_tenant_id());
   ObDMLSqlSplicer dml;
   int64_t affected_rows = 0;
+  bool is_oracle_mode = false;
+  ObTriggerInfo new_trigger_info(&inner_alloc);
   OV (trigger_info.is_valid(), OB_INVALID_ARGUMENT, trigger_info);
-  OX (new_values.set_database_id(trigger_info.get_database_id()));
-  OX (new_values.set_trigger_name(trigger_info.get_trigger_name()));
-  OZ (ObTriggerInfo::gen_package_source(trigger_info, base_object_database, base_object_name,
-                                        spec_source, body_source, inner_alloc));
-  OX (new_values.set_spec_source(spec_source));
-  OX (new_values.set_body_source(body_source));
+  OZ (new_trigger_info.deep_copy(trigger_info));
+  OZ (ObCompatModeGetter::check_is_oracle_mode_with_table_id(new_trigger_info.get_tenant_id(),
+                                                             new_trigger_info.get_base_object_id(),
+                                                             is_oracle_mode));
+  OZ (ObTriggerInfo::replace_table_name_in_body(new_trigger_info, inner_alloc, base_object_database,
+                                                base_object_name, is_oracle_mode));
+
   // update all_trigger.
-  OZ (fill_dml_sql(trigger_info, new_values, new_schema_version, dml));
+  OZ (fill_dml_sql(new_trigger_info, new_schema_version, dml));
   OZ (exec.exec_update(OB_ALL_TENANT_TRIGGER_TNAME, dml, affected_rows));
   OV (is_single_row(affected_rows), OB_ERR_UNEXPECTED, affected_rows);
   // insert all_trigger_history.
   OZ (dml.add_column("is_deleted", 0));
   OZ (exec.exec_insert(OB_ALL_TENANT_TRIGGER_HISTORY_TNAME, dml, affected_rows));
   OV (is_single_row(affected_rows), OB_ERR_UNEXPECTED, affected_rows);
-  OZ (log_trigger_operation(trigger_info, new_schema_version,
+  OZ (log_trigger_operation(new_trigger_info, new_schema_version,
                             op_type, NULL, sql_client));
   return ret;
 }
@@ -258,6 +260,10 @@ int ObTriggerSqlService::fill_dml_sql(const ObTriggerInfo &trigger_info,
   OZ (dml.add_column("package_exec_env", ObHexEscapeSqlStr(trigger_info.get_package_exec_env())));
   OZ (dml.add_column("sql_mode", trigger_info.get_sql_mode()));
   OZ (dml.add_column("trigger_priv_user", ObHexEscapeSqlStr(trigger_info.get_trigger_priv_user())));
+  OZ (dml.add_column("order_type", trigger_info.get_order_type_value()));
+  OZ (dml.add_column("ref_trg_db_name", ObHexEscapeSqlStr(trigger_info.get_ref_trg_db_name())));
+  OZ (dml.add_column("ref_trg_name", ObHexEscapeSqlStr(trigger_info.get_ref_trg_name())));
+  OZ (dml.add_column("action_order", trigger_info.get_action_order()));
   return ret;
 }
 

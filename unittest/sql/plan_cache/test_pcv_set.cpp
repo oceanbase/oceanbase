@@ -138,7 +138,7 @@ TEST_F(TestPCVSet, basic)
   EXPECT_TRUE(OB_SUCCESS == session.load_default_sys_variable(false, true));
   // when add  generate_plan() , change TEST_PLAN_NUM
   ObString sql = ObString::make_string("select * from t1 where c1 = 0");
-  ObPlanCacheCtx pc_ctx(sql, false, allocator, sql_ctx, exec_ctx, common::OB_SYS_TENANT_ID);
+  ObPlanCacheCtx pc_ctx(sql, PC_TEXT_MODE, allocator, sql_ctx, exec_ctx, common::OB_SYS_TENANT_ID);
   ObPCVSet pcv_set(plan_cache);
   int ret = OB_SUCCESS;
   generate_plan(test_sql_ctx,

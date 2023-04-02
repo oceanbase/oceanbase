@@ -14,6 +14,7 @@
 
 #include "io/easy_io.h"
 #include "rpc/frame/ob_net_easy.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 
 #include "lib/ob_define.h"
 #include "lib/utility/utility.h"
@@ -30,16 +31,79 @@ namespace common
 {
 void update_easy_log_level()
 {
-  easy_log_level = (easy_log_level_t)OB_LOGGER.get_id_level_map().get_level(oceanbase::common::OB_LOG_ROOT::M_EASY);
+  int level = OB_LOGGER.get_id_level_map().get_level(oceanbase::common::OB_LOG_ROOT::M_EASY);
+  switch (level) {
+    case OB_LOG_LEVEL_DBA_ERROR: // pass
+    case OB_LOG_LEVEL_DBA_WARN: {
+      easy_log_level = EASY_LOG_FATAL;
+      break;
+    }
+    case OB_LOG_LEVEL_INFO: {
+      easy_log_level = EASY_LOG_INFO;
+      break;
+    }
+    case OB_LOG_LEVEL_ERROR: {
+      easy_log_level = EASY_LOG_ERROR;
+      break;
+    }
+    case OB_LOG_LEVEL_WARN: {
+      easy_log_level = EASY_LOG_WARN;
+      break;
+    }
+    case OB_LOG_LEVEL_TRACE: {
+      easy_log_level = EASY_LOG_DEBUG;
+      break;
+    }
+    case OB_LOG_LEVEL_DEBUG: {
+      easy_log_level = EASY_LOG_TRACE;
+      break;
+    }
+    default: {
+      easy_log_level = EASY_LOG_INFO;
+      break;
+    }
+  }
 }
 
 void easy_log_format_adaptor(int level, const char *file, int line, const char *function,
                              uint64_t location_hash_val, const char *fmt, ...)
 {
+  int ob_level = level;
+  switch (level) {
+    case EASY_LOG_FATAL: {
+      ob_level = OB_LOG_LEVEL_DBA_ERROR;
+      break;
+    }
+    case EASY_LOG_ERROR: // pass
+    case EASY_LOG_USER_ERROR: {
+      ob_level = OB_LOG_LEVEL_ERROR;
+      break;
+    }
+    case EASY_LOG_WARN: {
+      ob_level = OB_LOG_LEVEL_WARN;
+      break;
+    }
+    case EASY_LOG_INFO: {
+      ob_level = OB_LOG_LEVEL_INFO;
+      break;
+    }
+    case EASY_LOG_DEBUG: {
+      ob_level = OB_LOG_LEVEL_TRACE;
+      break;
+    }
+    case EASY_LOG_TRACE: {
+      ob_level = OB_LOG_LEVEL_DEBUG;
+      break;
+    }
+    default: {
+      ob_level = OB_LOG_LEVEL_DEBUG;
+      break;
+    }
+  };
   va_list args;
   va_start(args, fmt);
-  OB_LOGGER.log_message_va("", level, file, line, function,
-                           location_hash_val, fmt, args);
+  OB_LOGGER.log_message_va("", ob_level, file, line, function,
+                           location_hash_val, 0, fmt, args);
   va_end(args);
 }
 };
@@ -171,12 +235,13 @@ void ObNetEasy::init_eio_(easy_io_t *eio, const ObNetOptions &opts)
   }
 }
 
-void ObNetEasy::update_eio_rpc_tcp_keepalive(easy_io_t* eio, int64_t user_timeout)
+void ObNetEasy::update_eio_rpc_tcp_keepalive(easy_io_t* eio, int64_t input_user_timeout)
 {
   if (NULL != eio) {
+    const uint32_t user_timeout = static_cast<uint32_t>(input_user_timeout);
     eio->tcp_keepalive = (user_timeout > 0) ? 1: 0;
     // tcp keeyalive args
-    eio->tcp_keepidle = max(user_timeout/5000000, 1);
+    eio->tcp_keepidle = max(user_timeout/5000000, 1u);
     eio->tcp_keepintvl = eio->tcp_keepidle;
     eio->tcp_keepcnt = 5;
     eio->conn_timeout = user_timeout/1000;
@@ -185,16 +250,16 @@ void ObNetEasy::update_eio_rpc_tcp_keepalive(easy_io_t* eio, int64_t user_timeou
 }
 
 void ObNetEasy::update_eio_sql_tcp_keepalive(easy_io_t* eio, int64_t user_timeout,
-                                             int enable_tcp_keepalive, int64_t tcp_keepidle,
-                                             int64_t tcp_keepintvl, int64_t tcp_keepcnt)
+                                              int enable_tcp_keepalive, int64_t tcp_keepidle,
+                                              int64_t tcp_keepintvl, int64_t tcp_keepcnt)
 {
   if (NULL != eio) {
-    eio->tcp_keepalive = (enable_tcp_keepalive > 0) ? 1: 0;
+    eio->tcp_keepalive = (enable_tcp_keepalive > 0) ? 1u: 0u;
     // tcp keeyalive args
-    eio->tcp_keepidle = max(tcp_keepidle/1000000, 1);
-    eio->tcp_keepintvl = max(tcp_keepintvl/1000000, 1);
-    eio->tcp_keepcnt = tcp_keepcnt;
-    eio->conn_timeout = user_timeout/1000;
+    eio->tcp_keepidle = static_cast<uint32_t>(max(tcp_keepidle/1000000, 1));
+    eio->tcp_keepintvl = static_cast<uint32_t>(max(tcp_keepintvl/1000000, 1));
+    eio->tcp_keepcnt = static_cast<uint32_t>(tcp_keepcnt);
+    eio->conn_timeout = static_cast<uint32_t>(user_timeout/1000);
     eio->ack_timeout = 0;
   }
 }
@@ -301,7 +366,8 @@ int ObNetEasy::add_unix_listen_(const char* path, easy_io_t * eio, ObReqHandler 
     LOG_ERROR("eio_ is NULL", KP(eio));
   } else if (NULL == (listen = easy_connection_add_listen(eio, path, 0, handler.ez_handler()))) {
     ret = OB_SERVER_LISTEN_ERROR;
-    LOG_ERROR("easy_connection_add_listen error", KERRMSG, K(ret));
+    LOG_DBA_ERROR(OB_SERVER_LISTEN_ERROR, "msg", "easy_connection_add_listen error",
+                  KERRMSG, K(ret));
   } else {
     LOG_INFO("listen unix domain succ", KCSTRING(path));
   }
@@ -320,7 +386,8 @@ int ObNetEasy::add_listen_(const uint32_t port, easy_io_t * eio, ObReqHandler &h
     LOG_ERROR("too many listen handler registered", K(ret));
   } else if (NULL == (listen = easy_connection_add_listen(eio, NULL, port, handler.ez_handler()))) {
     ret = OB_SERVER_LISTEN_ERROR;
-    LOG_ERROR("easy_connection_add_listen error", K(port), KERRMSG, K(ret));
+    LOG_DBA_ERROR(OB_SERVER_LISTEN_ERROR, "msg", "easy_connection_add_listen error",
+                  K(port), KERRMSG, K(ret));
   } else {
     transports_[proto_cnt_] = OB_NEW(ObReqTransport, ObModIds::OB_RPC, eio, handler.ez_handler());
     transport = transports_[proto_cnt_++];
@@ -352,7 +419,8 @@ int ObNetEasy::net_register_and_add_listen_(ObListener &listener, easy_io_t *eio
         LOG_ERROR("too many listen handler registered", K(ret));
       } else if (NULL == (listen = easy_add_pipefd_listen_for_connection(eio, handler.ez_handler(), &pipefd_pool))) {
         ret = OB_SERVER_LISTEN_ERROR;
-        LOG_ERROR("easy_add_pipefd_listen_for_connection! failed!", K(ret));
+        LOG_DBA_ERROR(OB_SERVER_LISTEN_ERROR,
+                      "msg", "easy_add_pipefd_listen_for_connection! failed!", K(ret));
       } else {
         transports_[proto_cnt_] = OB_NEW(ObReqTransport, ObModIds::OB_RPC, eio, handler.ez_handler());
         transport = transports_[proto_cnt_++];
@@ -526,7 +594,7 @@ static void rpc_easy_timer_cb(EV_P_ ev_timer *w, int revents)
         EASY_IOTH_SELF->tx_doing_request_count, EASY_IOTH_SELF->rx_doing_request_count);
     LOG_INFO("[RPC EASY STAT]", KCSTRING(log_str));
   } else {
-    LOG_ERROR("EASY_IOTH_SELF is NULL");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "EASY_IOTH_SELF is NULL");
   }
 }
 
@@ -545,7 +613,7 @@ static void high_prio_rpc_easy_timer_cb(EV_P_ ev_timer *w, int revents)
         EASY_IOTH_SELF->tx_doing_request_count, EASY_IOTH_SELF->rx_doing_request_count);
     LOG_INFO("[HIGH PRIO RPC EASY STAT]", KCSTRING(log_str));
   } else {
-    LOG_ERROR("EASY_IOTH_SELF is NULL");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "EASY_IOTH_SELF is NULL");
   }
 }
 
@@ -564,7 +632,7 @@ static void batch_rpc_easy_timer_cb(EV_P_ ev_timer *w, int revents)
         EASY_IOTH_SELF->tx_doing_request_count, EASY_IOTH_SELF->rx_doing_request_count);
     LOG_INFO("[BATCH_RPC EASY STAT]", KCSTRING(log_str));
   } else {
-    LOG_ERROR("EASY_IOTH_SELF is NULL");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "EASY_IOTH_SELF is NULL");
   }
 }
 
@@ -584,12 +652,12 @@ static void mysql_easy_timer_cb(EV_P_ ev_timer *w, int revents)
 
     if ((EASY_IOTH_SELF->tx_doing_request_count >= DOING_REQUEST_WARN_THRESHOLD) ||
         (EASY_IOTH_SELF->rx_doing_request_count >= DOING_REQUEST_WARN_THRESHOLD)) {
-      LOG_ERROR("[MYSQL EASY STAT]", KCSTRING(log_str));
+      LOG_ERROR_RET(OB_SUCCESS, "[MYSQL EASY STAT]", KCSTRING(log_str));
     } else {
       LOG_INFO("[MYSQL EASY STAT]", KCSTRING(log_str));
     }
   } else {
-    LOG_ERROR("EASY_IOTH_SELF is NULL");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "EASY_IOTH_SELF is NULL");
   }
 }
 
@@ -730,14 +798,18 @@ int ObNetEasy::start()
   }
 
   if (OB_SUCC(ret) && rpc_port_ > 0) {
-    if (OB_FAIL(rpc_listener_.listen_create(rpc_port_))) {
-      LOG_ERROR("create listen failed", K(ret));
-    } else if (OB_FAIL(rpc_listener_.start())) {
-      LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
-    } else if (OB_FAIL(ObNetKeepAlive::get_instance().start())) {
-      LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
+    global_ob_listener = &rpc_listener_;
+    if (!global_poc_server.has_start()) {
+      if (OB_FAIL(rpc_listener_.listen_create(rpc_port_))) {
+        LOG_ERROR("create listen failed", K(ret));
+      } else if (OB_FAIL(rpc_listener_.start())) {
+        LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObNetKeepAlive::get_instance().start())) {
+      LOG_ERROR("ObNetKeepAlive start failed!", K(rpc_port_), K(ret));
     } else {
-      LOG_INFO("oblistener start!", K(rpc_port_));
+      LOG_INFO("ObNetKeepAlive start!", K(rpc_port_));
     }
   }
 
@@ -854,9 +926,11 @@ int ObNetEasy::rpc_shutdown()
 int ObNetEasy::high_prio_rpc_shutdown()
 {
   int ret = OB_SUCCESS;
-  if (!started_ || !is_inited_ || OB_ISNULL(high_prio_rpc_eio_)) {
+  if (!started_ || !is_inited_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("easy net hasn't started", K(ret));
+  } else if (OB_ISNULL(high_prio_rpc_eio_)) {
+    LOG_INFO("user does not start high priority net threads");
   } else {
     int eret = easy_eio_shutdown(high_prio_rpc_eio_);
     if (eret != EASY_OK) {

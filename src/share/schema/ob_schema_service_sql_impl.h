@@ -41,6 +41,9 @@
 #include "share/schema/ob_dblink_sql_service.h"
 #include "share/schema/ob_directory_sql_service.h"
 #include "share/schema/ob_context_sql_service.h"
+#include "share/schema/ob_rls_sql_service.h"
+#include "sql/dblink/ob_dblink_utils.h"
+#include "lib/string/ob_string.h"
 
 namespace oceanbase
 {
@@ -84,6 +87,14 @@ public:
   const static int TENANT_MAP_BUCKET_NUM = 1024;
   const static int64_t MAX_BATCH_PART_NUM = 5000;
 
+  struct TableTrunc {
+    TableTrunc() : table_id_(OB_INVALID_ID), truncate_version_(OB_INVALID_VERSION) {}
+    TableTrunc(uint64_t table_id, int64_t truncate_version) : table_id_(table_id), truncate_version_(truncate_version) {}
+    uint64_t table_id_;
+    int64_t truncate_version_;
+    TO_STRING_KV(K_(table_id), K_(truncate_version));
+  };
+
   ObSchemaServiceSQLImpl();
   virtual ~ObSchemaServiceSQLImpl();
   virtual int init(common::ObMySQLProxy *sql_proxy,
@@ -117,15 +128,12 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(DbLink, dblink)
   GET_DDL_SQL_SERVICE_FUNC(Directory, directory)
   GET_DDL_SQL_SERVICE_FUNC(Context, context)
+  GET_DDL_SQL_SERVICE_FUNC(Rls, rls)
 
   /* sequence_id related */
   virtual int init_sequence_id(const int64_t rootservice_epoch);
   virtual int inc_sequence_id();
-  virtual uint64_t get_sequence_id() { return schema_info_.get_sequence_id(); };
-
-  virtual int64_t get_last_operation_schema_version() const { return last_operation_schema_version_; };
-  virtual uint64_t get_last_operation_tenant_id() const { return last_operation_tenant_id_; };
-  virtual int set_last_operation_info(const uint64_t tenant_id, const int64_t schema_version);
+  virtual uint64_t get_sequence_id() { SpinRLockGuard guard(rw_lock_); return sequence_id_;}
 
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
   //enable refresh schema info
@@ -210,6 +218,9 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(directory, ObDirectorySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(context, ObContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -232,7 +243,15 @@ public:
                                                 const uint64_t table_id,
                                                 common::ObISQLClient &sql_client,
                                                 ObTableSchema &table_schema);
-
+  virtual int get_db_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                             const uint64_t &database_id,
+                                             ObIArray<ObDatabaseSchema> &database_schema,
+                                             ObISQLClient &sql_client);
+  virtual int get_full_table_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                                     const int64_t &table_id,
+                                                     ObTableSchema &table_schema,
+                                                     ObArenaAllocator &allocator,
+                                                     ObMySQLTransaction &trans);
   // get mock fk parent table schema of a single mock fk parent table
   virtual int get_mock_fk_parent_table_schema_from_inner_table(
       const ObRefreshSchemaStatus &schema_status,
@@ -273,6 +292,9 @@ public:
   virtual int fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size);
   virtual int fetch_new_tablet_ids(const ObTableSchema &table_schema, uint64_t &tablet_id, const uint64_t size);
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id);
+  virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id);
+  virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id);
+  virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id);
 
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
@@ -326,6 +348,9 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(directory, ObDirectorySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(context, ObContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -402,6 +427,10 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(directory, ObDirectorySchema);
   FETCH_SCHEMAS_FUNC_DECLARE(context, ObContextSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(rls_policy, ObRlsPolicySchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(rls_group, ObRlsGroupSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
+
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
       const uint64_t tenant_id,
@@ -541,12 +570,14 @@ public:
       common::ObIArray<ObAuxTableMetaInfo> &aux_tables);
 
   // link table.
-  virtual int get_link_table_schema(const ObDbLinkSchema &dblink_schema,
+  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
                                     const common::ObString &database_name,
                                     const common::ObString &table_name,
                                     common::ObIAllocator &allocator,
                                     ObTableSchema *&table_schema,
-                                    uint32_t sessid);
+                                    sql::ObSQLSessionInfo *session_info,
+                                    const ObString &dblink_name,
+                                    bool is_reverse_link);
 
   static int check_ddl_id_exist(
       common::ObISQLClient &sql_client,
@@ -642,9 +673,9 @@ private:
       common::ObArray<T *> &table_schema_array,
       const uint64_t *table_ids /* = NULL */,
       const int64_t table_ids_size /*= 0 */,
-      common::ObIArray<uint64_t> &part_tables,
+      common::ObIArray<TableTrunc> &part_tables,
+      common::ObIArray<TableTrunc> &subpart_tables,
       common::ObIArray<uint64_t> &def_subpart_tables,
-      common::ObIArray<uint64_t> &subpart_tables,
       common::ObIArray<int64_t> &part_idxs,
       common::ObIArray<int64_t> &def_subpart_idxs,
       common::ObIArray<int64_t> &subpart_idxs);
@@ -677,9 +708,18 @@ private:
   // to filter is_deleted column
 
   int sql_append_pure_ids(const ObRefreshSchemaStatus &schema_status,
+                          const TableTrunc *ids,
+                          const int64_t ids_size,
+                          common::ObSqlString &sql);
+  int sql_append_pure_ids(const ObRefreshSchemaStatus &schema_status,
                           const uint64_t *ids,
                           const int64_t ids_size,
                           common::ObSqlString &sql);
+  int sql_append_ids_and_truncate_version(const ObRefreshSchemaStatus &schema_status,
+                                          const TableTrunc *ids,
+                                          const int64_t ids_size,
+                                          const int64_t schema_version,
+                                          common::ObSqlString &sql);
 
   //-------------------------- for new schema_cache ------------------------------
 
@@ -728,7 +768,7 @@ private:
                           const uint64_t tenant_id,
                           common::ObISQLClient &sql_client,
                           common::ObArray<T *> &range_part_tables,
-                          const uint64_t *table_ids /* = NULL */,
+                          const TableTrunc *table_ids /* = NULL */,
                           const int64_t table_ids_size /*= 0 */);
   template<typename T>
   int fetch_all_def_subpart_info(const ObRefreshSchemaStatus &schema_status,
@@ -745,7 +785,7 @@ private:
                              const uint64_t tenant_id,
                              common::ObISQLClient &sql_client,
                              common::ObArray<T *> &range_subpart_tables,
-                             const uint64_t *table_ids /* = NULL */,
+                             const TableTrunc *table_ids /* = NULL */,
                              const int64_t table_ids_size /*= 0 */);
 
   int fetch_partition_info(const ObRefreshSchemaStatus &schema_status,
@@ -791,6 +831,21 @@ private:
                          common::ObISQLClient &sql_client,
                          ObTableSchema &table_schema);
 
+  int fetch_rls_object_list(const ObRefreshSchemaStatus &schema_status,
+                            const uint64_t tenant_id,
+                            const uint64_t table_id,
+                            const int64_t schema_version,
+                            common::ObISQLClient &sql_client,
+                            ObTableSchema &table_schema);
+
+  int fetch_rls_columns(const ObRefreshSchemaStatus &schema_status,
+                        const int64_t schema_version,
+                        const uint64_t tenant_id,
+                        common::ObISQLClient &sql_client,
+                        common::ObArray<ObRlsPolicySchema *> &rls_policy_array,
+                        const uint64_t *table_ids,
+                        const int64_t table_ids_size);
+
   // whether we can see the expected version or not
   // @return OB_SCHEMA_EAGAIN when not readable
   virtual int can_read_schema_version(const ObRefreshSchemaStatus &schema_status, int64_t expected_version) override;
@@ -811,15 +866,21 @@ private:
                            const int64_t schema_version,
                            common::ObISQLClient &sql_client,
                            ObTablegroupSchema *&tablegroup_schema);
+
   template<typename T>
-  int fetch_link_table_info(const ObDbLinkSchema &dblink_schema,
+  int fetch_link_table_info(uint64_t tenant_id,
+                            uint64_t dblink_id,
+                            common::sqlclient::DblinkDriverProto &link_type,
+                            sql::DblinkGetConnType conn_type,
                             const common::ObString &database_name,
                             const common::ObString &table_name,
-                            common::ObDbLinkProxy &dblink_client,
                             ObIAllocator &alloctor,
                             T *&table_schema,
-                            uint32_t sessid);
-
+                            sql::ObSQLSessionInfo *session_info,
+                            const ObString &dblink_name,
+                            sql::ObReverseLink *reverse_link,
+                            const common::sqlclient::dblink_param_ctx &param_ctx,
+                            int64_t &next_sql_req_level);
   int try_mock_link_table_column(ObTableSchema &table_schema);
 
   template<typename SCHEMA>
@@ -895,7 +956,6 @@ private:
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;
-  lib::ObMutex mutex_;
   // record last schema version of log operation while execute ddl
   int64_t last_operation_schema_version_;
   ObTenantSqlService tenant_service_;
@@ -939,6 +999,7 @@ private:
   ObDbLinkSqlService dblink_service_;
   ObDirectorySqlService directory_service_;
   ObContextSqlService context_service_;
+  ObRlsSqlService rls_service_;
 
   ObClusterSchemaStatus cluster_schema_status_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> gen_schema_version_map_;

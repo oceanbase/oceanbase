@@ -26,7 +26,7 @@ namespace observer
 class ObAllVirtualPxTargetMonitor: public common::ObVirtualTableScannerIterator
 {
 public:
-  explicit ObAllVirtualPxTargetMonitor() {}
+  ObAllVirtualPxTargetMonitor();
   virtual ~ObAllVirtualPxTargetMonitor() {}
 public:
   int init();

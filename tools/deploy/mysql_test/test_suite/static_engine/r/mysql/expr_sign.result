@@ -390,22 +390,22 @@ select * from t2 order by sign(a4) ;
 | a1  | a2   | a3   | a4     | a5                  |
 +-----+------+------+--------+---------------------+
 | XXX | NULL | MIN  |   NULL | timestamp           |
-| WWW |    1 | LED  |   NULL | timestamp           |
-| SSJ | NULL | CHI  |   NULL | timestamp           |
 | KKK |   -3 | ATL  |   NULL | timestamp           |
-| BDL |    0 | DEN  |  -0.08 | timestamp           |
-| ZAJ |    2 | CHI  | -0.075 | timestamp           |
-| TWU |    0 | LAX  |  -0.08 | timestamp           |
-| PLS |   -1 | WDC  | -0.075 | timestamp           |
-| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
 | GG3 |   -3 | DD3  | -0.051 | timestamp           |
-| BOT |   -2 | SEA  | -0.085 | timestamp           |
+| GTM |    3 | DAL  |  -0.07 | timestamp           |
+| ZAJ |    2 | CHI  | -0.075 | timestamp           |
+| BDL |    0 | DEN  |  -0.08 | timestamp           |
+| PLS |   -1 | WDC  | -0.075 | timestamp           |
 | BMC |    3 | SEA  | -0.085 | timestamp           |
+| TWU |    0 | LAX  |  -0.08 | timestamp           |
+| BOT |   -2 | SEA  | -0.085 | timestamp           |
 | HBR |    1 | SEA  |  0.085 | timestamp           |
-| GG2 |   -3 | DD2  |  0.052 | timestamp           |
-| GG1 |    3 | DD1  |  0.053 | timestamp           |
 | DTX |    1 | NYC  |   0.08 | timestamp           |
 | VVV |   -2 | MON  |  0.075 | timestamp           |
+| GG1 |    3 | DD1  |  0.053 | timestamp           |
+| GG2 |   -3 | DD2  |  0.052 | timestamp           |
 | AME |    0 | SEA  |    0.1 | timestamp           |
 +-----+------+------+--------+---------------------+
 select * from t2 order by sign(a4) , a4 ;
@@ -413,9 +413,9 @@ select * from t2 order by sign(a4) , a4 ;
 | a1  | a2   | a3   | a4     | a5                  |
 +-----+------+------+--------+---------------------+
 | XXX | NULL | MIN  |   NULL | timestamp           |
-| WWW |    1 | LED  |   NULL | timestamp           |
-| SSJ | NULL | CHI  |   NULL | timestamp           |
 | KKK |   -3 | ATL  |   NULL | timestamp           |
+| SSJ | NULL | CHI  |   NULL | timestamp           |
+| WWW |    1 | LED  |   NULL | timestamp           |
 | BMC |    3 | SEA  | -0.085 | timestamp           |
 | BOT |   -2 | SEA  | -0.085 | timestamp           |
 | BDL |    0 | DEN  |  -0.08 | timestamp           |
@@ -720,22 +720,22 @@ select * from t2 order by sign(a4) for update;
 | a1  | a2   | a3   | a4     | a5                  |
 +-----+------+------+--------+---------------------+
 | XXX | NULL | MIN  |   NULL | NULL                |
-| WWW |    1 | LED  |   NULL | NULL                |
-| SSJ | NULL | CHI  |   NULL | 1974-03-19 00:00:00 |
 | KKK |   -3 | ATL  |   NULL | NULL                |
-| BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
-| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
-| TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
-| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
-| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| SSJ | NULL | CHI  |   NULL | 1974-03-19 00:00:00 |
+| WWW |    1 | LED  |   NULL | NULL                |
 | GG3 |   -3 | DD3  | -0.051 | 1974-03-19 00:00:00 |
-| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
+| GTM |    3 | DAL  |  -0.07 | 1977-09-23 00:00:00 |
+| ZAJ |    2 | CHI  | -0.075 | 1960-06-15 00:00:00 |
+| BDL |    0 | DEN  |  -0.08 | 1960-11-27 00:00:00 |
+| PLS |   -1 | WDC  | -0.075 | 1949-01-02 00:00:00 |
 | BMC |    3 | SEA  | -0.085 | 1958-09-08 00:00:00 |
+| TWU |    0 | LAX  |  -0.08 | 1969-10-05 00:00:00 |
+| BOT |   -2 | SEA  | -0.085 | 1951-11-29 00:00:00 |
 | HBR |    1 | SEA  |  0.085 | 1948-03-05 00:00:00 |
-| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
-| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
 | DTX |    1 | NYC  |   0.08 | 1961-05-04 00:00:00 |
 | VVV |   -2 | MON  |  0.075 | 1959-06-28 00:00:00 |
+| GG1 |    3 | DD1  |  0.053 | 1974-03-19 00:00:00 |
+| GG2 |   -3 | DD2  |  0.052 | 1974-03-19 00:00:00 |
 | AME |    0 | SEA  |    0.1 | 1942-02-19 00:00:00 |
 +-----+------+------+--------+---------------------+
 select abs(a2) , sum(a4) from t2 group by abs(a2) having sum(sign(a4)) > 0 for update;
@@ -883,7 +883,7 @@ select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 f
 |                              1 |                             -1 |
 +--------------------------------+--------------------------------+
 
-#https://work.aone.alibaba-inc.com/issue/32398792
+#
 select sign(1E-300) from dual;
 +--------------+
 | sign(1E-300) |

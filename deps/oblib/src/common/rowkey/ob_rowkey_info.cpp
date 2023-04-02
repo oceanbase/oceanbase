@@ -50,7 +50,7 @@ DEFINE_DESERIALIZE(ObRowkeyColumn)
   } else if (OB_FAIL(serialization::decode_vi64(
       buf, data_len, tmp_pos, reinterpret_cast<int64_t *>(&column_id_)))) {
     COMMON_LOG(WARN, "decode column_id error.", K_(column_id), K(ret));
-  } else if (OB_FAIL(type_.deserialize(buf, data_len, pos))) {
+  } else if (OB_FAIL(type_.deserialize(buf, data_len, tmp_pos))) {
     COMMON_LOG(WARN, "decode type error.", K_(type), K(ret));
   } else if (OB_FAIL(serialization::decode_vi32(
       buf, data_len, tmp_pos, reinterpret_cast<int32_t *>(&order_)))) {
@@ -71,6 +71,27 @@ DEFINE_GET_SERIALIZE_SIZE(ObRowkeyColumn)
   return len;
 }
 
+ObRowkeyColumn& ObRowkeyColumn::operator=(const ObRowkeyColumn &other)
+{
+  this->length_ = other.length_;
+  this->column_id_ = other.column_id_;
+  this->type_ = other.type_;
+  this->order_ = other.order_;
+  this->fulltext_flag_ = other.fulltext_flag_;
+  this->spatial_flag_ = other.spatial_flag_;
+  return *this;
+}
+
+bool ObRowkeyColumn::operator==(const ObRowkeyColumn &other) const
+{
+  return
+      this->length_ == other.length_ &&
+      this->column_id_ == other.column_id_ &&
+      this->type_ == other.type_ &&
+      this->order_ == other.order_ &&
+      this->fulltext_flag_ == other.fulltext_flag_ &&
+      this->spatial_flag_ == other.spatial_flag_;
+}
 
 ObRowkeyInfo::ObRowkeyInfo()
     : columns_(NULL), size_(0), capacity_(0), arena_(ObModIds::OB_SCHEMA_ROW_KEY), allocator_(&arena_)
@@ -109,10 +130,10 @@ const ObRowkeyColumn *ObRowkeyInfo::get_column(const int64_t index) const
   int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(index < 0 || index >= size_)) {
     tmp_ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "Invalid argument.", K(index), K_(size), K(tmp_ret));
+    COMMON_LOG_RET(WARN, tmp_ret, "Invalid argument.", K(index), K_(size), K(tmp_ret));
   } else if (!is_valid()) {
     tmp_ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "columns has not initialized.",
+    COMMON_LOG_RET(WARN, tmp_ret, "columns has not initialized.",
                KP_(columns), K_(size), K(index), K(tmp_ret));
   } else {
     ret = &columns_[index];
@@ -444,4 +465,37 @@ int ObRowkeyInfo::get_fulltext_column(uint64_t &column_id) const
     }
   }
   return ret;
+}
+
+int ObRowkeyInfo::get_spatial_col_id_by_type(uint64_t &column_id, ObObjType type) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (OB_ISNULL(columns_)) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "columns is null");
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < size_ && !found; i++) {
+    if (columns_[i].spatial_flag_ && columns_[i].type_.get_type() == type) {
+      column_id = columns_[i].column_id_;
+      found = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !found) {
+    ret = OB_SEARCH_NOT_FOUND;
+    COMMON_LOG(WARN, "spatial column id not found", K(ret), K(type), K(*this));
+  }
+
+  return ret;
+}
+
+int ObRowkeyInfo::get_spatial_cellid_col_id(uint64_t &column_id) const
+{
+  return get_spatial_col_id_by_type(column_id, ObUInt64Type);
+}
+
+int ObRowkeyInfo::get_spatial_mbr_col_id(uint64_t &column_id) const
+{
+  return get_spatial_col_id_by_type(column_id, ObVarcharType);
 }

@@ -19,6 +19,7 @@
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -72,7 +73,7 @@ int ObExprSubstrb::calc_result_length_in_byte(const ObExprResType &type,
     // create table substrb_test_tbl(c1 varchar2(64 char), c2 varchar2(7 byte)
     // GENERATED ALWAYS AS (substrb(c1, -1, 8)) VIRTUAL);
     // 使用如上建表语句时，substrb的参数是负数时，pos_obj是null
-    // https://work.aone.alibaba-inc.com/issue/21786489
+    //
     if (pos_obj.is_null_oracle()) {
       pos_val = 1;
     } else {
@@ -192,7 +193,7 @@ int ObExprSubstrb::calc(ObString &res_str, const ObString &text,
     LOG_WARN("text.ptr() is null", K(ret));
   } else {
     if (0 == start) {
-      start = 1;// https://aone.alibaba-inc.com/req/18055469 , oracle起始位置参数0和1等价
+      start = 1;//
     }
     start = (start > 0) ? (start - 1) : (start + text_len);
     if (OB_UNLIKELY(start < 0 || start >= text_len)) {
@@ -408,12 +409,89 @@ int ObExprSubstrb::calc_substrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
                 && (OB_FAIL(ObExprUtil::round_num2int64(*start, start_int))
                 || (3 == expr.arg_cnt_ && OB_FAIL(ObExprUtil::round_num2int64(*len, len_int))))) {
       LOG_WARN("round_num2int64 failed", K(ret));
-    } else if (OB_FAIL(calc(res_str, src_str, start_int, len_int, cs_type, res_alloc))) {
-      LOG_WARN("calc substrb failed", K(ret), K(src_str), K(start_int), K(len_int), K(cs_type));
-    } else if (res_str.empty() && !expr.args_[0]->datum_meta_.is_clob()) {
-      res.set_null();
-    } else {
-      res.set_string(res_str);
+    } else if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+      if (OB_FAIL(calc(res_str, src_str, start_int, len_int, cs_type, res_alloc))) {
+        LOG_WARN("calc substrb failed", K(ret), K(src_str), K(start_int), K(len_int), K(cs_type));
+      } else if (res_str.empty() && !expr.args_[0]->datum_meta_.is_clob()) {
+        res.set_null();
+      } else {
+        res.set_string(res_str);
+      }
+    } else { // text tc
+      if (0 == start_int) {
+        //
+        start_int = 1;
+      }
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      int64_t total_byte_len = 0;
+
+      // read as binary
+      const bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+      ObTextStringIter input_iter(expr.args_[0]->datum_meta_.type_, CS_TYPE_BINARY, src->get_string(), has_lob_header);
+      if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("Lob: init input_iter failed ", K(ret), K(input_iter));
+      } else if (OB_FAIL(input_iter.get_byte_len(total_byte_len))) {
+        LOG_WARN("Lob: get input byte len failed", K(ret));
+      } else {
+        len_int = len == NULL ? total_byte_len : len_int;
+      }
+      int64_t result_byte_len = MIN((start_int >= 0 ? total_byte_len - start_int + 1 : -start_int), len_int);
+      if (!input_iter.is_outrow_lob()) {
+        // ObExprSubstrb::calc alloc memory from result buffer at least as input text len.
+        result_byte_len = MAX(result_byte_len, total_byte_len);
+      }
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+      char *buf = NULL;
+      int64_t buf_size = 0;
+      if (OB_FAIL(ret)) {
+      } else if (len_int < 0 || start_int > total_byte_len) {
+        if (OB_FAIL(output_result.init(0))) { // fill empty lob result
+          LOG_WARN("Lob: init stringtext result failed", K(ret));
+        } else {
+          output_result.set_result();
+        }
+      } else if (output_result.init(result_byte_len)) {
+        LOG_WARN("Lob: init stringtext result failed", K(ret));
+      } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+        LOG_WARN("Lob: stringtext result reserve buffer failed", K(ret));
+      } else {
+        input_iter.set_start_offset((start_int >= 0 ? (start_int - 1) : total_byte_len + start_int));
+        input_iter.set_access_len(len_int);
+        ObTextStringIterState state;
+        ObString src_block_data;
+        while (OB_SUCC(ret)
+               && buf_size > 0
+               && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          ObDataBuffer data_buf(buf, buf_size);
+          if (!input_iter.is_outrow_lob()) {
+            ObString inrow_result;
+            if (OB_FAIL(calc(inrow_result, src_block_data, start_int, len_int, cs_type, data_buf))) {
+              LOG_WARN("get substr failed", K(ret));
+            } else if (OB_FAIL(output_result.append(inrow_result))) {
+              LOG_WARN("Lob: append result failed", K(ret), K(output_result), K(src_block_data));
+            }
+          // outrow lobs, only use calc for handle invalid bytes
+          } else {
+            if (OB_FAIL(calc(res_str, src_block_data, 0, src_block_data.length(), cs_type, data_buf))) {
+              LOG_WARN("calc substrb failed", K(ret), K(src_str), K(start_int), K(len_int), K(cs_type));
+            } else if (OB_FAIL(output_result.lseek(res_str.length(), 0))) {
+              LOG_WARN("result lseek failed", K(ret));
+            } else {
+              buf += res_str.length();
+              buf_size -= res_str.length();
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+        } else {
+          output_result.set_result();
+        }
+      }
     }
   }
   return ret;

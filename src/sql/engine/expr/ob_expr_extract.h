@@ -38,7 +38,8 @@ public:
                   const common::ObCastMode cast_mode,
                   const common::ObTimeZoneInfo *tz_info,
                   const int64_t cur_ts_value,
-                  const ObDateSqlMode date_sql_mode);
+                  const ObDateSqlMode date_sql_mode,
+                  bool has_lob_header);
   template <typename T>
   static int calc_oracle(T &result,
                         const int64_t date_unit,

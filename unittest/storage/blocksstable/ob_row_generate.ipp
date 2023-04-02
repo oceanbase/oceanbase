@@ -473,7 +473,8 @@ int ObRowGenerate::set_obj(const ObObjType &column_type,
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType: 
-    case ObJsonType: {
+    case ObJsonType:
+    case ObGeometryType: {
       ObLobCommon *value = NULL;
       void *buf = NULL;
       if (OB_ISNULL(buf = p_allocator_->alloc(sizeof(ObLobCommon) + 10))) {
@@ -486,7 +487,8 @@ int ObRowGenerate::set_obj(const ObObjType &column_type,
         if (column_type == ObTinyTextType) {
           byte_size = 2;
         }
-        obj.meta_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+        obj.meta_.set_collation_type(column_type == ObGeometryType ? CS_TYPE_BINARY
+                                     :CS_TYPE_UTF8MB4_GENERAL_CI);
         obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
         obj.set_type(column_type);
         obj.set_lob_value(column_type, value, value->get_handle_size(byte_size));
@@ -730,7 +732,8 @@ int ObRowGenerate::compare_obj(const ObObjType &column_type, const int64_t value
   case ObTextType:
   case ObMediumTextType:
   case ObLongTextType: 
-  case ObJsonType: {
+  case ObJsonType:
+  case ObGeometryType: {
     break;
   }
   case ObBitType: {

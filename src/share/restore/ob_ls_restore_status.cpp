@@ -49,7 +49,7 @@ const char *ObLSRestoreStatus::get_restore_status_str(const ObLSRestoreStatus &s
   };
   STATIC_ASSERT(LS_RESTORE_STATUS_MAX == ARRAYSIZEOF(restore_status_str), "status count mismatch");
   if (status.status_ < 0 || status.status_ >= LS_RESTORE_STATUS_MAX) {
-    LOG_ERROR("invalid status", K(status));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid status", K(status));
   } else {
     str = restore_status_str[status.status_];
   }

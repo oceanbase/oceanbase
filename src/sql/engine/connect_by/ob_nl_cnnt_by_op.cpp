@@ -286,6 +286,7 @@ int ObNLConnectByOp::inner_open()
               true /* enable dump */, 0))) {
       LOG_WARN("init chunk row store failed", K(ret));
     } else {
+      connect_by_pump_.set_allocator(mem_context_->get_malloc_allocator());
       connect_by_pump_.datum_store_.set_allocator(mem_context_->get_malloc_allocator());
     }
   }
@@ -310,6 +311,7 @@ int ObNLConnectByOp::inner_close()
   if (nullptr != mem_context_) {
     mem_context_->reuse();
   }
+  connect_by_pump_.sys_path_buffer_.reset();
   return ret;
 }
 
@@ -531,6 +533,10 @@ int ObNLConnectByOp::calc_pseudo_flags(ObConnectByOpPump::PumpNode &node)
           }
           finished = (false == output_cycle || node.is_cycle_)
                       && (false == output_leaf || false == node.is_leaf_);
+        }
+        if (OB_NOT_NULL(next_node.prior_exprs_result_)) {
+          connect_by_pump_.allocator_.free(
+              const_cast<ObChunkDatumStore::StoredRow *>(next_node.prior_exprs_result_));
         }
       }
     }

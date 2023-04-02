@@ -184,6 +184,8 @@ public:
   stmt::StmtType get_stmt_type() const;
   stmt::StmtType get_inner_stmt_type() const;
   stmt::StmtType get_literal_stmt_type() const;
+  const common::ObString& get_stmt_ps_sql() const { return ps_sql_; }
+  common::ObString& get_stmt_ps_sql() { return ps_sql_; }
   int64_t get_query_string_id() const;
   static void refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err);
   int refresh_location_cache(bool is_nonblock);
@@ -198,8 +200,10 @@ public:
     if (0 < my_session_.get_pl_exact_err_msg().length()) {
       my_session_.get_pl_exact_err_msg().reset();
     }
+    is_init_ = true;
     return common::OB_SUCCESS;
   }
+  bool is_inited() const { return is_init_; }
   common::ObIAllocator& get_mem_pool() { return mem_pool_; }
   ObExecContext &get_exec_context() { return exec_ctx_ != nullptr ? *exec_ctx_ : *inner_exec_ctx_; }
   void set_exec_context(ObExecContext &exec_ctx) { exec_ctx_ = &exec_ctx; }
@@ -213,7 +217,7 @@ public:
   int add_returning_param_column(const common::ObField &param);
 
   int from_plan(const ObPhysicalPlan &phy_plan, const common::ObIArray<ObPCParam *> &raw_params);
-  int to_plan(const bool is_ps_mode, ObPhysicalPlan *phy_plan);
+  int to_plan(const PlanCacheMode mode, ObPhysicalPlan *phy_plan);
   const common::ObString &get_statement_name() const;
   void set_statement_id(const uint64_t stmt_id);
   void set_statement_name(const common::ObString name);
@@ -312,6 +316,7 @@ public:
   bool get_is_com_filed_list() { return is_com_filed_list_; }
   void set_wildcard_string(common::ObString string) { wild_str_ = string; }
   common::ObString &get_wildcard_string() { return wild_str_;}
+  common::ParamStore &get_ps_params() { return ps_params_; }
   static void replace_lob_type(const ObSQLSessionInfo &session,
                                const ObField &field,
                                obmysql::ObMySQLField &mfield);
@@ -345,20 +350,16 @@ private:
   // 删除ParseNode中raw_text的多余的空格
   static int64_t remove_extra_space(char *buff, int64_t len);
   // Always called in the ObResultSet constructor
-  void update_start_time() const 
+  void update_start_time() const
   {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                                       observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_start_time();
+    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_start_time();
   }
   // Always called at the end of the ObResultSet destructor
-  void update_end_time() const 
+  void update_end_time() const
   {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                                       observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_end_time();
+    oceanbase::observer::ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_end_time();
   }
 
 protected:
@@ -419,7 +420,11 @@ private:
   ObExecutor executor_;
   bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
+  bool need_revert_tx_; //dblink
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
+  common::ObString ps_sql_; // for sql in pl
+  bool is_init_;
+  common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
 };
 
 
@@ -490,7 +495,11 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       executor_(),
       is_returning_(false),
       is_com_filed_list_(false),
-      wild_str_()
+      need_revert_tx_(false),
+      wild_str_(),
+      ps_sql_(),
+      is_init_(false),
+      ps_params_(ObWrapperAllocator(&allocator))
 {
   message_[0] = '\0';
   // Always called in the ObResultSet constructor

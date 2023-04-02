@@ -16,6 +16,7 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log.h"
+#include "lib/geo/ob_geo_utils.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -45,7 +46,8 @@ ObInfoSchemaColumnsTable::ObInfoSchemaColumnsTable() :
     last_filter_column_idx_(-1),
     database_schema_array_(),
     filter_table_schema_array_(),
-    view_resolve_alloc_()
+    mem_context_(nullptr),
+    iter_cnt_(0)
 {
 }
 
@@ -58,7 +60,11 @@ void ObInfoSchemaColumnsTable::reset()
 {
   ObVirtualTableScannerIterator::reset();
   tenant_id_ = OB_INVALID_ID;
-  view_resolve_alloc_.reset();
+  if (OB_LIKELY(NULL != mem_context_)) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
+  }
+  iter_cnt_ = 0;
 }
 
 int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
@@ -71,6 +77,8 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "tenant id is invalid_id", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(init_mem_context())) {
+    SERVER_LOG(WARN, "failed to init mem context", K(ret));
   } else {
     if (!start_to_read_) {
       void *tmp_ptr = NULL;
@@ -203,7 +211,10 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
     } else {
       table_schema = table_schema_array.at(i);
     }
-    if (OB_ISNULL(table_schema)) {
+    ++iter_cnt_;
+    if (0 == ++iter_cnt_ % 1024 && OB_FAIL(THIS_WORKER.check_status())) {
+      SERVER_LOG(WARN, "failed to check status", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "table_schema should not be NULL", K(ret));
     } else {
@@ -211,7 +222,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       //  不显示索引表
       if (table_schema->is_aux_table()
          || table_schema->is_in_recyclebin()
-         || is_ora_sys_view_table(table_schema->get_table_id())) { // Oracle system view
+         || is_ora_sys_view_table(table_schema->get_table_id())) {
         continue;
       } else if (is_filter_table_schema && OB_FAIL(schema_guard_->get_database_schema(tenant_id_,
           table_schema->get_database_id(), database_schema))) {
@@ -220,49 +231,54 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "database schema is null", K(ret));
       }
+      // for system view, its column info depend on hard code, so its valid by default, but do not have column meta
+      // status default value is valid, old version also work whether what status it read because its column count = 0
+      bool view_is_invalid = (0 == table_schema->get_object_status() || 0 == table_schema->get_column_count());
       if (OB_FAIL(ret)) {
-      } else if (is_normal_view) {
-        view_resolve_alloc_.reset_remain_one_page();
-        ObString view_definition;
-        sql::ObSelectStmt *select_stmt = NULL;
-        sql::ObSelectStmt *real_stmt = NULL;
-        ObStmtFactory stmt_factory(view_resolve_alloc_);
-        ObRawExprFactory expr_factory(view_resolve_alloc_);
-        if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
-                      view_resolve_alloc_,
-                      session_->get_local_collation_connection(),
-                      table_schema->get_view_schema(),
-                      view_definition))) {
-          SERVER_LOG(WARN, "fail to generate view definition for resolve", K(ret));
-        } else if (OB_FAIL(ObTableColumns::resolve_view_definition(&view_resolve_alloc_, session_, schema_guard_,
-                      *table_schema, select_stmt, expr_factory, stmt_factory, false))) {
-          if (OB_ERR_UNKNOWN_TABLE != ret && OB_ERR_VIEW_INVALID != ret) {
-            SERVER_LOG(WARN, "failed to resolve view definition", K(view_definition), K(ret), K(table_schema->get_table_id()));
-          } else {
-            ret = OB_SUCCESS;
-            continue;
-          }
-        } else if (OB_UNLIKELY(NULL == select_stmt)) {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "select_stmt is NULL", K(ret));
-        } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
-          // case : view definition is set_op
-          // Bug : http://k3.alibaba-inc.com/issue/6455327?stat=1.5.3&toPage=1&versionId=1043693
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "real stmt is NULL", K(ret));
-        } 
-        for (int64_t k = 0; OB_SUCC(ret) && k < real_stmt->get_select_item_size() && !has_more_; ++k) {
-          if (OB_FAIL(fill_row_cells(database_schema->get_database_name_str(), table_schema,
-                                      real_stmt, real_stmt->get_select_item(k), k + 1/* add for position */))) {
-            SERVER_LOG(WARN, "fail to fill row cells", K(ret));
-          } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-            SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
-            if (OB_SIZE_OVERFLOW == ret) {
-              last_schema_idx_ = last_db_schema_idx;
-              last_table_idx_ = i;
-              last_column_idx_ = k;
-              has_more_ = true;
+      } else if (is_normal_view && view_is_invalid) {
+        mem_context_->reset_remain_one_page();
+        WITH_CONTEXT(mem_context_) {
+          ObString view_definition;
+          sql::ObSelectStmt *select_stmt = NULL;
+          sql::ObSelectStmt *real_stmt = NULL;
+          ObStmtFactory stmt_factory(mem_context_->get_arena_allocator());
+          ObRawExprFactory expr_factory(mem_context_->get_arena_allocator());
+          if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(
+                        mem_context_->get_arena_allocator(),
+                        session_->get_local_collation_connection(),
+                        table_schema->get_view_schema(),
+                        view_definition))) {
+            SERVER_LOG(WARN, "fail to generate view definition for resolve", K(ret));
+          } else if (OB_FAIL(ObTableColumns::resolve_view_definition(&mem_context_->get_arena_allocator(), session_, schema_guard_,
+                        *table_schema, select_stmt, expr_factory, stmt_factory, false))) {
+            if (OB_ERR_UNKNOWN_TABLE != ret && OB_ERR_VIEW_INVALID != ret) {
+              SERVER_LOG(WARN, "failed to resolve view definition", K(view_definition), K(ret), K(table_schema->get_table_id()), K(mem_context_->used()));
+            } else {
               ret = OB_SUCCESS;
+              continue;
+            }
+          } else if (OB_UNLIKELY(NULL == select_stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "select_stmt is NULL", K(ret));
+          } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
+            // case : view definition is set_op
+            // Bug :
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "real stmt is NULL", K(ret));
+          }
+          for (int64_t k = 0; OB_SUCC(ret) && k < real_stmt->get_select_item_size() && !has_more_; ++k) {
+            if (OB_FAIL(fill_row_cells(database_schema->get_database_name_str(), table_schema,
+                                        real_stmt, real_stmt->get_select_item(k), k + 1/* add for position */))) {
+              SERVER_LOG(WARN, "fail to fill row cells", K(ret));
+            } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
+              SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+              if (OB_SIZE_OVERFLOW == ret) {
+                last_schema_idx_ = last_db_schema_idx;
+                last_table_idx_ = i;
+                last_column_idx_ = k;
+                has_more_ = true;
+                ret = OB_SUCCESS;
+              }
             }
           }
         }
@@ -391,7 +407,8 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
         // 指定db_name，同时指定了tbl_name
         const ObTableSchema *filter_table_schema = NULL;
         ObString table_name = start_key_obj_ptr[1].get_varchar();
-        if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
+        if (table_name.empty()) {
+        } else if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
             filter_database_schema->get_database_id(),
             table_name,
             false/*is_index*/,
@@ -414,12 +431,13 @@ int ObInfoSchemaColumnsTable::get_type_str(
     const ObObjMeta &obj_meta,
     const ObAccuracy &accuracy,
     const common::ObIArray<ObString> &type_info,
-    const int16_t default_length_semantics, int64_t &pos)
+    const int16_t default_length_semantics, int64_t &pos,
+    const common::ObGeoType geo_type)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos))) {
+                              column_type_str_, column_type_str_len_, pos, geo_type))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       void *tmp_ptr = NULL;
       if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
@@ -440,7 +458,7 @@ int ObInfoSchemaColumnsTable::get_type_str(
         column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos);
+                              column_type_str_, column_type_str_len_, pos, geo_type);
       }
     }
   }
@@ -575,7 +593,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             if (OB_FAIL(ob_sql_type_str(data_type_str_,
                                         column_type_str_len_,
                                         column_schema->get_data_type(),
-                                        column_schema->get_collation_type()))) {
+                                        column_schema->get_collation_type(),
+                                        column_schema->get_geo_type()))) {
               SERVER_LOG(WARN,"fail to get data type str",K(ret), K(column_schema->get_data_type()));
             } else {
               ObString type_val(column_type_str_len_,
@@ -587,7 +606,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
           }
         case CHARACTER_MAXIMUM_LENGTH: {
             if(ob_is_string_type(column_schema->get_data_type()) ||
-                ob_is_json(column_schema->get_data_type())) {
+               ob_is_json(column_schema->get_data_type()) || ob_is_geometry(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -605,7 +624,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                         mbmaxlen * column_schema->get_data_length()));
               }
             } else if(ob_is_text_tc(column_schema->get_data_type()) ||
-                ob_is_json(column_schema->get_data_type())) {
+                ob_is_json(column_schema->get_data_type()) || ob_is_geometry(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -669,10 +688,11 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
             if (OB_FAIL(get_type_str(column_schema->get_meta_type(),
-                                        column_schema->get_accuracy(),
-                                        column_schema->get_extended_type_info(),
-                                        default_length_semantics,
-                                        pos))) {
+                                     column_schema->get_accuracy(),
+                                     column_schema->get_extended_type_info(),
+                                     default_length_semantics,
+                                     pos,
+                                     column_schema->get_geo_type()))) {
               SERVER_LOG(WARN,"fail to get column type str",K(ret), K(column_schema->get_data_type()));
             } else if (column_schema->is_zero_fill()) {
              // zerofill, only for int, float, decimal
@@ -929,7 +949,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                 }
               } else {
                 ObArray<common::ObString> extended_type_info;
-                if (OB_FAIL(column_item.default_value_.print_plain_str_literal(extended_type_info, buf, buf_len, pos))) {
+                const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
+                if (OB_FAIL(extended_type_info.assign(select_item.expr_->get_enum_set_values()))) {
+                  SERVER_LOG(WARN, "failed to assign enum values", K(ret));
+                } else if (OB_FAIL(column_item.default_value_.print_plain_str_literal(extended_type_info, buf, buf_len, pos))) {
                   SERVER_LOG(WARN, "fail to print plain str literal", K(buf), K(buf_len), K(pos), K(ret));
                 } else {
                   cells[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
@@ -964,10 +987,16 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case DATA_TYPE: {
+            ObGeoType geo_sub_type = ObGeoType::GEOTYPEMAX;
+            if (ob_is_geometry(column_attributes.result_type_.get_type())) {
+              ObString type_str(strlen(column_type_str_), column_type_str_);
+              geo_sub_type = ObGeoTypeUtil::get_geo_type_by_name(type_str);
+            }
             if (OB_FAIL(ob_sql_type_str(data_type_str_,
                                         column_type_str_len_,
                                         column_attributes.result_type_.get_type(),
-                                        ObCharset::get_default_collation(ObCharset::get_default_charset())))) {
+                                        ObCharset::get_default_collation(ObCharset::get_default_charset()),
+                                        geo_sub_type))) {
               SERVER_LOG(WARN,"fail to get data type str",K(ret), K(column_attributes.type_));
             } else {
               ObString type_val(column_type_str_len_,
@@ -1056,21 +1085,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case COLUMN_TYPE: {
-            int64_t pos = 0;
-            const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-            ObArray<common::ObString> extended_type_info;
-            if (OB_FAIL(get_type_str(column_attributes.result_type_.get_obj_meta(),
-                                        column_attributes.result_type_.get_accuracy(),
-                                        extended_type_info,
-                                        default_length_semantics,
-                                        pos))) {
-              SERVER_LOG(WARN,"fail to get column type str",K(ret), K(column_attributes.result_type_));
-            }
-            if (OB_SUCC(ret)) {
-              ObString type_val(column_type_str_len_, static_cast<int32_t>(strlen(column_type_str_)),column_type_str_);
-              cells[cell_idx].set_varchar(type_val);
-              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-            }
+            ObString type_val(column_type_str_len_, static_cast<int32_t>(strlen(column_type_str_)),column_type_str_);
+            cells[cell_idx].set_varchar(type_val);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
         case COLUMN_KEY: {
@@ -1144,6 +1161,22 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
     } // end for
   }
 
+  return ret;
+}
+
+inline int ObInfoSchemaColumnsTable::init_mem_context()
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_LIKELY(NULL == mem_context_)) {
+    lib::ContextParam param;
+    param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
+      .set_mem_attr(tenant_id_, ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID);
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
+      SQL_ENG_LOG(WARN, "create entity failed", K(ret));
+    } else if (OB_ISNULL(mem_context_)) {
+      SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
+    }
+  }
   return ret;
 }
 

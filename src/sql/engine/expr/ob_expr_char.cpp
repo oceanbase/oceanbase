@@ -68,16 +68,11 @@ int ObExprChar::calc_result_typeN(ObExprResType &type, ObExprResType *types, int
   } else {
     //set calc type
     //i starts from 1 rather than 0 since the first param is obvarchar always.
-    //see http://review.alibaba-inc.com/r/21109/ for more details when necessary.
     for (int64_t i = 0; i < param_num-1; ++i) {
       types[i].set_calc_type(ObIntType);
     }
     ObExprOperator::calc_result_flagN(type, types, param_num);
-    //set length
-    CK( OB_INVALID_COUNT != type_ctx.get_max_allowed_packet());
-    if (OB_SUCC(ret)) {
-      type.set_length(static_cast<ObLength>(type_ctx.get_max_allowed_packet()));
-    }
+    type.set_length(static_cast<ObLength>(param_num * 4 - 4));
   }
   return ret;
 }

@@ -12,6 +12,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
+#include "logservice/palf/log_define.h"
 #define private public
 #include "logservice/palf/log_meta.h"
 #undef private
@@ -74,7 +75,8 @@ TEST(TestLogMeta, test_log_meta)
   LogConfigInfo curr_config_info;
   EXPECT_EQ(OB_SUCCESS, curr_config_info.generate(curr_member_list, curr_replica_num, curr_learner_list, curr_config_version));
   EXPECT_TRUE(curr_config_info.is_valid());
-  EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info));
+  EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
+      curr_log_proposal_id, LSN(0), curr_log_proposal_id));
   EXPECT_TRUE(log_config_meta1.is_valid());
 
   // Snapshot meta
@@ -111,24 +113,25 @@ TEST(TestLogMeta, test_log_meta_generate)
   LogMeta meta1, meta2;
   LSN prev_lsn(10000), lsn(20000);
   int64_t init_pid(2);
-  int64_t init_ts(10);
+  share::SCN init_scn;
+  init_scn.convert_for_logservice(10);
   int64_t init_cksum(10);
   PalfBaseInfo base_info;
   LogInfo log_info;
   log_info.log_id_ = 1;
-  log_info.log_ts_ = init_ts;
+  log_info.scn_ = init_scn;
   log_info.log_proposal_id_ = init_pid;
   log_info.accum_checksum_ = init_cksum;
   // invalid lsn
   log_info.lsn_ = lsn;
   base_info.curr_lsn_ = prev_lsn;
   base_info.prev_log_info_ = log_info;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, palf::NORMAL_REPLICA));
   // valid lsn
   log_info.lsn_ = prev_lsn;
   base_info.curr_lsn_ = lsn;
   base_info.prev_log_info_ = log_info;
-  EXPECT_EQ(OB_SUCCESS, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND));
+  EXPECT_EQ(OB_SUCCESS, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, palf::NORMAL_REPLICA));
   EXPECT_EQ(meta1.log_prepare_meta_.log_proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.curr_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
@@ -147,5 +150,6 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level("INFO");
   PALF_LOG(INFO, "begin unittest::test_log_meta");
   ::testing::InitGoogleTest(&argc, argv);
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

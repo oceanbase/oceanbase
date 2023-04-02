@@ -148,7 +148,7 @@ void ObTenantDfc::calc_max_buffer(int64_t max_parallel_cnt)
   max_buffer_size_ = max_blocked_buffer_size_ * MAX_BUFFER_FACTOR;
   int64_t factor = 1;
   int ret = OB_SUCCESS;
-  ret = E(EventTable::EN_DFC_FACTOR) ret;
+  ret = OB_E(EventTable::EN_DFC_FACTOR) ret;
   if (OB_FAIL(ret)) {
     factor = -ret;
     max_buffer_size_ *= factor;
@@ -217,7 +217,7 @@ int ObTenantDfc::cache_buffer(int64_t chid, ObDtlLinkedBuffer *&data_buffer, boo
     }
   } else {
     // 如果是老server发到新server，则不缓存
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_TRACE("old data not cache", K(ret), KP(chid), K(attach));
   }
   return ret;
@@ -276,8 +276,6 @@ int ObTenantDfc::try_process_first_buffer(ObDtlFlowControl *dfc, int64_t ch_idx)
   if (OB_FAIL(dfc->get_channel(ch_idx, ch))) {
     LOG_WARN("failed to get dtl channel", K(dfc), K(ch_idx), K(ret));
   } else {
-    // 这里为了兼容，先从每个QC或SQC的first buffer buffer去拿，如果拿到了，则返回
-    // 如果没有拿到，则需要再从原始cache中去拿
     bool got = false;
     if (dfc->has_dfo_key()) {
       if (OB_FAIL(try_process_first_buffer_by_qc(dfc, ch, ch_idx, got))) {
@@ -421,9 +419,9 @@ int ObDfcServer::get_current_tenant_dfc(uint64_t tenant_id, ObTenantDfc *&tenant
   } else if (tenant_id != tenant_dfc->get_tenant_id()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected tenant mtl", K(tenant_id), K(tenant_dfc->get_tenant_id()));
-    // if (OB_SYS_TENANT_ID == tenant_dfc->get_tenant_id() || OB_DIAG_TENANT_ID == tenant_dfc->get_tenant_id()) {
+    // if (OB_SYS_TENANT_ID == tenant_dfc->get_tenant_id()) {
     //   // 这里是为了解决 sys 租户 change tenant 到其它租户后，要求能使用 dtl 服务
-    //   // 否则有 bug：https://work.aone.alibaba-inc.com/issue/27506638
+    //   // 否则有 bug：
     //   //
     //   // 进入这个分支的场景是：init_sqc 这个 rpc 在这个机器上没有找到租户资源，
     //   // 于是 fallback 到 sys 租户，于是 MTL 中取出的 dfc tenant id 为 sys 租户 id

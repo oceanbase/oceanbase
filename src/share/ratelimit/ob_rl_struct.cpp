@@ -25,7 +25,7 @@ DEF_TO_STRING(ObServer2RegionMap)
 ObServer2RegionMap::ObServer2RegionMap(common::ObAddr &addr, char *region)
 {
   if (OB_ISNULL(region)) {
-    OB_LOG(ERROR, "invalid argument", KP(region));
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", KP(region));
   } else {
     addr_ = addr;
     region_.assign(region);
@@ -65,7 +65,7 @@ DEF_TO_STRING(ObRegionBwStat)
 ObRegionBwStat::ObRegionBwStat(char *region, int64_t max_bw)
 {
   if (OB_ISNULL(region)) {
-    OB_LOG(ERROR, "invalid argument", KP(region));
+    OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", KP(region));
   } else {
     max_bw_ = max_bw;
     region_.assign(region);

@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_crc32.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase {
 using namespace common;
@@ -48,22 +49,38 @@ int ObExprCrc32::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
   return ret;
 }
 
+inline void calc_crc32_inner(const ObString &str_val, ObDatum &res_datum)
+{
+  if (str_val.empty()) {
+    res_datum.set_uint(0ULL);
+  } else {
+    unsigned char* buf = reinterpret_cast<unsigned char*>(const_cast<char*>(str_val.ptr()));
+    res_datum.set_uint(crc32(0, buf, str_val.length()));
+  }
+}
+
 int ObExprCrc32::calc_crc32_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
 {
   int ret = OB_SUCCESS;
   unsigned char* buf = NULL;
   ObDatum* s_datum = NULL;
+  const ObDatumMeta &datum_meta = expr.args_[0]->datum_meta_;
   if (OB_FAIL(expr.args_[0]->eval(ctx, s_datum))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (s_datum->is_null()) {
     res_datum.set_null();
-  } else {
+  } else if (!ob_is_text_tc(datum_meta.type_)) {
     const ObString& str_val = s_datum->get_string();
-    if (str_val.empty()) {
-      res_datum.set_uint(0ULL);
+    calc_crc32_inner(str_val, res_datum);
+  } else { // text tc
+    ObString str_val;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *s_datum,
+                datum_meta, expr.args_[0]->obj_meta_.has_lob_header(), str_val))) {
+      LOG_WARN("get string data failed", K(ret));
     } else {
-      buf = reinterpret_cast<unsigned char*>(const_cast<char*>(str_val.ptr()));
-      res_datum.set_uint(crc32(0, buf, str_val.length()));
+      calc_crc32_inner(str_val, res_datum);
     }
   }
   return ret;

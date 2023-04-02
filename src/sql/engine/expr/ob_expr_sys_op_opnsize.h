@@ -33,6 +33,7 @@ public:
                        ObExpr &rt_expr) const override;
   static int calc_sys_op_opnsize_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                       ObDatum &res);
+  static int calc_sys_op_opnsize(ObExpr *expr, ObDatum *arg, int64_t &size);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSysOpOpnsize);
 };

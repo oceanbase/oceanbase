@@ -28,14 +28,11 @@ int ObDeleteStmtPrinter::do_print()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_, buf_len_, pos_, print_params_);
+    expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
     }
@@ -66,6 +63,11 @@ int ObDeleteStmtPrinter::print_basic_stmt()
   if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ should not be NULL", K(ret));
+  } else if (OB_FAIL(print_with())) {
+    LOG_WARN("failed to print with", K(ret));
+  } else if ((print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
+             OB_FAIL(print_cte_define())) {
+    LOG_WARN("failed to print cte", K(ret));
   } else if (OB_FAIL(print_delete())) {
     LOG_WARN("fail to print select", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_from())) {

@@ -38,7 +38,8 @@ public:
   static const int64_t DEFAULT_ESTIMATE_REAL_SIZE_PCT = 150;
 
   // maximum row count is restricted to 4 bytes in MicroBlockHeader
-  static const int64_t MAX_MICRO_BLOCK_ROW_CNT = UINT32_MAX;
+  // But all_col_datums_ is restricted to 64K, so we limit maximum row count to uint16_max
+  static const int64_t MAX_MICRO_BLOCK_ROW_CNT = UINT16_MAX;
   // Unlike ObMicroBlockWriter, ObMicroBlockEncoder internally uses ObRowWriter and ObIColumnEncoder
   // to form row and column data. Both ObRowWriter and ObIColumnEncoder check buffer capacity by
   // calling ObBufferWriter::advance_zero. If buffer size is not enough, they return failure.

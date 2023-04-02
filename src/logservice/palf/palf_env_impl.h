@@ -22,6 +22,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
 #include "share/ob_occam_timer.h"
+#include "share/scn.h"
 #include "fetch_log_engine.h"
 #include "log_loop_thread.h"
 #include "log_define.h"
@@ -32,11 +33,12 @@
 #include "palf_handle_impl.h"
 #include "log_io_worker.h"
 #include "block_gc_timer_task.h"
+#include "log_updater.h"
 namespace oceanbase
 {
 namespace common
 {
-class ObILogAllocator;
+class ObILogAllocatr;
 }
 namespace rpc
 {
@@ -50,14 +52,13 @@ namespace palf
 class IPalfHandleImpl;
 class PalfHandleImpl;
 class PalfHandle;
-struct PalfHandleImplGuard;
 class ILogBlockPool;
 
 class PalfHandleImplFactory
 {
 public:
   static PalfHandleImpl *alloc();
-  static void free(PalfHandleImpl *palf_handle_impl);
+  static void free(IPalfHandleImpl *palf_handle_impl);
 };
 
 class PalfHandleImplAlloc
@@ -65,28 +66,13 @@ class PalfHandleImplAlloc
 public:
   typedef common::LinkHashNode<LSKey> Node;
 
-  static PalfHandleImpl *alloc_value()
-  {
-    return NULL;
-  }
+  static PalfHandleImpl *alloc_value();
 
-  static void free_value(PalfHandleImpl *palf_handle_impl)
-  {
-    PalfHandleImplFactory::free(palf_handle_impl);
-    palf_handle_impl = NULL;
-  }
+  static void free_value(IPalfHandleImpl *palf_handle_impl);
 
-  static Node *alloc_node(PalfHandleImpl *palf_handle_impl)
-  {
-    UNUSED(palf_handle_impl);
-    return op_reclaim_alloc(Node);
-  }
+  static Node *alloc_node(IPalfHandleImpl *palf_handle_impl);
 
-  static void free_node(Node *node)
-  {
-    op_reclaim_free(node);
-    node = NULL;
-  }
+  static void free_node(Node *node);
 };
 
 class PalfDiskOptionsWrapper {
@@ -98,7 +84,10 @@ public:
     MAX_STATUS = 3
   };
 
-  PalfDiskOptionsWrapper() : disk_opts_for_stopping_writing_(), disk_opts_for_recycling_blocks_(), status_(Status::INVALID_STATUS) {}
+  PalfDiskOptionsWrapper() : disk_opts_for_stopping_writing_(),
+                             disk_opts_for_recycling_blocks_(),
+                             status_(Status::INVALID_STATUS),
+                             disk_opts_lock_(common::ObLatchIds::PALF_ENV_LOCK) {}
   ~PalfDiskOptionsWrapper() { reset(); }
 
   int init(const PalfDiskOptions &disk_opts);
@@ -147,18 +136,50 @@ private:
   mutable ObSpinLock disk_opts_lock_;
 };
 
-typedef common::ObLinkHashMap<LSKey, PalfHandleImpl, PalfHandleImplAlloc> PalfHandleImplMap;
+typedef common::ObLinkHashMap<LSKey, IPalfHandleImpl, PalfHandleImplAlloc> PalfHandleImplMap;
+
+class IPalfHandleImplGuard;
+class IPalfEnvImpl
+{
+public:
+  IPalfEnvImpl() {}
+  virtual ~IPalfEnvImpl() {}
+public:
+  virtual int get_palf_handle_impl(const int64_t palf_id,
+                                   IPalfHandleImplGuard &palf_handle_impl) = 0;
+  virtual int get_palf_handle_impl(const int64_t palf_id,
+                                   IPalfHandleImpl *&palf_handle_impl) = 0;
+  virtual int create_palf_handle_impl(const int64_t palf_id,
+                                      const AccessMode &access_mode,
+                                      const PalfBaseInfo &base_info,
+                                      IPalfHandleImpl *&palf_handle_impl) = 0;
+  virtual int remove_palf_handle_impl(const int64_t palf_id) = 0;
+  virtual void revert_palf_handle_impl(IPalfHandleImpl *palf_handle_impl) = 0;
+  virtual common::ObILogAllocator *get_log_allocator() = 0;
+  virtual int for_each(const common::ObFunction<int(IPalfHandleImpl *ipalf_handle_impl)> &func) = 0;
+  virtual int create_directory(const char *base_dir) = 0;
+  virtual int remove_directory(const char *base_dir) = 0;
+  virtual bool check_disk_space_enough() = 0;
+  virtual int get_io_start_time(int64_t &last_working_time) = 0;
+  virtual int64_t get_tenant_id() = 0;
+  // should be removed in version 4.2.0.0
+  virtual int update_replayable_point(const SCN &replayable_scn) = 0;
+  VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
+
+};
 
 // 日志服务的容器类，同时管理logservice对象的生命周期
-class PalfEnvImpl
+class PalfEnvImpl : public IPalfEnvImpl
 {
 public:
   PalfEnvImpl();
   virtual ~PalfEnvImpl();
 public:
-  int init(const PalfDiskOptions &disk_options,
+  int init(const PalfOptions &options,
            const char *base_dir,
            const common::ObAddr &self,
+           const int64_t cluster_id,
+           const int64_t tenant_id,
            rpc::frame::ObReqTransport *transport,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool);
@@ -174,17 +195,7 @@ public:
   void wait();
   void destroy();
 public:
-  // 新建日志流
-  //
-  // @param [in] palf_id，待创建日志流的标识符
-  // @param [out] palf_handle_impl，创建成功后生成的palf_handle_impl对象
-  //                           在不再使用palf_handle_impl对象时，需要调用者执行revert_palf_handle_impl
-  //
-  // @return :TODO
-  int create_palf_handle_impl(const int64_t palf_id,
-                              const AccessMode &access_mode,
-                              PalfHandleImpl *&palf_handle_impl);
-  // 创建迁移目的端的接口
+  // 创建日志流接口
   // @param [in] palf_id，待创建日志流的标识符
   // @param [in] palf_base_info，palf的日志起点信息
   // @param [out] palf_handle_impl，创建成功后生成的palf_handle_impl对象
@@ -192,36 +203,37 @@ public:
   int create_palf_handle_impl(const int64_t palf_id,
                               const AccessMode &access_mode,
                               const PalfBaseInfo &palf_base_info,
-                              PalfHandleImpl *&palf_handle_impl);
+                              IPalfHandleImpl *&palf_handle_impl) override final;
   // 删除日志流, 由Garbage Collector调用
   //
   // @param [in] palf_id，删除的日志流标识符
   //
   // @return :TODO
-  int remove_palf_handle_impl(const int64_t palf_id);
+  int remove_palf_handle_impl(const int64_t palf_id) override final;
   int get_palf_handle_impl(const int64_t palf_id,
-                           PalfHandleImpl *&palf_handle_impl);
+                           IPalfHandleImpl *&palf_handle_impl) override final;
   int get_palf_handle_impl(const int64_t palf_id,
-                           PalfHandleImplGuard &palf_handle_impl_guard);
-  void revert_palf_handle_impl(PalfHandleImpl *palf_handle_impl);
-  int try_switch_state_for_all();
-  int check_and_switch_freeze_mode();
-  int try_freeze_log_for_all();
-  // =================== memory space management ==================
-  bool check_tenant_memory_enough();
+                           IPalfHandleImplGuard &guard) override final;
+  void revert_palf_handle_impl(IPalfHandleImpl *palf_handle_impl) override final;
+
   // =================== disk space management ==================
   int try_recycle_blocks();
-  bool check_disk_space_enough();
+  bool check_disk_space_enough() override final;
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
-  int update_disk_options(const PalfDiskOptions &disk_options);
-  int get_disk_options(PalfDiskOptions &disk_options);
+  int update_options(const PalfOptions &options);
+  int get_options(PalfOptions &options);
   int for_each(const common::ObFunction<int(const PalfHandle&)> &func);
-  common::ObILogAllocator* get_log_allocator();
-  TO_STRING_KV(K_(self), K_(log_dir), K_(disk_options_wrapper));
+  int for_each(const common::ObFunction<int(IPalfHandleImpl *ipalf_handle_impl)> &func) override final;
+  common::ObILogAllocator* get_log_allocator() override final;
+  int get_io_start_time(int64_t &last_working_time) override final;
+  int64_t get_tenant_id() override final;
+  int update_replayable_point(const SCN &replayable_scn) override final;
+  INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
+      KPC(log_alloc_mgr_));
   // =================== disk space management ==================
 public:
-  int create_directory(const char *base_dir);
-  int remove_directory(const char *base_dir);
+  int create_directory(const char *base_dir) override final;
+  int remove_directory(const char *base_dir) override final;
 
 private:
   class ReloadPalfHandleImplFunctor : public ObBaseDirFunctor
@@ -233,55 +245,45 @@ private:
     PalfEnvImpl *palf_env_impl_;
   };
   int reload_palf_handle_impl_(const int64_t palf_id);
-  class SwitchStateFunctor
-  {
-  public:
-    SwitchStateFunctor() {}
-    ~SwitchStateFunctor() {}
-    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
-  };
-  class FreezeLogFunctor
-  {
-  public:
-    FreezeLogFunctor() {}
-    ~FreezeLogFunctor() {}
-    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
-  };
-  class CheckFreezeModeFunctor
-  {
-  public:
-    CheckFreezeModeFunctor() {}
-    ~CheckFreezeModeFunctor() {}
-    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
-  };
+
   struct LogGetRecycableFileCandidate {
     LogGetRecycableFileCandidate();
     ~LogGetRecycableFileCandidate();
-    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
+    bool operator() (const LSKey &palf_id, IPalfHandleImpl *palf_handle_impl);
     int64_t id_;
     block_id_t min_block_id_;
-    int64_t min_block_max_ts_;
+    share::SCN min_block_max_scn_;
     block_id_t min_using_block_id_;
     int64_t oldest_palf_id_;
-    int64_t oldest_block_ts_;
+    share::SCN oldest_block_scn_;
     int ret_code_;
-    TO_STRING_KV(K_(id), K_(min_block_max_ts), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_ts), K_(ret_code));
+    TO_STRING_KV(K_(id), K_(min_block_max_scn), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_scn), K_(ret_code));
   };
   struct GetTotalUsedDiskSpace
   {
     GetTotalUsedDiskSpace();
     ~GetTotalUsedDiskSpace();
-    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
+    bool operator() (const LSKey &palf_id, IPalfHandleImpl *palf_handle_impl);
     TO_STRING_KV(K_(total_used_disk_space), K_(ret_code));
     int64_t total_used_disk_space_;
     int64_t maximum_used_size_;
     int64_t palf_id_;
     int ret_code_;
   };
+  struct RemoveStaleIncompletePalfFunctor : public ObBaseDirFunctor {
+    RemoveStaleIncompletePalfFunctor(PalfEnvImpl *palf_env_impl);
+    ~RemoveStaleIncompletePalfFunctor();
+    int func(const dirent *entry) override;
+    PalfEnvImpl *palf_env_impl_;
+  };
 
 private:
+  int create_palf_handle_impl_(const int64_t palf_id,
+                               const AccessMode &access_mode,
+                               const PalfBaseInfo &palf_base_info,
+                               const LogReplicaType replica_type,
+                               IPalfHandleImpl *&palf_handle_impl);
   int scan_all_palf_handle_impl_director_();
-  void update_disk_options_guarded_by_lock_(const PalfDiskOptions &disk_options);
   const PalfDiskOptions &get_disk_options_guarded_by_lock_() const;
   int get_total_used_disk_space_(int64_t &total_used_disk_space,
                                  int64_t &palf_id,
@@ -290,10 +292,15 @@ private:
   int get_disk_usage_(int64_t &used_size_byte,
                       int64_t &palf_id,
                       int64_t &maximum_used_size);
-  int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, int64_t &oldest_ts);
+  int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, share::SCN &oldest_scn);
   int wait_until_reference_count_to_zero_(const int64_t palf_id);
   // check the diskspace whether is enough to hold a new palf instance.
   bool check_can_create_palf_handle_impl_() const;
+  int remove_palf_handle_impl_from_map_not_guarded_by_lock_(const int64_t palf_id);
+  int move_incomplete_palf_into_tmp_dir_(const int64_t palf_id);
+  int check_tmp_log_dir_exist_(bool &exist) const;
+  int remove_stale_incomplete_palf_();
+
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -307,11 +314,13 @@ private:
   common::ObOccamTimer election_timer_;
   LogIOWorker log_io_worker_;
   BlockGCTimerTask block_gc_timer_task_;
+  LogUpdater log_updater_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
   int64_t check_disk_print_log_interval_;
 
   char log_dir_[common::MAX_PATH_SIZE];
+  char tmp_log_dir_[common::MAX_PATH_SIZE];
   common::ObAddr self_;
 
   PalfHandleImplMap palf_handle_impl_map_;
@@ -322,6 +331,7 @@ private:
 
   LogIOWorkerConfig log_io_worker_config_;
   bool diskspace_enough_;
+  int64_t tenant_id_;
   bool is_inited_;
   bool is_running_;
 private:

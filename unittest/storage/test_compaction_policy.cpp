@@ -32,6 +32,7 @@
 #include "storage/test_dml_common.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "share/scn.h"
 
 
 namespace oceanbase
@@ -41,6 +42,7 @@ using namespace storage;
 using namespace blocksstable;
 using namespace memtable;
 using namespace share::schema;
+using namespace share;
 using namespace compaction;
 
 namespace memtable
@@ -104,6 +106,15 @@ public:
     common::ObIArray<ObTenantFreezeInfoMgr::FreezeInfo> &freeze_infos,
     common::ObIArray<share::ObSnapshotInfo> &snapshots);
 
+  void prepare_schema(share::schema::ObTableSchema &table_schema);
+  int prepare_medium_list(
+      const char *snapshot_list,
+      ObTabletHandle &tablet_handle);
+  int construct_array(
+      const char *snapshot_list,
+      ObIArray<int64_t> &array);
+  int check_result_tables_handle(const char *end_log_ts_list, const ObGetMergeTablesResult &result);
+
 public:
   TestCompactionPolicy();
   ~TestCompactionPolicy() = default;
@@ -127,6 +138,9 @@ public:
   ObSEArray<ObTableHandleV2, 4> major_tables_;
   ObSEArray<ObTableHandleV2, 4> minor_tables_;
   ObSEArray<ObTableHandleV2, 4> memtables_;
+  ObMediumCompactionInfo medium_info_;
+  ObSEArray<int64_t, 10> array_;
+  ObArenaAllocator allocator_;
 };
 
 TestCompactionPolicy::TestCompactionPolicy()
@@ -149,6 +163,15 @@ void TestCompactionPolicy::SetUp()
   t3m->destroy();
   ret = t3m->init();
   ASSERT_EQ(OB_SUCCESS, ret);
+
+  share::schema::ObTableSchema table_schema;
+  prepare_schema(table_schema);
+
+  medium_info_.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
+  medium_info_.medium_snapshot_ = 100;
+  medium_info_.data_version_ = 100;
+
+  medium_info_.storage_schema_.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL);
 }
 
 void TestCompactionPolicy::TearDown()
@@ -225,8 +248,8 @@ void TestCompactionPolicy::generate_table_key(
     table_key.version_range_.base_version_ = start_scn;
     table_key.version_range_.snapshot_version_ = end_scn;
   } else {
-    table_key.log_ts_range_.start_log_ts_ = start_scn;
-    table_key.log_ts_range_.end_log_ts_ = end_scn;
+    table_key.scn_range_.start_scn_.convert_for_tx(start_scn);
+    table_key.scn_range_.end_scn_.convert_for_tx(end_scn);
   }
 }
 
@@ -280,9 +303,17 @@ int TestCompactionPolicy::mock_memtable(
   ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(tablet.memtable_mgr_);
 
   ObITable::TableKey table_key;
-  int64_t end_border = (end_scn == 0) ? INT64_MAX : end_scn;
+  int64_t end_border = -1;
+  if (0 == end_scn || INT64_MAX == end_scn) {
+    end_border = OB_MAX_SCN_TS_NS;
+  } else {
+    end_border = end_scn;
+  }
+
   generate_table_key(ObITable::DATA_MEMTABLE, start_scn, end_border, table_key);
   ObMemtable *memtable = nullptr;
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = nullptr;
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
   if (OB_FAIL(t3m->acquire_memtable(table_handle))) {
@@ -290,15 +321,21 @@ int TestCompactionPolicy::mock_memtable(
   } else if (OB_ISNULL(memtable = static_cast<ObMemtable*>(table_handle.get_table()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get memtable", K(ret));
-  } else if (OB_FAIL(memtable->init(table_key, mt_mgr->ls_, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(ls_svr->get_ls(mt_mgr->ls_->get_ls_id(), ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD))) {
+    LOG_WARN("failed to get ls handle", K(ret));
+  } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
     LOG_WARN("failed to init memtable", K(ret));
   } else if (OB_FAIL(mt_mgr->add_memtable_(table_handle))) {
     LOG_WARN("failed to add memtable to mgr", K(ret));
-  } else if (OB_FAIL(memtable->add_to_data_checkpoint(mt_mgr->freezer_->get_data_checkpoint()))) {
+  } else if (OB_FAIL(memtable->add_to_data_checkpoint(mt_mgr->freezer_->get_ls_data_checkpoint()))) {
     LOG_WARN("add to data_checkpoint failed", K(ret), KPC(memtable));
     mt_mgr->clean_tail_memtable_();
-  } else if (INT64_MAX != end_border) { // frozen memtable
-    memtable->snapshot_version_ = snapshot_version;
+  } else if (OB_MAX_SCN_TS_NS != end_border) { // frozen memtable
+    SCN snapshot_scn;
+    snapshot_scn.convert_for_tx(snapshot_version);
+    memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
     memtable->unsynced_cnt_ = 0;
     memtable->is_tablet_freeze_ = true;
@@ -348,12 +385,70 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->init(ls_id, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
-      0, snapshot_version, table_schema, compat_mode, table_store_flag, table_handle, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, table_handle, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {
-    tablet->tablet_meta_.clog_checkpoint_ts_ = clog_checkpoint_ts;
+    tablet->tablet_meta_.clog_checkpoint_scn_.convert_for_logservice(clog_checkpoint_ts);
     tablet->tablet_meta_.snapshot_version_ = snapshot_version;
+  }
+  return ret;
+}
+
+int TestCompactionPolicy::construct_array(
+    const char *snapshot_list,
+    ObIArray<int64_t> &array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(snapshot_list)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(snapshot_list));
+  } else {
+    array.reset();
+    std::string copy(snapshot_list);
+    char *org = const_cast<char *>(copy.c_str());
+    static const char *delim = " ";
+    char *s = std::strtok(org, delim);
+    if (NULL != s) {
+      array.push_back(atoi(s));
+      while (NULL != (s= strtok(NULL, delim))) {
+        array.push_back(atoi(s));
+      }
+    }
+  }
+  return ret;
+}
+
+int TestCompactionPolicy::prepare_medium_list(
+    const char *snapshot_list,
+    ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet &tablet = *tablet_handle.get_obj();
+  construct_array(snapshot_list, array_);
+  tablet.medium_info_list_.reset_list();
+  for (int i = 0; OB_SUCC(ret) && i < array_.count(); ++i) {
+    medium_info_.medium_snapshot_ = array_.at(i);
+    ret = tablet.medium_info_list_.add_medium_compaction_info(medium_info_);
+  }
+  return ret;
+}
+
+int TestCompactionPolicy::check_result_tables_handle(
+    const char *end_log_ts_list,
+    const ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  construct_array(end_log_ts_list, array_);
+  if (array_.count() != result.handle_.get_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "table count is not equal", K(ret), K(array_), K(result.handle_));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < array_.count(); ++i) {
+    if (array_.at(i) != result.handle_.get_table(i)->get_end_scn().get_val_for_tx()) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "table is not equal", K(ret), K(i), K(array_.at(i)), KPC(result.handle_.get_table(i)));
+    }
   }
   return ret;
 }
@@ -526,15 +621,87 @@ int TestCompactionPolicy::prepare_freeze_info(
   int ret = OB_SUCCESS;
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   bool changed = false;
+  int64_t min_major_snapshot = INT64_MAX;
+
   if (OB_ISNULL(mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mgr is unexpected null", K(ret));
-  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts, freeze_infos, snapshots, INT64_MAX, changed))) {
+  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts,
+                                      freeze_infos,
+                                      snapshots,
+                                      min_major_snapshot,
+                                      changed))) {
     LOG_WARN("failed to update info", K(ret));
   }
   return ret;
 }
 
+class FakeLS : public storage::ObLS
+{
+public:
+  FakeLS() {
+    ls_meta_.tenant_id_ = 1001;
+    ls_meta_.ls_id_ = ObLSID(100);
+  }
+  int64_t get_min_reserved_snapshot() { return 10; }
+};
+
+
+static const int64_t TENANT_ID = 1;
+static const int64_t TABLE_ID = 7777;
+static const int64_t TEST_ROWKEY_COLUMN_CNT = 3;
+static const int64_t TEST_COLUMN_CNT = 6;
+
+void TestCompactionPolicy::prepare_schema(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t micro_block_size = 16 * 1024;
+  const uint64_t tenant_id = TENANT_ID;
+  const uint64_t table_id = TABLE_ID;
+  share::schema::ObColumnSchemaV2 column;
+
+  //generate data table schema
+  table_schema.reset();
+  ret = table_schema.set_table_name("test_merge_multi_version");
+  ASSERT_EQ(OB_SUCCESS, ret);
+  table_schema.set_tenant_id(tenant_id);
+  table_schema.set_tablegroup_id(1);
+  table_schema.set_database_id(1);
+  table_schema.set_table_id(table_id);
+  table_schema.set_rowkey_column_num(TEST_ROWKEY_COLUMN_CNT);
+  table_schema.set_max_used_column_id(TEST_COLUMN_CNT);
+  table_schema.set_block_size(micro_block_size);
+  table_schema.set_compress_func_name("none");
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  //init column
+  char name[OB_MAX_FILE_NAME_LENGTH];
+  memset(name, 0, sizeof(name));
+  const int64_t column_ids[] = {16,17,20,21,22,23,24,29};
+  for(int64_t i = 0; i < TEST_COLUMN_CNT; ++i){
+    ObObjType obj_type = ObIntType;
+    const int64_t column_id = column_ids[i];
+
+    if (i == 1) {
+      obj_type = ObVarcharType;
+    }
+    column.reset();
+    column.set_table_id(table_id);
+    column.set_column_id(column_id);
+    sprintf(name, "test%020ld", i);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+    column.set_data_type(obj_type);
+    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    column.set_data_length(10);
+    if (i < TEST_ROWKEY_COLUMN_CNT) {
+      column.set_rowkey_position(i + 1);
+    } else {
+      column.set_rowkey_position(0);
+    }
+    COMMON_LOG(INFO, "add column", K(i), K(column));
+    ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column));
+  }
+  COMMON_LOG(INFO, "dump stable schema", LITERAL_K(TEST_ROWKEY_COLUMN_CNT), K(table_schema));
+}
 
 TEST_F(TestCompactionPolicy, basic_create_sstable)
 {
@@ -708,12 +875,13 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   ret = prepare_tablet(key_data, 150, 150);
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  FakeLS ls;
   ObGetMergeTablesParam param;
   param.merge_type_ = ObMergeType::MINI_MERGE;
   ObGetMergeTablesResult result;
-  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_ts_ = 300;
+  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_tx(300);
   tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
-  ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  ret = ObPartitionMergePolicy::get_mini_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
   ASSERT_EQ(result.update_tablet_directly_, false);
 }
@@ -744,9 +912,10 @@ TEST_F(TestCompactionPolicy, check_minor_merge_basic)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINI_MINOR_MERGE;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
   ObGetMergeTablesResult result;
-  ret = ObPartitionMergePolicy::get_mini_minor_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(5, result.handle_.get_count());
 }
@@ -780,9 +949,10 @@ TEST_F(TestCompactionPolicy, check_no_need_minor_merge)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObGetMergeTablesParam param;
-  param.merge_type_ = ObMergeType::MINI_MINOR_MERGE;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
   ObGetMergeTablesResult result;
-  ret = ObPartitionMergePolicy::get_mini_minor_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 }
 
@@ -814,9 +984,10 @@ TEST_F(TestCompactionPolicy, check_major_merge_basic)
 
   ObGetMergeTablesParam param;
   param.merge_type_ = ObMergeType::MAJOR_MERGE;
-  param.merge_version_ = 340;
+  param.merge_version_ = 350;
   ObGetMergeTablesResult result;
-  ret = ObPartitionMergePolicy::get_major_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_medium_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(6, result.handle_.get_count());
 }
@@ -851,10 +1022,58 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
   param.merge_type_ = ObMergeType::MAJOR_MERGE;
   param.merge_version_ = 340;
   ObGetMergeTablesResult result;
-  ret = ObPartitionMergePolicy::get_major_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  FakeLS ls;
+  ret = ObPartitionMergePolicy::get_medium_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
 }
 
+TEST_F(TestCompactionPolicy, test_minor_with_medium)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
+  common::ObArray<share::ObSnapshotInfo> snapshots;
+  share::SCN scn;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(140, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+      "10            0            1          1          1        \n"
+      "11            150          200        200        200      \n"
+      "11            200          250        250        250      \n"
+      "11            250          300        300        300      \n"
+      "11            300          340        340        340      \n";
+
+  ret = prepare_tablet(key_data, 340, 340);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObGetMergeTablesParam param;
+  param.merge_type_ = ObMergeType::MINOR_MERGE;
+  param.merge_version_ = 0;
+  ObGetMergeTablesResult result;
+  FakeLS ls;
+
+  prepare_medium_list("240", tablet_handle_);
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, check_result_tables_handle("250, 300, 340", result));
+
+  prepare_medium_list("150", tablet_handle_);
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, check_result_tables_handle("200, 250, 300, 340", result));
+
+  prepare_medium_list("300", tablet_handle_);
+  ret = ObPartitionMergePolicy::get_minor_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+
+}
 
 } //unittest
 } //oceanbase

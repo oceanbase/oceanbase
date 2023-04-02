@@ -66,7 +66,7 @@ private:
   int64_t try_wait_gts_elapse_cnt_;
 };
 
-class ObGtsSource : public ObITsSource
+class ObGtsSource
 {
 public:
   ObGtsSource() : log_interval_(3 * 1000 * 1000), refresh_location_interval_(100 * 1000) { reset(); }
@@ -90,8 +90,6 @@ public:
   int wait_gts_elapse(const int64_t ts, ObTsCbTask *task, bool &need_wait);
   int wait_gts_elapse(const int64_t ts);
   int refresh_gts(const bool need_refresh);
-  int update_base_ts(const int64_t base_ts);
-  int get_base_ts(int64_t &base_ts);
   bool is_external_consistent() { return true; }
   int refresh_gts_location() { return refresh_gts_location_(); }
   TO_STRING_KV(K_(tenant_id), K_(gts_local_cache), K_(server), K_(gts_cache_leader));

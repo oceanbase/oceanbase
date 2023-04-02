@@ -210,7 +210,7 @@ SELECT c1, c2 FROM (
   (SELECT c1, c2 FROM ts2 ORDER BY c2 DESC, c1 LIMIT 1)
 ) AS res order by 1,2;
 
-# bug: https://work.aone.alibaba-inc.com/issue/21382678
+# bug:
 
 --disable_warnings
 DROP TABLE IF EXISTS T1, T2, T3;

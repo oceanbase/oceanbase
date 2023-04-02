@@ -17,6 +17,7 @@
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/tablet/ob_tablet.h"
 
 
 using namespace oceanbase;
@@ -215,7 +216,7 @@ bool ObLSCompleteMigrationDagNet::operator == (const ObIDagNet &other) const
   } else {
     const ObLSCompleteMigrationDagNet &other_dag_net = static_cast<const ObLSCompleteMigrationDagNet &>(other);
     if (!is_valid() || !other_dag_net.is_valid()) {
-      LOG_ERROR("ls complete migration dag net is invalid", K(*this), K(other));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls complete migration dag net is invalid", K(*this), K(other));
       is_same = false;
     } else if (ctx_.arg_.ls_id_ != other_dag_net.get_ls_id()) {
       is_same = false;
@@ -230,7 +231,7 @@ int64_t ObLSCompleteMigrationDagNet::hash() const
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_ERROR("ls complete migration ctx is NULL", K(tmp_ret), K(ctx_));
+    LOG_ERROR_RET(tmp_ret, "ls complete migration ctx is NULL", K(tmp_ret), K(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_.arg_.ls_id_, sizeof(ctx_.arg_.ls_id_), hash_value);
   }
@@ -415,7 +416,7 @@ bool ObCompleteMigrationDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ha_dag_net_ctx_) || OB_ISNULL(ha_dag.get_ha_dag_net_ctx())) {
       is_same = false;
-      LOG_ERROR("complete migration ctx should not be NULL", KP(ha_dag_net_ctx_), KP(ha_dag.get_ha_dag_net_ctx()));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "complete migration ctx should not be NULL", KP(ha_dag_net_ctx_), KP(ha_dag.get_ha_dag_net_ctx()));
     } else if (ha_dag_net_ctx_->get_dag_net_ctx_type() != ha_dag.get_ha_dag_net_ctx()->get_dag_net_ctx_type()) {
       is_same = false;
     } else {
@@ -820,8 +821,8 @@ ObStartCompleteMigrationTask::ObStartCompleteMigrationTask()
     is_inited_(false),
     ls_handle_(),
     ctx_(nullptr),
-    log_sync_scn_(0),
-    max_minor_end_scn_(0)
+    log_sync_scn_(SCN::min_scn()),
+    max_minor_end_scn_(SCN::min_scn())
 {
 }
 
@@ -903,8 +904,8 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
   bool is_log_sync = false;
   bool is_need_rebuild = false;
   bool is_cancel = false;
-  int64_t last_end_log_ts_ns = 0;
-  int64_t current_end_log_ts_ns = 0;
+  SCN last_end_scn;
+  SCN current_end_scn;
   const int64_t OB_CHECK_LOG_SYNC_INTERVAL = 200 * 1000; // 200ms
   const int64_t CLOG_IN_SYNC_DELAY_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min
   bool need_wait = true;
@@ -941,8 +942,8 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
 
       if (OB_FAIL(ret)) {
       } else if (is_log_sync) {
-        if (OB_FAIL(ls->get_end_ts_ns(log_sync_scn_))) {
-          LOG_WARN("failed to get end ts ns", K(ret), KPC(ctx_));
+        if (OB_FAIL(ls->get_end_scn(log_sync_scn_))) {
+          LOG_WARN("failed to get end scn", K(ret), KPC(ctx_));
         } else {
           const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
           LOG_INFO("log is sync, stop wait_log_sync", "arg", ctx_->arg_, K(cost_ts));
@@ -951,15 +952,15 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         ret = OB_LOG_NOT_SYNC;
         LOG_WARN("log is not sync", K(ret), KPC(ctx_), K(cost_ts));
-      } else if (OB_FAIL(ls->get_end_ts_ns(current_end_log_ts_ns))) {
-        LOG_WARN("failed to get end ts ns", K(ret), KPC(ctx_));
+      } else if (OB_FAIL(ls->get_end_scn(current_end_scn))) {
+        LOG_WARN("failed to get end scn", K(ret), KPC(ctx_));
       } else {
         bool is_timeout = false;
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("log is not sync, retry next loop", "arg", ctx_->arg_);
         }
 
-        if (current_end_log_ts_ns == last_end_log_ts_ns) {
+        if (current_end_scn == last_end_scn) {
           const int64_t current_ts = ObTimeUtility::current_time();
           if ((current_ts - last_wait_replay_ts) > CLOG_IN_SYNC_DELAY_TIMEOUT) {
             is_timeout = true;
@@ -972,14 +973,14 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
               ret = OB_LOG_NOT_SYNC;
               STORAGE_LOG(WARN, "failed to check log replay sync. timeout, stop migration task",
                   K(ret), K(*ctx_), K(CLOG_IN_SYNC_DELAY_TIMEOUT), K(wait_replay_start_ts),
-                  K(current_ts), K(current_end_log_ts_ns));
+                  K(current_ts), K(current_end_scn));
             }
           }
-        } else if (last_end_log_ts_ns > current_end_log_ts_ns) {
+        } else if (last_end_scn > current_end_scn) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("last end log ts should not smaller than current end log ts", K(ret), K(last_end_log_ts_ns), K(current_end_log_ts_ns));
+          LOG_WARN("last end log ts should not smaller than current end log ts", K(ret), K(last_end_scn), K(current_end_scn));
         } else {
-          last_end_log_ts_ns = current_end_log_ts_ns;
+          last_end_scn = current_end_scn;
           last_wait_replay_ts = ObTimeUtility::current_time();
         }
 
@@ -1004,8 +1005,8 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
   logservice::ObLogService *log_service = nullptr;
   bool wait_log_replay_success = false;
   bool is_cancel = false;
-  int64_t current_replay_log_ts_ns = 0;
-  int64_t last_replay_log_ts_ns = 0;
+  SCN current_replay_scn;
+  SCN last_replay_scn;
   const int64_t OB_CHECK_LOG_REPLAY_INTERVAL = 200 * 1000; // 200ms
   const int64_t CLOG_IN_REPLAY_DELAY_TIMEOUT = 30 * 60 * 1000 * 1000L; // 30 min
   bool need_wait = false;
@@ -1036,9 +1037,9 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
-      } else if (OB_FAIL(ls->get_max_decided_log_ts_ns(current_replay_log_ts_ns))) {
+      } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
-      } else if (current_replay_log_ts_ns + IS_REPLAY_DONE_THRESHOLD_NS >= log_sync_scn_) {
+      } else if (current_replay_scn.convert_to_ts() + IS_REPLAY_DONE_THRESHOLD_US >= log_sync_scn_.convert_to_ts()) {
         wait_log_replay_success = true;
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
@@ -1047,11 +1048,11 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
         bool is_timeout = false;
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("replay log is not sync, retry next loop", "arg", ctx_->arg_,
-              "current_replay_log_ts_ns", current_replay_log_ts_ns,
+              "current_replay_scn", current_replay_scn,
               "log_sync_scn", log_sync_scn_);
         }
 
-        if (current_replay_log_ts_ns == last_replay_log_ts_ns) {
+        if (current_replay_scn == last_replay_scn) {
           if (current_ts - last_replay_ts > CLOG_IN_REPLAY_DELAY_TIMEOUT) {
             is_timeout = true;
           }
@@ -1062,15 +1063,15 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
               ret = OB_WAIT_REPLAY_TIMEOUT;
               STORAGE_LOG(WARN, "failed to check log replay sync. timeout, stop migration task",
                   K(ret), K(*ctx_), K(CLOG_IN_REPLAY_DELAY_TIMEOUT), K(wait_replay_start_ts),
-                  K(current_ts), K(current_replay_log_ts_ns));
+                  K(current_ts), K(current_replay_scn));
             }
           }
-        } else if (last_replay_log_ts_ns > current_replay_log_ts_ns) {
+        } else if (last_replay_scn > current_replay_scn) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("last end log ts should not smaller than current end log ts", K(ret),
-              K(last_replay_log_ts_ns), K(current_replay_log_ts_ns));
+              K(last_replay_scn), K(current_replay_scn));
         } else {
-          last_replay_log_ts_ns = current_replay_log_ts_ns;
+          last_replay_scn = current_replay_scn;
           last_replay_ts = current_ts;
         }
 
@@ -1183,7 +1184,6 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
-  int64_t rebuild_seq = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1193,7 +1193,7 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->set_migration_status(hold_status, rebuild_seq))) {
+  } else if (OB_FAIL(ls->set_migration_status(hold_status, ctx_->rebuild_seq_))) {
     LOG_WARN("failed to set migration status", K(ret), KPC(ls));
   } else {
 #ifdef ERRSIM
@@ -1291,9 +1291,9 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
           || !tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
         ObSSTableArray &minor_sstables = tablet->get_table_store().get_minor_sstables();
         if (minor_sstables.empty()) {
-          max_minor_end_scn_ = MAX(max_minor_end_scn_, tablet->get_tablet_meta().clog_checkpoint_ts_);
+          max_minor_end_scn_ = MAX(max_minor_end_scn_, tablet->get_tablet_meta().clog_checkpoint_scn_);
         } else {
-          max_minor_end_scn_ = MAX(max_minor_end_scn_, minor_sstables.array_[minor_sstables.count() - 1]->get_end_log_ts());
+          max_minor_end_scn_ = MAX(max_minor_end_scn_, minor_sstables.array_[minor_sstables.count() - 1]->get_end_scn());
         }
         break;
       } else {
@@ -1332,7 +1332,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
   ObLS *ls = nullptr;
   bool is_cancel = false;
   bool need_wait = true;
-  int64_t current_replay_log_ts_ns = 0;
+  SCN current_replay_scn = share::SCN::min_scn();
   const int64_t OB_WAIT_LOG_REPLAY_INTERVAL = 200 * 1000; // 200ms
   const int64_t OB_WAIT_LOG_REPLAY_TIMEOUT = 30 * 60 * 1000 * 1000L; // 30 min
 
@@ -1362,12 +1362,12 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
-      } else if (OB_FAIL(ls->get_max_decided_log_ts_ns(current_replay_log_ts_ns))) {
+      } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
-      } else if (current_replay_log_ts_ns >= max_minor_end_scn_) {
+      } else if (current_replay_scn >= max_minor_end_scn_) {
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts push to max minor end scn success, stop wait", "arg", ctx_->arg_,
-            K(cost_ts), K(max_minor_end_scn_), K(current_replay_log_ts_ns));
+            K(cost_ts), K(max_minor_end_scn_), K(current_replay_scn));
         break;
       } else {
         const int64_t current_ts = ObTimeUtility::current_time();
@@ -1384,8 +1384,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
           } else {
             ret = OB_WAIT_REPLAY_TIMEOUT;
             STORAGE_LOG(WARN, "failed to wait replay to max minor end scn, timeout, stop migration task",
-                K(ret), K(*ctx_), K(current_ts),
-                K(wait_replay_start_ts));
+                K(ret), K(*ctx_), K(current_ts), K(wait_replay_start_ts));
           }
         }
 
@@ -1652,7 +1651,7 @@ int ObFinishCompleteMigrationTask::try_enable_vote_()
 
   #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_MIGRATION_ENABLE_VOTE_FAILED) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_MIGRATION_ENABLE_VOTE_FAILED) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "fake EN_MIGRATION_ENABLE_VOTE_FAILED", K(ret));
       }
@@ -1669,7 +1668,7 @@ int ObFinishCompleteMigrationTask::try_enable_vote_()
       LOG_INFO("succeed enable vote", KPC(ctx_));
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {
-        ret = E(EventTable::EN_MIGRATION_ENABLE_VOTE_RETRY) OB_SUCCESS;
+        ret = OB_E(EventTable::EN_MIGRATION_ENABLE_VOTE_RETRY) OB_SUCCESS;
         if (OB_FAIL(ret)) {
           STORAGE_LOG(ERROR, "fake EN_MIGRATION_ENABLE_VOTE_RETRY", K(ret));
         }

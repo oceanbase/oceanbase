@@ -14,6 +14,7 @@
 #include "observer/virtual_table/ob_all_virtual_memstore_info.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
@@ -50,6 +51,7 @@ void ObAllVirtualMemstoreInfo::reset()
   tables_handle_.reset();
   memtable_array_pos_ = 0;
   memset(freeze_time_dist_, 0, OB_MAX_CHAR_LENGTH);
+  memset(compaction_info_buf_, 0, sizeof(compaction_info_buf_));
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -245,11 +247,11 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
           // start_ts
-          cur_row_.cells_[i].set_uint64(mt->get_key().log_ts_range_.start_log_ts_ < 0 ? 0 : mt->get_key().log_ts_range_.start_log_ts_);
+          cur_row_.cells_[i].set_uint64(mt->get_key().scn_range_.start_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // end_ts
-          cur_row_.cells_[i].set_uint64(mt->get_key().log_ts_range_.end_log_ts_ < 0 ? 0 : mt->get_key().log_ts_range_.end_log_ts_);
+          cur_row_.cells_[i].set_uint64(mt->get_key().scn_range_.end_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // logging_blocked
@@ -338,6 +340,42 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_varchar(freeze_time_dist_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
+        case OB_APP_MIN_COLUMN_ID + 24: {
+          // compaction info list
+          cur_row_.cells_[i].set_varchar("-");
+          if (mt->is_data_memtable()) {
+            if (mt->has_multi_source_data_unit(MultiSourceDataUnitType::MEDIUM_COMPACTION_INFO)) {
+              int64_t pos = 0;
+              compaction::ObMediumCompactionInfo medium_info;
+              ObMultiSourceData::ObIMultiSourceDataUnitList dst_list;
+              if (OB_SUCC(mt->get_multi_source_data_unit_list(&medium_info, dst_list, allocator_))) {
+                int k = 0;
+                DLIST_FOREACH_X(info, dst_list, OB_SUCC(ret)) {
+                  common::databuff_printf(
+                      compaction_info_buf_,
+                      sizeof(compaction_info_buf_),
+                      pos,
+                      "medium%d_%ld,",
+                      k++,
+                      static_cast<const compaction::ObMediumCompactionInfo*>(info)->medium_snapshot_);
+                }
+                if (OB_SUCC(ret)) {
+                  cur_row_.cells_[i].set_varchar(compaction_info_buf_);
+                }
+              }
+
+
+              DLIST_FOREACH_REMOVESAFE_NORET(info, dst_list) {
+                dst_list.remove(info);
+                info->~ObIMultiSourceDataUnit();
+                allocator_->free(info);
+              }
+              COMMON_LOG(DEBUG, "medium_list", K(dst_list), K(cur_row_.cells_[i]));
+            }
+          }
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

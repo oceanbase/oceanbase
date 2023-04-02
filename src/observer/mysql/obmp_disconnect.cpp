@@ -68,7 +68,7 @@ int ObMPDisconnect::run()
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid session mgr", K(GCTX.session_mgr_), K(ret));
     } else {
-      // bugfix: https://k3.alibaba-inc.com/issue/8094220
+      // bugfix:
       (void) kill_unfinished_session(ctx_.sessid_); // ignore ret
       if (OB_FAIL(GCTX.session_mgr_->free_session(ctx_))) {
         LOG_WARN("free session fail", K(ctx_));

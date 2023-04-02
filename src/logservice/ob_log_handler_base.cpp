@@ -24,7 +24,9 @@ ObLogHandlerBase::ObLogHandlerBase() :
   proposal_id_(palf::INVALID_PROPOSAL_ID),
   id_(-1),
   palf_handle_(),
-  palf_env_(NULL)
+  palf_env_(NULL),
+  is_in_stop_state_(true),
+  is_inited_(false)
 {}
 
 int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
@@ -40,7 +42,7 @@ int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
   } else {
     curr_role = role_;
     curr_proposal_id = proposal_id_;
-    PALF_LOG(INFO, "prepare_switch_role success", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
+    PALF_LOG(TRACE, "prepare_switch_role success", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
   }
   return ret;
@@ -60,6 +62,36 @@ int ObLogHandlerBase::change_leader_to(const common::ObAddr &dst_addr)
     PALF_LOG(WARN, "palf change_leader failed", K(ret), K(dst_addr), K(palf_handle_));
   } else {
     PALF_LOG(INFO, "ObLogHandler change_laeder success", K(ret), K(dst_addr), K(palf_handle_));
+  }
+  return ret;
+}
+
+int ObLogHandlerBase::get_role(common::ObRole &role, int64_t &proposal_id) const
+{
+  int ret = OB_SUCCESS;
+  bool is_pending_state = false;
+  int64_t curr_palf_proposal_id;
+  ObRole curr_palf_role;
+  // 获取当前的proposal_id
+  RLockGuard guard(lock_);
+  const int64_t saved_proposal_id = ATOMIC_LOAD(&proposal_id_);
+  const ObRole saved_role = ATOMIC_LOAD(&role_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (FOLLOWER == saved_role) {
+    role = FOLLOWER;
+    proposal_id = saved_proposal_id;
+  } else if (OB_FAIL(palf_handle_.get_role(curr_palf_role, curr_palf_proposal_id, is_pending_state))) {
+    CLOG_LOG(WARN, "get_role failed", K(ret));
+  } else if (curr_palf_proposal_id != saved_proposal_id) {
+    // palf的proposal_id已经发生变化，返回FOLLOWER
+    role = FOLLOWER;
+    proposal_id = saved_proposal_id;
+  } else {
+    role = curr_palf_role;
+    proposal_id = saved_proposal_id;
   }
   return ret;
 }

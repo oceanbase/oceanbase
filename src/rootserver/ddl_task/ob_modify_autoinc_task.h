@@ -64,9 +64,12 @@ public:
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
+  virtual int cleanup_impl() override;
 private:
   int lock_table();
   int unlock_table();
@@ -74,7 +77,6 @@ private:
   int wait_trans_end();
   int fail();
   int success();
-  int cleanup();
   int set_schema_available();
   int check_update_autoinc_end(bool &is_end);
   int check_health();

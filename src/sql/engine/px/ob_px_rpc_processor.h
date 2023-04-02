@@ -96,9 +96,9 @@ public:
   ObFastInitSqcReportQCMessageCall(ObPxSqcMeta *sqc,
       int err,
       int64_t timeout_ts,
-      bool sqc_alive) : sqc_(sqc), err_(err),
+      bool need_set_not_alive) : sqc_(sqc), err_(err),
       need_interrupt_(false), timeout_ts_(timeout_ts),
-      sqc_alive_(sqc_alive)
+      need_set_not_alive_(need_set_not_alive)
   {
     need_interrupt_ = true;
   }
@@ -111,7 +111,7 @@ public:
   int err_;
   bool need_interrupt_;
   int64_t timeout_ts_;
-  bool sqc_alive_;
+  bool need_set_not_alive_;
 };
 
 class ObDealWithRpcTimeoutCall
@@ -120,9 +120,8 @@ public:
   ObDealWithRpcTimeoutCall(common::ObAddr addr,
       ObQueryRetryInfo *retry_info,
       int64_t timeout_ts,
-      common::ObCurTraceId::TraceId &trace_id,
-      bool retry) : addr_(addr), retry_info_(retry_info),
-      timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT), can_retry_(retry) {}
+      common::ObCurTraceId::TraceId &trace_id) : addr_(addr), retry_info_(retry_info),
+      timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT) {}
   ~ObDealWithRpcTimeoutCall() = default;
   void operator() (hash::HashMapPair<ObInterruptibleTaskID,
       ObInterruptCheckerNode *> &entry);
@@ -133,7 +132,6 @@ public:
   int64_t timeout_ts_;
   common::ObCurTraceId::TraceId trace_id_;
   int ret_;
-  bool can_retry_;
 };
 
 class ObFastInitSqcCB

@@ -24,7 +24,6 @@ namespace common
 using namespace obutil;
 using namespace lib;
 
-const int32_t ObTimer::MAX_TASK_NUM;
 
 int ObTimer::init(const char* thread_name)
 {
@@ -32,12 +31,23 @@ int ObTimer::init(const char* thread_name)
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else {
-    is_inited_ = true;
-    is_destroyed_ = false;
-    is_stopped_ = true;
-    has_running_repeat_task_ = false;
-    thread_name_ = thread_name;
-    ret = create();
+    tokens_ = reinterpret_cast<Token*>(ob_malloc(sizeof(Token) * max_task_num_, "timer"));
+    if (nullptr == tokens_) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(ERROR, "failed to alloc memory", K(ret));
+    } else {
+      for (int i = 0; i < max_task_num_; i++) {
+        new (&tokens_[i]) Token();
+      }
+      if (OB_SUCC(ret)) {
+        is_inited_ = true;
+        is_destroyed_ = false;
+        is_stopped_ = true;
+        has_running_repeat_task_ = false;
+        thread_name_ = thread_name;
+        ret = create();
+      }
+    }
   }
   return ret;
 }
@@ -115,9 +125,16 @@ void ObTimer::destroy()
       ObMonitor<Mutex>::Lock guard(monitor_);
       for (int64_t i = 0; i < tasks_num_; ++i) {
         tokens_[i].task->cancelCallBack();
-        ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr); 
+        ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
       }
       tasks_num_ = 0;
+    }
+    if (nullptr != tokens_) {
+      for (int i = 0; i < max_task_num_; i++) {
+        tokens_[i].~Token();
+      }
+      ob_free(tokens_);
+      tokens_ = NULL;
     }
     OB_LOG(INFO, "ObTimer destroy", KP(this), K_(thread_id));
   }
@@ -172,9 +189,9 @@ int ObTimer::schedule_task(ObTimerTask &task, const int64_t delay, const bool re
   } else if (delay < 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(delay));
-  } else if (tasks_num_ >= MAX_TASK_NUM) {
+  } else if (tasks_num_ >= max_task_num_) {
     ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "too much timer task", K(ret), K_(tasks_num), "max_task_num", MAX_TASK_NUM);
+    OB_LOG(WARN, "too much timer task", K(ret), K_(tasks_num), "max_task_num", max_task_num_);
   } else {
     int64_t time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
     if(!is_scheduled_immediately) {
@@ -200,15 +217,15 @@ int ObTimer::schedule_task(ObTimerTask &task, const int64_t delay, const bool re
 int ObTimer::insert_token(const Token &token)
 {
   int ret = OB_SUCCESS;
-  int32_t max_task_num= MAX_TASK_NUM;
+  int32_t max_task_num= max_task_num_;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
     if (has_running_repeat_task_) {
-      max_task_num = MAX_TASK_NUM - 1;
+      max_task_num = max_task_num_ - 1;
     }
     if (tasks_num_ >= max_task_num) {
-      OB_LOG(WARN, "tasks_num_ exceed max_task_num", K_(tasks_num), "max_task_num", MAX_TASK_NUM);
+      OB_LOG(WARN, "tasks_num_ exceed max_task_num", K_(tasks_num), "max_task_num", max_task_num_);
       ret = OB_ERR_UNEXPECTED;
     } else {
       int64_t pos = 0;
@@ -244,7 +261,7 @@ int ObTimer::cancel(const ObTimerTask &task)
     }
     if (pos != -1) {
       tokens_[pos].task->cancelCallBack();
-      ATOMIC_STORE(&(tokens_[pos].task->timer_), nullptr); 
+      ATOMIC_STORE(&(tokens_[pos].task->timer_), nullptr);
       memmove(&tokens_[pos], &tokens_[pos + 1],
               sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
       --tasks_num_;
@@ -259,7 +276,7 @@ void ObTimer::cancel_all()
   ObMonitor<Mutex>::Lock guard(monitor_);
   for (int64_t i = 0; i < tasks_num_; ++i) {
     tokens_[i].task->cancelCallBack();
-    ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr); 
+    ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
   }
   tasks_num_ = 0;
   OB_LOG(INFO, "cancel all", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_));
@@ -277,6 +294,7 @@ void ObTimer::run1()
     set_thread_name("ObTimer");
   }
   while (true) {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     {
       ObMonitor<Mutex>::Lock guard(monitor_);
       static const int64_t STATISTICS_INTERVAL_US = 600L * 1000 * 1000; // 10m
@@ -296,7 +314,7 @@ void ObTimer::run1()
         token.scheduled_time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds() + token.delay;
         if (OB_SUCCESS != (tmp_ret = insert_token(
             Token(token.scheduled_time, token.delay, token.task)))) {
-          OB_LOG(WARN, "insert token error", K(tmp_ret), K(token));
+          OB_LOG_RET(WARN, tmp_ret, "insert token error", K(tmp_ret), K(token));
         }
       }
       has_running_task_ = false;
@@ -339,16 +357,16 @@ void ObTimer::run1()
         } else {
           wakeup_time_ = tokens_[0].scheduled_time;
           {
-            // clock safty check. @see http://k3.alibaba-inc.com/issue/5068683
+            // clock safty check. @see
             const int64_t rt1 = ObTimeUtility::current_time();
             const int64_t rt2 = ObTimeUtility::current_time_coarse();
             const int64_t delta = rt1 > rt2 ? (rt1 - rt2) : (rt2 - rt1);
             static const int64_t MAX_REALTIME_DELTA1 = 20000; // 20ms
             static const int64_t MAX_REALTIME_DELTA2 = 500000; // 500ms
             if (delta > MAX_REALTIME_DELTA1) {
-              OB_LOG(WARN, "Hardware clock skew", K(rt1), K(rt2), K_(wakeup_time), K(now));
+              OB_LOG_RET(WARN, OB_ERR_SYS, "Hardware clock skew", K(rt1), K(rt2), K_(wakeup_time), K(now));
             } else if (delta > MAX_REALTIME_DELTA2) {
-              OB_LOG(ERROR, "Hardware clock error", K(rt1), K(rt2), K_(wakeup_time), K(now));
+              OB_LOG_RET(ERROR, OB_ERR_SYS, "Hardware clock error", K(rt1), K(rt2), K_(wakeup_time), K(now));
             }
           }
           monitor_.timed_wait(ObSysTime(wakeup_time_ - now));
@@ -374,8 +392,8 @@ void ObTimer::run1()
         ObTimerMonitor::get_instance().end_task(thread_id_, end_time);
       }
 
-      if (elapsed_time > 1000 * 1000) {
-        OB_LOG(WARN, "timer task cost too much time", "task", to_cstring(*token.task),
+      if (elapsed_time > ELAPSED_TIME_LOG_THREASHOLD) {
+        OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "timer task cost too much time", "task", to_cstring(*token.task),
             K(start_time), K(end_time), K(elapsed_time), KP(this), K_(thread_id));
       }
     }

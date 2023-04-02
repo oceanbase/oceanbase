@@ -32,6 +32,12 @@ int ObLogResSvrRpc::init(const rpc::frame::ObReqTransport *transport)
   return ret;
 }
 
+void ObLogResSvrRpc::destroy()
+{
+  inited_ = false;
+  proxy_.destroy();
+}
+
 int ObLogResSvrRpc::fetch_log(const ObAddr &server,
     const obrpc::ObRemoteFetchLogRequest &req,
     obrpc::ObRemoteFetchLogResponse &res)

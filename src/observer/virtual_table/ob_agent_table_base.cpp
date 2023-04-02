@@ -18,6 +18,7 @@
 #include "observer/ob_inner_sql_result.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/schema/ob_schema_utils.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase
 {
@@ -184,13 +185,54 @@ int ObAgentTableBase::build_base_table_mapping()
   return ret;
 }
 
-int ObAgentTableBase::construct_sql(common::ObSqlString &sql)
+int ObAgentTableBase::construct_sql(
+    const uint64_t exec_tenant_id,
+    common::ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema_) || OB_ISNULL(base_table_)) {
+  if (OB_ISNULL(base_table_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("table is NULL", K(ret));
-  } else {
+    LOG_WARN("table is NULL", KR(ret), KP(base_table_));
+  } else if (OB_FAIL(construct_columns(exec_tenant_id, sql))) {
+    LOG_WARN("fail to construct columns", KR(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(sql.append_fmt(" FROM `%s` WHERE 1=1", base_table_->get_table_name()))) {
+    LOG_WARN("append sql failed", KR(ret));
+  } else if (OB_FAIL(append_sql_condition(sql))) {
+    LOG_WARN("append condition failed", KR(ret));
+  } else if (OB_FAIL(add_extra_condition(sql))) {
+    LOG_WARN("append extra condition failed", KR(ret));
+  } else if (OB_FAIL(append_sql_orderby(sql))) {
+    LOG_WARN("append order by failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObAgentTableBase::construct_columns(
+    const uint64_t exec_tenant_id,
+    common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  // For compatiblity, iterate like virtual table should cast missing column with default value.
+  bool cast_default_value = (base_tenant_id_ != exec_tenant_id);
+  const ObTableSchema *exec_table_schema = NULL;
+  if (OB_ISNULL(base_table_)
+      || OB_ISNULL(schema_guard_)
+      || OB_ISNULL(table_schema_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table is NULL", KR(ret), KP(base_table_), K(table_schema_), KP(schema_guard_));
+  } else if (!cast_default_value) {
+    // skip
+  } else if (OB_FAIL(schema_guard_->get_table_schema(
+             exec_tenant_id, base_table_id_, exec_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(exec_tenant_id), K(base_table_id_));
+  } else if (OB_ISNULL(exec_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("exec table not exist", KR(ret), K(exec_tenant_id), K(base_table_id_));
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t buf_len = 100;
+    char *buf = NULL;
     // 对query timeout取10的指数次，防止系统租户计划缓存数过大
     int64_t rest_time = scan_param_->timeout_ - ObTimeUtility::current_time();
     int64_t query_timeout = 1;
@@ -198,30 +240,131 @@ int ObAgentTableBase::construct_sql(common::ObSqlString &sql)
       query_timeout = query_timeout * 10;
       rest_time = rest_time / 10;
     }
-
-    if (OB_FAIL(sql.assign_fmt("SELECT /*+ query_timeout(%ld) */ ",
-        query_timeout))) {
-      LOG_WARN("append sql failed", K(ret));
-    } else if (scan_param_->column_ids_.empty() && 
-               OB_FAIL(sql.append("1"))) {
-      LOG_WARN("failed to append dummy select expr", K(ret));
+    if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buf", KR(ret), K(buf_len));
+    } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ query_timeout(%ld) */ ", query_timeout))) {
+      LOG_WARN("append sql failed", KR(ret));
+    } else if (scan_param_->column_ids_.empty() && OB_FAIL(sql.append("1"))) {
+      LOG_WARN("failed to append dummy select expr", KR(ret));
     }
     FOREACH_CNT_X(c, scan_param_->column_ids_, OB_SUCC(ret)) {
-      const ObString &name = mapping_.at(*c).base_col_name_;
-      if (OB_FAIL(sql.append_fmt("%s%.*s",
-          0 == __INNER_I__(c) ? "" : ", ", name.length(), name.ptr()))) {
-        LOG_WARN("append sql failed", K(ret));
+      const uint64_t column_id = *c;
+      const ObString &name = mapping_.at(column_id).base_col_name_;
+      ObString col_name;
+      bool need_cast_default_value = false;
+      if (cast_default_value
+          && 0 != name.case_compare("effective_tenant_id()")) {
+        bool column_exist = false;
+        (void) table_schema_->get_column_name_by_column_id(column_id, col_name, column_exist);
+        if (!column_exist) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column should be exist", KR(ret), K(column_id), K_(table_schema));
+        } else if (OB_ISNULL(exec_table_schema->get_column_schema(col_name))) {
+          // column not exist in target tenant's table schema
+          need_cast_default_value = true;
+        }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(" FROM `%s` WHERE 1=1", base_table_->get_table_name()))) {
-      LOG_WARN("append sql failed", K(ret));
-    } else if (OB_FAIL(append_sql_condition(sql))) {
-      LOG_WARN("append condition failed", K(ret));
-    } else if (OB_FAIL(add_extra_condition(sql))) {
-      LOG_WARN("append extra condition failed", K(ret));
-    } else if (OB_FAIL(append_sql_orderby(sql))) {
-      LOG_WARN("append order by failed", K(ret));
+      if (OB_FAIL(ret)) {
+      } else if (!need_cast_default_value) {
+        if (OB_FAIL(sql.append_fmt("%s%.*s",
+            0 == __INNER_I__(c) ? "" : ", ", name.length(), name.ptr()))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+      } else if (OB_FAIL(cast_as_default_value(
+                 0 == __INNER_I__(c),
+                 buf, buf_len, name, col_name, sql))) {
+        LOG_WARN("fail to cast default value", KR(ret), K(col_name));
+      }
+    } // end FOREACH_CNT_X
+  }
+  return ret;
+}
+
+// Supported column types for system table:
+// 1. varchar、varbinary
+// 2. longtext: not support to cast default value to longtext.
+// 3. timestamp: default value can only be `current_timestamp(x)`, not support cast datetime to timestamp.
+// 4. double、float、number: can't have default value, cast may failed.
+// 5. bool
+// 6. bigint、int
+// 7. uint
+int ObAgentTableBase::cast_as_default_value(
+    const bool first_column,
+    char *buf,
+    const int64_t buf_len,
+    const common::ObString &name,
+    const common::ObString &col_name,
+    common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(base_table_) || OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arg", KR(ret), KP(base_table_), KP(buf), K(buf_len));
+  } else {
+    const ObColumnSchemaV2 *column = base_table_->get_column_schema(col_name);
+    if (OB_ISNULL(column)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("column not found", KR(ret), K(base_tenant_id_),
+               K(base_table_id_), K(col_name));
+    } else if (column->is_nullable()
+               && !column->is_not_null_validate_column()) {
+      if (OB_FAIL(sql.append_fmt("%s NULL AS %.*s",
+          first_column ? "" : ", ",
+          name.length(), name.ptr()))) {
+        LOG_WARN("append sql failed", KR(ret));
+      }
+    } else {
+      // For new adding columns, column which is longtext/timestamp/double/float/number should be nullable.
+      ObObj default_value = column->get_cur_default_value();
+      default_value.set_scale(column->get_data_scale());
+      if (column->get_meta_type().is_varchar()
+          || column->get_meta_type().is_varbinary()) {
+        // 1. varchar, varbinary
+        if (OB_FAIL(sql.append_fmt("%s '%s' AS %.*s",
+            first_column ? "" : ", ",
+            to_cstring(ObHexEscapeSqlStr(default_value.get_string())),
+            name.length(), name.ptr()))) {
+          LOG_WARN("append sql failed", KR(ret));
+        }
+      } else if (column->get_meta_type().is_signed_integer()
+                 || column->get_meta_type().is_unsigned()) {
+        lib::CompatModeGuard g(lib::Worker::CompatMode::MYSQL);
+        MEMSET(buf, '\0', buf_len);
+        int64_t len = 0;
+        if (OB_FAIL(default_value.print_plain_str_literal(buf, buf_len, len))) {
+          LOG_WARN("fail to print varchar", KR(ret), K(default_value));
+        } else if (column->get_meta_type().is_signed_integer()) {
+          if (column->get_meta_type().is_tinyint()) {
+            // 2. bool
+            if (OB_FAIL(sql.append_fmt("%s %s AS %.*s",
+                       first_column ? "" : ", ",
+                       default_value.get_tinyint() ? "True" : "False",
+                       name.length(), name.ptr()))) {
+              LOG_WARN("append sql failed", KR(ret), K(default_value));
+            }
+          } else {
+            // 3. bigint、int
+            if (OB_FAIL(sql.append_fmt("%s %.*s AS %.*s",
+                       first_column ? "" : ", ",
+                       static_cast<int>(len), buf,
+                       name.length(), name.ptr()))) {
+              LOG_WARN("append sql failed", KR(ret), K(default_value));
+            }
+          }
+        } else {
+          // 4. uint
+          if (OB_FAIL(sql.append_fmt("%s CAST(%.*s AS UNSIGNED) AS %.*s",
+                     first_column ? "" : ", ",
+                     static_cast<int>(len), buf,
+                     name.length(), name.ptr()))) {
+            LOG_WARN("append sql failed", KR(ret), K(default_value));
+          }
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported column type", KR(ret), KPC(column));
+      }
     }
   }
   return ret;

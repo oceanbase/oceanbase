@@ -100,7 +100,6 @@ int MockObTxCtx::init(const ObLSID &ls_id,
     // self end
     ObPartTransCtx::addr_.parse_from_cstring("127.0.0.1:3001");
     ObPartTransCtx::addr_.set_port(3001 + (int32_t)ls_id.id());
-    need_del_ctx_ = false;
     is_inited_ = true;
   }
 
@@ -400,10 +399,10 @@ int MockObTxCtx::handle_all()
   return mailbox_.handle_all();
 }
 
-int MockObTxCtx::get_gts_(int64_t &gts)
+int MockObTxCtx::get_gts_(share::SCN &gts)
 {
   // TODO(handora.qc): get gts failed
-  gts = ObTimeUtility::current_time();
+  gts.convert_for_gts(ObTimeUtility::current_time_ns());
   return OB_SUCCESS;
 }
 
@@ -413,13 +412,13 @@ int MockObTxCtx::wait_gts_elapse_commit_version_(bool &need_wait)
   return OB_SUCCESS;
 }
 
-int MockObTxCtx::get_local_max_read_version_(int64_t &local_max_read_version)
+int MockObTxCtx::get_local_max_read_version_(share::SCN &local_max_read_version)
 {
-  local_max_read_version = ObTimeUtility::current_time();
+  local_max_read_version.convert_for_gts(ObTimeUtility::current_time());
   return OB_SUCCESS;
 }
 
-int MockObTxCtx::update_local_max_commit_version_(const int64_t &)
+int MockObTxCtx::update_local_max_commit_version_(const share::SCN &)
 {
   return OB_SUCCESS;
 }
@@ -431,4 +430,5 @@ void MockObTxCtx::set_exiting_()
 }
 
 } // end namespace transaction
+
 } // end namespace oceanbase

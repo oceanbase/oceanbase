@@ -201,6 +201,19 @@ class ObApproximateNdvPrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "TRUE"; }
 };
 
+class ObEstimateBlockPrefs : public ObStatPrefs
+{
+  public:
+    ObEstimateBlockPrefs() : ObStatPrefs() {}
+    ObEstimateBlockPrefs(ObIAllocator *alloc,
+                          ObSQLSessionInfo *session_info,
+                          const ObString &pvalue) :
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "ESTIMATE_BLOCK"; }
+    virtual const char* get_stat_pref_default_value() const { return "TRUE"; }
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)
@@ -247,6 +260,7 @@ public:
 
 private:
   static int do_get_prefs(ObExecContext &ctx,
+                          ObIAllocator *allocator,
                           const ObSqlString &raw_sql,
                           bool &get_result,
                           ObObj &result);

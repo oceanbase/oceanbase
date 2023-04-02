@@ -17,6 +17,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_struct.h"   // ObArchiveRoundState
 #include "ob_archive_define.h"                // ObArchiveInterruptReason
+#include <cstdint>
 
 namespace oceanbase
 {
@@ -39,24 +40,34 @@ public:
    void get_round(ArchiveKey &key) const { key = key_; }
   bool is_compatible() const {return compatible_;}
   int set_archive_start(const ArchiveKey &key,
+      const share::SCN &round_start_scn,
+      const int64_t piece_switch_interval,
+      const share::SCN &genesis_scn,
+      const int64_t base_piece_id,
       const share::ObTenantLogArchiveStatus::COMPATIBLE compatible,
       const share::ObBackupDest &dest);
   void set_archive_force_stop(const ArchiveKey &key);
   void set_archive_interrupt(const ArchiveKey &key);
+  void set_archive_suspend(const ArchiveKey &key);
   int get_backup_dest(const ArchiveKey &key,
       share::ObBackupDest &dest);
+  int get_piece_info(const ArchiveKey &key,
+      int64_t &piece_switch_interval,
+      share::SCN &genesis_scn,
+      int64_t &base_piece_id);
   void get_archive_round_info(ArchiveKey &key, ObArchiveRoundState &state) const;
+  int get_archive_start_scn(const ArchiveKey &key, share::SCN &scn);
   void get_archive_round_compatible(ArchiveKey &key, bool &compatible);
   bool is_in_archive_status(const ArchiveKey &key) const;
-  bool is_in_interrupt_status(const ArchiveKey &key) const;
+  bool is_in_suspend_status(const ArchiveKey &key) const;
   bool is_in_archive_stopping_status(const ArchiveKey &key) const;
   bool is_in_archive_stop_status(const ArchiveKey &key) const;
   void update_log_archive_status(const ObArchiveRoundState::Status status);
-  int mark_fata_error(const share::ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
+  int mark_fatal_error(const share::ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
 
   void set_has_handle_error(bool has_handle);
   TO_STRING_KV(K_(key),
-               K_(round_start_ts),
+               K_(round_start_scn),
                K_(compatible),
                K_(log_archive_state),
                K_(backup_dest));
@@ -68,7 +79,10 @@ private:
 
 private:
   ArchiveKey            key_;
-  int64_t               round_start_ts_;
+  share::SCN            round_start_scn_;
+  int64_t               piece_switch_interval_;
+  int64_t               base_piece_id_;
+  share::SCN            genesis_scn_;
   bool                  compatible_;            // 该轮次兼容性处理
   ObArchiveRoundState   log_archive_state_;
   share::ObBackupDest   backup_dest_;

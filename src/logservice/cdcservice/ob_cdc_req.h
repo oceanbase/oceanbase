@@ -19,6 +19,7 @@
 #include "logservice/palf/log_group_entry.h"    // LogGroupEntry
 #include "logservice/palf/log_entry.h"          // LogEntry
 
+
 namespace oceanbase
 {
 namespace obrpc
@@ -35,6 +36,57 @@ class ObCdcLSFetchLogReq;
 class ObCdcLSFetchLogResp;
 
 class ObCdcLSFetchMissLogReq;
+
+class ObCdcRpcTestFlag {
+public:
+  // rpc request flag bit
+  static const int8_t OBCDC_RPC_FETCH_ARCHIVE = 1;
+  static const int8_t OBCDC_RPC_TEST_SWITCH_MODE = 1 << 1;
+
+public:
+  static bool is_fetch_archive_only(int8_t flag) {
+    return flag & OBCDC_RPC_FETCH_ARCHIVE;
+  }
+  static bool is_test_switch_mode(int8_t flag) {
+    return flag & OBCDC_RPC_TEST_SWITCH_MODE;
+  }
+};
+
+class ObCdcRpcId {
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObCdcRpcId(): client_pid_(0), client_addr_()  {}
+  ~ObCdcRpcId() = default;
+  int init(const uint64_t pid, const ObAddr &addr) {
+    int ret = OB_SUCCESS;
+    if (pid > 0 && addr.is_valid()) {
+      // addr may not be valid
+      client_pid_ = pid;
+      client_addr_ = addr;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      EXTLOG_LOG(WARN, "invalid arguments for ObCdcRpcId", KR(ret), K(pid), K(addr));
+    }
+    return ret;
+  }
+
+  void reset() {
+    client_pid_ = 0;
+    client_addr_.reset();
+  }
+
+  void set_addr(ObAddr &addr) { client_addr_ = addr; }
+  const ObAddr& get_addr() const { return client_addr_; }
+
+  void set_pid(uint64_t pid) { client_pid_ = pid; }
+  uint64_t get_pid() const { return client_pid_; }
+
+  TO_STRING_KV(K_(client_addr), K_(client_pid));
+private:
+  uint64_t client_pid_;
+  ObAddr client_addr_;
+};
 
 class ObCdcReqStartLSNByTsReq
 {
@@ -67,11 +119,19 @@ public:
   int append_param(const LocateParam &param);
   const LocateParamArray &get_params() const;
 
-  TO_STRING_KV(K_(rpc_ver), "param_count", params_.count(), K_(params));
+  void set_client_id(ObCdcRpcId &id) { client_id_ = id; }
+  const ObCdcRpcId &get_client_id() const { return client_id_; }
+
+  void set_flag(int8_t flag) { flag_ |= flag; }
+  int8_t get_flag() const { return flag_; }
+
+  TO_STRING_KV(K_(rpc_ver), "param_count", params_.count(), K_(params), K_(client_id), K_(flag));
   OB_UNIS_VERSION(1);
 private:
   int64_t rpc_ver_;
   LocateParamArray params_;
+  ObCdcRpcId client_id_;
+  int8_t flag_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCdcReqStartLSNByTsReq);
 };
@@ -167,11 +227,23 @@ public:
   void set_client_pid(const uint64_t id) { client_pid_ = id; }
   uint64_t get_client_pid() const { return client_pid_; }
 
+  void set_client_id(const ObCdcRpcId &id) { client_id_ = id; }
+  const ObCdcRpcId &get_client_id() const { return client_id_; }
+
+  void set_progress(const int64_t progress) { progress_ = progress; }
+  int64_t get_progress() const { return progress_; }
+
+  void set_flag(int8_t flag) { flag_ |= flag; }
+  int8_t get_flag() const { return flag_; }
+
   TO_STRING_KV(K_(rpc_ver),
       K_(ls_id),
       K_(start_lsn),
       K_(upper_limit_ts),
-      K_(client_pid));
+      K_(client_pid),
+      K_(client_id),
+      K_(progress),
+      K_(flag));
 
   OB_UNIS_VERSION(1);
 
@@ -181,6 +253,15 @@ private:
   LSN start_lsn_;
   int64_t upper_limit_ts_;
   uint64_t client_pid_;  // Process ID.
+  ObCdcRpcId client_id_;
+  // the progress represents the latest log ts(scn) of the log which the client has fetched (not precisely)
+  // the progress is a necessary parameter for cdc service to locate the logentry in archive.
+  // the main reason of adding this field in rpc is to handle a special case when fetching log:
+  // client has fetched log in server A, and server A is down suddenly, the client switched to server B and continue
+  // to fetch log. But server B doesn't maintain a context for client to fetch log, and without the client progress,
+  // server B can hardly locate log in archive.
+  int64_t progress_;
+  int8_t flag_;
 };
 
 // Statistics for LS
@@ -302,6 +383,10 @@ public:
   char *get_log_entry_buf() { return log_entry_buf_; }
   int64_t get_log_num() const { return log_num_; }
   int64_t get_pos() const { return pos_; }
+
+  void set_progress(int64_t progress) { server_progress_ = progress; }
+  int64_t get_progress() const { return server_progress_; }
+
   inline char *get_remain_buf(int64_t &remain_size)
   {
     remain_size = FETCH_BUF_LEN - pos_;
@@ -347,6 +432,7 @@ private:
   int64_t log_num_;
   int64_t pos_;
   char log_entry_buf_[FETCH_BUF_LEN];
+  int64_t server_progress_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCdcLSFetchLogResp);
@@ -386,10 +472,17 @@ public:
   void set_client_pid(const uint64_t id) { client_pid_ = id; }
   uint64_t get_client_pid() const { return client_pid_; }
 
+  void set_client_id(const ObCdcRpcId &id) { client_id_ = id; }
+  const ObCdcRpcId &get_client_id() const { return client_id_; }
+
+  void set_flag(int8_t flag) { flag_ |= flag; }
+  int8_t get_flag() const { return flag_; }
+
   TO_STRING_KV(K_(rpc_ver),
       K_(ls_id),
       K_(miss_log_array),
-      K_(client_pid));
+      K_(client_pid),
+      K_(flag));
   OB_UNIS_VERSION(1);
 
 private:
@@ -397,6 +490,8 @@ private:
   ObLSID ls_id_;
   MissLogParamArray miss_log_array_;
   uint64_t client_pid_;  // Process ID.
+  ObCdcRpcId client_id_;
+  int8_t flag_;
 };
 
 } // namespace obrpc

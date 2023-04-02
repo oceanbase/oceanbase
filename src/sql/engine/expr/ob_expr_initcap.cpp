@@ -17,6 +17,7 @@
 #include "objit/common/ob_item_type.h"
 #include "common/data_buffer.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -58,10 +59,12 @@ int ObExprInitcap::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
+// last_has_first_letter is used to assign has_first_letter at the beginning, and return last state of text
 int ObExprInitcap::initcap_string(const ObString &text,
-                                const ObCollationType cs_type,
-                                ObIAllocator *allocator,
-                                ObString &res_str)
+                                  const ObCollationType cs_type,
+                                  ObIAllocator *allocator,
+                                  ObString &res_str,
+                                  bool &last_has_first_letter)
 {
   int ret = OB_SUCCESS;
 
@@ -83,7 +86,7 @@ int ObExprInitcap::initcap_string(const ObString &text,
       ObStringScanner scanner(text, cs_type);
       ObString cur_letter;
       int32_t wchar = 0;
-      bool has_first_letter = false;
+      bool has_first_letter = last_has_first_letter;
 
       if (1 == case_multiply) {
         MEMCPY(buf, text.ptr(), text.length());
@@ -119,6 +122,7 @@ int ObExprInitcap::initcap_string(const ObString &text,
         }
       }
       if (OB_SUCC(ret)) {
+        last_has_first_letter = has_first_letter;
         res_str.assign_ptr(buf, pos);
       }
     }
@@ -140,20 +144,73 @@ int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
     LOG_WARN("eval arg 0 failed", K(ret), K(expr));
   } else if (arg_datum->is_null()) {
     res_datum.set_null();
-  } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, arg_datum->len_ * case_multiply))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
   } else {
-    ObDataBuffer buf_alloc(res_buf, arg_datum->len_ * case_multiply);
-    if (OB_FAIL(ObExprInitcap::initcap_string(arg_datum->get_string(),
-                                      expr.args_[0]->datum_meta_.cs_type_,
-                                      &buf_alloc, res_str))) {
-      LOG_WARN("initcap string failed", K(ret), K(arg_datum->get_string()));
-    } else if (0 == res_str.length()) {
-      // initcap is only for oracle mode. set res be null when string length is 0.
-      res_datum.set_null();
-    } else {
-      res_datum.set_string(res_str);
+    if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
+      if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, arg_datum->len_ * case_multiply))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        ObDataBuffer buf_alloc(res_buf, arg_datum->len_ * case_multiply);
+        bool last_has_first_letter = false;
+        if (OB_FAIL(ObExprInitcap::initcap_string(arg_datum->get_string(),
+                                                  cs_type,
+                                                  &buf_alloc,
+                                                  res_str,
+                                                  last_has_first_letter))) {
+          LOG_WARN("initcap string failed", K(ret), K(arg_datum->get_string()));
+        }
+      }
+    } else { // text tc
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+      ObTextStringIter input_iter(expr.args_[0]->datum_meta_.type_, cs_type,
+                                  arg_datum->get_string(),
+                                  expr.args_[0]->obj_meta_.has_lob_header());
+      ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+      int64_t input_byte_len = 0;
+      int64_t buf_size = 0;
+      if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+        LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
+      } else if (OB_FAIL(input_iter.get_byte_len(input_byte_len))) {
+        LOG_WARN("get input byte len failed");
+      } else if (OB_FAIL(output_result.init(input_byte_len * case_multiply))) {
+        LOG_WARN("init stringtext result failed");
+      } else if (input_byte_len == 0) {
+        // do nothing, let res_str become empty string
+        res_str.assign_ptr(NULL, 0);
+      } else if (OB_FAIL(output_result.get_reserved_buffer(res_buf, buf_size))) {
+        LOG_WARN("stringtext result reserve buffer failed");
+      } else {
+        ObTextStringIterState state;
+        ObString input_data;
+        bool last_has_first_letter = false;
+        while (OB_SUCC(ret)
+              && buf_size > 0
+              && (state = input_iter.get_next_block(input_data)) == TEXTSTRING_ITER_NEXT) {
+          ObDataBuffer buf_alloc(res_buf, buf_size);
+          if (OB_FAIL(ObExprInitcap::initcap_string(input_data,
+                                                    cs_type,
+                                                    &buf_alloc,
+                                                    res_str,
+                                                    last_has_first_letter))) {
+            LOG_WARN("initcap string failed", K(ret), K(input_data));
+          } else if (OB_FAIL(output_result.lseek(res_str.length(), 0))) {
+            LOG_WARN("result lseek failed", K(ret));
+          } else {
+            res_buf = res_buf + res_str.length();
+            buf_size = buf_size - res_str.length();
+          }
+        }
+        output_result.get_result_buffer(res_str);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (0 == res_str.length()) {
+        // initcap is only for oracle mode. set res be null when string length is 0.
+        res_datum.set_null();
+      } else {
+        res_datum.set_string(res_str);
+      }
     }
   }
   return ret;

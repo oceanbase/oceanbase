@@ -21,7 +21,6 @@
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_signal_worker.h"
-#include "lib/signal/ob_memory_cutter.h"
 #include "common/ob_common_utility.h"
 
 namespace oceanbase
@@ -94,7 +93,7 @@ void hook_sigsegv_msg(int sig, siginfo_t *si, void *context)
     // thread_name
     char tname[16];
     prctl(PR_GET_NAME, tname);
-    _OB_LOG(ERROR, "CRASH ERROR!!! sig=%d, sig_code=%d, sig_addr=%p, tid=%ld, tname=%s",
+    _OB_LOG_RET(ERROR, OB_ERROR, "CRASH ERROR!!! sig=%d, sig_code=%d, sig_addr=%p, tid=%ld, tname=%s",
             sig, si->si_code, si->si_addr, GETTID(), tname);
   }
 }
@@ -183,10 +182,24 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
         safe_snprintf(rlimit_core, sizeof(rlimit_core), "%lu", g_rlimit_core);
       }
       ssize_t print_len = safe_snprintf(print_buf, sizeof(print_buf),
-                                       "CRASH ERROR!!! IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT"\n",
+                                       "CRASH ERROR!!! IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT", ",
                                        ip, bp, sig, si->si_code, si->si_addr, rlimit_core, ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
                                        (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
-      write(STDERR_FILENO, print_buf, print_len);
+      const auto &si_guard = ObSqlInfoGuard::get_cur_guard();
+      char sql[] = "SQL=";
+      char end[] = "\n";
+      struct iovec iov[4];
+      memset(iov, 0, sizeof(iov));
+      iov[0].iov_base = print_buf;
+      iov[0].iov_len = print_len;
+      iov[1].iov_base = sql;
+      iov[1].iov_len = strlen(sql);
+      iov[2].iov_base = NULL != si_guard ? si_guard->sql_.ptr() : NULL;
+      iov[2].iov_len = NULL != si_guard ? si_guard->sql_.length() : 0;
+      iov[3].iov_base = end;
+      iov[3].iov_len = strlen(end);
+      writev(STDERR_FILENO, iov, sizeof(iov) / sizeof(iov[0]));
+
     #if MINICORE
     } else {
       // child

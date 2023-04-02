@@ -131,7 +131,7 @@ int ObTableStoreStat::add(const ObTableStoreStat& other)
     LOG_WARN("other is invalid", K(ret), K(other));
   } else if (other.ls_id_ != ls_id_ || other.tablet_id_ != tablet_id_ || other.table_id_ != table_id_) {
     ret = OB_NOT_THE_OBJECT;
-    LOG_WARN("not the same table store", K(ret), K(other));
+    LOG_DEBUG("not the same table store", K(ret), K(other));
   } else {
     row_cache_hit_cnt_ += other.row_cache_hit_cnt_;
     row_cache_miss_cnt_ += other.row_cache_miss_cnt_;
@@ -234,7 +234,7 @@ int ObTableStoreStatMgr::ReportTask::init(ObTableStoreStatMgr *stat_mgr)
 void ObTableStoreStatMgr::ReportTask::runTimerTask()
 {
   if (OB_ISNULL(stat_mgr_)) {
-    LOG_WARN("ReportTask is not inited");
+    LOG_WARN_RET(OB_NOT_INIT, "ReportTask is not inited");
   } else {
     stat_mgr_->run_report_task();
   }
@@ -368,21 +368,9 @@ int ObTableStoreStatMgr::report_stat(const ObTableStoreStat &stat)
 
 int ObTableStoreStatMgr::get_table_store_stat(const int64_t idx, ObTableStoreStat &stat)
 {
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableStoreStatMgr hasn't been initiated", K(ret));
-  } else if (idx < 0 || idx > limit_cnt_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid stat", K(ret), K(idx));
-  } else {
-    SpinRLockGuard guard(lock_);
-    if (idx >= cur_cnt_) {
-      ret = OB_ITER_END;
-    } else {
-      stat = stat_array_[idx];
-    }
-  }
+  UNUSED(idx);
+  UNUSED(stat);
+  int ret = OB_ITER_END;
   return ret;
 }
 

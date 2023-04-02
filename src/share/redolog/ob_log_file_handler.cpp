@@ -11,16 +11,16 @@
  */
 
 #define USING_LOG_PREFIX COMMON
+#include "lib/allocator/ob_malloc.h"
+#include "lib/oblog/ob_log.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "share/config/ob_server_config.h"
-#include "share/redolog/ob_log_file_handler.h"
 #include "share/io/ob_io_manager.h"
 #include "share/io/ob_io_struct.h"
-#include "lib/oblog/ob_log.h"
-#include "lib/allocator/ob_malloc.h"
-#include "lib/utility/ob_tracepoint.h"
+#include "share/redolog/ob_log_file_handler.h"
+#include "share/redolog/ob_log_file_reader.h"
 #include "share/redolog/ob_log_open_callback.h"
 #include "share/redolog/ob_log_write_callback.h"
-#include "share/redolog/ob_log_file_reader.h"
 
 namespace oceanbase
 {
@@ -48,9 +48,8 @@ ObLogFileHandler::ObLogFileHandler()
     io_fd_(),
     file_group_(),
     file_size_(0),
-    is_disk_warning_(false),
-    lock_(),
-    tenant_id_(OB_INVALID_TENANT_ID)
+    tenant_id_(OB_INVALID_TENANT_ID),
+    pwrite_ts_(0)
 {
 }
 
@@ -75,7 +74,7 @@ int ObLogFileHandler::init(
     tenant_id_ = tenant_id;
     log_dir_ = log_dir;
     file_size_ = file_size;
-    is_disk_warning_ = false;
+    pwrite_ts_ = 0;
   }
 
   if (OB_FAIL(ret)) {
@@ -103,8 +102,8 @@ void ObLogFileHandler::destroy()
   io_fd_.reset();
   file_group_.destroy();
   file_size_ = 0;
-  is_disk_warning_ = false;
   is_inited_ = false;
+  pwrite_ts_ = 0;
   LOG_DEBUG("log file handler destroyed");
 }
 
@@ -257,7 +256,7 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       io_info.offset_ = offset + read_sz;
       io_info.size_ = size - read_sz;
       io_info.flag_.set_mode(ObIOMode::READ);
-      io_info.flag_.set_category(ObIOCategory::LOG_IO);
+      io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       io_info.buf_ = nullptr;
       io_info.callback_ = nullptr;
@@ -291,6 +290,8 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
   } else if (OB_DATA_OUT_OF_RANGE == ret) {
     read_size = read_sz;
     ret = OB_SUCCESS;
+  } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+    LOG_WARN("underlying io memory not enough", K(ret), K(buf), K(read_sz), K(size), K(offset));
   } else {
     ret = OB_IO_ERROR;
     LOG_ERROR("fail to read", K(ret), K(buf), K(read_sz), K(size), K(offset), K(errno));
@@ -329,7 +330,7 @@ int ObLogFileHandler::inner_write_impl(const ObIOFd &io_fd, void *buf, const int
     io_info.fd_ = io_fd;
     io_info.offset_ = offset;
     io_info.size_ = size;
-    io_info.flag_.set_category(ObIOCategory::LOG_IO);
+    io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
     io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     io_info.buf_ = reinterpret_cast<const char *>(buf);
     io_info.callback_ = nullptr;
@@ -364,7 +365,7 @@ int ObLogFileHandler::unlink(const char* file_path)
   while (OB_SUCC(ret)) {
     if (OB_FAIL(THE_IO_DEVICE->unlink(file_path)) && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       LOG_WARN("unlink failed", K(ret), K(file_path));
-      ob_usleep(UNLINK_RETRY_INTERVAL_US);
+      ob_usleep(static_cast<uint32_t>(UNLINK_RETRY_INTERVAL_US));
       ret = OB_SUCCESS;
     } else if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
       ret = OB_SUCCESS;
@@ -391,16 +392,19 @@ int ObLogFileHandler::normal_retry_write(void *buf, int64_t size, int64_t offset
   } else {
     int64_t retry_cnt = 0;
     int64_t write_size = 0;
+    const int64_t start_ts = ObTimeUtility::current_time();
+    ATOMIC_STORE(&pwrite_ts_, start_ts);
     do {
       if (OB_FAIL(THE_IO_DEVICE->pwrite(io_fd_, offset, size, buf, write_size))) {
         retry_cnt ++;
         if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {
           LOG_WARN("fail to write", K(ret), KP(buf), K(size), K(offset), K(retry_cnt), K(write_size));
         } else {
-          ob_usleep(SLEEP_TIME_US);
+          ob_usleep(static_cast<uint32_t>(SLEEP_TIME_US));
         }
       }
     } while (OB_FAIL(ret));
+    ATOMIC_STORE(&pwrite_ts_, 0);
   }
 
   return ret;
@@ -420,7 +424,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
         LOG_WARN("failed to open file", K(ret), K(file_path), K(errno), KERRMSG);
         if (OB_TIMEOUT == ret || OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
-          ob_usleep(ObLogDefinition::RETRY_SLEEP_TIME_IN_US);
+          ob_usleep(static_cast<uint32_t>(ObLogDefinition::RETRY_SLEEP_TIME_IN_US));
         }
       } else {
         break;
@@ -430,7 +434,7 @@ int ObLogFileHandler::open(const char *file_path, const int flags, const mode_t 
     if (OB_SUCC(ret)) {
       const int64_t total_retry_time = ObTimeUtility::fast_current_time() - start_time;
       if (total_retry_time > MAX_RETRY_TIME) {
-        LOG_WARN("open file costs too much time", K(ret), K(total_retry_time), K(file_path), K(io_fd));
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "open file costs too much time", K(ret), K(total_retry_time), K(file_path), K(io_fd));
       }
     }
   }

@@ -27,7 +27,7 @@ class ObTransformTempTable : public ObTransformRule
 {
 public:
   explicit ObTransformTempTable(ObTransformerCtx *ctx)
-  : ObTransformRule(ctx, TransMethod::PRE_ORDER, T_MATERIALIZE),
+  : ObTransformRule(ctx, TransMethod::ROOT_ONLY, T_MATERIALIZE),
     allocator_("TempTable"),
     trans_param_(NULL) {}
 
@@ -101,6 +101,15 @@ public:
       :trans_stmt_(NULL),
       trans_type_(T_MATERIALIZE)
     {}
+    virtual ~TempTableTransParam()
+    {
+      for (int64_t i = 0; i < materialize_stmts_.count(); ++i) {
+        if (OB_NOT_NULL(materialize_stmts_.at(i))) {
+          materialize_stmts_.at(i)->~MaterializeStmts();
+          materialize_stmts_.at(i) = NULL;
+        }
+      }
+    }
     Ob2DArray<MaterializeStmts *> materialize_stmts_;
     ObSelectStmt *trans_stmt_;
     ObItemType trans_type_;
@@ -131,8 +140,8 @@ public:
 
   int add_materialize_stmts(const ObIArray<ObSelectStmt*> &stms);
 
-  int check_has_stmt(ObSelectStmt *left_stmt, 
-                     ObSelectStmt *right_stmt, 
+  int check_has_stmt(ObSelectStmt *left_stmt,
+                     ObSelectStmt *right_stmt,
                      hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                      bool &has_stmt);
 
@@ -141,6 +150,18 @@ public:
                        QueryRelation relation);
 
   int remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts);
+
+  int get_non_correlated_subquery(ObDMLStmt *stmt,
+                                  const uint64_t recursive_level,
+                                  hash::ObHashMap<uint64_t, uint64_t> &param_level,
+                                  ObIArray<ObSelectStmt *> &non_correlated_stmts,
+                                  uint64_t &min_param_level);
+
+  int check_exec_param_level(const ObRawExpr *expr,
+                             const hash::ObHashMap<uint64_t, uint64_t> &param_level,
+                             uint64_t &min_param_level);
+
+  int is_non_correlated(ObSelectStmt *stmt, bool &is_correlated);
 
   int classify_stmts(ObIArray<ObSelectStmt*> &stmts,
                      ObIArray<StmtClassifyHelper> &stmt_groups);
@@ -156,17 +177,15 @@ public:
                               ObStmtMapInfo& map_info,
                               ObStmtMapInfo& common_map_info);
 
-  int create_spj(ObSelectStmt *parent_stmt);
-
   int pushdown_conditions(ObSelectStmt *parent_stmt,
                         const ObIArray<int64_t> &cond_map,
-                        const ObIArray<int64_t> &common_cond_map);
-
-  int pushdown_group_by(ObSelectStmt *parent_stmt);
+                        const ObIArray<int64_t> &common_cond_map,
+                        ObIArray<ObRawExpr*> &pushdown_exprs);
 
   int pushdown_having_conditions(ObSelectStmt *parent_stmt,
                               const ObIArray<int64_t> &having_map,
-                              const ObIArray<int64_t> &common_having_map);
+                              const ObIArray<int64_t> &common_having_map,
+                              ObIArray<ObRawExpr*> &pushdown_exprs);
 
   int apply_temp_table(ObSelectStmt *parent_stmt,
                       TableItem *view_table,
@@ -233,6 +252,8 @@ public:
                          bool &hint_force_no_trans);
 
   int sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &materialize_stmts);
+
+  int pushdown_shared_subqueries(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &candi_exprs);
 
 private:
   ObArenaAllocator allocator_;

@@ -18,9 +18,10 @@
 #include "share/ob_ls_id.h"                     // ObLSID
 #include "common/ob_role.h"                 // ObRole
 #include "logservice/palf_handle_guard.h"   // PalfHandleGuard
+#include "share/scn.h"   // SCN
 #include "share/restore/ob_ls_restore_status.h" // ObLSRestoreStatus
-#include "share/restore/ob_log_archive_source.h"  // ObLogArchiveSourceItem
-#include "share/restore/ob_log_archive_source_mgr.h"  // ObLogArchiveSourceMgr
+#include "share/restore/ob_log_restore_source.h"  // ObLogRestoreSourceItem
+#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 #include "storage/ls/ob_ls.h"                   // ObLS
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
 #include "ob_remote_location_adaptor.h"
@@ -120,7 +121,8 @@ int ObRemoteLocationAdaptor::do_update_(ObLS &ls)
   const ObLSID &id = ls.get_ls_id();
   ObLogRestoreHandler *restore_handler = NULL;
   bool need_update = false;
-  share::ObLogArchiveSourceItem item;
+  share::ObLogRestoreSourceItem item;
+  bool source_exist = false;
   if (OB_FAIL(check_replica_status_(ls, need_update))) {
     LOG_WARN("check replica status failed", K(ret), K(ls));
   } else if (! need_update) {
@@ -128,8 +130,12 @@ int ObRemoteLocationAdaptor::do_update_(ObLS &ls)
   } else if (OB_ISNULL(restore_handler = ls.get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get restore_handler failed", K(ret), K(id));
-  } else if (OB_FAIL(get_source_(item))) {
+  } else if (OB_FAIL(get_source_(item, source_exist))) {
     LOG_WARN("get source failed", K(ret), K_(tenant_id), K(id));
+  } else if (!source_exist) {
+    if (OB_FAIL(clean_source_(*restore_handler))) {
+      LOG_WARN("clean source failed", K(ret), K(ls));
+    }
   } else if (OB_FAIL(add_source_(item, *restore_handler))) {
     LOG_WARN("add source failed", K(item), K(ls));
   } else {
@@ -138,14 +144,20 @@ int ObRemoteLocationAdaptor::do_update_(ObLS &ls)
   return ret;
 }
 
-int ObRemoteLocationAdaptor::get_source_(share::ObLogArchiveSourceItem &item)
+int ObRemoteLocationAdaptor::get_source_(share::ObLogRestoreSourceItem &item, bool &source_exist)
 {
   int ret = OB_SUCCESS;
-  share::ObLogArchiveSourceMgr mgr;
+  share::ObLogRestoreSourceMgr mgr;
+  source_exist = false;
   if (OB_FAIL(mgr.init(MTL_ID(), GCTX.sql_proxy_))) {
-    LOG_WARN("ObLogArchiveSourceMgr init failed", K(ret));
-  } else if (OB_FAIL(mgr.get_source(item))) {
+    LOG_WARN("ObLogRestoreSourceMgr init failed", K(ret));
+  } else if (OB_FAIL(mgr.get_source(item)) && OB_ENTRY_NOT_EXIST != ret) {
     LOG_WARN("get source failed", K(ret));
+  } else if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+    source_exist = false;
+  } else {
+    source_exist = true;
   }
   return ret;
 }
@@ -168,13 +180,18 @@ int ObRemoteLocationAdaptor::check_replica_status_(ObLS &ls, bool &need_update)
   return ret;
 }
 
-int ObRemoteLocationAdaptor::add_source_(const share::ObLogArchiveSourceItem &item,
+int ObRemoteLocationAdaptor::clean_source_(ObLogRestoreHandler &restore_handler)
+{
+  return restore_handler.clean_source();
+}
+
+int ObRemoteLocationAdaptor::add_source_(const share::ObLogRestoreSourceItem &item,
     ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! item.is_valid())) {
+  if (OB_UNLIKELY(!item.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archive source item", K(ret), K(item));
+    LOG_WARN("invalid log restore source item", K(ret), K(item));
   } else if (is_location_log_source_type(item.type_)) {
     ret = add_location_source_(item, restore_handler);
   } else if (is_service_log_source_type(item.type_)) {
@@ -187,33 +204,33 @@ int ObRemoteLocationAdaptor::add_source_(const share::ObLogArchiveSourceItem &it
   return ret;
 }
 
-int ObRemoteLocationAdaptor::add_location_source_(const share::ObLogArchiveSourceItem &item,
+int ObRemoteLocationAdaptor::add_location_source_(const share::ObLogRestoreSourceItem &item,
     ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
   share::ObBackupDest dest;
-  if (OB_FAIL(ObLogArchiveSourceMgr::get_backup_dest(item, dest))) {
+  if (OB_FAIL(ObLogRestoreSourceMgr::get_backup_dest(item, dest))) {
     LOG_WARN("get backup dest failed", K(ret), K(item));
-  } else if (OB_FAIL(restore_handler.add_source(dest, item.until_ts_))) {
+  } else if (OB_FAIL(restore_handler.add_source(dest, item.until_scn_))) {
     LOG_WARN("add ObBackupDest source failed", K(ret), K(dest), K(item));
   }
   return ret;
 }
 
-int ObRemoteLocationAdaptor::add_service_source_(const share::ObLogArchiveSourceItem &item,
+int ObRemoteLocationAdaptor::add_service_source_(const share::ObLogRestoreSourceItem &item,
     ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
   common::ObAddr addr;
   if (OB_FAIL(addr.parse_from_string(ObString(item.value_.ptr())))) {
     LOG_WARN("addr parse from string failed", K(ret), K(item));
-  } else if (OB_FAIL(restore_handler.add_source(addr, item.until_ts_))) {
+  } else if (OB_FAIL(restore_handler.add_source(addr, item.until_scn_))) {
     LOG_WARN("add ObAddr source failed", K(ret), K(addr), K(item));
   }
   return ret;
 }
 
-int ObRemoteLocationAdaptor::add_rawpath_source_(const share::ObLogArchiveSourceItem &item,
+int ObRemoteLocationAdaptor::add_rawpath_source_(const share::ObLogRestoreSourceItem &item,
     ObLogRestoreHandler &restore_handler)
 {
   UNUSED(item);

@@ -105,11 +105,34 @@ int ObMicroBlockDataHandle::get_index_block_data(
         nullptr,
         loaded_index_block_data_,
         allocator_))) {
-      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(read_info));
+      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(read_info), K(micro_block_id));
       try_release_loaded_index_block();
     } else {
       index_block = loaded_index_block_data_;
       is_loaded_index_block_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockDataHandle::get_cached_index_block_data(
+    const ObTableReadInfo &read_info,
+    ObMicroBlockData &index_block)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!read_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid columns info", K(ret), K(read_info));
+  } else if (ObSSTableMicroBlockState::IN_BLOCK_CACHE != block_state_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to get block data, unexpected block state", K(ret), K(block_state_));
+  } else {
+    const ObMicroBlockData *pblock = NULL;
+    if (NULL == (pblock = cache_handle_.get_block_data())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Fail to get cache block, ", K(ret));
+    } else {
+      index_block = *pblock;
     }
   }
   return ret;
@@ -206,21 +229,24 @@ int ObMicroBlockHandleMgr::init(
 
 int ObMicroBlockHandleMgr::get_micro_block_handle(
     const uint64_t tenant_id,
-    const MacroBlockId macro_id,
-    const ObIndexBlockRowHeader &idx_header,
+    const ObMicroIndexInfo &index_block_info,
     const bool is_data_block,
     ObMicroBlockDataHandle &micro_block_handle)
 {
   int ret = OB_SUCCESS;
   const bool deep_copy_key = true;
   bool found = false;
-  int64_t offset = idx_header.get_block_offset();
-  int64_t size = idx_header.get_block_size();
+  const MacroBlockId &macro_id = index_block_info.get_macro_id();
+  const int64_t offset = index_block_info.get_block_offset();
+  const int64_t size = index_block_info.get_block_size();
+  const ObIndexBlockRowHeader *idx_header = index_block_info.row_header_;
   micro_block_handle.reset();
   micro_block_handle.allocator_ = &allocator_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Block handle manager is not inited", K(ret));
+  } else if (OB_ISNULL(idx_header)) {
+    LOG_WARN("invalid argument", K(ret));
   } else {
     if (is_multi_) {
       if (is_ordered_) {
@@ -245,7 +271,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     }
 
     if (OB_FAIL(ret) || found) {
-    } else if (OB_FAIL(idx_header.fill_micro_des_meta(deep_copy_key, micro_block_handle.des_meta_))) {
+    } else if (OB_FAIL(idx_header->fill_micro_des_meta(deep_copy_key, micro_block_handle.des_meta_))) {
       LOG_WARN("Fail to fill micro block deserialize meta", K(ret));
     } else {
       micro_block_handle.tenant_id_ = tenant_id;
@@ -277,6 +303,47 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockHandleMgr::put_micro_block_handle(
+    const uint64_t tenant_id,
+    const blocksstable::MacroBlockId &macro_id,
+    const blocksstable::ObIndexBlockRowHeader &idx_header,
+    ObMicroBlockDataHandle &micro_block_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "block handle mgr is not inited", K(ret));
+  } else if (is_multi_) {
+    if (is_ordered_) {
+      *last_handle_ = micro_block_handle;
+    } else {
+      const int64_t offset = idx_header.get_block_offset();
+      const int64_t size = idx_header.get_block_size();
+      ObMicroBlockCacheKey key(tenant_id, macro_id, offset, size);
+      if (OB_FAIL(handle_cache_->put_handle(key, micro_block_handle))) {
+        STORAGE_LOG(WARN, "failed to put handle cache", K(ret), K(key));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockHandleMgr::reset_handle_cache()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "block handle mgr is not inited", K(ret));
+  } else if (is_multi_) {
+    if (is_ordered_) {
+      last_handle_->reset();
+    } else {
+      handle_cache_->reset_handles();
     }
   }
   return ret;

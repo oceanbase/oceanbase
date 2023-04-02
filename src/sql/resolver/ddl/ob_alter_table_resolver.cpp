@@ -502,7 +502,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
       } else if (index_table_schema->is_materialized_view()) {
-        // bug: https://aone.alibaba-inc.com/project/851168/issue/20958982
+        // bug:
         // index_tid_array: 包含index和mv, 这里只需要处理索引即可
         // so do-nothing for mv
       } else if (OB_FAIL(index_table_schema->get_index_name(index_name))) {
@@ -979,6 +979,7 @@ int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& n
 
 int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
                                                     obrpc::ObCreateIndexArg &index_arg,
+                                                    const int64_t index_name_value,
                                                     ObIArray<ObString> &input_index_columns_name)
 {
   int ret = OB_SUCCESS;
@@ -1018,6 +1019,19 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           }
         } else {
           sort_item.prefix_len_ = 0;
+        }
+
+        // spatial index constraint
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else {
+          bool is_explicit_order = (NULL != sort_column_node->children_[2]
+              && 1 != sort_column_node->children_[2]->is_empty_);
+          if (OB_FAIL(resolve_spatial_index_constraint(*table_schema_, sort_item.column_name_,
+              node.num_child_, index_name_value, is_explicit_order))) {
+            SQL_RESV_LOG(WARN, "check spatial index constraint fail",K(ret),
+                K(sort_item.column_name_), K(node.num_child_));
+          }
         }
 
         //column_order
@@ -1151,6 +1165,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
             } else if (OB_FAIL(resolve_index_column_list(*column_list_node,
                                                          *create_index_arg,
+                                                         node.value_,
                                                          input_index_columns_name))) {
               SQL_RESV_LOG(WARN, "resolve index name failed", K(ret));
             }
@@ -1158,7 +1173,11 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
           if (OB_SUCC(ret)) {
             if (!lib::is_oracle_mode()) {
               if (NULL != node.children_[3]) {
-                if (T_USING_BTREE == node.children_[3]->type_) {
+                if (SPATIAL_KEY == index_keyname_) {
+                  const char *method = T_USING_HASH == node.children_[3]->type_ ? "HASH" : "BTREE";
+                  ret = OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX;
+                  LOG_USER_ERROR(OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, method);
+                } else if (T_USING_BTREE == node.children_[3]->type_) {
                   create_index_arg->index_using_type_ = USING_BTREE;
                 } else {
                   create_index_arg->index_using_type_ = USING_HASH;
@@ -1244,7 +1263,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             if (OB_SUCCESS == ret) {
               if (NULL != table_option_node) {
                 has_index_using_type_ = false;
-                if (OB_FAIL(resolve_table_options(table_option_node, false))) {
+                if (OB_FAIL(resolve_table_options(table_option_node, true))) {
                   SQL_RESV_LOG(WARN, "failed to resolve table options!", K(ret));
                 } else if (has_index_using_type_) {
                   create_index_arg->index_using_type_ = index_using_type_;
@@ -1281,6 +1300,10 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             if (OB_SUCC(ret)) {
               if (OB_FAIL(generate_index_arg(*create_index_arg, is_unique_key))) {
                 SQL_RESV_LOG(WARN, "failed to generate index arg!", K(ret));
+              } else if (table_schema_->is_partitioned_table()
+                         && INDEX_TYPE_SPATIAL_GLOBAL == create_index_arg->index_type_) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
               } else {
                 create_index_arg->index_schema_.set_table_type(USER_INDEX);
                 create_index_arg->index_schema_.set_index_type(create_index_arg->index_type_);
@@ -1730,9 +1753,12 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
 {
   int ret = OB_SUCCESS;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t tenant_data_version = 0;
   if (OB_ISNULL(session_info_) || OB_ISNULL(alter_table_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "session info should not be null", K(session_info_), K(alter_table_stmt));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
   } else {
     //add storing column
     for (int32_t i = 0; OB_SUCC(ret) && i < store_column_names_.count(); ++i) {
@@ -1775,10 +1801,22 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           type = INDEX_TYPE_UNIQUE_LOCAL;
         }
       } else {
-        if (global_) {
-          type = INDEX_TYPE_NORMAL_GLOBAL;
+        if (tenant_data_version < DATA_VERSION_4_1_0_0 && index_keyname_ == SPATIAL_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+        } else if (global_) {
+          if (index_keyname_ == SPATIAL_KEY) {
+            type = INDEX_TYPE_SPATIAL_GLOBAL;
+          } else {
+            type = INDEX_TYPE_NORMAL_GLOBAL;
+          }
         } else {
-          type = INDEX_TYPE_NORMAL_LOCAL;
+          if (index_keyname_ == SPATIAL_KEY) {
+            type = INDEX_TYPE_SPATIAL_LOCAL;
+          } else {
+            type = INDEX_TYPE_NORMAL_LOCAL;
+          }
         }
       }
       index_arg.index_type_ = type;
@@ -2234,6 +2272,7 @@ int ObAlterTableResolver::resolve_alter_index(const ParseNode &node)
 int ObAlterTableResolver::resolve_alter_index_parallel_oracle(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
+  ObString tmp_index_name;
   ObString index_name;
   if (T_PARALLEL != node.type_ || OB_ISNULL(node.children_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2244,8 +2283,10 @@ int ObAlterTableResolver::resolve_alter_index_parallel_oracle(const ParseNode &n
   } else if (OB_ISNULL(index_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the index schema is null", K(ret));
-  } else if (OB_FAIL(index_schema_->get_index_name(index_name))) {
+  } else if (OB_FAIL(index_schema_->get_index_name(tmp_index_name))) {
     LOG_WARN("failed get index name", K(ret));
+  } else if (OB_FAIL(deep_copy_str(tmp_index_name, index_name))) {
+    LOG_WARN("failed to deep copy new_db_name", K(ret));
   } else {
     int64_t index_dop = node.children_[0]->value_;
     LOG_DEBUG("alter index table dop",
@@ -2375,14 +2416,17 @@ int ObAlterTableResolver::resolve_rename_index(const ParseNode &node)
       } else if (OB_FAIL(ObSQLUtils::check_index_name(cs_type, tmp_new_index_name))) {
         LOG_WARN("fail to check index name", K(tmp_new_index_name), K(ret));
       } else {
+        ObString tmp_index_name;
         ObString ori_index_name;
         ObString new_index_name;
         if (lib::is_mysql_mode()) {
           ori_index_name.assign_ptr(index_node->str_value_,
                                     static_cast<int32_t>(index_node->str_len_));
         } else if (lib::is_oracle_mode()) {
-          if (OB_FAIL(index_schema_->get_index_name(ori_index_name))) {
+          if (OB_FAIL(index_schema_->get_index_name(tmp_index_name))) {
             LOG_WARN("fail to get origin index name", K(ret));
+          } else if (OB_FAIL(deep_copy_str(tmp_index_name, ori_index_name))) {
+            LOG_WARN("failed to deep copy new_db_name", K(ret));
           }
         }
         new_index_name.assign_ptr(new_name_node->str_value_, static_cast<int32_t>(new_name_node->str_len_));
@@ -2703,6 +2747,7 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
 int ObAlterTableResolver::resolve_alter_index_tablespace_oracle(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
+  ObString tmp_index_name;
   ObString index_name;
   if (T_TABLESPACE != node.type_|| OB_ISNULL(node.children_[0]) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2710,8 +2755,10 @@ int ObAlterTableResolver::resolve_alter_index_tablespace_oracle(const ParseNode 
   } else if (OB_ISNULL(index_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the index schema is null", K(ret));
-  } else if (OB_FAIL(index_schema_->get_index_name(index_name))) {
+  } else if (OB_FAIL(index_schema_->get_index_name(tmp_index_name))) {
     LOG_WARN("failed to get index name", K(ret));
+  } else if (OB_FAIL(deep_copy_str(tmp_index_name, index_name))) {
+    LOG_WARN("failed to deep copy new_db_name", K(ret));
   } else {
     const uint64_t tenant_id = session_info_->get_effective_tenant_id();
     const ObTablespaceSchema *tablespace_schema = NULL;
@@ -3943,6 +3990,8 @@ int ObAlterTableResolver::resolve_convert_to_character(const ParseNode &node)
       if (CHARSET_INVALID == charset_type) {
         ret = OB_ERR_UNKNOWN_CHARSET;
         LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(charset_type, session_info_->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
       } else {
         charset_type_ = charset_type;
       }
@@ -3957,6 +4006,9 @@ int ObAlterTableResolver::resolve_convert_to_character(const ParseNode &node)
     if (CS_TYPE_INVALID == collation_type) {
       ret = OB_ERR_UNKNOWN_COLLATION;
       LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
+    } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(collation_type),
+                                                                      session_info_->get_effective_tenant_id()))) {
+      LOG_WARN("failed to check charset data version valid", K(ret));
     } else {
       collation_type_ = collation_type;
     }
@@ -4071,7 +4123,7 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
     SQL_RESV_LOG(WARN, "fail to set orig default value for alter table", K(ret), K(cur_default_value));
   } else if (OB_FAIL(session_info_->get_explicit_defaults_for_timestamp(explicit_value))) {
     LOG_WARN("fail to get explicit_defaults_for_timestamp", K(ret));
-  } else if (true == explicit_value) {
+  } else if (true == explicit_value || alter_column_schema.is_generated_column()) {
     //nothing to do
   } else {
     alter_column_schema.check_timestamp_column_order_ = true;
@@ -4341,6 +4393,9 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         } else if (!lib::is_oracle_mode() && ob_is_json_tc(alter_column_schema.get_data_type())) {
           ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
           SQL_RESV_LOG(WARN, "BLOB/TEXT or JSON can't set default value!", K(ret));
+        } else if (!lib::is_oracle_mode() && ob_is_geometry_tc(alter_column_schema.get_data_type())) {
+          ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+          SQL_RESV_LOG(WARN, "GEOMETRY can't set default value!", K(ret));
         } else if (OB_FAIL(resolve_default_value(default_node, default_value))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }
@@ -4380,7 +4435,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
   int ret = OB_SUCCESS;
   // 1. to get all check table schemas, including main table schema and its' index schemas.
   bool is_same = false;
-  ObSArray<ObTableSchema> check_table_schemas;
+  ObSArray<const ObTableSchema *> check_table_schemas;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
   if (OB_ISNULL(schema_guard)) {
@@ -4390,7 +4445,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
                                                                dst_col_schema,
                                                                is_same))) {
     LOG_WARN("check same type alter failed", K(ret));
-  } else if (table_schema.is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(table_schema))) {
+  } else if (table_schema.is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(&table_schema))) {
     LOG_WARN("push back schema failed", K(ret));
   } else if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple index infos failed", K(ret), K(table_schema));
@@ -4404,7 +4459,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null index schema", K(ret), K(simple_index_infos.at(i)));
-      } else if (index_schema->is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(*index_schema))) {
+      } else if (index_schema->is_partitioned_table() && OB_FAIL(check_table_schemas.push_back(index_schema))) {
         LOG_WARN("push back related index schema failed", K(ret));
       }
     }
@@ -4414,7 +4469,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
   if (OB_SUCC(ret)) {
     const ObString &alter_column_name = src_col_schema.get_column_name_str();
     for (int64_t i = 0; OB_SUCC(ret) && i < check_table_schemas.count(); i++) {
-      const ObTableSchema &cur_table_schema = check_table_schemas.at(i);
+      const ObTableSchema &cur_table_schema = *check_table_schemas.at(i);
       const ObColumnSchemaV2 *column_schema = nullptr;
       if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, bacause the column does not exist in the schema.
@@ -4621,6 +4676,23 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
             && alter_column_schema.get_cur_default_value().is_null()) {
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+        } else if (0 != origin_col_schema->get_rowkey_position()
+            && alter_column_schema.is_set_nullable_) {
+          ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
+          LOG_WARN("can't set primary key nullable", K(ret));
+        } else if (ObGeometryType == origin_col_schema->get_data_type()
+                   && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change geometry type");
+          LOG_WARN("can't not change geometry type", K(ret), K(origin_col_schema->get_geo_type()),
+                  K(alter_column_schema.get_geo_type()));
+        } else if (ObGeometryType == origin_col_schema->get_data_type()
+                   && ObGeometryType == alter_column_schema.get_data_type()
+                   && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support alter srid");
+          LOG_WARN("not support alter srid now", K(ret),
+                  K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
         }
       }
       if (OB_SUCC(ret)) {
@@ -4866,6 +4938,23 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               && alter_column_schema.get_cur_default_value().is_null()) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_USER_ERROR(OB_ERR_PRIMARY_CANT_HAVE_NULL);
+          } else if (0 != origin_col_schema->get_rowkey_position()
+              && alter_column_schema.is_set_nullable_) {
+            ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
+            LOG_WARN("can't set primary key nullable", K(ret));
+          } else if (ObGeometryType == origin_col_schema->get_data_type()
+                     && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry type");
+            LOG_WARN("can't not modify geometry type", K(ret), K(origin_col_schema->get_geo_type()),
+                    K(alter_column_schema.get_geo_type()));
+          } else if (ObGeometryType == origin_col_schema->get_data_type()
+                     && ObGeometryType == alter_column_schema.get_data_type()
+                     && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
+            LOG_WARN("can't not modify geometry srid", K(ret),
+                    K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
           }
         }
       }
@@ -5021,7 +5110,7 @@ int ObAlterTableResolver::fill_column_schema_according_stat(const ObColumnResolv
   } else if (ObTimestampType == alter_column_schema.get_data_type()) {
     if (OB_FAIL(session_info_->get_explicit_defaults_for_timestamp(explicit_value))) {
       LOG_WARN("fail to get explicit_defaults_for_timestamp", K(ret));
-    } else if (!explicit_value) {
+    } else if (!explicit_value && !alter_column_schema.is_generated_column()) {
       alter_column_schema.check_timestamp_column_order_ = true;
     }
   }
@@ -5200,6 +5289,7 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
   CK (OB_NOT_NULL(alter_table_stmt) && OB_NOT_NULL(schema_checker_) && OB_NOT_NULL(allocator_));
   CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
   if (OB_SUCC(ret)) {
+    alter_table_stmt->get_tg_arg().is_set_status_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_->get_trigger_list().count(); ++i) {
       ObTriggerInfo new_tg_arg;
       OX (new_tg_arg.set_is_enable(is_enable));

@@ -41,7 +41,7 @@ public:
     int64_t idx = get_itid() % MAX_REF_CNT;
     const int64_t new_ref = add_ref(idx, 1);
     if (OB_UNLIKELY(0 >= new_ref)) {
-      COMMON_LOG(ERROR, "unexpected ref", K(new_ref), K(idx));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref", K(new_ref), K(idx));
     }
     return idx;
   }
@@ -53,7 +53,7 @@ public:
   {
     const int64_t new_ref = add_ref(idx, -1);
     if (OB_UNLIKELY(0 > new_ref)) {
-      COMMON_LOG(ERROR, "unexpected ref", K(new_ref), K(idx));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref", K(new_ref), K(idx));
     }
   }
   void sync()
@@ -121,6 +121,7 @@ public:
   };
   ObDynamicQSync(): is_inited_(false), ref_array_(NULL), ref_num_(0) {}
   virtual ~ObDynamicQSync() {destroy();}
+  bool is_inited() const { return is_inited_; }
 
   int init(const lib::ObMemAttr& mem_attr)
   {
@@ -168,7 +169,7 @@ public:
     int64_t idx = get_itid() % ref_num_;
     const int64_t new_ref = add_ref(idx, 1);
     if (OB_UNLIKELY(0 >= new_ref)) {
-      COMMON_LOG(ERROR, "unexpected ref", K(new_ref), K(idx));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref", K(new_ref), K(idx));
     }
     return idx;
   }
@@ -180,7 +181,7 @@ public:
   {
     const int64_t new_ref = add_ref(idx, -1);
     if (OB_UNLIKELY(0 > new_ref)) {
-      COMMON_LOG(ERROR, "unexpected ref", K(new_ref), K(idx));
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref", K(new_ref), K(idx));
     }
   }
   void sync()

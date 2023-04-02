@@ -60,9 +60,7 @@ int ObDASBatchScanOp::open_op()
   if (OB_FAIL(init_scan_param())) {
     LOG_WARN("init scan param failed", K(ret));
   } else if (OB_FAIL(tsc_service.table_scan(scan_param_, batch_result_))) {
-    if (OB_SNAPSHOT_DISCARDED == ret
-        && transaction::ObTransVersion::INVALID_TRANS_VERSION !=
-            scan_param_.fb_snapshot_) {
+    if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
       ret = OB_INVALID_QUERY_TIMESTAMP;
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(scan_param_), K(ret));
@@ -165,7 +163,7 @@ int ObDASBatchScanOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASBatchScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASBatchScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
   DASExpandIterator *expand_iter = nullptr;
@@ -176,7 +174,7 @@ int ObDASBatchScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_
   } else {
     result_ = expand_iter;
     result_outputs_ = &(expand_iter->get_output_exprs());
-    if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more))) {
+    if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more, memory_limit))) {
       LOG_WARN("fill task result failed", K(ret));
     }
   }
@@ -367,7 +365,7 @@ int ObDASBatchScanOp::DASFoldIterator::get_next_row()
   } else if (OB_UNLIKELY(group_id_ > last_group_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("last iterator has not reach iter end", K(ret), K(group_id_), K(last_group_id));
-  } else if (OB_FAIL(last_row_.store_row_->to_expr_skip_const(output_exprs_, *eval_ctx_))) {
+  } else if (OB_FAIL(last_row_.store_row_->to_expr(output_exprs_, *eval_ctx_))) {
     LOG_WARN("to expr skip const failed", K(ret));
   } else {
     last_row_.store_row_->cells()[output_exprs_.count() - 1].set_int(OB_INVALID_INDEX);

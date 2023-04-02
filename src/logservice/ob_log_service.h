@@ -25,11 +25,12 @@
 #include "rcservice/ob_role_change_service.h"
 #include "restoreservice/ob_log_restore_service.h"     // ObLogRestoreService
 #include "replayservice/ob_log_replay_service.h"
+#include "ob_net_keepalive_adapter.h"
 #include "ob_reporter_adapter.h"
 #include "ob_ls_adapter.h"
 #include "ob_location_adapter.h"
+#include "ob_log_flashback_service.h"                  // ObLogFlashbackService
 #include "ob_log_handler.h"
-#include "ob_location_adapter.h"
 
 namespace oceanbase
 {
@@ -37,8 +38,13 @@ namespace commom
 {
 class ObAddr;
 class ObILogAllocator;
+class ObMySQLProxy;
 }
 
+namespace obrpc
+{
+class ObNetKeepAlive;
+}
 namespace rpc
 {
 namespace frame
@@ -51,6 +57,7 @@ namespace share
 {
 class ObLSID;
 class ObLocationService;
+class SCN;
 }
 
 namespace palf
@@ -67,7 +74,7 @@ class ObLSService;
 
 namespace logservice
 {
-//租户级日志服务管理
+
 class ObLogService
 {
 public:
@@ -80,30 +87,17 @@ public:
   void destroy();
 public:
   static palf::AccessMode get_palf_access_mode(const share::ObTenantRole &tenant_role);
-  int init(const palf::PalfDiskOptions &disk_options,
+  int init(const palf::PalfOptions &options,
            const char *base_dir,
            const common::ObAddr &self,
+           common::ObILogAllocator *alloc_mgr,
            rpc::frame::ObReqTransport *transport,
            storage::ObLSService *ls_service,
            share::ObLocationService *location_service,
            observer::ObIMetaReport *reporter,
-           palf::ILogBlockPool *log_block_pool);
-  //--日志流相关接口--
-  //新建日志流接口，该接口会创建日志流对应的目录，新建一个空白日志流。其中包括生成并初始化对应的ObReplayStatus结构
-  // @param [in] id，日志流标识符
-  // @param [in] replica_type，日志流的副本类型
-  // @param [in] tenant_role, 租户角色, 以此决定Palf使用模式(APPEND/RAW_WRITE)
-  // @param [in] create_ts, 日志流创建时间, 保证日志流产生的日志都大于该时间
-  // @param [in] allow_log_sync, 是否允许同步日志, 迁移支持先加 learner 后移除
-  // @param [out] log_handler，新建日志流以ObLogHandler形式返回，保证上层使用日志流时的生命周期
-  // @param [out] restore_handler，新建日志流以ObLogRestoreHandler形式返回，用于备库同步日志
-  int create_ls(const share::ObLSID &id,
-                const common::ObReplicaType &replica_type,
-                const share::ObTenantRole &tenant_role,
-                const int64_t create_ts,
-                const bool allow_log_sync,
-                ObLogHandler &log_handler,
-                ObLogRestoreHandler &restore_handler);
+           palf::ILogBlockPool *log_block_pool,
+           common::ObMySQLProxy *sql_proxy,
+           IObNetKeepAliveAdapter *net_keepalive_adapter);
   //--日志流相关接口--
   //新建日志流接口，该接口会创建日志流对应的目录，新建一个以PalfBaeInfo为日志基点的日志流。
   //其中包括生成并初始化对应的ObReplayStatus结构
@@ -122,7 +116,7 @@ public:
                 ObLogRestoreHandler &restore_handler);
 
   //删除日志流接口:外层调用create_ls()之后，后续流程失败，需要调用remove_ls()
-  int remove_ls(const share::ObLSID &id, 
+  int remove_ls(const share::ObLSID &id,
                 ObLogHandler &log_handler,
                 ObLogRestoreHandler &restore_handler);
 
@@ -148,9 +142,9 @@ public:
                     common::ObRole &role,
                     int64_t &proposal_id);
 
-  int update_replayable_point(const int64_t replayable_point);
+  int update_replayable_point(const share::SCN &replayable_point);
+  int get_replayable_point(share::SCN &replayable_point);
   int get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
-  int update_palf_disk_options(const palf::PalfDiskOptions &disk_options);
   // why we need update 'log_disk_size_' and 'log_disk_util_threshold' separately.
   //
   // 'log_disk_size' is a member of unit config.
@@ -175,22 +169,39 @@ public:
   //   log_disk_util_limit_threshold = 85,
   //   log_disk_util_threshold = 80
   // }.
-  int update_log_disk_util_threshold(const int64_t log_disk_usage_threshold, const int64_t log_disk_usage_limit_threshold);
+  int update_palf_options_except_disk_usage_limit_size();
   int update_log_disk_usage_limit_size(const int64_t log_disk_usage_limit_size);
-  int get_palf_disk_options(palf::PalfDiskOptions &options);
+  int get_palf_options(palf::PalfOptions &options);
   int iterate_palf(const ObFunction<int(const palf::PalfHandle&)> &func);
   int iterate_apply(const ObFunction<int(const ObApplyStatus&)> &func);
   int iterate_replay(const ObFunction<int(const ObReplayStatus&)> &func);
+
+  // @desc: flashback all log_stream's redo log of tenant 'tenant_id'
+  // @params [in] const uint64_t tenant_id: id of tenant which should be flashbacked
+  // @params [in] const SCN &flashback_scn: flashback point
+  // @params [in] const int64_t timeout_us: timeout time (us)
+  // @return
+  //   - OB_SUCCESS
+  //   - OB_INVALID_ARGUEMENT: invalid tenant_id or flashback_scn
+  //   - OB_NOT_SUPPORTED: meta tenant or sys tenant can't be flashbacked
+  //   - OB_EAGAIN: another flashback operation is doing
+  //   - OB_TIMEOUT: timeout
+  int flashback(const uint64_t tenant_id, const share::SCN &flashback_scn, const int64_t timeout_us);
+
   int diagnose_role_change(RCDiagnoseInfo &diagnose_info);
   int diagnose_replay(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
   int diagnose_apply(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
+  int get_io_start_time(int64_t &last_working_time);
+  int check_disk_space_enough(bool &is_disk_enough);
 
   palf::PalfEnv *get_palf_env() { return palf_env_; }
   // TODO by yunlong: temp solution, will by removed after Reporter be added in MTL
   ObLogReporterAdapter *get_reporter() { return &reporter_; }
   cdc::ObCdcService *get_cdc_service() { return &cdc_service_; }
   ObLogRestoreService *get_log_restore_service() { return &restore_service_; }
-  ObLogReplayService *get_log_replay_service() { return &replay_service_; }
+  ObLogReplayService *get_log_replay_service()  { return &replay_service_; }
+  obrpc::ObLogServiceRpcProxy *get_rpc_proxy() { return &rpc_proxy_; }
+  ObLogFlashbackService *get_flashback_service() { return &flashback_service_; }
 private:
   int create_ls_(const share::ObLSID &id,
                  const common::ObReplicaType &replica_type,
@@ -202,8 +213,11 @@ private:
 private:
   bool is_inited_;
   bool is_running_;
+
   common::ObAddr self_;
   palf::PalfEnv *palf_env_;
+  IObNetKeepAliveAdapter *net_keepalive_adapter_;
+
   ObLogApplyService apply_service_;
   ObLogReplayService replay_service_;
   ObRoleChangeService role_change_service_;
@@ -213,7 +227,8 @@ private:
   ObLogReporterAdapter reporter_;
   cdc::ObCdcService cdc_service_;
   ObLogRestoreService restore_service_;
-  ObSpinLock update_disk_opts_lock_;
+  ObLogFlashbackService flashback_service_;
+  ObSpinLock update_palf_opts_lock_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogService);
 };

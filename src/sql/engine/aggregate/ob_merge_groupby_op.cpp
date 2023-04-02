@@ -143,7 +143,8 @@ int ObMergeGroupByOp::init_rollup_distributor()
       int64_t row_count = child_->get_spec().rows_;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(inner_sort_.init(ctx_.get_my_session()->get_effective_tenant_id(),
-          &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funcs_, &eval_ctx_, &ctx_,
+          &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funcs_,
+          &eval_ctx_, &ctx_,
           MY_SPEC.enable_encode_sort_, false, false /* need_rewind */))) {
         LOG_WARN("failed to init sort", K(ret));
       } else if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(&ctx_,
@@ -242,6 +243,7 @@ int ObMergeGroupByOp::init()
         for (int64_t i = 0; !has_dup_group_expr_ && i < MY_SPEC.is_duplicate_rollup_expr_.count(); ++i) {
           has_dup_group_expr_ = MY_SPEC.is_duplicate_rollup_expr_.at(i);
         }
+        aggr_processor_.set_op_eval_infos(&eval_infos_);
       }
     }
   }
@@ -362,7 +364,7 @@ int ObMergeGroupByOp::rewrite_rollup_column(ObExpr *&diff_expr)
       : MY_SPEC.rollup_exprs_[cur_output_group_id_ - MY_SPEC.group_exprs_.count()]);
   LOG_DEBUG("debug write rollup column 1", KP(diff_expr), K(cur_output_group_id_));
   //for SELECT GROUPING(z0_test0) FROM Z0CASE GROUP BY z0_test0, ROLLUP(z0_test0);
-  //issue:https://work.aone.alibaba-inc.com/issue/33780805
+  //issue:
   if (cur_output_group_id_ >= MY_SPEC.group_exprs_.count()) {
     for (int64_t i = 0; diff_expr != NULL && i < MY_SPEC.group_exprs_.count(); ++i) {
       if (MY_SPEC.group_exprs_[i] == diff_expr) {
@@ -449,7 +451,7 @@ int ObMergeGroupByOp::collect_local_ndvs()
     if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
       LOG_WARN("failed to eval expr", K(ret));
     } else {
-      hash_value = expr->basic_funcs_->murmur_hash_(*datum, hash_value);
+      hash_value = expr->basic_funcs_->murmur_hash_v2_(*datum, hash_value);
       if ((0 < n_group && i == n_group - 1) || i >= n_group) {
         if (0 < n_group) {
           ndv_calculator_[i - n_group + 1].set(hash_value);
@@ -477,9 +479,11 @@ int ObMergeGroupByOp::process_parallel_rollup_key(ObRollupNDVInfo &ndv_info)
     ObRollupKeyPieceMsg piece;
     piece.op_id_ = MY_SPEC.id_;
     piece.thread_id_ = GETTID();
-    piece.dfo_id_ = proxy.get_dfo_id();
+    piece.source_dfo_id_ = proxy.get_dfo_id();
+    piece.target_dfo_id_ = proxy.get_dfo_id();
     piece.rollup_ndv_ = ndv_info;
-    if (OB_FAIL(proxy.get_dh_msg(MY_SPEC.id_,
+    if (OB_FAIL(proxy.get_dh_msg_sync(MY_SPEC.id_,
+        dtl::DH_ROLLUP_KEY_WHOLE_MSG,
         piece,
         temp_whole_msg,
         ctx_.get_physical_plan_ctx()->get_timeout_timestamp()))) {
@@ -523,7 +527,7 @@ int ObMergeGroupBySpec::register_to_datahub(ObExecContext &ctx) const
         ObRollupKeyWholeMsg::WholeMsgProvider *provider =
           new (buf)ObRollupKeyWholeMsg::WholeMsgProvider();
         ObSqcCtx &sqc_ctx = ctx.get_sqc_handler()->get_sqc_ctx();
-        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), *provider))) {
+        if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), dtl::DH_ROLLUP_KEY_WHOLE_MSG, *provider))) {
           LOG_WARN("fail add whole msg provider", K(ret));
         }
       }
@@ -814,10 +818,10 @@ int ObMergeGroupByOp::batch_collect_local_ndvs(const ObBatchRows *child_brs)
       bool is_batch_seed = (0 != i);
       ObDatum &curr_datum = expr->locate_batch_datums(eval_ctx_)[0];
       if (0 == i) {
-        expr->basic_funcs_->murmur_hash_batch_(rollup_hash_vals_, &curr_datum, expr->is_batch_result(),
+        expr->basic_funcs_->murmur_hash_v2_batch_(rollup_hash_vals_, &curr_datum, expr->is_batch_result(),
                   *child_brs->skip_, child_brs->size_, &hash_value_seed, is_batch_seed);
       } else {
-        expr->basic_funcs_->murmur_hash_batch_(rollup_hash_vals_, &curr_datum, expr->is_batch_result(),
+        expr->basic_funcs_->murmur_hash_v2_batch_(rollup_hash_vals_, &curr_datum, expr->is_batch_result(),
                   *child_brs->skip_, child_brs->size_, rollup_hash_vals_, is_batch_seed);
       }
       // whether it need skip???

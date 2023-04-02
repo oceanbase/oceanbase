@@ -458,7 +458,7 @@ with RECURSIVE qn () as (select 1) select * from qn, qn qn1;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ') as (select 1) select * from qn, qn qn1' at line 1
 # Materialization
 with RECURSIVE qn (foo, bar) as (select 1 from dual) select * from qn, qn qn1;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 with RECURSIVE qn (foo, bar) as (select 1 as col, 2 as coll from dual union all
                        select a,b from t1) select qn1.bar from qn qn1;
@@ -472,7 +472,7 @@ with RECURSIVE qn (foo, bar) as (select 1 as col, 2 as coll from dual union all
 
 # Merge
 with RECURSIVE qn (foo, bar) as (select 1 from t1) select * from qn, qn qn1;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 with RECURSIVE qn (foo, bar) as (select 1, 2 from t1) select * from qn, qn qn1;
 +-----+-----+-----+-----+
 | foo | bar | foo | bar |
@@ -528,7 +528,7 @@ create view v1 as
  with RECURSIVE qn (foo, bar) as (select 1,1 from dual) select * from qn;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS WITH RECURSIVE`qn`(foo, bar) as (select 1 AS `foo`,1 AS `bar`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from `qn`	utf8mb4	utf8mb4_general_ci
+v1	CREATE VIEW `v1` AS WITH RECURSIVE `qn`(`foo`, `bar`) as (select 1 AS `foo`,1 AS `bar`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from `qn`	utf8mb4	utf8mb4_general_ci
 
 select * from v1;
 +-----+-----+
@@ -541,7 +541,7 @@ create view v1 as
  with RECURSIVE qn (foo, bar) as (select 1,1 from t1) select * from qn;
 show create view v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE VIEW `v1` AS WITH RECURSIVE`qn`(foo, bar) as (select 1 AS `foo`,1 AS `bar` from `cte_st`.`t1`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from `qn`	utf8mb4	utf8mb4_general_ci
+v1	CREATE VIEW `v1` AS WITH RECURSIVE `qn`(`foo`, `bar`) as (select 1 AS `foo`,1 AS `bar` from `cte_st`.`t1`) select `qn`.`foo` AS `foo`,`qn`.`bar` AS `bar` from `qn`	utf8mb4	utf8mb4_general_ci
 select * from v1;
 +-----+-----+
 | foo | bar |
@@ -588,7 +588,7 @@ select (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from q
 from dual;
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select (WITH RECURSIVE`qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` from `qn`) AS `scal_subq`	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select (WITH RECURSIVE `qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` from `qn`) AS `scal_subq`	utf8mb4	utf8mb4_general_ci
 select * from v;
 +----------------+
 | scal_subq      |
@@ -599,7 +599,7 @@ drop view v;
 create view v as select * from (with RECURSIVE qn as (select 'with RECURSIVE' from dual) select * from qn)  dt;
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select `dt`.`with RECURSIVE` AS `with RECURSIVE` from (WITH RECURSIVE`qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` AS `with RECURSIVE` from `qn`) dt	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select `dt`.`with RECURSIVE` AS `with RECURSIVE` from (WITH RECURSIVE `qn` as (select 'with RECURSIVE' AS `with RECURSIVE`) select `qn`.`with RECURSIVE` AS `with RECURSIVE` from `qn`) `dt`	utf8mb4	utf8mb4_general_ci
 select * from v;
 +----------------+
 | with RECURSIVE |
@@ -1666,9 +1666,9 @@ with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from 
 |    9 |    9 |
 +------+------+
 with RECURSIVE cte(a,b,c) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 with RECURSIVE cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 with RECURSIVE cte(a,b,c) as
 (
   select c1,c2,c3 from t1 where t1.c1 < 20
@@ -1752,7 +1752,7 @@ with RECURSIVE cte(n) AS ( select 1 from cte) select * from cte;
 ERROR HY000: recursive WITH clause must use a UNION ALL operation
 set @@ob_query_timeout=1000000;
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
-ERROR HY000: unsupported operation in recursive branch of recursive WITH clause
+ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
 set @@ob_query_timeout=10000000;
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
 ERROR HY000: UNION ALL operation in recursive WITH clause must have only two branches
@@ -1865,16 +1865,16 @@ with RECURSIVE cte(n) as (select '1' from dual union all select n+1 from cte whe
 +------+
 
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 set @@ob_query_timeout=1000000;
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 set @@ob_query_timeout=10000000;
 
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 order by n ) select * from cte;
@@ -1929,7 +1929,7 @@ select c,d from cte2;
 explain basic with RECURSIVE
   cte2(c,d) AS (select * from t1 left join t2 on t1.c1=t2.c1 order by t1.c1 union all select c+1, d+1 from cte2 where c < 30)
 select c1 from cte2;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 with RECURSIVE
   cte2(c,d) AS (select t1.c1, t2.c2 from t1 left join t2 on t1.c1=t2.c1 order by t1.c1 union all select c+1, d+1 from cte2 where c < 30)

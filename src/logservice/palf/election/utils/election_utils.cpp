@@ -209,7 +209,7 @@ bool MemberListWithStates::is_synced_with_majority() const
 {
   bool ret_bool = false;
   if (OB_ISNULL(p_impl_)) {
-    ELECT_LOG(ERROR, "p_impl_ is nullptr", KP_(p_impl));
+    ELECT_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "p_impl_ is nullptr", KP_(p_impl));
   } else if (!p_impl_->member_list_.get_membership_version().is_valid()) {
     ret_bool = true;
   } else {
@@ -219,7 +219,7 @@ bool MemberListWithStates::is_synced_with_majority() const
     if (sync_count >= (p_impl_->member_list_.get_replica_num() / 2 + 1)) {
       ret_bool = true;
     } else {
-      ELECT_LOG(WARN, "membership version not sync with majority yet", K(*this), K(version));
+      ELECT_LOG_RET(WARN, OB_ERR_UNEXPECTED, "membership version not sync with majority yet", K(*this), K(version));
     }
   }
   return ret_bool;

@@ -266,7 +266,11 @@ public:
   // convert right table scan parameter of join MV scan.
   // (right table index back not supported)
   inline uint64_t get_table_id() const { return table_id_; }
+  inline int64_t is_spatial_index() const { return is_spatial_index_; }
+  inline void set_is_spatial_index(bool is_spatial_index) { is_spatial_index_ = is_spatial_index; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
+  inline bool enable_lob_locator_v2() const { return enable_lob_locator_v2_; }
+  inline bool &get_enable_lob_locator_v2() { return enable_lob_locator_v2_; }
   inline bool has_virtual_column() const { return has_virtual_column_; }
   inline int64_t get_rowid_version() const { return rowid_version_; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
@@ -307,12 +311,14 @@ private:
   // @param [out] use_lob_locator
   // @param [out] rowid_version
   // @param [out] rowid_projector
+  // @param [in] use_lob_locator_v2
   int construct_lob_locator_param(const ObTableSchema &table_schema,
                                   const ObIArray<ObColumnParam *> &storage_project_columns,
                                   const Projector &access_projector,
                                   bool &use_lob_locator,
                                   int64_t &rowid_version,
-                                  Projector &rowid_projector);
+                                  Projector &rowid_projector,
+                                  bool is_use_lob_locator_v2);
 private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;
   common::ObIAllocator &allocator_;
@@ -337,6 +343,10 @@ private:
   bool use_lob_locator_;
   int64_t rowid_version_;
   Projector rowid_projector_;
+  // if min cluster version < 4.1 use lob locator v1, else use lob locator v2.
+  // use enable_lob_locator_v2_ to avoid locator type sudden change while table scan is running
+  bool enable_lob_locator_v2_;
+  bool is_spatial_index_;
 };
 } //namespace schema
 } //namespace share

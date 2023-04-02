@@ -1,0 +1,1459 @@
+result_format: 4
+use test;
+
+set ob_query_timeout=100000000;
+
+DROP TABLE IF EXISTS customer;
+DROP TABLE IF EXISTS district;
+DROP TABLE IF EXISTS history;
+DROP TABLE IF EXISTS item;
+DROP TABLE IF EXISTS new_order;
+DROP TABLE IF EXISTS order_line;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS stock;
+DROP TABLE IF EXISTS warehouse;
+DROP PROCEDURE IF EXISTS delivery;
+DROP PROCEDURE IF EXISTS new_order_2;
+DROP PROCEDURE IF EXISTS new_order;
+DROP PROCEDURE IF EXISTS order_status;
+DROP PROCEDURE IF EXISTS payment;
+DROP PROCEDURE IF EXISTS stock_level;
+CREATE TABLE customer (
+  c_id int(11) NOT NULL default '0',
+  c_d_id int(11) NOT NULL default '0',
+  c_w_id int(11) NOT NULL default '0',
+  c_first varchar(16) default NULL,
+  c_middle char(2) default NULL,
+  c_last varchar(16) default NULL,
+  c_street_1 varchar(20) default NULL,
+  c_street_2 varchar(20) default NULL,
+  c_city varchar(20) default NULL,
+  c_state char(2) default NULL,
+  c_zip varchar(9) default NULL,
+  c_phone varchar(16) default NULL,
+  c_since timestamp NOT NULL,
+  c_credit char(2) default NULL,
+  c_credit_lim decimal(24,12) default NULL,
+  c_discount double default NULL,
+  c_balance decimal(24,12) default NULL,
+  c_ytd_payment decimal(24,12) default NULL,
+  c_payment_cnt double default NULL,
+  c_delivery_cnt double default NULL,
+  c_data varchar(500),
+  PRIMARY KEY (c_w_id,c_d_id,c_id),
+  KEY c_w_id (c_w_id,c_d_id,c_last,c_first)
+);
+
+CREATE TABLE district (
+  d_id int(11) NOT NULL default '0',
+  d_w_id int(11) NOT NULL default '0',
+  d_name varchar(10) default NULL,
+  d_street_1 varchar(20) default NULL,
+  d_street_2 varchar(20) default NULL,
+  d_city varchar(20) default NULL,
+  d_state char(2) default NULL,
+  d_zip varchar(9) default NULL,
+  d_tax double default NULL,
+  d_ytd decimal(24,12) default NULL,
+  d_next_o_id int(11) default NULL,
+  PRIMARY KEY (d_w_id,d_id)
+);
+
+CREATE TABLE history (
+  h_id bigint(20) auto_increment,
+  h_c_id int(11) default NULL,
+  h_c_d_id int(11) default NULL,
+  h_c_w_id int(11) default NULL,
+  h_d_id int(11) default NULL,
+  h_w_id int(11) NOT NULL default '0',
+  h_date timestamp NOT NULL,
+  h_amount double default NULL,
+  h_data varchar(24) default NULL,
+  PRIMARY KEY (h_id, h_w_id)
+);
+
+CREATE TABLE item (
+  i_id int(11) NOT NULL default '0',
+  i_im_id int(11) default NULL,
+  i_name varchar(24) default NULL,
+  i_price double default NULL,
+  i_data varchar(50) default NULL,
+  PRIMARY KEY (i_id)
+);
+
+CREATE TABLE new_order (
+  no_o_id int(11) NOT NULL default '0',
+  no_d_id int(11) NOT NULL default '0',
+  no_w_id int(11) NOT NULL default '0',
+  PRIMARY KEY (no_w_id,no_d_id,no_o_id)
+);
+
+CREATE TABLE order_line (
+  ol_o_id int(11) NOT NULL default '0',
+  ol_d_id int(11) NOT NULL default '0',
+  ol_w_id int(11) NOT NULL default '0',
+  ol_number int(11) NOT NULL default '0',
+  ol_i_id int(11) default NULL,
+  ol_supply_w_id int(11) default NULL,
+  ol_delivery_d timestamp NOT NULL,
+  ol_quantity double default NULL,
+  ol_amount double default NULL,
+  ol_dist_info varchar(24) default NULL,
+  PRIMARY KEY (ol_w_id,ol_d_id,ol_o_id,ol_number)
+);
+
+CREATE TABLE orders (
+  o_id int(11) NOT NULL default '0',
+  o_d_id int(11) NOT NULL default '0',
+  o_w_id int(11) NOT NULL default '0',
+  o_c_id int(11) default NULL,
+  o_entry_d timestamp NOT NULL,
+  o_carrier_id int(11) default NULL,
+  o_ol_cnt int(11) default NULL,
+  o_all_local double default NULL,
+  PRIMARY KEY (o_w_id,o_d_id,o_id),
+  KEY o_w_id (o_w_id,o_d_id,o_c_id,o_id)
+);
+
+CREATE TABLE stock (
+  s_i_id int(11) NOT NULL default '0',
+  s_w_id int(11) NOT NULL default '0',
+  s_quantity double NOT NULL default '0',
+  s_dist_01 varchar(24) default NULL,
+  s_dist_02 varchar(24) default NULL,
+  s_dist_03 varchar(24) default NULL,
+  s_dist_04 varchar(24) default NULL,
+  s_dist_05 varchar(24) default NULL,
+  s_dist_06 varchar(24) default NULL,
+  s_dist_07 varchar(24) default NULL,
+  s_dist_08 varchar(24) default NULL,
+  s_dist_09 varchar(24) default NULL,
+  s_dist_10 varchar(24) default NULL,
+  s_ytd decimal(16,8) default NULL,
+  s_order_cnt double default NULL,
+  s_remote_cnt double default NULL,
+  s_data varchar(50) default NULL,
+  PRIMARY KEY (s_w_id,s_i_id),
+  KEY  (s_w_id,s_i_id,s_quantity)
+);
+
+CREATE TABLE warehouse (
+  w_id int(11) NOT NULL default '0',
+  w_name varchar(10) default NULL,
+  w_street_1 varchar(20) default NULL,
+  w_street_2 varchar(20) default NULL,
+  w_city varchar(20) default NULL,
+  w_state char(2) default NULL,
+  w_zip varchar(9) default NULL,
+  w_tax double default NULL,
+  w_ytd decimal(24,12) default NULL,
+  PRIMARY KEY (w_id)
+);
+
+
+CREATE PROCEDURE delivery(in_w_id INT, in_o_carrier_id INT)
+BEGIN
+   DECLARE  out_c_id INT;
+   DECLARE  out_ol_amount INT;
+   DECLARE  tmp_d_id INT;
+   DECLARE  tmp_o_id INT default 0;
+
+   SET tmp_d_id = 1;
+
+   while tmp_d_id <= 10 DO
+   BEGIN
+
+     SET tmp_o_id= 0;
+
+     SELECT no_o_id
+     FROM new_order
+     WHERE no_w_id = in_w_id AND no_d_id = tmp_d_id
+     ORDER BY no_o_id ASC
+     LIMIT 1
+     FOR UPDATE INTO tmp_o_id;
+
+     IF tmp_o_id > 0
+     THEN
+       DELETE FROM new_order
+       WHERE no_o_id = tmp_o_id
+         AND no_w_id = in_w_id
+         AND no_d_id = tmp_d_id;
+
+       SELECT o_c_id
+       FROM orders
+       WHERE o_id = tmp_o_id
+         AND o_w_id = in_w_id
+         AND o_d_id = tmp_d_id
+       FOR UPDATE INTO out_c_id;
+
+       UPDATE orders
+       SET o_carrier_id = in_o_carrier_id
+       WHERE o_id = tmp_o_id
+         AND o_w_id = in_w_id
+         AND o_d_id = tmp_d_id;
+
+       UPDATE order_line force index (primary)
+       SET ol_delivery_d = current_timestamp
+       WHERE ol_o_id = tmp_o_id
+         AND ol_w_id = in_w_id
+         AND ol_d_id = tmp_d_id;
+
+       SELECT SUM(ol_amount * ol_quantity)
+       FROM order_line force index (primary)
+       WHERE ol_o_id = tmp_o_id
+         AND ol_w_id = in_w_id
+         AND ol_d_id = tmp_d_id INTO out_ol_amount;
+
+       UPDATE customer
+       SET c_delivery_cnt = c_delivery_cnt + 1,
+           c_balance = c_balance + out_ol_amount
+       WHERE c_id = out_c_id
+         AND c_w_id = in_w_id
+         AND c_d_id = tmp_d_id;
+
+     END IF;
+
+     SET tmp_d_id = tmp_d_id + 1;
+
+   END;
+   END WHILE;
+END//
+
+CREATE PROCEDURE new_order_2 (in_w_id INT,
+                              in_d_id INT,
+                              in_ol_i_id INT,
+                              in_ol_quantity INT,
+                              in_i_price NUMERIC,
+                              in_i_name VARCHAR(24),
+                              in_i_data VARCHAR(50),
+                              in_ol_o_id INT,
+                              in_ol_amount NUMERIC,
+                              in_ol_supply_w_id INT,
+                              in_ol_number INT,
+                              out out_s_quantity INT)
+BEGIN
+
+  DECLARE	tmp_s_dist VARCHAR(255);
+  DECLARE	tmp_s_data VARCHAR(255);
+
+  SET out_s_quantity = 0;
+
+  IF in_d_id = 1 THEN
+    SELECT s_quantity, s_dist_01, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 2 THEN
+    SELECT s_quantity, s_dist_02, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 3 THEN
+    SELECT s_quantity, s_dist_03, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 4 THEN
+    SELECT s_quantity, s_dist_04, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 5 THEN
+    SELECT s_quantity, s_dist_05, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 6 THEN
+    SELECT s_quantity, s_dist_06, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 7 THEN
+    SELECT s_quantity, s_dist_07, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 8 THEN
+    SELECT s_quantity, s_dist_08, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 9 THEN
+    SELECT s_quantity, s_dist_09, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+
+  ELSEIF in_d_id = 10 THEN
+    SELECT s_quantity, s_dist_10, s_data
+    FROM stock
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id
+                FOR UPDATE
+    INTO out_s_quantity, tmp_s_dist, tmp_s_data;
+  END IF;
+
+  IF out_s_quantity > in_ol_quantity + 10 THEN
+    UPDATE stock
+    SET s_quantity = out_s_quantity - in_ol_quantity
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id;
+  ELSE
+    UPDATE stock
+    SET s_quantity = out_s_quantity - in_ol_quantity + 91
+    WHERE s_i_id = in_ol_i_id
+      AND s_w_id = in_w_id;
+  END IF;
+
+  INSERT INTO order_line (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id,
+                          ol_supply_w_id, ol_delivery_d, ol_quantity,
+                          ol_amount, ol_dist_info)
+  VALUES (in_ol_o_id, in_d_id, in_w_id, in_ol_number, in_ol_i_id,
+          in_ol_supply_w_id, NULL, in_ol_quantity, in_ol_amount,
+          tmp_s_dist);
+END//
+
+CREATE PROCEDURE new_order(tmp_w_id INT,
+                           tmp_d_id INT,
+                           tmp_c_id INT,
+                           tmp_o_all_local INT,
+                           tmp_o_ol_cnt INT,
+                           ol_i_id1 INT,
+                           ol_supply_w_id1 INT,
+                           ol_quantity1 INT,
+                           ol_i_id2 INT,
+                           ol_supply_w_id2 INT,
+                           ol_quantity2 INT,
+                           ol_i_id3 INT,
+                           ol_supply_w_id3 INT,
+                           ol_quantity3 INT,
+                           ol_i_id4 INT,
+                           ol_supply_w_id4 INT,
+                           ol_quantity4 INT,
+                           ol_i_id5 INT,
+                           ol_supply_w_id5 INT,
+                           ol_quantity5 INT,
+                           ol_i_id6 INT,
+                           ol_supply_w_id6 INT,
+                           ol_quantity6 INT,
+                           ol_i_id7 INT,
+                           ol_supply_w_id7 INT,
+                           ol_quantity7 INT,
+                           ol_i_id8 INT,
+                           ol_supply_w_id8 INT,
+                           ol_quantity8 INT,
+                           ol_i_id9 INT,
+                           ol_supply_w_id9 INT,
+                           ol_quantity9 INT,
+                           ol_i_id10 INT,
+                           ol_supply_w_id10 INT,
+                           ol_quantity10 INT,
+                           ol_i_id11 INT,
+                           ol_supply_w_id11 INT,
+                           ol_quantity11 INT,
+                           ol_i_id12 INT,
+                           ol_supply_w_id12 INT,
+                           ol_quantity12 INT,
+                           ol_i_id13 INT,
+                           ol_supply_w_id13 INT,
+                           ol_quantity13 INT,
+                           ol_i_id14 INT,
+                           ol_supply_w_id14 INT,
+                           ol_quantity14 INT,
+                           ol_i_id15 INT,
+                           ol_supply_w_id15 INT,
+                           ol_quantity15 INT,
+                           out rc int)
+BEGIN
+  DECLARE out_c_credit VARCHAR(255);
+  DECLARE tmp_i_name VARCHAR(255);
+  DECLARE tmp_i_data VARCHAR(255);
+  DECLARE out_c_last VARCHAR(255);
+
+  DECLARE tmp_ol_supply_w_id INT;
+  DECLARE tmp_ol_quantity INT;
+  DECLARE out_d_next_o_id INT;
+  DECLARE tmp_i_id INT;
+
+  DECLARE tmp_s_quantity INT;
+
+  DECLARE out_w_tax REAL;
+  DECLARE out_d_tax REAL;
+  DECLARE out_c_discount REAL;
+  DECLARE tmp_i_price REAL;
+  DECLARE tmp_ol_amount REAL;
+  DECLARE tmp_total_amount REAL;
+
+  DECLARE o_id INT;
+
+  declare exit handler for sqlstate '02000' set rc = 1;
+
+  SET rc=0;
+
+  SET o_id = 0;
+
+  SELECT w_tax
+  FROM warehouse
+  WHERE w_id = tmp_w_id
+  INTO out_w_tax;
+
+  SELECT d_tax, d_next_o_id
+  FROM district
+  WHERE d_w_id = tmp_w_id
+    AND d_id = tmp_d_id FOR UPDATE
+  INTO out_d_tax, out_d_next_o_id;
+
+  SET o_id=out_d_next_o_id;
+
+  UPDATE district
+  SET d_next_o_id = out_d_next_o_id + 1
+  WHERE d_w_id = tmp_w_id
+    AND d_id = tmp_d_id;
+
+  SELECT c_discount , c_last, c_credit
+  FROM customer
+  WHERE c_w_id = tmp_w_id
+    AND c_d_id = tmp_d_id
+    AND c_id = tmp_c_id
+  INTO out_c_discount, out_c_last, out_c_credit;
+
+  INSERT INTO new_order (no_o_id, no_d_id, no_w_id)
+  VALUES (out_d_next_o_id, tmp_d_id, tmp_w_id);
+
+  INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d,
+	                    o_carrier_id, o_ol_cnt, o_all_local)
+  VALUES (out_d_next_o_id, tmp_d_id, tmp_w_id, tmp_c_id,
+	        current_timestamp, NULL, tmp_o_ol_cnt, tmp_o_all_local);
+
+  SET tmp_total_amount = 0;
+
+  IF tmp_o_ol_cnt > 0
+  THEN
+
+    SET tmp_i_id = ol_i_id1;
+    SET tmp_ol_supply_w_id = ol_supply_w_id1;
+    SET tmp_ol_quantity = ol_quantity1;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 1, tmp_s_quantity);
+
+      SET tmp_total_amount = tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 1
+  THEN
+    SET tmp_i_id = ol_i_id2;
+    SET tmp_ol_supply_w_id = ol_supply_w_id2;
+    SET tmp_ol_quantity = ol_quantity2;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 2, tmp_s_quantity);
+
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+  IF tmp_o_ol_cnt > 2
+  THEN
+    SET tmp_i_id = ol_i_id3;
+    SET tmp_ol_supply_w_id = ol_supply_w_id3;
+    SET tmp_ol_quantity = ol_quantity3;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0 THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 3, tmp_s_quantity);
+
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 3
+  THEN
+    SET tmp_i_id = ol_i_id4;
+    SET tmp_ol_supply_w_id = ol_supply_w_id4;
+    SET tmp_ol_quantity = ol_quantity4;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0 THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+			 tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 4, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 4
+  THEN
+    SET tmp_i_id = ol_i_id5;
+    SET tmp_ol_supply_w_id = ol_supply_w_id5;
+    SET tmp_ol_quantity = ol_quantity5;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0 THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 5, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 5
+  THEN
+    SET tmp_i_id = ol_i_id6;
+    SET tmp_ol_supply_w_id = ol_supply_w_id6;
+    SET tmp_ol_quantity = ol_quantity6;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+			 tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 6, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 6
+  THEN
+    SET tmp_i_id = ol_i_id7;
+    SET tmp_ol_supply_w_id = ol_supply_w_id7;
+    SET tmp_ol_quantity = ol_quantity7;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 7, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 7
+  THEN
+    SET tmp_i_id = ol_i_id8;
+    SET tmp_ol_supply_w_id = ol_supply_w_id8;
+    SET tmp_ol_quantity = ol_quantity8;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 8, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 8
+  THEN
+    SET tmp_i_id = ol_i_id9;
+    SET tmp_ol_supply_w_id = ol_supply_w_id9;
+    SET tmp_ol_quantity = ol_quantity9;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 9, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 9
+  THEN
+    SET tmp_i_id = ol_i_id10;
+    SET tmp_ol_supply_w_id = ol_supply_w_id10;
+    SET tmp_ol_quantity = ol_quantity10;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 10, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 10
+  THEN
+    SET tmp_i_id = ol_i_id11;
+    SET tmp_ol_supply_w_id = ol_supply_w_id11;
+    SET tmp_ol_quantity = ol_quantity11;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+		       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 11, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 11
+  THEN
+    SET tmp_i_id = ol_i_id12;
+    SET tmp_ol_supply_w_id = ol_supply_w_id12;
+    SET tmp_ol_quantity = ol_quantity12;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+		           tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 12, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 12
+  THEN
+    SET tmp_i_id = ol_i_id13;
+    SET tmp_ol_supply_w_id = ol_supply_w_id13;
+    SET tmp_ol_quantity = ol_quantity13;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 13, tmp_s_quantity);
+
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 13
+  THEN
+    SET tmp_i_id = ol_i_id14;
+    SET tmp_ol_supply_w_id = ol_supply_w_id14;
+    SET tmp_ol_quantity = ol_quantity14;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 14, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+
+  IF tmp_o_ol_cnt > 14
+  THEN
+    SET tmp_i_id = ol_i_id15;
+    SET tmp_ol_supply_w_id = ol_supply_w_id15;
+    SET tmp_ol_quantity = ol_quantity15;
+
+    SELECT i_price, i_name, i_data
+    FROM item
+    WHERE i_id = tmp_i_id
+    INTO tmp_i_price, tmp_i_name, tmp_i_data;
+
+    IF tmp_i_price > 0
+    THEN
+      SET tmp_ol_amount = tmp_i_price * tmp_ol_quantity;
+      call new_order_2(tmp_w_id, tmp_d_id, tmp_i_id,
+                       tmp_ol_quantity, tmp_i_price,
+                       tmp_i_name, tmp_i_data,
+                       out_d_next_o_id, tmp_ol_amount,
+                       tmp_ol_supply_w_id, 15, tmp_s_quantity);
+      SET tmp_total_amount = tmp_total_amount + tmp_ol_amount;
+    END IF;
+  END IF;
+END//
+
+CREATE PROCEDURE order_status (in_c_id INT,
+		                     in_c_w_id INT,
+                               in_c_d_id INT,
+                               in_c_last VARCHAR(16))
+BEGIN
+  DECLARE out_c_first VARCHAR(255);
+  DECLARE out_c_middle char(2);
+  DECLARE out_c_balance NUMERIC;
+  DECLARE out_o_id INT;
+  DECLARE out_o_carrier_id INT;
+  DECLARE out_o_entry_d VARCHAR(28);
+  DECLARE out_o_ol_cnt INT;
+  DECLARE out_ol_supply_w_id1 INT;
+  DECLARE out_ol_i_id1 INT;
+  DECLARE out_ol_quantity1 INT;
+  DECLARE out_ol_amount1 NUMERIC;
+  DECLARE out_ol_delivery_d1 VARCHAR(28);
+  DECLARE out_ol_supply_w_id2 INT;
+  DECLARE out_ol_i_id2 INT;
+  DECLARE out_ol_quantity2 INT;
+  DECLARE out_ol_amount2 NUMERIC;
+  DECLARE out_ol_delivery_d2 VARCHAR(28);
+  DECLARE out_ol_supply_w_id3 INT;
+  DECLARE out_ol_i_id3 INT;
+  DECLARE out_ol_quantity3 INT;
+  DECLARE out_ol_amount3 NUMERIC;
+  DECLARE out_ol_delivery_d3 VARCHAR(28);
+  DECLARE out_ol_supply_w_id4 INT;
+  DECLARE out_ol_i_id4 INT;
+  DECLARE out_ol_quantity4 INT;
+  DECLARE out_ol_amount4 NUMERIC;
+  DECLARE out_ol_delivery_d4 VARCHAR(28);
+  DECLARE out_ol_supply_w_id5 INT;
+  DECLARE out_ol_i_id5 INT;
+  DECLARE out_ol_quantity5 INT;
+  DECLARE out_ol_amount5 NUMERIC;
+  DECLARE out_ol_delivery_d5 VARCHAR(28);
+  DECLARE out_ol_supply_w_id6 INT;
+  DECLARE out_ol_i_id6 INT;
+  DECLARE out_ol_quantity6 INT;
+  DECLARE out_ol_amount6 NUMERIC;
+  DECLARE out_ol_delivery_d6 VARCHAR(28);
+  DECLARE out_ol_supply_w_id7 INT;
+  DECLARE out_ol_i_id7 INT;
+  DECLARE out_ol_quantity7 INT;
+  DECLARE out_ol_amount7 NUMERIC;
+  DECLARE out_ol_delivery_d7 VARCHAR(28);
+  DECLARE out_ol_supply_w_id8 INT;
+  DECLARE out_ol_i_id8 INT;
+  DECLARE out_ol_quantity8 INT;
+  DECLARE out_ol_amount8 NUMERIC;
+  DECLARE out_ol_delivery_d8 VARCHAR(28);
+  DECLARE out_ol_supply_w_id9 INT;
+  DECLARE out_ol_i_id9 INT;
+  DECLARE out_ol_quantity9 INT;
+  DECLARE out_ol_amount9 NUMERIC;
+  DECLARE out_ol_delivery_d9 VARCHAR(28);
+  DECLARE out_ol_supply_w_id10 INT;
+  DECLARE out_ol_i_id10 INT;
+  DECLARE out_ol_quantity10 INT;
+  DECLARE out_ol_amount10 NUMERIC;
+  DECLARE out_ol_delivery_d10 VARCHAR(28);
+  DECLARE out_ol_supply_w_id11 INT;
+  DECLARE out_ol_i_id11 INT;
+  DECLARE out_ol_quantity11 INT;
+  DECLARE out_ol_amount11 NUMERIC;
+  DECLARE out_ol_delivery_d11 VARCHAR(28);
+  DECLARE out_ol_supply_w_id12 INT;
+  DECLARE out_ol_i_id12 INT;
+  DECLARE out_ol_quantity12 INT;
+  DECLARE out_ol_amount12 NUMERIC;
+  DECLARE out_ol_delivery_d12 VARCHAR(28);
+  DECLARE out_ol_supply_w_id13 INT;
+  DECLARE out_ol_i_id13 INT;
+  DECLARE out_ol_quantity13 INT;
+  DECLARE out_ol_amount13 NUMERIC;
+  DECLARE out_ol_delivery_d13 VARCHAR(28);
+  DECLARE out_ol_supply_w_id14 INT;
+  DECLARE out_ol_i_id14 INT;
+  DECLARE out_ol_quantity14 INT;
+  DECLARE out_ol_amount14 NUMERIC;
+  DECLARE out_ol_delivery_d14 VARCHAR(28);
+  DECLARE out_ol_supply_w_id15 INT;
+  DECLARE out_ol_i_id15 INT;
+  DECLARE out_ol_quantity15 INT;
+  DECLARE out_ol_amount15 NUMERIC;
+  DECLARE out_ol_delivery_d15 VARCHAR(28);
+  DECLARE out_c_id INT;
+  DECLARE out_c_last VARCHAR(255);
+  DECLARE rc int default 0;
+
+  declare c cursor for SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d
+                       FROM order_line force index (primary)
+                       WHERE ol_w_id = in_c_w_id
+                       AND ol_d_id = in_c_d_id
+                       AND ol_o_id = out_o_id;
+  declare continue handler for sqlstate '02000' set rc = 1;
+  #	/*
+  #	 * Pick a customer by searching for c_last, should pick the one in the
+  #	 * middle, not the first one.
+  #	 */
+  IF in_c_id = 0
+  THEN
+    SELECT c_id
+    FROM customer
+    WHERE c_w_id = in_c_w_id
+      AND c_d_id = in_c_d_id
+      AND c_last = in_c_last
+    ORDER BY c_first ASC LIMIT 1
+    INTO out_c_id;
+  ELSE
+    set out_c_id = in_c_id;
+  END IF;
+
+  SELECT c_first, c_middle, c_last, c_balance
+  FROM customer
+  WHERE c_w_id = in_c_w_id
+    AND c_d_id = in_c_d_id
+    AND c_id = out_c_id
+  INTO out_c_first, out_c_middle, out_c_last, out_c_balance;
+
+  SELECT o_id, o_carrier_id, o_entry_d, o_ol_cnt
+  FROM orders
+  WHERE o_w_id = in_c_w_id
+    AND o_d_id = in_c_d_id
+    AND o_c_id = out_c_id
+  ORDER BY o_id DESC LIMIT 1
+  INTO out_o_id, out_o_carrier_id, out_o_entry_d, out_o_ol_cnt;
+
+  open c;
+  fetch_block:
+    BEGIN
+      fetch c into out_ol_i_id1, out_ol_supply_w_id1, out_ol_quantity1,
+                   out_ol_amount1, out_ol_delivery_d1;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id2, out_ol_supply_w_id2, out_ol_quantity2,
+                   out_ol_amount2, out_ol_delivery_d2;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id3, out_ol_supply_w_id3, out_ol_quantity3,
+                   out_ol_amount3, out_ol_delivery_d3;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id4, out_ol_supply_w_id4, out_ol_quantity4,
+                   out_ol_amount4, out_ol_delivery_d4;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id5, out_ol_supply_w_id5, out_ol_quantity5,
+                   out_ol_amount5, out_ol_delivery_d5;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id6, out_ol_supply_w_id6, out_ol_quantity6,
+                   out_ol_amount6, out_ol_delivery_d6;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id7, out_ol_supply_w_id7, out_ol_quantity7,
+                   out_ol_amount7, out_ol_delivery_d7;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id8, out_ol_supply_w_id8, out_ol_quantity8,
+                   out_ol_amount8, out_ol_delivery_d8;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id9, out_ol_supply_w_id9, out_ol_quantity9,
+                   out_ol_amount9, out_ol_delivery_d9;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id10, out_ol_supply_w_id10, out_ol_quantity10,
+                   out_ol_amount10, out_ol_delivery_d10;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id11, out_ol_supply_w_id11, out_ol_quantity11,
+                   out_ol_amount11, out_ol_delivery_d11;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id12, out_ol_supply_w_id12, out_ol_quantity12,
+                   out_ol_amount12, out_ol_delivery_d12;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id13, out_ol_supply_w_id13, out_ol_quantity13,
+                   out_ol_amount13, out_ol_delivery_d13;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id14, out_ol_supply_w_id14, out_ol_quantity14,
+                   out_ol_amount14, out_ol_delivery_d14;
+      if rc then
+        leave fetch_block;
+      end if;
+      fetch c into out_ol_i_id15, out_ol_supply_w_id15, out_ol_quantity15,
+                out_ol_amount15, out_ol_delivery_d15;
+    end fetch_block;
+  close c;
+END//
+
+CREATE PROCEDURE payment(in_w_id INT, in_d_id INT, in_c_id INT, in_c_w_id INT, in_c_d_id INT,
+                         in_c_last VARCHAR(16), in_h_amount INT)
+BEGIN
+  DECLARE  out_w_name VARCHAR(10);
+  DECLARE  out_w_street_1 VARCHAR(20);
+  DECLARE  out_w_street_2 VARCHAR(20);
+  DECLARE  out_w_city VARCHAR(20);
+  DECLARE  out_w_state VARCHAR(2);
+  DECLARE  out_w_zip VARCHAR(9);
+  DECLARE  out_w_ytd INTEGER;
+
+  DECLARE  out_d_name VARCHAR(10);
+  DECLARE  out_d_street_1 VARCHAR(20);
+  DECLARE  out_d_street_2 VARCHAR(20);
+  DECLARE  out_d_city VARCHAR(20);
+  DECLARE  out_d_state VARCHAR(2);
+  DECLARE  out_d_zip VARCHAR(9);
+  DECLARE  out_d_ytd INTEGER;
+
+  DECLARE  out_c_id INTEGER;
+  DECLARE  out_c_first VARCHAR(16);
+  DECLARE  out_c_middle VARCHAR(2);
+  DECLARE  out_c_last VARCHAR(20);
+  DECLARE  out_c_street_1 VARCHAR(20);
+  DECLARE  out_c_street_2 VARCHAR(20);
+  DECLARE  out_c_city VARCHAR(20);
+  DECLARE  out_c_state VARCHAR(2);
+  DECLARE  out_c_zip VARCHAR(9);
+  DECLARE  out_c_phone VARCHAR(16);
+  DECLARE  out_c_since VARCHAR(28);
+  DECLARE  out_c_credit VARCHAR(2);
+  DECLARE  out_c_credit_lim DECIMAL(24, 12);
+  DECLARE  out_c_discount REAL;
+  DECLARE  out_c_balance NUMERIC;
+  DECLARE  out_c_data VARCHAR(500);
+  DECLARE  out_c_ytd_payment INTEGER;
+
+  # /* Goofy temporaty variables. */
+  DECLARE  tmp_c_id VARCHAR(30);
+  DECLARE  tmp_c_d_id VARCHAR(30);
+  DECLARE  tmp_c_w_id VARCHAR(30);
+  DECLARE  tmp_d_id VARCHAR(30);
+  DECLARE  tmp_w_id VARCHAR(30);
+  DECLARE  tmp_h_amount VARCHAR(30);
+
+  # /* This one is not goofy. */
+  DECLARE  tmp_h_data VARCHAR(30);
+
+  SELECT w_name, w_street_1, w_street_2, w_city, w_state, w_zip, w_ytd
+  FROM warehouse
+  WHERE w_id = in_w_id
+  FOR UPDATE
+  INTO out_w_name, out_w_street_1, out_w_street_2, out_w_city,
+       out_w_state, out_w_zip, out_w_ytd;
+
+  UPDATE warehouse
+  SET w_ytd = out_w_ytd + in_h_amount
+  WHERE w_id = in_w_id;
+
+  SELECT d_name, d_street_1, d_street_2, d_city, d_state, d_zip, d_ytd
+  FROM district
+  WHERE d_id = in_d_id
+    AND d_w_id = in_w_id
+  FOR UPDATE
+  INTO out_d_name, out_d_street_1, out_d_street_2, out_d_city,
+       out_d_state, out_d_zip, out_d_ytd;
+
+  UPDATE district
+  SET d_ytd = out_d_ytd + in_h_amount
+  WHERE d_id = in_d_id
+    AND d_w_id = in_w_id;
+
+  #/*
+  # * Pick a customer by searching for c_last, should pick the one in the
+  # * middle, not the first one.
+  # */
+  IF in_c_id = 0 THEN
+    SELECT c_id
+    FROM customer
+    WHERE c_w_id = in_c_w_id
+      AND c_d_id = in_c_d_id
+      AND c_last = in_c_last
+    ORDER BY c_first ASC LIMIT 1
+    FOR UPDATE
+    INTO out_c_id;
+  ELSE
+    SET out_c_id = in_c_id;
+  END IF;
+
+  SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city,
+         c_state, c_zip, c_phone, c_since, c_credit,
+         c_credit_lim, c_discount, c_balance, c_data,
+         c_ytd_payment
+  FROM customer
+  WHERE c_w_id = in_c_w_id
+    AND c_d_id = in_c_d_id
+    AND c_id = out_c_id
+  FOR UPDATE
+  INTO out_c_first, out_c_middle, out_c_last, out_c_street_1,
+       out_c_street_2, out_c_city, out_c_state, out_c_zip, out_c_phone,
+       out_c_since, out_c_credit, out_c_credit_lim, out_c_discount,
+       out_c_balance, out_c_data, out_c_ytd_payment;
+
+  # /* Check credit rating. */
+  IF out_c_credit = 'BC'
+  THEN
+    SELECT out_c_id
+    INTO tmp_c_id;
+    SELECT in_c_d_id
+    INTO tmp_c_d_id;
+    SELECT in_c_w_id
+    INTO tmp_c_w_id;
+    SELECT in_d_id
+    INTO tmp_d_id;
+    SELECT in_w_id
+    INTO tmp_w_id;
+
+    SET out_c_data = concat(tmp_c_id,' ',tmp_c_d_id,' ',tmp_c_w_id,' ',tmp_d_id,' ',tmp_w_id);
+
+    UPDATE customer
+    SET c_balance = out_c_balance - in_h_amount,
+        c_ytd_payment = out_c_ytd_payment + 1,
+        c_data = out_c_data
+    WHERE c_id = out_c_id
+      AND c_w_id = in_c_w_id
+      AND c_d_id = in_c_d_id;
+  ELSE
+    UPDATE customer
+    SET c_balance = out_c_balance - in_h_amount,
+        c_ytd_payment = out_c_ytd_payment + 1
+    WHERE c_id = out_c_id
+      AND c_w_id = in_c_w_id
+      AND c_d_id = in_c_d_id;
+  END IF;
+
+  SET tmp_h_data = concat(out_w_name,' ', out_d_name);
+  INSERT INTO history (h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id,
+                       h_date, h_amount, h_data)
+  VALUES (out_c_id, in_c_d_id, in_c_w_id, in_d_id, in_w_id,
+          current_timestamp, in_h_amount, tmp_h_data);
+
+  # RETURN out_c_id;
+END //
+
+CREATE PROCEDURE stock_level(in_w_id INT,
+                             in_d_id INT,
+                             in_threshold INT,
+                             OUT low_stock INT)
+BEGIN
+  DECLARE tmp_d_next_o_id INT;
+
+  SELECT d_next_o_id
+  FROM district
+  WHERE d_w_id = in_w_id
+    AND d_id = in_d_id
+  INTO tmp_d_next_o_id;
+
+  SELECT count(*)
+  FROM order_line, stock, district
+  WHERE d_id = in_d_id
+        AND d_w_id = in_w_id
+        AND d_id = ol_d_id
+        AND d_w_id = ol_w_id
+        AND ol_i_id = s_i_id
+        AND ol_w_id = s_w_id
+        AND s_quantity < in_threshold
+        AND ol_o_id BETWEEN (tmp_d_next_o_id - 20)
+                        AND (tmp_d_next_o_id - 1)
+  INTO low_stock;
+END//
+
+
+## LOAD DATA
+## ./src/datagen -w 1 -m 1 -c 1 -i 1 -o 1 -n 1 -d /home/linlin.xll/work/dbt2-0.37.50.15/data/ --mysql
+## sh mysql_load_db.sh --mysql-path /usr/bin/mysql --host 10.244.4.65 --local --path /home/linlin.xll/data/
+## sh mysql_load_sp.sh --client-path /usr/bin/ --host 10.244.4.65
+## sh run_mysql.sh --connections 1 --time 10 --warehouses 1 --host 10.244.4.65 --lib-client-path /usr/bin/mysql --verbose --terminals 1
+insert into customer values(1,1,1,"4W+?M?/aG","OE","BARBARBAR","?VJ;t+P??m5v2?.=?T","%N#RO?|??;[_??~!Y?HP","?[S!JV58?#;+$cP?=d","tw",547411111,3078688431492068,"2018-09-13 15:23:42","GC",50000.00,0.0012,-10.00,10.00,1,0,"?&s?Jf4\\>?oCj'n?HR`i]c?uDH&-w?4??}{39?mL?2mC712Tao??1?oJ)kLvP^_:91BO??qs?<??J?R?_Jze+??4?7?-r=D?K\\$;Fs?8?l5$\\\\??|RT?f??CKlN??gp&?j7=4?J?ZT???h{h?-CTA0liy?YUU?YS_mep[?S?79u!vF`cP??o?W.\\De?vY='??b[1M??a?dYn??/.l?rPF}?g8^<op9ZNx?U?mDQe??1cs5f6#6[??2??m?c<+?_y??jO4???v?H???R#??8~??{]?<v?-4]??$*#???f~/{~?*w???b{|36^D?BO?t3{n<}^!k??ws[es'I\\??-c?9?2?7Vy?_RTp-?pn?M;P}~???Sjr^*`t?gb4?9?P`C?k(k/}?G+i?!B?S?d???X?_??P%x}d?x$?91r$UsdNs{8?Z");
+insert into customer values(1,2,1,"?9a.???t","OE","BARBARBAR","?B?P0cJ?rXdt?-","&u?4n6{DE;H0.AyG-","2S?sz?C1R??\\??/t?r","Km",584311111,1380979932437122,"2018-09-13 15:23:42", "GC", 50000.00, 0.4292, -10.00, 10.00, 1, 0, "C?|?df?Bu?#?r1J>F*t#[???m?7sX7|p*Nne?d|\\X}T'?tC?t??-???Ox'?&4zt4?9v?rQ?'#q.?CF??1???x?@G?5K???&?*sk{??x?N{~f?_P%7<???#(?6Iu?<zv<K7?B?c2@<?{1B)-N;?1:?/?-Ne?_5nx]?ctl???-gZ<?YF3r49?!=x-h3%$Eis?B4I?-*j7o?HKYcS(la?l|Uw:fr5?9?^P??9????I?;r/{!5Fb??4D\\C?#Un30)`??w?fM|?*?\\7eUA??0f?R?6/?iz?nyW`[#??O??Wz3d>]z?G?O:0EM<+??*X[W??Y)???V2pfk??Dm=??L/4v@=X?=?[rpD(w??eM?+?\\??}O?|GB?P??kC??%FMs_SAV4??$?fVoB1?8?8WXfCC&c6?_Q-'?]FBg??a?\\?Vt!H?z");
+insert into customer values(1,3,1,"?0?WH??\\|L??", "OE", "BARBARBAR", "n9m?}j|<J.", "u?%?_}Vs?L'(G?Z??2|f", "?1Znq4??7?k??\\", "KN", 870511111, 1030045424999498, "2018-09-13 15:23:42", "GC", 50000.00, 0.4976, -10.00, 10.00, 1, 0, "?k%?!??)?z8<atU[AG?a)^APq?Tr?84nx8dp?Hx????WWK?vg~5o:L??K>H@TZ??gFp\\kFAi(7?]W?(?_<`o]SE?fk???}?_?]?ax/?v;?1ol0a?A?n{G?^?QOxA?e}??lOmpMA?6HNxM?wk?CD%(w?P$Un#?B???>HQ`_0s?\\I&F?o$6??5]?b_7.Y$EH?%c$U?aZi;???8??2?q0?-?aa?d???5m?up5k/e3HV?dcqFsV?xU?X?VMNC;*V???T?b`Xr}?`@E&c?[Mc?:?wmD??T!18?'aug?*/r?l?/pH?(kZ??IaEbY'?Q/?14Y|pN?|?fF?j??Y?i?tI03kpaiZ?mY?v?oD3J?/?9?N????MkSkq[5??sv~>$r???3?^%?B4?m!_G???*RWd\\k[-70H9?/??7?H:?gC_)D?N??+?)`]\\??f5??D");
+insert into customer values(1,4,1,"?:Y??~5|CN9", "OE", "BARBARBAR", "g)fX?oQ?%?B", "p~7aXX/>g]9f:D8RgFr", "M6a+z??}i)?7}", "yL", 361011111, 7420033904334245, "2018-09-13 15:23:42", "GC", 50000.00, 0.3738, -10.00, 10.00, 1, 0, "N*f7vnUE?9G<_`????b2?\\Fp^:?H??9$?t9]8lx???17S??R{XYz?|@E?3kj?yd?Dr4Y<?V?|e?-I?T?;?q?e?EN????\\Of}?w-1W`?(??*A{\\9?D??~l.!b??G;3??'W?.?V%?F??]];kGUH01?41J??n2$N?)z?5\\>1;Z???L3Up]z~lb?r?~dM?^p?eIqp??v?=e?&??YMN1(?q?XPb?{FVI$?gkVGN)0`e?dJ??t$?s?hV???7^1b}3PB||_??l^>Y?]8?02?x?E#.0?:d?y?&?^?p?}Rd9e?/?(?%0y{??t(?a@ZU?vY?37Q!?xe?<V$2T?5ae?\\N_[D?p|IUP?.X?TYr*?`<GbCxNU/?8h4l?V`g'~?U[$?<V:?V*BgO???%:(?Gf??]AO?F+?q\\?Rv>iXjqw&?O??S??-AQ?0?7TzR]`??HPc\\???]]?P??=3{?=?");
+insert into customer values(1,5,1,"2?'>Pxn?.d", "OE", "BARBARBAR", "T?(?~?~2Qs_1[r", "+oS!?[??vL_B-j?r?lxv", "dJO????LT1", "wr", 609111111, 1509496824653474, "2018-09-13 15:23:42", "GC", 50000.00, 0.2251, -10.00, 10.00, 1, 0, "}n40ejZEZ???H?p?a%.%??70Igi]??`kHqx?1'?h??[!y??0??+??8?(|b[r;?;X_?8n?2+h?]`[TIiN5rA??:?aqL(?;98o?F3?M=G8o?h?#/L6vb(Sr??A;??S%&??B(xl;?y?w@}pD&??_?A/p(E??<2?@'?_&O??Ax???o[&l5?(?45b:WA?pP??NZ:R?9f??X?i%9moK`u=q?t?4?z?8\\]c?u?g?Oag|?%?VpD~.??tsZR?B*]X\\??=b??;%8w?Uz]?AvTLk;?4rF??FAHw/6?f?h??vLe($?~Ck0d4@X>?t?x?A?]E(D???]xV?;\\?00?y5[?S??A[??@+?zN??+h|_70<Ga?Mf?#xB{");
+insert into customer values(1,6,1,"(g?YZ*wc?O?_", "OE", "BARBARBAR", "???L1?]VNU", "?<qh\\JnZ???>?fvk?R??", "??a???L*G??Yp`??#", "Ek", 848911111, 3707196301486666, "2018-09-13 15:23:42", "GC", 50000.00, 0.4027, -10.00, 10.00, 1, 0, "ttO?>:?!?eL??.?A??QI?Gh(=$@3??^am?K??Cyt?![j%S??<0F!L?(f~>nj8)(z?IYyj0CE0t?4?k(6xL6?%5]?P(Je'H6?ol^/yvQ~H<?C}?VK0jK3t????2]?Opn?:)??~G\\?XB<3-h\\20|C?W*x923?VxlH?l=m@a?9??S'A?YQ?3ilhiBvpKt#?7I~?dA??>4?Z\\?yJD?=M^??$?^jG1k=E??!D8?<S&)?Y?R?.O?P?o8?ktL?z?!?t???%?'W?/82?g???yBkFWE??ftxPtj!cT?f1????'??dwnEN??jB'O9k???kW?+?tg?]XwI]f#?<o:_Z?&q?K?\\BtK??2?~{Pc.?0U9tV.?!=:R'7??_~R~Hr^F???Rm[^Hh?^2");
+insert into customer values(1,7,1,"a?<t$ky9aou", "OE", "BARBARBAR", "?JZn}uE?eue?(?[?", "k'uUAGW??e8", "1KXXz?3F?*??e??", "ID", 081111111, 9399126479328756, "2018-09-13 15:23:42", "GC", 50000.00, 0.1554, -10.00, 10.00, 1, 0, "?U?BnVqA#|N???Z7t2?w*?'s?a_?!9??ko7/!?M#Wp?PF@\\?G=eG?b???Tw?bi?!6?'.|J&2??W4???F?[k??Xp??=?B??;??@?Tg?cMw?^voU?`?ZM~??nh5\\??5?q?-`>jKw??eQk){Zg^??3p?~6?8?nJ?=4?zOR??E?VkX]D??wo??5_cHHp1???%?nuF?m79Rk??%?e?o){M=9?bVThHATC8??S?Yg*?0?f+y(&>1whK?L?B}I_?r?(hkYR!?Z?#9M-?T(#Z~iza?Z?ex5WI?]?S?7S?f:?u]?Z??[>^????EkF?~z:");
+insert into customer values(1,8,1,"-???)8tfGL9?%pe?", "OE", "BARBARBAR", "x:?k-q?u?wId??gy", "[y?%=!GS?B?E???4?T6", "8?H?'?p?G@Q", "dH", 317811111, 5312129264696994, "2018-09-13 15:23:42", "GC", 50000.00, 0.2249, -10.00, 10.00, 1, 0, "v??C????$o>~sb{q|ax???5/}?>m<?<??2(e1?J*V]?&?Xuw?LPn-cr?M?SgwlLS{J??16?eq_ad?51zV_F`??>Bpn~=9?n?HbiOmB?<~H}iR?A?A\\<6GWM?#)'2?s?=*PivoP?Cn[??=?y[S?fwG?Z@?`G?(.')[f}??Z@X??S-?)]G???/?LLt?iW?tT?$?a?y??/?5X?(W?M?6>K?gldF*?+|B?~'Ou~F??$$1?*]#My7h?&.dhIlOR?f@?kdfH?N??H/^HiWrAc88g;y$bDQ?`??PV`?{E7y?\\}P?E?Q[E_p?w@{/a!????<AQ%?k:a]l=?KWlr??/]]{z/?1/|??d7'?2?TAO??iw+?9s???5HP?T6?X???B?");
+insert into customer values(1,9,1,"2?2[8^H??", "OE", "BARBARBAR", "??!jg??z4l]]xF?U?'t", "J|?Z5??R??D", "mEK30g?A(=|~X", "cB", 152411111, 5756275745386347, "2018-09-13 15:23:42", "GC", 50000.00, 0.4633, -10.00, 10.00, 1, 0, "J?}??*TkH<?;[D)^(?F0+qQ?-??@V'mu?A_?I?Jf!6~SO}?UU*c^y?9|o)??0]m?s?|???V?&)1S???8?>tl%?Fj?6c?h%?9%d0?U[iYco?>ZeSM???{?3De>|R??:??t?k&X)^?oE+&?]J^O?7)GPlc)?<?44g}1(?^'=MlXVq5??p6-}=I*??3????$Td3RDnPV???E`?!V\\6X/Iw0.V@?G$cIN$Y~>?#j??K%Y7&?i23mX?z[3?5X?u~>w.????S??s?9???G?#???bw?O?F?\\?Z)%I??1;z??U'i4????m7w-?eQk?m?y??t;?mI?E8}x=<?3?y)b?~dg9?0?V?nP?@it??f??9k7JJ???Fv|?8A(?F?TFjy7?8?X?DS?R??z;9?2Uc?Dp*JnOF?");
+insert into customer values(1,10,1,"?ovZ?L??", "OE", "BARBARBAR", "8m?(_mBuZI'?*B`4", "-X???gfc?I??", "P?`D???0h>We._?dhL", "GU", 886611111, 8211838608073655, "2018-09-13 15:23:42", "GC", 50000.00, 0.0409, -10.00, 10.00, 1, 0, "2MouAk0(+&JaDUpM?h?XV\\?Q[X?$%fH-???&V?%W?M?#w[NZ???Lps{?)Z!$?A'{#??O_???%n@z&c)?w??=h?<gG4b:Rg?KAiw~JP?M?0??h#?5?0OO?h?:zKJ??3K?y?z?Fj;7o55-.???#kI?)).?KUx0]?++?{?);:>?DI?P<%B5o`(vg-M?W!?????}h?|?*?^E6ErHI?Z?GaY?k?q?{\\?jP?=?r?lr|???Bd-hKeKg??I\\Z?Q+I7sn??Z]r?-D??)8Y+vzf?7_~]?6B@?`L?-/d\\a+UkNKXMX?V+_?(kO??>?>S$|t?~?<8?Ej?h?6?@?GJO");
+
+insert into district values(1,1,"4W+?M?/aG","?VJ;t+P??m5v2?.=?T","%N#RO?|??;[_??~!Y?HP","?[S!JV58?#;+$cP?=d","tw", 547411111, 0.0364, 30000.00, 3001);
+insert into district values(2,1,"[VIK?yC..","C?WS?Q?2?&s?J","4\\>?oCj'n?HR`i]c?u","H&-w?4??}{39","FT", 948111111, 0.1732, 30000.00, 3001);
+insert into district values(3,1,"Tao??1?oJ)","LvP^_:91BO??qs?<??J","R?_Jze+??4?7?-r=","?K\\$;Fs?8?l5$\\\\??|","Pn", 764311111, 0.1470, 30000.00, 3001);
+insert into district values(4,1,"??gp&?j7=","?J?ZT???h{h?-CT","0liy?YUU?YS","mep[?S?79u!vF`cP??o","Mm", 034011111, 0.0163, 30000.00, 3001);
+insert into district values(5,1,"'??b[1M??a","dYn??/.l?rPF}?g8","<op9ZNx?U?m","Qe??1cs5f6#6[??2??m","sf", 205511111, 0.1222, 30000.00, 3001);
+insert into district values(6,1,"O4???v?H??","R#??8~??{]?<v?-4]","?$*#???f~/{~?*w???","{|36^D?BO?t3{n<}^","bX", 033311111, 0.0497, 30000.00, 3001);
+insert into district values(7,1,"I\\??-c?9?","?7Vy?_RTp-?pn?M;P}~?","?Sjr^*`t?g","4?9?P`C?k(","Iq", 825311111, 0.1144, 30000.00, 3001);
+insert into district values(8,1,"?S?d???X?_","?P%x}d?x$?91r$UsdN","{8?Zr?9a.?","?tC?B?P0cJ?rXdt?","iG", 510311111, 0.0987, 30000.00, 3001);
+insert into district values(9,1,"E;H0.AyG-","2S?sz?C1R??\\??/t?r","p?!?:'?P?0R","@?a?[O?av?H'","gZ", 517411111, 0.1491, 30000.00, 3001);
+insert into district values(10,1,"Bu?#?r1J","F*t#[???m?7sX7|p*Nn","?d|\\X}T'?tC?t??-?","?Ox'?&4zt4?9v?rQ?'#","hA", 443911111, 0.0377, 30000.00, 3001);
+
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 1, 1, 1, 1, "2018-09-13 15:23:42", 10.00,"4W+?M?/aGh?V");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 2, 1, 2, 1, "2018-09-13 15:23:42", 10.00,";t+P??m5v2?.=?T?");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 3, 1, 3, 1, "2018-09-13 15:23:42", 10.00,"N#RO?|??;[_??~!Y?HP??");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 4, 1, 4, 1, "2018-09-13 15:23:42", 10.00,"S!JV58?#;+$c");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 5, 1, 5, 1, "2018-09-13 15:23:42", 10.00,"?=d?N?;=??50t[VI");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 6, 1, 6, 1, "2018-09-13 15:23:42", 10.00,"?yC..UC?WS?Q?2?&s?Jf4\\>?");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 7, 1, 7, 1, "2018-09-13 15:23:42", 10.00,"Cj'n?HR`i]c?uDH&-w?4");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 8, 1, 8, 1, "2018-09-13 15:23:42", 10.00,"?}{39?mL?2mC71");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 9, 1, 9, 1, "2018-09-13 15:23:42", 10.00,"Tao??1?oJ)kLvP^");
+insert into history(h_c_id,h_c_d_id,h_c_w_id,h_d_id,h_w_id,h_date,h_amount,h_data) values(1, 10,1, 10,1, "2018-09-13 15:23:42", 10.00,":91BO??qs?<??J?R?");
+
+insert into item values(1, 9830, "W+?M?/aGh?VJ;t+P??m5v2?.", 82.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(36158, 1, "1234?/aGh?VJ;t+P??m5v2?.", 77.77, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(4071, 1, "5432?/aGh?VJ;t+P??m5v2?.", 99.99, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(49919, 1, "sdes?/aGh?VJ;t+P??m5v2?.", 11.11, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(56284, 1, "klki?/aGh?VJ;t+P??m5v2?.", 22.22, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(73312, 1, "poiu?/aGh?VJ;t+P??m5v2?.", 33.33, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(81280, 1, "rety?/aGh?VJ;t+P??m5v2?.", 44.44, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(8063, 1, "W,.iu/aGh?VJ;t+P??m5v2?.", 55.55, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(65014, 1, "oipm?/aGh?VJ;t+P??m5v2?.", 66.66, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(32766, 1, "mc,s?/aGh?VJ;t+P??m5v2?.", 88.88, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(76767, 1, "poxa?/aGh?VJ;t+P??m5v2?.", 81.152, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(16347, 1, "fdec?/aGh?VJ;t+P??m5v2?.", 98.52, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(63436, 1, "fdow?/aGh?VJ;t+P??m5v2?.", 19.32, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(48061, 1, "plxm?/aGh?VJ;t+P??m5v2?.", 82.22, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(98170, 1, "[;.,?/aGh?VJ;t+P??m5v2?.", 89.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(78779, 1, "pw089?/aGh?VJ;t+P??m5v2?", 86.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(42720, 1, "Wpoux/aGh?VJ;t+P??m5v2?.", 61.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(77791, 1, "W03m./aGh?VJ;t+P??m5v2?.", 62.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(61436, 1, "W1omc/aGh?VJ;t+P??m5v2?.", 37.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(39336, 1, "po82'/aGh?VJ;t+P??m5v2?.", 35.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(39807, 1, "kfew/aGh?VJ;t+P??m5v2?.", 14.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(8115, 1, "W09=z/aGh?VJ;t+P??m5v2?.", 12.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(24448, 1, "inxy?/aGh?VJ;t+P??m5v2?.", 71.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(98302, 1, "didi?/aGh?VJ;t+P??m5v2?.", 91.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(73728, 1, "laoe?/aGh?VJ;t+P??m5v2?.", 98.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(23965, 1, "govi?/aGh?VJ;t+P??m5v2?.", 89.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(81852, 1, "caon?/aGh?VJ;t+P??m5v2?.", 67.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(67928, 1, "nibam?/aGh?VJ;t+P??m5v2?", 98.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(63995, 1, "wocaon/aGh?VJ;t+P??m5v2?", 14.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(3936, 1, "WlawoiduGh?VJ;t+P??m5v2?", 32.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(94624, 1, "W+?epioxnGh?VJ;t+P??m5v2", 34.92, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(45056, 1, "W+?M?weoc9xn?VJ;t+P??m5v", 94.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(24309, 1, "W+?M?/aGweoiuch;t+P??m5v", 54.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(40936, 1, "W+?M?/aGh?wpo02,x.P??m5v", 12.62, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(69055, 1, "W+?M?/aGh?VJ;pw0-xk,m5v2", 22.22, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+insert into item values(96504, 1, "W+?M?/aGh?VJ;t+Pwpiocunx", 12.29, "T?%N#RO?|??;[_??~!Y?HP??[S!JV58?#;+$cP?=d?N?;=??5");
+
+insert into new_order values(1,1,1);
+insert into new_order values(1,2,1);
+insert into new_order values(1,3,1);
+insert into new_order values(1,4,1);
+insert into new_order values(1,5,1);
+insert into new_order values(1,6,1);
+insert into new_order values(1,7,1);
+insert into new_order values(1,8,1);
+insert into new_order values(1,9,1);
+insert into new_order values(1,10,1);
+
+insert into order_line values(1, 1  , 1 , 1 , 9595  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "gllwtTFfUTdWteofjIknOFIE");
+insert into order_line values(1, 1  , 1 , 2 , 95519 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "RPbAXhlKEfDJkXCoUvsJCcrm");
+insert into order_line values(1, 1  , 1 , 3 , 79074 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "RyKWbbmDCjKnTOtwweUAsOVm");
+insert into order_line values(1, 1  , 1 , 4 , 85859 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "PpjGVCFfYhgkKiuVwOJQLHUG");
+insert into order_line values(1, 1  , 1 , 5 , 23865 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "tbBRZpgiwCKCHJJotUwOPTDx");
+insert into order_line values(1, 1  , 1 , 6 , 92049 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "eFTLsONtFmJmVGogiwPRLiLh");
+insert into order_line values(1, 1  , 1 , 7 , 2831  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "CByLodQipiwcCCPMOKSEQaaf");
+insert into order_line values(1, 1  , 1 , 8 , 68037 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "PEsNFunEgChwkwgHZijOUxZN");
+insert into order_line values(1, 1  , 1 , 9 , 49081 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "nbvGmkkgXpBLThmaFxYLeXTn");
+insert into order_line values(1, 1  , 1 , 10    , 66763 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "mLCnaPQvWcgHJEWkopSCQwAO");
+insert into order_line values(1, 1  , 1 , 11    , 735   , 1 ,"2018-09-13 15:23:42", 5, 0.00, "MCsYqFJSsjhigdMmkurgfGWy");
+insert into order_line values(1, 2  , 1 , 1 , 55561 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "BemNgFLwKUPDeWMkBYXLToSA");
+insert into order_line values(1, 2  , 1 , 2 , 17961 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "YdbtlDxxpEDCBNvppAmCkNAi");
+insert into order_line values(1, 2  , 1 , 3 , 4739  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "XQtsfSXglJjKHaOjCpwXFMYr");
+insert into order_line values(1, 2  , 1 , 4 , 58882 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "FoRdJptciZUfHHOQRuQFeSuB");
+insert into order_line values(1, 2  , 1 , 5 , 14309 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "OoSDwxrPbbeVEmVZTCGhrwdJ");
+insert into order_line values(1, 2  , 1 , 6 , 24846 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "bXjrxxGpaEnSsoTXkYKGXDhd");
+insert into order_line values(1, 2  , 1 , 7 , 64989 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "aOiCvkZfCXDJOdmbWFRpcCnM");
+insert into order_line values(1, 2  , 1 , 8 , 28282 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "QPOBOoPxrLIqRKPUsDYfeUkV");
+insert into order_line values(1, 2  , 1 , 9 , 57201 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "XYAeJptYqJmGgeqoWIyLDsOB");
+insert into order_line values(1, 2  , 1 , 10    , 83876 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "VJoFVlDuRNkkLBTxgZDxOyGn");
+insert into order_line values(1, 2  , 1 , 11    , 12030 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "GXjdpeMEKiQNdhAorLPljwLM");
+insert into order_line values(1, 3  , 1 , 1 , 26721 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "nuKtSTwhYKmisDVvKWkbHBNQ");
+insert into order_line values(1, 3  , 1 , 2 , 87612 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "crZNSNhCgZvDIUNUcfwxCgtm");
+insert into order_line values(1, 3  , 1 , 3 , 67014 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "NWrKVVCuIuhqwnQSqxmeSPjo");
+insert into order_line values(1, 3  , 1 , 4 , 88447 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "VhyEjlACwVXYpFTwvqKNJakW");
+insert into order_line values(1, 3  , 1 , 5 , 62301 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "LpSyBohAsqmSsjnpIDvCARsj");
+insert into order_line values(1, 3  , 1 , 6 , 73316 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "KpxptKFMiGapHshtLADYQkbl");
+insert into order_line values(1, 3  , 1 , 7 , 39810 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "DFkIhvxFlRoqDYWeOdwVwJvZ");
+insert into order_line values(1, 3  , 1 , 8 , 73952 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "LjxXkBDviKRgPDxFTbDpGqtc");
+insert into order_line values(1, 3  , 1 , 9 , 38231 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "LJRTuCDSyNTCiDMAJCDhHvJK");
+insert into order_line values(1, 3  , 1 , 10    , 55041 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "BgRnwdWnwqPZJPMdqvGdvPfZ");
+insert into order_line values(1, 3  , 1 , 11    , 73931 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "VfvhUWnmklpHZmyplhexLutq");
+insert into order_line values(1, 3  , 1 , 12    , 87523 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "gdQDpLjLtdihQTTGATSYiEHm");
+insert into order_line values(1, 3  , 1 , 13    , 96829 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "hWJHNpKDSaPbliGtQWmKDnDu");
+insert into order_line values(1, 4  , 1 , 1 , 60649 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "YcLGytmmjxPbYEEjmKedGRni");
+insert into order_line values(1, 4  , 1 , 2 , 35962 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "eqCEJAgtGFnTRwqhZoldYync");
+insert into order_line values(1, 4  , 1 , 3 , 87248 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "UQDyghPIlZIrsOWhHoexvdmH");
+insert into order_line values(1, 4  , 1 , 4 , 62879 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "GUOioiYRIeyXmKWubQjXXqMC");
+insert into order_line values(1, 4  , 1 , 5 , 10210 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "GbpNNvICFWkdnsimqVWNRxda");
+insert into order_line values(1, 5  , 1 , 1 , 8583  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "DGPJiFvVbEXgaijOBSarOwGF");
+insert into order_line values(1, 5  , 1 , 2 , 79530 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "fQkWxndmWlsSHtXFaXnjmocm");
+insert into order_line values(1, 5  , 1 , 3 , 1145  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "KNVEvBtGXRTBFpMxiUrGyrDm");
+insert into order_line values(1, 5  , 1 , 4 , 46340 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "BdDItNuPqRplXODRoIgCfPvX");
+insert into order_line values(1, 5  , 1 , 5 , 56657 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "oyHqOhtqqOdLDVctHahjrWsx");
+insert into order_line values(1, 5  , 1 , 6 , 22544 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "OtWiOLHuCWdWmtkRFnmihTJP");
+insert into order_line values(1, 5  , 1 , 7 , 24982 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "MVYKuMeqvSCcOeyRBMLLdpyp");
+insert into order_line values(1, 6  , 1 , 1 , 14810 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "vlhhhgSCswsOPurDyQtZcFkf");
+insert into order_line values(1, 6  , 1 , 2 , 77331 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "VtRECmQJuXpNZJKSXymocmfW");
+insert into order_line values(1, 6  , 1 , 3 , 36136 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "CxOXhJRYnsLEDGBsTaCDsAcF");
+insert into order_line values(1, 6  , 1 , 4 , 81464 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "rUbeDDCRajAsInLsROZSIssj");
+insert into order_line values(1, 6  , 1 , 5 , 56201 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "jyRyEisFNVJoMJYNCGBnATCZ");
+insert into order_line values(1, 7  , 1 , 1 , 93233 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "UnQdmHCQqvWdRFTeORrqxsex");
+insert into order_line values(1, 7  , 1 , 2 , 21008 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "wYqOdLDTOpBRHrNDuEInivfA");
+insert into order_line values(1, 7  , 1 , 3 , 28524 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "TRBFYxdPMgAPaOGbFmsrpnwX");
+insert into order_line values(1, 7  , 1 , 4 , 2088  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "ThfgkyxlEvjIkVOKLoyqQEdJ");
+insert into order_line values(1, 7  , 1 , 5 , 28453 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "XTQyYJGEpqcOchjlPVgdfrTe");
+insert into order_line values(1, 7  , 1 , 6 , 80147 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "JlTGeQZUPXeVCUMeIOlsZBOf");
+insert into order_line values(1, 8  , 1 , 1 , 9931  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "YghhTaNxqMsGjXBLRmQABCsA");
+insert into order_line values(1, 8  , 1 , 2 , 29256 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "giAeHxkOfEPScGeVmoSNAJBQ");
+insert into order_line values(1, 8  , 1 , 3 , 93334 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "sCcWIieimLgXZmcoFeVkZhZr");
+insert into order_line values(1, 8  , 1 , 4 , 66041 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "avQkYiMaeVJJEvUKsTwuJDZE");
+insert into order_line values(1, 8  , 1 , 5 , 92347 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "LNQGMRcCbaKnBoiKxMfSXxmU");
+insert into order_line values(1, 8  , 1 , 6 , 2830  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "XTyksKXipKZSMBswPTlxDKki");
+insert into order_line values(1, 8  , 1 , 7 , 63828 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "hOCBjAtIkmrJviTVaFwtbMNO");
+insert into order_line values(1, 8  , 1 , 8 , 85950 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "xUZACgPFhYecHooyxKhqgJWd");
+insert into order_line values(1, 8  , 1 , 9 , 12773 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "PpLygJUHKWNyBvXfxeVmEsxl");
+insert into order_line values(1, 8  , 1 , 10    , 87152 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "UGHwdWNpVtYPaiMoHNKFTIJO");
+insert into order_line values(1, 8  , 1 , 11    , 12663 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "grAqVtWcRaYEpUXOjyXvNejX");
+insert into order_line values(1, 9  , 1 , 1 , 85401 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "RyHxrgPNBLQSlovbiTqTrnoF");
+insert into order_line values(1, 9  , 1 , 2 , 13465 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "CDBgWSgdqYkfLlqbdDqZEZsu");
+insert into order_line values(1, 9  , 1 , 3 , 45319 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "IhQbGTEIAaAGdQeOvQZNrDQI");
+insert into order_line values(1, 9  , 1 , 4 , 40521 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "IvpAHxhwyopDWQdWWINbvJrW");
+insert into order_line values(1, 9  , 1 , 5 , 85308 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "ZlScHAxWAetIbtWrwsIBoeJb");
+insert into order_line values(1, 9  , 1 , 6 , 36151 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "lxbHIbtAdaZbwyfQHgKdYhvg");
+insert into order_line values(1, 9  , 1 , 7 , 38558 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "MrmrWxqYGYAZxdAXewWjNEQx");
+insert into order_line values(1, 9  , 1 , 8 , 43607 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "fdWOOIfaBCZRAFpAEnDEkHaH");
+insert into order_line values(1, 9  , 1 , 9 , 49405 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "kILsXQWtekDjLdmKuMokNsxp");
+insert into order_line values(1, 9  , 1 , 10    , 98740 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "XwPOLBvWTTnpnrAQcLtovoBK");
+insert into order_line values(1, 9  , 1 , 11    , 31224 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "EweaFbYUpjuMfOFTdsldJOPD");
+insert into order_line values(1, 9  , 1 , 12    , 51875 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "RDuQryNvArXYmmhhYNWeHZws");
+insert into order_line values(1, 9  , 1 , 13    , 67712 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "gsjJdbMxrdxfZXXWvKjdSIqO");
+insert into order_line values(1, 10 , 1 , 1 , 23638 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "QrRwKafNCSMUvjAvHwrDIbGA");
+insert into order_line values(1, 10 , 1 , 2 , 15238 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "OwVCHLUYJeZoSbHeVdOVyVTq");
+insert into order_line values(1, 10 , 1 , 3 , 434       , 1 ,"2018-09-13 15:23:42", 5, 0.00, "TEadaoaVQihkgQpGFhImMdpA");
+insert into order_line values(1, 10 , 1 , 4 , 70931 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "VSFssYwTCwIDsxLaJrqYYVGg");
+insert into order_line values(1, 10 , 1 , 5 , 66853 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "jwSilNBrGtpcmSyUurTGrcxI");
+insert into order_line values(1, 10 , 1 , 6 , 83018 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "eHclymjqVuEwMjQDMEuLxpdR");
+insert into order_line values(1, 10 , 1 , 7 , 9795  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "TTetQiastZFdQBytXLdnnPRi");
+insert into order_line values(1, 10 , 1 , 8 , 15379 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "xeHtAbnEuEMWWHVcKMdJGBuK");
+insert into order_line values(1, 10 , 1 , 9 , 46032 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "ZgraWPFDjfeXjAbwWxdRandd");
+insert into order_line values(1, 10 , 1 , 10    , 80418 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "ESUTaTZruVIZYrFdPpdqMZOp");
+insert into order_line values(1, 10 , 1 , 11    , 67933 , 1 ,"2018-09-13 15:23:42", 5, 0.00, "DVsaFxSyqtSQLmLTNjkSNAhQ");
+insert into order_line values(1, 10 , 1 , 12    , 4526  , 1 ,"2018-09-13 15:23:42", 5, 0.00, "pfihumcNNHLgGbAxRLlcfYmp");
+
+insert into stock values(1, 1, 83, "JigllwtTFfUTdWteofjIknOF", "EfcRPbAXhlKEfDJkXCoUvsJC", "rmRGRyKWbbmDCjKnTOtwweUA", "OVmxwPpjGVCFfYhgkKiuVwOJ", "LHUGgOtbBRZpgiwCKCHJJotU", "OPTDxjneFTLsONtFmJmVGogi", "PRLiLhxaCByLodQipiwcCCPM", "KSEQaafsLPEsNFunEgChwkwg", "ZijOUxZNbPnbvGmkkgXpBLTh", "aFxYLeXTnMomLCnaPQvWcgHJ", 0, 0, 0, "UU?YS_mep[?S?79u!vF`cP??o?W");
+
+insert into warehouse values(1, "4W+?M?/aG", "?VJ;t+P??m5v2?.=?T", "%N#RO?|??;[_??~!Y?HP", "?[S!JV58?#;+$cP?=d", "tw", 547411111, 0.0364, 300000.00);
+
+## RUN TEST
+call order_status(0, 1, 5, 'ESEBARABLE');
+call stock_level(1, 5, 11, @low_stock);
++-----------+
+| low_stock |
++-----------+
+|         0 |
++-----------+
+call payment(1, 1, 0, 1, 1, 'BAROUGHTEING', 1495.970000);
+call payment(1, 4, 0, 1, 1, 'CALLYBARPRI', 3258.880000);
+call payment(1, 8, 1892, 1, 8, '', 3254.660000);
+call payment(1, 4, 1912, 1, 4, '', 1794.400000);
+call payment(1, 2, 0, 1, 9, 'ESEBAREING', 1234.600000);
+call payment(1, 9, 0, 1, 6, 'PRIOUGHTOUGHT', 1772.030000);
+call payment(1, 8, 0, 1, 8, 'ABLEESEPRES', 1394.860000);
+##all items can be found
+call new_order(1, 4, 1, 1, 6, 36158, 1, 10, 4071, 1, 6, 49919, 1, 9, 56284, 1, 3, 73312, 1, 5, 81280, 1, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, @rc);
++------+
+| rc   |
++------+
+|    0 |
++------+
+##all items can be found
+call new_order(1, 2, 1, 1, 14, 8063, 1, 5, 65014, 1, 3, 32766, 1, 6, 76767, 1, 7, 16347, 1, 9, 63436, 1, 7, 48061, 1, 1, 98170, 1, 4, 78779, 1, 1, 42720, 1, 2, 77791, 1, 3, 61436, 1, 3, 39336, 1, 9, 39807, 1, 5, 0, 0, 0, @rc);
++------+
+| rc   |
++------+
+|    0 |
++------+
+##all items can be found
+call new_order(1, 9, 1, 1, 15, 8115, 1, 2, 24448, 1, 10, 98302, 1, 8, 73728, 1, 4, 23965, 1, 5, 81852, 1, 5, 67928, 1, 3, 63995, 1, 5, 3936, 1, 10, 94624, 1, 6, 45056, 1, 7, 24309, 1, 4, 40936, 1, 9, 69055, 1, 10, 96504, 1, 5, @rc);
++------+
+| rc   |
++------+
+|    0 |
++------+
+##some items can not be found
+call new_order(1, 1, 1, 1, 6, 55288, 1, 3, 7998, 1, 6, 2048, 1, 2, 90108, 1, 6, 68540, 1, 9, 32767, 1, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, @rc);
++------+
+| rc   |
++------+
+|    1 |
++------+
+##some items can not be found
+call new_order(1, 3, 1, 1, 6, 88308, 1, 6, 88975, 1, 1, 12032, 1, 3, 23391, 1, 3, 49136, 1, 4, 7101, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, @rc);
++------+
+| rc   |
++------+
+|    1 |
++------+
+call payment(1, 3, 8, 1, 3, '', 1120.650000);
+##some items can not be found
+call new_order(1, 4, 1, 1, 6, 12158, 1, 9, 16246, 1, 8, 24574, 1, 5, 86016, 1, 2, 44479, 1, 8, 73727, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, @rc);
++------+
+| rc   |
++------+
+|    1 |
++------+
+call payment(1, 1, 1856, 1, 1, '', 2768.240000);
+##some items can not be found
+call new_order(1, 7, 1, 1, 6, 96926, 1, 3, 49151, 1, 4, 15357, 1, 7, 32512, 1, 7, 16128, 1, 3, 38144, 1, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, @rc);
++------+
+| rc   |
++------+
+|    1 |
++------+
+call stock_level(1, 2, 16, @low_stock);
++-----------+
+| low_stock |
++-----------+
+|         0 |
++-----------+
+call payment(1, 5, 337, 1, 5, '', 2597.460000);
+call delivery(1, 1);
+
+## CLEAN
+DROP TABLE customer;
+DROP TABLE district;
+DROP TABLE history;
+DROP TABLE item;
+DROP TABLE new_order;
+DROP TABLE order_line;
+DROP TABLE orders;
+DROP TABLE stock;
+DROP TABLE warehouse;
+DROP PROCEDURE delivery;
+DROP PROCEDURE new_order_2;
+DROP PROCEDURE new_order;
+DROP PROCEDURE order_status;
+DROP PROCEDURE payment;
+DROP PROCEDURE stock_level;

@@ -21,6 +21,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "share/scn.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -30,14 +31,14 @@ using namespace common;
  * ------------------------------ObArchiveRoundHandler---------------------
  */
 ObArchiveRoundHandler::ObArchiveRoundHandler()
-  :is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), incarnation_(OB_START_INCARNATION), 
+  :is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), incarnation_(OB_START_INCARNATION),
    sql_proxy_(nullptr), archive_table_op_()
 {
 
 }
 
 int ObArchiveRoundHandler::init(
-    const uint64_t tenant_id, 
+    const uint64_t tenant_id,
     const int64_t incarnation,
     ObMySQLProxy &sql_proxy)
 {
@@ -98,7 +99,7 @@ int ObArchiveRoundHandler::prepare_beginning_dest_round_(const ObTenantArchiveRo
 {
   int ret = OB_SUCCESS;
 
-  ARCHIVE_SCN_TYPE start_scn = 0;
+  SCN start_scn = SCN::min_scn();
   ObArchiveRoundState next_state = ObArchiveRoundState::beginning();
   if (!round.state_.is_prepare()) {
     ret = OB_INVALID_ARGUMENT;
@@ -125,12 +126,17 @@ bool ObArchiveRoundHandler::can_start_archive(const ObTenantArchiveRoundAttr &ro
 
 bool ObArchiveRoundHandler::can_stop_archive(const ObTenantArchiveRoundAttr &round) const
 {
-  // only tenant with archive state of BEGINNING or DOING or INTERRUPTED can stop archive.
-  return round.state_.is_beginning() || round.state_.is_doing() || round.state_.is_interrupted();
+  // only tenant with archive state of BEGINNING or DOING or INTERRUPTED or SUSPENDING or SUSPEND can stop archive.
+  return round.state_.is_beginning() || round.state_.is_doing() || round.state_.is_interrupted() || round.state_.is_suspending() || round.state_.is_suspend();
 }
 
+bool ObArchiveRoundHandler::can_suspend_archive(const ObTenantArchiveRoundAttr &round) const
+{
+  // only tenant with archive state of DOING or INTERRUPTED can defer archive.
+  return round.state_.is_doing() || round.state_.is_interrupted();
+}
 
-int ObArchiveRoundHandler::decide_start_scn_(ARCHIVE_SCN_TYPE &start_scn)
+int ObArchiveRoundHandler::decide_start_scn_(SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -138,9 +144,9 @@ int ObArchiveRoundHandler::decide_start_scn_(ARCHIVE_SCN_TYPE &start_scn)
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, sql_proxy_, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
   } else if (OB_FALSE_IT(start_scn = tenant_info.get_standby_scn())){
-  } else if (OB_LS_MIN_SCN_VALUE >= start_scn) {
+  } else if (SCN::base_scn() >= start_scn) {
     ret = OB_EAGAIN;
-    LOG_WARN("start_scn not valid， need wait", K(ret), K(tenant_info));
+    LOG_WARN("start_scn not valid, need wait", K(ret), K(tenant_info));
   }
   return ret;
 }
@@ -159,7 +165,7 @@ int ObArchiveRoundHandler::can_enable_archive(const int64_t dest_no, bool &can)
     } else {
       LOG_WARN("failed to get round", K(ret), K(dest_no));
     }
-  } else if (!round.state_.is_stop()) {
+  } else if (!round.state_.is_stop() && !round.state_.is_suspend()) {
     can = false;
     LOG_WARN("round exist on that dest", K(ret), K(dest_no), K(round));
   } else {
@@ -173,7 +179,11 @@ int ObArchiveRoundHandler::enable_archive(const int64_t dest_no, ObTenantArchive
   int ret = OB_SUCCESS;
   bool can = false;
   bool is_exist = false;
+  bool old_round_exist = true;
   ObMySQLTransaction trans;
+  ObLogArchiveDestState dest_state;
+  ObArchiveMode log_mode;
+
   if (OB_FAIL(can_enable_archive(dest_no, can))) {
     LOG_WARN("failed to check can enable archive", K(ret), K(dest_no));
   } else if (!can) {
@@ -181,19 +191,46 @@ int ObArchiveRoundHandler::enable_archive(const int64_t dest_no, ObTenantArchive
     LOG_WARN("cannot enable log archive", K(ret), K(dest_no));
   } else if (OB_FAIL(start_trans_(trans))) {
     LOG_WARN("failed to start transaction", K(ret), K(dest_no));
+  } else if (OB_FAIL(archive_table_op_.get_archive_mode(trans, log_mode))) {
+    LOG_WARN("failed to get archive mode", K(ret));
+  } else if (!log_mode.is_archivelog()) {
+    ret = OB_CANNOT_START_LOG_ARCHIVE_BACKUP;
+    LOG_WARN("log mode is not ARCHIVELOG", K(ret), K(dest_no), K(log_mode));
   } else if (OB_FAIL(archive_table_op_.lock_archive_dest(trans, dest_no, is_exist))) {
     LOG_WARN("failed to lock archive dest", K(ret), K(dest_no));
   } else if (!is_exist) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("empty archive dest", K(ret), K(dest_no));
+  } else if (OB_FAIL(archive_table_op_.get_dest_state(trans, false, dest_no, dest_state))) {
+    LOG_WARN("failed to get archive dest state", K(ret), K(dest_no));
+  } else if (!dest_state.is_enable()) {
+    ret = OB_CANNOT_START_LOG_ARCHIVE_BACKUP;
+    LOG_WARN("dest state is not enable", K(ret), K(dest_no), K(dest_state));
+  } else if (OB_FAIL(archive_table_op_.get_round(trans, dest_no, true, round))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      old_round_exist = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get last round", K(ret), K(dest_no));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (old_round_exist && round.state_.is_suspend()) {
+    ObArchiveRoundState next_state = ObArchiveRoundState::beginning();
+    if (OB_FAIL(archive_table_op_.switch_round_state_to(trans, round, next_state))) {
+      LOG_WARN("failed to switch state", K(ret), K(round), K(next_state));
+    } else if (OB_FAIL(trans.end(true))) {
+      LOG_WARN("failed to commit trans", K(ret), K(dest_no), K(round));
+    } else {
+      round.switch_state_to(next_state);
+      LOG_INFO("continue archive", K(round));
+    }
   } else if (OB_FAIL(prepare_new_dest_round_(dest_no, trans, round))) {
     LOG_WARN("failed to prepare new archive round", K(ret), K(dest_no));
   } else {
-    ObLogArchiveDestState state = ObLogArchiveDestState::enable();
     if (OB_FAIL(archive_table_op_.start_new_round(trans, round))) {
       LOG_WARN("failed to start new archive round", K(ret), K(dest_no), K(round));
-    } else if (OB_FAIL(archive_table_op_.set_dest_state(trans, dest_no, state))) {
-      LOG_WARN("failed to set dest state", K(ret), K(dest_no), K(round));
     } else if (OB_FAIL(trans.end(true))) {
       LOG_WARN("failed to commit trans", K(ret), K(dest_no), K(round));
     } 
@@ -234,6 +271,42 @@ int ObArchiveRoundHandler::disable_archive(const int64_t dest_no, ObTenantArchiv
   } else {
     round.switch_state_to(next_state);
     LOG_INFO("stop archive", K(round));
+  }
+
+  if (OB_FAIL(ret) && trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+      LOG_WARN("failed to end trans", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObArchiveRoundHandler::defer_archive(const int64_t dest_no, ObTenantArchiveRoundAttr &round)
+{
+  int ret = OB_SUCCESS;
+  bool can = false;
+  ObMySQLTransaction trans;
+  ObArchiveRoundState next_state = ObArchiveRoundState::suspending();
+  if (OB_FAIL(start_trans_(trans))) {
+    LOG_WARN("failed to start transaction", K(ret), K(dest_no));
+  } else if (OB_FAIL(archive_table_op_.get_round(trans, dest_no, true, round))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot defer log archive", K(ret), K(dest_no));
+    } else {
+      LOG_WARN("failed to get round", K(ret), K(dest_no));
+    }
+  } else if (!can_suspend_archive(round)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cannot defer log archive", K(ret), K(round));
+  } else if (OB_FAIL(archive_table_op_.switch_round_state_to(trans, round, next_state))) {
+    LOG_WARN("failed to switch state", K(ret), K(round), K(next_state));
+  } else if (OB_FAIL(trans.end(true))) {
+    LOG_WARN("failed to commit trans", K(ret), K(round));
+  } else {
+    round.switch_state_to(next_state);
+    LOG_INFO("defer archive", K(round));
   }
 
   if (OB_FAIL(ret) && trans.is_started()) {
@@ -307,10 +380,6 @@ int ObArchiveRoundHandler::checkpoint_to(
         LOG_WARN("failed to del round", K(ret), K(old_round), K(new_round));
       } else if (new_round.state_.is_stop() && OB_FAIL(archive_table_op_.insert_his_round(trans, his_round))) {
         LOG_WARN("failed to insert his round", K(ret), K(old_round), K(new_round), K(his_round));
-      } else if (new_round.state_.is_stop() && OB_FAIL(archive_table_op_.set_dest_state(trans, new_round.key_.dest_no_, ObLogArchiveDestState::disable()))) {
-        LOG_WARN("failed to set dest state", K(ret), K(old_round), K(new_round));
-      } else if (new_round.state_.is_interrupted() && OB_FAIL(archive_table_op_.set_dest_state(trans, new_round.key_.dest_no_, ObLogArchiveDestState::interrupt()))) {
-        LOG_WARN("failed to set dest state", K(ret), K(old_round), K(new_round));
       } else if (!new_round.state_.is_stop() && OB_FAIL(archive_table_op_.switch_round_state_to(
                   trans, old_round, new_round))) {
         LOG_WARN("failed to advance round", K(ret), K(old_round), K(new_round));

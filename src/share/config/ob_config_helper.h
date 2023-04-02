@@ -21,6 +21,11 @@
 
 namespace oceanbase
 {
+namespace obrpc
+{
+struct ObAdminSetConfigItem;
+}
+
 namespace common
 {
 class ObConfigItem;
@@ -155,6 +160,26 @@ public:
   bool check(const ObConfigItem &t) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEvenIntChecker);
+};
+
+class ObConfigFreezeTriggerIntChecker
+{
+public:
+  static bool check(const uint64_t tenant_id,
+                    const obrpc::ObAdminSetConfigItem &t);
+private:
+  static int64_t get_write_throttle_trigger_percentage_(const uint64_t tenant_id);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigFreezeTriggerIntChecker);
+};
+
+class ObConfigWriteThrottleTriggerIntChecker
+{
+public:
+  static bool check(const uint64_t tenant_id,
+                    const obrpc::ObAdminSetConfigItem &t);
+private:
+  static int64_t get_freeze_trigger_percentage_(const uint64_t tenant_id);
+  DISALLOW_COPY_AND_ASSIGN(ObConfigWriteThrottleTriggerIntChecker);
 };
 
 class ObConfigTabletSizeChecker

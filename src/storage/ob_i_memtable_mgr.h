@@ -13,9 +13,10 @@
 #ifndef OCEANBASE_STORAGE_OB_I_MEMTABLE_MGR
 #define OCEANBASE_STORAGE_OB_I_MEMTABLE_MGR
 
+#include "lib/lock/ob_spin_rwlock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "storage/ob_i_table.h"
 #include "storage/memtable/ob_multi_source_data.h"
-#include "storage/ob_storage_schema_recorder.h"
 
 namespace oceanbase
 {
@@ -35,11 +36,164 @@ class ObFreezer;
 
 using ObTableHdlArray = common::ObIArray<ObTableHandleV2>;
 
+enum LockType
+{
+  OB_LOCK_UNKNOWN = 0,
+  OB_SPIN_RWLOCK,
+  OB_QSYNC_LOCK,
+  OB_LOCK_MAX
+};
+
+class MemtableMgrLock
+{
+public:
+  MemtableMgrLock(const LockType lock_type, void *lock) : lock_type_(lock_type), lock_(lock) {}
+  ~MemtableMgrLock() { reset(); }
+  void reset()
+  {
+    lock_type_ = LockType::OB_LOCK_UNKNOWN;
+    lock_ = NULL;
+  }
+
+  bool is_valid() const
+  {
+    return NULL != lock_
+          && (lock_type_ > OB_LOCK_UNKNOWN && lock_type_ < OB_LOCK_MAX)
+          && (OB_QSYNC_LOCK == lock_type_ ? static_cast<common::ObQSyncLock *>(lock_)->is_inited() : true);
+  }
+
+  int rdlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->rdlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->rdlock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  void rdunlock()
+  {
+    if (lock_type_ == OB_QSYNC_LOCK) {
+      static_cast<common::ObQSyncLock *>(lock_)->rdunlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      static_cast<common::SpinRWLock *>(lock_)->unlock();
+    } else {
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected lock_type", K_(lock_type));
+    }
+  }
+
+  int try_wrlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->try_wrlock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  int wrlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->wrlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->wrlock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  void wrunlock()
+  {
+    if (lock_type_ == OB_QSYNC_LOCK) {
+      static_cast<common::ObQSyncLock *>(lock_)->wrunlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      static_cast<common::SpinRWLock *>(lock_)->unlock();
+    } else {
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected lock_type", K_(lock_type));
+    }
+  }
+
+private:
+  LockType lock_type_;
+  void *lock_;
+};
+
+class MemMgrRLockGuard
+{
+public:
+  explicit MemMgrRLockGuard(const MemtableMgrLock &lock)
+      : lock_(const_cast<MemtableMgrLock&>(lock)), ret_(OB_SUCCESS)
+  {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
+      COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
+    }
+  }
+  ~MemMgrRLockGuard()
+  {
+    if (OB_LIKELY(OB_SUCCESS == ret_)) {
+      lock_.rdunlock();
+    }
+  }
+  inline int get_ret() const { return ret_; }
+private:
+  MemtableMgrLock &lock_;
+  int ret_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(MemMgrRLockGuard);
+};
+
+class MemMgrWLockGuard
+{
+public:
+  explicit MemMgrWLockGuard(const MemtableMgrLock &lock)
+      : lock_(const_cast<MemtableMgrLock &>(lock)), ret_(OB_SUCCESS)
+  {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
+      COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
+    }
+  }
+  ~MemMgrWLockGuard()
+  {
+    if (OB_LIKELY(OB_SUCCESS == ret_)) {
+      lock_.wrunlock();
+    }
+  }
+  inline int get_ret() const { return ret_; }
+private:
+  MemtableMgrLock &lock_;
+  int ret_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(MemMgrWLockGuard);
+};
+
 class ObIMemtableMgr
 {
 
 public:
-  ObIMemtableMgr()
+  ObIMemtableMgr(const LockType lock_type, void *lock)
     : is_inited_(false),
       ref_cnt_(0),
       tablet_id_(),
@@ -48,7 +202,7 @@ public:
       memtable_head_(0),
       memtable_tail_(0),
       t3m_(nullptr),
-      lock_()
+      lock_(lock_type, lock)
   {
     memset(tables_, 0, sizeof(tables_));
   }
@@ -58,16 +212,25 @@ public:
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       logservice::ObLogHandler *log_handler,
       ObFreezer *freezer,
       ObTenantMetaMemMgr *t3m);
-  virtual int create_memtable(const int64_t clog_checkpoint_ts,
+
+  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
-                              const bool for_replay=false) = 0;
+                              const bool for_replay = false)
+  {
+    UNUSED(clog_checkpoint_scn);
+    UNUSED(schema_version);
+    UNUSED(for_replay);
+    return OB_NOT_SUPPORTED;
+  }
 
   virtual int get_active_memtable(ObTableHandleV2 &handle) const;
 
-  virtual int get_first_memtable(ObTableHandleV2 &handle) const;
+  virtual int get_first_nonempty_memtable(ObTableHandleV2 &handle) const;
 
   virtual int get_all_memtables(ObTableHdlArray &handle);
 
@@ -75,7 +238,7 @@ public:
 
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) { return OB_SUCCESS; }
 
-  virtual int get_memtable_for_replay(int64_t replay_log_ts, ObTableHandleV2 &handle)
+  virtual int get_memtable_for_replay(share::SCN replay_scn, ObTableHandleV2 &handle)
   {
     return OB_SUCCESS;
   }
@@ -85,23 +248,23 @@ public:
       ObIAllocator *allocator = nullptr) const;
 
   virtual int get_memtable_for_multi_source_data_unit(
-      memtable::ObMemtable *&memtable,
+      ObTableHandleV2 &handle,
       const memtable::MultiSourceDataUnitType type) const;
 
-  int release_memtables(const int64_t log_ts);
+  int release_memtables(const share::SCN &scn);
   // force release all memtables
   // WARNING: this will release all the ref of memtable, make sure you will not use it again.
   int release_memtables();
 
   bool has_memtable()
   {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     return has_memtable_();
   }
 
-  int get_newest_clog_checkpoint_ts(int64_t &clog_checkpoint_ts);
+  int get_newest_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn);
 
-  int get_newest_snapshot_version(int64_t &snapshot_version);
+  int get_newest_snapshot_version(share::SCN &snapshot_version);
 
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -111,23 +274,27 @@ public:
     destroy();
     ATOMIC_STORE(&ref_cnt_, 0);
   }
-  virtual int init_storage_schema_recorder(
+  virtual int init_storage_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       logservice::ObLogHandler *log_handler)
   { // do nothing
     UNUSED(tablet_id);
     UNUSED(ls_id);
-    UNUSED(max_saved_schema_version),
+    UNUSED(max_saved_schema_version);
+    UNUSED(max_saved_medium_scn);
+    UNUSED(compat_mode);
     UNUSED(log_handler);
     return OB_NOT_SUPPORTED;
   }
-  virtual int reset_storage_schema_recorder()
+  virtual int reset_storage_recorder()
   { // do nothing
     return OB_NOT_SUPPORTED;
   }
-
+  virtual int remove_memtables_from_data_checkpoint() { return OB_SUCCESS; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }
@@ -145,7 +312,6 @@ protected:
                    const share::ObLSID &ls_id,
                    ObFreezer *freezer,
                    ObTenantMetaMemMgr *t3m) = 0;
-
 protected:
   bool is_inited_;
   volatile int64_t ref_cnt_;
@@ -157,7 +323,7 @@ protected:
   int64_t memtable_tail_;
   ObTenantMetaMemMgr *t3m_;
   memtable::ObIMemtable *tables_[MAX_MEMSTORE_CNT];
-  mutable common::SpinRWLock lock_;
+  mutable MemtableMgrLock lock_;
 };
 
 class ObMemtableMgrHandle final

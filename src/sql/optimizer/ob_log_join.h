@@ -35,6 +35,9 @@ namespace sql
         nl_params_(),
         connect_by_pseudo_columns_(),
         connect_by_prior_exprs_(),
+        prior_exprs_(),
+        connect_by_root_exprs_(),
+        sys_connect_by_path_exprs_(),
         partition_id_expr_(nullptr),
         slave_mapping_type_(SM_NONE),
         connect_by_extra_exprs_(),
@@ -76,6 +79,10 @@ namespace sql
     inline common::ObIArray<ObRawExpr*> &get_connect_by_pseudo_columns() { return connect_by_pseudo_columns_; }
 
     inline common::ObIArray<ObRawExpr *> &get_connect_by_prior_exprs() { return connect_by_prior_exprs_; }
+    inline common::ObIArray<ObRawExpr *> &get_prior_exprs() { return prior_exprs_; }
+    inline common::ObIArray<ObRawExpr *> &get_connect_by_root_exprs() { return connect_by_root_exprs_; }
+    inline common::ObIArray<ObRawExpr *> &get_sys_connect_by_path_exprs() { return sys_connect_by_path_exprs_; }
+    inline common::ObIArray<ObRawExpr *> &get_connect_by_extra_exprs() { return connect_by_extra_exprs_; }
 
     int set_connect_by_prior_exprs(const common::ObIArray<ObRawExpr *> &exprs) { return connect_by_prior_exprs_.assign(exprs); }
 
@@ -93,8 +100,8 @@ namespace sql
 
     common::ObIArray<ObRawExpr *> &get_join_filters() { return join_filters_; }
 
-    virtual int inner_replace_generated_agg_expr(
-        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs);
+    virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> >&to_replace_exprs) override;
     const common::ObIArray<ObOrderDirection> &get_merge_directions() const { return merge_directions_; }
     int set_merge_directions(const common::ObIArray<ObOrderDirection> &merge_directions)
     {
@@ -106,7 +113,6 @@ namespace sql
      */
     virtual uint64_t hash(uint64_t seed) const override;
 
-    virtual int32_t get_explain_name_length() const;
     virtual int get_explain_name_internal(char *buf,
                                           const int64_t buf_len,
                                           int64_t &pos);
@@ -121,9 +127,6 @@ namespace sql
                                     PartitionFilterType &type);
     virtual bool is_block_input(const int64_t child_idx) const override;
     virtual bool is_consume_child_1by1() const { return HASH_JOIN == join_algo_; }
-
-    virtual int collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx) override;
-    virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
 
     inline bool is_nlj_with_param_down() const { return (NESTED_LOOP_JOIN == join_algo_) &&
                                                         !nl_params_.empty(); }
@@ -150,26 +153,29 @@ namespace sql
 
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
-    int set_use_batch(ObLogicalOperator* root);
+    int check_and_set_use_batch();
     void set_join_path(JoinPath *path) { join_path_ = path; }
     JoinPath *get_join_path() { return join_path_; }
     bool is_my_exec_expr(const ObRawExpr *expr);
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+    common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
+    common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+
   private:
+    int set_use_batch(ObLogicalOperator* root);
     inline bool can_enable_gi_partition_pruning()
     {
       return (NESTED_LOOP_JOIN == join_algo_)
           && join_dist_algo_ == DistAlgo::DIST_PARTITION_NONE;
     }
     int build_gi_partition_pruning();
+    int set_granule_repart_ref_table_id_recursively(ObLogicalOperator *op, int64_t ref_table_id);
     // 在 NLJ 上分配一个 partition id，作为 consumer
     // 左侧的 GI 看到这个 partition id 后会以 producer 的身份生成列
     int generate_join_partition_id_expr();
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
     int get_connect_by_exprs(ObIArray<ObRawExpr*> &all_exprs);
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
     virtual int allocate_granule_post(AllocGIContext &ctx) override;
     virtual int allocate_granule_pre(AllocGIContext &ctx) override;
     int get_pq_distribution_method(const DistAlgo join_dist_algo,
@@ -177,10 +183,11 @@ namespace sql
                                    ObPQDistributeMethod::Type &right_dist_method);
     bool is_using_slave_mapping() { return SM_NONE != slave_mapping_type_; }
     int allocate_startup_expr_post() override;
+    int allocate_startup_expr_post(int64_t child_idx) override;
 
     // print outline
-    virtual int print_outline(planText &plan);
-    int print_used_hint(planText &plan_text);
+    virtual int print_outline_data(PlanText &plan_text) override;
+    virtual int print_used_hint(PlanText &plan_text) override;
     int add_used_leading_hint(ObIArray<const ObHint*> &used_hints);
     int check_used_leading(const ObIArray<LeadingInfo> &leading_infos,
                            const ObLogicalOperator *op,
@@ -192,24 +199,26 @@ namespace sql
     bool is_scan_operator(log_op_def::ObLogOpType type);
     int append_used_join_hint(ObIArray<const ObHint*> &used_hints);
     int append_used_join_filter_hint(ObIArray<const ObHint*> &used_hints);
-    int print_outline_data(planText &plan_text);
     int print_join_hint_outline(const ObDMLStmt &stmt,
                                 const ObItemType hint_type,
                                 const ObString &qb_name,
                                 const ObRelIds &table_set,
-                                planText &plan_text);
+                                PlanText &plan_text);
     int print_join_filter_hint_outline(const ObDMLStmt &stmt,
                                        const ObString &qb_name,
                                        const ObRelIds &left_table_set,
                                        const uint64_t filter_table_id,
+                                       const ObTableInHint &child_table_hint,
+                                       const uint64_t child_table_id,
                                        const bool is_part_hint,
-                                       planText &plan_text);
+                                       PlanText &plan_text);
     int print_leading_tables(const ObDMLStmt &stmt,
-                             planText &plan_text,
+                             PlanText &plan_text,
                              const ObLogicalOperator *op);
     int print_join_tables_in_hint(const ObDMLStmt &stmt,
-                                  planText &plan_text,
+                                  PlanText &plan_text,
                                   const ObRelIds &table_set);
+
   private:
     // all join predicates
     common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_conditions_; //equal join condition, for merge-join
@@ -222,6 +231,9 @@ namespace sql
     common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> nl_params_;
     common::ObSEArray<ObRawExpr*, 3, common::ModulePageAllocator, true> connect_by_pseudo_columns_;
     common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_prior_exprs_;
+    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> prior_exprs_;
+    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_root_exprs_;
+    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> sys_connect_by_path_exprs_;
     // NLJ 模式下右侧接 GI 时，通知 GI 过滤掉不可能命中的分区，以提升 rescan 性能
     // NLJ 模式下记录左侧 pkey exchange 生成的 partition id 列
     // 用于在 CG 阶段定位 part id 列位置，然后生成行下标
@@ -233,6 +245,8 @@ namespace sql
     common::ObSEArray<JoinFilterInfo, 4, common::ModulePageAllocator, true> join_filter_infos_;
     bool can_use_batch_nlj_;
     JoinPath *join_path_;
+    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
+    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
 
     DISALLOW_COPY_AND_ASSIGN(ObLogJoin);
   };

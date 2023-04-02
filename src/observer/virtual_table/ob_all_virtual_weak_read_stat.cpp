@@ -89,15 +89,19 @@ int ObAllVirtualWeakReadStat::inner_get_next_row(ObNewRow *&row)
 		    case OB_APP_MIN_COLUMN_ID + SERVER_PORT:
 		      cells[i].set_int(wrs_stat.self_.get_port());
 		      break;
-		    case OB_APP_MIN_COLUMN_ID + SERVER_VERSION:
-		      cells[i].set_int(wrs_stat.server_version_);
+		    case OB_APP_MIN_COLUMN_ID + SERVER_VERSION: {
+					uint64_t v = wrs_stat.server_version_.is_valid() ? wrs_stat.server_version_.get_val_for_inner_table_field() : 0;
+		      cells[i].set_uint64(v);
 		      break;
+				}
 		    case OB_APP_MIN_COLUMN_ID + SERVER_VERSION_DELTA:
 		      cells[i].set_int(wrs_stat.server_version_delta_);
 		      break;
-        case OB_APP_MIN_COLUMN_ID + LOCAL_CLUSTER_VERSION:
-          cells[i].set_int(wrs_stat.local_cluster_version_);
+        case OB_APP_MIN_COLUMN_ID + LOCAL_CLUSTER_VERSION: {
+					uint64_t v = wrs_stat.local_cluster_version_.is_valid() ? wrs_stat.local_cluster_version_.get_val_for_inner_table_field() : 0;
+		      cells[i].set_uint64(v);
           break;
+				}
         case OB_APP_MIN_COLUMN_ID + LOCAL_CLUSTER_VERSION_DELTA:
           cells[i].set_int(wrs_stat.local_cluster_version_delta_);
           break;
@@ -154,18 +158,24 @@ int ObAllVirtualWeakReadStat::inner_get_next_row(ObNewRow *&row)
 		    case OB_APP_MIN_COLUMN_ID + CLUSTER_VERSION_GEN_TS:
 		      cells[i].set_int(wrs_stat.cluster_version_gen_tstamp_);
 		      break;
-		    case OB_APP_MIN_COLUMN_ID + CLUSTER_VERSION:
-		      cells[i].set_int(wrs_stat.cluster_version_);
+		    case OB_APP_MIN_COLUMN_ID + CLUSTER_VERSION: {
+					uint64_t v = wrs_stat.cluster_version_.is_valid() ? wrs_stat.cluster_version_.get_val_for_inner_table_field() : 0;
+		      cells[i].set_uint64(v);
 		      break;
+				}
 		    case OB_APP_MIN_COLUMN_ID + CLUSTER_VERSION_DELTA:
 		      cells[i].set_int(wrs_stat.cluster_version_delta_);
 		      break;
-		    case OB_APP_MIN_COLUMN_ID + MIN_CLUSTER_VERSION:
-		      cells[i].set_int(wrs_stat.min_cluster_version_);
+		    case OB_APP_MIN_COLUMN_ID + MIN_CLUSTER_VERSION: {
+					uint64_t v = wrs_stat.min_cluster_version_.is_valid() ? wrs_stat.min_cluster_version_.get_val_for_inner_table_field() : 0;
+		      cells[i].set_uint64(v);
 		      break;
-		    case OB_APP_MIN_COLUMN_ID + MAX_CLUSTER_VERSION:
-		      cells[i].set_int(wrs_stat.max_cluster_version_);
+				}
+		    case OB_APP_MIN_COLUMN_ID + MAX_CLUSTER_VERSION: {
+					uint64_t v = wrs_stat.max_cluster_version_.is_valid() ? wrs_stat.max_cluster_version_.get_val_for_inner_table_field() : 0;
+		      cells[i].set_uint64(v);
 		      break;
+				}
 		    default:
 		      ret = OB_ERR_UNEXPECTED;
 		      SERVER_LOG(WARN, "unexpected column id", K(ret));

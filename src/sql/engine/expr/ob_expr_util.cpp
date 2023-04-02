@@ -16,6 +16,8 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
 #include "common/ob_smart_call.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "lib/charset/ob_charset.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -451,29 +453,60 @@ int ObExprUtil::set_expr_ascii_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
                                       const common::ObCollationType src_coll_type)
 {
   int ret = OB_SUCCESS;
-  if (ascii.empty()) {
-    if (lib::is_oracle_mode()) {
-      expr_datum.set_null();
+  if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+    if (ascii.empty()) {
+      if (lib::is_oracle_mode()) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(ObString());
+      }
     } else {
-      expr_datum.set_string(ObString());
+      ObArenaAllocator temp_allocator;
+      ObString out;
+      char *buf = NULL;
+      if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
+        out = ascii;
+      } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
+                                            expr.datum_meta_.cs_type_, out))) {
+        LOG_WARN("charset convert failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, out.length(), datum_idx))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(out.length()));
+      } else {
+        MEMCPY(buf, out.ptr(), out.length());
+        expr_datum.set_string(buf, out.length());
+      }
     }
-  } else {
-    ObArenaAllocator temp_allocator;
+  } else { // text tc
+    ObArenaAllocator temp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString out;
     char *buf = NULL;
-    if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
-     out = ascii;
-    } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
-                                           expr.datum_meta_.cs_type_, out))) {
-      LOG_WARN("charset convert failed", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, out.length(), datum_idx))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), K(out.length()));
+    ObTextStringDatumResult res(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (ascii.empty()) {
+      if (lib::is_oracle_mode()) {
+        expr_datum.set_null();
+      } else if (OB_FAIL(res.init_with_batch_idx(0, datum_idx))) {
+        LOG_WARN("init text str result failed", K(ret));
+      } else {
+        res.set_result();
+      }
     } else {
-      MEMCPY(buf, out.ptr(), out.length());
-      expr_datum.set_string(buf, out.length());
+      if (is_ascii && !ObCharset::is_cs_nonascii(expr.datum_meta_.cs_type_)) {
+        out = ascii;
+      } else if (OB_FAIL(ObCharset::charset_convert(temp_allocator, ascii, src_coll_type,
+                                                    expr.datum_meta_.cs_type_, out))) {
+        LOG_WARN("charset convert failed", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(res.init_with_batch_idx(out.length(), datum_idx))) {
+        LOG_WARN("init text str result failed");
+      } else if (OB_FAIL(res.append(out.ptr(), out.length()))) {
+        LOG_WARN("append text str result failed", K(ret));
+      } else {
+        res.set_result();
+      }
     }
   }
   return ret;
@@ -527,8 +560,7 @@ int ObExprUtil::convert_string_collation(const ObString &in_str,
     out_str = in_str;
   } else {
     char *buf = NULL;
-    const int32_t CharConvertFactorNum = 4; //最多使用4字节存储一个字符
-    int32_t buf_len = in_str.length() * CharConvertFactorNum;
+    int32_t buf_len = in_str.length() * ObCharset::CharConvertFactorNum;
     uint32_t result_len = 0;
     if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -556,25 +588,6 @@ int ObExprUtil::deep_copy_str(const ObString &src, ObString &out, ObIAllocator &
   return ret;
 }
 
-int ObExprUtil::eval_generated_column(const ObExpr &rt_expr,
-                                      ObEvalCtx &eval_ctx,
-                                      ObDatum &expr_datum)
-{
-  int ret = OB_SUCCESS;
-  ObDatum *param_datum = NULL;
-  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_) ||
-      OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0])) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret));
-  } else if (OB_FAIL(rt_expr.args_[0]->eval(eval_ctx, param_datum))) {
-    LOG_WARN("failed to eval", K(ret));
-  } else {
-    expr_datum.set_datum(*param_datum);
-    LOG_DEBUG("generated column evaluated", K(*param_datum));
-  }
-  return ret;
-}
-
 int ObExprUtil::eval_stack_overflow_check(const ObExpr &expr,
                                           ObEvalCtx &ctx,
                                           ObDatum &)
@@ -582,7 +595,7 @@ int ObExprUtil::eval_stack_overflow_check(const ObExpr &expr,
   int ret = OB_SUCCESS;
 
   // control the occupied stack size by event to simulate stack overflow in testing.
-  int stack_size = E(EventTable::EN_STACK_OVERFLOW_CHECK_EXPR_STACK_SIZE) 0;
+  int stack_size = OB_E(EventTable::EN_STACK_OVERFLOW_CHECK_EXPR_STACK_SIZE) 0;
   stack_size = std::abs(stack_size);
   char *cur_stack[stack_size];
   if (stack_size > 0) {
@@ -622,7 +635,7 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
   int ret = OB_SUCCESS;
   char *buf = NULL;
   //一个字符最多4个byte
-  int32_t buf_len = from_string.length() * 4;
+  int32_t buf_len = from_string.length() * ObCharset::CharConvertFactorNum;
   uint32_t result_len = 0;
   if (0 == buf_len) {
   } else if (from_collation == CS_TYPE_UTF8MB4_BIN) {
@@ -639,7 +652,7 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
                                                 result_len))) {
     LOG_WARN("charset convert failed", K(ret), K(from_collation), K(CS_TYPE_UTF8MB4_BIN));
   } else {
-    to_string.assign(buf, result_len);
+    to_string.assign(buf, static_cast<int32_t>(result_len));
   }
   return ret;
 }

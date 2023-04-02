@@ -37,7 +37,6 @@ int ObLinkedMacroBlockWriter::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLinkedMacroBlockWriter has not been inited", K(ret));
   } else {
-    io_desc_.set_category(ObIOCategory::SYS_IO);
     io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     is_inited_ = true;
   }

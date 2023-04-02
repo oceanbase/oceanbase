@@ -110,7 +110,7 @@ public:
       || MAX_BUFFER_CNT <= (ATOMIC_LOAD(&total_buffer_cnt_));
   #ifdef ERRSIM
     int ret = common::OB_SUCCESS;
-    ret = E(EventTable::EN_FORCE_DFC_BLOCK) ret;
+    ret = OB_E(EventTable::EN_FORCE_DFC_BLOCK) ret;
     need_block = (common::OB_SUCCESS != ret) ? true : need_block;
     SQL_DTL_LOG(TRACE, "trace block", K(need_block), K(total_buffer_cnt_), K(ret));
     ret = common::OB_SUCCESS;
@@ -123,7 +123,7 @@ public:
         || MAX_BUFFER_CNT / 2 >= (ATOMIC_LOAD(&total_buffer_cnt_));
 #ifdef ERRSIM
   int ret = common::OB_SUCCESS;
-  ret = E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
+  ret = OB_E(EventTable::EN_DTL_ONE_ROW_ONE_BUFFER) ret;
   can_unblock = (common::OB_SUCCESS != ret) ? 0 == (ATOMIC_LOAD(&total_buffer_cnt_)) : can_unblock;
   SQL_DTL_LOG(TRACE, "trace unblock", K(can_unblock), K(total_buffer_cnt_), K(ret));
   ret = common::OB_SUCCESS;

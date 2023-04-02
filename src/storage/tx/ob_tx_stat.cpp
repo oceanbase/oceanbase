@@ -44,6 +44,9 @@ void ObTxStat::reset()
   session_id_ = 0;
   scheduler_addr_.reset();
   is_exiting_ = false;
+  xid_.reset();
+  coord_.reset();
+  last_request_ts_ = OB_INVALID_TIMESTAMP;
 }
 int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const uint64_t tenant_id,  const bool has_decided,
@@ -56,7 +59,8 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const int64_t pending_log_size, const int64_t flushed_log_size,
                    const int64_t role_state,
                    const int64_t session_id, const common::ObAddr &scheduler,
-                   const bool is_exiting)
+                   const bool is_exiting, const ObXATransID &xid,
+                   const share::ObLSID &coord, const int64_t last_request_ts)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -86,6 +90,13 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
     session_id_ = session_id;
     scheduler_addr_ = scheduler;
     is_exiting_ = is_exiting;
+    xid_ = xid;
+    if (part_tx_action == ObPartTransAction::COMMIT && !coord.is_valid()) {
+      coord_ = ls_id;
+    } else {
+      coord_ = coord;
+    }
+    last_request_ts_ = last_request_ts;
   }
   return ret;
 }
@@ -133,6 +144,117 @@ void ObTxLockStat::reset()
   tx_id_.reset();
   tx_ctx_create_time_ = 0;
   tx_expired_time_ = 0;
+}
+
+int ObTxSchedulerStat::init(const uint64_t tenant_id,
+                            const common::ObAddr &addr,
+                            const uint32_t sess_id,
+                            const ObTransID &tx_id,
+                            const int64_t state,
+                            const int64_t cluster_id,
+                            const ObXATransID &xid,
+                            const share::ObLSID &coord_id,
+                            const ObTxPartList &parts,
+                            const ObTxIsolationLevel &isolation,
+                            const int64_t snapshot_version,
+                            const ObTxAccessMode &access_mode,
+                            const uint64_t op_sn,
+                            const uint64_t flag,
+                            const int64_t active_ts,
+                            const int64_t expire_ts,
+                            const int64_t timeout_us,
+                            const ObTxSavePointList &savepoints,
+                            const int16_t abort_cause,
+                            const bool can_elr)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    TRANS_LOG(WARN, "ObTxSchedulerStat init twice");
+    ret = OB_INIT_TWICE;
+  } else if (OB_FAIL(parts_.assign(parts))) {
+    TRANS_LOG(WARN, "parts assign error", KR(ret), K(parts));
+  } else if (OB_FAIL(get_valid_savepoints(savepoints))) {
+    TRANS_LOG(WARN, "savepoints assign error", KR(ret), K(savepoints));
+  } else {
+    is_inited_ = true;
+    tenant_id_ = tenant_id;
+    addr_ = addr;
+    sess_id_ = sess_id;
+    tx_id_ = tx_id;
+    state_ = state;
+    cluster_id_ = cluster_id;
+    xid_ = xid;
+    coord_id_ = coord_id;
+    isolation_ = isolation;
+    snapshot_version_ = snapshot_version;
+    access_mode_ = access_mode;
+    op_sn_ = op_sn;
+    flag_ = flag;
+    active_ts_ = active_ts;
+    expire_ts_ = expire_ts;
+    timeout_us_ = timeout_us;
+    abort_cause_ = abort_cause;
+    can_elr_ = can_elr;
+  }
+  return ret;
+}
+
+void ObTxSchedulerStat::reset()
+{
+  is_inited_ = false;
+  tenant_id_ = 0;
+  addr_.reset();
+  sess_id_ = 0;
+  tx_id_.reset();
+  state_ = 0;
+  cluster_id_ = -1;
+  xid_.reset();
+  coord_id_.reset();
+  parts_.reset();
+  isolation_ = ObTxIsolationLevel::INVALID;
+  snapshot_version_ = -1;
+  access_mode_ = ObTxAccessMode::INVL;
+  op_sn_ = -1;
+  flag_ = 0;
+  active_ts_ = -1;
+  expire_ts_ = -1;
+  timeout_us_ = -1;
+  savepoints_.reset();
+  abort_cause_ = 0;
+  can_elr_ = false;
+}
+
+int64_t ObTxSchedulerStat::get_parts_str(char* buf, const int64_t buf_len)
+{
+  int64_t pos = 0;
+  J_ARRAY_START();
+  for (int i = 0; i < parts_.count(); i++) {
+    J_OBJ_START();
+    J_KV("id", parts_.at(i).id_.id());
+    J_COMMA();
+    J_KV("addr", parts_.at(i).addr_);
+    J_COMMA();
+    J_KV("epoch", parts_.at(i).epoch_);
+    J_OBJ_END();
+    if (i < parts_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  return pos;
+}
+
+int ObTxSchedulerStat::get_valid_savepoints(const ObTxSavePointList &savepoints)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; i < savepoints.count(); i++) {
+    if (savepoints.at(i).is_savepoint() || savepoints.at(i).is_snapshot()) {
+      if (OB_FAIL(savepoints_.push_back(savepoints.at(i)))) {
+        TRANS_LOG(WARN, "failed to push into savepoints array", KR(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 } // transaction

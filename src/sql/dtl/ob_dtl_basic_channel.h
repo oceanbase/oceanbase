@@ -93,6 +93,12 @@ static DtlWriterType msg_writer_map[] =
   CONTROL_WRITER, // DH_ROLLUP_KEY_WHOLE_MSG,
   CONTROL_WRITER, // DH_RANGE_DIST_WF_PIECE_MSG,
   CONTROL_WRITER, // DH_RANGE_DIST_WF_WHOLE_MSG,
+  CONTROL_WRITER, // DH_INIT_CHANNEL_PIECE_MSG,
+  CONTROL_WRITER, // DH_INIT_CHANNEL_WHOLE_MSG,
+  CONTROL_WRITER, // DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG,
+  CONTROL_WRITER, // DH_SECOND_STAGE_REPORTING_WF_WHOLE_MSG,
+  CONTROL_WRITER, // DH_OPT_STATS_GATHER_PIECE_MSG,
+  CONTROL_WRITER, // DH_OPT_STATS_GATHER_WHOLE_MSG,
 };
 
 static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writer_map size");
@@ -351,7 +357,8 @@ public:
   virtual int send(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx = nullptr, bool is_eof = false) override;
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
-  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached = false);
+  virtual int attach(ObDtlLinkedBuffer *&linked_buffer, bool is_first_buffer_cached = false,
+                     bool inc_recv_buf_cnt = true);
   // don't call send&flush in different threads.
   virtual int flush(bool wait=true, bool wait_response = true) override;
 

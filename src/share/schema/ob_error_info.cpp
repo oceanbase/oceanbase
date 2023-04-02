@@ -155,12 +155,8 @@ int ObErrorInfo::collect_error_info(const IObErrorInfo *info)
     LOG_WARN("collect error info failed", K(ret));
   } else {
     const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
-    uint16_t wcnt = 0;
-    if (OB_ISNULL(warnings_buf)) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("can not get thread warnings buffer");
-    } else {
-      wcnt = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
+    if (OB_NOT_NULL(warnings_buf)) {
+      uint16_t wcnt = static_cast<uint16_t>(warnings_buf->get_readable_warning_count());
       if (OB_FAIL(collect_error_info(info, warnings_buf, wcnt > 0))) {
         LOG_WARN("failed to fill error info", K(ret), K(*this));
       } else {
@@ -437,6 +433,27 @@ int ObErrorInfo::handle_error_info(ObMySQLTransaction &trans, const IObErrorInfo
     } 
   } else {
     // do nothing
+  }
+  return ret;
+}
+
+int ObErrorInfo::handle_error_info(const IObErrorInfo *info)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  if (OB_FAIL(collect_error_info(info))) {
+    LOG_WARN("collect error info failed", K(ret));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, get_tenant_id(), true))) {
+    LOG_WARN("fail start trans", K(ret));
+  } else if (OB_FAIL(handle_error_info(trans, info))) {
+    LOG_WARN("handle error info failed.", K(ret));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
+      LOG_WARN("trans end failed", K(ret), K(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
   return ret;
 }

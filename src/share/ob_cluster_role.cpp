@@ -40,7 +40,7 @@ const char *cluster_role_to_str(ObClusterRole type)
 {
   const char *type_str = "UNKNOWN";
   if (OB_UNLIKELY(type < INVALID_CLUSTER_ROLE) || OB_UNLIKELY(type > STANDBY_CLUSTER)) {
-    LOG_ERROR("fatal error, unknown cluster type", K(type));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown cluster type", K(type));
   } else {
     type_str = cluster_role_strs[type];
   }
@@ -50,7 +50,7 @@ const char *cluster_status_to_str(ObClusterStatus status)
 {
   const char *status_str = "UNKNOWN";
   if (OB_UNLIKELY(status < INVALID_CLUSTER_STATUS) || OB_UNLIKELY(status >= MAX_CLUSTER_STATUS)) {
-    LOG_ERROR("fatal error, unknown cluster type", K(status));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown cluster type", K(status));
   } else {
     status_str = cluster_status_strs[status];
   }
@@ -63,7 +63,7 @@ const char *cluster_protection_mode_to_str(ObProtectionMode mode)
 
   const char *mode_str = "UNKNOWN";
   if (OB_UNLIKELY(mode < INVALID_PROTECTION_MODE) || OB_UNLIKELY(mode > MAXIMUM_PROTECTION_MODE)) {
-    LOG_ERROR("fatal error, unknown cluster protect mode", K(mode));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown cluster protect mode", K(mode));
   } else {
     mode_str = cluster_protection_mode_strs[mode];
   }
@@ -77,7 +77,7 @@ const char *cluster_protection_level_to_str(ObProtectionLevel level)
 
   const char *level_str = "UNKNOWN";
   if (OB_UNLIKELY(level > MPF_TO_MA_MPT_LEVEL) || OB_UNLIKELY(level < INVALID_PROTECTION_LEVEL)) {
-    LOG_ERROR("fatal error, unknown cluster level", K(level));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown cluster level", K(level));
   } else {
     level_str = cluster_protection_level_strs[level];
   }

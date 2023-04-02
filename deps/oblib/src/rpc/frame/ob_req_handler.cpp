@@ -125,7 +125,7 @@ void *decode(easy_message_t *m)
   RLOCAL(int64_t, time_tot);
   void *pret = NULL;
   if (OB_ISNULL(m)) {
-    LOG_ERROR("message is NULL", K(m));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "message is NULL", K(m));
   } else {
     const int64_t start_time = common::ObTimeUtility::current_time();
     int64_t end_time = 0;
@@ -146,7 +146,7 @@ void *decode(easy_message_t *m)
     }
     const int64_t diff = end_time - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("decode handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "decode handler cost too much time", K(diff));
     }
   }
 
@@ -159,7 +159,7 @@ int encode(easy_request_t *r, void *packet)
   RLOCAL(int64_t, time_tot);
   int eret = EASY_ERROR;
   if (OB_ISNULL(r) || OB_ISNULL(r->ms) || OB_ISNULL(r->ms->c)) {
-    LOG_ERROR("invalid arguement which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid arguement which is NULL");
   } else {
     const int64_t start_time = common::ObTimeUtility::current_time();
     int64_t end_time = 0;
@@ -180,7 +180,7 @@ int encode(easy_request_t *r, void *packet)
     }
     const int64_t diff = end_time - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("encode handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "encode handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -192,7 +192,7 @@ int process(easy_request_t *r)
   RLOCAL(int64_t, time_tot);
   int eret = EASY_ERROR;
   if (OB_ISNULL(r) || OB_ISNULL(r->ms) || OB_ISNULL(r->ms->c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     int64_t end_time = 0;
@@ -213,7 +213,7 @@ int process(easy_request_t *r)
     }
     const int64_t diff = end_time - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("process handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "process handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -224,18 +224,18 @@ int batch_process(easy_message_t *m)
   int eret = EASY_ERROR;
 
   if (OB_ISNULL(m)) {
-    LOG_ERROR("invalid argument", K(m));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(m));
   } else {
     const int64_t start_time = common::ObTimeUtility::current_time();
     ObReqHandler *handler = packet_handler(m->c);
     if (!OB_ISNULL(handler)) {
       eret = handler->batch_process(m);
     } else {
-      LOG_ERROR("handler is NULL", K(handler));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "handler is NULL", K(handler));
     }
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("process handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "process handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -247,7 +247,7 @@ int on_connect(easy_connection_t *c)
   RLOCAL(int64_t, time_tot);
   int eret = EASY_ERROR;
   if (OB_ISNULL(c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     int64_t end_time = 0;
@@ -269,7 +269,7 @@ int on_connect(easy_connection_t *c)
     }
     const int64_t diff = end_time - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("on_connect handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "on_connect handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -281,7 +281,7 @@ int on_disconnect(easy_connection_t *c)
   RLOCAL(int64_t, time_tot);
   int eret = EASY_ERROR;
   if (OB_ISNULL(c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     int64_t end_time = 0;
@@ -303,7 +303,7 @@ int on_disconnect(easy_connection_t *c)
     }
     const int64_t diff = end_time - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("on_connect handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "on_connect handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -320,7 +320,7 @@ int new_packet(easy_connection_t *c)
     }
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("new_packet handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "new_packet handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -448,7 +448,7 @@ uint64_t get_packet_id(easy_connection_t *c, void *packet)
   }
   const int64_t diff = common::ObTimeUtility::current_time() - start_time;
   if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-    LOG_WARN("get_packet_id handler cost too much time", K(diff));
+    LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "get_packet_id handler cost too much time", K(diff));
   }
   return packet_id;
 }
@@ -459,13 +459,13 @@ void set_trace_info(easy_request_t *r, void *packet)
   abort_unless(NULL != packet);
 
   if (OB_ISNULL(r) || OB_ISNULL(r->ms) || OB_ISNULL(r->ms->c)) {
-    LOG_ERROR("invalid arguement which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid arguement which is NULL");
   } else {
     ObReqHandler *handler = packet_handler(r->ms->c);
     if (!OB_ISNULL(handler)) {
       handler->set_trace_info(r, packet);
     } else {
-      LOG_ERROR("set trace time");
+      LOG_ERROR_RET(common::OB_SUCCESS, "set trace time");
     }
   }
 }
@@ -482,7 +482,7 @@ int on_idle(easy_connection_t *c)
     eret = handler->on_idle(c);
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("on_idle handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "on_idle handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -491,7 +491,7 @@ int on_idle(easy_connection_t *c)
 void send_buf_done(easy_request_t *r)
 {
   if (OB_ISNULL(r) || OB_ISNULL(r->ms) || OB_ISNULL(r->ms->c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     ObReqHandler *handler = packet_handler(r->ms->c);
@@ -500,7 +500,7 @@ void send_buf_done(easy_request_t *r)
     }
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("send_buf_done handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "send_buf_done handler cost too much time", K(diff));
     }
   }
 }
@@ -508,7 +508,7 @@ void send_buf_done(easy_request_t *r)
 void sending_data(easy_connection_t *c)
 {
   if (OB_ISNULL(c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     ObReqHandler *handler = packet_handler(c);
@@ -517,7 +517,7 @@ void sending_data(easy_connection_t *c)
     }
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("sending_data handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "sending_data handler cost too much time", K(diff));
     }
   }
 }
@@ -526,7 +526,7 @@ int send_data_done(easy_connection_t *c)
 {
   int eret = EASY_ERROR;
   if (OB_ISNULL(c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     ObReqHandler *handler = packet_handler(c);
@@ -535,7 +535,7 @@ int send_data_done(easy_connection_t *c)
     }
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("send_data_done handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "send_data_done handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -545,7 +545,7 @@ int on_redispatch(easy_connection_t *c)
 {
   int eret = EASY_ERROR;
   if (OB_ISNULL(c)) {
-    LOG_ERROR("invalid argument which is NULL");
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL");
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     ObReqHandler *handler = packet_handler(c);
@@ -554,7 +554,7 @@ int on_redispatch(easy_connection_t *c)
     }
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("on_redispatch handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "on_redispatch handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -567,7 +567,7 @@ int on_close(easy_connection_t *c)
   RLOCAL(int64_t, time_tot);
   int eret = EASY_ERROR;
   if (OB_ISNULL(c)) {
-    LOG_ERROR("invalid argument which is NULL", K(eret));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument which is NULL", K(eret));
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     int64_t end_time = 0;
@@ -578,7 +578,7 @@ int on_close(easy_connection_t *c)
       time_tot += (end_time - start_time);
       on_close_tot += 1;
     } else {
-      LOG_ERROR("get packet handler fail", K(eret));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "get packet handler fail", K(eret));
     }
     if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
       if (0 != on_close_tot) {
@@ -590,7 +590,7 @@ int on_close(easy_connection_t *c)
     }
     const int64_t diff = end_time - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("on_close handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "on_close handler cost too much time", K(diff));
     }
   }
   return eret;
@@ -600,18 +600,18 @@ int cleanup(easy_request_t *r, void *apacket)
 {
   int eret = EASY_ERROR;
   if (OB_ISNULL(r) || OB_ISNULL(r->ms)) {
-    LOG_ERROR("invalid argument", K(r), K(apacket));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(r), K(apacket));
   } else {
     int64_t start_time = common::ObTimeUtility::current_time();
     ObReqHandler *handler = packet_handler(r->ms->c);
     if (!OB_ISNULL(handler)) {
       eret = handler->cleanup(r, apacket);
     } else {
-      LOG_ERROR("handler is NULL", K(handler));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "handler is NULL", K(handler));
     };
     const int64_t diff = common::ObTimeUtility::current_time() - start_time;
     if (diff > common::OB_EASY_HANDLER_COST_TIME) {
-      LOG_WARN("cleanup handler cost too much time", K(diff));
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "cleanup handler cost too much time", K(diff));
     }
   }
   return eret;

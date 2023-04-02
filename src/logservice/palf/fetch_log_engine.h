@@ -27,7 +27,7 @@ class ObILogAllocator;
 }
 namespace palf
 {
-class PalfEnvImpl;
+class IPalfEnvImpl;
 class FetchLogTask
 {
 public:
@@ -36,6 +36,7 @@ public:
   ~FetchLogTask() { reset(); }
   void reset();
 public:
+  bool is_valid() const;
   int set(const int64_t id,
           const common::ObAddr &server,
           const FetchLogType fetch_type,
@@ -45,7 +46,7 @@ public:
           const int64_t log_size,
           const int64_t log_count,
           const int64_t accepted_mode_pid);
-  int64_t get_timestamp_ns() const { return timestamp_ns_; }
+  int64_t get_timestamp_us() const { return timestamp_us_; }
   int64_t get_id() const { return id_; }
   const common::ObAddr &get_server() const { return server_; }
   FetchLogType get_fetch_type() const { return fetch_type_; }
@@ -54,14 +55,13 @@ public:
   const LSN &get_start_lsn() const { return start_lsn_; }
   int64_t get_log_size() const { return log_size_; }
   int64_t get_log_count() const { return log_count_; }
-  int64_t get_accepted_mode_meta() const { return accepted_mode_pid_; }
+  int64_t get_accepted_mode_pid() const { return accepted_mode_pid_; }
+  FetchLogTask& operator=(const FetchLogTask &task);
 
-  TO_STRING_KV(K_(timestamp_ns), K_(id), K_(server), K_(fetch_type), K_(proposal_id),
+  TO_STRING_KV(K_(timestamp_us), K_(id), K_(server), K_(fetch_type), K_(proposal_id),
                K_(prev_lsn), K_(start_lsn), K_(log_size), K_(log_count), K_(accepted_mode_pid));
 private:
-  DISALLOW_COPY_AND_ASSIGN(FetchLogTask);
-private:
-  int64_t timestamp_ns_;
+  int64_t timestamp_us_;
   int64_t id_;
   common::ObAddr server_;
   FetchLogType fetch_type_;
@@ -80,11 +80,13 @@ public:
   static const int64_t FETCH_LOG_THREAD_COUNT = 1;
   static const int64_t MINI_MODE_FETCH_LOG_THREAD_COUNT = 1;
   static const int64_t FETCH_LOG_TASK_MAX_COUNT_PER_LS = 64;
+  static const int64_t DEFAULT_CACHED_FETCH_TASK_NUM = 8;
+  static const int64_t MAX_CACHED_FETCH_TASK_NUM = 1024;
 public:
   FetchLogEngine();
   ~FetchLogEngine() { destroy(); }
 public:
-  int init(PalfEnvImpl *palf_env_impl, ObILogAllocator *alloc_mgr);
+  int init(IPalfEnvImpl *palf_env_impl, ObILogAllocator *alloc_mgr);
   void destroy();
   int submit_fetch_log_task(FetchLogTask *fetch_log_task);
 public:
@@ -95,13 +97,22 @@ public:
   void handle_drop(void *task);
   FetchLogTask *alloc_fetch_log_task();
   void free_fetch_log_task(FetchLogTask *task);
+  int update_replayable_point(const share::SCN &replayable_scn);
 private:
   bool is_task_queue_timeout_(FetchLogTask *fetch_log_task) const;
+  int try_remove_task_from_cache_(FetchLogTask *fetch_log_task);
+  int push_task_into_cache_(FetchLogTask *fetch_log_task);
+private:
+  typedef common::ObSpinLock SpinLock;
+  typedef common::ObSpinLockGuard SpinLockGuard;
 private:
   int tg_id_;
   bool is_inited_;
-  PalfEnvImpl *palf_env_impl_;
+  IPalfEnvImpl *palf_env_impl_;
   common::ObILogAllocator *allocator_;
+  share::SCN replayable_point_;
+  mutable SpinLock cache_lock_;
+  ObSEArray<FetchLogTask, DEFAULT_CACHED_FETCH_TASK_NUM> fetch_task_cache_;
   DISALLOW_COPY_AND_ASSIGN(FetchLogEngine);
 };
 } // namespace logservice

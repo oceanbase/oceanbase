@@ -24,13 +24,13 @@ namespace transaction
 {
 void ObTxCommitCallback::reset()
 {
-  enable_ = true;
+  enable_ = false;
   inited_ = false;
   callback_count_ = 0;
   txs_ = NULL;
   tx_id_.reset();
   ret_ = OB_ERR_UNEXPECTED;
-  commit_version_ = -1;
+  commit_version_.reset();
 }
 
 int ObTxCommitCallback::callback()

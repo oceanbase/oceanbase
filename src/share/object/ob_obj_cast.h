@@ -19,6 +19,7 @@
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "lib/charset/ob_charset.h"
+#include "lib/geo/ob_geo_common.h"
 #include "share/ob_errno.h"
 
 namespace oceanbase
@@ -44,11 +45,24 @@ namespace common
 #define CM_STRICT_MODE                   (1ULL << 8)
 #define CM_SET_MIN_IF_OVERFLOW           (1ULL << 9)
 #define CM_ERROR_ON_SCALE_OVER           (1ULL << 10)
+#define CM_STRICT_JSON                   (1ULL << 11)
 
+#define CM_CS_LEVEL_RESERVED1            (1ULL << 48)
+#define CM_CS_LEVEL_RESERVED2            (1ULL << 49)
+#define CM_CS_LEVEL_RESERVED3            (1ULL << 50)
+#define CM_CS_LEVEL_SHIFT                48
+#define CM_CS_LEVEL_MASK                 7ULL
+#define CM_TIME_TRUNCATE_FRACTIONAL      (1ULL << 51)
+#define CM_TO_COLUMN_CS_LEVEL            (1ULL << 52)
 #define CM_ERROR_FOR_DIVISION_BY_ZERO    (1ULL << 53)
 #define CM_NO_ZERO_IN_DATE               (1ULL << 54) // reserve
 #define CM_NO_ZERO_DATE                  (1ULL << 55)
 #define CM_ALLOW_INVALID_DATES           (1ULL << 56)
+#define CM_GEOMETRY_TYPE_RESERVED1       (1ULL << 12)
+#define CM_GEOMETRY_TYPE_RESERVED2       (1ULL << 13)
+#define CM_GEOMETRY_TYPE_RESERVED3       (1ULL << 14)
+#define CM_GEOMETRY_TYPE_RESERVED4       (1ULL << 15)
+#define CM_GEOMETRY_TYPE_RESERVED5       (1ULL << 16)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -81,6 +95,7 @@ typedef uint64_t ObCastMode;
 #define CM_IS_INTERNAL_CALL(mode)             ((CM_INTERNAL_CALL & (mode)) != 0)
 #define CM_IS_EXTERNAL_CALL(mode)             (!CM_IS_INTERNAL_CALL(mode))
 #define CM_IS_STRICT_MODE(mode)               ((CM_STRICT_MODE & (mode)) != 0)
+#define CM_IS_TIME_TRUNCATE_FRACTIONAL(mode)  ((CM_TIME_TRUNCATE_FRACTIONAL & (mode)) != 0)
 #define CM_IS_ERROR_FOR_DIVISION_BY_ZERO(mode)    \
   ((CM_ERROR_FOR_DIVISION_BY_ZERO & (mode)) != 0)
 #define CM_IS_NO_ZERO_IN_DATE(mode)           ((CM_NO_ZERO_IN_DATE & (mode)) != 0)
@@ -98,8 +113,30 @@ typedef uint64_t ObCastMode;
   ((CM_FORCE_USE_STANDARD_NLS_FORMAT & (mode)) != 0)
 #define CM_IS_SET_MIN_IF_OVERFLOW(mode)       ((CM_SET_MIN_IF_OVERFLOW & (mode)) != 0)
 #define CM_IS_ERROR_ON_SCALE_OVER(mode)       ((CM_ERROR_ON_SCALE_OVER & (mode)) != 0)
+#define CM_IS_STRICT_JSON(mode)               ((CM_STRICT_JSON & (mode)) != 0)
 #define CM_IS_JSON_VALUE(mode)                CM_IS_ERROR_ON_SCALE_OVER(mode)
-
+#define CM_IS_TO_COLUMN_CS_LEVEL(mode)        ((CM_TO_COLUMN_CS_LEVEL & (mode)) != 0)
+// for geomerty type cast
+#define CM_IS_GEOMETRY_GEOMETRY(mode)             ((((mode) >> 12) & 0x1F) == 0)
+#define CM_IS_GEOMETRY_POINT(mode)                ((((mode) >> 12) & 0x1F) == 1)
+#define CM_IS_GEOMETRY_LINESTRING(mode)           ((((mode) >> 12) & 0x1F) == 2)
+#define CM_IS_GEOMETRY_POLYGON(mode)              ((((mode) >> 12) & 0x1F) == 3)
+#define CM_IS_GEOMETRY_MULTIPOINT(mode)           ((((mode) >> 12) & 0x1F) == 4)
+#define CM_IS_GEOMETRY_MULTILINESTRING(mode)      ((((mode) >> 12) & 0x1F) == 5)
+#define CM_IS_GEOMETRY_MULTIPOLYGON(mode)         ((((mode) >> 12) & 0x1F) == 6)
+#define CM_IS_GEOMETRY_GEOMETRYCOLLECTION(mode)   ((((mode) >> 12) & 0x1F) == 7)
+#define CM_SET_GEOMETRY_GEOMETRY(mode)            ((mode) &= 0xFFFE0FFF, (mode) |= (0 << 12))
+#define CM_SET_GEOMETRY_POINT(mode)               ((mode) &= 0xFFFE0FFF, (mode) |= (1 << 12))
+#define CM_SET_GEOMETRY_LINESTRING(mode)          ((mode) &= 0xFFFE0FFF, (mode) |= (2 << 12))
+#define CM_SET_GEOMETRY_POLYGON(mode)             ((mode) &= 0xFFFE0FFF, (mode) |= (3 << 12))
+#define CM_SET_GEOMETRY_MULTIPOINT(mode)          ((mode) &= 0xFFFE0FFF, (mode) |= (4 << 12))
+#define CM_SET_GEOMETRY_MULTILINESTRING(mode)     ((mode) &= 0xFFFE0FFF, (mode) |= (5 << 12))
+#define CM_SET_GEOMETRY_MULTIPOLYGON(mode)        ((mode) &= 0xFFFE0FFF, (mode) |= (6 << 12))
+#define CM_SET_GEOMETRY_GEOMETRYCOLLECTION(mode)  ((mode) &= 0xFFFE0FFF, (mode) |= (7 << 12))
+#define CM_GET_CS_LEVEL(mode)                     (((mode) >> CM_CS_LEVEL_SHIFT) & CM_CS_LEVEL_MASK)
+#define CM_SET_CS_LEVEL(mode, level) \
+  ((mode) &= ~(CM_CS_LEVEL_MASK << CM_CS_LEVEL_SHIFT), \
+  (mode) |= ((level & CM_CS_LEVEL_MASK) << CM_CS_LEVEL_SHIFT))
 struct ObObjCastParams
 {
   // add params when necessary
@@ -374,6 +411,12 @@ public:
                                    int64_t &pos);
   static int can_cast_in_oracle_mode(const ObObjType dest_type, const ObCollationType dest_coll_type,
                                      const ObObjType src_type, const ObCollationType src_coll_type);
+  // for resource management.
+  static int get_obj_param_text(const ObObjParam &obj_param,
+                                const common::ObString raw_text,
+                                common::ObIAllocator &allocator,
+                                common::ObCollationType cs_type,
+                                common::ObString &res);
 private:
   inline static int64_t get_idx_of_collate(ObCollationType cs_type)
   {
@@ -411,6 +454,12 @@ private:
         break;
       case CS_TYPE_GB18030_CHINESE_CI:
         idx = 10;
+        break;
+      case CS_TYPE_LATIN1_BIN:
+        idx = 11;
+        break;
+      case CS_TYPE_LATIN1_SWEDISH_CI:
+        idx = 12;
         break;
       default:
         idx = -1;
@@ -468,6 +517,18 @@ public:
   static number::ObNumber MYSQL_CHECK_MAX[number::ObNumber::MAX_PRECISION + 1][number::ObNumber::MAX_SCALE + 1];
   static number::ObNumber ORACLE_CHECK_MIN[OB_MAX_NUMBER_PRECISION + 1][MAX_ORACLE_SCALE_SIZE + 1];
   static number::ObNumber ORACLE_CHECK_MAX[OB_MAX_NUMBER_PRECISION + 1][MAX_ORACLE_SCALE_SIZE + 1];
+};
+
+class ObGeoCastUtils
+{
+public:
+  static common::ObGeoType get_geo_type_from_cast_mode(uint64_t cast_mode);
+  static int set_geo_type_to_cast_mode(common::ObGeoType geo_type,
+                                       uint64_t &cast_mode);
+  static void geo_cast_error_handle(int err_code,
+                                    common::ObGeoType src_type,
+                                    common::ObGeoType dst_type,
+                                    const common::ObGeoErrLogInfo &log_info);
 };
 
 } // end namespace common

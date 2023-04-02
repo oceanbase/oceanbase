@@ -23,7 +23,7 @@ namespace common
 class ObRecursiveMutex
 {
 public:
-  explicit ObRecursiveMutex(const uint32_t latch_id = ObLatchIds::DEFAULT_RECURSIVE_MUTEX);
+  explicit ObRecursiveMutex(const uint32_t latch_id);
   ~ObRecursiveMutex();
   int lock();
   int unlock();

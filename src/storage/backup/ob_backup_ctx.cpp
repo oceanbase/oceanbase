@@ -22,6 +22,7 @@
 #include "storage/backup/ob_backup_reader.h"
 #include "share/backup/ob_backup_struct.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 #include <algorithm>
 
@@ -62,7 +63,7 @@ void ObSimpleBackupStat::reset()
 /* ObSimpleBackupStatMgr */
 
 ObSimpleBackupStatMgr::ObSimpleBackupStatMgr()
-    : is_inited_(false), backup_dest_(), backup_set_desc_(), tenant_id_(OB_INVALID_ID), ls_id_(), stat_list_()
+    : mutex_(common::ObLatchIds::BACKUP_LOCK), is_inited_(false), backup_dest_(), backup_set_desc_(), tenant_id_(OB_INVALID_ID), ls_id_(), stat_list_()
 {}
 
 ObSimpleBackupStatMgr::~ObSimpleBackupStatMgr()
@@ -124,7 +125,7 @@ int ObSimpleBackupStatMgr::mark_end(const share::ObBackupDataType &backup_data_t
 }
 
 int ObSimpleBackupStatMgr::add_macro_block(
-    const share::ObBackupDataType &backup_data_type, const common::ObLogicMacroBlockId &logic_id)
+    const share::ObBackupDataType &backup_data_type, const blocksstable::ObLogicMacroBlockId &logic_id)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
@@ -461,7 +462,7 @@ int ObBackupDataCtx::write_backup_file_header(const ObBackupFileHeader &file_hea
 }
 
 int ObBackupDataCtx::write_macro_block_data(const blocksstable::ObBufferReader &buffer,
-    const common::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index)
+    const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
   macro_index.reset();
@@ -575,7 +576,7 @@ int ObBackupDataCtx::get_macro_block_backup_path_(const int64_t file_id, share::
 }
 
 int ObBackupDataCtx::write_macro_block_data_(const blocksstable::ObBufferReader &reader,
-    const common::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index)
+    const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
   const int64_t alignment = DIO_READ_ALIGN_SIZE;
@@ -628,7 +629,7 @@ int ObBackupDataCtx::write_meta_data_(const blocksstable::ObBufferReader &reader
   return ret;
 }
 
-int ObBackupDataCtx::build_macro_block_index_(const common::ObLogicMacroBlockId &logic_id, const int64_t offset,
+int ObBackupDataCtx::build_macro_block_index_(const blocksstable::ObLogicMacroBlockId &logic_id, const int64_t offset,
     const int64_t length, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
@@ -932,7 +933,7 @@ void ObBackupRecoverRetryCtx::reset()
 
 ObLSBackupCtx::ObLSBackupCtx()
     : is_inited_(),
-      mutex_(),
+      mutex_(common::ObLatchIds::BACKUP_LOCK),
       cond_(),
       is_finished_(false),
       result_code_(OB_SUCCESS),
@@ -1471,7 +1472,7 @@ int ObLSBackupCtx::inner_recover_need_reuse_macro_block_(const ObBackupRetryDesc
   int ret = OB_SUCCESS;
   is_end = false;
   ObBackupMacroBlockIndexIterator iter;
-  const common::ObLogicMacroBlockId &need_reuse_logic_id = backup_retry_ctx_.need_skip_logic_id_;
+  const blocksstable::ObLogicMacroBlockId &need_reuse_logic_id = backup_retry_ctx_.need_skip_logic_id_;
   if (OB_FAIL(iter.init(param_.task_id_,
           param_.backup_dest_,
           param_.tenant_id_,

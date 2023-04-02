@@ -62,6 +62,9 @@ public:
                                   NotifyRebuildReq,
                                   OB_LOG_NOTIFY_REBUILD_REQ);
   DECLARE_RPC_PROXY_POST_FUNCTION(PR3,
+                                  NotifyFetchLogReq,
+                                  OB_LOG_NOTIFY_FETCH_LOG);
+  DECLARE_RPC_PROXY_POST_FUNCTION(PR3,
                                   LogRegisterParentReq,
                                   OB_LOG_REGISTER_PARENT_REQ);
   DECLARE_RPC_PROXY_POST_FUNCTION(PR3,
@@ -94,6 +97,11 @@ public:
                                       LogGetMCStReq,
                                       LogGetMCStResp,
                                       OB_LOG_GET_MC_ST);
+  DECLARE_SYNC_RPC_PROXY_POST_FUNCTION(PR5,
+                                      get_log_stat,
+                                      LogGetStatReq,
+                                      LogGetStatResp,
+                                      OB_LOG_GET_STAT);
 };
 } // end namespace obrpc
 } // end namespace oceanbase

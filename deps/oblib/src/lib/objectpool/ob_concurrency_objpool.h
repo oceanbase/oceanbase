@@ -43,7 +43,6 @@ extern void thread_shutdown_cleanup(void *);
 enum ObMemCacheType
 {
   OP_GLOBAL,
-  OP_TC,
   OP_RECLAIM
 };
 
@@ -177,8 +176,6 @@ private:
   void global_free(void *item);
   void *reclaim_alloc(ObThreadCache *thread_cache);
   void reclaim_free(ObThreadCache *cur_thread_cache, void *item);
-  void *tc_alloc(ObThreadCache *thread_cache);
-  void tc_free(ObThreadCache *cur_thread_cache, void *item);
   ObThreadCache *init_thread_cache();
   void privatize_thread_cache(ObThreadCache *cur_thread_cache, ObThreadCache *src_thread_cache);
 
@@ -389,7 +386,7 @@ class ObFixedClassAllocator
 public:
   ObFixedClassAllocator(const int obj_size, const ObMemAttr &attr, int blk_size, int64_t nway) : allocator_(obj_size, attr, blk_size)
   {
-    allocator_.set_nway(nway);
+    allocator_.set_nway(static_cast<int32_t>(nway));
   }
   virtual ~ObFixedClassAllocator() {}
 
@@ -466,7 +463,7 @@ public:
         if (OB_LIKELY(NULL != instance)) {
           if (common::OB_SUCCESS != instance->init(typeid(T).name(), RND16(sizeof(T)),
                                                    obj_count, RND16(alignment), cache_type, is_meta, label)) {
-            _OB_LOG(ERROR, "failed to init class allocator %s", typeid(T).name());
+            _OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "failed to init class allocator %s", typeid(T).name());
             delete instance;
             instance = NULL;
             ATOMIC_BCAS(&once_, 1, 0);
@@ -617,7 +614,7 @@ public:
         instance = new (std::nothrow) ObObjFreeListList();
         if (OB_LIKELY(NULL != instance)) {
           if (common::OB_SUCCESS != instance->init()) {
-            _OB_LOG(ERROR, "failed to init object freelist list");
+            _OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "failed to init object freelist list");
             delete instance;
             instance = NULL;
             (void)ATOMIC_BCAS(&once_, 1, 0);
@@ -796,16 +793,14 @@ inline void call_destructor(T *ptr) {
 //          3. because object pool uses singleton, please only use one of global,
 //             tc or reclaim interfaces for each object type in the whole procject.
 // Note:
-// op_alloc,op_tc_alloc and op_reclaim_alloc call the default constructor if it exist,
+// op_alloc and op_reclaim_alloc call the default constructor if it exist,
 // else it just reinterpret_cast ptr.
 //
-// op_alloc_args,op_tc_alloc_args and op_reclaim_args call the constructor with args.
+// op_alloc_args and op_reclaim_args call the constructor with args.
 // It uses placement new to construct instance, if args is null and there isn't public
 // default constructor, compiler isn't happy.
 //
 // op_alloc_args uses global object freelist, save memory but performance is poor.
-// op_tc_alloc_args uses thread local object free list, perfromance is better but
-//   waste some memory.
 // op_reclaim_alloc_args uses thread local object free list and with memory reclaim,
 //   performace is good and object waste less memory.
 
@@ -887,61 +882,7 @@ inline void call_destructor(T *ptr) {
     } \
   })
 
-// thread cache pool allocator interface
-#define op_tc_alloc_args(type, args...) \
-  ({ \
-    type *ret = NULL; \
-    common::ObClassAllocator<type> *instance = \
-      common::ObClassAllocator<type>::get(common::OPNum<type>::LOCAL_NUM, common::OP_TC, \
-                                          common::OPNum<type>::LABEL); \
-    if (OB_LIKELY(NULL != instance)) { \
-      void *tmp = instance->alloc_void(); \
-      if (OB_LIKELY(NULL != tmp)) { \
-        ret = new (tmp) type(args); \
-      } \
-    } \
-    ret; \
-  })
-
-#define op_tc_alloc(type) \
-  ({ \
-    type *ret = NULL; \
-    common::ObClassAllocator<type> *instance = \
-      common::ObClassAllocator<type>::get(common::OPNum<type>::LOCAL_NUM, common::OP_TC, \
-                                          common::OPNum<type>::LABEL); \
-    if (OB_LIKELY(NULL != instance)) { \
-      ret = instance->alloc(); \
-    } \
-    ret; \
-  })
-
-#define op_tc_free(ptr) \
-  ({ \
-    common::ObClassAllocator<__typeof__(*ptr)> *instance = \
-      common::ObClassAllocator<__typeof__(*ptr)>::get(common::OPNum<__typeof__(*ptr)>::LOCAL_NUM, common::OP_TC, \
-                                                      common::OPNum<__typeof__(*ptr)>::LABEL); \
-    if (OB_LIKELY(NULL != instance)) { \
-      instance->free(ptr); \
-    } \
-  })
-
-// thread cache pool and reclaim allocator interface
-#define op_reclaim_alloc_args(type, args...) \
-  ({ \
-    type *ret = NULL; \
-    common::ObClassAllocator<type> *instance = \
-      common::ObClassAllocator<type>::get(common::OPNum<type>::LOCAL_NUM, common::OP_RECLAIM, \
-                                          common::OPNum<type>::LABEL); \
-    if (OB_LIKELY(NULL != instance)) { \
-      void *tmp = instance->alloc_void(); \
-      if (OB_LIKELY(NULL != tmp)) { \
-        ret = new (tmp) type(args); \
-      } \
-    } \
-    ret; \
-  })
-
-#define op_reclaim_alloc(type) \
+#define op_reclaim_alloc_old(type) \
   ({ \
     OLD_STATIC_ASSERT((std::is_default_constructible<type>::value), "type is not default constructible"); \
     type *ret = NULL; \
@@ -954,7 +895,7 @@ inline void call_destructor(T *ptr) {
     ret; \
   })
 
-#define op_reclaim_free(ptr) \
+#define op_reclaim_free_old(ptr) \
   ({ \
     common::ObClassAllocator<__typeof__(*ptr)> *instance = \
       common::ObClassAllocator<__typeof__(*ptr)>::get(common::OPNum<__typeof__(*ptr)>::LOCAL_NUM, \
@@ -964,6 +905,14 @@ inline void call_destructor(T *ptr) {
       instance->free(ptr); \
     } \
   })
+
+#ifndef PERF_MODE
+#define op_reclaim_alloc(type) op_alloc(type)
+#define op_reclaim_free(ptr) op_free(ptr)
+#else
+#define op_reclaim_alloc(type) op_reclaim_alloc_old(type)
+#define op_reclaim_free(ptr) op_reclaim_free_old(ptr)
+#endif
 
 } // end of namespace common
 } // end of namespace oceanbase

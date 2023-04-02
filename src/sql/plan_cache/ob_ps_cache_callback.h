@@ -39,7 +39,7 @@ public:
   // ref_count 为1表示所有session均不依赖当前cache中对象;
   int operator()(common::hash::HashMapPair<ObPsStmtId, ObPsStmtInfo*> &entry)
   {
-    int callback_ret_ = common::OB_SUCCESS;
+    int &ret = callback_ret_;
     if (OB_ISNULL(closed_ps_) || OB_ISNULL(expired_ps_)) {
       callback_ret_ = common::OB_NOT_INIT;
       SQL_PC_LOG(WARN, "key_array not inited", K(callback_ret_));
@@ -102,9 +102,9 @@ public:
     int callback_ret_ = common::OB_SUCCESS;
     if (OB_ISNULL(key_array_)) {
       callback_ret_ = common::OB_NOT_INIT;
-      SQL_PC_LOG(WARN, "key_array not inited", K(callback_ret_));
+      SQL_PC_LOG_RET(WARN, callback_ret_, "key_array not inited", K(callback_ret_));
     } else if (OB_SUCCESS != (callback_ret_ = key_array_->push_back(entry.first))) {
-      SQL_PC_LOG(WARN, "fail to push back key", K(callback_ret_));
+      SQL_PC_LOG_RET(WARN, callback_ret_, "fail to push back key", K(callback_ret_));
     }
 
     // The Story Behind Return Code:

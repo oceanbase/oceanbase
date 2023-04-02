@@ -34,7 +34,7 @@ PartProgressController::PartProgressController() :
     max_progress_cnt_(0),
     progress_list_(NULL),
     recycled_indices_(),
-    recycled_indices_lock_(),
+    recycled_indices_lock_(common::ObLatchIds::OBCDC_PROGRESS_RECYCLE_LOCK),
     progress_cnt_(0),
     valid_progress_cnt_(0),
     thread_counter_(0),

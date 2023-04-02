@@ -103,6 +103,10 @@ int calc_assign_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
       obj_meta.set_scale(expr.datum_meta_.scale_);
       obj_meta.set_collation_type(expr.datum_meta_.cs_type_);
       obj_meta.set_collation_level(common::CS_LEVEL_IMPLICIT);
+      if (expr.args_[1]->obj_meta_.has_lob_header()) {
+         // use temp meta to session var，ensure flag in expr.args_[1](val_res) copy to dest
+        obj_meta.set_has_lob_header();
+      }
       if (OB_FAIL(val_res->to_obj(obj, obj_meta))) {
         LOG_WARN("to_obj failed", K(ret), K(expr), K(obj_meta));
       }

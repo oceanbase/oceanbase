@@ -74,19 +74,20 @@ void ObStoreCtx::reset()
   table_version_ = INT64_MAX;
   timeout_ = -1;
   mvcc_acc_ctx_.reset();
-  log_ts_ = INT64_MAX;
+  tablet_stat_.reset();
+  replay_log_scn_.set_max();
 }
 
 int ObStoreCtx::init_for_read(const ObLSID &ls_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
-                              const int64_t snapshot_version)
+                              const SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = MTL(ObLSService*);
   ObLSHandle ls_handle;
   if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    STORAGE_LOG(ERROR, "get_ls from ls service fail.", K(ret), K(*ls_svr));
+    STORAGE_LOG(WARN, "get_ls from ls service fail.", K(ret), K(*ls_svr));
   } else {
     ret = init_for_read(ls_handle, timeout, tx_lock_timeout, snapshot_version);
   }
@@ -96,12 +97,12 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
 int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
-                              const int64_t snapshot_version)
+                              const SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObTxTableGuard tx_table_guard;
-  if (!ls_handle.is_valid() || timeout < 0 || snapshot_version < 0) {
+  if (!ls_handle.is_valid() || timeout < 0 || !snapshot_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid arguments", K(ret), K(ls_handle), K(timeout), K(tx_lock_timeout), K(snapshot_version));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -130,9 +131,10 @@ void ObStoreCtx::force_print_trace_log()
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;
-  trans_version_ = 0;
+  trans_version_ = SCN::min_scn();
   lock_trans_id_.reset();
   lock_data_sequence_ = 0;
+  lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   is_delayed_cleanout_ = false;
   mvcc_row_ = NULL;
 }
@@ -315,29 +317,6 @@ int ObLockRowChecker::check_lock_row_valid(
     }
   }
   return ret;
-}
-
-const char * ObMergeTypeStr[] = {
-    "MINI_MINOR_MERGE",
-    "BUF_MINOR_MERGE",
-    "HISTORY_MINI_MINOR_MERGE",
-    "MINI_MERGE",
-    "MAJOR_MERGE",
-    "MINOR_MERGE",
-    "DDL_KV_MERGE",
-    "BACKFILL_TX_MERGE"
-};
-
-const char *merge_type_to_str(const ObMergeType &merge_type)
-{
-  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(ObMergeTypeStr), "merge type str len is mismatch");
-  const char *str = "";
-  if (merge_type >= MERGE_TYPE_MAX || merge_type < MINI_MINOR_MERGE) {
-    str = "invalid_merge_type";
-  } else {
-    str = ObMergeTypeStr[merge_type];
-  }
-  return str;
 }
 
 }

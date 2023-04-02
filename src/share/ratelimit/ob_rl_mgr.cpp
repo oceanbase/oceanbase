@@ -253,7 +253,7 @@ int ObRatelimitMgr::update_local_s2r_map()
 
         if (line < s2r_map_list_.count()) {
           s2r_changed = 1;
-          for (int i = (s2r_map_list_.count() - 1); i >= line; i--) {
+          for (int64_t i = (s2r_map_list_.count() - 1); i >= line; i--) {
             s2r_map_list_.remove(i);
           }
         }
@@ -345,7 +345,7 @@ int ObRatelimitMgr::update_region_max_bw()
 
       if (line < peer_region_bw_list_.count()) {
         region_list_changed = 1;
-        for (int i = (peer_region_bw_list_.count() - 1); i >= line; i--) {
+        for (int64_t i = (peer_region_bw_list_.count() - 1); i >= line; i--) {
           peer_region_bw_list_.remove(i);
         }
       }
@@ -355,7 +355,7 @@ int ObRatelimitMgr::update_region_max_bw()
       }
       OB_LOG(DEBUG, "Got peer_region_bw_list_", K(peer_region_bw_list_.count()), K(local_server_list_.count()), K(region_list_changed));
       if (region_list_changed) {
-        int max_bw = 0;
+        int64_t max_bw = 0;
         for (int i = 0; i < peer_region_bw_list_.count(); i++) {
           region_bw_stat = &peer_region_bw_list_[i];
           region_bw_stat->server_bw_list_.destroy();
@@ -651,7 +651,7 @@ void ObRatelimitMgr::calculate_s2r_max_bw_all()
 {
   ObRegionBwStat *region_bw_stat = nullptr;
   if (IS_NOT_INIT) {
-    OB_LOG(ERROR, "ObRatelimitMgr not inited.");
+    OB_LOG_RET(ERROR, OB_NOT_INIT, "ObRatelimitMgr not inited.");
   } else {
     for (int i = 0; i < peer_region_bw_list_.count(); i++) {
       region_bw_stat = &(peer_region_bw_list_[i]);

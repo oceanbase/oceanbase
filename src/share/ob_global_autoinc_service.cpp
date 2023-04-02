@@ -126,6 +126,9 @@ int ObGlobalAutoIncService::init(const ObAddr &addr, ObMySQLProxy *mysql_proxy)
                                          ObModIds::OB_AUTOINCREMENT))) {
     LOG_WARN("init autoinc_map_ failed", K(ret));
   } else {
+    for (int64_t i = 0; i < MUTEX_NUM; ++i) {
+      op_mutex_[i].set_latch_id(common::ObLatchIds::AUTO_INCREMENT_GAIS_LOCK);
+    }
     self_ = addr;
     is_inited_ = true;
   }
@@ -255,9 +258,6 @@ int ObGlobalAutoIncService::handle_curr_autoinc_request(const ObGAISAutoIncKeyAr
     LOG_WARN("invalid argument", K(ret), K(request));
   } else if (OB_FAIL(check_leader_(key.tenant_id_, is_leader))) {
     LOG_WARN("check leader failed", K(ret), K(request.sender_), K(self_));
-  } else if (OB_UNLIKELY(!is_leader)) {
-    ret = OB_NOT_MASTER;
-    LOG_WARN("gais service is not leader", K(ret));
   } else if (OB_FAIL(mutex.lock())) {
     LOG_WARN("fail to get lock", K(ret));
   } else {
@@ -267,11 +267,12 @@ int ObGlobalAutoIncService::handle_curr_autoinc_request(const ObGAISAutoIncKeyAr
     if (OB_UNLIKELY(OB_SUCCESS != err && OB_HASH_NOT_EXIST != err)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get seq value", K(ret), K(key));
-    } else if (OB_LIKELY(cache_node.is_valid())) {
+    } else if (is_leader && OB_LIKELY(cache_node.is_valid())) {
       // get autoinc values from cache
       sequence_value = cache_node.sequence_value_;
       sync_value = cache_node.sync_value_;
-      // hash not exist or cache node is non-valid, read value from inner table
+      // hash not exist, cache node is non-valid or service is not leader,
+      // read value from inner table
     } else if (OB_FAIL(read_value_from_inner_table_(key, sequence_value, sync_value))) {
       LOG_WARN("fail to read value from inner table", K(ret));
     }

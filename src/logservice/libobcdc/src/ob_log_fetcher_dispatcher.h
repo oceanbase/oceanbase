@@ -18,23 +18,13 @@
 
 #include "lib/utility/ob_macro_utils.h"         // DISALLOW_COPY_AND_ASSIGN, CACHE_ALIGNED
 
+#include "ob_log_fetcher_dispatcher_interface.h" // IObLogFetcherDispatcher
 #include "ob_log_utils.h"                       // _SEC_
 
 namespace oceanbase
 {
 namespace libobcdc
 {
-
-class ObLogEntryTask;
-class PartTransTask;
-class IObLogFetcherDispatcher
-{
-public:
-  virtual ~IObLogFetcherDispatcher() {}
-
-  // DDL/DML: Support for dispatch partition transaction tasks
-  virtual int dispatch(PartTransTask &task, volatile bool &stop_flag) = 0;
-};
 
 /////////////////////////////////////////////////////////////////////////////////
 
@@ -66,6 +56,7 @@ private:
   int dispatch_offline_ls_task_(PartTransTask &task, volatile bool &stop_flag);
   int dispatch_global_ls_heartbeat_(PartTransTask &task, volatile bool &stop_flag);
   int dispatch_ls_table_op_(PartTransTask &task, volatile bool &stop_flag);
+  int dispatch_to_sys_ls_handler_(PartTransTask &task, volatile bool &stop_flag);
 
 private:
   bool              inited_;

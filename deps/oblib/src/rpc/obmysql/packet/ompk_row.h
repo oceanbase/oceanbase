@@ -26,6 +26,7 @@ class OMPKRow : public ObMySQLPacket
 public:
   explicit OMPKRow(const ObMySQLRow &row);
   virtual ~OMPKRow() { }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_ROW; }
 
   virtual int serialize(char *buffer, int64_t len, int64_t &pos) const;
 private:

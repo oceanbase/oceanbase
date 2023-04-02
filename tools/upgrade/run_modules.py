@@ -3,12 +3,18 @@
 
 ALL_MODULE = 'all'
 
-MODULE_DDL = 'ddl'
-MODULE_NORMAL_DML = 'normal_dml'
-MODULE_EACH_TENANT_DML = 'each_tenant_dml'
-MODULE_EACH_TENANT_DDL = 'each_tenant_ddl'
-MODULE_SYSTEM_VARIABLE_DML = 'system_variable_dml'
-MODULE_SPECIAL_ACTION = 'special_action'
+# module for upgrade_pre.py
+MODULE_BEGIN_UPGRADE          = 'begin_upgrade'
+MODULE_BEGIN_ROLLING_UPGRADE  = 'begin_rolling_upgrade'
+MODULE_SPECIAL_ACTION         = 'special_action'
+#MODULE_HEALTH_CHECK          = 'health_check'
+
+# module for upgrade_post.py
+MODULE_HEALTH_CHECK           = 'health_check'
+MODULE_END_ROLLING_UPGRADE    = 'end_rolling_upgrade'
+MODULE_TENANT_UPRADE          = 'tenant_upgrade'
+MODULE_END_UPRADE             = 'end_upgrade'
+MODULE_POST_CHECK             = 'post_check'
 
 def get_all_module_set():
   import run_modules

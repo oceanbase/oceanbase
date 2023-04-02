@@ -143,7 +143,7 @@ int64_t ObConstEncoder::calc_size() const
       tmp_ret = get_cell_len(*const_list_header_->datum_, size);
     }
     if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-      LOG_WARN("failed to get cell len", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "failed to get cell len", K(tmp_ret));
     } else {
       size += sizeof(ObConstMetaHeader);
     }
@@ -216,7 +216,8 @@ int ObConstEncoder::get_cell_len(const ObDatum &datum, int64_t &length) const
       case ObTextSC:
       case ObJsonSC:
       case ObOTimestampSC:
-      case ObIntervalSC: {
+      case ObIntervalSC:
+      case ObGeometrySC: {
         length = datum.len_;
         break;
       }
@@ -249,7 +250,8 @@ int ObConstEncoder::store_value(const ObDatum &datum, char *buf)
       case ObTextSC:
       case ObJsonSC:
       case ObOTimestampSC:
-      case ObIntervalSC: {
+      case ObIntervalSC:
+      case ObGeometrySC: {
         MEMCPY(buf, datum.ptr_, datum.len_);
         break;
       }

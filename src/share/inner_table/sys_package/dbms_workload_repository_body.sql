@@ -1,6 +1,3 @@
---package_name:dbms_workload_repository
---author:xiaochu.yh
-
 CREATE OR REPLACE PACKAGE BODY dbms_workload_repository AS
 
 TYPE COLUMN_CONTENT_ARRAY IS VARRAY(20) OF VARCHAR2(4096);
@@ -41,10 +38,11 @@ END FORMAT_ROW;
 
 
 -- main function
-FUNCTION ASH_REPORT_TEXT(l_btime         IN DATE,
-                         l_etime         IN DATE,
-                         l_sql_id        IN VARCHAR2  DEFAULT NULL,
-                         l_wait_class    IN VARCHAR2  DEFAULT NULL
+FUNCTION ASH_REPORT_TEXT(L_BTIME       IN DATE,
+                         L_ETIME       IN DATE,
+                         SQL_ID        IN VARCHAR2  DEFAULT NULL,
+                         TRACE_ID      IN VARCHAR2  DEFAULT NULL,
+                         WAIT_CLASS    IN VARCHAR2  DEFAULT NULL
                         )
 RETURN awrrpt_text_type_table
 IS
@@ -54,6 +52,12 @@ IS
 
   TYPE TopEventCursor IS REF CURSOR;
   top_event_cv        TopEventCursor;
+
+  TYPE SummaryRecord IS RECORD (
+    SAMPLE_CNT        NUMBER,
+    EVENT_CNT         NUMBER
+  );
+  sample_rec       SummaryRecord;
 
   TYPE TopEventRecord IS RECORD (
     EVENT             SYS.V$ACTIVE_SESSION_HISTORY.EVENT%TYPE,
@@ -99,6 +103,7 @@ IS
 
   TYPE CompleteSQLRecord IS RECORD (
     SQL_ID         SYS.V$ACTIVE_SESSION_HISTORY.SQL_ID%TYPE,
+    PLAN_ID        SYS.V$ACTIVE_SESSION_HISTORY.PLAN_ID%TYPE,
     QUERY_SQL      SYS.V$OB_PLAN_CACHE_PLAN_STAT.QUERY_SQL%TYPE
   );
   complete_sql_rec   CompleteSQLRecord;
@@ -136,22 +141,58 @@ BEGIN
   REPORT_CLEANUP();
 
   DBMS_OUTPUT.PUT_LINE('');
-  DBMS_OUTPUT.PUT_LINE('# ' || l_sql_id);
+  DBMS_OUTPUT.PUT_LINE('# ASH Report');
   DBMS_OUTPUT.PUT_LINE('');
 
-  DYN_SQL := 'SELECT MIN(SAMPLE_TIME) ASH_BEGIN_TIME, MAX(SAMPLE_TIME) ASH_END_TIME, COUNT(1) NUM_SAMPLES, SUM(' || FILTER_EVENT_STR || ') NUM_EVENTS ' ||
+  DYN_SQL := 'SELECT MIN(SAMPLE_TIME), MAX(SAMPLE_TIME) ' ||
              'FROM   (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ';
   EXECUTE IMMEDIATE DYN_SQL
-  INTO  ASH_BEGIN_TIME, ASH_END_TIME, NUM_SAMPLES, NUM_EVENTS
+  INTO  ASH_BEGIN_TIME, ASH_END_TIME
   USING L_BTIME, L_ETIME,
         L_BTIME, L_ETIME,
-        NULL_CHAR, NULL_CHAR,
-        NULL_CHAR, NULL_CHAR,
-        NULL_CHAR, NULL_CHAR,
+        SQL_ID, SQL_ID,
+        TRACE_ID, TRACE_ID,
+        WAIT_CLASS, WAIT_CLASS,
         NULL_CHAR, NULL_CHAR,
         NULL_CHAR, NULL_CHAR,
         NULL_CHAR, NULL_CHAR;
-  DUR_ELAPSED    := (ASH_END_TIME - ASH_BEGIN_TIME) * 24 * 60 * 60; -- in seconds
+
+  DYN_SQL := 'SELECT COUNT(1) NUM_SAMPLES, SUM(' || FILTER_EVENT_STR || ') NUM_EVENTS ' ||
+             'FROM   (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ';
+  OPEN top_event_cv FOR DYN_SQL
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR;
+  LOOP
+    FETCH top_event_cv INTO sample_rec;
+    EXIT WHEN top_event_cv%NOTFOUND;
+    NUM_SAMPLES := sample_rec.SAMPLE_CNT;
+    NUM_EVENTS := sample_rec.EVENT_CNT;
+  END LOOP;
+  CLOSE top_event_cv;
+
+  DUR_ELAPSED    := ROUND((ASH_END_TIME - ASH_BEGIN_TIME) * 24 * 60 * 60, 0); -- in seconds
+  APPEND_ROW('----');
+  APPEND_ROW('           Sample Begin: ' || TO_CHAR(L_BTIME, 'yyyy-mm-dd HH24:MI:SS'));
+  APPEND_ROW('             Sample End: ' || TO_CHAR(L_ETIME, 'yyyy-mm-dd HH24:MI:SS'));
+  APPEND_ROW('             ----------');
+  APPEND_ROW('    Analysis Begin Time: ' || TO_CHAR(ASH_BEGIN_TIME, 'yyyy-mm-dd HH24:MI:SS'));
+  APPEND_ROW('      Analysis End Time: ' || TO_CHAR(ASH_END_TIME, 'yyyy-mm-dd HH24:MI:SS'));
+  APPEND_ROW('           Elapsed Time: ' || TO_CHAR(DUR_ELAPSED)); -- TO_CHAR(ROUND(DUR_ELAPSED, DIG_2_FM)) || '(secs)');
+  APPEND_ROW('          Num of Sample: ' || TO_CHAR(NUM_SAMPLES));
+  APPEND_ROW('          Num of Events: ' || TO_CHAR(NUM_EVENTS));
+  APPEND_ROW('Average Active Sessions: ' || TO_CHAR(ROUND(NUM_SAMPLES/DUR_ELAPSED,2), DIG_3_FM));
+  APPEND_ROW('----');
+
+  IF (ASH_BEGIN_TIME IS NULL OR NUM_SAMPLES = 0) THEN
+    return RPT_ROWS;
+  END IF;
+
   IF DUR_ELAPSED <= 0 THEN
     DUR_ELAPSED := 1; -- avoid zero division
   END IF;
@@ -162,17 +203,6 @@ BEGIN
     NUM_EVENTS := 1;
   END IF;
 
-  APPEND_ROW('----');
-  APPEND_ROW('           Sample Begin: ' || TO_CHAR(L_BTIME, 'yyyy-mm-dd HH24:MI:SS'));
-  APPEND_ROW('             Sample End: ' || TO_CHAR(L_ETIME, 'yyyy-mm-dd HH24:MI:SS'));
-  APPEND_ROW('             ----------');
-  APPEND_ROW('    Analysis Begin Time: ' || TO_CHAR(ASH_BEGIN_TIME, 'yyyy-mm-dd HH24:MI:SS'));
-  APPEND_ROW('      Analysis End Time: ' || TO_CHAR(ASH_END_TIME, 'yyyy-mm-dd HH24:MI:SS'));
-  APPEND_ROW('           Elapsed Time: ' || TO_CHAR(DUR_ELAPSED) || '(secs)');
-  APPEND_ROW('          Num of Sample: ' || TO_CHAR(NUM_SAMPLES));
-  APPEND_ROW('          Num of Events: ' || TO_CHAR(NUM_EVENTS));
-  APPEND_ROW('Average Active Sessions: ' || TO_CHAR(ROUND(NUM_SAMPLES/DUR_ELAPSED,2), DIG_3_FM));
-  APPEND_ROW('----');
 
   APPEND_ROW(' ');
   APPEND_ROW('## Top User Events:');
@@ -183,13 +213,13 @@ BEGIN
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, ' ', '|'));
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
-  DYN_SQL := 'SELECT EVENT,  WAIT_CLASS, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' || 'GROUP BY EVENT, WAIT_CLASS';
+  DYN_SQL := 'SELECT /*+ MONITOR */ EVENT,  WAIT_CLASS, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' || 'GROUP BY EVENT, WAIT_CLASS';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR;
@@ -221,11 +251,11 @@ BEGIN
              'FROM   (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' ||
              'GROUP BY EVENT, WAIT_CLASS ORDER BY 2 DESC) WHERE ROWNUM < 10';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR;
@@ -237,7 +267,7 @@ BEGIN
           COLUMN_CONTENT_ARRAY(
             top_event_pval_rec.EVENT,
             TO_CHAR(ROUND(100 * top_event_pval_rec.EVENT_CNT/NUM_EVENTS,2), DIG_2_FM) || '%',
-            TO_CHAR(ROUND(100 * top_event_pval_rec.SAMPLE_CNT/DUR_ELAPSED,3), DIG_3_FM) || '%',
+            TO_CHAR(ROUND(100 * top_event_pval_rec.SAMPLE_CNT/NUM_SAMPLES,3), DIG_3_FM) || '%',
             '"' || TO_CHAR(top_event_pval_rec.P1) || '","' || TO_CHAR(top_event_pval_rec.P2) || '","' || TO_CHAR(top_event_pval_rec.P3) || '"',
             NVL(top_event_pval_rec.P1TEXT, ' '),
             NVL(top_event_pval_rec.P2TEXT, ' '),
@@ -267,8 +297,8 @@ BEGIN
   --            'GROUP BY MODULE, ROLLUP(ACTION) ORDER BY MODULE, SAMPLE_CNT DESC) ' ||
   --            'WHERE SAMPLE_CNT / :num_samples_param > -0.01';
   -- OPEN top_event_cv FOR DYN_SQL
-  -- USING   L_BTIME, L_ETIME,
-  --         L_BTIME, L_ETIME,
+  -- USING   ASH_BEGIN_TIME, ASH_END_TIME,
+  --         ASH_BEGIN_TIME, ASH_END_TIME,
   --         NULL_CHAR, NULL_CHAR,
   --         NULL_CHAR, NULL_CHAR,
   --         NULL_CHAR, NULL_CHAR,
@@ -321,11 +351,11 @@ BEGIN
              '  SAMPLES_CNT FOR EXECUTION_PHASE IN (IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION,IN_PX_EXECUTION, IN_SEQUENCE_LOAD )' ||
              ' ) ORDER BY SAMPLES_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR;
@@ -336,8 +366,8 @@ BEGIN
         FORMAT_ROW(
           COLUMN_CONTENT_ARRAY(
             top_phase_rec.EXECUTION_PHASE,
-            TO_CHAR(top_phase_rec.SAMPLE_CNT),
             TO_CHAR(ROUND(100 * top_phase_rec.SAMPLE_CNT/NUM_SAMPLES, 3), DIG_3_FM) || '%',
+            TO_CHAR(top_phase_rec.SAMPLE_CNT),
             TO_CHAR(ROUND(top_phase_rec.SAMPLE_CNT/DUR_ELAPSED,2), DIG_2_FM)
           ),
           column_widths, ' ', '|'
@@ -367,11 +397,11 @@ BEGIN
               ') top_event GROUP BY SQL_ID, PLAN_ID, EVENT) ash ' ||
              'LEFT JOIN SYS.GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) v1 WHERE ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR;
@@ -412,11 +442,11 @@ BEGIN
              ' ) top_event WHERE wait_class_id != 100 GROUP BY SQL_ID, PLAN_ID, EVENT) ash ' ||
              'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR;
@@ -439,15 +469,15 @@ BEGIN
   -- complete List of SQL Text
   APPEND_ROW(' ');
   APPEND_ROW('## Complete List of SQL Text');
-  DYN_SQL := 'SELECT SQL_ID, QUERY_SQL FROM (SELECT pc.SQL_ID SQL_ID, pc.QUERY_SQL QUERY_SQL ' ||
+  DYN_SQL := 'SELECT SQL_ID, PLAN_ID, QUERY_SQL FROM (SELECT pc.SQL_ID SQL_ID, pc.PLAN_ID, pc.QUERY_SQL QUERY_SQL ' ||
              'FROM (SELECT SQL_ID, PLAN_ID, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event GROUP BY SQL_ID, PLAN_ID, EVENT) ash ' ||
              'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE QUERY_SQL IS NOT NULL AND ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR;
@@ -455,6 +485,7 @@ BEGIN
     FETCH top_event_cv INTO complete_sql_rec;
     EXIT WHEN top_event_cv%NOTFOUND;
     APPEND_ROW('  SQL ID: ' || NVL(complete_sql_rec.SQL_ID, ' '));
+    APPEND_ROW(' PLAN ID: ' || TO_CHAR(complete_sql_rec.PLAN_ID));
     APPEND_ROW('SQL Text: ' || NVL(SUBSTR(complete_sql_rec.QUERY_SQL, 0, 4000), ' '));
     APPEND_ROW('');
   END LOOP;
@@ -476,11 +507,11 @@ BEGIN
              ' GROUP BY SESSION_ID, USER_ID, EVENT HAVING COUNT(1) / :num_samples > 0.005 ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100) ash ' ||
              ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR, NUM_SAMPLES;
@@ -520,11 +551,11 @@ BEGIN
              ' WHERE wait_class_id != 100 GROUP BY SESSION_ID, USER_ID, EVENT HAVING COUNT(1) / :num_samples > 0.005 ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100) ash ' ||
              ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR, NUM_SAMPLES;
@@ -560,11 +591,11 @@ BEGIN
   DYN_SQL := 'SELECT * FROM (SELECT EVENT, COUNT(1) SAMPLE_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' ||
              ' WHERE wait_class_id = 104 AND SUBSTR(event, 0, 6) = ''latch:'' GROUP BY EVENT HAVING COUNT(1) / :num_samples > 0.005 ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
-  USING   L_BTIME, L_ETIME,
-          L_BTIME, L_ETIME,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
-          NULL_CHAR, NULL_CHAR,
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR, NUM_SAMPLES;
@@ -585,6 +616,26 @@ BEGIN
   return RPT_ROWS;
 
 END ASH_REPORT_TEXT;
+
+
+-- entry function
+PROCEDURE ASH_REPORT(BTIME         IN DATE,
+                     ETIME         IN DATE,
+                     SQL_ID        IN VARCHAR2  DEFAULT NULL,
+                     TRACE_ID      IN VARCHAR2  DEFAULT NULL,
+                     WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
+                     REPORT_TYPE   IN VARCHAR2  DEFAULT 'text'
+                   )
+IS
+  -- REPORT_TYPE is reserved for 'text'/'html', currently only 'text' supported
+  res AWRRPT_TEXT_TYPE_TABLE;
+BEGIN
+  DBMS_OUTPUT.ENABLE(NULL);
+  res := DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME, SQL_ID, WAIT_CLASS);
+  for i in res.first .. res.last loop
+    DBMS_OUTPUT.put_line(res(i));
+  end loop;
+END ASH_REPORT;
 
 
 

@@ -40,6 +40,7 @@ public:
   {
     return field_count_;
   }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_RESHEAD; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(OMPKResheader);

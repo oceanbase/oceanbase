@@ -85,7 +85,7 @@
  *        behavior is just call ptr's destuction method and call allocator's free method, WILL NOT 
  *        CALL destory() method even if ptr has one.
  *
- *  - Contact xuwang.txw@antgroup.com for help.
+ *  - Contact  for help.
  */
 
 #ifndef OCEANBASE_LIB_GUARD_OB_UNIQUE_GUARD_H
@@ -224,9 +224,9 @@ public:
         allocator_->free(data_);
       }
     } else if (!OB_ISNULL(data_)) {
-      OCCAM_LOG(ERROR, "should never go here", K(*this));
+      OCCAM_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "should never go here", K(*this));
     } else if (!OB_ISNULL(allocator_)) {
-      OCCAM_LOG(ERROR, "should never go here", K(*this));
+      OCCAM_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "should never go here", K(*this));
     } else {}// it'ok that both data_ and allocator_ are nullptr, ObUniqueGuard has been reset
     data_ = nullptr;
     deleter_ = nullptr;

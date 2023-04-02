@@ -45,75 +45,6 @@ int ObIRawExprCopier::copy(const ObRawExpr *expr,
   return ret;
 }
 
-int ObNonFixedExprCopier::check_need_copy(const ObRawExpr *old_expr,
-                                          ObRawExpr *&new_expr)
-{
-  int ret = OB_SUCCESS;
-  new_expr = NULL;
-  if (OB_LIKELY(old_expr != NULL)) {
-    if (!use_new_allocator_ &&
-        !copy_fixed_expr_ &&
-        is_fixed_expr(*old_expr)) {
-      new_expr = const_cast<ObRawExpr *>(old_expr);
-    }
-  }
-  return ret;
-}
-
-int ObNonFixedExprCopier::do_copy_expr(const ObRawExpr *old_expr,
-                                       ObRawExpr *&new_expr)
-{
-  int ret = OB_SUCCESS;
-  bool cur_value = copy_fixed_expr_;
-  // disable for param expr or attribute expr
-  copy_fixed_expr_ = false;
-  if (OB_ISNULL(old_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("old expr is null", K(ret));
-  } else if (OB_FAIL(expr_factory_.create_raw_expr(old_expr->get_expr_class(),
-                                                   old_expr->get_expr_type(),
-                                                   new_expr))) {
-    LOG_WARN("failed to create raw expr", K(ret));
-  } else if (OB_FAIL(new_expr->deep_copy(*this, *old_expr))) {
-    LOG_WARN("failed to assign old expr", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < new_expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(copy(new_expr->get_param_expr(i))))) {
-        LOG_WARN("failed to copy param expr", K(ret));
-      }
-    }
-  }
-  // restore
-  if (cur_value) {
-    copy_fixed_expr_ = true;
-  }
-  return ret;
-}
-
-bool ObNonFixedExprCopier::is_fixed_expr(const ObRawExpr &expr)
-{
-  return expr.is_column_ref_expr() ||
-      expr.is_query_ref_expr() ||
-      expr.is_aggr_expr() ||
-      expr.is_win_func_expr() ||
-      expr.is_set_op_expr() ||
-      expr.is_exec_param_expr() ||
-      is_pseudo_column_like_expr(expr) ||
-      expr.has_flag(IS_SHARED_REF) ||
-      expr.is_param_expr();
-}
-
-bool ObNonFixedExprCopier::is_pseudo_column_like_expr(const ObRawExpr &expr)
-{
-  bool bret = false;
-  if (ObRawExpr::EXPR_PSEUDO_COLUMN == expr.get_expr_class() ||
-      T_FUN_SYS_ROWNUM == expr.get_expr_type() ||
-      T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type()) {
-    bret = true;
-  }
-  return bret;
-}
-
 int ObPLExprCopier::copy_expr(ObRawExprFactory &expr_factory,
                               const ObRawExpr *old_expr,
                               ObRawExpr *&new_expr)
@@ -174,8 +105,10 @@ int ObRawExprCopier::check_need_copy(const ObRawExpr *old_expr,
   } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != tmp)) {
     ret = tmp;
     LOG_WARN("get expr from hash map failed", K(ret));
-  } else if (old_expr->is_exec_param_expr() &&
-             !static_cast<const ObExecParamRawExpr *>(old_expr)->is_onetime()) {
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(new_expr) &&
+      old_expr->is_exec_param_expr() &&
+      !static_cast<const ObExecParamRawExpr *>(old_expr)->is_onetime()) {
     // TODO link.zt skip the copy of exec param expr
     // let the query ref raw expr to copy the expr
     // to be improved
@@ -192,6 +125,8 @@ int ObRawExprCopier::copy_expr_node(const ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
+  } else if (ObRawExprUtils::find_expr(uncopy_expr_nodes_, expr)) {
+    new_expr = const_cast<ObRawExpr *>(expr);
   } else if (OB_FAIL(expr_factory_.create_raw_expr(expr->get_expr_class(),
                                                    expr->get_expr_type(),
                                                    tmp))) {
@@ -313,10 +248,16 @@ int ObRawExprCopier::do_copy_expr(const ObRawExpr *old_expr,
   return ret;
 }
 
+/**
+ * @brief ObRawExprCopier::copy_on_replace
+ * @param from_expr : the input expr to be replaced
+ * @param to_expr : the output expr generaetd by replacing the input expr
+ * @param replacer : tells how to replace a expr node
+ * @return
+ */
 int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
                                      ObRawExpr *&to_expr,
-                                     ObIRawExprReplacer *replacer /*= NULL*/,
-                                     ObIArray<ObRawExpr *> *uncopy_list)
+                                     ObIRawExprReplacer *replacer /*= NULL*/)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *tmp = NULL;
@@ -348,10 +289,10 @@ int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
       ObRawExpr *new_param = NULL;
       if (OB_FAIL(SMART_CALL(copy_on_replace(param, new_param, replacer)))) {
         LOG_WARN("failed to static replace expr", K(ret));
-      } else if (param == new_param ||
-                 (uncopy_list != NULL && ObRawExprUtils::find_expr(*uncopy_list, from_expr))) {
+      } else if (param == new_param) {
         // do noting if the param does not change, or the expr is marked as uncopy.
-      } else if (from_expr == to_expr && OB_FAIL(copy_expr_node(from_expr, to_expr))) {
+      } else if (from_expr == to_expr &&
+                 OB_FAIL(copy_expr_node(from_expr, to_expr))) {
         // the param is changed, create a copy of the from_expr
         // and then make modifications on the copy (to_expr).
         LOG_WARN("failed to copy expr node", K(ret));
@@ -363,14 +304,15 @@ int ObRawExprCopier::copy_on_replace(ObRawExpr *from_expr,
   return ret;
 }
 
-int ObRawExprCopier::add_skipped_expr(const ObRawExpr *target)
+int ObRawExprCopier::add_skipped_expr(const ObRawExpr *target, bool include_child)
 {
-  return add_expr(target, target);
-}
-
-int ObRawExprCopier::add_skipped_expr(const ObIArray<ObRawExpr *> &targets)
-{
-  return add_expr(targets, targets);
+  int ret = OB_SUCCESS;
+  if (include_child) {
+    ret = add_expr(target, target);
+  } else {
+    ret = uncopy_expr_nodes_.push_back(target);
+  }
+  return ret;
 }
 
 int ObRawExprCopier::add_replaced_expr(const ObRawExpr *from_expr,
@@ -383,4 +325,17 @@ int ObRawExprCopier::add_replaced_expr(const ObIArray<ObRawExpr *> &from_exprs,
                                        const ObIArray<ObRawExpr *> &to_exprs)
 {
   return add_expr(from_exprs, to_exprs);
+}
+
+int ObRawExprCopier::get_copied_exprs(ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &from_to_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (auto it = copied_exprs_.begin(); OB_SUCC(ret) && it != copied_exprs_.end(); ++it) {
+    if (OB_FAIL(from_to_exprs.push_back(
+                  std::pair<ObRawExpr *, ObRawExpr *>(reinterpret_cast<ObRawExpr*>(it->first),
+                                                      reinterpret_cast<ObRawExpr*>(it->second))))) {
+      LOG_WARN("failed to push back from to expr", K(ret));
+    }
+  }
+  return ret;
 }

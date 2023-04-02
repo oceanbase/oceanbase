@@ -50,7 +50,7 @@ struct NotImplementItemEncode
     UNUSED(buf_len);
     UNUSED(pos);
     UNUSED(item);
-    _OB_LOG(WARN, "call not implemented function.");
+    _OB_LOG_RET(WARN, OB_NOT_IMPLEMENT, "call not implemented function.");
     return OB_NOT_IMPLEMENT;
   }
 
@@ -60,7 +60,7 @@ struct NotImplementItemEncode
     UNUSED(data_len);
     UNUSED(pos);
     UNUSED(item);
-    _OB_LOG(WARN, "call not implemented function.");
+    _OB_LOG_RET(WARN, OB_NOT_IMPLEMENT, "call not implemented function.");
     return OB_NOT_IMPLEMENT;
   }
 
@@ -327,7 +327,7 @@ T *ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::alloc_place
     }
     count_++;
   } else {
-    _OB_LOG(WARN, "extend buf error, "
+    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "extend buf error, "
               "count_=%ld, data_size_=%ld, (int64_t)sizeof(T)=%ld, data_size_/(int64_t)sizeof(T)=%ld",
               count_, data_size_, static_cast<int64_t>(sizeof(T)), data_size_ / static_cast<int64_t>(sizeof(T)));
   }
@@ -444,19 +444,19 @@ ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>
     this->reset();
     this->reserve(other.count());
     if (OB_UNLIKELY(static_cast<uint64_t>(data_size_) < (sizeof(T)*other.count_))) {
-      _OB_LOG(ERROR, "no memory");
       error_ = OB_ALLOCATE_MEMORY_FAILED;
+      _OB_LOG_RET(ERROR, error_, "no memory");
     } else {
       const int64_t assign = std::min(valid_count_, other.count_);
       for (int64_t i = 0; OB_LIKELY(OB_SUCCESS == error_) && i < assign; ++i) {
         if (OB_UNLIKELY(OB_SUCCESS != (error_ = copy_assign(data_[i], other.data_[i])))) {
-          LIB_LOG(WARN, "failed to copy data", K(error_));
+          LIB_LOG_RET(WARN, error_, "failed to copy data", K(error_));
           count_ = i;
         }
       }
       for (int64_t i = assign; OB_LIKELY(OB_SUCCESS == error_) && i < other.count_; ++i) {
         if (OB_UNLIKELY(OB_SUCCESS != (error_ = construct_assign(data_[i], other.data_[i])))) {
-          LIB_LOG(WARN, "failed to copy data", K(error_));
+          LIB_LOG_RET(WARN, error_, "failed to copy data", K(error_));
           count_ = i;
         }
       }

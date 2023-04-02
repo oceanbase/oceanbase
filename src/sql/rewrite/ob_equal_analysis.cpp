@@ -57,25 +57,29 @@ void ObEqualAnalysis::reset()
   //the allocator is not equal analysis enjoy alone, so can't reset allocator at here
 }
 
-int64_t ObEqualAnalysis::get_or_add_expr_idx(const ObRawExpr *expr)
+int ObEqualAnalysis::get_or_add_expr_idx(const ObRawExpr *expr, int64_t &expr_idx)
 {
-  int64_t expr_idx = -1;
+  int ret = OB_SUCCESS;
+  expr_idx = -1;
   EqualSetKey key;
   key.expr_ = expr;
-  int ret = column_set_.get_refactored(key, expr_idx);
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(column_set_.get_refactored(key, expr_idx))) {
     /*do nothing*/
   } else if (OB_HASH_NOT_EXIST != ret) {
     LOG_WARN("failed to get from hash map", K(ret), K(expr_idx));
   } else {
     ret = OB_SUCCESS;
     expr_idx = column_set_.size();
-    if (OB_SUCCESS != (ret = column_set_.set_refactored(key, expr_idx))) {
+    if (OB_FAIL(column_set_.set_refactored(key, expr_idx))) {
       expr_idx = -1;
       LOG_WARN("set expr index to column set failed", K(ret), K(expr_idx));
     }
   }
-  return expr_idx;
+  if (OB_SUCC(ret) && expr_idx < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected idx", K(ret));
+  }
+  return ret;
 }
 
 int ObEqualAnalysis::feed_where_expr(const ObRawExpr *expr)
@@ -121,8 +125,7 @@ int ObEqualAnalysis::feed_equal_sets(const EqualSets &input_equal_sets)
       if (OB_ISNULL(expr = eset->at(j))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
-      } else if (OB_UNLIKELY(0 > (expr_idx = get_or_add_expr_idx(expr)))) {
-        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(get_or_add_expr_idx(expr, expr_idx))) {
         LOG_WARN("get or add expr idx failed", K(ret));
       }  else if (OB_FAIL(equal_set->add_expr(expr_idx, true, expr))) {
         LOG_WARN("add expr to equal set failed", K(ret));
@@ -144,12 +147,10 @@ int ObEqualAnalysis::add_equal_cond(const ObOpRawExpr &expr)
       || OB_ISNULL(expr.get_param_expr(1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is invalid", K(expr));
-  } else if (OB_UNLIKELY((l_expr_idx = get_or_add_expr_idx(expr.get_param_expr(0))) < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get or add left expr idx failed");
-  } else if (OB_UNLIKELY((r_expr_idx = get_or_add_expr_idx(expr.get_param_expr(1))) < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get or add right expr idx failed");
+  } else if (OB_FAIL(get_or_add_expr_idx(expr.get_param_expr(0), l_expr_idx))) {
+    LOG_WARN("get or add left expr idx failed", K(ret));
+  } else if (OB_FAIL(get_or_add_expr_idx(expr.get_param_expr(1), r_expr_idx))) {
+    LOG_WARN("get or add right expr idx failed", K(ret));
   } else if (l_expr_idx != r_expr_idx) {
     //左右两边是完全相等的表达式，例如c1=c1, sum(c1)=sum(c1),属于恒true范围，不具有传递关系，所以不加入集合中
     if (OB_FAIL(find_equal_set(l_expr_idx, expr.get_param_expr(1), equal_set))) {
@@ -214,7 +215,7 @@ ObExprEqualSet *ObEqualAnalysis::new_equal_set()
   if (NULL != (ptr = equal_set_alloc_.alloc(sizeof(ObExprEqualSet)))) {
     equal_set = new(ptr) ObExprEqualSet();
     if (!equal_sets_.add_last(equal_set)) {
-      LOG_WARN("add equal set failed");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "add equal set failed");
       equal_set->~ObEqualSet();
       equal_set_alloc_.free(equal_set);
       equal_set = NULL;

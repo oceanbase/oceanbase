@@ -13,7 +13,10 @@
 #ifndef SRC_STORAGE_COMPACTION_OB_COMPACTION_SUGGESTION_H_
 #define SRC_STORAGE_COMPACTION_OB_COMPACTION_SUGGESTION_H_
 
-#include "storage/ob_i_store.h"
+#include "storage/compaction/ob_compaction_util.h"
+#include "lib/allocator/page_arena.h"
+#include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_iarray.h"
 
 namespace oceanbase
 {
@@ -29,7 +32,7 @@ public:
   ObInfoRingArray(ObIAllocator &allocator)
     : is_inited_(false),
       allocator_(allocator),
-      lock_(),
+      lock_(common::ObLatchIds::INFO_MGR_LOCK),
       pos_(0),
       max_cnt_(0),
       array_(NULL)

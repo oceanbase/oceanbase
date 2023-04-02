@@ -129,7 +129,7 @@ int ObExprPad::calc_pad_expr(const ObExpr &expr, ObEvalCtx &ctx,
       if (OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is NULL", K(ret));
-      } else if (OB_FAIL(ObExprBaseLRpad::calc_mysql(ObExprBaseLRpad::RPAD_TYPE, expr,
+      } else if (OB_FAIL(ObExprBaseLRpad::calc_mysql(ObExprBaseLRpad::RPAD_TYPE, expr, ctx,
                             *src, len_char, *pad, *session, res_alloc, res))) {
         LOG_WARN("calc_mysql failed", K(ret));
       }

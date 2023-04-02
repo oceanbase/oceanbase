@@ -44,7 +44,7 @@ int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const int status,
                               const ObAddr &addr,
                               const int64_t request_id,
-                              const int64_t private_data)
+                              const SCN &private_data)
 {
   return MTL(ObTransService *)->handle_trans_msg_callback(sender_ls_id,
                                                   receiver_ls_id,
@@ -73,7 +73,7 @@ void ObTransRpcResult::reset()
 {
   status_ = OB_SUCCESS;
   send_timestamp_ = 0L;
-  private_data_ = 0;
+  private_data_.reset();
 }
 
 void ObTransRpcResult::init(const int status, const int64_t timestamp)
@@ -131,6 +131,10 @@ TX_Process(Abort, handle_trans_abort_request);
 TX_Process(RollbackSP, handle_sp_rollback_request);
 TX_Process(Keepalive, handle_trans_keepalive);
 TX_Process(KeepaliveResp, handle_trans_keepalive_response);
+TX_Process(AskState, handle_trans_ask_state);
+TX_Process(AskStateResp, handle_trans_ask_state_response);
+TX_Process(CollectState, handle_trans_collect_state);
+TX_Process(CollectStateResp, handle_trans_collect_state_response);
 TX_Process(SubPrepare, handle_sub_prepare_request);
 TX_Process(SubPrepareResp, handle_sub_prepare_response);
 TX_Process(SubCommit, handle_sub_commit_request);
@@ -169,6 +173,14 @@ int ObTransRpc::init(ObTransService *trans_service,
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_keepalive_resp_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
+  } else if (OB_SUCCESS != (ret = tx_ask_state_cb_.init())) {
+    TRANS_LOG(WARN, "transaction callback init error", KR(ret));
+  } else if (OB_SUCCESS != (ret = tx_ask_state_resp_cb_.init())) {
+    TRANS_LOG(WARN, "transaction callback init error", KR(ret));
+  } else if (OB_SUCCESS != (ret = tx_collect_state_cb_.init())) {
+    TRANS_LOG(WARN, "transaction callback init error", KR(ret));
+  } else if (OB_SUCCESS != (ret = tx_collect_state_resp_cb_.init())) {
+    TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_sub_prepare_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_sub_prepare_resp_cb_.init())) {
@@ -184,6 +196,7 @@ int ObTransRpc::init(ObTransService *trans_service,
   } else if (OB_FAIL(rpc_proxy_.init(req_transport, self))) {
     TRANS_LOG(WARN, "init rpc_proxy fail", KR(ret));
   } else {
+    tenant_id_ = MTL_ID();
     trans_service_ = trans_service;
     last_stat_ts_ = ObTimeUtility::current_time();
     batch_rpc_ = batch_rpc;
@@ -214,9 +227,9 @@ int ObTransRpc::start()
 void ObTransRpc::stop()
 {
   if (!is_inited_) {
-    TRANS_LOG(WARN, "ObTransRpc is not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "ObTransRpc is not inited");
   } else if (!is_running_) {
-    TRANS_LOG(WARN, "ObTransRpc already has been stopped");
+    TRANS_LOG_RET(WARN, OB_IN_STOP_STATE, "ObTransRpc already has been stopped");
   } else {
     is_running_ = false;
     TRANS_LOG(INFO, "ObTransRpc stop success");
@@ -226,9 +239,9 @@ void ObTransRpc::stop()
 void ObTransRpc::wait()
 {
   if (!is_inited_) {
-    TRANS_LOG(WARN, "ObTransRpc is not inited");
+    TRANS_LOG_RET(WARN, OB_NOT_INIT, "ObTransRpc is not inited");
   } else if (is_running_) {
-    TRANS_LOG(WARN, "ObTransRpc is already running");
+    TRANS_LOG_RET(WARN, OB_IN_STOP_STATE, "ObTransRpc is already running");
   } else {
     TRANS_LOG(INFO, "ObTransRpc wait success");
   }
@@ -325,6 +338,14 @@ int ObTransRpc::post_(const ObAddr &server, ObTxMsg &msg)
     case SUBROLLBACK_RESP:
     {
       ret = post_sub_response_msg_(server, msg);
+      break;
+    }
+    case ASK_STATE:
+    case ASK_STATE_RESP:
+    case COLLECT_STATE:
+    case COLLECT_STATE_RESP:
+    {
+      ret = post_standby_msg_(server, msg);
       break;
     }
     default:
@@ -434,6 +455,49 @@ int ObTransRpc::post_msg(const ObLSID &p, ObTxMsg &msg)
   return ret;
 }
 
+int ObTransRpc::post_msg(const ObAddr &server, const ObTxFreeRouteMsg &msg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    TRANS_LOG(WARN, "ObTransRpc not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransRpc is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_UNLIKELY(!server.is_valid()) || OB_UNLIKELY(!msg.is_valid())) {
+    TRANS_LOG(WARN, "invalid argument", K(server), K(msg));
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    switch(msg.type_) {
+    case TX_FREE_ROUTE_CHECK_ALIVE: {
+      ret = rpc_proxy_.to(server).by(tenant_id_)
+        .timeout(GCONF._ob_trans_rpc_timeout)
+        .post_msg(static_cast<const ObTxFreeRouteCheckAliveMsg&>(msg),
+                  &tx_free_route_ck_alive_cb_);
+      break;
+    }
+    case TX_FREE_ROUTE_CHECK_ALIVE_RESP: {
+      ret = rpc_proxy_.to(server).by(tenant_id_)
+        .timeout(GCONF._ob_trans_rpc_timeout)
+        .post_msg(static_cast<const ObTxFreeRouteCheckAliveRespMsg&>(msg),
+                  &tx_free_route_ck_alive_resp_cb_);
+      break;
+    }
+    default:
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(ERROR, "invalid msg type", KR(ret), K(msg));
+    }
+  }
+  TRANS_LOG(INFO, "post txn free route msg", K(ret), K(msg));
+  return ret;
+}
+
+int ObTransRpc::sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result)
+{
+  return rpc_proxy_.to(server).by(tenant_id_).timeout(GCONF._ob_trans_rpc_timeout)
+    .sync_access(m, result);
+}
+
 int ObTransRpc::post_sub_request_msg_(const ObAddr &server, ObTxMsg &msg)
 {
   int ret = OB_SUCCESS;
@@ -483,6 +547,41 @@ int ObTransRpc::post_sub_response_msg_(const ObAddr &server, ObTxMsg &msg)
     case SUBROLLBACK_RESP: {
       ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
               post_sub_rollback_resp_msg(static_cast<ObTxSubRollbackRespMsg&>(msg), &tx_sub_rollback_resp_cb_);
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      TRANS_LOG(WARN, "rpc proxy not supported", K(tenant_id), K(server), K(msg));
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTransRpc::post_standby_msg_(const ObAddr &server, ObTxMsg &msg)
+{
+  int ret = OB_SUCCESS;
+  const int64_t msg_type = msg.get_msg_type();
+  const uint64_t tenant_id = msg.tenant_id_;
+  switch (msg_type) {
+    case ASK_STATE: {
+      ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
+              post_ask_state_msg(static_cast<ObAskStateMsg&>(msg), &tx_ask_state_cb_);
+      break;
+    }
+    case ASK_STATE_RESP: {
+      ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
+              post_ask_state_resp_msg(static_cast<ObAskStateRespMsg&>(msg), &tx_ask_state_resp_cb_);
+      break;
+    }
+    case COLLECT_STATE: {
+      ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
+              post_collect_state_msg(static_cast<ObCollectStateMsg&>(msg), &tx_collect_state_cb_);
+      break;
+    }
+    case COLLECT_STATE_RESP: {
+      ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
+              post_collect_state_resp_msg(static_cast<ObCollectStateRespMsg&>(msg), &tx_collect_state_resp_cb_);
       break;
     }
     default: {

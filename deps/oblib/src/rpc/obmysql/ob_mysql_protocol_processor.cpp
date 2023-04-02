@@ -18,6 +18,7 @@
 #include "rpc/obmysql/packet/ompk_ssl_request.h"
 #include "rpc/obmysql/ob_mysql_request_utils.h"
 #include "rpc/obmysql/obsm_struct.h"
+#include "rpc/obmysql/ob_packet_record.h"
 
 namespace oceanbase
 {
@@ -63,6 +64,19 @@ int ObMysqlProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool
       } else {
         ObMySQLCapabilityFlags capability;
         capability.capability_ = uint2korr(start);
+        /*
+          connection_phase_ state transition
+          (1)use ssl:
+          1.when tcp connection establised, the state is initialized as CPE_CONNECTED
+          2.if client decide to open ssl,  after decode the first incomplete
+          login request packet, the state is changed to CPE_SSL_CONNECT, and the packet will be droped (not processed by processor)
+          3.after ssl handshake finished, after decode the complete login request
+          packet, the state changed to CPE_CONNECTED and deliver the packet to processor(ObMPConnect)
+          4.when complete the authentication operations, the state is changed to CPE_AUTHED
+          CPE_CONNECTED -> CPE_SSL_CONNECT -> CPE_CONNECTED -> CPE_AUTHED
+          (2)do not use ssl
+          CPE_CONNECTED -> CPE_AUTHED
+        */
         if (conn.is_in_connected_phase()) {
           if (1 == capability.cap_flags_.OB_CLIENT_SSL) {
             if (OB_FAIL(decode_sslr_body(pool, start, pktlen, pktseq, pkt))) {
@@ -100,7 +114,10 @@ int ObMysqlProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool
 int ObMysqlProtocolProcessor::do_splice(ObSMConnection& conn, ObICSMemPool& pool, void*& pkt, bool& need_decode_more)
 {
   INIT_SUCC(ret);
-  if (OB_FAIL(process_mysql_packet(conn.mysql_pkt_context_, pool, pkt, need_decode_more))) {
+  __builtin_prefetch(&conn.pkt_rec_wrapper_.pkt_rec_[conn.pkt_rec_wrapper_.cur_pkt_pos_
+                                              % ObPacketRecordWrapper::REC_BUF_SIZE]);
+  if (OB_FAIL(process_mysql_packet(conn.mysql_pkt_context_, &conn.pkt_rec_wrapper_,
+                                                pool, pkt, need_decode_more))) {
     LOG_ERROR("fail to process_mysql_packet", K(ret));
   }
   return ret;
@@ -148,7 +165,8 @@ inline int ObMysqlProtocolProcessor::decode_sslr_body(ObICSMemPool& pool, const 
     buf += pktlen;
 
     if (OB_FAIL(sslrpkt->decode())) {
-      LOG_ERROR("failed to decode OMPKSSLRequest", KPC(sslrpkt), K(ret));
+      LOG_WARN("failed to decode OMPKSSLRequest and the socket connection that this session belongs"
+                "to could be an illegal connection", KPC(sslrpkt), K(ret));
     }
   }
   return ret;
@@ -263,7 +281,8 @@ int ObMysqlProtocolProcessor::read_body(
       context.raw_pkt_.set_content(start + pos, static_cast<uint32_t>(context.payload_len_));
       const int64_t actual_data_len = handle_len;
       void *tmp_ipacket = reinterpret_cast<void *>(&context.raw_pkt_);
-      if (OB_FAIL(process_one_mysql_packet(context, pool, actual_data_len, tmp_ipacket, need_decode_more))) {
+      if (OB_FAIL(process_one_mysql_packet(context, NULL, pool, actual_data_len,
+                                                    tmp_ipacket, need_decode_more))) {
         LOG_ERROR("fail to process one mysql packet", K(context), K(ret));
       } else {
         if (need_decode_more) { // mysql packet not received complete
@@ -397,6 +416,7 @@ int ObMysqlProtocolProcessor::process_fragment_mysql_packet(
 
 int ObMysqlProtocolProcessor::process_one_mysql_packet(
     ObMysqlPktContext &context,
+    obmysql::ObPacketRecordWrapper *pkt_rec_wrapper,
     ObICSMemPool& pool,
     const int64_t actual_data_len,
     void *&ipacket,
@@ -455,6 +475,9 @@ int ObMysqlProtocolProcessor::process_one_mysql_packet(
         // no need set seq again
         need_decode_more = false;
         ipacket = raw_pkt;
+        if (OB_NOT_NULL(pkt_rec_wrapper) && pkt_rec_wrapper->enable_proto_dia()) {
+          pkt_rec_wrapper->record_recieve_mysql_packet(*raw_pkt);
+        }
         LOG_DEBUG("recevie one mysql packet complete", K(context), KPC(raw_pkt),
                   K(total_data_len), K(actual_data_len));
       }
@@ -476,6 +499,7 @@ int ObMysqlProtocolProcessor::process_one_mysql_packet(
 
 int ObMysqlProtocolProcessor::process_mysql_packet(
     ObMysqlPktContext &context,
+    obmysql::ObPacketRecordWrapper *pkt_rec_wrapper,
     ObICSMemPool& pool,
     void *&ipacket,
     bool &need_decode_more) {
@@ -488,9 +512,13 @@ int ObMysqlProtocolProcessor::process_mysql_packet(
   } else {
     int64_t data_len = raw_pkt->get_clen();
     const char *payload = raw_pkt->get_cdata();
+    if (OB_NOT_NULL(pkt_rec_wrapper) && pkt_rec_wrapper->enable_proto_dia()) {
+      pkt_rec_wrapper->record_recieve_mysql_pkt_fragment(raw_pkt->get_clen());
+    }
     if (FALSE_IT(context.payload_len_ = data_len)) {
       // impossible
-    } else if (OB_FAIL(process_one_mysql_packet(context, pool, data_len, ipacket, need_decode_more))) {
+    } else if (OB_FAIL(process_one_mysql_packet(context, pkt_rec_wrapper,
+                                  pool, data_len, ipacket, need_decode_more))) {
       LOG_ERROR("fail to process one mysql packet", K(context), K(need_decode_more), K(ret));
     } else {
       if (need_decode_more) {
@@ -507,6 +535,7 @@ int ObMysqlProtocolProcessor::process_mysql_packet(
           context.payload_len_ = 0;
         }
       } else {
+
         // nothing
         context.reset();
       }

@@ -32,29 +32,29 @@ class LogLearner
   OB_UNIS_VERSION(1);
 public:
   LogLearner();
-  LogLearner(const common::ObAddr &server, const int64_t register_ts_ns);
-  LogLearner(const common::ObAddr &server, const common::ObRegion &region, const int64_t register_ts_ns);
+  LogLearner(const common::ObAddr &server, const int64_t register_time_us);
+  LogLearner(const common::ObAddr &server, const common::ObRegion &region, const int64_t register_time_us);
   LogLearner(const LogLearner &child);
   virtual ~LogLearner();
   bool is_valid() const;
   void reset();
-  bool is_timeout(const int64_t timeout_ns) const;
+  bool is_timeout(const int64_t timeout_us) const;
   const common::ObAddr &get_server() const;
   void update_keepalive_ts();
   bool operator<(const LogLearner &val) const;
   bool operator==(const LogLearner &val) const;
   bool operator!=(const LogLearner &val) const;
   LogLearner &operator=(const LogLearner &val);
-  TO_STRING_KV(K_(server), K_(region), K_(register_ts_ns), K_(keepalive_ts));
+  TO_STRING_KV(K_(server), K_(region), K_(register_time_us), K_(keepalive_ts));
 
 public:
   // net addr of LogLearner
   common::ObAddr server_;
   // Region info
   common::ObRegion region_;
-  // <parent, child, register_ts_ns_> uniquely identifies a available
+  // <parent, child, register_time_us_> uniquely identifies a available
   // registration when this child is in children list of parent
-  int64_t register_ts_ns_;
+  int64_t register_time_us_;
   // last recv keepalive timestamp
   int64_t keepalive_ts_;
 };

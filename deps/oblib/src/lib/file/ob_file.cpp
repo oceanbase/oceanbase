@@ -75,7 +75,7 @@ void IFileReader::close()
 {
   if (-1 != fd_) {
     if(0 != ::close(fd_)) {
-      OB_LOG(WARN, "fail to close file ", K_(fd), K(errno), KERRMSG);
+      OB_LOG_RET(WARN, OB_ERR_SYS, "fail to close file ", K_(fd), K(errno), KERRMSG);
     }
     fd_ = -1;
   }
@@ -90,7 +90,7 @@ void IFileReader::revise(int64_t pos)
 {
   if (-1 != fd_) {
     if(0 != ::ftruncate(fd_, pos)) {
-       _OB_LOG(WARN, "ftruncate fail fd=%d file_pos=%ld errno=%u", fd_, pos, errno);
+       _OB_LOG_RET(WARN, OB_ERR_SYS, "ftruncate fail fd=%d file_pos=%ld errno=%u", fd_, pos, errno);
     }
   }
 }
@@ -784,9 +784,9 @@ int64_t unintr_pwrite(const int fd, const void *buf, const int64_t count, const 
         if (errno == EINTR) { // Blocking IO does not need to judge EAGAIN
           continue;
         }
-        _OB_LOG(ERROR,
-                  "pwrite fail ret=%ld errno=%u fd=%d buf=%p size2write=%ld offset2write=%ld retry_num=%ld",
-                  write_ret, errno, fd, (char *)buf + offset2write, length2write, offset + offset2write, retry);
+        _OB_LOG_RET(ERROR, OB_ERR_SYS,
+                    "pwrite fail ret=%ld errno=%u fd=%d buf=%p size2write=%ld offset2write=%ld retry_num=%ld",
+                    write_ret, errno, fd, (char *)buf + offset2write, length2write, offset + offset2write, retry);
         retry++;
       } else {
         break;
@@ -816,7 +816,7 @@ int64_t unintr_write(const int fd, const void *buf, const int64_t count)
         if (errno == EINTR) { // Blocking IO does not need to judge EAGAIN
           continue;
         }
-        _OB_LOG(ERROR,
+        _OB_LOG_RET(ERROR, OB_ERR_SYS,
                   "pwrite fail ret=%ld errno=%u fd=%d buf=%p size2write=%ld offset2write=%ld retry_num=%ld",
                   write_ret, errno, fd, (char *)buf + offset2write, length2write, offset2write, retry);
         retry++;
@@ -848,7 +848,7 @@ int64_t unintr_pread(const int fd, void *buf, const int64_t count, const int64_t
         if (errno == EINTR) { // Blocking IO does not need to judge EAGAIN
           continue;
         }
-        _OB_LOG(ERROR,
+        _OB_LOG_RET(ERROR, OB_ERR_SYS,
                   "pread fail ret=%ld errno=%u fd=%d buf=%p size2read=%ld offset2read=%ld retry_num=%ld",
                   read_ret, errno, fd, (char *)buf + offset2read, length2read, offset + offset2read, retry);
         retry++;
@@ -1011,7 +1011,7 @@ int64_t ObFileBuffer::get_base_pos()
 void ObFileBuffer::set_base_pos(const int64_t pos)
 {
   if (pos > buffer_size_) {
-    _OB_LOG(WARN, "base_pos=%ld will be greater than buffer_size=%ld", pos, buffer_size_);
+    _OB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "base_pos=%ld will be greater than buffer_size=%ld", pos, buffer_size_);
   }
   base_pos_ = pos;
 }
@@ -1363,7 +1363,7 @@ ObFileAsyncAppender::ObFileAsyncAppender() : pool_(),
   memset(&ctx_, 0, sizeof(ctx_));
   int tmp_ret = 0;
   if (0 != (tmp_ret = io_setup(AIO_MAXEVENTS, &ctx_))) {
-    _OB_LOG(ERROR, "io_setup fail ret=%d", tmp_ret);
+    _OB_LOG_RET(ERROR, OB_ERR_SYS, "io_setup fail ret=%d", tmp_ret);
   }
 }
 
@@ -1437,13 +1437,13 @@ void ObFileAsyncAppender::close()
   if (-1 != fd_) {
     if (OB_SUCCESS != fsync()) {
       // Fatal error
-      _OB_LOG(ERROR, "fsync fail fd=%d, will set fd=-1, and the fd will leek", fd_);
+      _OB_LOG_RET(ERROR, OB_ERR_SYS, "fsync fail fd=%d, will set fd=-1, and the fd will leek", fd_);
     } else {
       if (0 != ftruncate(fd_, file_pos_)) {
-        OB_LOG(WARN, "fail to truncate file ", K_(fd), K(errno), KERRMSG);
+        OB_LOG_RET(WARN, OB_ERR_SYS, "fail to truncate file ", K_(fd), K(errno), KERRMSG);
       }
       if (0 != ::close(fd_)) {
-        OB_LOG(WARN, "fail to close file ", K_(fd), K(errno), KERRMSG);
+        OB_LOG_RET(WARN, OB_ERR_SYS, "fail to close file ", K_(fd), K(errno), KERRMSG);
       }
 
 
@@ -1562,7 +1562,7 @@ ObFileAsyncAppender::AIOCB *ObFileAsyncAppender::get_iocb_()
   if (NULL != ret
       && NULL == ret->buffer) {
     if (NULL == (ret->buffer = (char *)memalign(align_size_, AIO_BUFFER_SIZE))) {
-      _OB_LOG(WARN, "alloc async buffer fail");
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc async buffer fail");
       pool_.free_obj(ret);
       cur_iocb_ = NULL;
       ret = NULL;
@@ -1589,7 +1589,7 @@ void ObFileAsyncAppender::wait()
       pool_.free_obj(iocb);
     } else {
       // Fatal error
-      _OB_LOG(ERROR, "iocb return fail iocb=%p res=%ld res2=%ld, will set fd=-1, and the fd will leek",
+      _OB_LOG_RET(ERROR, OB_ERR_SYS, "iocb return fail iocb=%p res=%ld res2=%ld, will set fd=-1, and the fd will leek",
                 ioe[i].data, ioe[i].res, ioe[i].res2);
       fd_ = -1;
       cur_iocb_ = NULL;

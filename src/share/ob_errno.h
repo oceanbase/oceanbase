@@ -256,10 +256,12 @@ constexpr int OB_GTI_NOT_READY = -4383;
 constexpr int OB_STACK_OVERFLOW = -4385;
 constexpr int OB_NOT_ALLOW_REMOVING_LEADER = -4386;
 constexpr int OB_NEED_SWITCH_CONSUMER_GROUP = -4387;
-constexpr int OB_UNEXPECT_INTERNAL_ERROR = -4388;
-constexpr int OB_ERR_TOO_MUCH_TIME = -4389;
 constexpr int OB_ERR_REMOTE_SCHEMA_NOT_FULL = -4390;
 constexpr int OB_DDL_SSTABLE_RANGE_CROSS = -4391;
+constexpr int OB_DISK_HUNG = -4392;
+constexpr int OB_ERR_OBSERVER_START = -4393;
+constexpr int OB_ERR_OBSERVER_STOP = -4394;
+constexpr int OB_ERR_OBSERVICE_START = -4395;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -434,6 +436,16 @@ constexpr int OB_WAIT_TABLET_READY_TIMEOUT = -4742;
 constexpr int OB_FREEZE_SERVICE_EPOCH_MISMATCH = -4743;
 constexpr int OB_DELETE_SERVER_NOT_ALLOWED = -4745;
 constexpr int OB_PACKET_STATUS_UNKNOWN = -4746;
+constexpr int OB_ARBITRATION_SERVICE_NOT_EXIST = -4747;
+constexpr int OB_ARBITRATION_SERVICE_ALREADY_EXIST = -4748;
+constexpr int OB_UNEXPECTED_TABLET_STATUS = -4749;
+constexpr int OB_INVALID_TABLE_STORE = -4750;
+constexpr int OB_WAIT_DEGRATION_TIMEOUT = -4751;
+constexpr int OB_ERR_ROOTSERVICE_START = -4752;
+constexpr int OB_ERR_ROOTSERVICE_STOP = -4753;
+constexpr int OB_ERR_ROOT_INSPECTION = -4754;
+constexpr int OB_ERR_ROOTSERVICE_THREAD_HUNG = -4755;
+constexpr int OB_MIGRATE_NOT_COMPATIBLE = -4756;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -526,6 +538,7 @@ constexpr int OB_SQL_OPT_JOIN_ORDER_FAILED = -5121;
 constexpr int OB_SQL_OPT_ERROR = -5122;
 constexpr int OB_ERR_OCI_INIT_TIMEZONE = -5123;
 constexpr int OB_ERR_ZLIB_DATA = -5124;
+constexpr int OB_ERR_DBLINK_SESSION_KILLED = -5125;
 constexpr int OB_SQL_RESOLVER_NO_MEMORY = -5130;
 constexpr int OB_SQL_DML_ONLY = -5131;
 constexpr int OB_ERR_NO_GRANT = -5133;
@@ -764,8 +777,59 @@ constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
 constexpr int OB_DDL_SCHEMA_VERSION_NOT_MATCH = -5403;
 constexpr int OB_ERR_COLUMN_GROUP_DUPLICATE = -5404;
+constexpr int OB_ERR_RESERVED_SYNTAX = -5405;
+constexpr int OB_ERR_INVALID_PARAM_TO_PROCEDURE = -5406;
+constexpr int OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT = -5407;
+constexpr int OB_ERR_CTE_MAX_RECURSION_DEPTH = -5408;
+constexpr int OB_DUPLICATE_OBJECT_NAME_EXIST = -5409;
+constexpr int OB_ERR_REFRESH_SCHEMA_TOO_LONG = -5410;
 constexpr int OB_SQL_RETRY_SPM = -5434;
 constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
+constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -5438;
+constexpr int OB_EER_WINDOW_NO_INHERIT_FRAME = -5439;
+constexpr int OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = -5440;
+constexpr int OB_ERR_INVALID_DATA_TYPE_RETURNING = -5443;
+constexpr int OB_ERR_JSON_VALUE_NO_VALUE = -5445;
+constexpr int OB_ERR_DEFAULT_VALUE_NOT_LITERAL = -5446;
+constexpr int OB_ERR_JSON_SYNTAX_ERROR = -5447;
+constexpr int OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE = -5448;
+constexpr int OB_ERR_WITHOUT_ARR_WRAPPER = -5449;
+constexpr int OB_ERR_JSON_PATCH_INVALID = -5450;
+constexpr int OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED = -5451;
+constexpr int OB_ERR_LOB_TYPE_NOT_SORTING = -5452;
+constexpr int OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR = -5455;
+constexpr int OB_ERR_NO_VALUE_IN_PASSING = -5456;
+constexpr int OB_ERR_INVALID_COLUMN_SPE = -5457;
+constexpr int OB_ERR_INPUT_JSON_NOT_BE_NULL = -5458;
+constexpr int OB_ERR_INVALID_DATA_TYPE = -5459;
+constexpr int OB_ERR_INVALID_CLAUSE = -5460;
+constexpr int OB_ERR_INVALID_CMP_OP = -5461;
+constexpr int OB_ERR_INVALID_INPUT = -5462;
+constexpr int OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR = -5463;
+constexpr int OB_ERR_ADDITIONAL_IS_JSON = -5464;
+constexpr int OB_ERR_FUNCTION_INVALID_STATE = -5465;
+constexpr int OB_ERR_MISS_VALUE = -5466;
+constexpr int OB_ERR_DIFFERENT_TYPE_SELECTED = -5467;
+constexpr int OB_ERR_NO_VALUE_SELECTED = -5468;
+constexpr int OB_ERR_NON_TEXT_RET_NOTSUPPORT = -5469;
+constexpr int OB_ERR_PL_JSONTYPE_USAGE = -5470;
+constexpr int OB_ERR_NULL_INPUT = -5471;
+constexpr int OB_ERR_DEFAULT_VALUE_NOT_MATCH = -5474;
+constexpr int OB_ERR_CONVERSION_FAIL = -5476;
+constexpr int OB_ERR_NOT_OBJ_REF = -5477;
+constexpr int OB_ERR_UNSUPPORT_TRUNCATE_TYPE = -5478;
+constexpr int OB_ERR_UNIMPLEMENT_JSON_FEATURE = -5479;
+constexpr int OB_ERR_USAGE_KEYWORD = -5480;
+constexpr int OB_ERR_INPUT_JSON_TABLE = -5481;
+constexpr int OB_ERR_BOOL_CAST_NUMBER = -5482;
+constexpr int OB_ERR_NESTED_PATH_DISJUNCT = -5483;
+constexpr int OB_ERR_INVALID_VARIABLE_IN_JSON_PATH = -5484;
+constexpr int OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED = -5486;
+constexpr int OB_ERR_PATH_EXPRESSION_NOT_LITERAL = -5487;
+constexpr int OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL = -5488;
+constexpr int OB_ERR_SCHEMA_HISTORY_EMPTY = -5489;
+constexpr int OB_ERR_TABLE_NAME_NOT_IN_LIST = -5490;
+constexpr int OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART = -5491;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1239,8 +1303,11 @@ constexpr int OB_ERR_INTERVAL_CANNOT_BE_ZERO = -6273;
 constexpr int OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS = -6274;
 constexpr int OB_OBJ_LOCK_NOT_COMPLETED = -6275;
 constexpr int OB_OBJ_UNLOCK_CONFLICT = -6276;
-constexpr int OB_LOG_TS_OUT_OF_BOUND = -6277;
+constexpr int OB_SCN_OUT_OF_BOUND = -6277;
 constexpr int OB_TRANS_IDLE_TIMEOUT = -6278;
+constexpr int OB_TRANS_FREE_ROUTE_NOT_SUPPORTED = -6279;
+constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
+constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
 constexpr int OB_NO_LOG = -6303;
@@ -1263,6 +1330,8 @@ constexpr int OB_LOG_NEED_REBUILD = -6319;
 constexpr int OB_TOO_MANY_LOG_TASK = -6320;
 constexpr int OB_INVALID_BATCH_SIZE = -6321;
 constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
+constexpr int OB_LOG_REPLAY_ERROR = -6323;
+constexpr int OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT = -6324;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1305,6 +1374,9 @@ constexpr int OB_RG_NOT_MATCH = -7105;
 constexpr int OB_TRANSFER_TASK_ABORTED = -7106;
 constexpr int OB_TRANSFER_INVALID_MESSAGE = -7107;
 constexpr int OB_TRANSFER_CTX_TS_NOT_MATCH = -7108;
+constexpr int OB_TRANSFER_SYS_ERROR = -7109;
+constexpr int OB_TRANSFER_MEMBER_LIST_NOT_SAME = -7110;
+constexpr int OB_ERR_UNEXPECTED_LOCK_OWNER = -7111;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -1369,9 +1441,11 @@ constexpr int OB_BACKUP_FORMAT_FILE_NOT_EXIST = -9080;
 constexpr int OB_BACKUP_FORMAT_FILE_NOT_MATCH = -9081;
 constexpr int OB_BACKUP_MAJOR_NOT_COVER_MINOR = -9085;
 constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
-constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -9087;
-constexpr int OB_EER_WINDOW_NO_INHERIT_FRAME = -9088;
-constexpr int OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = -9089;
+constexpr int OB_CLOG_RECYCLE_BEFORE_ARCHIVE = -9087;
+constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
+constexpr int OB_ALREADY_IN_ARCHIVE_MODE = -9091;
+constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
+constexpr int OB_RESTORE_LOG_TO_END = -9093;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -1590,6 +1664,38 @@ constexpr int OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO_LENGT
 constexpr int OB_ERR_MISSING_INTO_KEYWORD = -9712;
 constexpr int OB_ERR_CLAUSE_RETURN_ILLEGAL = -9713;
 constexpr int OB_ERR_NAME_HAS_TOO_MANY_PARTS = -9714;
+constexpr int OB_ERR_LOB_SPAN_TRANSACTION = -9715;
+constexpr int OB_ERR_INVALID_MULTISET = -9716;
+constexpr int OB_ERR_INVALID_CAST_UDT = -9717;
+constexpr int OB_ERR_POLICY_EXIST = -9718;
+constexpr int OB_ERR_POLICY_NOT_EXIST = -9719;
+constexpr int OB_ERR_ADD_POLICY_TO_SYS_OBJECT = -9720;
+constexpr int OB_ERR_INVALID_INPUT_STRING = -9721;
+constexpr int OB_ERR_SEC_COLUMN_ON_VIEW = -9722;
+constexpr int OB_ERR_INVALID_INPUT_FOR_ARGUMENT = -9723;
+constexpr int OB_ERR_POLICY_DISABLED = -9724;
+constexpr int OB_ERR_CIRCULAR_POLICIES = -9725;
+constexpr int OB_ERR_TOO_MANY_POLICIES = -9726;
+constexpr int OB_ERR_POLICY_FUNCTION = -9727;
+constexpr int OB_ERR_NO_PRIV_EVAL_PREDICATE = -9728;
+constexpr int OB_ERR_EXECUTE_POLICY_FUNCTION = -9729;
+constexpr int OB_ERR_POLICY_PREDICATE = -9730;
+constexpr int OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS = -9731;
+constexpr int OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED = -9732;
+constexpr int OB_ERR_POLICY_GROUP_EXIST = -9733;
+constexpr int OB_ERR_POLICY_GROUP_NOT_EXIST = -9734;
+constexpr int OB_ERR_DRIVING_CONTEXT_EXIST = -9735;
+constexpr int OB_ERR_DRIVING_CONTEXT_NOT_EXIST = -9736;
+constexpr int OB_ERR_UPDATE_DEFAULT_GROUP = -9737;
+constexpr int OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP = -9738;
+constexpr int OB_ERR_INVALID_SEC_COLUMN_TYPE = -9739;
+constexpr int OB_ERR_UNPROTECTED_VIRTUAL_COLUMN = -9740;
+constexpr int OB_ERR_ATTRIBUTE_ASSOCIATION = -9741;
+constexpr int OB_ERR_MERGE_INTO_WITH_POLICY = -9742;
+constexpr int OB_ERR_SP_NO_DROP_SP = -9743;
+constexpr int OB_ERR_RECOMPILATION_OBJECT = -9744;
+constexpr int OB_ERR_VARIABLE_NOT_IN_SELECT_LIST = -9745;
+constexpr int OB_ERR_MULTI_RECORD = -9746;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -1765,6 +1871,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MACRO_BLOCK_TYPE__USER_ERROR_MSG "the macro block type does not exist"
 #define OB_INVALID_DATE_FORMAT_END__USER_ERROR_MSG "Incorrect value"
 #define OB_PG_IS_REMOVED__USER_ERROR_MSG "partition group is removed"
+#define OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME__USER_ERROR_MSG "ddl task executes too much time"
 #define OB_HASH_EXIST__USER_ERROR_MSG "%s"
 #define OB_HASH_NOT_EXIST__USER_ERROR_MSG "%s"
 #define OB_HASH_GET_TIMEOUT__USER_ERROR_MSG "hash map/set get timeout"
@@ -1947,11 +2054,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_GTI_NOT_READY__USER_ERROR_MSG "transaction id is not ready"
 #define OB_STACK_OVERFLOW__USER_ERROR_MSG "stack overflow"
 #define OB_NOT_ALLOW_REMOVING_LEADER__USER_ERROR_MSG "Do not allow removing leader"
-#define OB_NEED_SWITCH_CONSUMER_GROUP__USER_ERROR_MSG "Need switch consumer group"
+#define OB_NEED_SWITCH_CONSUMER_GROUP__USER_ERROR_MSG "Failed to switch resource group"
 #define OB_UNEXPECT_INTERNAL_ERROR__USER_ERROR_MSG "Unexpected internal error happen, please checkout the internal errcode"
 #define OB_ERR_TOO_MUCH_TIME__USER_ERROR_MSG "Porcessing time is too long"
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__USER_ERROR_MSG "Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__USER_ERROR_MSG "ddl sstable version range cross"
+#define OB_DISK_HUNG__USER_ERROR_MSG "disk is hung"
+#define OB_ERR_OBSERVER_START__USER_ERROR_MSG "observer start process failure"
+#define OB_ERR_OBSERVER_STOP__USER_ERROR_MSG "observer stop process failure"
+#define OB_ERR_OBSERVICE_START__USER_ERROR_MSG "observice start process has failure"
+#define OB_ERR_THREAD_PANIC__USER_ERROR_MSG "Worker thread pannic, thread may be terminated or hung"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -2129,6 +2241,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FROZEN_INFO_ALREADY_EXIST__USER_ERROR_MSG "%s"
 #define OB_DELETE_SERVER_NOT_ALLOWED__USER_ERROR_MSG "%s"
 #define OB_PACKET_STATUS_UNKNOWN__USER_ERROR_MSG "Network error and packet status unknown. Abort auto retry."
+#define OB_ARBITRATION_SERVICE_NOT_EXIST__USER_ERROR_MSG "arbitration service does not exist"
+#define OB_ARBITRATION_SERVICE_ALREADY_EXIST__USER_ERROR_MSG "arbitration service already exist"
+#define OB_UNEXPECTED_TABLET_STATUS__USER_ERROR_MSG "%s"
+#define OB_INVALID_TABLE_STORE__USER_ERROR_MSG "%s"
+#define OB_WAIT_DEGRATION_TIMEOUT__USER_ERROR_MSG "wait degration finished timeout"
+#define OB_ERR_ROOTSERVICE_START__USER_ERROR_MSG "rootservice start process has failure"
+#define OB_ERR_ROOTSERVICE_STOP__USER_ERROR_MSG "rootservice stop process has failure"
+#define OB_ERR_ROOT_INSPECTION__USER_ERROR_MSG "root inspection is not passed"
+#define OB_ERR_ROOTSERVICE_THREAD_HUNG__USER_ERROR_MSG "rootservice backgroud thread may be hung"
+#define OB_MIGRATE_NOT_COMPATIBLE__USER_ERROR_MSG "Migration src and dest version is not compatible."
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -2227,7 +2349,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_USER_VARIABLE_UNKNOWN__USER_ERROR_MSG "Variable %.*s does not exists"
 #define OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME__USER_ERROR_MSG "MERGING_FROZEN_TIME() system function only be used in daily merging."
 #define OB_INVALID_NUMERIC__USER_ERROR_MSG "Invalid numeric char '%c'"
-#define OB_ERR_REGEXP_ERROR__USER_ERROR_MSG "Got error 'empty (sub)expression' from regexp"
+#define OB_ERR_REGEXP_ERROR__USER_ERROR_MSG "Got error '%s' from regexp"
 #define OB_SQL_LOG_OP_SETCHILD_OVERFLOW__USER_ERROR_MSG "Logical operator child index overflow"
 #define OB_SQL_EXPLAIN_FAILED__USER_ERROR_MSG "fail to explain plan"
 #define OB_SQL_OPT_COPY_OP_FAILED__USER_ERROR_MSG "fail to copy logical operator"
@@ -2237,6 +2359,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SQL_OPT_ERROR__USER_ERROR_MSG "optimizer general error"
 #define OB_ERR_OCI_INIT_TIMEZONE__USER_ERROR_MSG "failure to initialize timezone information"
 #define OB_ERR_ZLIB_DATA__USER_ERROR_MSG "ZLIB: Input data corrupted"
+#define OB_ERR_DBLINK_SESSION_KILLED__USER_ERROR_MSG "your session has been killed"
 #define OB_SQL_RESOLVER_NO_MEMORY__USER_ERROR_MSG "sql resolver no memory"
 #define OB_SQL_DML_ONLY__USER_ERROR_MSG "plan cache support dml only"
 #define OB_ERR_NO_GRANT__USER_ERROR_MSG "No such grant defined"
@@ -2493,6 +2616,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__USER_ERROR_MSG "ddl schema version not match"
 #define OB_ERR_COLUMN_GROUP_DUPLICATE__USER_ERROR_MSG "Duplicate column group name '%.*s'"
+#define OB_ERR_RESERVED_SYNTAX__USER_ERROR_MSG "The \'%.*s\' syntax is reserved for purposes internal to the OceanBase Server"
+#define OB_ERR_INVALID_PARAM_TO_PROCEDURE__USER_ERROR_MSG "Incorrect parameters to procedure \'%.*s\'"
+#define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__USER_ERROR_MSG "Incorrect parameters in the call to native function '%.*s'"
+#define OB_ERR_CTE_MAX_RECURSION_DEPTH__USER_ERROR_MSG "Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
+#define OB_DUPLICATE_OBJECT_NAME_EXIST__USER_ERROR_MSG "Duplicate object name exists, schema refreshing may be hung"
+#define OB_ERR_REFRESH_SCHEMA_TOO_LONG__USER_ERROR_MSG "Refresh schema failed continuously, ddl may be hung"
 #define OB_ERR_INVALID_JSON_TEXT__USER_ERROR_MSG "Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__USER_ERROR_MSG "Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__USER_ERROR_MSG "The JSON binary value contains invalid data."
@@ -2520,6 +2649,60 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OUTLINE_NOT_REPRODUCIBLE__USER_ERROR_MSG "outline not reproducible"
 #define OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN__USER_ERROR_MSG " TIMESTAMP_TO_SCN expected timestamp argument"
 #define OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP__USER_ERROR_MSG "SCN_TO_TIMESTAMP expected a interger number as nsec argument"
+#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__USER_ERROR_MSG "A window which depends on another cannot define partitioning"
+#define OB_EER_WINDOW_NO_INHERIT_FRAME__USER_ERROR_MSG "Window '%.*s' has a frame definition, so cannot be referenced by another window"
+#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__USER_ERROR_MSG "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_ERR_INVALID_JSON_TYPE__USER_ERROR_MSG "invalid JSON type."
+#define OB_ERR_JSON_PATH_SYNTAX_ERROR__USER_ERROR_MSG "JSON path expression syntax error ('%s')"
+#define OB_ERR_INVALID_DATA_TYPE_RETURNING__USER_ERROR_MSG "invalid data type for return value"
+#define OB_ERR_JSON_VALUE_NO_SCALAR__USER_ERROR_MSG "JSON_VALUE evaluated to non-scalar value"
+#define OB_ERR_JSON_VALUE_NO_VALUE__USER_ERROR_MSG "JSON_VALUE evaluated to no value"
+#define OB_ERR_DEFAULT_VALUE_NOT_LITERAL__USER_ERROR_MSG "default value not a literal"
+#define OB_ERR_JSON_SYNTAX_ERROR__USER_ERROR_MSG "JSON syntax error"
+#define OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE__USER_ERROR_MSG "JSON_EQUAL used outside predicate"
+#define OB_ERR_WITHOUT_ARR_WRAPPER__USER_ERROR_MSG "result cannot be returned without array wrapper"
+#define OB_ERR_JSON_PATCH_INVALID__USER_ERROR_MSG "Patch specification is not valid JSON"
+#define OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED__USER_ERROR_MSG "ORDER SIBLINGS BY clause not allowed here"
+#define OB_ERR_LOB_TYPE_NOT_SORTING__USER_ERROR_MSG "Column of LOB type cannot be used for sorting"
+#define OB_ERR_DUPLICATE_KEY__USER_ERROR_MSG "duplicate key names in JSON object"
+#define OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR__USER_ERROR_MSG "JSON path expression syntax error ('%.*s')"
+#define OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR__USER_ERROR_MSG "illegal zero-length identifier"
+#define OB_ERR_NO_VALUE_IN_PASSING__USER_ERROR_MSG "Variable in JSON path expression has no value in PASSING clause."
+#define OB_ERR_INVALID_COLUMN_SPE__USER_ERROR_MSG "JSON syntax error"
+#define OB_ERR_INPUT_JSON_NOT_BE_NULL__USER_ERROR_MSG "JSON syntax error"
+#define OB_ERR_INVALID_DATA_TYPE__USER_ERROR_MSG "invalid data type for '%s' column"
+#define OB_ERR_INVALID_CLAUSE__USER_ERROR_MSG "invalid '%s' clause"
+#define OB_ERR_INVALID_CMP_OP__USER_ERROR_MSG "invalid comparison operation involving JSON type value"
+#define OB_ERR_INVALID_INPUT__USER_ERROR_MSG "Invalid Input"
+#define OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR__USER_ERROR_MSG "empty input to JSON operator"
+#define OB_ERR_ADDITIONAL_IS_JSON__USER_ERROR_MSG "cannot add additional IS jSON check constraint"
+#define OB_ERR_FUNCTION_INVALID_STATE__USER_ERROR_MSG "Package or function PRO is in an invalid state"
+#define OB_ERR_MISS_VALUE__USER_ERROR_MSG "missing VALUE keyword"
+#define OB_ERR_DIFFERENT_TYPE_SELECTED__USER_ERROR_MSG "JSON path expression selected a value of different data type"
+#define OB_ERR_NO_VALUE_SELECTED__USER_ERROR_MSG "JSON path expression did not select a value."
+#define OB_ERR_NON_TEXT_RET_NOTSUPPORT__USER_ERROR_MSG "ASCII or PRETTY not supported for non-textual return data type"
+#define OB_ERR_PL_JSONTYPE_USAGE__USER_ERROR_MSG "Invalid use of PL/SQL JSON object type"
+#define OB_ERR_NULL_INPUT__USER_ERROR_MSG "Input cannot be null"
+#define OB_ERR_NOT_ISO_8601_FORMAT__USER_ERROR_MSG "Jdate or time stamp string value does not conform to ISO 8601 format"
+#define OB_ERR_VALUE_EXCEEDED_MAX__USER_ERROR_MSG "%d value is out of range in %d"
+#define OB_ERR_DEFAULT_VALUE_NOT_MATCH__USER_ERROR_MSG "default value not matching type defined in RETURNING clause"
+#define OB_ERR_BOOL_NOT_CONVERT_NUMBER__USER_ERROR_MSG "cannot convert Boolean value to number"
+#define OB_ERR_CONVERSION_FAIL__USER_ERROR_MSG "JSON conversion failed"
+#define OB_ERR_NOT_OBJ_REF__USER_ERROR_MSG "not an object or REF"
+#define OB_ERR_UNSUPPORT_TRUNCATE_TYPE__USER_ERROR_MSG "Truncation is not supported with data type in RETURNING clause"
+#define OB_ERR_UNIMPLEMENT_JSON_FEATURE__USER_ERROR_MSG "Unimplemented JSON feature"
+#define OB_ERR_USAGE_KEYWORD__USER_ERROR_MSG "invalid usage of keyword EXISTS"
+#define OB_ERR_INPUT_JSON_TABLE__USER_ERROR_MSG "invalid input data type for JSON_TABLE"
+#define OB_ERR_BOOL_CAST_NUMBER__USER_ERROR_MSG "cannot convert Boolean value to number"
+#define OB_ERR_NESTED_PATH_DISJUNCT__USER_ERROR_MSG "JSON_TABLE nested path expressions not disjunct"
+#define OB_ERR_INVALID_VARIABLE_IN_JSON_PATH__USER_ERROR_MSG " Invalid use of bind variable in SQL/JSON path."
+#define OB_ERR_JSON_KEY_NOT_FOUND__USER_ERROR_MSG "JSON key name not found."
+#define OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED__USER_ERROR_MSG "Invalid numeric"
+#define OB_ERR_PATH_EXPRESSION_NOT_LITERAL__USER_ERROR_MSG "path expression not a literal"
+#define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__USER_ERROR_MSG "invalid argument for %s call"
+#define OB_ERR_SCHEMA_HISTORY_EMPTY__USER_ERROR_MSG "Schema history is empty"
+#define OB_ERR_TABLE_NAME_NOT_IN_LIST__USER_ERROR_MSG "table name not in FROM list"
+#define OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART__USER_ERROR_MSG "DEFAULT partition must be last partition specified"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -2716,11 +2899,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CTE_ILLEGAL_QUERY_NAME__USER_ERROR_MSG "illegal reference of a query name in WITH clause"
 #define OB_ERR_CTE_UNSUPPORTED_COLUMN_ALIASING__USER_ERROR_MSG "unsupported column aliasing"
 #define OB_ERR_UNSUPPORTED_USE_OF_CTE__USER_ERROR_MSG "unsupported use of WITH clause"
-#define OB_ERR_CTE_COLUMN_NUMBER_NOT_MATCH__USER_ERROR_MSG "number of WITH clause column names does not match number of elements in select list"
+#define OB_ERR_CTE_COLUMN_NUMBER_NOT_MATCH__USER_ERROR_MSG "View's SELECT and view's field list have different column counts"
 #define OB_ERR_NEED_COLUMN_ALIAS_LIST_IN_RECURSIVE_CTE__USER_ERROR_MSG "recursive WITH clause must have column alias list"
 #define OB_ERR_NEED_UNION_ALL_IN_RECURSIVE_CTE__USER_ERROR_MSG "recursive WITH clause must use a UNION ALL operation"
 #define OB_ERR_NEED_ONLY_TWO_BRANCH_IN_RECURSIVE_CTE__USER_ERROR_MSG "UNION ALL operation in recursive WITH clause must have only two branches"
-#define OB_ERR_NEED_REFERENCE_ITSELF_DIRECTLY_IN_RECURSIVE_CTE__USER_ERROR_MSG "recursive WITH clause must reference itself directly in one of the UNION ALL branches"
+#define OB_ERR_NEED_REFERENCE_ITSELF_DIRECTLY_IN_RECURSIVE_CTE__USER_ERROR_MSG "In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery"
 #define OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE__USER_ERROR_MSG "recursive WITH clause needs an initialization branch"
 #define OB_ERR_CYCLE_FOUND_IN_RECURSIVE_CTE__USER_ERROR_MSG "cycle detected while executing recursive WITH query"
 #define OB_ERR_CTE_REACH_MAX_LEVEL_RECURSION__USER_ERROR_MSG "maximum level of recursion reached while executing recursive WITH query"
@@ -2734,8 +2917,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CTE_DUPLICATE_NAME_IN_SEARCH_CLAUSE__USER_ERROR_MSG "duplicate name found in sort specification list for SEARCH clause of WITH clause"
 #define OB_ERR_CTE_DUPLICATE_NAME_IN_CYCLE_CLAUSE__USER_ERROR_MSG "duplicate name found in cycle column list for CYCLE clause of WITH clause"
 #define OB_ERR_CTE_ILLEGAL_COLUMN_IN_CYCLE_CLAUSE__USER_ERROR_MSG "element in cycle column list of CYCLE clause must appear in the column alias list of the WITH clause element"
-#define OB_ERR_CTE_ILLEGAL_RECURSIVE_BRANCH__USER_ERROR_MSG "unsupported operation in recursive branch of recursive WITH clause"
-#define OB_ERR_ILLEGAL_JOIN_IN_RECURSIVE_CTE__USER_ERROR_MSG "unsupported join in recursive WITH query"
+#define OB_ERR_CTE_ILLEGAL_RECURSIVE_BRANCH__USER_ERROR_MSG "Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block"
+#define OB_ERR_ILLEGAL_JOIN_IN_RECURSIVE_CTE__USER_ERROR_MSG "In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints"
 #define OB_ERR_CTE_NEED_COLUMN_ALIAS_LIST__USER_ERROR_MSG "WITH clause element did not have a column alias list"
 #define OB_ERR_CTE_ILLEGAL_COLUMN_IN_SERACH_CALUSE__USER_ERROR_MSG "element in sort specification list of SEARCH clause did not appear in the column alias list of the WITH clause element"
 #define OB_ERR_CTE_RECURSIVE_QUERY_NAME_REFERENCED_MORE_THAN_ONCE__USER_ERROR_MSG "recursive query name referenced more than once in recursive branch of recursive WITH clause element"
@@ -3050,8 +3233,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS__USER_ERROR_MSG "partitioning key maps to a partition outside maximum permitted number of partitions"
 #define OB_OBJ_LOCK_NOT_COMPLETED__USER_ERROR_MSG "object lock not completed, and can not unlock."
 #define OB_OBJ_UNLOCK_CONFLICT__USER_ERROR_MSG "there is an unlock operation doing, unlock conflict."
-#define OB_LOG_TS_OUT_OF_BOUND__USER_ERROR_MSG "log_ts is out of bounds of memtable"
+#define OB_SCN_OUT_OF_BOUND__USER_ERROR_MSG "scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__USER_ERROR_MSG "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction"
+#define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__USER_ERROR_MSG "Query is not supported to be executed on txn temporary node"
+#define OB_TRANS_LIVE_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction cost too much without commit or rollback"
+#define OB_TRANS_COMMIT_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction commit cost too much"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -3074,6 +3260,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TOO_MANY_LOG_TASK__USER_ERROR_MSG "too many log tasks"
 #define OB_INVALID_BATCH_SIZE__USER_ERROR_MSG "ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__USER_ERROR_MSG "ob clog slide timeout"
+#define OB_LOG_REPLAY_ERROR__USER_ERROR_MSG "log replay error"
+#define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__USER_ERROR_MSG "ob trying to lock config change conflicts"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3116,10 +3304,101 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_TASK_ABORTED__USER_ERROR_MSG "transfer task aborted"
 #define OB_TRANSFER_INVALID_MESSAGE__USER_ERROR_MSG "transfer invalid message"
 #define OB_TRANSFER_CTX_TS_NOT_MATCH__USER_ERROR_MSG "transfer ctx_ts not match"
+#define OB_TRANSFER_SYS_ERROR__USER_ERROR_MSG "transfer system error"
+#define OB_TRANSFER_MEMBER_LIST_NOT_SAME__USER_ERROR_MSG "transfer src ls and dest ls member list not same"
+#define OB_ERR_UNEXPECTED_LOCK_OWNER__USER_ERROR_MSG "lock owner id is not expected"
+#define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
+#define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
+#define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
+#define OB_ERR_GIS_UNKNOWN_EXCEPTION__USER_ERROR_MSG "Unknown exception caught in GIS function %s."
+#define OB_ERR_GIS_INVALID_DATA__USER_ERROR_MSG "Invalid GIS data provided to function %s."
+#define OB_ERR_BOOST_GEOMETRY_EMPTY_INPUT_EXCEPTION__USER_ERROR_MSG "The geometry has no data in function %s."
+#define OB_ERR_BOOST_GEOMETRY_CENTROID_EXCEPTION__USER_ERROR_MSG "Unable to calculate centroid because geometry is empty in function %s."
+#define OB_ERR_BOOST_GEOMETRY_OVERLAY_INVALID_INPUT_EXCEPTION__USER_ERROR_MSG "Geometry overlay calculation error: geometry data is invalid in function %s."
+#define OB_ERR_BOOST_GEOMETRY_TURN_INFO_EXCEPTION__USER_ERROR_MSG "Geometry turn info calculation error: geometry data is invalid in function %s."
+#define OB_ERR_BOOST_GEOMETRY_SELF_INTERSECTION_POINT_EXCEPTION__USER_ERROR_MSG "Analysis procedures of intersection points interrupted unexpectedly in function %s."
+#define OB_ERR_BOOST_GEOMETRY_UNKNOWN_EXCEPTION__USER_ERROR_MSG "Unknown exception thrown in function %s."
+#define OB_ERR_GIS_DATA_WRONG_ENDIANESS__USER_ERROR_MSG "Geometry byte string must be little endian."
+#define OB_ERR_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS__USER_ERROR_MSG "Do not support online operation on table with GIS index"
+#define OB_ERR_BOOST_GEOMETRY_INCONSISTENT_TURNS_EXCEPTION__USER_ERROR_MSG "Inconsistent intersection points."
+#define OB_ERR_GIS_MAX_POINTS_IN_GEOMETRY_OVERFLOWED__USER_ERROR_MSG "Parameter %s exceeds the maximum number of points in a geometry (%lu) in function %s."
+#define OB_ERR_UNEXPECTED_GEOMETRY_TYPE__USER_ERROR_MSG "%.64s value is a geometry of unexpected type %.64s in %.64s."
+#define OB_ERR_SRS_PARSE_ERROR__USER_ERROR_MSG "Can\'t parse the spatial reference system definition of SRID %u."
+#define OB_ERR_SRS_PROJ_PARAMETER_MISSING__USER_ERROR_MSG "The spatial reference system definition for SRID %u does not specify the mandatory %s (EPSG %u) projection parameter."
+#define OB_ERR_WARN_SRS_NOT_FOUND__USER_ERROR_MSG "There\'s no spatial reference system with SRID %u."
+#define OB_ERR_SRS_NOT_CARTESIAN__USER_ERROR_MSG "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which is not Cartesian."
+#define OB_ERR_SRS_NOT_CARTESIAN_UNDEFINED__USER_ERROR_MSG "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which has not been defined."
+#define OB_ERR_SRS_NOT_FOUND__USER_ERROR_MSG "There\'s no spatial reference system with SRID %u."
+#define OB_ERR_WARN_SRS_NOT_FOUND_AXIS_ORDER__USER_ERROR_MSG "There\'s no spatial reference system with SRID %u. The axis order is unknown."
+#define OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS__USER_ERROR_MSG "%.192s(%.80s) has not been implemented for geographic spatial reference systems."
+#define OB_ERR_WRONG_SRID_FOR_COLUMN__USER_ERROR_MSG "The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is %lu, but the SRID of the column is %lu. Consider changing the SRID of the geometry or the SRID property of the column."
+#define OB_ERR_CANNOT_ALTER_SRID_DUE_TO_INDEX__USER_ERROR_MSG "The SRID specification on the column \'%.64s\' cannot be changed because there is a spatial index on the column. Please remove the spatial index before altering the SRID specification."
+#define OB_ERR_WARN_USELESS_SPATIAL_INDEX__USER_ERROR_MSG "The spatial index on column \'%.64s\' will not be used by the query optimizer since the column does not have an SRID attribute. Consider adding an SRID attribute to the column."
+#define OB_ERR_ONLY_IMPLEMENTED_FOR_SRID_0_AND_4326__USER_ERROR_MSG "Function %.192s is only defined for SRID 0 and SRID 4326."
+#define OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS__USER_ERROR_MSG "%.192s(%.80s) has not been implemented for Cartesian spatial reference systems."
+#define OB_ERR_NOT_IMPLEMENTED_FOR_PROJECTED_SRS__USER_ERROR_MSG "%.192s(%.80s) has not been implemented for projected spatial reference systems."
+#define OB_ERR_SRS_MISSING_MANDATORY_ATTRIBUTE__USER_ERROR_MSG "Missing mandatory attribute %s."
+#define OB_ERR_SRS_MULTIPLE_ATTRIBUTE_DEFINITIONS__USER_ERROR_MSG "Multiple definitions of attribute %s."
+#define OB_ERR_SRS_NAME_CANT_BE_EMPTY_OR_WHITESPACE__USER_ERROR_MSG "The spatial reference system name can\'t be an empty string or start or end with whitespace."
+#define OB_ERR_SRS_ORGANIZATION_CANT_BE_EMPTY_OR_WHITESPACE__USER_ERROR_MSG "The organization name can\'t be an empty string or start or end with whitespace."
+#define OB_ERR_SRS_ID_ALREADY_EXISTS__USER_ERROR_MSG "There is already a spatial reference system with SRID %u."
+#define OB_ERR_WARN_SRS_ID_ALREADY_EXISTS__USER_ERROR_MSG "There is already a spatial reference system with SRID %u."
+#define OB_ERR_CANT_MODIFY_SRID_0__USER_ERROR_MSG "SRID 0 is not modifiable."
+#define OB_ERR_WARN_RESERVED_SRID_RANGE__USER_ERROR_MSG "The SRID range [%u, %u] has been reserved for system use. SRSs in this range may be added, modified or removed without warning during upgrade."
+#define OB_ERR_CANT_MODIFY_SRS_USED_BY_COLUMN__USER_ERROR_MSG "Can\'t modify SRID %u. There is at least one column depending on it."
+#define OB_ERR_SRS_INVALID_CHARACTER_IN_ATTRIBUTE__USER_ERROR_MSG "Invalid character in attribute %s."
+#define OB_ERR_SRS_ATTRIBUTE_STRING_TOO_LONG__USER_ERROR_MSG "Attribute %s is too long. The maximum length is %u characters."
+#define OB_ERR_SRS_NOT_GEOGRAPHIC__USER_ERROR_MSG "Function %s is only defined for geographic spatial reference systems, but one of its arguments is in SRID %u, which is not geographic."
+#define OB_ERR_POLYGON_TOO_LARGE__USER_ERROR_MSG "Function %s encountered a polygon that was too large. Polygons must cover less than half the planet."
+#define OB_ERR_SPATIAL_UNIQUE_INDEX__USER_ERROR_MSG "Spatial indexes can\'t be primary or unique indexes."
+#define OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE__USER_ERROR_MSG "A parameter of function %.192s contains a geometry with longitude %f, which is out of range. It must be within (%f, %f]."
+#define OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE__USER_ERROR_MSG "A parameter of function %.192s contains a geometry with latitude %f, which is out of range. It must be within [%f, %f]."
+#define OB_ERR_SRS_GEOGCS_INVALID_AXES__USER_ERROR_MSG "The spatial reference system definition for SRID %u specifies invalid geographic axes \'%.20s\' and \'%.20s\'. One axis must be NORTH or SOUTH and the other must be EAST or WEST."
+#define OB_ERR_SRS_INVALID_SEMI_MAJOR_AXIS__USER_ERROR_MSG "The length of the semi-major axis must be a positive number."
+#define OB_ERR_SRS_INVALID_INVERSE_FLATTENING__USER_ERROR_MSG "The inverse flattening must be larger than 1.0, or 0.0 if the ellipsoid is a sphere."
+#define OB_ERR_SRS_INVALID_ANGULAR_UNIT__USER_ERROR_MSG "The angular unit conversion factor must be a positive number."
+#define OB_ERR_SRS_INVALID_PRIME_MERIDIAN__USER_ERROR_MSG "The prime meridian must be within (-180, 180] degrees, specified in the SRS angular unit."
+#define OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED__USER_ERROR_MSG "Transformation from SRID %u is not supported."
+#define OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED__USER_ERROR_MSG "Transformation to SRID %u is not supported."
+#define OB_ERR_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84__USER_ERROR_MSG "Transformation from SRID %u is not supported. The spatial reference system has no TOWGS84 clause."
+#define OB_ERR_TRANSFORM_TARGET_SRS_MISSING_TOWGS84__USER_ERROR_MSG "Transformation to SRID %u is not supported. The spatial reference system has no TOWGS84 clause."
+#define OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION__USER_ERROR_MSG "Cannot create a functional index on a function that returns a JSON or GEOMETRY value."
+#define OB_ERR_SPATIAL_FUNCTIONAL_INDEX__USER_ERROR_MSG "Spatial functional index is not supported."
+#define OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT__USER_ERROR_MSG "The geometry passed to function %s is in SRID 0, which doesn\'t specify a length unit. Can\'t convert to \'%s\'."
+#define OB_ERR_INVALID_CAST_TO_GEOMETRY__USER_ERROR_MSG "Invalid cast from %s to %s."
+#define OB_ERR_INVALID_CAST_POLYGON_RING_DIRECTION__USER_ERROR_MSG "Invalid cast from %s to %s. A polygon ring is in the wrong direction."
+#define OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION__USER_ERROR_MSG "Arguments to function %s contains geometries with different SRIDs: %u and %u. All geometries must have the same SRID."
+#define OB_ERR_LONGITUDE_OUT_OF_RANGE__USER_ERROR_MSG "Longitude %f is out of range in function %.192s. It must be within (%f, %f]."
+#define OB_ERR_LATITUDE_OUT_OF_RANGE__USER_ERROR_MSG "Latitude %f is out of range in function %.192s. It must be within [%f, %f]."
+#define OB_ERR_STD_BAD_ALLOC_ERROR__USER_ERROR_MSG "Memory allocation error: %-.256s in function %s."
+#define OB_ERR_STD_DOMAIN_ERROR__USER_ERROR_MSG "Domain error: %-.256s in function %s."
+#define OB_ERR_STD_LENGTH_ERROR__USER_ERROR_MSG "Length error: %-.256s in function %s."
+#define OB_ERR_STD_INVALID_ARGUMENT__USER_ERROR_MSG "Invalid argument error: %-.256s in function %s."
+#define OB_ERR_STD_OUT_OF_RANGE_ERROR__USER_ERROR_MSG "Out of range error: %-.256s in function %s."
+#define OB_ERR_STD_OVERFLOW_ERROR__USER_ERROR_MSG "Overflow error: %-.256s in function %s."
+#define OB_ERR_STD_RANGE_ERROR__USER_ERROR_MSG "Range error: %-.256s in function %s."
+#define OB_ERR_STD_UNDERFLOW_ERROR__USER_ERROR_MSG "Underflow error: %-.256s in function %s."
+#define OB_ERR_STD_LOGIC_ERROR__USER_ERROR_MSG "Logic error: %-.256s in function %s."
+#define OB_ERR_STD_RUNTIME_ERROR__USER_ERROR_MSG "Runtime error: %-.256s in function %s."
+#define OB_ERR_STD_UNKNOWN_EXCEPTION__USER_ERROR_MSG "Unknown exception: %-.384s in function %s."
+#define OB_ERR_CANT_CREATE_GEOMETRY_OBJECT__USER_ERROR_MSG "Cannot get geometry object from data you send to the GEOMETRY field."
+#define OB_ERR_SRID_WRONG_USAGE__USER_ERROR_MSG "Incorrect usage of srid."
+#define OB_ERR_INDEX_ORDER_WRONG_USAGE__USER_ERROR_MSG "Incorrect usage of spatial/fulltext/hash index and explicit index order."
+#define OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL__USER_ERROR_MSG "A SPATIAL index may only contain a geometrical type column."
+#define OB_ERR_SPATIAL_CANT_HAVE_NULL__USER_ERROR_MSG "All parts of a SPATIAL index must be NOT NULL."
+#define OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX__USER_ERROR_MSG "The index type %s is not supported for spatial indexes."
+#define OB_ERR_UNIT_NOT_FOUND__USER_ERROR_MSG "There\'s no unit of measure named \'%s\'."
+#define OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR__USER_ERROR_MSG "The string \'%.192s\' is not a valid key %c value pair in function %.192s."
+#define OB_ERR_NONPOSITIVE_RADIUS__USER_ERROR_MSG "Invalid radius provided to function %s: Radius(%lf) must be greater than zero."
+#define OB_ERR_SRS_EMPTY__USER_ERROR_MSG "Spatial reference system is empty"
+#define OB_ERR_INVALID_OPTION_KEY__USER_ERROR_MSG "Invalid option key \'%.192s\' in function %.192s."
+#define OB_ERR_INVALID_OPTION_VALUE__USER_ERROR_MSG "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
+#define OB_ERR_INVALID_GEOMETRY_TYPE__USER_ERROR_MSG "Unknown WKB type(%d)! Full WKB type number was (%d)."
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
 #define OB_PACKET_CLUSTER_ID_NOT_MATCH__USER_ERROR_MSG "Packet cluster_id not match"
+#define OB_TENANT_ID_NOT_MATCH__USER_ERROR_MSG "Tenant id not match"
 #define OB_URI_ERROR__USER_ERROR_MSG "URI error"
 #define OB_FINAL_MD5_ERROR__USER_ERROR_MSG "OSS file MD5 error"
 #define OB_OSS_ERROR__USER_ERROR_MSG "OSS error"
@@ -3200,9 +3479,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__USER_ERROR_MSG "backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__USER_ERROR_MSG "backup advance checkpoint by flush timeout"
-#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__USER_ERROR_MSG "A window which depends on another cannot define partitioning"
-#define OB_EER_WINDOW_NO_INHERIT_FRAME__USER_ERROR_MSG "Window '%.*s' has a frame definition, so cannot be referenced by another window"
-#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__USER_ERROR_MSG "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__USER_ERROR_MSG "observer clog is recycled before archive"
+#define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
+#define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
+#define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
+#define OB_RESTORE_LOG_TO_END__USER_ERROR_MSG "Restore log to end"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -3422,6 +3703,38 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_INTO_KEYWORD__USER_ERROR_MSG "missing INTO keyword"
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__USER_ERROR_MSG "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__USER_ERROR_MSG "name has too many parts"
+#define OB_ERR_LOB_SPAN_TRANSACTION__USER_ERROR_MSG "LOB locators cannot span transactions"
+#define OB_ERR_INVALID_MULTISET__USER_ERROR_MSG "MULTISET expression not allowed"
+#define OB_ERR_INVALID_CAST_UDT__USER_ERROR_MSG "invalid CAST to a type that is not a nested table or VARRAY"
+#define OB_ERR_POLICY_EXIST__USER_ERROR_MSG "policy already exists"
+#define OB_ERR_POLICY_NOT_EXIST__USER_ERROR_MSG "policy does not exist"
+#define OB_ERR_ADD_POLICY_TO_SYS_OBJECT__USER_ERROR_MSG "adding a policy to an object owned by SYS is not allowed"
+#define OB_ERR_INVALID_INPUT_STRING__USER_ERROR_MSG "input value for %s is not valid"
+#define OB_ERR_SEC_COLUMN_ON_VIEW__USER_ERROR_MSG "cannot create security relevant column policy in an object view"
+#define OB_ERR_INVALID_INPUT_FOR_ARGUMENT__USER_ERROR_MSG "input value for argument %s is not valid"
+#define OB_ERR_POLICY_DISABLED__USER_ERROR_MSG "policy was disabled"
+#define OB_ERR_CIRCULAR_POLICIES__USER_ERROR_MSG "circular security policies detected"
+#define OB_ERR_TOO_MANY_POLICIES__USER_ERROR_MSG "the number of related policies has exceeded the limit of 16"
+#define OB_ERR_POLICY_FUNCTION__USER_ERROR_MSG "policy function or package %.*s.%.*s has error"
+#define OB_ERR_NO_PRIV_EVAL_PREDICATE__USER_ERROR_MSG "insufficient privilege to evaluate policy predicate"
+#define OB_ERR_EXECUTE_POLICY_FUNCTION__USER_ERROR_MSG "failed to execute policy function"
+#define OB_ERR_POLICY_PREDICATE__USER_ERROR_MSG "policy predicate has error"
+#define OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS__USER_ERROR_MSG "insufficient privileges to do direct path access"
+#define OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED__USER_ERROR_MSG "integrity constraint violated - parent record not found"
+#define OB_ERR_POLICY_GROUP_EXIST__USER_ERROR_MSG "policy group already exists"
+#define OB_ERR_POLICY_GROUP_NOT_EXIST__USER_ERROR_MSG "policy group does not exist"
+#define OB_ERR_DRIVING_CONTEXT_EXIST__USER_ERROR_MSG "driving context already exists"
+#define OB_ERR_DRIVING_CONTEXT_NOT_EXIST__USER_ERROR_MSG "driving context does not exist"
+#define OB_ERR_UPDATE_DEFAULT_GROUP__USER_ERROR_MSG "can not update SYS_DEFAULT policy group"
+#define OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP__USER_ERROR_MSG "Driving context %.*s,%.*s contains invalid group %.*s"
+#define OB_ERR_INVALID_SEC_COLUMN_TYPE__USER_ERROR_MSG "Column %.*s in sec_relevant_cols cannot be of an object data type"
+#define OB_ERR_UNPROTECTED_VIRTUAL_COLUMN__USER_ERROR_MSG "A protected base column was referenced in an unprotected virtual column expression"
+#define OB_ERR_ATTRIBUTE_ASSOCIATION__USER_ERROR_MSG "Attribute association failed for policy %.*s"
+#define OB_ERR_MERGE_INTO_WITH_POLICY__USER_ERROR_MSG "The MERGE INTO syntax does not support the security policy"
+#define OB_ERR_SP_NO_DROP_SP__USER_ERROR_MSG "Can't drop or alter a '%s' from within another stored routine."
+#define OB_ERR_RECOMPILATION_OBJECT__USER_ERROR_MSG "errors during recompilation/revalidation of object"
+#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__USER_ERROR_MSG "variable not in select list"
+#define OB_ERR_MULTI_RECORD__USER_ERROR_MSG "coercion into multiple record targets not supported"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -3597,6 +3910,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MACRO_BLOCK_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4189, the macro block type does not exist"
 #define OB_INVALID_DATE_FORMAT_END__ORA_USER_ERROR_MSG "ORA-01830: date format picture ends before converting entire input string"
 #define OB_PG_IS_REMOVED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4191, partition group is removed"
+#define OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4192, ddl task executes too much time"
 #define OB_HASH_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4200, %s"
 #define OB_HASH_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4201, %s"
 #define OB_HASH_GET_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4204, hash map/set get timeout"
@@ -3779,11 +4093,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_GTI_NOT_READY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4383, transaction id is not ready"
 #define OB_STACK_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4385, stack overflow"
 #define OB_NOT_ALLOW_REMOVING_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4386, Do not allow removing leader"
-#define OB_NEED_SWITCH_CONSUMER_GROUP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4387, Need switch consumer group"
+#define OB_NEED_SWITCH_CONSUMER_GROUP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4387, Failed to switch resource group"
 #define OB_UNEXPECT_INTERNAL_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4388, Unexpected internal error happen, please checkout the internal errcode"
 #define OB_ERR_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4389, Porcessing time is too long"
 #define OB_ERR_REMOTE_SCHEMA_NOT_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4390, Schema of remote server is not refreshed yet"
 #define OB_DDL_SSTABLE_RANGE_CROSS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4391, ddl sstable version range cross"
+#define OB_DISK_HUNG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4392, disk is hung"
+#define OB_ERR_OBSERVER_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4393, observer start process failure"
+#define OB_ERR_OBSERVER_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4394, observer stop process failure"
+#define OB_ERR_OBSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4395, observice start process has failure"
+#define OB_ERR_THREAD_PANIC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4396, Worker thread pannic, thread may be terminated or hung"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -3961,6 +4280,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FROZEN_INFO_ALREADY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4744, %s"
 #define OB_DELETE_SERVER_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4745, %s"
 #define OB_PACKET_STATUS_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
+#define OB_ARBITRATION_SERVICE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4747, arbitration service does not exist"
+#define OB_ARBITRATION_SERVICE_ALREADY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4748, arbitration service already exist"
+#define OB_UNEXPECTED_TABLET_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4749, %s"
+#define OB_INVALID_TABLE_STORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4750, %s"
+#define OB_WAIT_DEGRATION_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4751, wait degration finished timeout"
+#define OB_ERR_ROOTSERVICE_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4752, rootservice start process has failure"
+#define OB_ERR_ROOTSERVICE_STOP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4753, rootservice stop process has failure"
+#define OB_ERR_ROOT_INSPECTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4754, root inspection is not passed"
+#define OB_ERR_ROOTSERVICE_THREAD_HUNG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4755, rootservice backgroud thread may be hung"
+#define OB_MIGRATE_NOT_COMPATIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4756, Migration src and dest version is not compatible."
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -4059,7 +4388,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_USER_VARIABLE_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5112, Variable %.*s does not exists"
 #define OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5113, MERGING_FROZEN_TIME() system function only be used in daily merging."
 #define OB_INVALID_NUMERIC__ORA_USER_ERROR_MSG "ORA-01722: invalid number char '%c'"
-#define OB_ERR_REGEXP_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5115, Got error 'empty (sub)expression' from regexp"
+#define OB_ERR_REGEXP_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5115, Got error '%s' from regexp"
 #define OB_SQL_LOG_OP_SETCHILD_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5116, Logical operator child index overflow"
 #define OB_SQL_EXPLAIN_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5117, fail to explain plan"
 #define OB_SQL_OPT_COPY_OP_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5118, fail to copy logical operator"
@@ -4069,6 +4398,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SQL_OPT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5122, optimizer general error"
 #define OB_ERR_OCI_INIT_TIMEZONE__ORA_USER_ERROR_MSG "ORA-01804: failure to initialize timezone information"
 #define OB_ERR_ZLIB_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5124, ZLIB: Input data corrupted"
+#define OB_ERR_DBLINK_SESSION_KILLED__ORA_USER_ERROR_MSG "ORA-00028: your session has been killed"
 #define OB_SQL_RESOLVER_NO_MEMORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5130, sql resolver no memory"
 #define OB_SQL_DML_ONLY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5131, plan cache support dml only"
 #define OB_ERR_NO_GRANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5133, No such grant defined"
@@ -4325,10 +4655,16 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5403, ddl schema version not match"
 #define OB_ERR_COLUMN_GROUP_DUPLICATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5404, Duplicate column group name '%.*s'"
-#define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text."
-#define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text in argument."
-#define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-00600: The JSON binary value contains invalid data."
-#define OB_ERR_INVALID_JSON_PATH__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON path expression."
+#define OB_ERR_RESERVED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5405, The \'%.*s\' syntax is reserved for purposes internal to the OceanBase Server"
+#define OB_ERR_INVALID_PARAM_TO_PROCEDURE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5406, Incorrect parameters to procedure \'%.*s\'"
+#define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5407, Incorrect parameters in the call to native function '%.*s'"
+#define OB_ERR_CTE_MAX_RECURSION_DEPTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5408, Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
+#define OB_DUPLICATE_OBJECT_NAME_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5409, Duplicate object name exists, schema refreshing may be hung"
+#define OB_ERR_REFRESH_SCHEMA_TOO_LONG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5410, Refresh schema failed continuously, ddl may be hung"
+#define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error."
+#define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error"
+#define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-40783: invalid binary JSON data\nstring"
+#define OB_ERR_INVALID_JSON_PATH__ORA_USER_ERROR_MSG "ORA-40442: JSON path expression syntax error ('INT')"
 #define OB_ERR_INVALID_JSON_CHARSET__ORA_USER_ERROR_MSG "ORA-00600: Cannot create a JSON value from a string."
 #define OB_ERR_INVALID_JSON_CHARSET_IN_FUNCTION__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON character data provided to function."
 #define OB_ERR_INVALID_TYPE_FOR_JSON__ORA_USER_ERROR_MSG "ORA-00600: Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required."
@@ -4336,22 +4672,76 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_JSON_PATH_CHARSET__ORA_USER_ERROR_MSG "ORA-00600: A path expression must be encoded in the utf8 character set."
 #define OB_ERR_INVALID_JSON_PATH_WILDCARD__ORA_USER_ERROR_MSG "ORA-00600: In this situation, path expressions may not contain the * and ** tokens."
 #define OB_ERR_JSON_VALUE_TOO_BIG__ORA_USER_ERROR_MSG "ORA-00600: The JSON value is too big to be stored in a JSON column."
-#define OB_ERR_JSON_KEY_TOO_BIG__ORA_USER_ERROR_MSG "ORA-00600: The JSON object contains a key name that is too long."
+#define OB_ERR_JSON_KEY_TOO_BIG__ORA_USER_ERROR_MSG "ORA-40476: JSON key too long."
 #define OB_ERR_JSON_USED_AS_KEY__ORA_USER_ERROR_MSG "ORA-00600: JSON column '%.*s' cannot be used in key specification."
 #define OB_ERR_JSON_VACUOUS_PATH__ORA_USER_ERROR_MSG "ORA-00600: The path expression is not allowed in this context."
 #define OB_ERR_JSON_BAD_ONE_OR_ALL_ARG__ORA_USER_ERROR_MSG "ORA-00600: The oneOrAll argument may take these values: \'one\' or \'all\'."
 #define OB_ERR_NUMERIC_JSON_VALUE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: Out of range JSON value for CAST"
 #define OB_ERR_INVALID_JSON_VALUE_FOR_CAST__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON value for CAST"
 #define OB_ERR_JSON_OUT_OF_DEPTH__ORA_USER_ERROR_MSG "ORA-00600: The JSON document exceeds the maximum depth."
-#define OB_ERR_JSON_DOCUMENT_NULL_KEY__ORA_USER_ERROR_MSG "ORA-00600: JSON documents may not contain NULL member names."
+#define OB_ERR_JSON_DOCUMENT_NULL_KEY__ORA_USER_ERROR_MSG "ORA-40595: Name input to JSON generation function cannot be null"
 #define OB_ERR_BLOB_CANT_HAVE_DEFAULT__ORA_USER_ERROR_MSG "ORA-00600: Invalid default value for \'%.*s\'"
 #define OB_ERR_INVALID_JSON_PATH_ARRAY_CELL__ORA_USER_ERROR_MSG "ORA-00600: A path expression is not a path to a cell in an array"
-#define OB_ERR_MISSING_JSON_VALUE__ORA_USER_ERROR_MSG "ORA-00600: No value was found by '%.192s' on the specified path."
-#define OB_ERR_MULTIPLE_JSON_VALUES__ORA_USER_ERROR_MSG "ORA-00600: More than one value was found by '%.192s' on the specified path."
+#define OB_ERR_MISSING_JSON_VALUE__ORA_USER_ERROR_MSG "ORA-40462: '%.192s' evaluated to no value"
+#define OB_ERR_MULTIPLE_JSON_VALUES__ORA_USER_ERROR_MSG "ORA-40470: More than one value was found by '%.192s' on the specified path."
 #define OB_SQL_RETRY_SPM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5434, retry sql due to spm"
 #define OB_OUTLINE_NOT_REPRODUCIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5435, outline not reproducible"
 #define OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5436,  TIMESTAMP_TO_SCN expected timestamp argument"
 #define OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5437, SCN_TO_TIMESTAMP expected a interger number as nsec argument"
+#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5438, A window which depends on another cannot define partitioning"
+#define OB_EER_WINDOW_NO_INHERIT_FRAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5439, Window '%.*s' has a frame definition, so cannot be referenced by another window"
+#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5440, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_ERR_INVALID_JSON_TYPE__ORA_USER_ERROR_MSG "ORA-40587: invalid JSON type."
+#define OB_ERR_JSON_PATH_SYNTAX_ERROR__ORA_USER_ERROR_MSG "ORA-40442: JSON path expression syntax error ('%s')"
+#define OB_ERR_INVALID_DATA_TYPE_RETURNING__ORA_USER_ERROR_MSG "ORA-40449: invalid data type for return value"
+#define OB_ERR_JSON_VALUE_NO_SCALAR__ORA_USER_ERROR_MSG "ORA-40456: JSON_VALUE evaluated to non-scalar value"
+#define OB_ERR_JSON_VALUE_NO_VALUE__ORA_USER_ERROR_MSG "ORA-40462: JSON_VALUE evaluated to no value"
+#define OB_ERR_DEFAULT_VALUE_NOT_LITERAL__ORA_USER_ERROR_MSG "ORA-40455: default value not a literal"
+#define OB_ERR_JSON_SYNTAX_ERROR__ORA_USER_ERROR_MSG "ORA-40441: JSON syntax error"
+#define OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE__ORA_USER_ERROR_MSG "ORA-40600: JSON_EQUAL used outside predicate"
+#define OB_ERR_WITHOUT_ARR_WRAPPER__ORA_USER_ERROR_MSG "ORA-40480: result cannot be returned without array wrapper"
+#define OB_ERR_JSON_PATCH_INVALID__ORA_USER_ERROR_MSG "ORA-40629: Patch specification is not valid JSON"
+#define OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-30929: ORDER SIBLINGS BY clause not allowed here"
+#define OB_ERR_LOB_TYPE_NOT_SORTING__ORA_USER_ERROR_MSG "ORA-40750: Column of LOB type cannot be used for sorting"
+#define OB_ERR_DUPLICATE_KEY__ORA_USER_ERROR_MSG "ORA-40473: duplicate key names in JSON object"
+#define OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR__ORA_USER_ERROR_MSG "ORA-40597: JSON path expression syntax error ('%.*s')"
+#define OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR__ORA_USER_ERROR_MSG "ORA-01741: illegal zero-length identifier"
+#define OB_ERR_NO_VALUE_IN_PASSING__ORA_USER_ERROR_MSG "ORA-40656: Variable in JSON path expression has no value in PASSING clause."
+#define OB_ERR_INVALID_COLUMN_SPE__ORA_USER_ERROR_MSG "ORA-01747: invalid user.table.column, table.column, or column specification"
+#define OB_ERR_INPUT_JSON_NOT_BE_NULL__ORA_USER_ERROR_MSG "ORA-40595: Name input to JSON generation function cannot be null"
+#define OB_ERR_INVALID_DATA_TYPE__ORA_USER_ERROR_MSG "ORA-40484: invalid data type for '%s' column"
+#define OB_ERR_INVALID_CLAUSE__ORA_USER_ERROR_MSG "ORA-40450: invalid '%s' clause"
+#define OB_ERR_INVALID_CMP_OP__ORA_USER_ERROR_MSG "ORA-40796: invalid comparison operation involving JSON type value"
+#define OB_ERR_INVALID_INPUT__ORA_USER_ERROR_MSG "ORA-30980: Invalid Input"
+#define OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR__ORA_USER_ERROR_MSG "ORA-40833: empty input to JSON operator"
+#define OB_ERR_ADDITIONAL_IS_JSON__ORA_USER_ERROR_MSG "ORA-40664: cannot add additional IS jSON check constraint"
+#define OB_ERR_FUNCTION_INVALID_STATE__ORA_USER_ERROR_MSG "ORA-06575: Package or function PRO is in an invalid state"
+#define OB_ERR_MISS_VALUE__ORA_USER_ERROR_MSG "ORA-02000: missing VALUE keyword"
+#define OB_ERR_DIFFERENT_TYPE_SELECTED__ORA_USER_ERROR_MSG "ORA-40566: JSON path expression selected a value of different data type"
+#define OB_ERR_NO_VALUE_SELECTED__ORA_USER_ERROR_MSG "ORA-40565: JSON path expression did not select a value."
+#define OB_ERR_NON_TEXT_RET_NOTSUPPORT__ORA_USER_ERROR_MSG "ORA-40481: ASCII or PRETTY not supported for non-textual return data type"
+#define OB_ERR_PL_JSONTYPE_USAGE__ORA_USER_ERROR_MSG "ORA-40573: Invalid use of PL/SQL JSON object type"
+#define OB_ERR_NULL_INPUT__ORA_USER_ERROR_MSG "ORA-64403: Input cannot be null"
+#define OB_ERR_NOT_ISO_8601_FORMAT__ORA_USER_ERROR_MSG "ORA-40688: date or time stamp string value does not conform to ISO 8601 format"
+#define OB_ERR_VALUE_EXCEEDED_MAX__ORA_USER_ERROR_MSG "ORA-40459: output value too large (actual: %d, maximum: %d)"
+#define OB_ERR_DEFAULT_VALUE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-40452: default value not matching type defined in RETURNING clause"
+#define OB_ERR_BOOL_NOT_CONVERT_NUMBER__ORA_USER_ERROR_MSG "ORA-40799: cannot convert Boolean value to number"
+#define OB_ERR_CONVERSION_FAIL__ORA_USER_ERROR_MSG "ORA-40570: JSON conversion failed"
+#define OB_ERR_NOT_OBJ_REF__ORA_USER_ERROR_MSG "ORA-22806: not an object or REF"
+#define OB_ERR_UNSUPPORT_TRUNCATE_TYPE__ORA_USER_ERROR_MSG "ORA-40779: Truncation is not supported with data type in RETURNING clause"
+#define OB_ERR_UNIMPLEMENT_JSON_FEATURE__ORA_USER_ERROR_MSG "ORA-40569: Unimplemented JSON feature"
+#define OB_ERR_USAGE_KEYWORD__ORA_USER_ERROR_MSG "ORA-40487: invalid usage of keyword EXISTS"
+#define OB_ERR_INPUT_JSON_TABLE__ORA_USER_ERROR_MSG "ORA-40491: invalid input data type for JSON_TABLE"
+#define OB_ERR_BOOL_CAST_NUMBER__ORA_USER_ERROR_MSG "ORA-40799: cannot convert Boolean value to number"
+#define OB_ERR_NESTED_PATH_DISJUNCT__ORA_USER_ERROR_MSG "ORA-40560: JSON_TABLE nested path expressions not disjunct"
+#define OB_ERR_INVALID_VARIABLE_IN_JSON_PATH__ORA_USER_ERROR_MSG "ORA-40576:  Invalid use of bind variable in SQL/JSON path."
+#define OB_ERR_JSON_KEY_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-40571: JSON key name not found."
+#define OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED__ORA_USER_ERROR_MSG "ORA-40451: invalid default value provided"
+#define OB_ERR_PATH_EXPRESSION_NOT_LITERAL__ORA_USER_ERROR_MSG "ORA-40454: path expression not a literal"
+#define OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL__ORA_USER_ERROR_MSG "PLS-00185: invalid argument for %s call"
+#define OB_ERR_SCHEMA_HISTORY_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5489, Schema history is empty"
+#define OB_ERR_TABLE_NAME_NOT_IN_LIST__ORA_USER_ERROR_MSG "ORA-00964: table name not in FROM list"
+#define OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART__ORA_USER_ERROR_MSG "ORA-14318: DEFAULT partition must be last partition specified"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -4882,8 +5272,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS__ORA_USER_ERROR_MSG "ORA-14300: partitioning key maps to a partition outside maximum permitted number of partitions"
 #define OB_OBJ_LOCK_NOT_COMPLETED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6275, object lock not completed, and can not unlock."
 #define OB_OBJ_UNLOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6276, there is an unlock operation doing, unlock conflict."
-#define OB_LOG_TS_OUT_OF_BOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6277, log_ts is out of bounds of memtable"
+#define OB_SCN_OUT_OF_BOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6277, scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: transaction idle timeout"
+#define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-06279: Query is not supported to be executed on txn temporary node"
+#define OB_TRANS_LIVE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6280, Transaction cost too much without commit or rollback"
+#define OB_TRANS_COMMIT_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6281, Transaction commit cost too much"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
 #define OB_NO_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6303, no log ever scanned"
@@ -4906,6 +5299,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TOO_MANY_LOG_TASK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6320, too many log tasks"
 #define OB_INVALID_BATCH_SIZE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6321, ob invalid batch size"
 #define OB_CLOG_SLIDE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6322, ob clog slide timeout"
+#define OB_LOG_REPLAY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6323, log replay error"
+#define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6324, ob trying to lock config change conflicts"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -4948,10 +5343,101 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANSFER_TASK_ABORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7106, transfer task aborted"
 #define OB_TRANSFER_INVALID_MESSAGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7107, transfer invalid message"
 #define OB_TRANSFER_CTX_TS_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7108, transfer ctx_ts not match"
+#define OB_TRANSFER_SYS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7109, transfer system error"
+#define OB_TRANSFER_MEMBER_LIST_NOT_SAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7110, transfer src ls and dest ls member list not same"
+#define OB_ERR_UNEXPECTED_LOCK_OWNER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7111, lock owner id is not expected"
+#define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
+#define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
+#define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
+#define OB_ERR_GIS_UNKNOWN_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Unknown exception caught in GIS function %s."
+#define OB_ERR_GIS_INVALID_DATA__ORA_USER_ERROR_MSG "ORA-00600: Invalid GIS data provided to function %s."
+#define OB_ERR_BOOST_GEOMETRY_EMPTY_INPUT_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: The geometry has no data in function %s."
+#define OB_ERR_BOOST_GEOMETRY_CENTROID_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Unable to calculate centroid because geometry is empty in function %s."
+#define OB_ERR_BOOST_GEOMETRY_OVERLAY_INVALID_INPUT_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Geometry overlay calculation error: geometry data is invalid in function %s."
+#define OB_ERR_BOOST_GEOMETRY_TURN_INFO_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Geometry turn info calculation error: geometry data is invalid in function %s."
+#define OB_ERR_BOOST_GEOMETRY_SELF_INTERSECTION_POINT_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Analysis procedures of intersection points interrupted unexpectedly in function %s."
+#define OB_ERR_BOOST_GEOMETRY_UNKNOWN_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Unknown exception thrown in function %s."
+#define OB_ERR_GIS_DATA_WRONG_ENDIANESS__ORA_USER_ERROR_MSG "ORA-00600: Geometry byte string must be little endian."
+#define OB_ERR_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS__ORA_USER_ERROR_MSG "ORA-00600: Do not support online operation on table with GIS index"
+#define OB_ERR_BOOST_GEOMETRY_INCONSISTENT_TURNS_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Inconsistent intersection points."
+#define OB_ERR_GIS_MAX_POINTS_IN_GEOMETRY_OVERFLOWED__ORA_USER_ERROR_MSG "ORA-00600: Parameter %s exceeds the maximum number of points in a geometry (%lu) in function %s."
+#define OB_ERR_UNEXPECTED_GEOMETRY_TYPE__ORA_USER_ERROR_MSG "ORA-00600: %.64s value is a geometry of unexpected type %.64s in %.64s."
+#define OB_ERR_SRS_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Can\'t parse the spatial reference system definition of SRID %u."
+#define OB_ERR_SRS_PROJ_PARAMETER_MISSING__ORA_USER_ERROR_MSG "ORA-00600: The spatial reference system definition for SRID %u does not specify the mandatory %s (EPSG %u) projection parameter."
+#define OB_ERR_WARN_SRS_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: There\'s no spatial reference system with SRID %u."
+#define OB_ERR_SRS_NOT_CARTESIAN__ORA_USER_ERROR_MSG "ORA-00600: Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which is not Cartesian."
+#define OB_ERR_SRS_NOT_CARTESIAN_UNDEFINED__ORA_USER_ERROR_MSG "ORA-00600: Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which has not been defined."
+#define OB_ERR_SRS_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: There\'s no spatial reference system with SRID %u."
+#define OB_ERR_WARN_SRS_NOT_FOUND_AXIS_ORDER__ORA_USER_ERROR_MSG "ORA-00600: There\'s no spatial reference system with SRID %u. The axis order is unknown."
+#define OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS__ORA_USER_ERROR_MSG "ORA-00600: %.192s(%.80s) has not been implemented for geographic spatial reference systems."
+#define OB_ERR_WRONG_SRID_FOR_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is %lu, but the SRID of the column is %lu. Consider changing the SRID of the geometry or the SRID property of the column."
+#define OB_ERR_CANNOT_ALTER_SRID_DUE_TO_INDEX__ORA_USER_ERROR_MSG "ORA-00600: The SRID specification on the column \'%.64s\' cannot be changed because there is a spatial index on the column. Please remove the spatial index before altering the SRID specification."
+#define OB_ERR_WARN_USELESS_SPATIAL_INDEX__ORA_USER_ERROR_MSG "ORA-00600: The spatial index on column \'%.64s\' will not be used by the query optimizer since the column does not have an SRID attribute. Consider adding an SRID attribute to the column."
+#define OB_ERR_ONLY_IMPLEMENTED_FOR_SRID_0_AND_4326__ORA_USER_ERROR_MSG "ORA-00600: Function %.192s is only defined for SRID 0 and SRID 4326."
+#define OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS__ORA_USER_ERROR_MSG "ORA-00600: %.192s(%.80s) has not been implemented for Cartesian spatial reference systems."
+#define OB_ERR_NOT_IMPLEMENTED_FOR_PROJECTED_SRS__ORA_USER_ERROR_MSG "ORA-00600: %.192s(%.80s) has not been implemented for projected spatial reference systems."
+#define OB_ERR_SRS_MISSING_MANDATORY_ATTRIBUTE__ORA_USER_ERROR_MSG "ORA-00600: Missing mandatory attribute %s."
+#define OB_ERR_SRS_MULTIPLE_ATTRIBUTE_DEFINITIONS__ORA_USER_ERROR_MSG "ORA-00600: Multiple definitions of attribute %s."
+#define OB_ERR_SRS_NAME_CANT_BE_EMPTY_OR_WHITESPACE__ORA_USER_ERROR_MSG "ORA-00600: The spatial reference system name can\'t be an empty string or start or end with whitespace."
+#define OB_ERR_SRS_ORGANIZATION_CANT_BE_EMPTY_OR_WHITESPACE__ORA_USER_ERROR_MSG "ORA-00600: The organization name can\'t be an empty string or start or end with whitespace."
+#define OB_ERR_SRS_ID_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: There is already a spatial reference system with SRID %u."
+#define OB_ERR_WARN_SRS_ID_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: There is already a spatial reference system with SRID %u."
+#define OB_ERR_CANT_MODIFY_SRID_0__ORA_USER_ERROR_MSG "ORA-00600: SRID 0 is not modifiable."
+#define OB_ERR_WARN_RESERVED_SRID_RANGE__ORA_USER_ERROR_MSG "ORA-00600: The SRID range [%u, %u] has been reserved for system use. SRSs in this range may be added, modified or removed without warning during upgrade."
+#define OB_ERR_CANT_MODIFY_SRS_USED_BY_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: Can\'t modify SRID %u. There is at least one column depending on it."
+#define OB_ERR_SRS_INVALID_CHARACTER_IN_ATTRIBUTE__ORA_USER_ERROR_MSG "ORA-00600: Invalid character in attribute %s."
+#define OB_ERR_SRS_ATTRIBUTE_STRING_TOO_LONG__ORA_USER_ERROR_MSG "ORA-00600: Attribute %s is too long. The maximum length is %u characters."
+#define OB_ERR_SRS_NOT_GEOGRAPHIC__ORA_USER_ERROR_MSG "ORA-00600: Function %s is only defined for geographic spatial reference systems, but one of its arguments is in SRID %u, which is not geographic."
+#define OB_ERR_POLYGON_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: Function %s encountered a polygon that was too large. Polygons must cover less than half the planet."
+#define OB_ERR_SPATIAL_UNIQUE_INDEX__ORA_USER_ERROR_MSG "ORA-00600: Spatial indexes can\'t be primary or unique indexes."
+#define OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: A parameter of function %.192s contains a geometry with longitude %f, which is out of range. It must be within (%f, %f]."
+#define OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: A parameter of function %.192s contains a geometry with latitude %f, which is out of range. It must be within [%f, %f]."
+#define OB_ERR_SRS_GEOGCS_INVALID_AXES__ORA_USER_ERROR_MSG "ORA-00600: The spatial reference system definition for SRID %u specifies invalid geographic axes \'%.20s\' and \'%.20s\'. One axis must be NORTH or SOUTH and the other must be EAST or WEST."
+#define OB_ERR_SRS_INVALID_SEMI_MAJOR_AXIS__ORA_USER_ERROR_MSG "ORA-00600: The length of the semi-major axis must be a positive number."
+#define OB_ERR_SRS_INVALID_INVERSE_FLATTENING__ORA_USER_ERROR_MSG "ORA-00600: The inverse flattening must be larger than 1.0, or 0.0 if the ellipsoid is a sphere."
+#define OB_ERR_SRS_INVALID_ANGULAR_UNIT__ORA_USER_ERROR_MSG "ORA-00600: The angular unit conversion factor must be a positive number."
+#define OB_ERR_SRS_INVALID_PRIME_MERIDIAN__ORA_USER_ERROR_MSG "ORA-00600: The prime meridian must be within (-180, 180] degrees, specified in the SRS angular unit."
+#define OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: Transformation from SRID %u is not supported."
+#define OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: Transformation to SRID %u is not supported."
+#define OB_ERR_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84__ORA_USER_ERROR_MSG "ORA-00600: Transformation from SRID %u is not supported. The spatial reference system has no TOWGS84 clause."
+#define OB_ERR_TRANSFORM_TARGET_SRS_MISSING_TOWGS84__ORA_USER_ERROR_MSG "ORA-00600: Transformation to SRID %u is not supported. The spatial reference system has no TOWGS84 clause."
+#define OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION__ORA_USER_ERROR_MSG "ORA-00600: Cannot create a functional index on a function that returns a JSON or GEOMETRY value."
+#define OB_ERR_SPATIAL_FUNCTIONAL_INDEX__ORA_USER_ERROR_MSG "ORA-00600: Spatial functional index is not supported."
+#define OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT__ORA_USER_ERROR_MSG "ORA-00600: The geometry passed to function %s is in SRID 0, which doesn\'t specify a length unit. Can\'t convert to \'%s\'."
+#define OB_ERR_INVALID_CAST_TO_GEOMETRY__ORA_USER_ERROR_MSG "ORA-00600: Invalid cast from %s to %s."
+#define OB_ERR_INVALID_CAST_POLYGON_RING_DIRECTION__ORA_USER_ERROR_MSG "ORA-00600: Invalid cast from %s to %s. A polygon ring is in the wrong direction."
+#define OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION__ORA_USER_ERROR_MSG "ORA-00600: Arguments to function %s contains geometries with different SRIDs: %u and %u. All geometries must have the same SRID."
+#define OB_ERR_LONGITUDE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: Longitude %f is out of range in function %.192s. It must be within (%f, %f]."
+#define OB_ERR_LATITUDE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: Latitude %f is out of range in function %.192s. It must be within [%f, %f]."
+#define OB_ERR_STD_BAD_ALLOC_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Memory allocation error: %-.256s in function %s."
+#define OB_ERR_STD_DOMAIN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Domain error: %-.256s in function %s."
+#define OB_ERR_STD_LENGTH_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Length error: %-.256s in function %s."
+#define OB_ERR_STD_INVALID_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Invalid argument error: %-.256s in function %s."
+#define OB_ERR_STD_OUT_OF_RANGE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Out of range error: %-.256s in function %s."
+#define OB_ERR_STD_OVERFLOW_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Overflow error: %-.256s in function %s."
+#define OB_ERR_STD_RANGE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Range error: %-.256s in function %s."
+#define OB_ERR_STD_UNDERFLOW_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Underflow error: %-.256s in function %s."
+#define OB_ERR_STD_LOGIC_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Logic error: %-.256s in function %s."
+#define OB_ERR_STD_RUNTIME_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Runtime error: %-.256s in function %s."
+#define OB_ERR_STD_UNKNOWN_EXCEPTION__ORA_USER_ERROR_MSG "ORA-00600: Unknown exception: %-.384s in function %s."
+#define OB_ERR_CANT_CREATE_GEOMETRY_OBJECT__ORA_USER_ERROR_MSG "ORA-00600: Cannot get geometry object from data you send to the GEOMETRY field."
+#define OB_ERR_SRID_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: Incorrect usage of srid."
+#define OB_ERR_INDEX_ORDER_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: Incorrect usage of spatial/fulltext/hash index and explicit index order."
+#define OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL__ORA_USER_ERROR_MSG "ORA-00600: A SPATIAL index may only contain a geometrical type column."
+#define OB_ERR_SPATIAL_CANT_HAVE_NULL__ORA_USER_ERROR_MSG "ORA-00600: All parts of a SPATIAL index must be NOT NULL."
+#define OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX__ORA_USER_ERROR_MSG "ORA-00600: The index type %s is not supported for spatial indexes."
+#define OB_ERR_UNIT_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: There\'s no unit of measure named \'%s\'."
+#define OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR__ORA_USER_ERROR_MSG "ORA-00600: The string \'%.192s\' is not a valid key %c value pair in function %.192s."
+#define OB_ERR_NONPOSITIVE_RADIUS__ORA_USER_ERROR_MSG "ORA-00600: Invalid radius provided to function %s: Radius(%lf) must be greater than zero."
+#define OB_ERR_SRS_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: Spatial reference system is empty"
+#define OB_ERR_INVALID_OPTION_KEY__ORA_USER_ERROR_MSG "ORA-00600: Invalid option key \'%.192s\' in function %.192s."
+#define OB_ERR_INVALID_OPTION_VALUE__ORA_USER_ERROR_MSG "ORA-00600: Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
+#define OB_ERR_INVALID_GEOMETRY_TYPE__ORA_USER_ERROR_MSG "ORA-00600: Unknown WKB type(%d)! Full WKB type number was (%d)."
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
 #define OB_PACKET_CLUSTER_ID_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8004, Packet cluster_id not match"
+#define OB_TENANT_ID_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8005, Tenant id not match"
 #define OB_URI_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9001, URI error"
 #define OB_FINAL_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9002, OSS file MD5 error"
 #define OB_OSS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9003, OSS error"
@@ -5032,9 +5518,11 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9084, the contents of pwrite are inconsistent"
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9085, backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout"
-#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9087, A window which depends on another cannot define partitioning"
-#define OB_EER_WINDOW_NO_INHERIT_FRAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9088, Window '%.*s' has a frame definition, so cannot be referenced by another window"
-#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9087, observer clog is recycled before archive"
+#define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
+#define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
+#define OB_ALREADY_IN_NOARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
+#define OB_RESTORE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9093, Restore log to end"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
@@ -5254,6 +5742,38 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_INTO_KEYWORD__ORA_USER_ERROR_MSG "ORA-00925: missing INTO keyword"
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__ORA_USER_ERROR_MSG "ORA-06547: RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__ORA_USER_ERROR_MSG "ORA-06563: name has too many parts"
+#define OB_ERR_LOB_SPAN_TRANSACTION__ORA_USER_ERROR_MSG "ORA-22990: LOB locators cannot span transactions"
+#define OB_ERR_INVALID_MULTISET__ORA_USER_ERROR_MSG "ORA-22903: MULTISET expression not allowed"
+#define OB_ERR_INVALID_CAST_UDT__ORA_USER_ERROR_MSG "ORA-22907: invalid CAST to a type that is not a nested table or VARRAY"
+#define OB_ERR_POLICY_EXIST__ORA_USER_ERROR_MSG "ORA-28101: policy already exists"
+#define OB_ERR_POLICY_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-28102: policy does not exist"
+#define OB_ERR_ADD_POLICY_TO_SYS_OBJECT__ORA_USER_ERROR_MSG "ORA-28103: adding a policy to an object owned by SYS is not allowed"
+#define OB_ERR_INVALID_INPUT_STRING__ORA_USER_ERROR_MSG "ORA-28104: input value for %s is not valid"
+#define OB_ERR_SEC_COLUMN_ON_VIEW__ORA_USER_ERROR_MSG "ORA-28105: cannot create security relevant column policy in an object view"
+#define OB_ERR_INVALID_INPUT_FOR_ARGUMENT__ORA_USER_ERROR_MSG "ORA-28106: input value for argument %s is not valid"
+#define OB_ERR_POLICY_DISABLED__ORA_USER_ERROR_MSG "ORA-28107: policy was disabled"
+#define OB_ERR_CIRCULAR_POLICIES__ORA_USER_ERROR_MSG "ORA-28108: circular security policies detected"
+#define OB_ERR_TOO_MANY_POLICIES__ORA_USER_ERROR_MSG "ORA-28109: the number of related policies has exceeded the limit of 16"
+#define OB_ERR_POLICY_FUNCTION__ORA_USER_ERROR_MSG "ORA-28110: policy function or package %.*s.%.*s has error"
+#define OB_ERR_NO_PRIV_EVAL_PREDICATE__ORA_USER_ERROR_MSG "ORA-28111: insufficient privilege to evaluate policy predicate"
+#define OB_ERR_EXECUTE_POLICY_FUNCTION__ORA_USER_ERROR_MSG "ORA-28112: failed to execute policy function"
+#define OB_ERR_POLICY_PREDICATE__ORA_USER_ERROR_MSG "ORA-28113: policy predicate has error"
+#define OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS__ORA_USER_ERROR_MSG "ORA-28116: insufficient privileges to do direct path access"
+#define OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED__ORA_USER_ERROR_MSG "ORA-28117: integrity constraint violated - parent record not found"
+#define OB_ERR_POLICY_GROUP_EXIST__ORA_USER_ERROR_MSG "ORA-28118: policy group already exists"
+#define OB_ERR_POLICY_GROUP_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-28119: policy group does not exist"
+#define OB_ERR_DRIVING_CONTEXT_EXIST__ORA_USER_ERROR_MSG "ORA-28120: driving context already exists"
+#define OB_ERR_DRIVING_CONTEXT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-28121: driving context does not exist"
+#define OB_ERR_UPDATE_DEFAULT_GROUP__ORA_USER_ERROR_MSG "ORA-28122: can not update SYS_DEFAULT policy group"
+#define OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP__ORA_USER_ERROR_MSG "ORA-28123: Driving context %.*s,%.*s contains invalid group %.*s"
+#define OB_ERR_INVALID_SEC_COLUMN_TYPE__ORA_USER_ERROR_MSG "ORA-28124: Column %.*s in sec_relevant_cols cannot be of an object data type"
+#define OB_ERR_UNPROTECTED_VIRTUAL_COLUMN__ORA_USER_ERROR_MSG "ORA-28125: A protected base column was referenced in an unprotected virtual column expression"
+#define OB_ERR_ATTRIBUTE_ASSOCIATION__ORA_USER_ERROR_MSG "ORA-28126: Attribute association failed for policy %.*s"
+#define OB_ERR_MERGE_INTO_WITH_POLICY__ORA_USER_ERROR_MSG "ORA-28132: The MERGE INTO syntax does not support the security policy"
+#define OB_ERR_SP_NO_DROP_SP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9743, Can't drop or alter a '%s' from within another stored routine."
+#define OB_ERR_RECOMPILATION_OBJECT__ORA_USER_ERROR_MSG "ORA-04045: errors during recompilation/revalidation of %.*s.%.*s"
+#define OB_ERR_VARIABLE_NOT_IN_SELECT_LIST__ORA_USER_ERROR_MSG "ORA-01007: variable not in select list"
+#define OB_ERR_MULTI_RECORD__ORA_USER_ERROR_MSG "ORA-00494: coercion into multiple record targets not supported"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5264,6 +5784,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
+extern int g_all_ob_errnos[2035];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -18,6 +18,7 @@
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -60,7 +61,7 @@ public:
   int serialize_ls_log(ObPresistIDLog &ls_log, int64_t service_type);
   char *get_log_buf() { return log_buf_; }
   int64_t get_log_pos() { return pos_; }
-  void set_log_ts(const int64_t &ts) { log_ts_ = ts; }
+  void set_log_ts(const share::SCN &ts) { log_ts_ = ts; }
   void set_srv_type(const int64_t srv_type) { id_srv_type_ = srv_type; }
   void set_limited_id(const int64_t limited_id) { limited_id_ = limited_id; }
 public:
@@ -73,7 +74,7 @@ public:
 private:
   int64_t id_srv_type_;
   int64_t limited_id_;
-  int64_t log_ts_;
+  share::SCN log_ts_;
   char log_buf_[MAX_LOG_BUFF_SIZE];
   int64_t pos_;
 };
@@ -104,18 +105,19 @@ public:
   int get_number(const int64_t range, const int64_t base_id, int64_t &start_id, int64_t &end_id);
 
   //日志处理
-  int handle_submit_callback(const bool success, const int64_t limited_id, const int64_t log_ts);
+  int handle_submit_callback(const bool success, const int64_t limited_id, const share::SCN log_ts);
   void test_lock() { WLockGuard guard(rwlock_); }
 
   //获取回放数据
-  int handle_replay_result(const int64_t last_id, const int64_t limited_id, const int64_t log_ts);
+  int handle_replay_result(const int64_t last_id, const int64_t limited_id, const share::SCN log_ts);
 
   // clog checkpoint
-  int flush(int64_t rec_log_ts);
+  int flush(share::SCN &scn);
+  share::SCN get_rec_scn();
   int64_t get_rec_log_ts();
 
   // for clog replay
-  int replay(const void *buffer, const int64_t buf_size, const palf::LSN &lsn, const int64_t log_ts);
+  int replay(const void *buffer, const int64_t buf_size, const palf::LSN &lsn, const share::SCN &log_ts);
 
   //切主
   int switch_to_follower_gracefully();
@@ -126,12 +128,12 @@ public:
   int check_leader(bool &leader);
   int check_and_fill_ls();
   void reset_ls();
-  void update_limited_id(const int64_t limited_id, const int64_t latest_log_ts);
+  void update_limited_id(const int64_t limited_id, const share::SCN latest_log_ts);
   int update_ls_id_meta(const bool write_slog);
 
   // 虚表
-  void get_virtual_info(int64_t &last_id, int64_t &limited_id, int64_t &rec_log_ts,
-                        int64_t &latest_log_ts, int64_t &pre_allocated_range,
+  void get_virtual_info(int64_t &last_id, int64_t &limited_id, share::SCN &rec_log_ts,
+                        share::SCN &latest_log_ts, int64_t &pre_allocated_range,
                         int64_t &submit_log_ts, bool &is_master);
   static const int64_t SUBMIT_LOG_ALARM_INTERVAL = 100 * 1000;
   static const int64_t MIN_LAST_ID = 1;
@@ -141,6 +143,7 @@ protected:
   //日志提交
   int submit_log_(const int64_t last_id, const int64_t limited_id);
   int submit_log_with_lock_(const int64_t last_id, const int64_t limited_id);
+  int64_t max_pre_allocated_id_(const int64_t base_id);
 protected:
   ServiceType service_type_;
   //预分配大小
@@ -149,13 +152,12 @@ protected:
   int64_t last_id_;
   // 回放出的临时状态
   int64_t tmp_last_id_;
-  // 当前可分配的最大值
   int64_t limited_id_;
   bool is_logging_;
   //checkpoint ts
-  int64_t rec_log_ts_;
+  share::SCN rec_log_ts_;
   //最新持久化成功的ts
-  int64_t latest_log_ts_;
+  share::SCN latest_log_ts_;
   // current time when submit log
   int64_t submit_log_ts_;
   mutable common::SpinRWLock rwlock_;
@@ -168,10 +170,10 @@ protected:
 class ObIDMeta
 {
 public:
-  ObIDMeta() : limited_id_(ObIDService::MIN_LAST_ID), latest_log_ts_(OB_INVALID_TIMESTAMP) {}
+  ObIDMeta() : limited_id_(ObIDService::MIN_LAST_ID) {}
   ~ObIDMeta() {}
   int64_t limited_id_;
-  int64_t latest_log_ts_;
+  share::SCN latest_log_ts_;
   TO_STRING_KV(K_(limited_id), K_(latest_log_ts));
   OB_UNIS_VERSION(1);
 };
@@ -184,10 +186,10 @@ public:
   void update_all_id_meta(const ObAllIDMeta &all_id_meta);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
-                     const int64_t latest_log_ts);
+                     const share::SCN &latest_log_ts);
   int get_id_meta(const int64_t service_type,
                   int64_t &limited_id,
-                  int64_t &latest_log_ts) const;
+                  share::SCN &latest_log_ts) const;
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
     int64_t pos = 0;

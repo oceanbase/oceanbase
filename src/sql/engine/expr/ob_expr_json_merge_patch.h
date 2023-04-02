@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for define of func json_merge_patch
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_MERGE_PATCH_H_
@@ -24,6 +25,14 @@ namespace sql
 class ObExprJsonMergePatch : public ObFuncExprOperator
 {
 public:
+  enum {
+    OPT_RES_TYPE_ID,
+    OPT_PRETTY_ID,
+    OPT_ASCII_ID,
+    OPT_TRUNC_ID,
+    OPT_ERROR_ID,
+    OPT_MAX_ID
+  };
   explicit ObExprJsonMergePatch(common::ObIAllocator &alloc);
   virtual ~ObExprJsonMergePatch();
   virtual int calc_result_typeN(ObExprResType& type,
@@ -33,7 +42,7 @@ public:
                                 const override;
 
   static int eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-  
+  static int eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                     ObExpr &rt_expr) const override;
 private:

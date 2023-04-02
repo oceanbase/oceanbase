@@ -20,6 +20,7 @@
 #include "sql/engine/ob_serializable_function.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/ob_bit_vector.h"
+#include "common/ob_common_utility.h"
 
 namespace oceanbase
 {
@@ -191,7 +192,7 @@ struct ObEvalCtx
     int64_t batch_idx_default_val_ = 0;
     int64_t batch_size_default_val_ = 0;
   };
-  explicit ObEvalCtx(ObExecContext &exec_ctx);
+  explicit ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator = NULL);
   explicit ObEvalCtx(ObEvalCtx &eval_ctx);
   virtual ~ObEvalCtx();
 
@@ -285,7 +286,7 @@ struct ObExprBasicFuncs
   // use murmur_hash_ instead.
   ObExprHashFuncType default_hash_;
   ObBatchDatumHashFunc default_hash_batch_;
-  // For murmur/xx/wy functions, the specified hash method is used for all tyeps.
+  // For murmur/xx/wy functions, the specified hash method is used for all types.
   ObExprHashFuncType murmur_hash_;
   ObBatchDatumHashFunc murmur_hash_batch_;
   ObExprHashFuncType xx_hash_;
@@ -295,6 +296,26 @@ struct ObExprBasicFuncs
 
   ObExprCmpFuncType null_first_cmp_;
   ObExprCmpFuncType null_last_cmp_;
+
+  /* murmur_hash_v2_ is more efficient than murmur_hash_
+     If there is no problem of compatibility, use hash_v2_ is a better choice
+
+     For example, if we calc hash of NUMBER,
+
+      murmur_hash_ calcs like that :
+          if (datum.is_null()) {
+            const int null_type = ObNullType;
+            v = murmurhash64A(&null_type, sizeof(null_type), seed);
+          } else {
+            uint64_t tmp_v = murmurhash64A(datum.get_number_desc().se_, 1, seed);
+            v = murmurhash64A(datum.get_number_digits(), static_cast<uint64_t>(sizeof(uint32_t)* datum.get_number_desc().len_), tmp_v);
+          }
+
+      murmur_hash_v2_ calc like that :
+          v =  murmurhash64A(datum.ptr_, datum.len_, seed);
+  */
+  ObExprHashFuncType murmur_hash_v2_;
+  ObBatchDatumHashFunc murmur_hash_v2_batch_;
 };
 
 
@@ -308,7 +329,8 @@ struct ObDynReserveBuf
            || common::ObRawTC == tc
            || common::ObRowIDTC == tc
            || common::ObLobTC == tc
-           || common::ObJsonTC == tc;
+           || common::ObJsonTC == tc
+           || common::ObGeometryTC == tc;
   }
 
   ObDynReserveBuf() = default;
@@ -328,6 +350,18 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 
 #define EVAL_FUNC_ARG_DECL const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
 #define EVAL_FUNC_ARG_LIST expr, ctx, expr_datum
+
+
+#ifndef NDEBUG
+#define CHECK_STRING_LENGTH(expr, datum)   \
+  if (OB_SUCC(ret) && 0 == datum.len_ && !datum.is_null() && is_oracle_mode() &&\
+      (ob_is_string_tc(expr.datum_meta_.type_) || ob_is_raw(expr.datum_meta_.type_))) {  \
+    SQL_ENG_LOG(ERROR, "unexpected datum length", K(expr)); \
+  }
+#else
+#define CHECK_STRING_LENGTH(expr, datum)
+#endif
+
 
 // default evaluate batch function which call eval() for every datum of batch.
 extern int expr_default_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL);
@@ -402,12 +436,14 @@ public:
     return ctx.frames_[frame_idx_] + res_buf_off_;
   }
 
-
   // locate expr datum && reset ptr_ to reserved buf
   OB_INLINE ObDatum &locate_datum_for_write(ObEvalCtx &ctx) const;
 
   // locate batch datums and reset datum ptr_ to reserved buf
   inline ObDatum *locate_datums_for_update(ObEvalCtx &ctx, const int64_t size) const;
+
+  // reset ptr in ObDatum to reserved buf
+  OB_INLINE void reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const;
 
   OB_INLINE ObDatum &locate_param_datum(ObEvalCtx &ctx, int param_index) const
   {
@@ -434,7 +470,7 @@ public:
     len = 0;
     int64_t idx = batch_idx_mask_ & datum_idx;
     if (OB_UNLIKELY(!ObDynReserveBuf::supported(datum_meta_.type_))) {
-      SQL_ENG_LOG(ERROR, "unexpected alloc string result memory called", K(*this));
+      SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected alloc string result memory called", K(*this));
     } else {
       ObDynReserveBuf *drb = reinterpret_cast<ObDynReserveBuf *>(
         ctx.frames_[frame_idx_] + dyn_buf_header_offset_ + sizeof(ObDynReserveBuf) * idx);
@@ -482,6 +518,8 @@ public:
   template <typename ...TS>
   OB_INLINE int eval_batch_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
                                        const int64_t size, TS &...args) const;
+
+  OB_INLINE int deep_copy_self_datum(ObEvalCtx &ctx) const;
 
   // deep copy %datum to reserve buffer or new allocated buffer if reserved buffer is not enough.
   OB_INLINE int deep_copy_datum(ObEvalCtx &ctx, const common::ObDatum &datum) const;
@@ -610,6 +648,7 @@ public:
       uint64_t is_static_const_:1; // is const during the whole execution
       uint64_t is_boolean_:1; // to distinguish result of this expr between and int tc
       uint64_t is_dynamic_const_:1; // is const during the subplan execution, including exec param
+      uint64_t need_stack_check_:1; // the expression tree depth needs to check whether the stack overflows
     };
     uint64_t flag_;
   };
@@ -792,6 +831,8 @@ public:
 
   OB_INLINE void set_meta(const ObDatumMeta &meta)
   {
+    accuracy_.scale_ = meta.scale_;
+    accuracy_.precision_ = meta.precision_;
     meta_ = meta;
   }
   // accuracy.
@@ -874,7 +915,7 @@ typedef ObToStringDatum DATUM2STR;
 // 因为实现的eval_func中, 打印日志时, 如果调用ObToStringExpr(ctx, expr),
 // 该函数又会调用eval_func计算, 不断循环调用, 且一直没走到设置evaluated_
 // 标记为true的逻辑, 最终会导致爆栈;
-// bug:https://work.aone.alibaba-inc.com/issue/29459333
+// bug:
 struct ObToStringExpr
 {
   ObToStringExpr(ObEvalCtx &ctx, const ObExpr &e) : c_(ctx), e_(e) {}
@@ -933,6 +974,16 @@ inline ObDatum *ObExpr::locate_datums_for_update(ObEvalCtx &ctx,
   return datums;
 }
 
+OB_INLINE void ObExpr::reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const
+{
+  OB_ASSERT(datum_idx >= 0);
+  char *frame = ctx.frames_[frame_idx_];
+  OB_ASSERT(NULL != frame);
+  ObDatum *expr_datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + datum_idx;
+  char *data_pos = frame + res_buf_off_ + res_buf_len_ * datum_idx;
+  expr_datum->ptr_ = data_pos;
+}
+
 template <typename ...TS>
 OB_INLINE int ObExpr::eval_param_value(ObEvalCtx &ctx, TS &...args) const
 {
@@ -976,7 +1027,6 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
   OB_ASSERT(NULL != frame);
 	datum = (ObDatum *)(frame + datum_off_);
   ObEvalInfo *eval_info = (ObEvalInfo *)(frame + eval_info_off_);
-
   if (is_batch_result()) {
     if (NULL == eval_func_ || eval_info->projected_) {
       datum = datum + ctx.get_batch_idx();
@@ -985,14 +1035,19 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
     }
   } else if (NULL != eval_func_ && !eval_info->evaluated_) {
 	// do nothing for const/column reference expr or already evaluated expr
-		if (datum->ptr_ != frame + res_buf_off_) {
-			datum->ptr_ = frame + res_buf_off_;
-		}
-		ret = eval_func_(*this, ctx, *datum);
-    if (OB_LIKELY(common::OB_SUCCESS == ret)) {
-      eval_info->evaluated_ = true;
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      datum->set_null();
+      if (datum->ptr_ != frame + res_buf_off_) {
+        datum->ptr_ = frame + res_buf_off_;
+      }
+      ret = eval_func_(*this, ctx, *datum);
+      CHECK_STRING_LENGTH((*this), (*datum));
+      if (OB_LIKELY(common::OB_SUCCESS == ret)) {
+        eval_info->evaluated_ = true;
+      } else {
+        datum->set_null();
+      }
     }
 	}
 	return ret;
@@ -1016,6 +1071,17 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
   } else if (size > 0) {
     ret = do_eval_batch(ctx, skip, size);
   }
+  return ret;
+}
+
+OB_INLINE int ObExpr::deep_copy_self_datum(ObEvalCtx &ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObDatum &datum = locate_expr_datum(ctx);
+  if (OB_FAIL(deep_copy_datum(ctx, datum))) {
+    SQL_LOG(WARN, "fail to deep copy datum", K(ret), K(ctx), K(datum));
+  }
+
   return ret;
 }
 
@@ -1047,24 +1113,25 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
                                           int64_t index)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
-    LIB_LOG(ERROR, "buffer is NULL");
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    databuff_printf(buffer, CStringBufMgr::BUF_SIZE, pos, "vectorized_rows(%ld)=", index);
-    pos += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + pos, CStringBufMgr::BUF_SIZE -1);
-    if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-      buffer[pos] = '\0';
+    const int64_t buf_len = mgr.get_buffer_len();
+    databuff_printf(buffer, buf_len, str_len, "vectorized_rows(%ld)=", index);
+    str_len += to_string(ROWEXPR2STR(eval_ctx, exprs), buffer + str_len, buf_len - str_len - 1);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
+    mgr.update_position(str_len + 1);
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 
@@ -1105,7 +1172,7 @@ inline int encode(char *buf, const int64_t buf_len, int64_t &pos, sql::ObExpr *e
   if (NULL != expr) {
     sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
     if (OB_UNLIKELY(NULL == array || array->empty() || expr < &array->at(0)
-                    || (idx = expr - &array->at(0) + 1) > array->count())) {
+                    || (idx = static_cast<uint32_t>(expr - &array->at(0) + 1)) > array->count())) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "expr not in array", K(ret), KP(array), KP(idx), KP(expr));
     }

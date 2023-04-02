@@ -28,17 +28,6 @@ namespace oceanbase
 namespace sql
 {
 
-int ObLogCount::generate_link_sql_post(GenLinkStmtPostContext &link_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (0 == dblink_id_) {
-    // do nothing
-  } else if (OB_FAIL(link_ctx.spell_count(startup_exprs_, filter_exprs_, rownum_limit_expr_))) {
-    LOG_WARN("dblink fail to reverse spell count", K(dblink_id_), K(ret));
-  }
-  return ret;
-}
-
 int ObLogCount::est_cost()
 {
   int ret = OB_SUCCESS;
@@ -145,7 +134,6 @@ int ObLogCount::inner_est_cost(double &child_card,
     if (NULL != rownum_limit_expr_ && 
         !rownum_limit_expr_->has_flag(CNT_DYNAMIC_PARAM)) {
       if (OB_FAIL(ObTransformUtils::get_limit_value(rownum_limit_expr_,
-                                                    get_stmt(),
                                                     opt_ctx.get_params(),
                                                     opt_ctx.get_exec_ctx(),
                                                     &opt_ctx.get_allocator(),
@@ -172,17 +160,8 @@ int ObLogCount::inner_est_cost(double &child_card,
 int ObLogCount::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *rownum_expr = NULL;
-  if (OB_ISNULL(get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(get_stmt()));
-  } else if (OB_FAIL(get_stmt()->get_rownum_expr(rownum_expr))) {
-    LOG_WARN("failed to get rownum expr", K(ret));
-  } else if (OB_ISNULL(rownum_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(all_exprs.push_back(rownum_expr))) {
-    LOG_WARN("failed to push back rownum expr", K(ret));
+  if (NULL != rownum_expr_ && OB_FAIL(all_exprs.push_back(rownum_expr_))) {
+    LOG_WARN("failed to add exprs", K(ret));
   } else if (NULL != rownum_limit_expr_ && OB_FAIL(all_exprs.push_back(rownum_limit_expr_))) {
     LOG_WARN("failed to add exprs", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
@@ -192,20 +171,30 @@ int ObLogCount::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogCount::print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type)
+int ObLogCount::get_plan_item_info(PlanText &plan_text,
+                                   ObSqlPlanItem &plan_item)
 {
 	int ret = OB_SUCCESS;
-	if (NULL != rownum_limit_expr_) {
-		 if (OB_FAIL(BUF_PRINTF(", "))) {
-			LOG_WARN("BUF_PRINTF fails", K(ret));
-		} else {
-			EXPLAIN_PRINT_EXPR(rownum_limit_expr_, type);
-		}
-	}
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get base plan item info", K(ret));
+  } else if (NULL != rownum_limit_expr_) {
+    BEGIN_BUF_PRINT;
+    EXPLAIN_PRINT_EXPR(rownum_limit_expr_, type);
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
 	return ret;
+}
+
+int ObLogCount::inner_replace_op_exprs(
+    const ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != rownum_limit_expr_ &&
+      OB_FAIL(replace_expr_action(to_replace_exprs, rownum_limit_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  }
+  return ret;
 }
 
 } /* namespace sql */

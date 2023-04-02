@@ -27,16 +27,24 @@ namespace common {
  */
 class ObOptTableStat : public common::ObIKVCacheValue
 {
+  OB_UNIS_VERSION_V(1);
 public:
   struct Key : public common::ObIKVCacheKey
   {
     Key() : tenant_id_(0),
             table_id_(OB_INVALID_ID),
-            partition_id_(OB_INVALID_INDEX)
+            partition_id_(OB_INVALID_INDEX),
+            tablet_id_(ObTabletID::INVALID_TABLET_ID)
     {
     }
     explicit Key(uint64_t tenant_id, uint64_t table_id, int64_t partition_id) :
-      tenant_id_(tenant_id), table_id_(table_id), partition_id_(partition_id)
+      tenant_id_(tenant_id), table_id_(table_id), partition_id_(partition_id),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID)
+    {
+    }
+    explicit Key(uint64_t tenant_id, uint64_t table_id, uint64_t tablet_id) :
+      tenant_id_(tenant_id), table_id_(table_id), partition_id_(OB_INVALID_INDEX),
+      tablet_id_(tablet_id)
     {
     }
     void init(uint64_t tenant_id, uint64_t table_id, int64_t partition_id)
@@ -44,6 +52,7 @@ public:
       tenant_id_ = tenant_id;
       table_id_ = table_id;
       partition_id_ = partition_id;
+      tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     }
     uint64_t hash() const
     {
@@ -54,7 +63,8 @@ public:
       const Key &other_key = reinterpret_cast<const Key&>(other);
       return tenant_id_ == other_key.tenant_id_ &&
              table_id_ == other_key.table_id_ &&
-             partition_id_ == other_key.partition_id_;
+             partition_id_ == other_key.partition_id_ &&
+             tablet_id_ == other_key.tablet_id_;
     }
     uint64_t get_tenant_id() const
     {
@@ -97,13 +107,15 @@ public:
       tenant_id_ = 0;
       table_id_ = OB_INVALID_ID;
       partition_id_ = OB_INVALID_INDEX;
+      tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     }
 
-    TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id));
+    TO_STRING_KV(K_(tenant_id), K_(table_id), K_(partition_id), K_(tablet_id));
 
     uint64_t tenant_id_;
     uint64_t table_id_;
     int64_t partition_id_;
+    uint64_t tablet_id_;
   };
   ObOptTableStat()
     : table_id_(OB_INVALID_ID),
@@ -121,7 +133,10 @@ public:
       data_version_(0),
       last_analyzed_(0),
       stattype_locked_(0),
-      modified_count_(0) {}
+      modified_count_(0),
+      sample_size_(0),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID),
+      stat_expired_time_(-1) {}
   ObOptTableStat(uint64_t table_id,
                  int64_t partition_id,
                  int64_t object_type,
@@ -150,12 +165,20 @@ public:
       data_version_(data_version),
       last_analyzed_(0),
       stattype_locked_(0),
-      modified_count_(0) {}
+      modified_count_(0),
+      sample_size_(0),
+      tablet_id_(ObTabletID::INVALID_TABLET_ID),
+      stat_expired_time_(-1) {}
 
   virtual ~ObOptTableStat() {}
 
+  int merge_table_stat(const ObOptTableStat &other);
+
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(uint64_t table_id) { table_id_ = table_id; }
+
+  uint64_t get_tablet_id() const { return tablet_id_; }
+  void set_tablet_id(uint64_t tablet_id) { tablet_id_ = tablet_id; }
 
   int64_t get_partition_id() const { return partition_id_; }
   void set_partition_id(int64_t partition_id) { partition_id_ = partition_id; }
@@ -169,7 +192,9 @@ public:
   int64_t get_row_count() const { return row_count_; }
   void set_row_count(int64_t rc) { row_count_ = rc; }
 
-  int64_t get_avg_row_size() const { return avg_row_size_; }
+  int64_t get_avg_row_size() const { return (int64_t)avg_row_size_; }
+  // can't be overload, so we just use the args to pass avg_len.
+  void get_avg_row_size(double &avg_len) const { avg_len = avg_row_size_; }
   void set_avg_row_size(int64_t avg_len) { avg_row_size_ = avg_len; }
 
   int64_t get_sstable_avg_row_size() const { return sstable_avg_row_size_; }
@@ -202,6 +227,30 @@ public:
   int64_t get_modified_count() const { return modified_count_; }
   void set_modified_count(int64_t modified_count) {  modified_count_ = modified_count; }
 
+  int64_t get_sample_size() const { return sample_size_; }
+  void set_sample_size(int64_t sample_size) {  sample_size_ = sample_size; }
+
+  bool is_arrived_expired_time() const {
+    return stat_expired_time_ != -1 && stat_expired_time_ <= ObTimeUtility::current_time(); }
+
+  void set_stat_expired_time(int64_t expired_time) {  stat_expired_time_ = expired_time; }
+
+  void add_row_count(int64_t rc) { row_count_ += rc; }
+
+  // for multi rows
+  void add_avg_row_size(double avg_row_size, int64_t rc) {
+    SQL_LOG(DEBUG, "INFO", K(partition_id_));
+    SQL_LOG(DEBUG, "MERGE TABLE AVG LEN", K(avg_row_size_), K(row_count_), K(avg_row_size), K(rc));
+    if (row_count_ + rc != 0) {
+      avg_row_size_ = (avg_row_size_ * row_count_ + avg_row_size * rc) / (row_count_ + rc);
+      SQL_LOG(DEBUG, "avg size ", K(avg_row_size_));
+    }
+  }
+  // for one row
+  void add_avg_row_size(int64_t avg_row_size) {
+    add_avg_row_size((double)avg_row_size, 1);
+  }
+
   virtual int64_t size() const
   {
     return sizeof(*this);
@@ -218,6 +267,21 @@ public:
       tstat = new (buf) ObOptTableStat();
       *tstat = *this;
       value = tstat;
+    }
+    return ret;
+  }
+
+  virtual int deep_copy(char *buf, const int64_t buf_len, ObOptTableStat *&stat) const
+  {
+    int ret = OB_SUCCESS;
+    ObOptTableStat *tstat = nullptr;
+    if (nullptr == buf || buf_len < size()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid argument.", K(ret), KP(buf), K(buf_len), K(size()));
+    } else {
+      tstat = new (buf) ObOptTableStat();
+      *tstat = *this;
+      stat = tstat;
     }
     return ret;
   }
@@ -245,6 +309,9 @@ public:
     last_analyzed_ = 0;
     stattype_locked_ = 0;
     modified_count_ = 0;
+    sample_size_ = 0;
+    tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+    stat_expired_time_ = -1;
   }
 
   TO_STRING_KV(K(table_id_),
@@ -262,7 +329,10 @@ public:
                K(data_version_),
                K(last_analyzed_),
                K(stattype_locked_),
-               K(modified_count_));
+               K(modified_count_),
+               K(sample_size_),
+               K(tablet_id_),
+               K(stat_expired_time_));
 
 private:
   uint64_t table_id_;
@@ -270,7 +340,7 @@ private:
   int64_t object_type_;
 
   int64_t row_count_;
-  int64_t avg_row_size_;
+  double avg_row_size_;
 
   int64_t sstable_row_count_;
   int64_t memtable_row_count_;
@@ -283,6 +353,9 @@ private:
   int64_t last_analyzed_;
   uint64_t stattype_locked_;
   int64_t modified_count_;
+  int64_t sample_size_;
+  uint64_t tablet_id_;//now only use estimate table rowcnt by meta table.
+  int64_t stat_expired_time_;//mark the stat in cache is arrived expired time, if arrived at expired time need reload, -1 meanings no expire forever.
 };
 
 }

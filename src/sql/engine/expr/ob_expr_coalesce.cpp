@@ -127,6 +127,65 @@ int ObExprCoalesce::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_coalesce_expr;
+  uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+  // 4.1.0 & 4.0 observers may run in same cluster, plan with batch func from observer(version4.1.0) may serialized to
+  // observer(version4.0.0) to execute, thus batch func is not null only if min_cluster_version>=4.1.0
+  if (ob_version >= CLUSTER_VERSION_4_1_0_0) {
+    rt_expr.eval_batch_func_ = calc_batch_coalesce_expr;
+  }
+  return ret;
+}
+
+int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                                             const ObBitVector &skip, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("calculate batch coalesce expr", K(batch_size));
+
+  ObDatum *results = expr.locate_batch_datums(ctx);
+  if (OB_ISNULL(results)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr results frame is not inited", K(ret));
+  } else {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+    my_skip.bit_calculate(skip, eval_flags, batch_size,
+                          [](uint64_t l, uint64_t r) { return l | r; });
+    int64_t skip_cnt = my_skip.accumulate_bit_cnt(batch_size);
+    for (int arg_idx = 0; OB_SUCC(ret) && arg_idx < expr.arg_cnt_; arg_idx++) {
+      if (skip_cnt >= batch_size) {
+        break;
+      } else if (OB_FAIL(expr.args_[arg_idx]->eval_batch(ctx, my_skip, batch_size))) {
+        LOG_WARN("failed to eval batch results", K(arg_idx), K(ret));
+      } else {
+        ObDatumVector dv = expr.args_[arg_idx]->locate_expr_datumvector(ctx);
+        ObBitVector::flip_foreach(
+          my_skip,
+          batch_size,
+          [&](int64_t idx) __attribute__((always_inline)) {
+            if (!dv.at(idx)->is_null()) {
+              results[idx].set_datum(*dv.at(idx));
+              eval_flags.set(idx);
+              my_skip.set(idx);
+              skip_cnt++;
+            }
+            return OB_SUCCESS;
+          }
+        );
+      }
+    }
+    // if skip_map not set, set corresponding result to null
+    if (OB_SUCC(ret)) {
+      ObBitVector::flip_foreach(
+        my_skip,
+        batch_size,
+        [&](int64_t idx) __attribute__((always_inline)) {
+          results[idx].set_null();
+          eval_flags.set(idx);
+          return OB_SUCCESS;
+        });
+    }
+  }
   return ret;
 }
 

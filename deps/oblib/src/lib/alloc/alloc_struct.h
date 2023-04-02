@@ -104,7 +104,7 @@ struct ObLabel
   }
   // for format print
   operator const char*() const;
-  bool is_valid() const { return nullptr != str_; }
+  bool is_valid() const { return nullptr != str_ && '\0' != str_[0]; }
   int64_t to_string(char *buf, const int64_t buf_len) const;
   const char *str_;
 };
@@ -157,7 +157,7 @@ struct AChunk {
   OB_INLINE char *blk_data(const ABlock *block) const;
   OB_INLINE void mark_unused_blk_offset_bit(int offset);
   OB_INLINE void unmark_unused_blk_offset_bit(int offset);
-
+  OB_INLINE bool is_all_blks_unused();
   union {
     uint32_t MAGIC_CODE_;
     struct {
@@ -237,6 +237,7 @@ struct AObject {
     struct {
       struct {
         uint8_t on_leak_check_ : 1;
+        uint8_t on_malloc_sample_ : 1;
       };
     };
   };
@@ -361,6 +362,20 @@ void AChunk::unmark_unused_blk_offset_bit(int offset)
   unused_blk_bs_.unset(offset);
 }
 
+bool AChunk::is_all_blks_unused()
+{
+  bool ret = false;
+  if (0 != washed_size_) {
+    auto blk_bs = blk_bs_;
+    blk_bs.combine(unused_blk_bs_,
+          [](int64_t left, int64_t right) { return (left ^ right); });
+    ret = -1 == blk_bs.min_bit_ge(0);
+  } else {
+    ret = -1 == blk_bs_.min_bit_ge(1);
+  }
+  return ret;
+}
+
 ABlock *AChunk::offset2blk(int offset) const
 {
   return (ABlock*)data_ + offset;
@@ -417,6 +432,7 @@ char *AChunk::blk_data(const ABlock *block) const
 ABlock::ABlock() :
     MAGIC_CODE_(ABLOCK_MAGIC_CODE),
     alloc_bytes_(0),
+    ablock_size_(0),
     obj_set_(NULL), mem_context_(0),
     prev_(this), next_(this)
 {}
@@ -460,7 +476,8 @@ char *ABlock::data() const
 AObject::AObject()
     : MAGIC_CODE_(FREE_AOBJECT_MAGIC_CODE),
       nobjs_(0), nobjs_prev_(0), obj_offset_(0),
-      alloc_bytes_(0), tenant_id_(0)
+      alloc_bytes_(0), tenant_id_(0),
+      on_leak_check_(false), on_malloc_sample_(false)
 {
 }
 

@@ -21,6 +21,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "common/object/ob_object.h"
 #include "sql/parser/ob_parser.h"
+#include "sql/parser/ob_fast_parser.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/plan_cache/ob_id_manager_allocator.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
@@ -115,10 +116,8 @@ public:
   ObSqlParameterization() {}
   virtual ~ObSqlParameterization() {}
   static int fast_parser(common::ObIAllocator &allocator,
-                         ObSQLMode sql_mode,
-                         common::ObCollationType connection_collation,
+                         const FPContext &fp_ctx,
                          const common::ObString &sql,
-                         const bool enable_batched_multi_stmt,
                          ObFastParserResult &fp_result);
 
   static int transform_syntax_tree(common::ObIAllocator &allocator,
@@ -130,7 +129,9 @@ public:
                                    SelectItemParamInfoArray *select_item_param_infos,
                                    share::schema::ObMaxConcurrentParam::FixParamStore &fixed_param_store,
                                    bool is_transform_outline,
-                                   SQL_EXECUTION_MODE execution_mode = INVALID_MODE);
+                                   SQL_EXECUTION_MODE execution_mode = INVALID_MODE,
+                                   const ObIArray<FixedParamValue> *udr_fixed_params = NULL,
+                                   bool is_from_pl = false);
   static int raw_fast_parameterize_sql(common::ObIAllocator &allocator,
                                        const ObSQLSessionInfo &session,
                                        const common::ObString &sql,
@@ -164,11 +165,13 @@ public:
   static SQL_EXECUTION_MODE get_sql_execution_mode(ObPlanCacheCtx &pc_ctx);
   static bool is_prepare_mode(SQL_EXECUTION_MODE mode);
   static bool is_execute_mode(SQL_EXECUTION_MODE mode);
+  static bool is_ignore_scale_check(TransformTreeCtx &ctx, const ParseNode *parent);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlParameterization);
   static int is_fast_parse_const(TransformTreeCtx &ctx);
 
   static bool is_node_not_param(TransformTreeCtx &ctx);
+  static bool is_udr_not_param(TransformTreeCtx &ctx);
   static int transform_tree(TransformTreeCtx &ctx, const ObSQLSessionInfo &session_info);
   static int add_param_flag(const ParseNode *node, SqlInfo &sql_info);
   static int add_not_param_flag(const ParseNode *node, SqlInfo &sql_info);
@@ -186,7 +189,7 @@ private:
   static int parameterize_fields(SelectItemTraverseCtx &ctx);
 
   static int resolve_paramed_const(SelectItemTraverseCtx &ctx);
-  static int transform_minus_op(ObIAllocator &, ParseNode *);
+  static int transform_minus_op(ObIAllocator &, ParseNode *, bool is_from_pl=false);
 
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);

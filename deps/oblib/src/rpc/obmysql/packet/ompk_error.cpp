@@ -79,7 +79,7 @@ int OMPKError::decode()
     pos += 5;
     if (end >= pos) {
       //OB_ASSERT(end >= pos);
-      message_.assign_ptr(pos, static_cast<uint32_t>(end - pos));
+      message_.assign_ptr(pos, static_cast<int32_t>(end - pos));
       pos += end - pos;
       //OB_ASSERT(pos == end);
       if (pos != end) {

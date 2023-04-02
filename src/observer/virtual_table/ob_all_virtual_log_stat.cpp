@@ -43,17 +43,21 @@ int ObAllVirtualPalfStat::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (false == start_to_read_) {
+    const bool is_cluster_already_4100 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
     auto func_iterate_palf = [&](const palf::PalfHandle &palf_handle) -> int {
       int ret = OB_SUCCESS;
       logservice::ObLogStat log_stat;
+      int64_t palf_id = -1;
+      palf_handle.get_palf_id(palf_id);
       if (OB_FAIL(palf_handle.stat(log_stat.palf_stat_))) {
-        SERVER_LOG(WARN, "PalfHandle stat failed", K(ret));
-      } else if (OB_FAIL(get_log_handler_stat_(log_stat.palf_stat_, log_stat))){
-        SERVER_LOG(WARN, "get_log_handler_stat_ failed", K(ret), K(log_stat));
+        SERVER_LOG(WARN, "PalfHandle stat failed", K(ret), K(palf_id));
+      } else if (false == is_cluster_already_4100 &&
+          OB_FAIL(get_log_handler_stat_(log_stat.palf_stat_, log_stat))){
+        SERVER_LOG(WARN, "get_log_handler_stat_ failed", K(ret), K(palf_id), K(log_stat));
       } else if (OB_FAIL(insert_log_stat_(log_stat, &cur_row_))){
-        SERVER_LOG(WARN, "ObAllVirtualPalfStat insert_log_stat_ failed", K(ret), K(log_stat));
+        SERVER_LOG(WARN, "ObAllVirtualPalfStat insert_log_stat_ failed", K(ret), K(palf_id), K(log_stat));
       } else {
-        SERVER_LOG(TRACE, "iterate this log_stream success", K(log_stat));
+        SERVER_LOG(TRACE, "iterate this log_stream success", K(palf_id), K(log_stat));
         scanner_.add_row(cur_row_);
       }
       return ret;
@@ -122,7 +126,7 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 4: {
-        if (OB_FAIL(role_to_string(log_stat.role_, role_str_, sizeof(role_str_)))) {
+        if (OB_FAIL(role_to_string(palf_stat.role_, role_str_, sizeof(role_str_)))) {
           SERVER_LOG(WARN, "role_to_string failed", K(ret), K(palf_stat));
         } else {
           cur_row_.cells_[i].set_varchar(ObString::make_string(role_str_));
@@ -132,7 +136,7 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 5: {
-        cur_row_.cells_[i].set_int(log_stat.proposal_id_);
+        cur_row_.cells_[i].set_int(palf_stat.log_proposal_id_);
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         break;
@@ -172,7 +176,9 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 10: {
-        cur_row_.cells_[i].set_bool(log_stat.in_sync_);
+        const bool is_cluster_already_4100 = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+        const bool is_in_sync = (is_cluster_already_4100)? log_stat.palf_stat_.is_in_sync_: log_stat.in_sync_;
+        cur_row_.cells_[i].set_bool(is_in_sync);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 11: {
@@ -184,7 +190,7 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 13: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(palf_stat.begin_ts_ns_));
+        cur_row_.cells_[i].set_uint64(palf_stat.begin_scn_.get_val_for_inner_table_field());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 14: {
@@ -192,7 +198,7 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 15: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(palf_stat.end_ts_ns_));
+        cur_row_.cells_[i].set_uint64(palf_stat.end_scn_.get_val_for_inner_table_field());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 16: {
@@ -200,7 +206,32 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 17: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(palf_stat.max_ts_ns_));
+        cur_row_.cells_[i].set_uint64(palf_stat.max_scn_.get_val_for_inner_table_field());
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 18: {
+        const ObAddr arb_server = palf_stat.arbitration_member_.get_server();
+        if (arb_server.is_valid()
+            && OB_FAIL(arb_server.ip_port_to_string(arbitration_member_buf_, MAX_SINGLE_MEMBER_LENGTH))) {
+          SERVER_LOG(WARN, "ip_port_to_string failed", K(ret), K(palf_stat));
+        } else {
+          if (!arb_server.is_valid()) {
+            memset(arbitration_member_buf_, 0, MAX_SINGLE_MEMBER_LENGTH);
+          }
+          cur_row_.cells_[i].set_varchar(ObString::make_string(arbitration_member_buf_));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
+        }
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 19: {
+        if (OB_FAIL(learner_list_to_string_(palf_stat.degraded_list_))) {
+          SERVER_LOG(WARN, "learner list to_string failed", K(ret), K(palf_stat));
+        } else {
+          cur_row_.cells_[i].set_varchar(ObString::make_string(degraded_list_buf_));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
+        }
         break;
       }
     }
@@ -230,12 +261,6 @@ int ObAllVirtualPalfStat::get_log_handler_stat_(const palf::PalfStat &palf_stat,
              || NULL == (ls = ls_handle.get_ls())) {
     ret = OB_ENTRY_NOT_EXIST;
     SERVER_LOG(WARN, "get log stream from ObLSService failed", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_log_handler()->prepare_switch_role(log_handler_role, log_handler_pid,
-      unused_role, unused_pid, unused_bool))) {
-    SERVER_LOG(WARN, "get log_handler role failed", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->get_log_restore_handler()->prepare_switch_role(restore_handler_role,
-      restore_handler_pid, unused_role, unused_pid, unused_bool))) {
-    SERVER_LOG(WARN, "get restore_handler role failed", K(ret), K(ls_id));
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ls->get_log_handler()->is_in_sync(is_in_sync, need_rebuild))) {
@@ -243,11 +268,6 @@ int ObAllVirtualPalfStat::get_log_handler_stat_(const palf::PalfStat &palf_stat,
     }
   }
   if (OB_SUCC(ret)) {
-    log_stat.role_ = ((LEADER == palf_stat.role_ ) &&  \
-        ((LEADER == log_handler_role && log_handler_pid == palf_stat.log_proposal_id_)  \
-        || (LEADER == restore_handler_role && restore_handler_pid == palf_stat.log_proposal_id_)))?\
-        LEADER: FOLLOWER;
-    log_stat.proposal_id_ = palf_stat.log_proposal_id_;
     log_stat.in_sync_ = is_in_sync;
   }
   return ret;
@@ -268,6 +288,47 @@ int ObAllVirtualPalfStat::member_list_to_string_(
       MAX_MEMBER_LIST_LENGTH))) {
     SERVER_LOG(WARN, "member_list2text failed", KR(ret),
         K(member_list), K(tmp_member_list), K_(member_list_buf));
+  }
+  return ret;
+}
+
+int ObAllVirtualPalfStat::learner_list_to_string_(
+    const common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  char buf[MAX_IP_PORT_LENGTH];
+  if (learner_list.get_member_number() == 0) {
+    memset(degraded_list_buf_, 0, MAX_LEARNER_LIST_LENGTH);
+  } else {
+    const int64_t count = learner_list.get_member_number();
+    ObMember tmp_learner;
+    for (int64_t i = 0; i < count && (OB_SUCCESS == ret); ++i) {
+      if (OB_FAIL(learner_list.get_learner(i, tmp_learner))) {
+        SERVER_LOG(WARN, "get_learner failed", KR(ret), K(i));
+      }
+      if (0 != pos) {
+        if (pos + 1 < MAX_LEARNER_LIST_LENGTH) {
+          degraded_list_buf_[pos++] = ',';
+        } else {
+          ret = OB_BUF_NOT_ENOUGH;
+          SERVER_LOG(WARN, "buffer not enough", KR(ret), K(pos));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tmp_learner.get_server().ip_port_to_string(buf, sizeof(buf)))) {
+        SERVER_LOG(WARN, "convert server to string failed", KR(ret), K(tmp_learner));
+      } else {
+        int n = snprintf(degraded_list_buf_ + pos, MAX_LEARNER_LIST_LENGTH - pos, \
+            "%s:%ld", buf, tmp_learner.get_timestamp());
+        if (n < 0 || n >= MAX_LEARNER_LIST_LENGTH - pos) {
+          ret = OB_BUF_NOT_ENOUGH;
+          SERVER_LOG(WARN, "snprintf error or buf not enough", KR(ret), K(n), K(pos));
+        } else {
+          pos += n;
+        }
+      }
+    }
   }
   return ret;
 }

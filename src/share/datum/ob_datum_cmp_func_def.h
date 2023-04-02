@@ -24,6 +24,7 @@
 #include "ob_datum_util.h"
 #include "lib/json_type/ob_json_base.h" // for ObIJsonBase
 #include "lib/json_type/ob_json_bin.h" // for ObJsonBin
+#include "share/ob_lob_access_utils.h" // for Text types
 
 namespace oceanbase
 {
@@ -119,6 +120,32 @@ struct ObDatumTCCmp<ObFloatTC, ObFloatTC> : public ObDefined<>
     return real_value_cmp(l.get_float(), r.get_float());
   }
 };
+
+template <ObScale SCALE>
+struct ObFixedDoubleCmp: public ObDefined<>
+{
+  constexpr static double LOG_10[] =
+  {
+    1e000, 1e001, 1e002, 1e003, 1e004, 1e005, 1e006, 1e007,
+    1e008, 1e009, 1e010, 1e011, 1e012, 1e013, 1e014, 1e015,
+    1e016, 1e017, 1e018, 1e019, 1e020, 1e021, 1e022, 1e023,
+    1e024, 1e025, 1e026, 1e027, 1e028, 1e029, 1e030, 1e031
+  };
+  constexpr static double P = 5 / LOG_10[SCALE + 1];
+  inline static int cmp(const ObDatum &l_datum, const ObDatum &r_datum)
+  {
+    int ret = 0;
+    const double l = l_datum.get_double();
+    const double r = r_datum.get_double();
+    if (l == r || fabs(l - r) < P) {
+      ret = 0;
+    } else {
+      ret = (l < r ? -1 : 1);
+    }
+    return ret;
+  }
+};
+
 
 template <>
 struct ObDatumTCCmp<ObDoubleTC, ObDoubleTC> : public ObDatumTCCmp<ObFloatTC, ObFloatTC>
@@ -268,30 +295,71 @@ struct ObDatumTypeCmp<ObURowIDType, ObURowIDType> : public ObDefined<>
   }
 };
 
-template <>
-struct ObDatumTypeCmp<ObJsonType, ObJsonType> : public ObDefined<>
+template <bool HAS_LOB_LOCATOR>
+struct ObDatumJsonCmp : public ObDefined<>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r)
   {
     int ret = OB_SUCCESS;
     int result = 0;
-    ObJsonBin j_bin_l(l.ptr_, l.len_);
-    ObJsonBin j_bin_r(r.ptr_, r.len_);
-    ObIJsonBase *j_base_l = &j_bin_l;
-    ObIJsonBase *j_base_r = &j_bin_r;
+    ObString l_data;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObJsonType, CS_TYPE_BINARY, l.get_string(), HAS_LOB_LOCATOR);
+    ObTextStringIter r_instr_iter(ObJsonType, CS_TYPE_BINARY, r.get_string(), HAS_LOB_LOCATOR);
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(l_instr_iter));
+    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
+    } else {
+      ObJsonBin j_bin_l(l_data.ptr(), l_data.length());
+      ObJsonBin j_bin_r(r_data.ptr(), r_data.length());
+      ObIJsonBase *j_base_l = &j_bin_l;
+      ObIJsonBase *j_base_r = &j_bin_r;
 
-    if (OB_FAIL(j_bin_l.reset_iter())) {
-      COMMON_LOG(WARN, "fail to reset left json bin iter", K(ret), K(l.len_));
-    } else if (OB_FAIL(j_bin_r.reset_iter())) {
-      COMMON_LOG(WARN, "fail to reset right json bin iter", K(ret), K(r.len_));
-    } else if (OB_FAIL(j_base_l->compare(*j_base_r, result))) {
-      COMMON_LOG(WARN, "fail to compare json", K(ret), K(*j_base_l), K(*j_base_r));
+      if (OB_FAIL(j_bin_l.reset_iter())) {
+        COMMON_LOG(WARN, "fail to reset left json bin iter", K(ret), K(l.len_));
+      } else if (OB_FAIL(j_bin_r.reset_iter())) {
+        COMMON_LOG(WARN, "fail to reset right json bin iter", K(ret), K(r.len_));
+      } else if (OB_FAIL(j_base_l->compare(*j_base_r, result))) {
+        COMMON_LOG(WARN, "fail to compare json", K(ret), K(*j_base_l), K(*j_base_r));
+      }
     }
 
     return result;
   }
 };
 
+template <bool HAS_LOB_HEADER>
+struct ObDatumGeoCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int result = 0;
+    ObString l_data;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObGeometryType, CS_TYPE_BINARY, l.get_string(), HAS_LOB_HEADER);
+    ObTextStringIter r_instr_iter(ObGeometryType, CS_TYPE_BINARY, r.get_string(), HAS_LOB_HEADER);
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(l_instr_iter));
+    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
+    } else {
+      result = ObCharset::strcmpsp(CS_TYPE_BINARY, l_data.ptr(), l_data.length(), r_data.ptr(), r_data.length(), false);
+    }
+    return result > 0 ? 1 : (result < 0 ? -1 : 0);
+  }
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // begin define string compare functions
@@ -307,7 +375,9 @@ typedef ObConstIntMapping<0,
     CS_TYPE_UTF16_UNICODE_CI, 1,
     CS_TYPE_UTF8MB4_UNICODE_CI, 1,
     CS_TYPE_GB18030_CHINESE_CI, 1,
-    CS_TYPE_GB18030_BIN, 1> SupportedCollections;
+    CS_TYPE_GB18030_BIN, 1,
+    CS_TYPE_LATIN1_SWEDISH_CI,1,
+    CS_TYPE_LATIN1_BIN,1 > SupportedCollections;
 
 // bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 //                            bool is_oracle_mode,
@@ -324,9 +394,86 @@ template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
 struct ObDatumStrCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
 {
   inline static int cmp(const ObDatum &l, const ObDatum &r)
-  {
+  { // ToDo: @gehao need to handle ObDatum has_lob_header flags ?
     int res = ObCharset::strcmpsp(
         CS_TYPE, l.ptr_, l.len_, r.ptr_, r.len_, WITH_END_SPACE);
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
+
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumTextCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int res = 0;
+    ObString l_data;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
+    ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+    } else if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+    } else {
+      res = ObCharset::strcmpsp(
+          CS_TYPE, l_data.ptr(), l_data.length(), r_data.ptr(), r_data.length(), WITH_END_SPACE);
+
+    }
+    // if error occur when reading outrow lobs, the compare result is wrong.
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
+
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumTextStringCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int res = 0;
+    ObString l_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter l_instr_iter(ObLongTextType, CS_TYPE, l.get_string(), true); // longtext only indicates its a lob type
+    if (OB_FAIL(l_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init left lob str iter failed", K(ret), K(CS_TYPE), K(l));
+    } else if (OB_FAIL(l_instr_iter.get_full_data(l_data))) {
+      COMMON_LOG(WARN, "Lob: get left lob str iter full data failed ", K(ret), K(CS_TYPE), K(l_instr_iter));
+    } else {
+      res = ObCharset::strcmpsp(
+          CS_TYPE, l_data.ptr(), l_data.length(), r.ptr_, r.len_, WITH_END_SPACE);
+    }
+    // if error occur when reading outrow lobs, the compare result is wrong.
+    return res > 0 ? 1 : (res < 0 ? -1 : 0);
+  }
+};
+
+template <ObCollationType CS_TYPE, bool WITH_END_SPACE>
+struct ObDatumStringTextCmp : public ObDefined<SupportedCollections::liner_search(CS_TYPE)>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r)
+  {
+    int ret = OB_SUCCESS;
+    int res = 0;
+    ObString r_data;
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObTextStringIter r_instr_iter(ObLongTextType, CS_TYPE, r.get_string(), true);  // longtext only indicates its a lob type
+    if (OB_FAIL(r_instr_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: init right lob str iter failed", K(ret), K(ret), K(r));
+    } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
+      COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(CS_TYPE), K(r_instr_iter));
+    } else {
+      res = ObCharset::strcmpsp(
+          CS_TYPE, l.ptr_, l.len_, r_data.ptr(), r_data.length(), WITH_END_SPACE);
+
+    }
+    // if error occur when reading outrow lobs, the compare result is wrong.
     return res > 0 ? 1 : (res < 0 ? -1 : 0);
   }
 };

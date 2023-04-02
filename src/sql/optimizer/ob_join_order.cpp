@@ -21,7 +21,8 @@
 #include "sql/optimizer/ob_select_log_plan.h"
 #include "sql/optimizer/ob_skyline_prunning.h"
 #include "sql/optimizer/ob_log_table_scan.h"
-#include "sql/optimizer/ob_log_table_lookup.h"
+#include "sql/optimizer/ob_log_subplan_scan.h"
+#include "sql/optimizer/ob_log_temp_table_access.h"
 #include "sql/plan_cache/ob_plan_set.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
@@ -29,6 +30,7 @@
 #include "sql/optimizer/ob_log_temp_table_insert.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "sql/rewrite/ob_predicate_deduce.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -63,17 +65,28 @@ ObJoinOrder::~ObJoinOrder()
 }
 
 int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
-                                       ObCostTableScanInfo &est_cost_info)
+                                       ObCostTableScanInfo &est_cost_info,
+                                       bool use_skip_scan)
 {
   int ret = OB_SUCCESS;
   const ObQueryRangeArray &ranges = range_info.get_ranges();
+  const ObQueryRangeArray &ss_ranges = range_info.get_ss_ranges();
   est_cost_info.ranges_.reset();
+  est_cost_info.ss_ranges_.reset();
   // maintain query range info
   for(int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
     if (OB_ISNULL(ranges.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("range is null", K(ret));
     } else if (OB_FAIL(est_cost_info.ranges_.push_back(*ranges.at(i)))) {
+      LOG_WARN("failed to add range", K(ret));
+    } else { /*do nothing*/ }
+  }
+  for(int64_t i = 0; use_skip_scan && OB_SUCC(ret) && i < ss_ranges.count(); ++i) {
+    if (OB_ISNULL(ss_ranges.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("range is null", K(ret));
+    } else if (OB_FAIL(est_cost_info.ss_ranges_.push_back(*ss_ranges.at(i)))) {
       LOG_WARN("failed to add range", K(ret));
     } else { /*do nothing*/ }
   }
@@ -218,8 +231,7 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                                                   is_global_index ? NULL : &table_item->part_ids_,
                                                                   dtc_params,
                                                                   is_dml_table,
-                                                                  NULL,
-                                                                  ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+                                                                  NULL))) {
       LOG_WARN("Failed to initialize table location", K(ret));
     } else if (OB_FAIL(table_partition_info->calculate_phy_table_location_info(*exec_ctx,
                                                                               *params,
@@ -287,7 +299,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
                      path->index_id_ == cur_path->index_id_ &&
                      path->use_das_ == cur_path->use_das_) {
             if (path->use_das_) {
-              path->strong_sharding_ = opt_ctx->get_match_all_sharding();  
+              path->strong_sharding_ = opt_ctx->get_match_all_sharding();
             } else {
               path->strong_sharding_ = cur_path->strong_sharding_;
             }
@@ -300,7 +312,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
                                                           path->strong_sharding_))) {
             LOG_WARN("failed to calc sharding info", K(ret));
           } else if (!path->use_das_ && (1 < access_paths.count() || path->is_inner_path_) &&
-                     (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
+                     (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) &&
                      !is_virtual_table(path->ref_table_id_) &&
                      !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), path->ref_table_id_) &&
                      opt_ctx->get_parallel() > path->strong_sharding_->get_part_cnt()) {
@@ -350,8 +362,6 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(opt_ctx),
         K(session_info), K(schema_guard), K(ret));
-  } else if (ObSqlSchemaGuard::is_link_table(stmt, table_partition_info.get_table_id())) {
-    sharding_info = opt_ctx->get_local_sharding();
   } else if (use_das) {
     sharding_info = opt_ctx->get_match_all_sharding();
   } else if (OB_FAIL(schema_guard->get_table_schema(table_partition_info.get_ref_table_id(),
@@ -479,43 +489,43 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
-  ObSEArray<common::ObAddr, 8> servers;
   ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
   uint64_t ref_table_id = path->table_partition_info_->get_ref_table_id();
   uint64_t table_id = path->table_partition_info_->get_table_id();
-  bool is_link = false;
+
   if (OB_ISNULL(get_plan()) || OB_ISNULL(path) ||
       OB_ISNULL(get_plan()->get_stmt()) ||
       OB_ISNULL(path->table_partition_info_) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-      OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard()) ||
-      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
+      OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(path->table_partition_info_->get_location_type(opt_ctx->get_local_server_addr(),
                                                                     location_type))) {
     LOG_WARN("failed to get location type", K(ret));
+  } else if (OB_FAIL(path->table_partition_info_->get_all_servers(path->server_list_))) {
+    LOG_WARN("failed to get all servers", K(ret));
   } else if (opt_ctx->use_intra_parallel()
       && !opt_ctx->is_use_table_dop() & !opt_ctx->is_use_table_parallel_hint()
       && (OB_TBL_LOCATION_LOCAL == location_type || OB_TBL_LOCATION_REMOTE == location_type)) {
     path->parallel_ = opt_ctx->get_parallel();
     path->server_cnt_ = 1;
-  } else if (path->use_das_ || is_link) {
+  } else if (path->use_das_) {
     path->parallel_ = opt_ctx->get_parallel();
     path->server_cnt_ = 1;
+    path->server_list_.reuse();
+    if (OB_FAIL(path->server_list_.push_back(opt_ctx->get_local_server_addr()))) {
+      LOG_WARN("failed to assign das path server list", K(ret));
+    }
   } else if (OB_FAIL(schema_guard->get_table_schema(path->table_partition_info_->get_ref_table_id(),
                                                     table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(path->table_partition_info_->get_all_servers(servers))) {
-    LOG_WARN("failed to get all servers", K(ret));
   } else {
     int64_t parallel = opt_ctx->get_parallel();
     if (opt_ctx->is_use_table_dop()) {
@@ -531,7 +541,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
       }
     }
     path->parallel_ = parallel;
-    path->server_cnt_ = servers.count();
+    path->server_cnt_ = path->server_list_.count();
   }
   return ret;
 }
@@ -567,7 +577,67 @@ int ObJoinOrder::get_valid_index_ids_with_no_index_hint(ObSqlSchemaGuard &schema
   return ret;
 }
 
+int ObJoinOrder::extract_geo_schema_info(const uint64_t table_id,
+                                         const uint64_t index_id,
+                                         ObWrapperAllocator &wrap_allocator,
+                                         ColumnIdInfoMapAllocer &map_alloc,
+                                         ColumnIdInfoMap &geo_columnInfo_map)
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const share::schema::ObTableSchema *index_schema = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(schema_guard), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(table_id), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
+    LOG_WARN("fail to get index schema", K(index_id), K(ret));
+  } else if (OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_schema), K(index_schema), K(ret));
+  } else if (OB_FAIL(geo_columnInfo_map.create(OB_DEFAULT_SRID_BUKER, &map_alloc, &wrap_allocator))) {
+    LOG_WARN("Init column_info_map failed", K(ret));
+  } else {
+    const ObRowkeyInfo* rowkey_info = NULL;
+    const ObColumnSchemaV2 *column_schema = NULL;
+    rowkey_info = &index_schema->get_rowkey_info();
+    uint64_t column_id = OB_INVALID_ID;
+    // traverse index schema
+    for (int col_idx = 0;  OB_SUCC(ret) && col_idx < rowkey_info->get_size(); ++col_idx) {
+      if (OB_FAIL(rowkey_info->get_column_id(col_idx, column_id))) {
+        LOG_WARN("Failed to get column id", K(ret));
+      } else if (OB_ISNULL(column_schema = (index_schema->get_column_schema(column_id)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+      } else if (column_schema->is_spatial_cellid_column()) {
+        const ObColumnSchemaV2 *geo_column_schema = NULL;
+        uint64_t geo_col_id = column_schema->get_geo_col_id();
+        ObGeoColumnInfo column_info;
+        if (OB_ISNULL(geo_column_schema = (table_schema->get_column_schema(geo_col_id)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get column schema", K(column_id), K(ret));
+        } else if (geo_column_schema->is_geometry()) {
+          column_info.srid_ = geo_column_schema->get_srid();
+          column_info.cellid_columnId_ = column_id;
+          if (OB_FAIL(geo_columnInfo_map.set_refactored(geo_col_id, column_info))) {
+            LOG_WARN("failed to set columnId_map", K(geo_col_id), K(ret));
+          } else if (OB_FAIL(geo_columnInfo_map.set_refactored(column_id, column_info))) {
+            LOG_WARN("failed to set columnId_map", K(column_id), K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::get_query_range_info(const uint64_t table_id,
+                                      const uint64_t base_table_id,
                                       const uint64_t index_id,
                                       QueryRangeInfo &range_info,
                                       PathHelper &helper)
@@ -580,7 +650,12 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   ObQueryRange *query_range = NULL;
   const share::schema::ObTableSchema *index_schema = NULL;
   ObQueryRangeArray &ranges = range_info.get_ranges();
+  ObQueryRangeArray &ss_ranges = range_info.get_ss_ranges();
   ObIArray<ColumnItem> &range_columns = range_info.get_range_columns();
+  bool is_geo_index = false;
+  ColumnIdInfoMap geo_columnInfo_map;
+  ObWrapperAllocator wrap_allocator(*allocator_);
+  ColumnIdInfoMapAllocer map_alloc(OB_MALLOC_NORMAL_BLOCK_SIZE, wrap_allocator);
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard()) ||
@@ -596,6 +671,12 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   } else if (OB_FAIL(get_plan()->get_index_column_items(opt_ctx->get_expr_factory(),
                                                         table_id, *index_schema, range_columns))) {
     LOG_WARN("failed to generate rowkey column items", K(ret));
+  } else if ((is_geo_index = index_schema->is_spatial_index()) && OB_FAIL(extract_geo_schema_info(base_table_id,
+                                                                                                index_id,
+                                                                                                wrap_allocator,
+                                                                                                map_alloc,
+                                                                                                geo_columnInfo_map))) {
+    LOG_WARN("failed to extract geometry schema info", K(ret), K(table_id), K(index_id));
   } else {
     const ObSQLSessionInfo *session = opt_ctx->get_session_info();
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
@@ -605,10 +686,15 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t range_prefix_count = 0;
     bool contain_always_false = false;
     bool has_exec_param = false;
-    if (OB_FAIL(extract_preliminary_query_range(range_columns,
-                                                helper.filters_,
-                                                range_info.get_expr_constraints(),
-                                                query_range))) {
+    if (!is_geo_index && OB_FAIL(extract_preliminary_query_range(range_columns,
+                                                                 helper.filters_,
+                                                                 range_info.get_expr_constraints(),
+								 query_range))) {
+      LOG_WARN("failed to extract query range", K(ret), K(index_id));
+    } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
+                                                                           helper.filters_,
+                                                                           geo_columnInfo_map,
+                                                                           query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (OB_ISNULL(query_range)) {
       ret = OB_ERR_UNEXPECTED;
@@ -619,6 +705,11 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                       all_single_value_range,
                                                       dtc_params))) {
       LOG_WARN("failed to final extract query range", K(ret));
+    } else if (OB_FAIL(query_range->get_ss_tablet_ranges(*allocator_,
+                                                         *exec_ctx,
+                                                         ss_ranges,
+                                                         dtc_params))) {
+      LOG_WARN("failed to final extract index skip query range", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::check_prefix_ranges_count(range_info.get_ranges(),
                                                                   equal_prefix_count,
                                                                   equal_prefix_null_count,
@@ -648,7 +739,9 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
         query_range = NULL;
       }
     } else {
-      LOG_TRACE("succeed to get query range", K(ranges), K(*query_range), K(table_id), K(index_id));
+      LOG_TRACE("succeed to get query range", K(ranges), K(ss_ranges), K(helper.filters_),
+                  K(*query_range), K(range_columns), K(query_range->get_range_exprs()),
+                  K(table_id), K(index_id));
     }
   }
   return ret;
@@ -679,13 +772,12 @@ int ObJoinOrder::get_preliminary_prefix_info(ObQueryRange &query_range,
   int64_t equal_prefix_count = 0;
   int64_t range_prefix_count = 0;
   bool contain_always_false = false;
-  if (OB_ISNULL(query_range.get_table_grapth().key_part_head_)) {
+  const ObKeyPart *key_part_head = query_range.get_table_grapth().key_part_head_;
+  if (OB_ISNULL(key_part_head)) {
     ret = OB_NOT_INIT;
     LOG_WARN("table_graph.key_part_head_ is not inited.", K(ret));
-  } else if (query_range.get_table_grapth().key_part_head_->pos_.offset_ < 0) {
-    //do nothing
   } else {
-    get_prefix_info(query_range.get_table_grapth().key_part_head_,
+    get_prefix_info(key_part_head,
                     equal_prefix_count,
                     range_prefix_count,
                     contain_always_false);
@@ -698,7 +790,7 @@ int ObJoinOrder::get_preliminary_prefix_info(ObQueryRange &query_range,
   return ret;
 }
 
-void ObJoinOrder::get_prefix_info(ObKeyPart *key_part,
+void ObJoinOrder::get_prefix_info(const ObKeyPart *key_part,
                                   int64_t &equal_prefix_count,
                                   int64_t &range_prefix_count,
                                   bool &contain_always_false)
@@ -706,7 +798,7 @@ void ObJoinOrder::get_prefix_info(ObKeyPart *key_part,
   if (OB_NOT_NULL(key_part)) {
     equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
     range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-      for ( /*do nothing*/ ; NULL != key_part; key_part = key_part->or_next_) {
+    for ( /*do nothing*/ ; NULL != key_part; key_part = key_part->or_next_) {
       int64_t cur_equal_prefix_count = 0;
       int64_t cur_range_prefix_count = 0;
       if (key_part->is_equal_condition()) {
@@ -718,7 +810,7 @@ void ObJoinOrder::get_prefix_info(ObKeyPart *key_part,
         ++cur_range_prefix_count;
       } else if (key_part->is_range_condition()) {
         ++cur_range_prefix_count;
-      } else if (key_part->is_always_false_condition()) {
+      } else if (key_part->is_always_false()) {
         contain_always_false = true;
       }
       equal_prefix_count = std::min(cur_equal_prefix_count, equal_prefix_count);
@@ -752,6 +844,7 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
       } else if (OB_INVALID_ID != index_to_use) {
         helper.table_opt_info_->optimization_method_ = OptimizationMethod::RULE_BASED;
         helper.table_opt_info_->heuristic_rule_ = HeuristicRule::VIRTUAL_TABLE_HEURISTIC;
+        OPT_TRACE("choose index using heuristics for virtual table", index_to_use);
         LOG_TRACE("OPT:[RBO] choose index using heuristics for virtual table",
                   K(table_id),
                   K(ref_table_id),
@@ -766,6 +859,7 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
                                         helper))) {
         LOG_WARN("Failed to check user_table_heuristics", K(ret));
       } else if (OB_INVALID_ID != index_to_use) {
+        OPT_TRACE("choose primary/index using heuristics", index_to_use);
         LOG_TRACE("OPT:[RBO] choose primary/index using heuristics", K(table_id), K(index_to_use));
       }
     }
@@ -775,7 +869,7 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
         bool is_create_basic_path = false;
         AccessPath *das_access_path = NULL;
         AccessPath *basic_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
-        if (OB_FAIL(will_use_das(table_id, 
+        if (OB_FAIL(will_use_das(table_id,
                                  ref_table_id,
                                  index_to_use,
                                  index_info_cache,
@@ -783,14 +877,15 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
                                  is_create_das_path,
                                  is_create_basic_path))) {
           LOG_WARN("failed to check will use das", K(ret));
-        } else if (is_create_das_path && 
+        } else if (is_create_das_path &&
                    OB_FAIL(create_one_access_path(table_id,
                                                   ref_table_id,
                                                   index_to_use,
                                                   index_info_cache,
                                                   helper,
                                                   das_access_path,
-                                                  true))) {
+                                                  true,
+                                                  OptSkipScanState::SS_DISABLE))) {
           LOG_WARN("failed to create primary index path", K(ret), K(table_id), K(ref_table_id));
         } else if (OB_NOT_NULL(das_access_path) && OB_FAIL(access_paths.push_back(das_access_path))) {
           LOG_WARN("failed to push back access path");
@@ -801,16 +896,19 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
                                                   index_info_cache,
                                                   helper,
                                                   basic_access_path,
-                                                  false))) {
+                                                  false,
+                                                  OptSkipScanState::SS_DISABLE))) {
           LOG_WARN("failed to make index path", "index_table_id", index_to_use, K(ret));
         } else if (OB_NOT_NULL(basic_access_path) && OB_FAIL(access_paths.push_back(basic_access_path))) {
           LOG_WARN("failed to create primary index path", K(ret), K(table_id), K(ref_table_id));
         } else {
           added = true;
+          OPT_TRACE("table added using heuristics", index_to_use);
           LOG_TRACE("OPT:[RBO] table added using heuristics",
                K(table_id), K(ref_table_id), K(index_to_use));
         }
       } else {
+        OPT_TRACE("table not added using heuristics", ref_table_id);
         LOG_TRACE("OPT:[RBO] table not added using heuristics", K(table_id), K(ref_table_id));
       }
     }
@@ -845,8 +943,7 @@ int ObJoinOrder::virtual_table_heuristics(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == idx_id &&  i < valid_index_ids.count(); ++i) {
       if (OB_UNLIKELY(OB_INVALID_ID == valid_index_ids.at(i))) {
         LOG_WARN("index id invalid", K(table_id), K(valid_index_ids.at(i)), K(ret));
-      } else if (OB_FAIL(schema_guard->get_table_schema(valid_index_ids.at(i), index_schema,
-                                        ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))
+      } else if (OB_FAIL(schema_guard->get_table_schema(valid_index_ids.at(i), index_schema))
                  || OB_ISNULL(index_schema)) {
         LOG_WARN("fail to get table schema", K(index_schema), K(valid_index_ids.at(i)), K(ret));
       } else if (!index_schema->is_index_table()) {
@@ -913,7 +1010,7 @@ int ObJoinOrder::user_table_heuristics(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
       int64_t index_col_num = 0;
       uint64_t index_id = valid_index_ids.at(i);
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1139,7 +1236,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                              const ObIndexInfoCache &index_info_cache,
                              PathHelper &helper,
                              bool &create_das_path,
-                             bool &create_basic_path) 
+                             bool &create_basic_path)
 {
   int ret = OB_SUCCESS;
   create_das_path = false;
@@ -1173,11 +1270,14 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     bool hint_force_no_das = false;
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
+                    get_plan()->get_optimizer_context().has_dblink() ||
+                    get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     is_batch_update_table;
     //this sql force to use DAS TSC:
     //batch update table(multi queries or arraybinding)
     //contain nested sql(pl udf or in nested sql)
     //trigger or foreign key in the top sql not force to use DAS TSC
+    //has function table
     if (force_das_tsc) {
       create_das_path = true;
       create_basic_path = false;
@@ -1191,7 +1291,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                get_plan()->get_optimizer_context().get_parallel() < 2) {
       create_das_path = true;
       create_basic_path = false;
-    } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
+    } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) &&
                !is_virtual_table(ref_id) &&
                !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), ref_id)) {
       create_das_path = true;
@@ -1205,14 +1305,15 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   }
   return ret;
 }
-                  
+
 int ObJoinOrder::create_one_access_path(const uint64_t table_id,
                                         const uint64_t ref_id,
                                         const uint64_t index_id,
                                         const ObIndexInfoCache &index_info_cache,
                                         PathHelper &helper,
                                         AccessPath *&access_path,
-                                        bool use_das)
+                                        bool use_das,
+                                        OptSkipScanState use_skip_scan)
 {
   int ret = OB_SUCCESS;
   IndexInfoEntry *index_info_entry = NULL;
@@ -1261,6 +1362,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.index_meta_info_.is_index_back_ = index_info_entry->is_index_back();
     ap->est_cost_info_.index_meta_info_.is_unique_index_ = index_info_entry->is_unique_index();
     ap->est_cost_info_.index_meta_info_.is_global_index_ = index_info_entry->is_index_global();
+    ap->est_cost_info_.index_meta_info_.is_geo_index_ = index_info_entry->is_index_geo();
     ap->est_cost_info_.is_virtual_table_ = is_virtual_table(ref_id);
     ap->est_cost_info_.table_metas_ = &get_plan()->get_basic_table_metas();
     ap->est_cost_info_.sel_ctx_ = &get_plan()->get_selectivity_ctx();
@@ -1274,6 +1376,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->range_prefix_count_ = index_info_entry->get_range_info().get_range_prefix_count();
     ap->interesting_order_info_ = index_info_entry->get_interesting_order_info();
     ap->for_update_ = table_item->for_update_;
+    ap->use_skip_scan_ = use_skip_scan;
     if (!get_plan()->get_stmt()->is_select_stmt()) {
       // do nothing
       // sample scan doesn't support DML other than SELECT.
@@ -1307,7 +1410,10 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     LOG_TRACE("TSC use das", K(ap->use_das_), K(ap->is_global_index_),
              K(table_id), K(ref_id), K(index_id));
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(add_access_filters(ap, ordering_info.get_index_keys(), helper.filters_))) {
+    } else if (OB_FAIL(add_access_filters(ap,
+                                          ordering_info.get_index_keys(),
+                                          range_info.get_query_range()->get_range_exprs(),
+                                          helper))) {
       LOG_WARN("failed to add access filters", K(*ap), K(ordering_info.get_index_keys()), K(ret));
     } else if (get_plan()->get_stmt()->get_column_items(table_id, ap->est_cost_info_.access_column_items_)) {
       LOG_WARN("failed to get column items", K(ret));
@@ -1322,7 +1428,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
         LOG_WARN("failed to get index keys", K(ret));
       } else if (OB_FAIL(ap->est_cost_info_.range_columns_.assign(range_info.get_range_columns()))) {
         LOG_WARN("failed to assign range columns", K(ret));
-      } else if (OB_FAIL(fill_query_range_info(range_info, ap->est_cost_info_))) {
+      } else if (OB_FAIL(fill_query_range_info(range_info, ap->est_cost_info_,
+                                               OptSkipScanState::SS_DISABLE != use_skip_scan))) {
         LOG_WARN("failed to fill query range info", K(ret));
       } else { /*do nothing*/ }
     } else { /*do nothing*/ }
@@ -1341,7 +1448,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
                                ap->pre_query_range_,
                                ap->est_cost_info_,
                                is_nl_with_extended_range,
-                               ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))) {
+                               ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id),
+                               OptSkipScanState::SS_DISABLE != use_skip_scan))) {
         LOG_WARN("failed to fill filters for cost table info", K(ret));
       } else if (!helper.is_inner_path_ &&
                 OB_FAIL(increase_diverse_path_count(ap))) {
@@ -1349,6 +1457,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
       } else if (OB_FAIL(ap->subquery_exprs_.assign(helper.subquery_exprs_))) {
         LOG_WARN("failed to assign exprs", K(ret));
       } else if (OB_FAIL(ap->equal_param_constraints_.assign(helper.equal_param_constraints_))) {
+        LOG_WARN("failed to assign equal param constraints", K(ret));
+      } else if (OB_FAIL(ap->const_param_constraints_.assign(helper.const_param_constraints_))) {
         LOG_WARN("failed to assign equal param constraints", K(ret));
       } else if (OB_FAIL(ap->expr_constraints_.assign(range_info.get_expr_constraints()))) {
         LOG_WARN("failed to assign expr constraints", K(ret));
@@ -1367,7 +1477,8 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
                                           const uint64_t index_id,
                                           common::ObIArray<ObRawExpr*> &index_keys,
                                           common::ObIArray<ObRawExpr*> &ordering,
-                                          ObOrderDirection &direction)
+                                          ObOrderDirection &direction,
+                                          const bool is_index_back)
 {
   int ret = OB_SUCCESS;
   direction = default_asc_direction();
@@ -1391,6 +1502,8 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
     LOG_WARN("NULL pointer error", K(ret), K(table_id), K(ref_table_id), K(index_id));
   } else if (!index_schema->is_ordered()) {
     // for virtual table, we have HASH index which offers no ordering on index keys
+  } else if (index_schema->is_global_index_table() && is_index_back) {
+    // for global index lookup, the order is wrong.
   } else if (OB_FAIL(append(ordering, index_keys))) {
     LOG_WARN("failed to append index ordering expr", K(ret));
   } else if (OB_FAIL(get_index_scan_direction(ordering, stmt,
@@ -1533,35 +1646,53 @@ int ObJoinOrder::get_direction_in_order_by(const ObIArray<OrderItem> &order_by,
   return ret;
 }
 
-
 int ObJoinOrder::add_access_filters(AccessPath *path,
-                                    const ObIArray<ObRawExpr*> &index_keys,
-                                    const ObIArray<ObRawExpr *> &restrict_infos)
+                                    const ObIArray<ObRawExpr *> &index_keys,
+                                    const ObIArray<ObRawExpr *> &range_exprs,
+                                    PathHelper &helper)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
+  const ObIArray<ObRawExpr *> &restrict_infos = helper.filters_;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(path)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(get_plan()), K(stmt), K(path), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < restrict_infos.count(); ++i) {
-      if (ObOptimizerUtil::find_equal_expr(stmt->get_deduced_exprs(), restrict_infos.at(i))) {
-        if (path->ref_table_id_ == path->index_id_) { //主表扫描不添加推导表达式
-        } else {
-          bool index_match = false;
-          if (OB_FAIL(check_expr_overlap_index(restrict_infos.at(i), index_keys, index_match))) {
-            LOG_WARN("check quals match index error", K(restrict_infos.at(i)), K(index_keys), K(ret));
-          } else if (index_match) {
+    ObSEArray<ObRawExpr *, 4> remove_dup;
+    for (int64_t i = 0; OB_SUCC(ret) && i < restrict_infos.count(); i++) {
+      bool found = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < deduced_exprs_info_.count(); j++) {
+        const DeducedExprInfo &deduced_expr_info = deduced_exprs_info_.at(j);
+        if (ObOptimizerUtil::is_expr_equivalent(deduced_expr_info.deduced_expr_, restrict_infos.at(i),
+                                                get_plan()->get_equal_sets())) {
+          found = true;
+          if (ObOptimizerUtil::find_equal_expr(range_exprs, restrict_infos.at(i))) {
             if (OB_FAIL(path->filter_.push_back(restrict_infos.at(i)))) {
               LOG_WARN("push back error", K(ret));
+            } else if (OB_FAIL(append(helper.const_param_constraints_, deduced_expr_info.const_param_constraints_))) {
+              LOG_WARN("append failed", K(ret));
+            } else if (deduced_expr_info.is_precise_) {
+              ObRawExpr *raw_expr = deduced_expr_info.deduced_from_expr_;
+              if (OB_ISNULL(raw_expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("raw expr is null", K(ret));
+              } else if (OB_FAIL(remove_dup.push_back(raw_expr))) {
+                LOG_WARN("push back error", K(ret));
+              }
+            } else {
+              //do nothing
             }
-          } else { /*do nothing*/ }
+          }
         }
-      } else {
+      }
+      if (OB_SUCC(ret) && !found) {
         if (OB_FAIL(path->filter_.push_back(restrict_infos.at(i)))) {
           LOG_WARN("push back error", K(ret));
         }
       }
+    }
+    if (OB_FAIL(ObOptimizerUtil::remove_item(path->filter_, remove_dup))) {
+      LOG_WARN("remove dup failed", K(ret));
     }
   }
   return ret;
@@ -1664,7 +1795,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
       LOG_WARN("check_and_extract query range failed", K(ret));
     } else {
       const ObTableSchema *index_schema = NULL;
-      if (OB_FAIL(guard->get_table_schema(index_table_id, index_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
+      if (OB_FAIL(guard->get_table_schema(index_table_id, index_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(index_schema)) {
         LOG_WARN("index schema should not be null", K(ret));
@@ -1732,6 +1863,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
   if (!do_prunning) {
     skyline_index_ids.reset();
     LOG_TRACE("do not do index prunning", K(table_id), K(base_table_id));
+    OPT_TRACE("do not do index prunning");
     if (OB_FAIL(append(skyline_index_ids, valid_index_ids))) {
       LOG_WARN("failed to append id", K(ret));
     } else { /*do nothing*/ }
@@ -1767,6 +1899,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
         LOG_WARN("get dominated idx ids failed", K(ret));
       } else {
         LOG_TRACE("after prunning remain index ids", K(skyline_index_ids));
+        OPT_TRACE("after prunning remain index ids", skyline_index_ids);
       }
     }
   }
@@ -1783,19 +1916,16 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
   const ObTableSchema *index_schema = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObDMLStmt *stmt = NULL;
-  bool is_link = false;
   index_entry = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard()) ||
       OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(schema_guard), K(ret));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, is_link))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, ObSqlSchemaGuard::is_link_table(stmt, table_id)))) {
     LOG_WARN("failed to get index schema", K(ret));
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1811,22 +1941,22 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
       bool is_index_back = false;
       bool is_unique_index = false;
       bool is_index_global = false;
+      bool is_index_geo = index_schema->is_spatial_index();
       entry->set_index_id(index_id);
       int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
       int64_t max_prefix_count = 0;
-      if (OB_FAIL(get_access_path_ordering(table_id, base_table_id, index_id,
-                                           entry->get_ordering_info().get_index_keys(),
-                                           entry->get_ordering_info().get_ordering(),
-                                           direction))) {
-        LOG_WARN("get_access_path_ordering ", K(ret));
-      } else if (OB_FAIL(get_simple_index_info(table_id, base_table_id, index_id,
+      if (OB_FAIL(get_simple_index_info(table_id, base_table_id, index_id,
                                                is_unique_index, is_index_back, is_index_global))) {
         LOG_WARN("failed to get simple index info", K(ret));
+      } else if (OB_FAIL(get_access_path_ordering(table_id, base_table_id, index_id,
+                                           entry->get_ordering_info().get_index_keys(),
+                                           entry->get_ordering_info().get_ordering(),
+                                           direction,
+                                           is_index_back))) {
+        LOG_WARN("get_access_path_ordering ", K(ret));
       } else {
-        if (is_link) {
-          entry->get_ordering_info().get_ordering().reset();
-        }
         entry->set_is_index_global(is_index_global);
+        entry->set_is_index_geo(is_index_geo);
         entry->set_is_index_back(is_index_back);
         entry->set_is_unique_index(is_unique_index);
         entry->get_ordering_info().set_scan_direction(direction);
@@ -1857,10 +1987,11 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
            //ignore extract query range
           LOG_TRACE("ignore virtual table", K(base_table_id), K(index_id));
         } else if (OB_FAIL(get_query_range_info(table_id,
+                                                base_table_id,
                                                 index_id,
                                                 entry->get_range_info(),
                                                 helper))) {
-          LOG_WARN("failed to get query range", K(ret));
+          LOG_WARN("failed to get query range", K(ret), K(table_id), K(base_table_id), K(index_id));
         } else {
           LOG_TRACE("finish extract query range", K(table_id), K(index_id));
         }
@@ -1927,6 +2058,9 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(params),
         K(stmt), K(ret));
+  } else if (OB_FAIL(get_generated_col_index_qual(table_id,
+                                                  helper.filters_))) {
+    LOG_WARN("get prefix index qual failed");
   } else if (OB_FAIL(get_valid_index_ids(table_id,
                                          ref_table_id,
                                          valid_index_ids))) {
@@ -1960,7 +2094,8 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
       bool is_create_das_path = false;
       AccessPath *das_access_path = NULL;
       AccessPath *basic_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
-      if (OB_FAIL(will_use_das(table_id, 
+      OptSkipScanState use_skip_scan = OptSkipScanState::SS_UNSET;
+      if (OB_FAIL(will_use_das(table_id,
                                ref_table_id,
                                skyline_index_ids.at(i),
                                index_info_cache,
@@ -1968,6 +2103,13 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                is_create_das_path,
                                is_create_basic_path))) {
         LOG_WARN("failed to check will use das", K(ret));
+      } else if (OB_FAIL(will_use_skip_scan(table_id,
+                                            ref_table_id,
+                                            skyline_index_ids.at(i),
+                                            index_info_cache,
+                                            helper,
+                                            use_skip_scan))) {
+        LOG_WARN("failed to check will use skip scan", K(ret));
       } else if (is_create_das_path &&
                  OB_FAIL(create_one_access_path(table_id,
                                                 ref_table_id,
@@ -1975,7 +2117,8 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                                 index_info_cache,
                                                 helper,
                                                 das_access_path,
-                                                true))) {
+                                                true,
+                                                use_skip_scan))) {
         LOG_WARN("failed to make index path", "index_table_id", skyline_index_ids.at(i), K(ret));
       } else if ( OB_NOT_NULL(das_access_path) && OB_FAIL(access_paths.push_back(das_access_path))) {
         LOG_WARN("failed to push back access path", K(ret));
@@ -1986,7 +2129,8 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
                                                index_info_cache,
                                                helper,
                                                basic_access_path,
-                                               false))) {
+                                               false,
+                                               use_skip_scan))) {
         LOG_WARN("failed to make index path", "index_table_id", skyline_index_ids.at(i), K(ret));
       } else if( OB_NOT_NULL(basic_access_path) && OB_FAIL(access_paths.push_back(basic_access_path))) {
         LOG_WARN("failed to push back access path", K(ret));
@@ -1996,50 +2140,52 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::extract_param_for_query_range(const ObIArray<ObRawExpr*> &range_conditions,
-                                               ObIArray<int64_t> &param_pos)
+int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
+                                    const uint64_t ref_id,
+                                    const uint64_t index_id,
+                                    const ObIndexInfoCache &index_info_cache,
+                                    PathHelper &helper,
+                                    OptSkipScanState &use_skip_scan)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < range_conditions.count(); i++) {
-    if (OB_FAIL(extract_param_for_query_range(range_conditions.at(i),
-                                              param_pos))) {
-      LOG_WARN("failed to extract param for query range", K(ret));
-    } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to extract param for query range", K(param_pos));
-  }
-  return ret;
-}
-
-int ObJoinOrder::extract_param_for_query_range(const ObRawExpr *raw_expr,
-                                               ObIArray<int64_t> &param_pos)
-{
-  int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  if (OB_ISNULL(raw_expr)) {
+  use_skip_scan = OptSkipScanState::SS_UNSET;
+  IndexInfoEntry *index_info_entry = NULL;
+  const ObQueryRange *query_range = NULL;
+  bool hint_force_skip_scan = false;
+  bool hint_force_no_skip_scan = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == ref_id) || OB_UNLIKELY(OB_INVALID_ID == index_id) ||
+      OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpecte null", K(ret));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("check stack overflow failed", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret));
-  } else if (raw_expr->is_const_or_param_expr()) {
-    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(raw_expr);
-    if (const_expr->get_value().is_unknown()) {
-      if (OB_FAIL(add_var_to_array_no_dup(param_pos, const_expr->get_value().get_unknown()))) {
-        LOG_WARN("failed to push back into array", K(ret));
-      } else { /*do nothing*/ }
-    }
+    LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(ret));
+  } else if (is_virtual_table(ref_id)) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
+  } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
+                                                           index_info_entry))) {
+    LOG_WARN("failed to get index info entry", K(table_id), K(index_id), K(ret));
+  } else if (OB_ISNULL(index_info_entry)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index info entry should not be null", K(ret));
+  } else if (OB_ISNULL(query_range = index_info_entry->get_range_info().get_query_range()) ||
+             !query_range->is_ss_range()) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_use_skip_scan(table_id,
+                                                                         index_id,
+                                                                         hint_force_skip_scan,
+                                                                         hint_force_no_skip_scan))) {
+    LOG_WARN("failed to check use skip scan", K(ret), K(table_id));
+  } else if (hint_force_skip_scan) {
+    use_skip_scan = OptSkipScanState::SS_HINT_ENABLE;
+  } else if (hint_force_no_skip_scan) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
+  } else if (helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) {
+    use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(extract_param_for_query_range(raw_expr->get_param_expr(i),
-                                                           param_pos)))) {
-        LOG_WARN("failed to extract param for query range", K(ret));
-      } else { /*do nothing*/  }
-    }
+    // may use skip scan for SS_NDV_SEL_ENABLE after calculate ndv and selectivity
+    use_skip_scan = OptSkipScanState::SS_UNSET;
   }
+
+  LOG_TRACE("check use skip scan", K(helper.is_inner_path_),
+                          K(hint_force_skip_scan), K(hint_force_no_skip_scan), K(use_skip_scan));
   return ret;
 }
 
@@ -2120,7 +2266,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
       LOG_WARN("failed to push back array", K(ret));
     } else { /*do nothing*/ }
   } else if (FALSE_IT(log_table_hint = get_plan()->get_log_plan_hint().get_index_hint(table_id))) {
-  } else if (NULL != log_table_hint && !log_table_hint->is_no_index_hint()) {
+  } else if (NULL != log_table_hint && log_table_hint->is_use_index_hint()) {
     // for use index hint, get index ids from hint.
     if (OB_FAIL(valid_index_ids.assign(log_table_hint->index_list_))) {
       LOG_WARN("failed to assign index ids", K(ret));
@@ -2131,7 +2277,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                                             false,
                                                             table_item->access_all_part(),
                                                             false /*domain index*/,
-                                                            table_item->is_link_table() /*is_link*/))) {
+                                                            false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ref_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -2150,6 +2296,24 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
       } else { /*do nothing*/ }
     }
   } else { /*do nothing*/ }
+  if (OB_SUCC(ret)) {
+    const ObTableSchema *schema = NULL;
+    bool is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
+    OPT_TRACE("valid index:");
+    for (int64_t i = 0; i < valid_index_ids.count(); ++i) {
+      schema_guard->get_table_schema(valid_index_ids.at(i), schema, is_link);
+      ObString name;
+      if (OB_ISNULL(schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table schema", K(ret));
+      } else if (ref_table_id == valid_index_ids.at(i)) {
+        name = schema->get_table_name_str();
+      } else if (OB_FAIL(schema->get_index_name(name))) {
+        LOG_WARN("failed to get index name", K(ret));
+      }
+      OPT_TRACE(valid_index_ids.at(i), "->", name);
+    }
+  }
 
   if (OB_SUCC(ret) && is_virtual_table(ref_table_id) && !valid_index_ids.empty()
       && OB_FAIL(add_var_to_array_no_dup(valid_index_ids, ref_table_id))) {
@@ -2341,7 +2505,6 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
   int64_t index_count = OB_MAX_INDEX_PER_TABLE + 3;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObDMLStmt *stmt = NULL;
-  bool is_link = false;
   if (OB_ISNULL(table_opt_info) || OB_ISNULL(get_plan())
       || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())
       || OB_ISNULL(stmt = get_plan()->get_stmt())) {
@@ -2350,8 +2513,6 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
   } else if (OB_UNLIKELY(OB_INVALID_ID == base_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid table id", K(base_table_id), K(ret));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -2360,8 +2521,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
                                                             index_count,
                                                             false,
                                                             true /*global index*/,
-                                                            false /*domain index*/,
-                                                            is_link))) {
+                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(base_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -2374,7 +2534,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
     for (int64_t i = 0; OB_SUCC(ret) && i < index_count; ++i) {
       ObString name;
       uint64_t index_id = index_ids[i];
-      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema, is_link))) {
+      if (OB_FAIL(schema_guard->get_table_schema(index_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2409,7 +2569,7 @@ int ObJoinOrder::fill_opt_info_index_name(const uint64_t table_id,
  * @interest_column_ids 匹配索引前缀的列id
  * @const_column_info   interest_column_ids对应的每一个column是否为const
  * 具体的匹配规则可以看
- * https://aone.alibaba-inc.com/code/D170675
+ *
  * */
 int ObJoinOrder::check_all_interesting_order(const ObIArray<OrderItem> &ordering,
                                              const ObDMLStmt *stmt,
@@ -2441,6 +2601,7 @@ int ObJoinOrder::check_all_interesting_order(const ObIArray<OrderItem> &ordering
                                                                   get_plan()->get_is_subplan_scan(),
                                                                   get_plan()->get_equal_sets(),
                                                                   get_plan()->get_const_exprs(),
+                                                                  get_plan()->get_is_parent_set_distinct(),
                                                                   check_scope,
                                                                   interesting_order_info,
                                                                   prefix_count))) {
@@ -2469,6 +2630,7 @@ int ObJoinOrder::check_all_interesting_order(const ObIArray<OrderItem> &ordering
                                                                 get_plan()->get_is_subplan_scan(),
                                                                 get_plan()->get_equal_sets(),
                                                                 get_plan()->get_const_exprs(),
+                                                                get_plan()->get_is_parent_set_distinct(),
                                                                 check_scope,
                                                                 interesting_order_info))) {
     LOG_WARN("failed to compute stmt interesting order", K(ret));
@@ -2660,10 +2822,28 @@ int ObJoinOrder::extract_filter_column_ids(const ObIArray<ObRawExpr*> &quals,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column expr should not be null", K(ret), K(i));
         } else {
-          const uint64_t column_id = column->get_column_id();
+          uint64_t column_id = column->get_column_id();
           bool has = false;
           if (is_data_table) {
             has = true;
+          } else if (index_schema.is_spatial_index()) {
+            const ObRowkeyInfo* rowkey_info = &index_schema.get_rowkey_info();
+            const ObColumnSchemaV2 *column_schema = NULL;
+            uint64_t index_column_id = OB_INVALID_ID;
+            for (int col_idx = 0;  OB_SUCC(ret) && col_idx < rowkey_info->get_size(); ++col_idx) {
+              if (OB_FAIL(rowkey_info->get_column_id(col_idx, index_column_id))) {
+                LOG_WARN("Failed to get column id", K(ret));
+              } else if (OB_ISNULL(column_schema = (index_schema.get_column_schema(index_column_id)))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get column schema", K(index_column_id), K(ret));
+              } else if (column_schema->is_spatial_cellid_column()) {
+                uint64_t geo_col_id = column_schema->get_geo_col_id();
+                if (geo_col_id == column_id) {
+                  has = true;
+                  column_id = index_column_id;
+                }
+              }
+            }
           } else if (OB_FAIL(index_schema.has_column(column_id, has))) {
             LOG_WARN("check has column failed", K(column_id), K(has), K(ret));
           }
@@ -2754,6 +2934,61 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   return ret;
 }
 
+int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
+                                                     const ObIArray<ObRawExpr*> &predicates,
+                                                     const ColumnIdInfoMap &column_schema_info,
+                                                     ObQueryRange *&query_range)
+{
+  int ret = OB_SUCCESS;
+  ObOptimizerContext *opt_ctx = NULL;
+  const ParamStore *params = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+      OB_ISNULL(allocator_) ||
+      OB_ISNULL(params = opt_ctx->get_params())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
+        K(allocator_), K(params), K(ret));
+  } else {
+    void *tmp_ptr = allocator_->alloc(sizeof(ObQueryRange));
+    ObQueryRange *tmp_qr = NULL;
+    if (OB_ISNULL(tmp_ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for query range", K(ret));
+    } else {
+      tmp_qr = new(tmp_ptr)ObQueryRange(*allocator_);
+      const ObDataTypeCastParams dtc_params =
+            ObBasicSessionInfo::create_dtc_params(opt_ctx->get_session_info());
+      // deep copy
+      ColumnIdInfoMap::const_iterator iter = column_schema_info.begin();
+      if (OB_FAIL(tmp_qr->init_columnId_map())) {
+        LOG_WARN("Init column_info_map failed", K(ret));
+      }
+      while (OB_SUCC(ret) && iter != column_schema_info.end()) {
+        if (OB_FAIL(tmp_qr->set_columnId_map(iter->first, iter->second))) {
+          LOG_WARN("set column info map failed", K(ret), K(iter->first));
+        }
+        iter++;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
+                                                                 dtc_params, opt_ctx->get_exec_ctx(),
+                                                                 NULL, params))) {
+        LOG_WARN("failed to preliminary extract query range", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      query_range = tmp_qr;
+    } else {
+      if (NULL != tmp_qr) {
+        tmp_qr->~ObQueryRange();
+        tmp_qr = NULL;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::estimate_size_and_width_for_base_table(PathHelper &helper,
                                                         ObIArray<AccessPath *> &access_paths)
 {
@@ -2801,17 +3036,22 @@ int ObJoinOrder::estimate_size_and_width_for_join(const ObJoinOrder* left_tree,
   int ret = OB_SUCCESS;
   double new_rows = 0.0;
   double sel = 1.0;
+  EqualSets equal_sets;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) || OB_ISNULL(join_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(left_tree), K(right_tree), K(ret));
   } else if (OB_FAIL(est_join_width())) {
     LOG_WARN("failed to estimate join width", K(ret));
+  } else if (OB_FAIL(append(equal_sets, left_tree->get_output_equal_sets())) ||
+             OB_FAIL(append(equal_sets, right_tree->get_output_equal_sets()))) {
+    LOG_WARN("failed to append equal sets", K(ret));
   } else if (OB_FAIL(calc_join_output_rows(get_plan(),
                                            left_tree->get_tables(),
                                            right_tree->get_tables(),
                                            left_tree->get_output_rows(),
                                            right_tree->get_output_rows(),
-                                           *join_info_, new_rows, sel))) {
+                                           *join_info_, new_rows,
+                                           sel, equal_sets))) {
     LOG_WARN("failed to calc join output rows", K(ret));
   } else {
     set_output_rows(new_rows);
@@ -2936,6 +3176,19 @@ int ObJoinOrder::get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_co
   return ret;
 }
 
+double ObJoinOrder::calc_single_parallel_rows(double rows, int64_t parallel)
+{
+  double ret = rows;
+  if (rows < parallel) {
+    parallel = rows;
+
+  }
+  //at least one parallel
+  parallel = parallel < 1 ? 1: parallel;
+  ret = rows / parallel;
+  return ret;
+}
+
 int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
                                                   ObLogicalOperator *root)
 {
@@ -2950,7 +3203,7 @@ int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
   } else {
     const ObDMLStmt *parent_stmt = get_plan()->get_stmt();
     const ObSelectStmt *child_stmt = static_cast<const ObSelectStmt*>(root->get_stmt());
-    if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_const_expr(
+    if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(
                                         get_plan()->get_optimizer_context().get_expr_factory(),
                                         root->get_output_equal_sets(),
                                         table_id,
@@ -2960,16 +3213,11 @@ int ObJoinOrder::compute_const_exprs_for_subquery(uint64_t table_id,
                                         root->get_output_const_exprs(),
                                         output_const_exprs_))) {
       LOG_WARN("failed to convert subplan scan expr", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(
-                                        get_plan()->get_optimizer_context().get_expr_factory(),
-                                        root->get_output_equal_sets(),
-                                        table_id,
-                                        *parent_stmt,
-                                        *child_stmt,
-                                        true,
-                                        root->get_output_const_exprs(),
-                                        output_const_exprs_))) {
-      LOG_WARN("failed to convert subplan scan expr", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_subplan_const_column(*parent_stmt,
+                                                                 table_id,
+                                                                 *child_stmt,
+                                                                 output_const_exprs_))) {
+      LOG_WARN("failed to get subplan const column expr", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
       LOG_WARN("failed to compute const exprs", K(ret));
     } else { /*do nothing*/ }
@@ -3181,7 +3429,7 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
       LOG_WARN("equal expr is null", K(ret));
     } else if (OB_FAIL(equal_expr->formalize(plan->get_optimizer_context().get_session_info()))) {
       LOG_WARN("failed to formalize expr", K(ret));
-    } else if (OB_FAIL(equal_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+    } else if (OB_FAIL(equal_expr->pull_relation_id())) {
       LOG_WARN("failed to pull relation id and levels", K(ret));
     } else if (OB_FAIL(preds.push_back(equal_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
@@ -3190,18 +3438,24 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
   return ret;
 }
 
-int ObJoinOrder::convert_subplan_scan_order_item(ObRawExprFactory &expr_factory,
-                                                 const EqualSets &equal_sets,
-                                                 const ObIArray<ObRawExpr *> &const_exprs,
+int ObJoinOrder::convert_subplan_scan_order_item(ObLogPlan &plan,
+                                                 ObLogicalOperator &subplan_root,
                                                  const uint64_t table_id,
-                                                 const ObDMLStmt &parent_stmt,
-                                                 const ObSelectStmt &child_stmt,
-                                                 const ObIArray<OrderItem> &input_order,
                                                  ObIArray<OrderItem> &output_order)
 {
   int ret = OB_SUCCESS;
-  ObRawExprCopier copier(expr_factory);
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_order.count(); i++) {
+  const EqualSets &equal_sets = subplan_root.get_output_equal_sets();
+  const ObIArray<ObRawExpr *> &const_exprs = subplan_root.get_output_const_exprs();
+  const ObSelectStmt *child_stmt = static_cast<const ObSelectStmt *>(subplan_root.get_stmt());
+  const ObIArray<OrderItem> &input_order = subplan_root.get_op_ordering();
+  ObRawExprCopier copier(plan.get_optimizer_context().get_expr_factory());
+  if (OB_ISNULL(subplan_root.get_stmt()) ||
+      !OB_UNLIKELY(subplan_root.get_stmt()->is_select_stmt()) ||
+      OB_ISNULL(plan.get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_order.count(); ++i) {
     ObRawExpr *temp_expr = NULL;
     if (OB_ISNULL(input_order.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -3209,8 +3463,8 @@ int ObJoinOrder::convert_subplan_scan_order_item(ObRawExprFactory &expr_factory,
     } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(copier,
                                                                   equal_sets,
                                                                   table_id,
-                                                                  parent_stmt,
-                                                                  child_stmt,
+                                                                  *plan.get_stmt(),
+                                                                  *child_stmt,
                                                                   input_order.at(i).expr_,
                                                                   temp_expr))) {
       LOG_WARN("failed to convert subplan scan expr", K(ret));
@@ -3236,27 +3490,26 @@ int ObJoinOrder::convert_subplan_scan_order_item(ObRawExprFactory &expr_factory,
     LOG_TRACE("subplan scan order item", K(output_order));
   }
   return ret;
+
+
+  return ret;
 }
 
-int ObJoinOrder::convert_subplan_scan_sharding_info(ObIAllocator &allocator,
-                                                    ObOptimizerContext &opt_ctx,
-                                                    const EqualSets &equal_sets,
+int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
+                                                    ObLogicalOperator &subplan_root,
                                                     const uint64_t table_id,
-                                                    const ObDMLStmt &parent_stmt,
-                                                    const ObSelectStmt &child_stmt,
-                                                    ObShardingInfo *input_strong_sharding,
-                                                    const ObIArray<ObShardingInfo*> &input_weak_sharding,
                                                     ObShardingInfo *&output_strong_sharding,
                                                     ObIArray<ObShardingInfo*> &output_weak_sharding)
 {
   int ret = OB_SUCCESS;
+  ObOptimizerContext &opt_ctx = plan.get_optimizer_context();
+  ObShardingInfo *input_strong_sharding = subplan_root.get_strong_sharding();
+  const ObIArray<ObShardingInfo*> &input_weak_sharding = subplan_root.get_weak_sharding();
+
   if (NULL != input_strong_sharding &&
-      OB_FAIL(convert_subplan_scan_sharding_info(allocator,
-                                                 opt_ctx,
-                                                 equal_sets,
+      OB_FAIL(convert_subplan_scan_sharding_info(plan,
+                                                 subplan_root,
                                                  table_id,
-                                                 parent_stmt,
-                                                 child_stmt,
                                                  true,
                                                  input_strong_sharding,
                                                  output_strong_sharding))) {
@@ -3267,12 +3520,9 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObIAllocator &allocator,
       if (OB_ISNULL(input_weak_sharding.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(convert_subplan_scan_sharding_info(allocator,
-                                                            opt_ctx,
-                                                            equal_sets,
+      } else if (OB_FAIL(convert_subplan_scan_sharding_info(plan,
+                                                            subplan_root,
                                                             table_id,
-                                                            parent_stmt,
-                                                            child_stmt,
                                                             false,
                                                             input_weak_sharding.at(i),
                                                             temp_sharding))) {
@@ -3288,12 +3538,9 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObIAllocator &allocator,
   return ret;
 }
 
-int ObJoinOrder::convert_subplan_scan_sharding_info(ObIAllocator &allocator,
-                                                    ObOptimizerContext &opt_ctx,
-                                                    const EqualSets &equal_sets,
+int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
+                                                    ObLogicalOperator &subplan_root,
                                                     const uint64_t table_id,
-                                                    const ObDMLStmt &parent_stmt,
-                                                    const ObSelectStmt &child_stmt,
                                                     bool is_strong,
                                                     ObShardingInfo *input_sharding,
                                                     ObShardingInfo *&output_sharding)
@@ -3302,35 +3549,38 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObIAllocator &allocator,
   ObSEArray<ObRawExpr*, 8> part_exprs;
   ObSEArray<ObRawExpr*, 8> subpart_exprs;
   ObSEArray<ObRawExpr*, 8> part_func;
+  const ObSelectStmt *child_stmt = static_cast<const ObSelectStmt *>(subplan_root.get_stmt());
+  ObIAllocator &allocator = plan.get_allocator();
+  ObRawExprFactory &expr_factory = plan.get_optimizer_context().get_expr_factory();
   output_sharding = NULL;
-  if (OB_ISNULL(input_sharding)) {
+  if (OB_ISNULL(input_sharding) || OB_ISNULL(plan.get_stmt()) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(input_sharding), K(ret));
   } else if (input_sharding->is_single() || input_sharding->is_distributed_without_partitioning()) {
     output_sharding = input_sharding;
-  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(opt_ctx.get_expr_factory(),
-                                                                equal_sets,
+  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
+                                                                subplan_root.get_output_equal_sets(),
                                                                 table_id,
-                                                                parent_stmt,
-                                                                child_stmt,
+                                                                *plan.get_stmt(),
+                                                                *child_stmt,
                                                                 false,
                                                                 input_sharding->get_partition_keys(),
                                                                 part_exprs))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(opt_ctx.get_expr_factory(),
-                                                                equal_sets,
+  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
+                                                                subplan_root.get_output_equal_sets(),
                                                                 table_id,
-                                                                parent_stmt,
-                                                                child_stmt,
+                                                                *plan.get_stmt(),
+                                                                *child_stmt,
                                                                 false,
                                                                 input_sharding->get_sub_partition_keys(),
                                                                 subpart_exprs))) {
     LOG_WARN("failed to convert subplan scan expr", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(opt_ctx.get_expr_factory(),
-                                                                equal_sets,
+  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
+                                                                subplan_root.get_output_equal_sets(),
                                                                 table_id,
-                                                                parent_stmt,
-                                                                child_stmt,
+                                                                *plan.get_stmt(),
+                                                                *child_stmt,
                                                                 false,
                                                                 input_sharding->get_partition_func(),
                                                                 part_func))) {
@@ -3342,11 +3592,11 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObIAllocator &allocator,
     if (!is_strong && !is_converted) {
       /*do nothing*/
     } else if (is_strong && !is_converted) {
-      output_sharding = opt_ctx.get_distributed_sharding();
+      output_sharding = plan.get_optimizer_context().get_distributed_sharding();
     } else {
       ObShardingInfo *temp_sharding = NULL;
       if (OB_ISNULL(temp_sharding =
-                reinterpret_cast<ObShardingInfo*>(allocator.alloc(sizeof(ObShardingInfo))))) {
+                static_cast<ObShardingInfo*>(allocator.alloc(sizeof(ObShardingInfo))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
@@ -3412,7 +3662,8 @@ int ObJoinOrder::add_path(Path* path)
   } else {
     bool should_add = true;
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
-    if (!path->is_cte_path() && 
+    OPT_TRACE("path:", path);
+    if (!path->is_cte_path() &&
         path->contain_match_all_fake_cte() &&
         !path->is_remote()) {
       should_add = false;
@@ -3429,14 +3680,16 @@ int ObJoinOrder::add_path(Path* path)
                  K(*cur_path), K(*path), K(ret));
       } else if (DominateRelation::OBJ_LEFT_DOMINATE == plan_rel ||
                  DominateRelation::OBJ_EQUAL == plan_rel) {
-        should_add = false;    
+        should_add = false;
         LOG_TRACE("current path has been dominated, no need to add", K(*cur_path),
-                  K(*path), K(ret)); 
+            K(*path), K(ret));
+        OPT_TRACE("current path has been dominated by path:", cur_path);
       } else if (DominateRelation::OBJ_RIGHT_DOMINATE == plan_rel) {
         if (OB_FAIL(interesting_paths_.remove(i))) {
           LOG_WARN("failed to remove dominated plans", K(i), K(ret));
         } else {
           LOG_TRACE("current path dominated interesting path", K(*cur_path), K(*path), K(ret));
+          OPT_TRACE("current path dominated interesting path:", cur_path);
         }
       } else { /* do nothing */ }
     }
@@ -3446,6 +3699,10 @@ int ObJoinOrder::add_path(Path* path)
         LOG_WARN("failed to add plan into interesting paths", K(ret));
       } else if (!should_add && OB_FAIL(add_recycled_paths(path))) {
         LOG_WARN("failed to add recycled path", K(ret));
+      } else if (should_add) {
+        OPT_TRACE("this path is added, interesting path count:", interesting_paths_.count());
+      } else {
+        OPT_TRACE("this path is domained, interesting path count:", interesting_paths_.count());
       }
     }
   }
@@ -3519,7 +3776,6 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
     } else {
       right_dominated_count++;
     }
-     
     // check dominate relationship for sharding info
     if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(first_path.get_strong_sharding(),
                                                                first_path.get_weak_sharding(),
@@ -3734,6 +3990,8 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
 
   if (OB_FAIL(ordering_.assign(other.ordering_))) {
     LOG_WARN("failed to assign nested loop params", K(ret));
+  } else if (OB_FAIL(server_list_.assign(other.server_list_))) {
+    LOG_WARN("failed to assign server list", K(ret));
   } else if (OB_FAIL(filter_.assign(other.filter_))) {
     LOG_WARN("failed to assign nested loop params", K(ret));
   } else if (OB_FAIL(pushdown_filters_.assign(other.pushdown_filters_))) {
@@ -3756,6 +4014,11 @@ bool oceanbase::sql::Path::is_cte_path() const
 bool oceanbase::sql::Path::is_function_table_path() const
 {
   return NULL != parent_ && parent_->get_type() == FUNCTION_TABLE_ACCESS;
+}
+
+bool oceanbase::sql::Path::is_json_table_path() const
+{
+  return NULL != parent_ && parent_->get_type() == JSON_TABLE_ACCESS;
 }
 
 bool oceanbase::sql::Path::is_temp_table_path() const
@@ -3800,22 +4063,6 @@ int oceanbase::sql::Path::check_is_base_table(bool &is_base_table)
   return ret;
 }
 
-
-int oceanbase::sql::Path::check_meet_repart(bool &can_repart)
-{
-  int ret = OB_SUCCESS;
-  can_repart = false;
-  if (OB_ISNULL(get_sharding())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (!get_sharding()->is_distributed_with_table_location_and_partitioning()) {
-    can_repart = false;
-  } else if (OB_FAIL(check_is_base_table(can_repart))) {
-    LOG_WARN("failed to check is bas table", K(ret));
-  }
-  return ret;
-}
-
 int oceanbase::sql::Path::re_estimate_cost(EstimateCostInfo &info, double &card, double &cost)
 {
   int ret = OB_SUCCESS;
@@ -3830,6 +4077,48 @@ int oceanbase::sql::Path::compute_pipeline_info()
   int ret = OB_SUCCESS;
   is_pipelined_path_ = true;
   is_nl_style_pipelined_path_ = true;
+  return ret;
+}
+
+int oceanbase::sql::Path::compute_path_property_from_log_op()
+{
+  int ret = OB_SUCCESS;
+  int64_t interesting_order_info;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(log_op_) || OB_ISNULL(parent_) ||
+      OB_ISNULL(parent_->get_plan()) ||
+      OB_ISNULL(stmt=parent_->get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null log op", K(ret));
+  } else if (OB_FAIL(get_ordering().assign(log_op_->get_op_ordering()))) {
+    LOG_WARN("failed to assign ordering", K(ret));
+  } else if (OB_FAIL(weak_sharding_.assign(log_op_->get_weak_sharding()))) {
+    LOG_WARN("failed to assign weak sharding", K(ret));
+  } else if (OB_FAIL(parent_->check_all_interesting_order(get_ordering(),
+                                                          stmt,
+                                                          interesting_order_info))) {
+    LOG_WARN("failed to check all interesting order", K(ret));
+  } else {
+    strong_sharding_ = log_op_->get_strong_sharding();
+    set_interesting_order_info(interesting_order_info);
+    is_local_order_ = log_op_->get_is_local_order();
+    is_range_order_ = log_op_->get_is_range_order();
+    exchange_allocated_ = log_op_->is_exchange_allocated();
+    phy_plan_type_ = log_op_->get_phy_plan_type();
+    location_type_ = log_op_->get_location_type();
+    contain_fake_cte_ = log_op_->get_contains_fake_cte();
+    contain_pw_merge_op_ = log_op_->get_contains_pw_merge_op();
+    contain_match_all_fake_cte_ = log_op_->get_contains_match_all_fake_cte();
+    contain_das_op_ = log_op_->get_contains_das_op();
+    parallel_ = log_op_->get_parallel();
+    server_cnt_ = log_op_->get_server_cnt();
+    is_pipelined_path_ = log_op_->is_pipelined_plan();
+    is_nl_style_pipelined_path_ = log_op_->is_nl_style_pipelined_plan();
+    cost_ = log_op_->get_cost();
+    op_cost_ = log_op_->get_op_cost();
+    contain_pw_merge_op_ = log_op_->get_contains_pw_merge_op();
+    inner_row_count_ = log_op_->get_card();
+  }
   return ret;
 }
 
@@ -3855,6 +4144,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   range_prefix_count_ = other.range_prefix_count_;
   table_opt_info_ = other.table_opt_info_;
   for_update_ = other.for_update_;
+  use_skip_scan_ = other.use_skip_scan_;
 
   if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
@@ -3982,7 +4272,7 @@ int AccessPath::re_estimate_cost(EstimateCostInfo &param, double &card, double &
   return ret;
 }
 
-const ObRangesArray& AccessPath::get_query_ranges() const
+const ObIArray<ObNewRange>& AccessPath::get_query_ranges() const
 {
   return est_cost_info_.ranges_;
 }
@@ -4000,6 +4290,26 @@ int FunctionTablePath::assign(const FunctionTablePath &other, common::ObIAllocat
 }
 
 int FunctionTablePath::estimate_cost()
+{
+  int ret = OB_SUCCESS;
+  op_cost_ = 1.0;
+  cost_ = 1.0;
+  return  ret;
+}
+
+int JsonTablePath::assign(const JsonTablePath &other, common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(Path::assign(other, allocator))) {
+    LOG_WARN("failed to deep copy path", K(ret));
+  } else {
+    table_id_ = other.table_id_;
+    value_expr_ = other.value_expr_;
+  }
+  return ret;
+}
+
+int JsonTablePath::estimate_cost()
 {
   int ret = OB_SUCCESS;
   op_cost_ = 1.0;
@@ -4200,6 +4510,8 @@ int JoinPath::compute_join_path_sharding()
                                               reselected_dup_pos,
                                               strong_sharding_))) {
         LOG_WARN("failed to compute basic sharding info", K(ret));
+      } else if (OB_FALSE_IT(inherit_sharding_index_ = 0)) {
+        //do nothing
       } else if (reselected_dup_pos.empty()) {
         /*no duplicated table, do nothing*/
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {
@@ -4219,17 +4531,21 @@ int JoinPath::compute_join_path_sharding()
       strong_sharding_ = opt_ctx.get_local_sharding();
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
       strong_sharding_ = left_path_->strong_sharding_;
+      inherit_sharding_index_ = 0;
       if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
       strong_sharding_ = right_path_->strong_sharding_;
+      inherit_sharding_index_ = 1;
       if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
-    } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {
+    } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_ ||
+               DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (LEFT_OUTER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4239,6 +4555,7 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else if (RIGHT_OUTER_JOIN == join_type_) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_)) ||
             OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
@@ -4261,16 +4578,19 @@ int JoinPath::compute_join_path_sharding()
                  LEFT_ANTI_JOIN == join_type_ ||
                  INNER_JOIN == join_type_) {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       }
-    } else if (DistAlgo::DIST_PARTITION_NONE == join_dist_algo_) {
+    } else if (DistAlgo::DIST_PARTITION_NONE == join_dist_algo_ ||
+               DistAlgo::DIST_HASH_NONE == join_dist_algo_) {
       if (LEFT_OUTER_JOIN == join_type_ || FULL_OUTER_JOIN == join_type_) {
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append append weak sharding", K(ret));
@@ -4280,23 +4600,26 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       }
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
         (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_ && JoinAlgo::HASH_JOIN == join_algo_)) {
-      if (right_path_->parallel_more_than_part_cnt()) {		
-        //If the degree of parallelism is greater than the number of partitions,		
-        //sharding will not be inherited to avoid thread waste.		
-        strong_sharding_ = opt_ctx.get_distributed_sharding();		
+      if (right_path_->parallel_more_than_part_cnt()) {
+        //If the degree of parallelism is greater than the number of partitions,
+        //sharding will not be inherited to avoid thread waste.
+        strong_sharding_ = opt_ctx.get_distributed_sharding();
       } else {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
         if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       }
-    } else if (DistAlgo::DIST_NONE_PARTITION == join_dist_algo_) {
+    } else if (DistAlgo::DIST_NONE_PARTITION == join_dist_algo_ ||
+               DistAlgo::DIST_NONE_HASH == join_dist_algo_) {
       if (RIGHT_OUTER_JOIN == join_type_ || FULL_OUTER_JOIN == join_type_) {
         if (OB_FAIL(append(weak_sharding_, left_path_->get_weak_sharding()))) {
           LOG_WARN("failed to push back weak sharding", K(ret));
@@ -4306,17 +4629,19 @@ int JoinPath::compute_join_path_sharding()
         } else { /*do nothing*/ }
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
       }
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_) {
-      if (left_path_->parallel_more_than_part_cnt()) {		
-        //If the degree of parallelism is greater than the number of partitions,		
-        //sharding will not be inherited to avoid thread waste.		
-        strong_sharding_ = opt_ctx.get_distributed_sharding();		
+      if (left_path_->parallel_more_than_part_cnt()) {
+        //If the degree of parallelism is greater than the number of partitions,
+        //sharding will not be inherited to avoid thread waste.
+        strong_sharding_ = opt_ctx.get_distributed_sharding();
       } else {
         strong_sharding_ = left_path_->strong_sharding_;
+        inherit_sharding_index_ = 0;
         if (OB_FAIL(append(weak_sharding_, left_path_->weak_sharding_))) {
           LOG_WARN("failed to append weak sharding", K(ret));
         } else { /*do nothing*/ }
@@ -4328,6 +4653,7 @@ int JoinPath::compute_join_path_sharding()
     } else if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       if (right_path_->is_single()) {
         strong_sharding_ = right_path_->strong_sharding_;
+        inherit_sharding_index_ = 1;
       } else {
         strong_sharding_ = opt_ctx.get_distributed_sharding();
       }
@@ -4498,9 +4824,27 @@ int JoinPath::compute_hash_hash_sharding_info()
           }
         }
       }
+      // determine if hybrid hash dm can be enabled
+      // should check is_naaj - #issue/46230785
+      if (OB_SUCC(ret) && !is_naaj_ && 1 == equal_join_conditions_.count()) {
+        ObArray<ObObj> popular_values;
+        if (OB_FAIL(log_plan->check_if_use_hybrid_hash_distribution(
+                    log_plan->get_optimizer_context(),
+                    log_plan->get_stmt(),
+                    join_type_,
+                    *right_expr,
+                    popular_values))) {
+          LOG_WARN("fail check if use hybrid hash distribution", K(ret));
+        } else if (popular_values.count() > 0) {
+          use_hybrid_hash_dm_ = true;
+        }
+      }
     }
     if (OB_SUCC(ret)) {
-      if ((use_left && FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) ||
+      if (use_hybrid_hash_dm_) {
+        // fix issue/45941566
+        strong_sharding_ = log_plan->get_optimizer_context().get_distributed_sharding();
+      } else if ((use_left && FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) ||
           (use_right && FULL_OUTER_JOIN != join_type_ && LEFT_OUTER_JOIN != join_type_)) {
         ObShardingInfo *target_sharding = NULL;
         if (use_left && OB_FAIL(log_plan->get_cached_hash_sharding_info(left_join_exprs,
@@ -4526,7 +4870,6 @@ int JoinPath::compute_hash_hash_sharding_info()
           } else if (use_right && FULL_OUTER_JOIN != join_type_ && LEFT_OUTER_JOIN != join_type_) {
             ret = target_sharding->get_partition_keys().assign(right_join_exprs);
           } else { /*do nothing*/ }
-
           if (OB_FAIL(ret)) {
             /*do nothing*/
           } else if (OB_FAIL(log_plan->get_hash_dist_info().push_back(target_sharding))) {
@@ -4543,6 +4886,7 @@ int JoinPath::compute_hash_hash_sharding_info()
   return ret;
 }
 
+
 int JoinPath::compute_join_path_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
@@ -4555,44 +4899,102 @@ int JoinPath::compute_join_path_parallel_and_server_info()
     if (is_slave_mapping_) {
       parallel_ = opt_ctx.get_parallel();
       server_cnt_ = left_path_->server_cnt_;
-    } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_ ||
-               DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
+      if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_) {
       parallel_ = 1;
       server_cnt_ = 1;
+      if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
+      parallel_ = 1;
+      server_cnt_ = 1;
+      if (OB_FAIL(server_list_.push_back(opt_ctx.get_local_server_addr()))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
     } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
       parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
+      if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
     } else if (DistAlgo::DIST_ALL_NONE == join_dist_algo_) {
       parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
+      if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
     } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_) {
       if (OB_NOT_NULL(left_path_->strong_sharding_) && OB_NOT_NULL(right_path_->strong_sharding_)) {
         parallel_ = opt_ctx.get_parallel();
         int64_t part_cnt = left_path_->strong_sharding_->get_part_cnt();
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
         server_cnt_ = left_path_->server_cnt_;
+        if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+          LOG_WARN("failed to assign server list", K(ret));
+        }
+      }
+    } else if (DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
+      if (OB_NOT_NULL(left_path_->strong_sharding_) && OB_NOT_NULL(right_path_->strong_sharding_)) {
+        parallel_ = opt_ctx.get_parallel();
+        server_cnt_ = left_path_->server_cnt_;
+        if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+          LOG_WARN("failed to assign server list", K(ret));
+        }
       }
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
                DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
-    } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
-               DistAlgo::DIST_HASH_HASH == join_dist_algo_) {
+      if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_) {
       parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
+      if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo_) {
+      parallel_ = left_path_->parallel_;
+      server_cnt_ = left_path_->server_cnt_;
+      common::ObAddr all_server_list;
+      // a special ALL server list indicating hash-hash data distribution
+      all_server_list.set_max();
+      if (OB_FAIL(server_list_.push_back(all_server_list))) {
+        LOG_WARN("failed to assign all server list", K(ret));
+      }
     } else if (DistAlgo::DIST_PARTITION_NONE == join_dist_algo_) {
       parallel_ = right_path_->parallel_;
       server_cnt_ = right_path_->server_cnt_;
-      if (OB_NOT_NULL(right_path_->strong_sharding_)) {
+      if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      } else if (OB_NOT_NULL(right_path_->strong_sharding_)) {
         int64_t part_cnt = right_path_->strong_sharding_->get_part_cnt();
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
+      }
+    } else if (DistAlgo::DIST_HASH_NONE == join_dist_algo_) {
+      parallel_ = right_path_->parallel_;
+      server_cnt_ = right_path_->server_cnt_;
+      if (OB_FAIL(server_list_.assign(right_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
       }
     } else if (DistAlgo::DIST_NONE_PARTITION == join_dist_algo_) {
       parallel_ = left_path_->parallel_;
       server_cnt_ = left_path_->server_cnt_;
-      if (OB_NOT_NULL(left_path_->strong_sharding_)) {
+      if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      } else if (OB_NOT_NULL(left_path_->strong_sharding_)) {
         int64_t part_cnt = left_path_->strong_sharding_->get_part_cnt();
         parallel_ = parallel_ > part_cnt ? part_cnt : parallel_;
+      }
+    } else if (DistAlgo::DIST_NONE_HASH == join_dist_algo_) {
+      parallel_ = left_path_->parallel_;
+      server_cnt_ = left_path_->server_cnt_;
+      if (OB_FAIL(server_list_.assign(left_path_->server_list_))) {
+        LOG_WARN("failed to assign server list", K(ret));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -4624,21 +5026,30 @@ int JoinPath::can_use_batch_nlj(ObLogPlan *plan,
                       || access_path->is_cte_path()
                       || access_path->is_function_table_path()
                       || access_path->is_temp_table_path()
+                      || access_path->is_json_table_path()
                       || table_item->for_update_
                       || !access_path->subquery_exprs_.empty()
                       );
-    for (int64_t i = 0; OB_SUCC(ret) && use_batch_nlj && i < access_path->filter_.count(); ++i) {
-      const ObRawExpr *expr = access_path->filter_.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table filter is null", K(ret));
-      } else if (OB_NOT_NULL(access_path->pre_query_range_) &&
-                ObOptimizerUtil::find_item(access_path->pre_query_range_->get_range_exprs(), expr)) {
-        //range expr, do nothing
-      } else {
-        use_batch_nlj = !expr->has_flag(CNT_DYNAMIC_PARAM);
+
+    if (use_batch_nlj) {
+      bool found_query_range = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < access_path->filter_.count() && !found_query_range; ++i) {
+        const ObRawExpr *expr = access_path->filter_.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table filter is null", K(ret));
+        } else if (OB_NOT_NULL(access_path->pre_query_range_) &&
+                  ObOptimizerUtil::find_item(access_path->pre_query_range_->get_range_exprs(), expr)) {
+          found_query_range = true;
+        } else {
+          //do nothing
+          //dynamic filter will keep in tsc operator
+          //static filter will pushdown to storage
+        }
       }
+      use_batch_nlj = use_batch_nlj && found_query_range;
     }
+
   }
   return ret;
 }
@@ -4727,7 +5138,8 @@ int JoinPath::can_use_das_batch_nlj(ObLogicalOperator* root, bool &use_batch_nlj
     if (OB_FAIL(SMART_CALL(can_use_das_batch_nlj(root->get_child(0), use_batch_nlj)))) {
       LOG_WARN("failed to check das batch nlj", K(ret));
     }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
+  } else if (log_op_def::LOG_SET == root->get_type()
+             || log_op_def::LOG_JOIN == root->get_type()) {
     use_batch_nlj = true;
     for (int64_t i = 0; OB_SUCC(ret) && use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);
@@ -4832,11 +5244,11 @@ int JoinPath::compute_join_path_info()
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(ret));
   } else {
     contain_fake_cte_ = left_path_->contain_fake_cte_ || right_path_->contain_fake_cte_;
-    contain_pw_merge_op_ = (left_path_->contain_pw_merge_op_ && !is_left_need_exchange()) || 
+    contain_pw_merge_op_ = (left_path_->contain_pw_merge_op_ && !is_left_need_exchange()) ||
                            (right_path_->contain_pw_merge_op_ && !is_right_need_exchange()) ||
                            (join_algo_ == JoinAlgo::MERGE_JOIN && is_partition_wise());
     contain_match_all_fake_cte_ = left_path_->contain_match_all_fake_cte_ ||
-                                  right_path_->contain_match_all_fake_cte_; 
+                                  right_path_->contain_match_all_fake_cte_;
     contain_das_op_ = left_path_->contain_das_op_ || right_path_->contain_das_op_;
   }
   return ret;
@@ -4996,7 +5408,11 @@ int JoinPath::re_estimate_rows(double left_output_rows, double right_output_rows
         LOG_WARN("failed to append join conditions", K(ret));
       }
     }
+    EqualSets equal_sets;
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(equal_sets, left_tree->get_output_equal_sets())) ||
+               OB_FAIL(append(equal_sets, right_tree->get_output_equal_sets()))) {
+      LOG_WARN("failed to append equal sets", K(ret));
     } else if (OB_FAIL(ObJoinOrder::calc_join_output_rows(plan,
                                                           left_tree->get_tables(),
                                                           right_tree->get_tables(),
@@ -5004,7 +5420,8 @@ int JoinPath::re_estimate_rows(double left_output_rows, double right_output_rows
                                                           right_output_rows,
                                                           join_info,
                                                           row_count,
-                                                          selectivity))) {
+                                                          selectivity,
+                                                          equal_sets))) {
       LOG_WARN("failed to calc join output rows", K(ret));
     }
   }
@@ -5049,7 +5466,7 @@ int JoinPath::cost_nest_loop_join(double left_output_rows,
       right_part_cnt = right_path_->get_sharding()->get_part_cnt();
     }
     if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
-      left_rows = left_rows * server_cnt_ / in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel/server_cnt_);
       right_cost = right_cost * right_out_parallel / server_cnt_;
       right_rows /= server_cnt_;
     } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo_ ||
@@ -5057,11 +5474,11 @@ int JoinPath::cost_nest_loop_join(double left_output_rows,
       right_rows /= in_parallel;
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
                DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
-      left_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
       /* do nothing */
     } else {
-      left_rows /= in_parallel;
+      left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
       right_rows /= right_part_cnt;
       right_cost = right_cost * right_out_parallel / right_part_cnt;
     }
@@ -5401,6 +5818,7 @@ void JoinPath::reuse()
   merge_directions_.reuse();
   equal_join_conditions_.reuse();
   other_join_conditions_.reuse();
+  server_list_.reuse();
   equal_cond_sel_ = -1.0;
   other_cond_sel_ = -1.0;
   contain_normal_nl_ = false;
@@ -5540,6 +5958,8 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
       set_type(FAKE_CTE_TABLE_ACCESS);
     } else if (table_item->is_function_table()) {
       set_type(FUNCTION_TABLE_ACCESS);
+    } else if (table_item->is_json_table()) {
+      set_type(JSON_TABLE_ACCESS);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid type of table item", K(table_item->type_), K(ret));
@@ -5555,15 +5975,73 @@ int ObJoinOrder::generate_base_paths()
     ret = generate_cte_table_paths();
   } else if (FUNCTION_TABLE_ACCESS == get_type()) {
     ret = generate_function_table_paths();
+  } else if (JSON_TABLE_ACCESS == get_type()) {
+    ret = generate_json_table_paths();
   } else if (TEMP_TABLE_ACCESS == get_type()) {
     ret = generate_temp_table_paths();
   } else if (ACCESS == get_type()) {
     ret = generate_normal_base_table_paths();
   } else if (SUBQUERY == get_type()) {
+    OPT_TRACE_TITLE("begin generate subplan");
     ret = generate_normal_subquery_paths();
+    OPT_TRACE_TITLE("end generate subplan");
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected base path type", K(get_type()), K(ret));
+  }
+  return ret;
+}
+
+
+int ObJoinOrder::generate_json_table_paths()
+{
+  int ret = OB_SUCCESS;
+  JsonTablePath *json_path = NULL;
+  const ObDMLStmt *stmt = NULL;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
+  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_)) ||
+             OB_ISNULL(table_item->json_table_def_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_id_), K(table_item), K(ret));
+  } else if (OB_ISNULL(json_path = static_cast<JsonTablePath*>(allocator_->alloc(sizeof(JsonTablePath))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate access path", K(ret));
+  } else {
+    json_path = new(json_path) JsonTablePath();
+    json_path->table_id_ = table_id_;
+    json_path->parent_ = this;
+    ObExecParamRawExpr *nl_param = nullptr;
+    ObRawExpr* json_table_expr = NULL;
+    // magic number ? todo refine this
+    output_rows_ = 199;
+    output_row_size_ = 199;
+    json_path->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
+    if (OB_FAIL(append(json_path->filter_, get_restrict_infos()))) {
+      LOG_WARN("failed to append filter", K(ret));
+    } else if (OB_ISNULL(json_table_expr = table_item->json_table_def_->doc_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to extract param for json table expr", K(ret));
+    } else if (OB_FAIL(param_json_table_expr(json_table_expr,
+                                             nl_param,
+                                             json_path->subquery_exprs_))) {
+      LOG_WARN("failed to extract param for json table expr", K(ret));
+    } else if (OB_NOT_NULL(nl_param) && OB_FAIL(json_path->nl_params_.push_back(nl_param))) {
+      LOG_WARN("failed to assign nl params", K(ret));
+    } else {
+      json_path->value_expr_ = json_table_expr;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(json_path->estimate_cost())) {
+        LOG_WARN("failed to estimate cost", K(ret));
+      } else if (OB_FAIL(json_path->compute_pipeline_info())) {
+        LOG_WARN("failed to compute pipelined path", K(ret));
+      } else if (OB_FAIL(add_path(json_path))) {
+        LOG_WARN("failed to add path", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   return ret;
 }
@@ -5651,7 +6129,37 @@ int ObJoinOrder::param_funct_table_expr(ObRawExpr* &function_table_expr,
   return ret;
 }
 
-int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item, 
+
+int ObJoinOrder::param_json_table_expr(ObRawExpr* &json_table_expr,
+                                       ObExecParamRawExpr*& nl_params,
+                                       ObIArray<ObRawExpr*> &subquery_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  ObLogPlan *plan = get_plan();
+  ObSEArray<ObRawExpr *, 1> new_json_exprs;
+  if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = plan->get_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("NULL pointer error", K(plan), K(ret));
+  } else {
+    bool need_add_exec_param = (json_table_expr->get_relation_ids().bit_count() > 0);
+    if (need_add_exec_param &&
+        OB_FAIL(ObRawExprUtils::create_new_exec_param(stmt->get_query_ctx(),
+                                                      get_plan()->get_optimizer_context().get_expr_factory(),
+                                                      json_table_expr))) {
+      LOG_WARN("failed to create quest mark expr", K(ret));
+    } else if (OB_FAIL(json_table_expr->extract_info())) {
+      LOG_WARN("failed to extract expr info", K(ret));
+    } else if (OB_FAIL(json_table_expr->pull_relation_id())) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else if (need_add_exec_param) {
+      nl_params = static_cast<ObExecParamRawExpr*>(json_table_expr);
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item,
                                            ObShardingInfo *sharding)
 {
   int ret = OB_SUCCESS;
@@ -5698,11 +6206,11 @@ int ObJoinOrder::generate_cte_table_paths()
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_id_));
-  } else if (OB_FAIL(create_one_cte_table_path(table_item, 
+  } else if (OB_FAIL(create_one_cte_table_path(table_item,
                                                get_plan()->get_optimizer_context().get_match_all_sharding()))) {
     LOG_WARN("failed to create one cte table path", K(ret));
   } else if (table_item->is_recursive_union_fake_table_ &&
-             OB_FAIL(create_one_cte_table_path(table_item, 
+             OB_FAIL(create_one_cte_table_path(table_item,
                                                get_plan()->get_optimizer_context().get_local_sharding()))) {
     LOG_WARN("failed to create one cte table path", K(ret));
   }
@@ -5730,7 +6238,7 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
   ObSEArray<ObTablePartitionInfo *, 8> tbl_part_infos;
   uint64_t table_id = table_id_;
   uint64_t ref_table_id = table_meta_info_.ref_table_id_;
-  if (!helper.is_inner_path_ && 
+  if (!helper.is_inner_path_ &&
       OB_FAIL(compute_base_table_property(table_id, ref_table_id))) {
     LOG_WARN("failed to compute base path property", K(ret));
   } else if (OB_FAIL(create_access_paths(table_id, ref_table_id, helper, access_paths))) {
@@ -5780,7 +6288,7 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
         K(output_equal_sets_));
   }
   return ret;
-} 
+}
 
 int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
                                               ObIArray<AccessPath *> &access_paths)
@@ -5792,8 +6300,7 @@ int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(access_paths.count()), K(get_plan()), K(session_info));
-  } else if (access_paths.count() <= 1 ||
-             OB_DEFAULT_STAT_EST == table_meta_info_.cost_est_type_) {
+  } else if (access_paths.count() <= 1) {
     /* do not pruning access path */
   } else if (OB_FAIL(try_pruning_base_table_access_path(access_paths, unstable_index_id))) {
     LOG_WARN("failed to pruning base table access path", K(ret));
@@ -5842,9 +6349,11 @@ int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &acces
     } else {
       need_prune |= ap->range_prefix_count_ > 0 &&
                     ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
+      need_prune |= ap->range_prefix_count_ > 0 &&
+                    ap->est_cost_info_.index_meta_info_.is_geo_index_;
     }
   }
-  
+
   if (OB_SUCC(ret) && need_prune) {
     for (int64_t i = base_path_positions.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       int64_t base_path_pos = base_path_positions.at(i);
@@ -5863,7 +6372,7 @@ int ObJoinOrder::try_pruning_base_table_access_path(ObIArray<AccessPath*> &acces
       }
     }
   }
-  
+
   return ret;
 }
 
@@ -6064,24 +6573,14 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
   } else {
     int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
     const ObDMLStmt *parent_stmt = get_plan()->get_stmt();
-    const ObSelectStmt *child_stmt = static_cast<const ObSelectStmt*>(root->get_stmt());
-    if (OB_FAIL(convert_subplan_scan_order_item(get_plan()->get_optimizer_context().get_expr_factory(),
-                                                root->get_output_equal_sets(),
-                                                root->get_output_const_exprs(),
+    if (OB_FAIL(convert_subplan_scan_order_item(*get_plan(),
+                                                *root,
                                                 table_id,
-                                                *get_plan()->get_stmt(),
-                                                static_cast<const ObSelectStmt&>(*root->get_stmt()),
-                                                root->get_op_ordering(),
                                                 path->get_ordering()))) {
       LOG_WARN("failed to convert subplan scan order item", K(ret));
-    } else if (OB_FAIL(convert_subplan_scan_sharding_info(*allocator_,
-                                                          get_plan()->get_optimizer_context(),
-                                                          root->get_output_equal_sets(),
+    } else if (OB_FAIL(convert_subplan_scan_sharding_info(*get_plan(),
+                                                          *root,
                                                           table_id,
-                                                          *parent_stmt,
-                                                          *child_stmt,
-                                                          root->get_strong_sharding(),
-                                                          root->get_weak_sharding(),
                                                           path->strong_sharding_,
                                                           path->weak_sharding_))) {
       LOG_WARN("failed to convert subplan scan sharding info", K(ret));
@@ -6101,6 +6600,9 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->contain_das_op_ = root->get_contains_das_op();
       path->parallel_ = root->get_parallel();
       path->server_cnt_ = root->get_server_cnt();
+      if (OB_FAIL(path->server_list_.assign(root->get_server_list()))) {
+        LOG_WARN("failed to assign subquery path server list", K(ret));
+      }
     }
   }
   return ret;
@@ -6124,15 +6626,7 @@ int ObJoinOrder::compute_subquery_property(const uint64_t table_id,
     LOG_WARN("failed to compute const exprs for subquery", K(ret));
   } else if (OB_FAIL(compute_equal_set_for_subquery(table_id, root))) {
     LOG_WARN("failed to compute equal set condition", K(ret));
-  } else if (OB_FAIL(compute_fd_item_set_for_subquery(
-                     get_plan()->get_optimizer_context().get_expr_factory(),
-                     root->get_output_equal_sets(),
-                     root->get_output_const_exprs(),
-                     table_id,
-                     *get_plan()->get_stmt(),
-                     static_cast<const ObSelectStmt&>(*root->get_stmt()),
-                     root->get_fd_item_set(),
-                     fd_item_set_))) {
+  } else if (OB_FAIL(compute_fd_item_set_for_subquery(table_id, root))) {
     LOG_WARN("failed to compute fd item set for subplan scan", K(ret));
   } else {
     is_at_most_one_row_ = root->get_is_at_most_one_row();
@@ -6341,6 +6835,7 @@ int ObJoinOrder::generate_join_paths(const ObJoinOrder &left_tree,
                                                 reverse_path_info))) {
       LOG_WARN("failed to generate join paths", K(ret));
     } else if (interesting_paths_.count() > 0) {
+      OPT_TRACE("succeed to generate join paths using hint");
       LOG_TRACE("succeed to generate join paths using hint", K(path_info), K(reverse_path_info), K(ret));
     } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_status())) {
       LOG_WARN("failed to generate join paths with hint", K(ret));
@@ -6385,6 +6880,7 @@ int ObJoinOrder::generate_join_paths(const ObJoinOrder &left_tree,
         LOG_WARN("failed to generate join paths by ignoring hint", K(ret));
       }
     } else {
+      OPT_TRACE("succeed to generate join paths by ignoring hint");
       LOG_TRACE("succeed to generate join paths by ignoring hint", K(ret));
     }
   }
@@ -6506,7 +7002,11 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
     LOG_WARN("failed to get equal join keys", K(ret));
   } else {
     has_equal_condition = !merge_join_conditions.empty() || !hash_join_conditions.empty();
+    if (!has_equal_condition) {
+      OPT_TRACE("do not have equal join condition, will not use merge/hash join");
+    }
   }
+
   // generate hash join paths
   if (OB_SUCC(ret) && !hash_join_conditions.empty() &&
       ((HASH_JOIN & path_info.local_methods_) ||
@@ -6564,10 +7064,14 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                            naaj_info.get_is_sna(reverse_path_info.join_type_, true)))) {
       LOG_WARN("failed to generate hash join paths", K(ret));
     } else {
-      LOG_TRACE("succeed to generate hash join paths", K(hash_join_conditions.count()),
-          "hash_path_count", interesting_paths_.count() - path_number);
+      int64_t hash_join_path_num = interesting_paths_.count() - path_number;
       path_number = interesting_paths_.count();
-      has_non_nl_path = true;
+      if (path_number > 0) {
+        has_non_nl_path = true;
+      }
+      OPT_TRACE("generate", hash_join_path_num, "hash join path");
+      LOG_TRACE("succeed to generate hash join paths", K(hash_join_conditions.count()),
+          "hash_path_count", hash_join_path_num);
     }
   }
   // generate nest loop join paths
@@ -6607,9 +7111,11 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                          has_equal_condition))) {
       LOG_WARN("failed to generate nested loop join path", K(ret));
     } else {
-      LOG_TRACE("succeed to generate all nested loop join path",
-                "nl_path_count", interesting_paths_.count() - path_number);
+      int64_t nl_join_path_num = interesting_paths_.count() - path_number;
       path_number = interesting_paths_.count();
+      OPT_TRACE("generate", nl_join_path_num, "nl join path");
+      LOG_TRACE("succeed to generate all nested loop join path",
+                "nl_path_count", nl_join_path_num);
     }
   }
   // generate merge join paths
@@ -6684,10 +7190,13 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                           reverse_path_info))) {
         LOG_WARN("failed to generate merge join paths", K(ret));
       } else {
-        LOG_TRACE("succeed to generate merge join paths", K(merge_join_conditions.count()),
-                "merge_path_count", interesting_paths_.count() - path_number);
+        int64_t merge_join_path_num = interesting_paths_.count() - path_number;
         path_number = interesting_paths_.count();
         has_non_nl_path = true;
+
+        OPT_TRACE("generate", merge_join_path_num, "merge join path");
+        LOG_TRACE("succeed to generate merge join paths", K(merge_join_conditions.count()),
+                "merge_path_count", merge_join_path_num);
       }
     }
   }
@@ -6719,6 +7228,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
   } else {
     Path *left_path = NULL;
     Path *right_path = NULL;
+    OPT_TRACE_TITLE("Consider HASH", ob_join_type_str(path_info.join_type_));
     for (int64_t i = 0; OB_SUCC(ret) && i < left_best_paths.count(); i++) {
       if (OB_ISNULL(left_path = left_best_paths.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -6749,6 +7259,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                 DistAlgo dist_algo = get_dist_algo(k);
                 if ((DistAlgo::DIST_PARTITION_WISE != dist_algo ||
                      is_partition_wise_valid(*left_path, *right_path)) &&
+                    is_repart_valid(*left_path, *right_path, dist_algo, false /* is_nl */) &&
                     OB_FAIL(create_and_add_hash_path(left_path,
                                                      right_path,
                                                      path_info.join_type_,
@@ -6793,6 +7304,7 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
   const ObIArray<ObRawExpr*> &join_conditions =
       IS_OUTER_OR_CONNECT_BY_JOIN(path_info.join_type_) ? on_conditions : where_conditions;
   bool need_inner_path = false;
+  OPT_TRACE_TITLE("Consider NL", ob_join_type_str(path_info.join_type_));
   if (OB_UNLIKELY(left_paths.empty()) || OB_UNLIKELY(right_paths.empty()) || OB_ISNULL(get_plan()) ||
       OB_UNLIKELY(left_paths.at(0).empty()) || OB_ISNULL(left_tree = left_paths.at(0).at(0)->parent_) ||
       OB_UNLIKELY(right_paths.at(0).empty()) || OB_ISNULL(right_tree = right_paths.at(0).at(0)->parent_)) {
@@ -6828,6 +7340,7 @@ int ObJoinOrder::generate_nl_paths(const EqualSets &equal_sets,
     }
   } else if ((has_non_nl_path && !left_tree->get_is_at_most_one_row()) || path_info.force_inner_nl_) {
     /*do nothing*/
+    OPT_TRACE("ignore normal NL join");
   } else {
     if (OB_FAIL(find_minimal_cost_path(right_paths, best_paths))) {
       LOG_WARN("failed to find minimal cost path", K(ret));
@@ -6864,19 +7377,35 @@ int ObJoinOrder::create_plan_for_inner_path(Path *path)
     //do nothing
   } else if (OB_FAIL(get_plan()->create_plan_tree_from_path(path, op))) {
     LOG_WARN("failed to create plan from path", K(ret));
+  } else if (OB_FAIL(path->compute_path_property_from_log_op())) {
+    LOG_WARN("failed to compute path property", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::create_subplan_filter_for_join_path(Path *path,
+                                                    ObIArray<ObRawExpr*> &subquery_filters)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *op = NULL;
+  if (OB_ISNULL(path) || OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null path", K(ret));
+  } else if (subquery_filters.empty()) {
+    //do nothing
+  } else if (OB_FAIL(get_plan()->create_plan_tree_from_path(path, op))) {
+    LOG_WARN("failed to create plan from path", K(ret));
   } else if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null op", K(ret));
-  } else if (OB_FAIL(path->weak_sharding_.assign(op->get_weak_sharding()))) {
-    LOG_WARN("failed to assign weak sharding", K(ret));
-  } else {
-    path->strong_sharding_ = op->get_strong_sharding();
-    path->cost_ = op->get_cost();
-    path->op_cost_ = op->get_op_cost();
-    path->inner_row_count_ = op->get_card();
-    path->exchange_allocated_ = op->is_exchange_allocated();
-    path->phy_plan_type_ = op->get_phy_plan_type();
-    path->location_type_ = op->get_location_type();
+  } else if (OB_FAIL(get_plan()->allocate_subplan_filter_as_top(op,
+                                                                subquery_filters,
+                                                                true,
+                                                                true))) {
+    LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else if (OB_FALSE_IT(path->log_op_ = op)) {
+  } else if (OB_FAIL(path->compute_path_property_from_log_op())) {
+    LOG_WARN("failed to compute path property", K(ret));
   }
   return ret;
 }
@@ -6947,6 +7476,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
           if ((DistAlgo::DIST_PARTITION_WISE != dist_algo ||
                (is_partition_wise_valid(*left_paths.at(i), *right_path) &&
                 !right_path->exchange_allocated_)) &&
+                is_repart_valid(*left_paths.at(i), *right_path, dist_algo, true /* is_nl */) &&
                OB_FAIL(create_and_add_nl_path(left_paths.at(i),
                                               right_path,
                                               path_info.join_type_,
@@ -7016,10 +7546,12 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
            OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
         DistAlgo dist_algo = get_dist_algo(j);
         if ((dist_method & j) && (DistAlgo::DIST_PARTITION_WISE != dist_algo ||
-             is_partition_wise_valid(*left_paths.at(i), *right_path))) {
+             is_partition_wise_valid(*left_paths.at(i), *right_path))
+             && is_repart_valid(*left_paths.at(i), *right_path, dist_algo, true /* is_nl */)) {
           bool right_need_exchange = (dist_algo == DIST_HASH_HASH ||
                                       dist_algo == DIST_NONE_BROADCAST ||
-                                      dist_algo == DIST_NONE_PARTITION);
+                                      dist_algo == DIST_NONE_PARTITION ||
+                                      dist_algo == DIST_NONE_HASH);
           if (!ObOptimizerUtil::is_right_need_exchange(*right_path->get_sharding(), dist_algo) &&
               right_path->exchange_allocated_ &&
               right_path->get_sharding()->is_distributed()) {
@@ -7071,7 +7603,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   bool is_basic = false;
   bool is_remote = false;
   bool is_match_repart = false;
+  bool is_match_single_side_hash = false;
   bool is_partition_wise = false;
+  bool is_ext_partition_wise = false;
   bool right_is_base_table = false;
   bool need_pull_to_local = false;
   ObSEArray<ObRawExpr*, 8> target_part_keys;
@@ -7080,7 +7614,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   distributed_methods = path_info.distributed_methods_;
   bool use_shared_hash_join = get_plan()->get_optimizer_context().get_parallel() > 1;
   ObSQLSessionInfo *session = NULL;
-  const ObLogPlanHint *log_hint = NULL;		
+  const ObLogPlanHint *log_hint = NULL;
   const LogJoinHint *log_join_hint = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
@@ -7099,29 +7633,41 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     distributed_methods &= ~DIST_ALL_NONE;
     distributed_methods &= ~DIST_BC2HOST_NONE;
     distributed_methods &= ~DIST_PARTITION_NONE;
+    distributed_methods &= ~DIST_HASH_NONE;
     distributed_methods &= ~DIST_NONE_PARTITION;
+    distributed_methods &= ~DIST_NONE_HASH;
     distributed_methods &= ~DIST_PARTITION_WISE;
+    distributed_methods &= ~DIST_EXT_PARTITION_WISE;
+    OPT_TRACE("fake cte table will use basic or pull to local");
   } else if (HASH_JOIN == join_algo && is_naaj) {
     distributed_methods &= ~DIST_PARTITION_WISE;
+    distributed_methods &= ~DIST_EXT_PARTITION_WISE;
+    OPT_TRACE("HASH NAA JOIN can not use partition wise");
     if (LEFT_ANTI_JOIN == path_info.join_type_) {
       distributed_methods &= ~DIST_PARTITION_NONE;
+      distributed_methods &= ~DIST_HASH_NONE;
+      OPT_TRACE("left naaj can not use PKEY/HASH NONE");
     } else {
       distributed_methods &= ~DIST_NONE_PARTITION;
+      distributed_methods &= ~DIST_NONE_HASH;
+      OPT_TRACE("right naaj can not use NONE PKEY/HASH");
     }
   }
 
   if (OB_SUCC(ret)) {
-    log_hint = &get_plan()->get_log_plan_hint();		
+    log_hint = &get_plan()->get_log_plan_hint();
     log_join_hint = log_hint->get_join_hint(right_path.parent_->get_tables());
     if (HASH_JOIN == join_algo) {
       if (use_shared_hash_join) {
         distributed_methods &= ~DIST_BROADCAST_NONE;
         distributed_methods &= ~DIST_ALL_NONE;
+        OPT_TRACE("shared hash join will not use BROADCAST");
         if (IS_LEFT_STYLE_JOIN(path_info.join_type_)) {
           distributed_methods &= ~DIST_BC2HOST_NONE;
         }
       } else {
         distributed_methods &= ~DIST_BC2HOST_NONE;
+        OPT_TRACE("hash join will not use BC2HOST");
       }
     } else if (MERGE_JOIN == join_algo) {
       // disable dist algo except basic & pwj for mj
@@ -7134,22 +7680,31 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
         distributed_methods &= ~DIST_NONE_ALL;
         distributed_methods &= ~DIST_ALL_NONE;
         distributed_methods &= ~DIST_PARTITION_NONE;
+        distributed_methods &= ~DIST_HASH_NONE;
         distributed_methods &= ~DIST_NONE_PARTITION;
+        distributed_methods &= ~DIST_NONE_HASH;
+        OPT_TRACE("merge join prune normal path and will only use basic or partition wise");
       }
     } else if (!is_push_down) {
       distributed_methods &= ~DIST_BC2HOST_NONE;
       distributed_methods &= ~DIST_ALL_NONE;
       // @guoping.wgp release this constraint in future
       distributed_methods &= ~DIST_HASH_HASH;
+      distributed_methods &= ~DIST_HASH_NONE;
+      distributed_methods &= ~DIST_NONE_HASH;
+      OPT_TRACE("normal NL join can not use BC2HOST and HASH HASH");
     } else {
       // nested loop join with pushdown
       distributed_methods &= ~DIST_HASH_HASH;
       distributed_methods &= ~DIST_NONE_PARTITION;
+      distributed_methods &= ~DIST_NONE_HASH;
+      distributed_methods &= ~DIST_HASH_NONE;
       distributed_methods &= ~DIST_NONE_BROADCAST;
       distributed_methods &= ~DIST_BROADCAST_NONE;
       distributed_methods &= ~DIST_ALL_NONE;
       if (right_path.exchange_allocated_) {
         distributed_methods &= ~DIST_PARTITION_WISE;
+        distributed_methods &= ~DIST_EXT_PARTITION_WISE;
       }
       if (OB_FAIL(right_path.check_is_base_table(right_is_base_table))) {
         LOG_WARN("failed to check is base table", K(ret));
@@ -7197,6 +7752,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
   // check if match basic sharding info
   if (OB_SUCC(ret) && (distributed_methods & DIST_BASIC_METHOD)) {
+    OPT_TRACE("check basic method");
     ObSEArray<ObShardingInfo*, 2> input_shardings;
     if (OB_FAIL(input_shardings.push_back(left_sharding)) ||
         OB_FAIL(input_shardings.push_back(right_sharding))) {
@@ -7209,110 +7765,222 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
       LOG_WARN("failed to check basic sharding info", K(ret));
     } else if (get_cnt_rownum() && (!is_basic || is_remote)) {
       distributed_methods &= DIST_PULL_TO_LOCAL;
+      OPT_TRACE("query with rownum, will use pull to local");
     } else if (is_basic) {
       distributed_methods = DIST_BASIC_METHOD;
+      OPT_TRACE("plan will use basic method");
     } else {
       distributed_methods &= ~DIST_BASIC_METHOD;
+      OPT_TRACE("plan will not use basic method");
     }
   }
 
   // check if match partition wise join
   if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_WISE)) {
+    OPT_TRACE("check partition wise method");
     if (left_path.parallel_more_than_part_cnt() ||
-        right_path.parallel_more_than_part_cnt()) {		
-      distributed_methods &= ~DIST_PARTITION_WISE;		
-      is_partition_wise = false;		
+        right_path.parallel_more_than_part_cnt()) {
+      distributed_methods &= ~DIST_PARTITION_WISE;
+      is_partition_wise = false;
+      OPT_TRACE("parallel more than partition count, will not use partition wise");
     } else if (OB_FAIL(check_if_match_partition_wise(equal_sets,
-                                              left_path,
-                                              right_path,
-                                              left_join_keys,
-                                              right_join_keys,
-                                              null_safe_info,
-                                              path_info.join_type_,
-                                              is_partition_wise))) {
+                                                     left_path,
+                                                     right_path,
+                                                     left_join_keys,
+                                                     right_join_keys,
+                                                     null_safe_info,
+                                                     is_partition_wise))) {
       LOG_WARN("failed to check if match partition wise join", K(ret));
     } else if (is_partition_wise) {
       if (left_path.exchange_allocated_ == right_path.exchange_allocated_) {
         distributed_methods = DIST_PARTITION_WISE;
+        OPT_TRACE("plan will use partition wise method");
       } else {
         need_pull_to_local = true;
       }
     } else {
       distributed_methods &= ~DIST_PARTITION_WISE;
+      OPT_TRACE("plan will not use partition wise method");
+    }
+  }
+  // check if match extended partition wise join
+  if (OB_SUCC(ret) && (distributed_methods & DIST_EXT_PARTITION_WISE)) {
+    OPT_TRACE("check extended partition wise method");
+    if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
+        !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list()) ||
+        !right_sharding->is_distributed_without_table_location_with_partitioning() ||
+        !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
+      distributed_methods &= ~DIST_EXT_PARTITION_WISE;
+      is_ext_partition_wise = false;
+      OPT_TRACE("sharding is not expected, will not use extended partition wise");
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_extended_partition_wise(equal_sets,
+                                                              left_path.get_server_list(),
+                                                              right_path.get_server_list(),
+                                                              left_join_keys,
+                                                              right_join_keys,
+                                                              null_safe_info,
+                                                              left_path.get_strong_sharding(),
+                                                              left_path.get_weak_sharding(),
+                                                              right_path.get_strong_sharding(),
+                                                              right_path.get_weak_sharding(),
+                                                              is_ext_partition_wise))) {
+      LOG_WARN("failed to check match extended partition wise", K(ret));
+    } else if (is_ext_partition_wise) {
+      distributed_methods = DIST_EXT_PARTITION_WISE;
+      OPT_TRACE("plan will use ext partition wise method");
+    } else {
+      distributed_methods &= ~DIST_EXT_PARTITION_WISE;
+      OPT_TRACE("plan will not use ext partition wise method");
     }
   }
   // check if match left re-partition
   if (OB_SUCC(ret) && (distributed_methods & DIST_PARTITION_NONE)) {
+    OPT_TRACE("check partition none method");
     if (right_path.parallel_more_than_part_cnt() &&
-        NULL != log_join_hint &&		
-        (path_info.ignore_hint_ ||		
-        !(log_join_hint->dist_methods_ & DIST_PARTITION_NONE))) {		
-      is_match_repart = false;		
-    } else if (OB_FAIL(right_path.check_meet_repart(is_match_repart))) {
-      LOG_WARN("failed to check whether right path meet repart", K(ret));
-    } else if (!is_match_repart) {
-      /*do nothing*/
+        NULL != log_join_hint &&
+        (path_info.ignore_hint_ ||
+        !(log_join_hint->dist_methods_ & DIST_PARTITION_NONE))) {
+      is_match_repart = false;
+      OPT_TRACE("right parallel more than partition count, will not use partition none");
+    } else if (NULL == right_path.get_strong_sharding()) {
+      is_match_repart = false;
+      OPT_TRACE("strong sharding of right path is null, not use partition none");
+    } else if (!right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
+      is_match_repart = false;
+      OPT_TRACE("right path not meet repart");
     } else if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
-    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart(equal_sets,
-                                                             left_join_keys,
-                                                             right_join_keys,
-                                                             target_part_keys,
-                                                             is_match_repart))) {
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
+                                                                      left_join_keys,
+                                                                      right_join_keys,
+                                                                      target_part_keys,
+                                                                      is_match_repart))) {
       LOG_WARN("failed to check if match repartition", K(ret));
     } else { /*do nothing*/ }
 
     if (OB_SUCC(ret)) {
       if (!is_match_repart) {
+        OPT_TRACE("plan will not use partition none method");
         distributed_methods &= ~DIST_PARTITION_NONE;
         if (path_info.force_slave_mapping_) {
+          OPT_TRACE("force slave mapping and prune broadcast/bc2host none method");
           distributed_methods &= ~DIST_BROADCAST_NONE;
-          distributed_methods &= ~DIST_ALL_NONE;
           if (use_shared_hash_join && HASH_JOIN == join_algo) {
             distributed_methods &= ~DIST_BC2HOST_NONE;
           }
         }
       } else {
+        OPT_TRACE("plan will use partition none method and prune broadcast/bc2host/hash none method");
         distributed_methods &= ~DIST_BROADCAST_NONE;
-        distributed_methods &= ~DIST_ALL_NONE;
+        distributed_methods &= ~DIST_HASH_NONE;
         if (use_shared_hash_join && HASH_JOIN == join_algo) {
           distributed_methods &= ~DIST_BC2HOST_NONE;
         }
+        need_pull_to_local = (right_path.contain_pw_merge_op() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0)
+                             || right_path.exchange_allocated_;
+      }
+    }
+  }
+  // check if match hash none
+  if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_NONE)) {
+    OPT_TRACE("check hash none method");
+    target_part_keys.reuse();
+    if (NULL == right_path.get_strong_sharding()) {
+      is_match_single_side_hash = false;
+      OPT_TRACE("strong sharding of right path is null, not use hash none");
+    } else if (!right_sharding->is_distributed_without_table_location_with_partitioning() ||
+               !ObShardingInfo::is_shuffled_server_list(right_path.get_server_list())) {
+      is_match_single_side_hash = false;
+    } else if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
+      LOG_WARN("failed to get partition keys", K(ret));
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
+                                                                      left_join_keys,
+                                                                      right_join_keys,
+                                                                      target_part_keys,
+                                                                      is_match_single_side_hash))) {
+      LOG_WARN("failed to check if match hash-none", K(ret));
+    } else { /*do nothing*/ }
+
+    if (OB_SUCC(ret)) {
+      if (!is_match_single_side_hash) {
+        OPT_TRACE("plan will not use hash none method");
+        distributed_methods &= ~DIST_HASH_NONE;
+      } else {
+        OPT_TRACE("plan will use hash none method and prune broadcast none method");
+        // not prune DIST_BC2HOST_NONE under shared hash join
+        distributed_methods &= ~DIST_BROADCAST_NONE;
       }
     }
   }
   // check if match right re-partition
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_PARTITION)) {
+    OPT_TRACE("check none partition method");
     target_part_keys.reuse();
     if (left_path.parallel_more_than_part_cnt() &&
-        NULL != log_join_hint &&		
-        (path_info.ignore_hint_ ||		
-        !(log_join_hint->dist_methods_ & DIST_NONE_PARTITION))) {		
-      is_match_repart = false;		
-    } else if (OB_FAIL(left_path.check_meet_repart(is_match_repart))) {
-      LOG_WARN("failed to check if meet repart", K(ret));
-    } else if (!is_match_repart) {
-      /*do nothing*/
+        NULL != log_join_hint &&
+        (path_info.ignore_hint_ ||
+        !(log_join_hint->dist_methods_ & DIST_NONE_PARTITION))) {
+      is_match_repart = false;
+      OPT_TRACE("left parallel more than partition count, will not use none partition");
+    } else if (NULL == left_path.get_strong_sharding()) {
+      is_match_repart = false;
+      OPT_TRACE("strong sharding of left path is null, not use none partition");
+    } else if (!left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
+      is_match_repart = false;
+      OPT_TRACE("left path not meet repart");
     } else if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get all partition keys", K(ret));
-    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart(equal_sets,
-                                                             right_join_keys,
-                                                             left_join_keys,
-                                                             target_part_keys,
-                                                             is_match_repart))) {
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
+                                                                      right_join_keys,
+                                                                      left_join_keys,
+                                                                      target_part_keys,
+                                                                      is_match_repart))) {
       LOG_WARN("failed to check if match repartition", K(ret));
     } else { /*do nothing*/ }
 
     if (OB_SUCC(ret)) {
       if (!is_match_repart) {
+        OPT_TRACE("plan will not use none partition method");
         distributed_methods &= ~DIST_NONE_PARTITION;
         if (path_info.force_slave_mapping_) {
+          OPT_TRACE("force slave mapping and prune none broadcast method");
           distributed_methods &= ~DIST_NONE_BROADCAST;
-          distributed_methods &= ~DIST_NONE_ALL;
         }
       } else {
+        OPT_TRACE("plan will use none partition method and prune none broadcast/hash method");
         distributed_methods &= ~DIST_NONE_BROADCAST;
-        distributed_methods &= ~DIST_NONE_ALL;
+        distributed_methods &= ~DIST_NONE_HASH;
+        need_pull_to_local = left_path.contain_pw_merge_op() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0;
+      }
+    }
+  }
+  // check if match none-hash
+  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_HASH)) {
+    OPT_TRACE("check none hash method");
+    target_part_keys.reuse();
+    if (NULL == left_path.get_strong_sharding()) {
+      is_match_single_side_hash = false;
+      OPT_TRACE("strong sharding of left path is null, not use none hash");
+    } else if (!left_sharding->is_distributed_without_table_location_with_partitioning() ||
+               !ObShardingInfo::is_shuffled_server_list(left_path.get_server_list())) {
+      is_match_single_side_hash = false;
+    } else if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
+      LOG_WARN("failed to get all partition keys", K(ret));
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(equal_sets,
+                                                                      right_join_keys,
+                                                                      left_join_keys,
+                                                                      target_part_keys,
+                                                                      is_match_single_side_hash))) {
+      LOG_WARN("failed to check if match none-hash", K(ret));
+    } else { /*do nothing*/ }
+
+    if (OB_SUCC(ret)) {
+      if (!is_match_single_side_hash) {
+        OPT_TRACE("plan will not use none hash method");
+        distributed_methods &= ~DIST_NONE_HASH;
+      } else {
+        OPT_TRACE("plan will use none hash method and prune none broadcast method");
+        distributed_methods &= ~DIST_NONE_BROADCAST;
       }
     }
   }
@@ -7323,6 +7991,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) && distributed_methods != DIST_PULL_TO_LOCAL &&
       !need_pull_to_local) {
     distributed_methods &= ~DIST_PULL_TO_LOCAL;
+    OPT_TRACE("plan will not use pull to local method");
   }
   return ret;
 }
@@ -7340,28 +8009,40 @@ bool ObJoinOrder::is_partition_wise_valid(const Path &left_path,
   return is_valid;
 }
 
+bool ObJoinOrder::is_repart_valid(const Path &left_path, const Path &right_path, const DistAlgo dist_algo, const bool is_nl)
+{
+  bool is_valid = true;
+  if (DistAlgo::DIST_PARTITION_NONE == dist_algo && right_path.exchange_allocated_ && is_nl) {
+    is_valid = false;
+  } else if (DistAlgo::DIST_PARTITION_NONE == dist_algo && right_path.contain_pw_merge_op()) {
+    is_valid = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+  } else if (DistAlgo::DIST_NONE_PARTITION == dist_algo && left_path.contain_pw_merge_op()) {
+    is_valid = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+  } else {
+    is_valid = true;
+  }
+  return is_valid;
+}
+
 int ObJoinOrder::check_if_match_partition_wise(const EqualSets &equal_sets,
                                                Path &left_path,
                                                Path &right_path,
                                                const ObIArray<ObRawExpr*> &left_join_keys,
                                                const ObIArray<ObRawExpr*> &right_join_keys,
                                                const ObIArray<bool> &null_safe_exprs,
-                                               const ObJoinType join_type,
                                                bool &is_partition_wise)
 {
   int ret = OB_SUCCESS;
-  ObShardingInfo *left_sharding = left_path.get_strong_sharding();
-  ObShardingInfo *right_sharding = right_path.get_strong_sharding();
   is_partition_wise = false;
   if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(equal_sets,
-                                                                   left_join_keys,
-                                                                   right_join_keys,
-                                                                   null_safe_exprs,
-                                                                   left_path.get_strong_sharding(),
-                                                                   left_path.get_weak_sharding(),
-                                                                   right_path.get_strong_sharding(),
-                                                                   right_path.get_weak_sharding(),
-                                                                   is_partition_wise))) {
+                                                            left_join_keys,
+                                                            right_join_keys,
+                                                            null_safe_exprs,
+                                                            left_path.get_strong_sharding(),
+                                                            left_path.get_weak_sharding(),
+                                                            right_path.get_strong_sharding(),
+                                                            right_path.get_weak_sharding(),
+                                                            is_partition_wise))) {
     LOG_WARN("failed to check if match partition wise join", K(ret));
   } else {
     LOG_TRACE("succeed to check if match partition wise join", K(is_partition_wise));
@@ -7411,6 +8092,7 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
     LOG_WARN("get unexpected array count", K(left_paths.count()),
         K(left_merge_keys.count()), K(ret));
   } else {
+    OPT_TRACE_TITLE("Consider Merge", ob_join_type_str(path_info.join_type_));
     for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < right_paths.count(); j++) {
         if (OB_FAIL(generate_mj_paths(equal_sets,
@@ -7583,6 +8265,8 @@ int ObJoinOrder::find_minimal_cost_merge_path(const int64_t in_parallel,
     } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo &&
                !is_partition_wise_valid(left_path, *right_path)) {
       /*do nothing*/
+    } else if (!is_repart_valid(left_path, *right_path, join_dist_algo, false /* is_nl */)) {
+      /*do nothing*/
     } else if (OB_UNLIKELY(out_parallel = right_path->parallel_) < 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected parallel", K(out_parallel), K(ret));
@@ -7597,6 +8281,7 @@ int ObJoinOrder::find_minimal_cost_merge_path(const int64_t in_parallel,
     } else if (OB_FAIL(ObOptimizerUtil::simplify_ordered_exprs(right_path->parent_->get_fd_item_set(),
                                                                right_path->parent_->get_output_equal_sets(),
                                                                right_path->parent_->get_output_const_exprs(),
+                                                               get_plan()->get_onetime_query_refs(),
                                                                temp_order_items,
                                                                right_order_items))) {
       LOG_WARN("failed to simplify exprs", K(ret));
@@ -7605,6 +8290,7 @@ int ObJoinOrder::find_minimal_cost_merge_path(const int64_t in_parallel,
                                                         right_path->parent_->get_fd_item_set(),
                                                         right_path->parent_->get_output_equal_sets(),
                                                         right_path->parent_->get_output_const_exprs(),
+                                                        get_plan()->get_onetime_query_refs(),
                                                         right_path->parent_->get_is_at_most_one_row(),
                                                         right_need_sort,
                                                         right_prefix_pos))) {
@@ -7613,6 +8299,7 @@ int ObJoinOrder::find_minimal_cost_merge_path(const int64_t in_parallel,
                 DistAlgo::DIST_BASIC_METHOD == join_dist_algo) &&
                 left_merge_key.need_sort_ && right_need_sort && prune_mj) {
       // do nothing
+      OPT_TRACE("prune merge join,beacuse both left and right path need sort");
     } else {
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
       bool is_fully_partition_wise = (DistAlgo::DIST_PARTITION_WISE == join_dist_algo) &&
@@ -7711,6 +8398,7 @@ int ObJoinOrder::init_merge_join_structure(ObIAllocator &allocator,
                                                   path->parent_->get_fd_item_set(),
                                                   path->parent_->get_output_equal_sets(),
                                                   path->parent_->get_output_const_exprs(),
+                                                  get_plan()->get_onetime_query_refs(),
                                                   path->parent_->get_is_at_most_one_row(),
                                                   join_exprs,
                                                   default_directions,
@@ -7742,33 +8430,32 @@ int ObJoinOrder::set_nl_filters(JoinPath *join_path,
   if (OB_ISNULL(join_path) || OB_ISNULL(right_path)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(join_path), K(right_path), K(ret));
+  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) {
+    if (OB_FAIL(append_array_no_dup(join_path->filter_, where_conditions))) {
+      LOG_WARN("failed to append conditions", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < on_conditions.count(); ++i) {
+      if (right_path->is_inner_path() && //如果是条件下降的NL
+          ObOptimizerUtil::find_item(right_path->pushdown_filters_, on_conditions.at(i))) {
+         /*do nothing*/
+      } else if (OB_FAIL(join_path->other_join_conditions_.push_back(on_conditions.at(i)))) { //未下降的nl条件
+        LOG_WARN("failed to push back conditions", K(ret));
+      }
+    }
   } else {
-    //首先处理where条件
+    if (OB_FAIL(append_array_no_dup(join_path->other_join_conditions_, on_conditions))) {
+      LOG_WARN("failed to append conditions", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < where_conditions.count(); ++i) {
       //只有能在本级处理的qual才能放在join条件里，处理AB时，遇到a+b=c条件是不能放在本级join条件里的
       if (OB_ISNULL(where_conditions.at(i))) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("raw expr is null", K(ret));
-      } else if (where_conditions.at(i)->get_relation_ids().is_subset(get_tables())) {
-        if (right_path->is_inner_path() && //如果是条件下降的NL
-            ObOptimizerUtil::find_item(right_path->pushdown_filters_, where_conditions.at(i))) {
+      } else if (right_path->is_inner_path() && //如果是条件下降的NL
+                 ObOptimizerUtil::find_item(right_path->pushdown_filters_, where_conditions.at(i))) {
           /*do nothing*/
-        } else { //未下降的nl条件
-          if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) { //如果是外连接，where条件只能作为普通的filter
-            ret = join_path->filter_.push_back(where_conditions.at(i));
-          } else { //如果不是外连接，where条件只能作为join filter
-            ret = join_path->other_join_conditions_.push_back(where_conditions.at(i));
-          }
-        }
-      } else { /*不能在本级join中处理的qual跳过*/ }
-    }
-    //处理on条件（这时是在处理OJ）
-    for (int64_t i = 0; OB_SUCC(ret) && i < on_conditions.count(); ++i) {
-      if (right_path->is_inner_path() && //如果是条件下降的NL
-          ObOptimizerUtil::find_item(right_path->pushdown_filters_, on_conditions.at(i))) {
-         /*do nothing*/
-      } else { //未下降的nl条件
-        ret = join_path->other_join_conditions_.push_back(on_conditions.at(i));//on条件必须放在join层
+      } else if (OB_FAIL(join_path->other_join_conditions_.push_back(where_conditions.at(i)))) { //未下降的nl条件
+        LOG_WARN("failed to push back conditions", K(ret));
       }
     }
   }
@@ -7790,7 +8477,7 @@ int ObJoinOrder::alloc_join_path(JoinPath *&join_path)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate a join path", K(join_path), K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
@@ -7810,9 +8497,16 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
 {
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
+  ObSEArray<ObRawExpr*, 4> normal_filters;
+  ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) || OB_ISNULL(get_plan())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path), K(right_path), K(get_plan()), K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(filters,
+                                                              subquery_filters,
+                                                              normal_filters,
+                                                              false))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
   } else if (OB_FAIL(alloc_join_path(join_path))) {
     LOG_WARN("failed to allocate a hash join path", K(ret));
   } else {
@@ -7828,11 +8522,12 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
     join_path->is_naaj_ = is_naaj;
     join_path->is_sna_ = is_sna;
     join_path->is_slave_mapping_ &= (!is_naaj);
+    OPT_TRACE("create new Hash Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
       LOG_WARN("failed to append join conditions", K(ret));
     } else if (OB_FAIL(append(join_path->other_join_conditions_, other_join_conditions))) {
       LOG_WARN("failed to append join filters", K(ret));
-    } else if (OB_FAIL(append(join_path->filter_, filters))) {
+    } else if (OB_FAIL(append(join_path->filter_, normal_filters))) {
       LOG_WARN("failed to append join quals", K(ret));
     } else if (DistAlgo::DIST_PULL_TO_LOCAL != join_dist_algo &&
                OB_FAIL(generate_join_filter_infos(left_path,
@@ -7845,6 +8540,9 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to generate join filter info", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
+    } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
+                                                           subquery_filters))) {
+      LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add path", K(ret));
     } else {
@@ -7880,21 +8578,21 @@ int ObJoinOrder::generate_join_filter_infos(const Path *left_path,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret), K(left_path), K(right_path), K(get_plan()));
   } else if (get_plan()->get_optimizer_context().get_parallel() <= 1) {
-    //do nothing
+    OPT_TRACE("parallel <= 1, plan will not use join filter");
   } else if (RIGHT_OUTER_JOIN == join_type ||
             FULL_OUTER_JOIN == join_type ||
             RIGHT_ANTI_JOIN == join_type ||
             CONNECT_BY_JOIN == join_type ||
             is_naaj) {
     //do nothing
-  } else if (OB_FAIL(find_possible_join_filter_table(*left_path,
-                                                     *right_path,
-                                                     join_dist_algo,
-                                                     equal_join_conditions,
-                                                     join_filter_infos))) {
+  } else if (OB_FAIL(find_possible_join_filter_tables(*left_path,
+                                                      *right_path,
+                                                      join_dist_algo,
+                                                      equal_join_conditions,
+                                                      join_filter_infos))) {
     LOG_WARN("failed to find possible table scan for bf", K(ret));
   } else if (join_filter_infos.empty()) {
-    //do nothing
+    OPT_TRACE("no valid join filter");
   } else if (OB_FAIL(check_normal_join_filter_valid(*left_path, *right_path, join_filter_infos))) {
     LOG_WARN("fail to check bloom filter gen rule", K(ret));
   } else if (OB_FAIL(check_partition_join_filter_valid(join_dist_algo, join_filter_infos))) {
@@ -7905,13 +8603,14 @@ int ObJoinOrder::generate_join_filter_infos(const Path *left_path,
   return ret;
 }
 
-int ObJoinOrder::find_possible_join_filter_table(const Path &left_path,
-                                                 const Path &right_path,
-                                                 const DistAlgo join_dist_algo,
-                                                 const ObIArray<ObRawExpr*> &equal_join_conditions,
-                                                 ObIArray<JoinFilterInfo> &join_filter_infos)
+int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
+                                                  const Path &right_path,
+                                                  const DistAlgo join_dist_algo,
+                                                  const ObIArray<ObRawExpr*> &equal_join_conditions,
+                                                  ObIArray<JoinFilterInfo> &join_filter_infos)
 {
   int ret = OB_SUCCESS;
+  ObRelIds right_tables;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(right_path.get_sharding())
       || OB_ISNULL(left_path.parent_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7919,30 +8618,69 @@ int ObJoinOrder::find_possible_join_filter_table(const Path &left_path,
                               K(left_path.parent_));
   } else {
     bool right_need_exchange = ObOptimizerUtil::is_right_need_exchange(*right_path.get_sharding(), join_dist_algo);
-    if (OB_FAIL(find_shuffle_table_scan(get_plan()->get_log_plan_hint(),
-                                        right_path,
-                                        left_path.parent_->get_tables(),
-                                        !get_plan()->get_optimizer_context().enable_bloom_filter(),
-                                        !right_need_exchange,
-                                        join_filter_infos))) {
-      LOG_WARN("failed to find shuffle_table_scan", K(ret));
-    } else if (OB_FAIL(get_join_filter_exprs(equal_join_conditions,
-                                            join_filter_infos))) {
-      LOG_WARN("failed to get all join expr for bf", K(ret));
+    bool left_need_exchange = ObOptimizerUtil::is_left_need_exchange(*left_path.get_sharding(), join_dist_algo);
+    bool is_fully_partition_wise = !left_need_exchange && !right_need_exchange && DIST_PARTITION_WISE == join_dist_algo;
+    ObSEArray<ObRawExpr*, 4> left_exprs;
+    ObSEArray<ObRawExpr*, 4> right_exprs;
+    if (OB_FAIL(ObOptimizerUtil::extract_equal_join_conditions(equal_join_conditions,
+                                                               left_path.parent_->get_tables(),
+                                                               left_exprs,
+                                                               right_exprs))) {
+      LOG_WARN("failed format equal join conditions", K(ret));
+    } else if (OB_FAIL(get_plan()->get_table_ids(right_exprs, right_tables))) {
+      LOG_WARN("failed to get table ids by rexprs", K(ret));
+    } else if (OB_FAIL(find_possible_join_filter_tables(
+                       get_plan()->get_log_plan_hint(),
+                       right_path,
+                       left_path.parent_->get_tables(),
+                       right_tables,
+                       !get_plan()->get_optimizer_context().enable_bloom_filter(),
+                       !right_need_exchange,
+                       is_fully_partition_wise,
+                       left_exprs,
+                       right_exprs,
+                       join_filter_infos))) {
+      LOG_WARN("failed to find subquery possible join filter table", K(ret));
     }
   }
   return ret;
 }
 
-int ObJoinOrder::find_shuffle_table_scan(const ObLogPlanHint &log_plan_hint,
-                                         const Path &right_path,
-                                         const ObRelIds &left_tables,
-                                         bool config_disable,
-                                         bool is_current_dfo,
-                                         ObIArray<JoinFilterInfo> &join_filter_infos)
+int ObJoinOrder::fill_join_filter_info(JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
-  if (right_path.is_access_path()) {
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(get_plan()));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
+                                                          get_plan()->get_selectivity_ctx(),
+                                                          join_filter_info.rexprs_,
+                                                          join_filter_info.row_count_,
+                                                          join_filter_info.right_distinct_card_,
+                                                          false))) {
+    LOG_WARN("failed to calc distinct", K(ret));
+  }
+
+  return ret;
+}
+
+int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_hint,
+                                                  const Path &right_path,
+                                                  const ObRelIds &left_tables,
+                                                  const ObRelIds &right_tables,
+                                                  bool config_disable,
+                                                  bool is_current_dfo,
+                                                  bool is_fully_partition_wise,
+                                                  const ObIArray<ObRawExpr*> &left_join_conditions,
+                                                  const ObIArray<ObRawExpr*> &right_join_conditions,
+                                                  ObIArray<JoinFilterInfo> &join_filter_infos)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt* stmt;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (right_path.is_access_path()) {
     const AccessPath &access = static_cast<const AccessPath&>(right_path);
     bool can_join_filter = false;
     const ObJoinFilterHint *force_hint = NULL;
@@ -7958,7 +8696,7 @@ int ObJoinOrder::find_shuffle_table_scan(const ObLogPlanHint &log_plan_hint,
                                                            can_join_filter,
                                                            force_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
-    } else if (is_current_dfo &&
+    } else if (is_current_dfo && !is_fully_partition_wise &&
                OB_FAIL(log_plan_hint.check_use_join_filter(access.table_id_,
                                                            left_tables,
                                                            true,
@@ -7971,6 +8709,8 @@ int ObJoinOrder::find_shuffle_table_scan(const ObLogPlanHint &log_plan_hint,
     } else {
       JoinFilterInfo info;
       info.table_id_ = access.table_id_;
+      info.filter_table_id_ = access.table_id_;
+      info.index_id_ = access.index_id_;
       info.ref_table_id_ = access.ref_table_id_;
       info.sharding_ = access.strong_sharding_;
       info.row_count_ = access.get_output_row_count();
@@ -7979,9 +8719,16 @@ int ObJoinOrder::find_shuffle_table_scan(const ObLogPlanHint &log_plan_hint,
       info.need_partition_join_filter_ = can_part_join_filter;
       info.force_part_filter_ = force_part_hint;
       info.in_current_dfo_ = is_current_dfo;
-      if ((info.can_use_join_filter_ || info.need_partition_join_filter_)
-          && OB_FAIL(join_filter_infos.push_back(info))) {
-        LOG_WARN("failed to push back info", K(ret));
+      if ((info.can_use_join_filter_ || info.need_partition_join_filter_)) {
+        if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
+                                          right_join_conditions,
+                                          info))) {
+          LOG_WARN("failed to get join filter exprs", K(ret));
+        } else if (OB_FAIL(fill_join_filter_info(info))) {
+          LOG_WARN("failed to fill join filter info", K(ret));
+        } else if(OB_FAIL(join_filter_infos.push_back(info))) {
+          LOG_WARN("failed to push back info", K(ret));
+        }
       }
     }
   } else if (right_path.is_temp_table_path()) {
@@ -7998,86 +8745,139 @@ int ObJoinOrder::find_shuffle_table_scan(const ObLogPlanHint &log_plan_hint,
     } else if (can_join_filter) {
       JoinFilterInfo info;
       info.table_id_ = temp_table.table_id_;
+      info.filter_table_id_ = temp_table.table_id_;
       info.row_count_ = temp_table.get_path_output_rows();
       info.can_use_join_filter_ = true;
       info.force_filter_ = force_hint;
       info.need_partition_join_filter_ = false;
       info.force_part_filter_ = NULL;
       info.in_current_dfo_ = is_current_dfo;
-      if (OB_FAIL(join_filter_infos.push_back(info))) {
+      if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
+                                        right_join_conditions,
+                                        info))) {
+        LOG_WARN("failed to get join filter exprs", K(ret));
+      } else if (OB_FAIL(fill_join_filter_info(info))) {
+        LOG_WARN("failed to fill join filter info", K(ret));
+      } else if (OB_FAIL(join_filter_infos.push_back(info))) {
         LOG_WARN("failed to push back info", K(ret));
       }
     }
-  } else if (is_current_dfo && right_path.is_join_path()) {
+  } else if (((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) || is_current_dfo) && right_path.is_join_path()) {
     const JoinPath &join_path = static_cast<const JoinPath&>(right_path);
-    if (OB_NOT_NULL(join_path.left_path_) &&
-        OB_FAIL(SMART_CALL(find_shuffle_table_scan(log_plan_hint,
-                                                  *join_path.left_path_,
-                                                  left_tables,
-                                                  config_disable,
-                                                  !join_path.is_left_need_exchange(),
-                                                  join_filter_infos)))) {
+    if (!is_current_dfo && join_path.is_left_need_exchange()) {
+      // Stop recursive join_path.left_path_ if GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 and
+      // is_current_dfo is false and join_path.is_left_need_exchange().
+      // Do not allow bloom filters to be sent between non-adjacent dfos.
+    } else if (OB_ISNULL(join_path.left_path_) ||
+               OB_ISNULL(join_path.left_path_->parent_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (join_path.left_path_->parent_->get_tables().overlap(right_tables) &&
+                OB_FAIL(SMART_CALL(find_possible_join_filter_tables(log_plan_hint,
+                                                          *join_path.left_path_,
+                                                          left_tables,
+                                                          right_tables,
+                                                          config_disable,
+                                                          !join_path.is_left_need_exchange() && is_current_dfo,
+                                                          join_path.is_fully_paratition_wise(),
+                                                          left_join_conditions,
+                                                          right_join_conditions,
+                                                          join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
-    } else if (OB_NOT_NULL(join_path.right_path_) &&
-              OB_FAIL(SMART_CALL(find_shuffle_table_scan(log_plan_hint,
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!is_current_dfo && join_path.is_right_need_exchange()) {
+      // stop recursive join_path.right_path_ if GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 and
+      // is_current_dfo is false and join_path.is_left_need_exchange().
+      // Do not allow bloom filters to be sent between non-adjacent dfos.
+    } else if (OB_ISNULL(join_path.right_path_) ||
+               OB_ISNULL(join_path.right_path_->parent_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (join_path.right_path_->parent_->get_tables().overlap(right_tables) &&
+               OB_FAIL(SMART_CALL(find_possible_join_filter_tables(log_plan_hint,
                                                         *join_path.right_path_,
                                                         left_tables,
+                                                        right_tables,
                                                         config_disable,
-                                                        !join_path.is_right_need_exchange(),
+                                                        !join_path.is_right_need_exchange() && is_current_dfo,
+                                                        join_path.is_fully_paratition_wise(),
+                                                        left_join_conditions,
+                                                        right_join_conditions,
                                                         join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
+    }
+  } else if (right_path.is_subquery_path()) {
+    ObSEArray<ObRawExpr*, 4> pushdown_left_quals;
+    ObSEArray<ObRawExpr*, 4> pushdown_right_quals;
+    JoinFilterPushdownHintInfo hint_info;
+    ObSqlBitSet<> table_set;
+    ObLogPlan* child_plan;
+    const SubQueryPath& subquery_path = static_cast<const SubQueryPath&>(right_path);
+    if (OB_ISNULL(subquery_path.root_) ||
+        OB_ISNULL(child_plan = subquery_path.root_->get_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(log_plan_hint.get_pushdown_join_filter_hints(subquery_path.subquery_id_,
+                                                                    left_tables,
+                                                                    config_disable,
+                                                                    hint_info))) {
+      LOG_WARN("failed to check use join filter", K(ret));
+    } else if (OB_FAIL(table_set.add_member(stmt->get_table_bit_index(subquery_path.subquery_id_)))) {
+      LOG_WARN("failed to add member into table set", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::extract_pushdown_join_filter_quals(left_join_conditions,
+                                                                           right_join_conditions,
+                                                                           table_set,
+                                                                           pushdown_left_quals,
+                                                                           pushdown_right_quals))) {
+      LOG_WARN("failed to extract pushdown quals", K(ret));
+    } else if (OB_FAIL(child_plan->pushdown_join_filter_into_subquery(stmt,
+                                                                      subquery_path.root_,
+                                                                      subquery_path.subquery_id_,
+                                                                      hint_info,
+                                                                      is_current_dfo,
+                                                                      is_fully_partition_wise,
+                                                                      pushdown_left_quals,
+                                                                      pushdown_right_quals,
+                                                                      join_filter_infos))) {
+      LOG_WARN("failed to find pushdown join filter table", K(ret));
     }
   }
   return ret;
 }
 
-int ObJoinOrder::get_join_filter_exprs(const ObIArray<ObRawExpr*> &equal_join_conditions,
-                                       ObIArray<JoinFilterInfo> &join_filter_infos)
+int ObJoinOrder::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
+                                       const ObIArray<ObRawExpr*> &right_join_conditions,
+                                       JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = NULL;
   ObSqlBitSet<> table_set;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+  const ObDMLStmt* stmt;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null stmt", K(ret));
+    LOG_WARN("unexpected null", K(ret), K(get_plan()));
+  } else if (OB_UNLIKELY(left_join_conditions.count() != right_join_conditions.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("join condition length error", K(ret));
+  } else if (OB_FAIL(table_set.add_member(stmt->get_table_bit_index(join_filter_info.table_id_)))) {
+    LOG_WARN("failed to add member", K(ret));
   }
-  for (int i = 0; OB_SUCC(ret) && i < join_filter_infos.count(); ++i) {
-    JoinFilterInfo &info = join_filter_infos.at(i);
-    table_set.reuse();
-    if (OB_FAIL(table_set.add_member(stmt->get_table_bit_index(info.table_id_)))) {
-      LOG_WARN("failed to add member", K(ret));
-    }
-    for (int j = 0; OB_SUCC(ret) && j < equal_join_conditions.count(); ++j) {
-      ObRawExpr* expr = equal_join_conditions.at(j);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL expr", K(ret));
-      } else if (!expr->has_flag(IS_JOIN_COND) ||
-                 2 != expr->get_param_count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected join condition", K(ret));
-      } else {
-        ObRawExpr *lexpr = expr->get_param_expr(0);
-        ObRawExpr *rexpr = expr->get_param_expr(1);
-        if (OB_ISNULL(lexpr) || OB_ISNULL(rexpr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null expr", K(ret));
-        } else if (lexpr->get_relation_ids().is_subset(table_set)) {
-          if (OB_FAIL(info.lexprs_.push_back(rexpr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          } else if (OB_FAIL(info.rexprs_.push_back(lexpr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          }
-        } else if (rexpr->get_relation_ids().is_subset(table_set)) {
-          if (OB_FAIL(info.lexprs_.push_back(lexpr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          } else if (OB_FAIL(info.rexprs_.push_back(rexpr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          }
-        }
+  for (int64_t j = 0; OB_SUCC(ret) && j < right_join_conditions.count(); ++j) {
+    ObRawExpr *lexpr = left_join_conditions.at(j);
+    ObRawExpr *rexpr = right_join_conditions.at(j);
+    if (OB_ISNULL(lexpr) || OB_ISNULL(rexpr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (rexpr->get_relation_ids().is_subset(table_set)) {
+      if (OB_FAIL(join_filter_info.lexprs_.push_back(lexpr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(join_filter_info.rexprs_.push_back(rexpr))) {
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
   }
+
   return ret;
 }
 
@@ -8107,12 +8907,12 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
   for (int i = 0; OB_SUCC(ret) && i < join_filter_infos.count(); ++i) {
     JoinFilterInfo &info = join_filter_infos.at(i);
     double join_filter_sel = 1.0;
-    if (!info.in_current_dfo_ && cur_dfo_has_shuffle_bf) {
+    if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) && cur_dfo_has_shuffle_bf && !info.in_current_dfo_) {
       info.can_use_join_filter_ = false;
+      OPT_TRACE("current dfo has shuffle join filter, this hash join will not use join filter");
     } else if (!info.can_use_join_filter_ || info.lexprs_.empty()) {
       info.can_use_join_filter_ = false;
     } else if (OB_FAIL(calc_join_filter_selectivity(left_path,
-                                                    right_path,
                                                     info,
                                                     join_filter_sel))) {
       LOG_WARN("failed to calc join filter sel", K(ret));
@@ -8124,6 +8924,11 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
       }
       info.join_filter_selectivity_ = join_filter_sel;
       info.can_use_join_filter_ = rate >= threshold || NULL != info.force_filter_;
+      OPT_TRACE("join filter info:");
+      OPT_TRACE("in current dfo:", info.in_current_dfo_);
+      OPT_TRACE("filter selectivity:", info.join_filter_selectivity_);
+      OPT_TRACE("force user:", NULL != info.force_filter_);
+      OPT_TRACE("use join filter:", info.can_use_join_filter_);
       LOG_TRACE("succeed to check normal join filter", K(info));
     }
   }
@@ -8131,7 +8936,6 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
 }
 
 int ObJoinOrder::calc_join_filter_selectivity(const Path& left_path,
-                                              const Path& right_path,
                                               JoinFilterInfo& info,
                                               double &join_filter_selectivity)
 {
@@ -8145,27 +8949,20 @@ int ObJoinOrder::calc_join_filter_selectivity(const Path& left_path,
     LOG_WARN("unexpected null plan", K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
                                                           plan->get_selectivity_ctx(),
-                                                          info.rexprs_,
-                                                          info.row_count_,
-                                                          right_distinct_card,
-                                                          false))) {
-    LOG_WARN("failed to calc distinct", K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
-                                                          plan->get_selectivity_ctx(),
                                                           info.lexprs_,
                                                           left_path.get_path_output_rows(),
                                                           left_distinct_card,
                                                           false))) {
     LOG_WARN("failed to calc distinct", K(ret));
   } else {
-    join_filter_selectivity = left_distinct_card / right_distinct_card;
+    join_filter_selectivity = left_distinct_card / info.right_distinct_card_;
     if (join_filter_selectivity < 0) {
       join_filter_selectivity = 0;
     } else if (join_filter_selectivity > 0.9) {
       join_filter_selectivity = 0.9;
     }
-    LOG_TRACE("succeed to calc join filter selectivity", K(join_filter_selectivity), 
-                                      K(left_distinct_card), K(right_distinct_card));
+    LOG_TRACE("succeed to calc join filter selectivity", K(join_filter_selectivity),
+                                      K(left_distinct_card), K(info.right_distinct_card_));
   }
   return ret;
 }
@@ -8227,20 +9024,20 @@ int ObJoinOrder::check_partition_join_filter_valid(const DistAlgo join_dist_algo
       LOG_WARN("unexpected null sharding", K(ret));
     } else if (OB_FAIL(info.sharding_->get_all_partition_keys(target_part_keys))) {
       LOG_WARN("fail to get all partion keys", K(ret));
-    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart(get_plan()->get_equal_sets(),
-                                                            info.lexprs_,
-                                                            info.rexprs_,
-                                                            target_part_keys,
-                                                            match))) {
+    } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(get_plan()->get_equal_sets(),
+                                                                        info.lexprs_,
+                                                                        info.rexprs_,
+                                                                        target_part_keys,
+                                                                        match))) {
       LOG_WARN("fail to check if match repart", K(ret));
     } else if (!match) {
       // If the join condition includes all level 1 partition key,
       // partition bf can be generated based on the level 1 partition key
-      if (OB_FAIL(ObShardingInfo::check_if_match_repart(get_plan()->get_equal_sets(),
-                                                            info.lexprs_,
-                                                            info.rexprs_,
-                                                            info.sharding_->get_partition_keys(),
-                                                            match))) {
+      if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(get_plan()->get_equal_sets(),
+                                                                  info.lexprs_,
+                                                                  info.rexprs_,
+                                                                  info.sharding_->get_partition_keys(),
+                                                                  match))) {
         LOG_WARN("fail to check if match repart", K(ret));
       } else {
         info.skip_subpart_ = true;
@@ -8249,13 +9046,16 @@ int ObJoinOrder::check_partition_join_filter_valid(const DistAlgo join_dist_algo
     if (OB_FAIL(ret)) {
     } else if (!match) {
       info.need_partition_join_filter_ = false;
-    } else if (OB_FAIL(build_join_filter_part_expr(info.ref_table_id_,
+      OPT_TRACE("hash join will not use partition join filter");
+    } else if (OB_FAIL(build_join_filter_part_expr(info.index_id_,
                                                   info.lexprs_,
                                                   info.rexprs_,
                                                   info.sharding_,
                                                   info.calc_part_id_expr_,
                                                   info.skip_subpart_))) {
       LOG_WARN("fail to init bf part expr", K(ret));
+    } else {
+      OPT_TRACE("hash join will use partition join filter");
     }
   }
   return ret;
@@ -8423,11 +9223,18 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
   const ObDMLStmt *stmt = NULL;
+  ObSEArray<ObRawExpr*, 4> normal_filters;
+  ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) || OB_ISNULL(left_path->get_sharding()) ||
       OB_ISNULL(right_path->get_sharding()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(left_path), K(right_path), K(get_plan()), K(stmt), K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(filters,
+                                                              subquery_filters,
+                                                              normal_filters,
+                                                              false))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
   } else if (RIGHT_SEMI_JOIN == join_type || RIGHT_ANTI_JOIN == join_type) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected right semt/anti merge join", K(ret), K(join_type));
@@ -8447,11 +9254,12 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
     join_path->right_prefix_pos_ = right_prefix_pos;
     join_path->equal_cond_sel_ = equal_cond_sel;
     join_path->other_cond_sel_ = other_cond_sel;
+    OPT_TRACE("create new Merge Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
       LOG_WARN("failed to append join conditions", K(ret));
     } else if (OB_FAIL(append(join_path->other_join_conditions_, other_join_conditions))) {
       LOG_WARN("failed to append join filters", K(ret));
-    } else if (OB_FAIL(append(join_path->filter_, filters))) {
+    } else if (OB_FAIL(append(join_path->filter_, normal_filters))) {
       LOG_WARN("failed to append join quals", K(ret));
     } else if (OB_FAIL(append(join_path->left_sort_keys_, left_sort_keys))) {
       LOG_WARN("failed to append left expected ordering", K(ret));
@@ -8461,6 +9269,9 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
       LOG_WARN("faield to append merge directions", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
+    } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
+                                                           subquery_filters))) {
+      LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add join path", K(ret));
     } else {
@@ -8669,8 +9480,7 @@ public:
         if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null expr", K(ret));
-        } else if (OB_FALSE_IT(ref_expr=expr->get_ref_expr())) {
-        } else if (OB_ISNULL(ref_expr)) {
+        } else if (OB_ISNULL(ref_expr = expr->get_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null expr", K(ret));
         } else if (ref_expr->get_relation_ids().is_subset(*left_table_set_)) {
@@ -8679,34 +9489,21 @@ public:
           } else {
             new_query_ref->set_has_nl_param(true);
           }
-        } else if (ref_expr->get_relation_ids().overlap(*left_table_set_)) {
-          ObRawExpr* new_ref_expr = NULL;
-          if (OB_FAIL(SMART_CALL(copier_->copy_on_replace(ref_expr, new_ref_expr, this)))) {
-            LOG_WARN("failed to copy and replace expr", K(ret));
-          } else if (OB_ISNULL(new_ref_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null expr", K(ret));
-          } else if (OB_FALSE_IT(expr->set_ref_expr(new_ref_expr))) {
-          } else if (OB_FAIL(new_query_ref->get_exec_params().push_back(expr))) {
-            LOG_WARN("failed to push back expr", K(ret));
-          } else {
-            new_query_ref->set_has_nl_param(true);
-          }
+        } else if (OB_UNLIKELY(ref_expr->get_relation_ids().overlap(*left_table_set_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected expr", K(ret), K(*ref_expr));
         } else if (OB_FAIL(new_query_ref->get_exec_params().push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
       new_expr = new_query_ref;
-    } else if (old_expr == root_expr_) {
+    } else if (copier_->is_existed(old_expr)) {
       // do nothing
-    } else if (old_expr->get_relation_ids().is_subset(*left_table_set_) &&
-               T_OP_ROW != old_expr->get_expr_type() &&
-               !old_expr->has_flag(CNT_ONETIME) &&
-               !old_expr->has_flag(CNT_SUB_QUERY)) {
+    } else if (old_expr->is_column_ref_expr() &&
+               old_expr->get_relation_ids().is_subset(*left_table_set_)) {
       new_expr = old_expr;
       if (OB_FAIL(ObRawExprUtils::create_new_exec_param(query_ctx_,
                                                         expr_factory,
-                                                        expr_level_,
                                                         new_expr))) {
         LOG_WARN("failed to create new exec param", K(ret));
       } else if (OB_FAIL(nl_params_.push_back(
@@ -8720,7 +9517,6 @@ public:
   ObArray<ObExecParamRawExpr *> nl_params_;
   ObQueryCtx *query_ctx_;
   const ObRelIds *left_table_set_;
-  int64_t expr_level_;
   ObRawExpr *root_expr_;
   ObRawExprCopier *copier_;
 };
@@ -8737,12 +9533,35 @@ int ObJoinOrder::extract_params_for_inner_path(const ObRelIds &join_relids,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
+    ObSEArray<ObQueryRefRawExpr*, 4> query_ref_exprs;
     ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
     NLParamReplacer replacer;
     replacer.query_ctx_ = stmt->get_query_ctx();
-    replacer.expr_level_ = stmt->get_current_level();
     replacer.left_table_set_ = &join_relids;
     replacer.copier_ = &copier;
+    if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(exprs, query_ref_exprs))) {
+      LOG_WARN("failed to extract query ref expr", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < query_ref_exprs.count(); ++i) {
+      ObQueryRefRawExpr *query_ref_expr = query_ref_exprs.at(i);
+      if (OB_ISNULL(query_ref_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < query_ref_expr->get_param_count(); ++j) {
+        ObExecParamRawExpr *exec_param = query_ref_expr->get_exec_param(j);
+        ObRawExpr *ref_expr = NULL;
+        if (OB_ISNULL(exec_param) || OB_ISNULL(ref_expr = exec_param->get_ref_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null expr", K(ret));
+        } else if (!ref_expr->get_relation_ids().is_subset(join_relids) ||
+                   copier.is_existed(ref_expr)) {
+          // do nothing
+        } else if (OB_FAIL(copier.add_replaced_expr(ref_expr, exec_param))) {
+          LOG_WARN("failed to add replaced expr", K(ret));
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
       ObRawExpr *temp_expr = NULL;
       replacer.root_expr_ = exprs.at(i);
@@ -8750,7 +9569,7 @@ int ObJoinOrder::extract_params_for_inner_path(const ObRelIds &join_relids,
         LOG_WARN("failed to copy on replace expr", K(ret));
       } else if (OB_FAIL(temp_expr->extract_info())) {
         LOG_WARN("failed to extract expr info", K(ret));
-      } else if (OB_FAIL(temp_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+      } else if (OB_FAIL(temp_expr->pull_relation_id())) {
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (temp_expr->has_flag(CNT_SUB_QUERY)) {
         if (OB_FAIL(create_onetime_expr(join_relids, temp_expr))) {
@@ -8801,7 +9620,8 @@ int ObJoinOrder::is_onetime_expr(const ObRelIds &ignore_relids,ObRawExpr* expr, 
     } else if (has_ref_assign_user_var) {
       is_valid = false;
     } else if (expr->get_output_column() != 1 ||
-               static_cast<ObQueryRefRawExpr *>(expr)->is_set()) {
+               static_cast<ObQueryRefRawExpr *>(expr)->is_set() ||
+               static_cast<ObQueryRefRawExpr *>(expr)->is_multiset()) {
       is_valid = false;
     }
   }
@@ -8838,7 +9658,6 @@ int ObJoinOrder::create_onetime_expr(const ObRelIds &ignore_relids, ObRawExpr* &
     } else {
       new_expr->set_ref_expr(expr, true);
       new_expr->set_result_type(expr->get_result_type());
-      new_expr->set_expr_level(stmt->get_current_level());
       new_expr->set_param_index(stmt->get_question_marks_count());
       // TODO link.zt
       const_cast<ObDMLStmt*>(stmt)->increase_question_marks_count();
@@ -8919,18 +9738,27 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(ret));
   } else {
+    if (ignore_hint) {
+      OPT_TRACE("start generate join path without hint");
+    } else {
+      OPT_TRACE("start generate join path with hint");
+    }
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     const bool both_access = ACCESS == left_tree.get_type() && ACCESS == right_tree.get_type();
     if (CONNECT_BY_JOIN == path_info.join_type_) {
       path_info.local_methods_ = NESTED_LOOP_JOIN;
       path_info.distributed_methods_ = DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
+      OPT_TRACE("connect by will use nl join");
+      OPT_TRACE("connect by will use pull to local / basic method");
     } else {
       path_info.local_methods_ = NESTED_LOOP_JOIN | MERGE_JOIN | HASH_JOIN ;
       path_info.distributed_methods_ = DIST_PULL_TO_LOCAL | DIST_HASH_HASH |
+                                       DIST_HASH_NONE | DIST_NONE_HASH |
                                        DIST_BROADCAST_NONE | DIST_NONE_BROADCAST |
                                        DIST_BC2HOST_NONE | DIST_PARTITION_NONE |
                                        DIST_NONE_PARTITION | DIST_PARTITION_WISE |
-                                       DIST_BASIC_METHOD | DIST_NONE_ALL | DIST_ALL_NONE;
+                                       DIST_EXT_PARTITION_WISE | DIST_BASIC_METHOD |
+                                       DIST_NONE_ALL | DIST_ALL_NONE;
     }
     if (!ignore_hint && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(),
                                                               both_access,
@@ -8939,10 +9767,12 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     } else if (RIGHT_OUTER_JOIN == path_info.join_type_ ||
                FULL_OUTER_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
+      OPT_TRACE("right or full outer join can not use nested loop join");
     } else if (RIGHT_SEMI_JOIN == path_info.join_type_ ||
                RIGHT_ANTI_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
       path_info.local_methods_ &= ~MERGE_JOIN;
+      OPT_TRACE("right semi/anti join can not use nested loop/merge join");
     }
     //check batch update join type
     if (OB_SUCC(ret) && get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
@@ -8974,6 +9804,7 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
           //force to use nested loop join in batch update
           //the update target table must be the right table
           path_info.local_methods_ = NESTED_LOOP_JOIN;
+          OPT_TRACE("batch multi stmt force use nested loop join");
         } else {
           //ignore this join path
           path_info.local_methods_ = 0;
@@ -8987,6 +9818,11 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
                                               join_type,
                                               path_info))) {
         LOG_WARN("failed to check depend function table", K(ret));
+      } else if (OB_FAIL(check_depend_json_table(left_tree,
+                                                 right_tree,
+                                                 join_type,
+                                                 path_info))) {
+        LOG_WARN("failed to check depend function table", K(ret));
       } else if (OB_FAIL(check_subquery_in_join_condition(join_type,
                                                           join_conditions,
                                                           path_info))) {
@@ -8997,23 +9833,50 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     if (OB_FAIL(ret)) {
       /*do nothing*/
     } else {
-      if (get_cnt_rownum()) {
+      if (get_cnt_rownum() ||
+         (!opt_ctx.is_var_assign_only_in_root_stmt() && opt_ctx.has_var_assign())) {
         path_info.distributed_methods_ &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
+        OPT_TRACE("query with rownum can only use pull to local or basic method");
       }
       if (IS_LEFT_STYLE_JOIN(path_info.join_type_)) {
         // without BC2HOST DIST_BROADCAST_NONE
         path_info.distributed_methods_ &= ~DIST_BROADCAST_NONE;
         path_info.distributed_methods_ &= ~DIST_ALL_NONE;
+        OPT_TRACE("left anti/semi/outer join can not use broadcast none method");
       }
       if (IS_RIGHT_STYLE_JOIN(path_info.join_type_)) {
         // without BC2HOST DIST_NONE_BROADCAST
         path_info.distributed_methods_ &= ~DIST_NONE_BROADCAST;
         path_info.distributed_methods_ &= ~DIST_NONE_ALL;
+        OPT_TRACE("right anti/semi/outer join can not use none broadcast method");
       }
       if (opt_ctx.get_parallel() <= 1) {
         path_info.distributed_methods_ &= ~DIST_HASH_HASH;
         path_info.distributed_methods_ &= ~DIST_BROADCAST_NONE;
         path_info.distributed_methods_ &= ~DIST_NONE_BROADCAST;
+        OPT_TRACE("parallel=1, plan will not use hash hash、broadcast none、none broadcast");
+      }
+      OPT_TRACE("candi local methods:");
+      int64_t local_methods = path_info.local_methods_;
+      const ObString join_algo_str[] =
+      {
+        "NESTED LOOP JOIN",
+        "MERGE JOIN",
+        "HASH JOIN"
+      };
+      for (int idx = 0; idx < sizeof(join_algo_str) / sizeof(ObString); ++idx) {
+        if (local_methods & 1) {
+          OPT_TRACE(join_algo_str[idx]);
+        }
+        local_methods >>= 1;
+      }
+      OPT_TRACE("candi distribute methods:");
+      int64_t distributed_methods = path_info.distributed_methods_;
+      for (int64_t k = 1; k < DistAlgo::DIST_MAX_JOIN_METHOD; k = k << 1) {
+        if (distributed_methods & k) {
+          DistAlgo dist_algo = get_dist_algo(k);
+          OPT_TRACE(ob_dist_algo_str(dist_algo));
+        }
       }
     }
   }
@@ -9036,11 +9899,44 @@ int ObJoinOrder::check_depend_function_table(const ObJoinOrder &left_tree,
       if (left_tree.get_tables().has_member(info.table_idx_) &&
           info.depend_table_set_.is_subset(right_tree.get_tables())) {
         path_info.local_methods_ = 0;
+        OPT_TRACE("right tree has depend function table, ignore this path");
       } else if (right_tree.get_tables().has_member(info.table_idx_) &&
                   info.depend_table_set_.is_subset(left_tree.get_tables())) {
         if (RIGHT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
           ret = OB_NOT_SUPPORTED;
+          OPT_TRACE("right/full outer join with depend function table not support");
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "depended function table in right/full outer join");
+        } else {
+          path_info.local_methods_ &= NESTED_LOOP_JOIN;
+          path_info.force_inner_nl_ = true;
+          OPT_TRACE("left tree has depend function table, force use nested loop join");
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_depend_json_table(const ObJoinOrder &left_tree,
+                                         const ObJoinOrder &right_tree,
+                                         const ObJoinType join_type,
+                                         ValidPathInfo &path_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Input argument error", K(get_plan()), K(ret));
+  } else {
+    const ObIArray<JsonTableDependInfo> &infos = get_plan()->get_json_table_depend_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
+      const JsonTableDependInfo &info = infos.at(i);
+      if (left_tree.get_tables().has_member(info.table_idx_) &&
+          info.depend_table_set_.is_subset(right_tree.get_tables())) {
+        path_info.local_methods_ = 0;
+      } else if (right_tree.get_tables().has_member(info.table_idx_) &&
+                  info.depend_table_set_.is_subset(left_tree.get_tables())) {
+        if (RIGHT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
+          ret = OB_NOT_SUPPORTED;
         } else {
           path_info.local_methods_ &= NESTED_LOOP_JOIN;
           path_info.force_inner_nl_ = true;
@@ -9063,16 +9959,17 @@ int ObJoinOrder::check_subquery_in_join_condition(const ObJoinType join_type,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
     } else if (expr->has_flag(CNT_SUB_QUERY)) {
-
       has_subquery = true;
     }
   }
   if (OB_SUCC(ret) && has_subquery) {
     if (IS_RIGHT_STYLE_JOIN(join_type)) {
       path_info.local_methods_ = 0;
+      OPT_TRACE("right style join has correlated subquery, ignore this path");
     } else {
       path_info.local_methods_ &= NESTED_LOOP_JOIN;
       path_info.force_inner_nl_ = true;
+      OPT_TRACE("join condition has correlated subquery, force use nested loop join");
     }
   }
   return ret;
@@ -9162,8 +10059,7 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
              OB_UNLIKELY(OB_INVALID_ID == index_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table id", K(ref_table_id), K(index_id), K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema,
-                                    ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
     LOG_WARN("failed to get index schema", K(ret));
   } else if (OB_FAIL(extract_used_columns(table_id,
                                           ref_table_id,
@@ -9173,8 +10069,8 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
   } else if (index_id != ref_table_id) {
     is_unique_index = index_schema->is_unique_index();
     is_index_global = index_schema->is_global_index_table();
-    is_index_back = false;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_ids.count(); ++idx) {
+    is_index_back = index_schema->is_spatial_index() ? true : false;
+    for (int64_t idx = 0; OB_SUCC(ret) && !is_index_back && idx < column_ids.count(); ++idx) {
       bool found = false;
       const uint64_t used_column_id = column_ids.at(idx);
       if (OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == used_column_id) {
@@ -9184,7 +10080,6 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
                  K(idx), K(column_ids.at(idx)), K(ret));
       } else if (!found) {
         is_index_back = true;
-        break;
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
@@ -9216,7 +10111,8 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
                               const ObQueryRange *query_range,
                               ObCostTableScanInfo &est_cost_info,
                               bool &is_nl_with_extended_range,
-                              bool is_link)
+                              bool is_link,
+                              bool use_skip_scan)
 {
   int ret = OB_SUCCESS;
   is_nl_with_extended_range = false;
@@ -9236,7 +10132,7 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(get_plan()), K(schema_guard), K(ret));
     } else if (OB_FAIL(schema_guard->get_table_schema(est_cost_info.index_id_,
-                                                      index_schema, is_link))) {
+                                                      index_schema))) {
       LOG_WARN("failed to get index schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -9244,15 +10140,24 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
     } else if (OB_FAIL(index_schema->get_column_ids(index_column_descs))) {
       LOG_WARN("failed to extract column ids", K(ret));
     } else {
-      // get index column bitsets
+      uint64_t geo_column_id;
+      bool is_geo_index = index_schema->is_spatial_index();
+      if (is_geo_index && OB_FAIL(index_schema->get_spatial_geo_column_id(geo_column_id))) {
+        LOG_WARN("failed to extract geo column id", K(ret));
+      }
+      // replace cellid column id with geo column id, since filters only record geo column id.
       for (int64_t i = 0; OB_SUCC(ret) && i < index_column_descs.count(); i++) {
-        if (OB_FAIL(index_column_bs.add_member(index_column_descs.at(i).col_id_))) {
+        if (is_geo_index && (i == 0) && OB_FAIL(index_column_bs.add_member(geo_column_id))) {
+          LOG_WARN("failed to add geo member", K(ret), K(i), K(geo_column_id));
+        } else if (OB_FAIL(index_column_bs.add_member(index_column_descs.at(i).col_id_))) {
           LOG_WARN("failed to add member", K(ret));
         }
       }
       //
       if (OB_SUCC(ret)) {
         if (OB_FAIL(est_cost_info.prefix_filters_.assign(query_range->get_range_exprs()))) {
+          LOG_WARN("failed to assign exprs", K(ret));
+        } else if (use_skip_scan && OB_FAIL(est_cost_info.ss_postfix_range_filters_.assign(query_range->get_ss_range_exprs()))) {
           LOG_WARN("failed to assign exprs", K(ret));
         }
       }
@@ -9286,10 +10191,14 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
       for (int64_t i = 0; OB_SUCC(ret) && first_param_column_idx == -1 &&
                           i < est_cost_info.range_columns_.count(); ++i) {
         ColumnItem &column = est_cost_info.range_columns_.at(i);
-        if (!column_bs.has_member(column.column_id_)) {
+        uint64_t column_id = column.column_id_;
+        if (is_geo_index && (i == 0)) {
+          column_id = geo_column_id;
+        }
+        if (!column_bs.has_member(column_id)) {
           first_param_column_idx = i;
         } else {
-          ret = prefix_column_bs.add_member(column.column_id_);
+          ret = prefix_column_bs.add_member(column_id);
         }
       }
 
@@ -9298,6 +10207,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         LOG_WARN("failed to add members", K(ret));
       } else if (-1 != first_param_column_idx) {
         uint64_t column_id = est_cost_info.range_columns_.at(first_param_column_idx).column_id_;
+        if (is_geo_index && (first_param_column_idx == 0)) {
+          column_id = geo_column_id;
+        }
         ret = ex_prefix_column_bs.add_member(column_id);
       }
 
@@ -9322,9 +10234,17 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
         } else if (can_extract) {
           ret = est_cost_info.pushdown_prefix_filters_.push_back(filter);
         } else if (est_cost_info.ref_table_id_ != est_cost_info.index_id_) {
-          ret = est_cost_info.postfix_filters_.push_back(filter);
+          if (!use_skip_scan || !ObOptimizerUtil::find_item(est_cost_info.ss_postfix_range_filters_, filter)) {
+            ret = est_cost_info.postfix_filters_.push_back(filter);
+          }
+          // 对于空间索引，空间谓词一定要回表计算
+          if (OB_SUCC(ret) && est_cost_info.index_meta_info_.is_geo_index_) {
+            ret = est_cost_info.table_filters_.push_back(filter);
+          }
         } else {
-          ret = est_cost_info.table_filters_.push_back(filter);
+          if (!use_skip_scan || !ObOptimizerUtil::find_item(est_cost_info.ss_postfix_range_filters_, filter)) {
+            ret = est_cost_info.table_filters_.push_back(filter);
+          }
         }
       }
 
@@ -9357,7 +10277,8 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
           is_nl_with_extended_range = true;
         }
         LOG_TRACE("succeed to classify filters", K(est_cost_info.prefix_filters_),
-            K(est_cost_info.pushdown_prefix_filters_), K(est_cost_info.postfix_filters_),
+            K(est_cost_info.pushdown_prefix_filters_), K(est_cost_info.ss_postfix_range_filters_),
+            K(est_cost_info.postfix_filters_),
             K(est_cost_info.table_filters_), K(is_nl_with_extended_range));
       }
     }
@@ -9383,10 +10304,10 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
     if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
-    } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->is_column_ref_expr()) {
+    } else if (l_expr->is_dynamic_const_expr() && r_expr->is_column_ref_expr()) {
       column = static_cast<const ObColumnRefRawExpr*>(r_expr);
       exec_param = l_expr;
-    } else if (l_expr->is_column_ref_expr() && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
+    } else if (l_expr->is_column_ref_expr() && r_expr->is_dynamic_const_expr()) {
       column = static_cast<const ObColumnRefRawExpr*>(l_expr);
       exec_param = r_expr;
     }
@@ -9412,7 +10333,7 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
     } else if (first_expr->is_column_ref_expr() &&
-               patten_expr->has_flag(IS_DYNAMIC_PARAM) &&
+               patten_expr->is_dynamic_const_expr() &&
                escape_expr->is_static_const_expr()) {
       column = static_cast<const ObColumnRefRawExpr*>(first_expr);
       ObObjType column_type = column->get_result_type().get_type();
@@ -9421,6 +10342,38 @@ int ObJoinOrder::can_extract_unprecise_range(const uint64_t table_id,
           || !ex_prefix_column_bs.has_member(column->get_column_id())) {
         /*do nothing*/
       } else if (column_type == patten_type && ob_is_string_type(column_type)) {
+        can_extract = true;
+      } else {
+        can_extract = false;
+      }
+    }
+  } else if (filter->is_spatial_expr()) {
+    const ObRawExpr *geo_expr = ObRawExprUtils::skip_inner_added_expr(filter);
+    const ObRawExpr *l_expr = NULL;
+    const ObRawExpr *r_expr = NULL;
+    if (OB_ISNULL(geo_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_ISNULL(l_expr = geo_expr->get_param_expr(0))
+              || OB_ISNULL(r_expr = geo_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->is_column_ref_expr()) {
+      column = static_cast<const ObColumnRefRawExpr*>(r_expr);
+      exec_param = l_expr;
+    } else if (l_expr->is_column_ref_expr() && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
+      column = static_cast<const ObColumnRefRawExpr*>(l_expr);
+      exec_param = r_expr;
+    }
+
+    if (OB_SUCC(ret) && NULL != column && NULL != exec_param) {
+      ObObjType column_type = column->get_result_type().get_type();
+      ObObjType exec_param_type = exec_param->get_result_type().get_type();
+      if (column->get_table_id() != table_id
+          || !ex_prefix_column_bs.has_member(column->get_column_id())) {
+        /*do nothing*/
+      } else if ((ob_is_string_type(column_type) || ob_is_geometry(column_type))
+                && (ob_is_string_type(exec_param_type) || ob_is_geometry(exec_param_type))) {
         can_extract = true;
       } else {
         can_extract = false;
@@ -9440,8 +10393,7 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(schema_guard), K(get_plan()), K(table_partition_info_), K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema,
-                                   ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), table_id)))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -9522,8 +10474,8 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index schema should not be null", K(ret), K(index_id));
-        } else if (OB_FAIL(init_est_info_for_index(index_id, 
-                                                   index_meta_info, 
+        } else if (OB_FAIL(init_est_info_for_index(index_id,
+                                                   index_meta_info,
                                                    ap->table_partition_info_,
                                                    ap->is_global_index_ ? *index_schema : *table_schema,
                                                    has_opt_stat))) {
@@ -9537,7 +10489,7 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
                   static_cast<double>(table_meta_info_.table_column_count_));
             index_meta_info.index_micro_block_count_ = table_meta_info_.has_opt_stat_ ?
                 table_meta_info_.micro_block_count_
-                    * (static_cast<double>(index_meta_info.index_column_count_) / 
+                    * (static_cast<double>(index_meta_info.index_column_count_) /
                       static_cast<double>(table_meta_info_.table_column_count_)) : -1;
           }
         }
@@ -9600,6 +10552,7 @@ int ObJoinOrder::push_down_order_siblings(JoinPath *join_path, const Path *right
                                                   right_path->parent_->get_fd_item_set(),
                                                   right_path->parent_->get_output_equal_sets(),
                                                   right_path->parent_->get_output_const_exprs(),
+                                                  get_plan()->get_onetime_query_refs(),
                                                   right_path->parent_->get_is_at_most_one_row(),
                                                   right_need_sort,
                                                   right_prefix_pos)))) {
@@ -9628,10 +10581,21 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
 {
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
+  ObSEArray<ObRawExpr*, 4> normal_filters;
+  ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) ||
       OB_ISNULL(get_plan()) || OB_ISNULL(left_path->get_sharding())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path), K(right_path), K(get_plan()), K(ret));
+  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type) &&
+             OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(where_conditions,
+                                                              subquery_filters,
+                                                              normal_filters,
+                                                              false))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
+  } else if (!(IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) &&
+             OB_FAIL(normal_filters.assign(where_conditions))) {
+    LOG_WARN("failed to assign filters", K(ret));
   } else if (OB_FAIL(alloc_join_path(join_path))) {
     LOG_WARN("failed to allocate a nl join path", K(ret));
   } else {
@@ -9644,17 +10608,21 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                          join_type,
                                          need_mat);
     join_path->contain_normal_nl_ = !has_equal_cond;
+    OPT_TRACE("create new NL Join path:", join_path);
     if (OB_FAIL(set_nl_filters(join_path,
                                right_path,
                                join_type,
                                on_conditions,
-                               where_conditions))) {
+                               normal_filters))) {
       LOG_WARN("failed to remove filters", K(ret));
     } else if (CONNECT_BY_JOIN == join_type &&
                OB_FAIL(push_down_order_siblings(join_path, right_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
+    } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
+                                                           subquery_filters))) {
+      LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add path", K(ret));
     } else {
@@ -9672,19 +10640,19 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
   int ret = OB_SUCCESS;
   ObSEArray<ObColumnRefRawExpr*, 16> column_exprs;
   ObSEArray<uint64_t, 16> column_ids;
-  const ObDMLStmt *stmt = NULL;
   ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id) ||
       OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table id", K(table_id), K(ref_table_id), K(ret));
   } else if (OB_ISNULL(get_plan()) ||
-             OB_ISNULL(stmt = get_plan()->get_stmt()) ||
              OB_ISNULL(table_partition_info_) ||
-             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
+             OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid params", K(get_plan()),  K(ret));
-  } else if (OB_FAIL(stmt->get_column_exprs(table_id, column_exprs))) {
+  } else if (OB_FAIL(get_plan()->get_column_exprs(table_id, column_exprs))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else {
     ObSEArray<int64_t, 64> all_used_part_id;
@@ -9693,12 +10661,15 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
               table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
       const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
-      if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
+      int64_t part_id = (!table_schema.is_partitioned_table() && is_virtual_table(ref_table_id))
+                                                       ? ref_table_id : part_loc.get_partition_id();
+      if (OB_FAIL(all_used_part_id.push_back(part_id))) {
         LOG_WARN("failed to push back partition id", K(ret));
       } else if (OB_FAIL(all_used_tablet_id.push_back(part_loc.get_tablet_id()))) {
         LOG_WARN("failed to push back tablet id", K(ret));
       }
     }
+    LOG_TRACE("init_est_sel_info_for_access_path", K(all_used_part_id), K(all_used_tablet_id), K(ref_table_id));
     if (OB_SUCC(ret)) {
       // 1. try with statistics
       int64_t table_row_count = 0;
@@ -9707,6 +10678,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       int64_t micro_block_count = 0;
       bool has_opt_stat = false;
       int64_t stat_type = 0;
+      int64_t last_analyzed = 0;
 
       const int64_t total_part_cnt = 0;
       const int64_t origin_part_cnt = all_used_part_id.count();
@@ -9725,7 +10697,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       } else if (use_global) {
         has_opt_stat = true;
         stat_type = 1;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(session_info->get_effective_tenant_id(),
+      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(*schema_guard,
+                                                                            session_info->get_effective_tenant_id(),
                                                                             ref_table_id,
                                                                             all_used_part_id,
                                                                             total_part_cnt,
@@ -9746,7 +10719,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                                                                    &table_row_count,
                                                                    &avg_row_size,
                                                                    &part_size,
-                                                                   &micro_block_count))) {
+                                                                   &micro_block_count,
+                                                                   &last_analyzed))) {
           LOG_WARN("failed to get table stats", K(ret));
         } else {
           table_meta_info_.table_row_count_ = table_row_count;
@@ -9763,20 +10737,14 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
         }
       }
 
-      // 2. try to estimate the whole memtable
-      if (OB_SUCC(ret) &&
-          table_meta_info_.table_row_count_ <= 0 &&
-          !table_meta_info_.has_opt_stat_) {
-        // a newly created which only has memtable data, and do not have any stats
-        // we use default rowcount here, and try to refine the value by estimating the memtable.
-        table_meta_info_.is_only_memtable_data_ = true;
-        if (origin_part_cnt > 1) {
-          // do nothing
-        } else if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(
-                      OPT_CTX, *table_partition_info_, table_meta_info_))) {
+      // 2. if the table row count is 0, we try refine it.
+      if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
+        if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(OPT_CTX,
+                                                                         *table_partition_info_,
+                                                                         table_meta_info_))) {
           LOG_WARN("failed to estimate full table rowcount", K(ret));
         } else {
-          LOG_TRACE("total rowcount, mem-table without stats", K(table_meta_info_.table_row_count_));
+          LOG_TRACE("succeed to estimate full table rowcount", K(table_meta_info_.table_row_count_));
         }
       }
 
@@ -9806,7 +10774,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                       table_meta_info_.table_row_count_,
                       all_used_part_id,
                       column_ids,
-                      stat_type))) {
+                      stat_type,
+                      last_analyzed))) {
           LOG_WARN("failed to add base table meta info", K(ret));
         }
       }
@@ -9824,9 +10793,11 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
   int ret = OB_SUCCESS;
   has_opt_stat = false;
   ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_UNLIKELY(OB_INVALID_ID == index_id) ||
       OB_ISNULL(table_partition_info) ||
-      OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
+      OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
+      OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index id", K(index_id), K(ret));
   } else {
@@ -9866,7 +10837,8 @@ int ObJoinOrder::init_est_info_for_index(const uint64_t index_id,
       } else if (use_global) {
         has_opt_stat = true;
         stat_type = 1;
-      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(session_info->get_effective_tenant_id(),
+      } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_has_opt_stat(*schema_guard,
+                                                                            session_info->get_effective_tenant_id(),
                                                                             index_id,
                                                                             all_used_part_id,
                                                                             total_part_cnt,
@@ -9913,8 +10885,10 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
   ObArray<int64_t> part_ids;
   can_use = false;
   ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   if (OB_ISNULL(get_plan()) ||
-      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+      OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(schema_guard = OPT_CTX.get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (all_used_parts.count() <= 1) {
@@ -9925,7 +10899,8 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
     if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-    } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(session_info->get_effective_tenant_id(),
+    } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(*schema_guard,
+                                                                          session_info->get_effective_tenant_id(),
                                                                           ref_table_id,
                                                                           global_part_id,
                                                                           last_analyzed))) {
@@ -9949,7 +10924,8 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
         } else if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
-        } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(session_info->get_effective_tenant_id(),
+        } else if (OB_FAIL(OPT_CTX.get_opt_stat_manager()->check_stat_version(*schema_guard,
+                                                                              session_info->get_effective_tenant_id(),
                                                                               ref_table_id,
                                                                               part_id,
                                                                               last_analyzed))) {
@@ -10108,7 +11084,8 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                                        double right_output_rows,
                                        const JoinInfo &join_info,
                                        double &new_rows,
-                                       double &selectivity)
+                                       double &selectivity,
+                                       EqualSets &equal_sets)
 {
   int ret = OB_SUCCESS;
   const ObJoinType join_type = join_info.join_type_;
@@ -10119,7 +11096,8 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                                                                    &left_ids,
                                                                    &right_ids,
                                                                    left_output_rows,
-                                                                   right_output_rows))) {
+                                                                   right_output_rows,
+                                                                   &equal_sets))) {
   } else if (INNER_JOIN == join_type) {
     if (OB_FAIL(ObOptSelectivity::calculate_selectivity(plan->get_update_table_metas(),
                                                         plan->get_selectivity_ctx(),
@@ -10174,7 +11152,8 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                                           right_output_rows,
                                           tmp_join_info,
                                           tmp_rows,
-                                          tmp_sel))) {
+                                          tmp_sel,
+                                          equal_sets))) {
           LOG_WARN("failed to calc join output rows", K(ret));
         } else {
           new_rows += tmp_rows;
@@ -10191,7 +11170,8 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
                                           right_output_rows,
                                           tmp_join_info,
                                           tmp_rows,
-                                          tmp_sel))) {
+                                          tmp_sel,
+                                          equal_sets))) {
           LOG_WARN("failed to calc join output rows", K(ret));
         } else {
           new_rows += tmp_rows;
@@ -10286,6 +11266,7 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
       selectivity = connect_by_selectivity;
     }
   }
+  plan->get_selectivity_ctx().clear_equal_sets();
   LOG_TRACE("estimate join size and width", K(left_output_rows), K(right_output_rows),
             K(selectivity), K(new_rows));
   return ret;
@@ -10335,13 +11316,10 @@ int ObJoinOrder::compute_fd_item_set_for_table_scan(const uint64_t table_id,
   const ObDMLStmt *stmt = NULL;
   uint64_t index_tids[OB_MAX_INDEX_PER_TABLE];
   int64_t index_count = OB_MAX_INDEX_PER_TABLE;
-  bool is_link = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(stmt), K(schema_guard));
-  } else {
-    is_link = ObSqlSchemaGuard::is_link_table(stmt, table_id);
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -10350,14 +11328,13 @@ int ObJoinOrder::compute_fd_item_set_for_table_scan(const uint64_t table_id,
                                                             index_count,
                                                             false,
                                                             true  /*global index*/,
-                                                            false /*domain index*/,
-                                                            is_link))) {
+                                                            false /*domain index*/))) {
     LOG_WARN("failed to get can read index", K(ret), K(table_ref_id));
   }
   for (int64_t i = -1; OB_SUCC(ret) && i < index_count; ++i) {
     const ObTableSchema *index_schema = NULL;
     uint64_t index_id = (i == -1 ? table_ref_id : index_tids[i]);
-    if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema, is_link))) {
+    if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -10372,7 +11349,7 @@ int ObJoinOrder::compute_fd_item_set_for_table_scan(const uint64_t table_id,
       LOG_WARN("failed to try add fd item", K(ret));
     }
   }
-  if (OB_SUCC(ret) && stmt->is_select_stmt()) { 
+  if (OB_SUCC(ret) && stmt->is_select_stmt()) {
     ObSqlBitSet<> table_set;
     if (OB_FAIL(stmt->get_table_rel_ids(table_id, table_set))) {
       LOG_WARN("fail to get table relids", K(ret));
@@ -10619,32 +11596,29 @@ int ObJoinOrder::compute_fd_item_set_for_outer_join(const ObJoinOrder *left_tree
   return ret;
 }
 
-int ObJoinOrder::compute_fd_item_set_for_subquery(ObRawExprFactory &expr_factory,
-                                                  const EqualSets &equal_sets,
-                                                  const ObIArray<ObRawExpr*> &const_exprs,
-                                                  const uint64_t table_id,
-                                                  const ObDMLStmt &parent_stmt,
-                                                  const ObSelectStmt &child_stmt,
-                                                  const ObFdItemSet &input_fd_item_sets,
-                                                  ObFdItemSet &output_fd_item_sets)
+int ObJoinOrder::compute_fd_item_set_for_subquery(const uint64_t table_id,
+                                                  ObLogicalOperator *subplan_root)
 {
   int ret = OB_SUCCESS;
-  ObFdItemFactory &fd_factory = get_plan()->get_fd_item_factory();
-  ObSEArray<ObRawExpr*, 8> new_parent_exprs;
-  if (OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(subplan_root->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_fd_item_sets(fd_factory, expr_factory,
-                                                                        equal_sets, const_exprs,
-                                                                        table_id,
-                                                                        parent_stmt, child_stmt,
-                                                                        input_fd_item_sets,
-                                                                        output_fd_item_sets))) {
+  } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_fd_item_sets(
+                       get_plan()->get_fd_item_factory(),
+                       get_plan()->get_optimizer_context().get_expr_factory(),
+                       subplan_root->get_output_equal_sets(),
+                       subplan_root->get_output_const_exprs(),
+                       table_id,
+                       *get_plan()->get_stmt(),
+                       static_cast<const ObSelectStmt &>(*subplan_root->get_stmt()),
+                       subplan_root->get_fd_item_set(),
+                       fd_item_set_))) {
     LOG_WARN("failed to convert subplan scan fd item sets", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set())) {
     LOG_WARN("failed to deduce fd item set", K(ret));
   } else {
-    LOG_TRACE("subplan scan fd item set", K(output_fd_item_sets));
+    LOG_TRACE("subplan scan fd item set", K(fd_item_set_));
   }
   return ret;
 }
@@ -11039,9 +12013,10 @@ int ObJoinOrder::check_filter_is_redundant(ObJoinOrder &left_tree,
   int ret = OB_SUCCESS;
   if (ACCESS == left_tree.get_type() ||
       SUBQUERY == left_tree.get_type()) {
-    if (ObOptimizerUtil::find_equal_expr(left_tree.get_restrict_infos(),
-                                         expr,
-                                         context)) {
+    if (ObPredicateDeduce::find_equal_expr(left_tree.get_restrict_infos(),
+                                           expr,
+                                           NULL,
+                                           &context)) {
       is_redunant = true;
     }
   } else if (JOIN == left_tree.get_type()) {
@@ -11365,6 +12340,20 @@ int ObJoinOrder::copy_path(const Path& src_path, Path* &dst_path)
         dst_path = new_func_path;
       }
     }
+  } else if (src_path.is_json_table_path()) {
+    const JsonTablePath &json_table_path = static_cast<const JsonTablePath&>(src_path);
+    JsonTablePath *new_jt_path = NULL;
+    if (OB_ISNULL(new_jt_path = static_cast<JsonTablePath*>(allocator_->alloc(sizeof(JsonTablePath))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to allocate an JsonTablePath", K(ret));
+    } else {
+      new_jt_path = new(new_jt_path) JsonTablePath();
+      if (OB_FAIL(new_jt_path->assign(json_table_path, allocator_))) {
+        LOG_WARN("failed to assign access path", K(ret));
+      } else {
+        dst_path = new_jt_path;
+      }
+    }
   } else if (src_path.is_temp_table_path()) {
     const TempTablePath &temp_path = static_cast<const TempTablePath&>(src_path);
     TempTablePath *new_temp_table = NULL;
@@ -11424,6 +12413,469 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
     } else if (OB_FAIL(pushdown_quals.push_back(qual))) {
       LOG_WARN("failed to push back qual", K(ret));
     } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObJoinOrder::DeducedExprInfo::assign(const DeducedExprInfo &other)
+{
+  int ret = OB_SUCCESS;
+  deduced_expr_ = other.deduced_expr_;
+  deduced_from_expr_ = other.deduced_from_expr_;
+  is_precise_ = other.is_precise_;
+  if (OB_FAIL(const_param_constraints_.assign(other.const_param_constraints_))) {
+    LOG_WARN("failed to assign pc constraint", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::add_deduced_expr(ObRawExpr *deduced_expr,
+                      ObRawExpr *deduce_from,
+                      bool is_persistent)
+{
+  ObExprEqualCheckContext equal_ctx;
+  return add_deduced_expr(deduced_expr, deduce_from, is_persistent, equal_ctx);
+}
+
+int ObJoinOrder::add_deduced_expr(ObRawExpr *deduced_expr,
+                      ObRawExpr *deduced_from,
+                      bool is_precise,
+                      ObExprEqualCheckContext &equal_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
+      OB_ISNULL(phy_plan_ctx = OPT_CTX.get_exec_ctx()->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret));
+  } else {
+    DeducedExprInfo deduced_expr_info;
+    deduced_expr_info.deduced_expr_ = deduced_expr;
+    deduced_expr_info.deduced_from_expr_ = deduced_from;
+    deduced_expr_info.is_precise_ = is_precise;
+    for(int64_t i = 0; OB_SUCC(ret) && i < equal_ctx.param_expr_.count(); i++) {
+      int64_t param_idx = equal_ctx.param_expr_.at(i).param_idx_;
+      ObPCConstParamInfo param_info;
+      if (OB_UNLIKELY(param_idx < 0 || param_idx >= phy_plan_ctx->get_param_store().count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(param_idx),
+                                          K(phy_plan_ctx->get_param_store().count()));
+      } else if (OB_FAIL(param_info.const_idx_.push_back(param_idx))) {
+        LOG_WARN("failed to push back param idx", K(ret));
+      } else if (OB_FAIL(param_info.const_params_.push_back(
+                                                    phy_plan_ctx->get_param_store().at(param_idx)))) {
+        LOG_WARN("failed to push back value", K(ret));
+      } else if (OB_FAIL(deduced_expr_info.const_param_constraints_.push_back(param_info))) {
+        LOG_WARN("failed to push back param info", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_FAIL(deduced_exprs_info_.push_back(deduced_expr_info))) {
+      LOG_WARN("push back failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObJoinOrder::get_generated_col_index_qual(const int64_t table_id,
+                                              ObIArray<ObRawExpr *> &quals)
+{
+  int ret = OB_SUCCESS;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else {
+    int64_t N = quals.count();
+    deduced_exprs_info_.reset();
+    bool is_persistent = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+      ObRawExpr *new_qual = NULL;
+      ObRawExpr *qual = quals.at(i);
+      if (OB_ISNULL(qual)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else if (OB_FAIL(deduce_prefix_str_idx_exprs(qual, table_item, new_qual))) {
+        LOG_WARN("deduce prefix str failed", K(ret));
+      } else if (new_qual != NULL) {
+        if (OB_FAIL(quals.push_back(new_qual))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+        LOG_TRACE("deduce common gen col", K(*new_qual), K(*qual));
+      } else if (OB_FAIL(deduce_common_gen_col_index_expr(qual, table_item, new_qual))) {
+        LOG_WARN("deduce expr failed", K(ret));
+      } else if (new_qual != NULL) {
+        if (OB_FAIL(quals.push_back(new_qual))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+        LOG_TRACE("deduce common gen col", K(*new_qual), K(*qual));
+      } else {
+        //do nothing
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
+                                          const TableItem *table_item,
+                                          ObRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    new_expr = NULL;
+    ObColumnRefRawExpr *column_expr = NULL;
+    ObRawExpr *value_expr = NULL;
+    ObRawExpr *escape_expr = NULL;
+    ObRawExpr *param_expr1 = NULL;
+    ObRawExpr *param_expr2 = NULL;
+    ObItemType type = expr->get_expr_type();
+
+    if (IS_BASIC_CMP_OP(expr->get_expr_type())
+                || IS_SINGLE_VALUE_OP(expr->get_expr_type())) {
+      //only =/</<=/>/>=/IN/like can deduce generated exprs
+      if (OB_ISNULL(param_expr1 = expr->get_param_expr(0)) || OB_ISNULL(param_expr2 = expr->get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
+      } else if (T_OP_LIKE == expr->get_expr_type()) {
+        /*
+
+        err1: should add const expr for expr2
+        err2: if expr2 is 'a%d' deduce is error
+              c1 like 'a%d' DOESN'T MEAN:
+              substr(c1, 1, n) like substr('a%d', 1, n)
+              because after %, there is normal char.
+        */
+        column_expr = NULL;
+      } else if (T_OP_IN == expr->get_expr_type()) {
+        if (T_OP_ROW == param_expr2->get_expr_type()
+            && !param_expr2->has_generalized_column()
+            && param_expr1->get_result_type().is_string_type()
+            && param_expr1->is_column_ref_expr()) {
+          bool all_match = true;
+          for (int64_t j = 0; OB_SUCC(ret) && all_match && j < param_expr2->get_param_count(); ++j) {
+            if (OB_ISNULL(param_expr2->get_param_expr(j))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param expr2 is null");
+            } else if (!param_expr2->get_param_expr(j)->get_result_type().is_string_type()
+                || param_expr2->get_param_expr(j)->get_collation_type() != param_expr1->get_collation_type()) {
+              all_match = false;
+            }
+          }
+          if (OB_SUCC(ret) && all_match && expr->get_param_expr(0)->is_column_ref_expr()) {
+            column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+            value_expr = expr->get_param_expr(1);
+          }
+        }
+      } else if (param_expr1->is_column_ref_expr() && param_expr2->is_static_scalar_const_expr()) {
+        if (param_expr1->get_result_type().is_string_type() //only for string and same collation
+            && param_expr2->get_result_type().is_string_type()
+            && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
+          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+          value_expr = expr->get_param_expr(1);
+        }
+      } else if (param_expr1->is_static_scalar_const_expr() && param_expr2->is_column_ref_expr()) {
+        if (param_expr1->get_result_type().is_string_type()
+            && param_expr2->get_result_type().is_string_type()
+            && param_expr1->get_collation_type() == param_expr2->get_collation_type()) {
+          type = get_opposite_compare_type(expr->get_expr_type());
+          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
+          value_expr = expr->get_param_expr(0);
+        }
+      } else if (param_expr1->is_column_ref_expr() && param_expr2->is_column_ref_expr()) {
+        //do nothing
+      }
+      if (OB_SUCC(ret) && column_expr != NULL && value_expr != NULL &&
+         column_expr->get_table_id() == table_item->table_id_ &&
+         OB_FAIL(get_prefix_str_idx_exprs(expr,
+                                          column_expr,
+                                          value_expr,
+                                          escape_expr,
+                                          table_item,
+                                          type,
+                                          new_expr))) {
+        LOG_WARN("get_prefix str idx exprs faield", K(ret));
+      } else {
+        //do nothing
+      }
+    }
+  }
+
+  return ret;
+}
+
+
+int ObJoinOrder::get_prefix_str_idx_exprs(ObRawExpr *expr,
+                                        ObColumnRefRawExpr *column_expr,
+                                        ObRawExpr *value_expr,
+                                        ObRawExpr *escape_expr,
+                                        const TableItem *table_item,
+                                        ObItemType type,
+                                        ObRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  new_expr = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(table_item) ||
+      OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (OB_ISNULL(column_expr) || OB_ISNULL(value_expr )) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (column_expr->has_generated_column_deps()) {
+    ObSEArray<ObColumnRefRawExpr *, 4> column_exprs;
+    if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(table_item->table_id_, column_exprs))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
+      ObColumnRefRawExpr *gen_column_expr = column_exprs.at(j);
+      if (OB_ISNULL(gen_column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (!gen_column_expr->is_generated_column()) {
+        //do nothing
+      } else {
+        const ObRawExpr *dep_expr = gen_column_expr->get_dependant_expr();
+        const ObRawExpr *substr_expr = NULL;
+        if (OB_ISNULL(dep_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("generated column expr is null", K(*gen_column_expr), K(j), K(ret));
+        } else if (ObRawExprUtils::has_prefix_str_expr(*dep_expr, *column_expr, substr_expr)) {
+          ObItemType gen_type = type;
+          if (T_OP_GT == type) {
+            gen_type = T_OP_GE;
+          } else if (T_OP_LT == type) {
+            gen_type = T_OP_LE;
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(build_prefix_index_compare_expr(*gen_column_expr,
+                                                              const_cast<ObRawExpr*>(substr_expr),
+                                                              gen_type,
+                                                              *value_expr,
+                                                              escape_expr,
+                                                              new_expr))) {
+            LOG_WARN("build prefix index compare expr failed", K(ret));
+          } else if (OB_FAIL(new_expr->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
+            LOG_WARN("formalize failed", K(ret));
+          } else if (OB_FAIL(new_expr->pull_relation_id())) {
+            LOG_WARN("pullup relids and level failed", K(ret));
+          } else if (OB_FAIL(add_deduced_expr(new_expr, expr, false))) {
+            LOG_WARN("push back failed", K(ret));
+          } else {
+            gen_column_expr->set_explicited_reference();
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::build_prefix_index_compare_expr(ObRawExpr &column_expr,
+                                                   ObRawExpr *prefix_expr,
+                                                   ObItemType type,
+                                                   ObRawExpr &value_expr,
+                                                   ObRawExpr *escape_expr,
+                                                   ObRawExpr *&new_op_expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *substr_expr = NULL;
+  if (T_OP_LIKE == type) {
+    //build value substr expr
+    ObOpRawExpr *like_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::create_substr_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                   get_plan()->get_optimizer_context().get_session_info(),
+                                                   &value_expr,
+                                                   prefix_expr->get_param_expr(1),
+                                                   prefix_expr->get_param_expr(2),
+                                                   substr_expr))) {
+      LOG_WARN("create substr expr failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_like_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                       get_plan()->get_optimizer_context().get_session_info(),
+                                                       prefix_expr,
+                                                       substr_expr,
+                                                       escape_expr,
+                                                       like_expr))) {
+      LOG_WARN("build like expr failed", K(ret));
+    } else {
+      new_op_expr = like_expr;
+    }
+  } else {
+    ObRawExpr *right_expr = NULL;
+    if (T_OP_IN == type) {
+      ObOpRawExpr *row_expr = NULL;
+      if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(T_OP_ROW, row_expr))) {
+        LOG_WARN("create to_type expr failed", K(ret));
+      } else if (OB_ISNULL(row_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("to_type is null");
+      } else {
+        right_expr = row_expr;
+        for (int64_t k = 0; OB_SUCC(ret) && k < value_expr.get_param_count(); ++k) {
+          if (OB_FAIL(ObRawExprUtils::create_substr_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                         get_plan()->get_optimizer_context().get_session_info(),
+                                                         value_expr.get_param_expr(k),
+                                                         prefix_expr->get_param_expr(1),
+                                                         prefix_expr->get_param_expr(2),
+                                                         substr_expr))) {
+            LOG_WARN("create substr expr failed", K(ret));
+          } else if (OB_FAIL(row_expr->add_param_expr(substr_expr))) {
+            LOG_WARN("set param expr failed", K(ret));
+          }
+        }
+      }
+    } else {
+      if (OB_FAIL(ObRawExprUtils::create_substr_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                     get_plan()->get_optimizer_context().get_session_info(),
+                                                     &value_expr,
+                                                     prefix_expr->get_param_expr(1),
+                                                     prefix_expr->get_param_expr(2),
+                                                     substr_expr))) {
+        LOG_WARN("create substr expr failed", K(ret));
+      } else {
+        right_expr = substr_expr;
+      }
+    }
+    // change to const
+    if (OB_SUCC(ret)) {
+      ObObj result;
+      ObConstRawExpr *c_expr = NULL;
+      if (OB_FAIL(substr_expr->extract_info())) {
+        LOG_WARN("extract info failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                        get_plan()->get_optimizer_context().get_session_info(),
+                                                        type,
+                                                        new_op_expr,
+                                                        &column_expr,
+                                                        right_expr))) {
+        LOG_WARN("failed to create double op expr", K(ret), K(type), K(column_expr), KPC(right_expr));
+      } else if (OB_FAIL(new_op_expr->extract_info())) {
+        LOG_WARN("extract info failed", K(ret));
+      } else if (OB_FAIL(new_op_expr->pull_relation_id())) {
+        LOG_WARN("pullup rel ids failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *qual,
+                                                  const TableItem *table_item,
+                                                  ObRawExpr *&new_qual)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObColumnRefRawExpr *, 4> column_exprs;
+  new_qual = NULL;
+  if (OB_ISNULL(qual) || OB_ISNULL(get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("qual is null", K(ret));
+  } else if (qual->get_expr_class() != ObRawExpr::EXPR_OPERATOR) { // these can extract query range
+    //do nothing
+  } else if (!qual->has_flag(CNT_COLUMN)) {
+    //do nothing
+  } else if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(table_item->table_id_, column_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); i++) {
+      ObColumnRefRawExpr *column_expr = column_exprs.at(i);
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is null", K(ret));
+      } else if (!column_expr->is_generated_column()) {
+        //do nothing
+      } else {
+        ObRawExpr* depend_expr = column_expr->get_dependant_expr();
+        bool is_lossless = true;
+        if (OB_ISNULL(depend_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("depend epxr is null", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_conv(depend_expr, is_lossless))) {
+          LOG_WARN("check depend epxr lossless failed", K(ret));
+        } else if(is_lossless) {
+          depend_expr = depend_expr->get_param_expr(4);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(depend_expr, is_lossless))) {
+          LOG_WARN("check depend epxr lossless failed", K(ret));
+        } else if(is_lossless) {
+          depend_expr = depend_expr->get_param_expr(0);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(depend_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("depend epxr is null", K(ret));
+        } else if (OB_FAIL(try_get_generated_col_index_expr(qual, depend_expr, column_expr,
+                                                                 new_qual))) {
+          LOG_WARN("try get expr failed", K(ret));
+        } else if (new_qual != NULL) {
+          break;
+        }
+      }
+    } //end for
+  } //end loop
+  return ret;
+}
+
+int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
+                                                ObRawExpr *depend_expr,
+                                                ObColumnRefRawExpr *col_expr,
+                                                ObRawExpr *&new_qual)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(qual) || OB_ISNULL(depend_expr) ||
+      OB_ISNULL(get_plan()->get_stmt()) ||
+      OB_ISNULL(col_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("qual is null", K(ret));
+  } else {
+    ObRawExprFactory &expr_factory = OPT_CTX.get_expr_factory();
+    for (int64_t j = 0; OB_SUCC(ret) && new_qual == NULL && j < qual->get_param_count(); j++) {
+      ObRawExpr *child = qual->get_param_expr(j);
+      //to replace the j-th child
+      //remove inner cast's influence.
+      ObRawExpr *real_child_expr = NULL;
+      ObExprEqualCheckContext equal_ctx;
+      equal_ctx.override_const_compare_ = true;
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child is null", K(ret));
+      } else if (depend_expr->same_as(*child, &equal_ctx)) {
+        ObRawExprCopier copier(expr_factory);
+        ObSEArray<ObRawExpr *, 4> column_exprs;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(qual, column_exprs))) {
+          LOG_WARN("extract_column_exprs error", K(ret));
+        } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+          LOG_WARN("failed to add skipped exprs", K(ret));
+        } else if (OB_FAIL(copier.copy(qual, new_qual))) {
+          LOG_WARN("failed to copy expr node", K(ret));
+          //depend_expr's res type may be diff from its column's. copy real_qual and deduce type again.
+        } else if (OB_FAIL(static_cast<ObOpRawExpr *>(new_qual)->replace_param_expr(j, col_expr))) {
+          LOG_WARN("replace failed", K(ret));
+        } else if (OB_FAIL(new_qual->formalize(OPT_CTX.get_session_info()))) {
+          if (ret != OB_SUCCESS) {
+            //probably type deduced failed. do nothing
+            LOG_WARN("new qual is not formalized correctly", K(ret), K(*new_qual));
+            ret = OB_SUCCESS;
+            continue; //do not add this expr.
+          }
+        } else if (OB_FAIL(new_qual->pull_relation_id())) {
+          LOG_WARN("pull up rel and level failed", K(ret));
+        } else if (FALSE_IT(col_expr->set_explicited_reference())) {
+          //do nothing
+        } else if (OB_FAIL(add_deduced_expr(new_qual, qual, true, equal_ctx))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }

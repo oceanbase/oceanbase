@@ -238,12 +238,17 @@ int ObExprOracleNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
     const ObDatumMeta &left_meta = rt_expr.args_[0]->datum_meta_;
     const ObDatumMeta &right_meta = rt_expr.args_[1]->datum_meta_;
     const ObCollationType cmp_cs_type = left_meta.cs_type_;
+    const bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
+                                rt_expr.args_[1]->obj_meta_.has_lob_header();
     CK(left_meta.cs_type_ == right_meta.cs_type_);
     CK(OB_NOT_NULL(cmp_func = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
                                                       left_meta.type_,
                                                       right_meta.type_,
+                                                      left_meta.scale_,
+                                                      right_meta.scale_,
                                                       lib::is_oracle_mode(),
-                                                      cmp_cs_type)));
+                                                      cmp_cs_type,
+                                                      has_lob_header)));
     OX(rt_expr.inner_func_cnt_ = 1);
     OX(rt_expr.inner_functions_[0] = reinterpret_cast<void*>(cmp_func));
     OX(rt_expr.eval_func_ = first_param_can_be_null_ ? eval_nullif : eval_nullif_not_null);

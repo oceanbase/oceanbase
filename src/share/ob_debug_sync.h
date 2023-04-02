@@ -205,7 +205,7 @@ public:
   void stop();
 
 private:
-  ObDebugSync() : stop_(false), rpc_proxy_(NULL)
+  ObDebugSync() : stop_(false), lock_(ObLatchIds::DEFAULT_SPIN_LOCK), rpc_proxy_(NULL)
   {}
 
   int parse_action(const ObString &str, ObDebugSyncAction &action, bool &clear, bool &reset);

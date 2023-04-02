@@ -80,7 +80,7 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
       if (OB_FAIL(arg.commit_cb_.callback())) {
         TRANS_LOG(WARN, "end transaction callback failed", KR(ret), "context", *this);
       }
-      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, Y(ret),
+      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, OB_Y(ret),
                            OB_ID(arg1), arg.commit_cb_.ret_,
                            OB_ID(arg2), arg.commit_cb_.commit_version_,
                            OB_ID(async), false);
@@ -115,7 +115,7 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
           TRANS_LOG(WARN, "end transaction callback failed", KR(ret), "context", *this);
         }
       }
-      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, Y(ret),
+      REC_TRANS_TRACE_EXT2(tlog_, end_trans_cb, OB_Y(ret),
                            OB_ID(arg1), arg.commit_cb_.ret_,
                            OB_ID(arg2), arg.commit_cb_.commit_version_,
                            OB_ID(async), true);
@@ -127,7 +127,7 @@ void ObTransCtx::print_trace_log_if_necessary_()
 {
   // freectx
   if (!is_exiting_) {
-    TRANS_LOG(WARN, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
+    TRANS_LOG_RET(WARN, OB_ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
     FORCE_PRINT_TRACE(tlog_, "[trans debug] ");
   }
 
@@ -152,7 +152,7 @@ void ObTransCtx::set_exiting_()
 
     const int64_t ctx_ref = get_ref();
     if (NULL == ls_tx_ctx_mgr_) {
-      TRANS_LOG(ERROR, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context", *this);
+      TRANS_LOG_RET(ERROR, tmp_ret, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context", *this);
     } else {
       ls_tx_ctx_mgr_->del_tx_ctx(this);
       TRANS_LOG(DEBUG, "transaction exiting", "context", *this, K(lbt()));
@@ -205,7 +205,7 @@ bool ObTransCtx::has_callback_scheduler_()
 }
 
 // callback scheduler commit result
-int ObTransCtx::defer_callback_scheduler_(const int retcode, const int64_t commit_version)
+int ObTransCtx::defer_callback_scheduler_(const int retcode, const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   if (!commit_cb_.is_enabled()) {

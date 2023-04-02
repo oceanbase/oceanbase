@@ -16,6 +16,7 @@
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace sql
@@ -74,7 +75,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASDMLBaseRtDef)
 
 // add by dkz
 OB_SERIALIZE_MEMBER((ObDASInsRtDef, ObDASDMLBaseRtDef),
-                    need_fetch_conflict_);
+                    need_fetch_conflict_,
+                    direct_insert_task_id_);
 
 
 OB_SERIALIZE_MEMBER((ObDASLockRtDef, ObDASDMLBaseRtDef),
@@ -90,6 +92,87 @@ OB_SERIALIZE_MEMBER((ObDASUpdCtDef, ObDASDMLBaseCtDef),
 OB_SERIALIZE_MEMBER((ObDASLockCtDef, ObDASDMLBaseCtDef),
                     lock_flag_);
 
+ObDASDMLIterator::~ObDASDMLIterator()
+{
+  if (spat_rows_ != nullptr) {
+    spat_rows_->~ObSEArray();
+    spat_rows_ = nullptr;
+  }
+}
+
+int ObDASDMLIterator::create_spatial_index_store()
+{
+  int ret = OB_SUCCESS;
+  void *buf = allocator_.alloc(sizeof(ObSpatIndexRow));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate spatial row store failed", K(ret));
+  } else {
+    spat_rows_ = new(buf) ObSpatIndexRow();
+  }
+  return ret;
+}
+
+int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  ObDASWriteBuffer &write_buffer = get_write_buffer();
+  ObSpatIndexRow *spatial_rows = get_spatial_index_rows();
+  bool got_row = false;
+  while (OB_SUCC(ret) && !got_row) {
+    if (OB_ISNULL(spatial_rows) || spatial_row_idx_ >= spatial_rows->count()) {
+      const ObChunkDatumStore::StoredRow *sr = nullptr;
+      spatial_row_idx_ = 0;
+      if (OB_FAIL(write_iter_.get_next_row(sr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row from result iterator failed", K(ret));
+        }
+      } else if (OB_ISNULL(spatial_rows)) {
+        if (OB_FAIL(create_spatial_index_store())) {
+          LOG_WARN("create spatila index rows store failed", K(ret));
+        } else {
+          spatial_rows = get_spatial_index_rows();
+        }
+      }
+      if (OB_NOT_NULL(spatial_rows)) {
+        spatial_rows->reuse();
+      }
+
+      if(OB_SUCC(ret)) {
+        uint64_t geo_col_id = das_ctdef_->table_param_.get_data_table().get_spatial_geo_col_id();
+        uint64_t rowkey_num = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
+        int64_t geo_idx = -1;
+        ObString geo_wkb;
+        ObObjMeta geo_meta;
+        for (uint64_t i = 0; i < main_ctdef_->column_ids_.count() && geo_idx == -1; i++) {
+          if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
+            geo_idx = i;
+            geo_wkb = sr->cells()[i].get_string();
+            geo_meta = main_ctdef_->column_types_.at(i);
+          }
+        }
+        if (geo_idx == -1) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("can't get geo col idx", K(ret), K(geo_col_id));
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, geo_meta.get_type(),
+                           geo_meta.get_collation_type(), geo_meta.has_lob_header(), geo_wkb))) {
+          LOG_WARN("fail to get real geo data", K(ret));
+        } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
+                                                                  *row_projector_, *sr, *spatial_rows))) {
+          LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_col_id), K(geo_wkb));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && spatial_row_idx_ < spatial_rows->count()) {
+      row = &(*spatial_rows)[spatial_row_idx_];
+      spatial_row_idx_++;
+      got_row = true;
+    }
+  }
+  return ret;
+}
+
 int ObDASDMLIterator::get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -100,21 +183,30 @@ int ObDASDMLIterator::get_next_row(ObNewRow *&row)
       LOG_WARN("begin write iterator failed", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    const ObChunkDatumStore::StoredRow *sr = nullptr;
-    if (OB_FAIL(write_iter_.get_next_row(sr))) {
+
+  if (OB_SUCC(ret) && das_ctdef_->table_param_.get_data_table().is_spatial_index()) {
+    if (OB_FAIL(get_next_spatial_index_row(row))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("get next row from result iterator failed", K(ret));
+        LOG_WARN("get next spatial index row failed", K(ret), K(das_ctdef_->table_param_.get_data_table()));
       }
-    } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
-                                                       *sr,
-                                                       *row_projector_,
-                                                       allocator_,
-                                                       *cur_row_))) {
-      LOG_WARN("project storage row failed", K(ret));
-    } else {
-      row = cur_row_;
-      LOG_TRACE("get next row from dml das iterator", KPC(sr), KPC(row), K(das_ctdef_));
+    }
+  } else {
+    if (OB_SUCC(ret)) {
+      const ObChunkDatumStore::StoredRow *sr = nullptr;
+      if (OB_FAIL(write_iter_.get_next_row(sr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row from result iterator failed", K(ret));
+        }
+      } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
+                                                        *sr,
+                                                        *row_projector_,
+                                                        allocator_,
+                                                        *cur_row_))) {
+        LOG_WARN("project storage row failed", K(ret));
+      } else {
+        row = cur_row_;
+        LOG_TRACE("get next row from dml das iterator", KPC(sr), KPC(row), K(das_ctdef_));
+      }
     }
   }
   return ret;
@@ -280,6 +372,7 @@ int ObDASWriteBuffer::init_dml_shadow_row(int64_t column_cnt, bool strip_lob_loc
 int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
                                   ObEvalCtx *ctx,
                                   const int64_t memory_limit,
+                                  DmlRow* &stored_row,
                                   bool &row_added,
                                   bool strip_lob_locator)
 {
@@ -292,7 +385,6 @@ int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
     dml_shadow_row_->reuse();
   }
   if (OB_SUCC(ret)) {
-    DmlRow *stored_row = nullptr;
     if (OB_FAIL(dml_shadow_row_->shadow_copy(exprs, *ctx))) {
       LOG_WARN("shadow copy dml row failed", K(ret));
     } else if (OB_FAIL(try_add_row(*dml_shadow_row_, memory_limit, row_added, &stored_row))) {
@@ -713,12 +805,12 @@ int ObDASWriteBuffer::Iterator::get_next_row_skip_const(ObEvalCtx &ctx, const Ob
   int ret = OB_SUCCESS;
   if (OB_LIKELY(cur_row_ != nullptr)) {
     //get next row from buffer list
-    ret = cur_row_->to_expr_skip_const(exprs, ctx);
+    ret = cur_row_->to_expr(exprs, ctx);
     cur_row_ = ObDASWriteBuffer::get_next_dml_row(cur_row_);
   } else if (OB_ISNULL(datum_iter_)) {
     ret = OB_ITER_END;
   } else {
-    ret = datum_iter_->get_next_row_skip_const(ctx, exprs);
+    ret = datum_iter_->get_next_row(ctx, exprs);
   }
 
   return ret;

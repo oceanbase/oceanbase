@@ -14,7 +14,7 @@
 #define OB_SESSION_STAT_H_
 
 #include "lib/stat/ob_di_cache.h"
-#include "lib/stat/ob_di_tls.h"
+#include "lib/thread_local/ob_tsi_factory.h"
 
 namespace oceanbase
 {
@@ -77,7 +77,7 @@ public:
       : prev_tenant_id_(OB_SYS_TENANT_ID)
   {
     if (oceanbase::lib::is_diagnose_info_enabled()) {
-      buffer_ = ObDITls<ObSessionDIBuffer>::get_instance();
+      buffer_ = GET_TSI(ObSessionDIBuffer);
       if (NULL != buffer_) {
         prev_tenant_id_ = buffer_->get_tenant_id();
         if (0 < tenant_id) {

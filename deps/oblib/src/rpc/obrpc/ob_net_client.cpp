@@ -16,6 +16,9 @@
 #include "lib/ob_define.h"
 #include "lib/net/ob_addr.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
+extern "C" {
+#include "rpc/pnio/interface/group.h"
+};
 
 using namespace oceanbase::common;
 

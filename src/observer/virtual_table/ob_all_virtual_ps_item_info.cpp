@@ -12,7 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_ps_item_info.h"
 
-#include "sql/plan_cache/ob_plan_cache_manager.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_sql_utils.h"
 
@@ -40,11 +40,13 @@ int ObAllVirtualPsItemInfo::inner_get_next_row()
       tenant_id_array_idx_ = 0;
     } else {
       uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
-      if (OB_FAIL(get_next_row_from_specified_tenant(tenant_id, is_sub_end))) {
-        SERVER_LOG(WARN, "get_next_row_from_specified_tenant failed", K(ret), K(tenant_id));
-      } else {
-        if (is_sub_end) {
-          ++tenant_id_array_idx_;
+      MTL_SWITCH(tenant_id) {
+        if (OB_FAIL(get_next_row_from_specified_tenant(tenant_id, is_sub_end))) {
+          SERVER_LOG(WARN, "get_next_row_from_specified_tenant failed", K(ret), K(tenant_id));
+        } else {
+          if (is_sub_end) {
+            ++tenant_id_array_idx_;
+          }
         }
       }
     }
@@ -57,12 +59,8 @@ int ObAllVirtualPsItemInfo::inner_open()
   int ret = OB_SUCCESS;
   // sys tenant show all tenant infos
   if (is_sys_tenant(effective_tenant_id_)) {
-    ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
-    if (OB_UNLIKELY(NULL == pcm_)) {
-      ret = OB_NOT_INIT;
-      SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-    } else if (OB_FAIL(pcm_->get_ps_cache_map().foreach_refactored(op))) {
-      SERVER_LOG(WARN, "fail to traverse pcm", K(ret));
+    if(OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
+      SERVER_LOG(WARN, "failed to add tenant id", K(ret));
     }
   } else {
     // user tenant show self tenant info
@@ -189,19 +187,10 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
   int ret = OB_SUCCESS;
   is_end = false;
   if (OB_INVALID_ID == stmt_id_array_idx_) {
-    if (OB_UNLIKELY(NULL == pcm_)) {
-      ret = OB_NOT_INIT;
-      SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-    } else if (OB_UNLIKELY(NULL != ps_cache_)){
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "before get_ps_cache, the point of ps_cache must be NULL", K(ret));
-    } else if (NULL == (ps_cache_ = pcm_->get_ps_cache(tenant_id))) {
+    ps_cache_ = MTL(ObPsCache*);
+    if (false == ps_cache_->is_inited()) {
       is_end = true;
-      SERVER_LOG(DEBUG, "plan cache not exists for this tenant yet", K(ret));
-    } else if (false == ps_cache_->is_inited() || false == ps_cache_->is_valid()) {
-      is_end = true;
-      SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()),
-                                                              K(ps_cache_->is_valid()));
+      SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()));
     } else if (OB_FAIL(ps_cache_->get_all_stmt_id(&stmt_id_array_))) {
       SERVER_LOG(WARN, "get_all_stmt_id failed", K(ret));
     } else {
@@ -222,7 +211,6 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "plan cache is null", K(ret));
         } else {
-          ps_cache_->dec_ref_count();
           ps_cache_ = NULL;
         }
       } else {

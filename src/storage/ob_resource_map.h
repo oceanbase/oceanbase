@@ -160,7 +160,7 @@ class ObResourceMap
 public:
   ObResourceMap();
   virtual ~ObResourceMap();
-  int init(const int64_t bucket_num, const char *label,
+  int init(const int64_t bucket_num, const uint64_t tenant_id, const char *label,
       const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
   template <typename Callback = ObResourceDefaultCallback<Key,Value>>
   int get(const Key &key, ObResourceHandle<Value> &handle, Callback callback = ObResourceDefaultCallback<Key, Value>());
@@ -203,20 +203,27 @@ ObResourceMap<Key, Value>::~ObResourceMap()
 }
 
 template <typename Key, typename Value>
-int ObResourceMap<Key, Value>::init(const int64_t bucket_num, const char *label,
-    const int64_t total_limit, const int64_t hold_limit, const int64_t page_size)
+int ObResourceMap<Key, Value>::init(
+    const int64_t bucket_num,
+    const uint64_t tenant_id,
+    const char *label,
+    const int64_t total_limit,
+    const int64_t hold_limit,
+    const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
   const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObResourceMap has already been inited", K(ret));
-  } else if (OB_UNLIKELY(bucket_num <= 0 || total_limit <= 0 || hold_limit <= 0 || page_size <= 0)) {
+  } else if (OB_UNLIKELY(bucket_num <= 0 || total_limit <= 0 || hold_limit <= 0 || page_size <= 0
+      || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = common::OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(total_limit), K(hold_limit), K(page_size));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(total_limit), K(hold_limit),
+        K(page_size), K(tenant_id));
   } else if (OB_FAIL(bucket_lock_.init(bkt_num))) {
     STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
-  } else if (OB_FAIL(map_.create(bkt_num, label))) {
+  } else if (OB_FAIL(map_.create(bkt_num, label, label, tenant_id))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));
   } else if (OB_UNLIKELY(bkt_num != map_.bucket_count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -227,6 +234,7 @@ int ObResourceMap<Key, Value>::init(const int64_t bucket_num, const char *label,
   } else {
     allocator_.set_label(label);
     is_inited_ = true;
+    STORAGE_LOG(INFO, "init resource map success", K(ret), K(tenant_id), K(bkt_num));
   }
   return ret;
 }
@@ -384,7 +392,7 @@ void ObResourceMap<Key, Value>::destroy()
     for (iter = map_.begin(); iter != map_.end(); iter++) {
       ValueStore *value_store = iter->second;
       if (OB_NOT_NULL(value_store)) {
-        STORAGE_LOG(WARN, "exception: this value should be erased before.",
+        STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "exception: this value should be erased before.",
                 K(*value_store->get_value_ptr()));
         free_resource(value_store);
       }

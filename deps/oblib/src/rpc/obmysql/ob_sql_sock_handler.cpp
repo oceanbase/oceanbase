@@ -11,10 +11,9 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
-#include "rpc/frame/ob_req_deliver.h"
 #include "rpc/obmysql/ob_sql_sock_handler.h"
+#include "rpc/frame/ob_req_deliver.h"
 #include "rpc/obmysql/ob_sql_sock_processor.h"
-#include "rpc/obmysql/ob_sql_sock_session.h"
 
 namespace oceanbase
 {
@@ -140,15 +139,13 @@ int ObSqlSockHandler::on_readable(void* udata)
   }
 
   if (OB_SUCCESS != ret || NULL == sql_req) {
+  } else if (FALSE_IT(sess->set_last_decode_succ_and_deliver_time(ObTimeUtility::current_time()))) {
   } else if (OB_FAIL(deliver_->deliver(*sql_req))) {
     LOG_WARN("deliver sql request fail", K(ret));
-  } else {
-    sess->set_last_decode_succ_and_deliver_time(ObTimeUtility::current_time());
   }
 
   return ret;
 }
-
 
 }; // end namespace obmysql
 }; // end namespace oceanbase

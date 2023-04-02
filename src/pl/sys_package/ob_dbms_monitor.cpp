@@ -16,7 +16,7 @@
 #include "share/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-#include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "pl/sys_package/ob_dbms_monitor.h"
 #include "lib/number/ob_number_v2.h"
 
@@ -86,7 +86,7 @@ int ObDBMSMonitor::session_trace_enable(sql::ObExecContext &ctx, sql::ParamStore
   OZ (params.at(2).get_number(sample_pct));
   OV (params.at(3).is_varchar(), OB_INVALID_ARGUMENT);
   OZ (params.at(3).get_string(record_policy));
-  // add recorde polciy
+  // add record polciy
   sql::ObSQLSessionInfo *sess = NULL;
   sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
   FLTControlInfo c_info;

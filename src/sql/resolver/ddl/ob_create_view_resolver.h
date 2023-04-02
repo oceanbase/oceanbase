@@ -47,11 +47,23 @@ public:
   virtual ~ObCreateViewResolver();
 
   virtual int resolve(const ParseNode &parse_tree);
+  static int add_column_infos(const uint64_t tenant_id,
+                              ObSelectStmt &select_stmt,
+                              ObTableSchema &table_schema,
+                              common::ObIAllocator &alloc,
+                              sql::ObSQLSessionInfo &session_info,
+                              const common::ObIArray<ObString> &column_list);
+  static int resolve_column_default_value(const sql::ObSelectStmt *select_stmt,
+                                        const sql::SelectItem &select_item,
+                                        schema::ObColumnSchemaV2 &column_schema,
+                                        common::ObIAllocator &alloc,
+                                        sql::ObSQLSessionInfo &session_info);
 private:
   int check_privilege(ObCreateTableStmt *stmt,
                       ObSelectStmt *select_stmt);
   int resolve_column_list(ParseNode *view_columns_node,
-                          common::ObIArray<common::ObString> &column_list);
+                          common::ObIArray<common::ObString> &column_list,
+                          ObTableSchema &table_schema);
   int check_select_stmt_col_name(
       SelectItem &select_item,
       ObArray<int64_t> &index_array,

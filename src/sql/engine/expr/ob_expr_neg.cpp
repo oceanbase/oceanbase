@@ -214,7 +214,8 @@ int ObExprNeg::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObEx
           if (type1.get_type() == ObUNumberType) {
             type.set_precision(static_cast<int16_t>(type1.get_precision()));
           } else {
-            type.set_precision(static_cast<int16_t>(type1.get_precision() + NEG_PRECISION_OFFSET));
+            type.set_precision(static_cast<int16_t>(
+              MIN(type1.get_precision() + NEG_PRECISION_OFFSET, OB_MAX_INTEGER_DISPLAY_WIDTH)));
           }
         }
       }

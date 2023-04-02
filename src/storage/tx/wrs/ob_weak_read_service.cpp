@@ -76,7 +76,7 @@ void ObWeakReadService::wait()
   LOG_INFO("[WRS] weak read service thread wait");
 }
 
-int ObWeakReadService::get_server_version(const uint64_t tenant_id, int64_t &version) const
+int ObWeakReadService::get_server_version(const uint64_t tenant_id, SCN &version) const
 {
   int ret = OB_SUCCESS;
   // switch tenant
@@ -93,7 +93,7 @@ int ObWeakReadService::get_server_version(const uint64_t tenant_id, int64_t &ver
         KR(ret), K(tenant_id));
   }
 
-  if (OB_SUCC(ret) && ! is_valid_read_snapshot_version(version)) {
+  if (OB_SUCC(ret) && !version.is_valid()) {
     int old_ret = ret;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get server version succ, but version is not valid snapshot version", K(ret), K(old_ret),
@@ -104,7 +104,7 @@ int ObWeakReadService::get_server_version(const uint64_t tenant_id, int64_t &ver
   return ret;
 }
 
-int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, int64_t &version)
+int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, SCN &version)
 {
   int ret = OB_SUCCESS;
   // switch tenant
@@ -123,7 +123,7 @@ int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, int64_t &ve
         KR(ret), K(tenant_id));
   }
 
-  if (OB_SUCC(ret) && ! is_valid_read_snapshot_version(version)) {
+  if (OB_SUCC(ret) && !version.is_valid()) {
     int old_ret = ret;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get cluster version succ, but version is not valid snapshot version", K(ret), K(old_ret),
@@ -164,7 +164,7 @@ void ObWeakReadService::process_get_cluster_version_rpc(const uint64_t tenant_id
     obrpc::ObWrsGetClusterVersionResponse &res)
 {
   int ret = OB_SUCCESS;
-  int64_t version = 0;
+  SCN version;
 
   MTL_SWITCH(tenant_id) {
     ObTenantWeakReadService *twrs = NULL;

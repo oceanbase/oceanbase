@@ -41,19 +41,18 @@ namespace sql
     {}
     virtual ~ObLogSort()
     {}
-    virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
     virtual int est_cost() override;
     virtual int est_width() override;
     virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
     int inner_est_cost(double child_card, double &topn_count, double &op_cost);
     const OrderItem &get_hash_sortkey() const { return hash_sortkey_; }
     OrderItem &get_hash_sortkey() { return hash_sortkey_; }
+    inline void set_hash_sortkey(const OrderItem &hash_sortkey) { hash_sortkey_ = hash_sortkey; }
     const common::ObIArray<OrderItem> &get_sort_keys() const { return sort_keys_; }
     common::ObIArray<OrderItem> &get_sort_keys() { return sort_keys_; }
     const common::ObIArray<OrderItem> &get_encode_sortkeys() const { return encode_sortkeys_; }
     common::ObIArray<OrderItem> &get_encode_sortkeys() { return encode_sortkeys_; }
     int get_sort_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
-    int create_hash_sortkey(const common::ObIArray<OrderItem> &order_keys);
     int create_encode_sortkey_expr(const common::ObIArray<OrderItem> &order_keys);
     int get_sort_exprs(common::ObIArray<ObRawExpr*> &sort_exprs);
 
@@ -98,14 +97,11 @@ namespace sql
     inline int64_t get_topk_precision() const {return topk_precision_;}
     virtual bool is_block_op() const override { return !is_prefix_sort(); }
     virtual int compute_op_ordering() override;
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
   protected:
-    virtual int inner_replace_generated_agg_expr(
+    virtual int inner_replace_op_exprs(
         const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs);
-  private:
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
   private:
     OrderItem hash_sortkey_;
     common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;

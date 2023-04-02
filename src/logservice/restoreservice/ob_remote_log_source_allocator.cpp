@@ -12,14 +12,13 @@
 
 #include "ob_remote_log_source_allocator.h"
 #include "ob_remote_log_source.h"
-#include "share/restore/ob_log_archive_source.h"
 #include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
 namespace logservice
 {
-ObRemoteLogParent *ObResSrcAlloctor::alloc(const share::ObLogArchiveSourceType &type,
+ObRemoteLogParent *ObResSrcAlloctor::alloc(const share::ObLogRestoreSourceType &type,
     const share::ObLSID &ls_id)
 {
   ObRemoteLogParent *source = NULL;
@@ -27,13 +26,13 @@ ObRemoteLogParent *ObResSrcAlloctor::alloc(const share::ObLogArchiveSourceType &
     // just skip
   } else {
     switch (type) {
-      case share::ObLogArchiveSourceType::SERVICE:
+      case share::ObLogRestoreSourceType::SERVICE:
         source = OB_NEW(ObRemoteSerivceParent, "SerSource", ls_id);
         break;
-      case share::ObLogArchiveSourceType::RAWPATH:
+      case share::ObLogRestoreSourceType::RAWPATH:
         source = OB_NEW(ObRemoteRawPathParent, "DestSource", ls_id);
         break;
-      case share::ObLogArchiveSourceType::LOCATION:
+      case share::ObLogRestoreSourceType::LOCATION:
         source = OB_NEW(ObRemoteLocationParent, "LocSource", ls_id);
         break;
       default:
@@ -47,13 +46,13 @@ void ObResSrcAlloctor::free(ObRemoteLogParent *source)
 {
   if (NULL != source) {
     switch (source->get_source_type()) {
-      case share::ObLogArchiveSourceType::SERVICE:
+      case share::ObLogRestoreSourceType::SERVICE:
         MTL_DELETE(ObRemoteLogParent, "SerSource", source);
         break;
-      case share::ObLogArchiveSourceType::RAWPATH:
+      case share::ObLogRestoreSourceType::RAWPATH:
         MTL_DELETE(ObRemoteLogParent, "DestSource", source);
         break;
-      case share::ObLogArchiveSourceType::LOCATION:
+      case share::ObLogRestoreSourceType::LOCATION:
         MTL_DELETE(ObRemoteLogParent, "LocSource", source);
         break;
       default:

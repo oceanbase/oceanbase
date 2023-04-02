@@ -33,7 +33,7 @@
 #include <lib/thread_local/ob_tsi_utils.h>
 #include <lib/atomic/ob_atomic.h>
 #include <lib/utility/utility.h>
-#include <lib/thread/ob_cache_line_segregated_array.h>
+#include <lib/cpu/ob_cpu_topology.h>
 #include "lib/ob_running_mode.h"
 
 #define PTR_META2OBJ(x) reinterpret_cast<T*>(reinterpret_cast<char*>(x) + sizeof(Meta));
@@ -52,6 +52,7 @@ struct ObPoolArenaHead
   int32_t miss_cnt; // Number of direct allocations
   int32_t miss_return_cnt; // Number of returns directly allocated
   int16_t free_num;  // Number of caches
+  int64_t all_using_cnt;
   int16_t reserved1;
   int64_t last_borrow_ts; // Time of last visit
   int64_t last_return_ts; // Time of last visit
@@ -77,6 +78,7 @@ struct ObPoolArenaHead
     miss_cnt = 0;
     miss_return_cnt = 0;
     free_num = 0;
+    all_using_cnt = 0;
     reserved1 = 0;
     last_borrow_ts = 0;
     last_return_ts = 0;
@@ -85,7 +87,6 @@ struct ObPoolArenaHead
     next = NULL;
   }
 };
-typedef ObCacheLineSegregatedArray<ObPoolArenaHead> ObPoolArenaArray;
 
 class ObServerObjectPoolRegistry
 {
@@ -104,7 +105,7 @@ public:
             K(ObServerObjectPoolRegistry::pool_num_));
       } else {
         arena_idx_++;
-        if (arena_idx_ >= ObServerObjectPoolRegistry::pool_list_[pool_idx_].array->size()) {
+        if (arena_idx_ >= ObServerObjectPoolRegistry::pool_list_[pool_idx_].array_size) {
           pool_idx_++;
           arena_idx_ = 0;
         }
@@ -120,7 +121,7 @@ public:
       } else {
         PoolPair &pair = ObServerObjectPoolRegistry::pool_list_[pool_idx_];
         type_name = pair.type_name;
-        arena_head = &(*pair.array)[arena_idx_];
+        arena_head = &pair.array[arena_idx_];
       }
       return ret;
     }
@@ -153,7 +154,7 @@ public:
     }
     return ret;
   }
-  static int add(const char* type_name, ObPoolArenaArray *array) {
+  static int add(const char* type_name, ObPoolArenaHead *array, int32_t array_size) {
     int ret = OB_SUCCESS;
     if (NULL == type_name || NULL == array) {
       ret = OB_INVALID_ARGUMENT;
@@ -161,6 +162,7 @@ public:
     } else if (pool_num_ < MAX_POOL_NUM) {
       pool_list_[pool_num_].type_name = type_name;
       pool_list_[pool_num_].array = array;
+      pool_list_[pool_num_].array_size = array_size;
       pool_num_++;
     } else {
       ret = OB_ARRAY_OUT_OF_RANGE;
@@ -172,7 +174,8 @@ public:
 private:
   struct PoolPair {
     const char * type_name;
-    ObPoolArenaArray *array;
+    ObPoolArenaHead *array;
+    int32_t array_size;
   };
   static const int64_t MAX_POOL_NUM = 1L << 21;
   static PoolPair pool_list_[MAX_POOL_NUM];
@@ -191,45 +194,46 @@ template <class T>
 class ObServerObjectPool
 {
 public:
-  static ObServerObjectPool& get_instance() {
-    static ObServerObjectPool instance_;
-    return instance_;
-  }
-
   T* borrow_object() {
     T *ctx = NULL;
-    int64_t itid = get_itid();
-    int64_t aid = itid % arena_.size();
-    Meta *cmeta = NULL;
-    ObPoolArenaHead &arena = arena_[aid];
-    int64_t cur_ts = OB_TSC_TIMESTAMP.current_time();
-    { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
-      ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
-      cmeta = static_cast<Meta*>(arena.next);
-      if (NULL != cmeta) {
-        arena.next = static_cast<void*>(cmeta->next);
-        arena.borrow_cnt++;
-        arena.free_num--;
-        arena.last_borrow_ts = cur_ts;
-      } else {
-        arena.miss_cnt++;
-        arena.last_miss_ts = cur_ts;
+    if (OB_LIKELY(is_inited_)) {
+      Meta *cmeta = NULL;
+      int64_t itid = get_itid();
+      int64_t aid = itid % arena_num_;
+      ObPoolArenaHead &arena = arena_[aid];
+      int64_t cur_ts = OB_TSC_TIMESTAMP.current_time();
+      { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
+        ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+        cmeta = static_cast<Meta*>(arena.next);
+        if (NULL != cmeta) {
+          arena.next = static_cast<void*>(cmeta->next);
+          arena.borrow_cnt++;
+          arena.free_num--;
+          arena.all_using_cnt++;
+          arena.last_borrow_ts = cur_ts;
+        } else {
+          arena.miss_cnt++;
+          arena.last_miss_ts = cur_ts;
+        }
       }
-    }
-    if (NULL != cmeta) {
-      ctx = PTR_META2OBJ(cmeta);
-    }
-    if (NULL == ctx) {
-      char *p = static_cast<char*>(ob_malloc(item_size_, ObModIds::OB_SERVER_OBJECT_POOL));
-      if (NULL == p) {
-        COMMON_LOG(ERROR, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(itid), K(aid), K(arena));
-      } else {
-        Meta *cmeta = reinterpret_cast<Meta*>(p);
-        cmeta->next = NULL;
-        cmeta->arena_id = -1;
-        cmeta->magic = 0xFEDCFEDC01230123;
-        ctx = PTR_META2OBJ(p);
-        new (ctx) T();
+      if (NULL != cmeta) {
+        ctx = PTR_META2OBJ(cmeta);
+      }
+      if (NULL == ctx) {
+        ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
+        char *p = static_cast<char*>(ob_malloc(item_size_, attr));
+        if (NULL == p) {
+          COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_));
+        } else {
+          Meta *cmeta = reinterpret_cast<Meta*>(p);
+          cmeta->next = NULL;
+          cmeta->arena_id = -(aid + 1);
+          cmeta->magic = 0xFEDCFEDC01230123;
+          ctx = PTR_META2OBJ(p);
+          new (ctx) T();
+          ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+          arena.all_using_cnt++;
+        }
       }
     }
     return ctx;
@@ -237,7 +241,9 @@ public:
 
   void return_object(T* x) {
     if (NULL == x) {
-      COMMON_LOG(ERROR, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(get_itid()));
+      COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_), K(get_itid()));
+    } else if (OB_UNLIKELY(!is_inited_)){
+      COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected return", K(typeid(T).name()), K(item_size_), K(get_itid()));
     } else {
       Meta *cmeta = PTR_OBJ2META(x);
       int64_t aid = cmeta->arena_id;
@@ -251,23 +257,24 @@ public:
           arena.next = static_cast<void*>(cmeta);
           arena.return_cnt++;
           arena.free_num++;
+          arena.all_using_cnt--;
           arena.last_return_ts = cur_ts;
         }
       } else {
         x->~T();
         ob_free(cmeta);
-        ObPoolArenaHead &arena = arena_[-aid];
+        ObPoolArenaHead &arena = arena_[-(aid + 1)];
         int64_t cur_ts = OB_TSC_TIMESTAMP.current_time();
         { // Enter the critical area of the arena, the timestamp is obtained outside the lock, and minimize the length of the critical area
           ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
           arena.miss_return_cnt++;
+          arena.all_using_cnt--;
           arena.last_miss_return_ts = cur_ts;
         }
       }
     }
   }
 
-private:
   /**
    * 粗暴的在 Pool 构造时给每个入口分配 16 个可用的对象
    * 内存直接根据总大小一次性 ob_malloc 出来
@@ -275,20 +282,35 @@ private:
    * 因为是全局单例，所以是在程序启动时机完成了这些工作
    * TODO: 改为按需分配
    */
-  ObServerObjectPool() {
+  ObServerObjectPool(const int64_t tenant_id, const bool regist, const bool is_mini_mode)
+    : tenant_id_(tenant_id), regist_(regist), is_mini_mode_(is_mini_mode), arena_num_(0),
+      arena_(NULL), cnt_per_arena_(0), item_size_(0), buf_(nullptr), is_inited_(false)
+  {}
+
+  int init()
+  {
+    int ret = OB_SUCCESS;
+    const bool is_mini = (lib::is_mini_mode() || is_mini_mode_);
+    arena_num_ = static_cast<int32_t>(is_mini ? get_cpu_count()/2 : get_cpu_count());
     //If the assignment logic of buf_ below is not reached, buf_ will not be initialized
     buf_ = NULL;
-    int ret = OB_SUCCESS;
-    cnt_per_arena_ = lib::is_mini_mode() ? 16 : 128;
+    cnt_per_arena_ = is_mini ? 16 : 128;
     int64_t s = (sizeof(T) + sizeof(Meta)); // Each cached object header has a Meta field to store necessary information and linked list pointers
     item_size_ = upper_align(s, CACHE_ALIGN_SIZE); // Align according to the cache line to ensure that there will be no false sharing between objects
-    if (OB_FAIL(ObCacheLineSegregatedArrayBase::get_instance().alloc_array(arena_))) {
-      COMMON_LOG(ERROR, "alloc_array failed", K(ret), K(typeid(T).name()), K(item_size_));
-    } else if ((buf_ = ob_malloc(arena_.size() * cnt_per_arena_ * item_size_, ObModIds::OB_SERVER_OBJECT_POOL)) == NULL) {
-      COMMON_LOG(ERROR, "allocate memory failed", K(ret), K(typeid(T).name()), K(item_size_), K(arena_.size()), K(+cnt_per_arena_));
+    ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
+    void *ptr = NULL;
+    if (OB_ISNULL(ptr = ob_malloc(sizeof(ObPoolArenaHead) * arena_num_,
+                                  ObMemAttr(tenant_id_, "PoolArenaArray")))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(ERROR, "allocate memory failed", K(ret), K(typeid(T).name()));
+    } else if ((buf_ = ob_malloc(arena_num_ * cnt_per_arena_ * item_size_, attr)) == NULL) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      COMMON_LOG(ERROR, "allocate memory failed", K(ret), K(typeid(T).name()), K(item_size_),
+                 K(arena_num_), K(+cnt_per_arena_));
     } else {
+      arena_ = (ObPoolArenaHead*)ptr;
       char *p = reinterpret_cast<char*>(buf_);
-      for (int64_t i = 0; i < arena_.size(); ++i) {
+      for (int64_t i = 0; i < arena_num_; ++i) {
         Meta *pmeta = NULL;
         for (int64_t j = 0; j < cnt_per_arena_; ++j) {
           Meta *cmeta = reinterpret_cast<Meta*>(p);
@@ -304,20 +326,67 @@ private:
         arena.next = static_cast<void*>(pmeta);
         arena.free_num = static_cast<int16_t>(cnt_per_arena_);
       }
-      if (OB_FAIL(ObServerObjectPoolRegistry::add(typeid(T).name(), &arena_))) { // Register to the global list, display and print the log in the virtual table
-        COMMON_LOG(WARN, "add to pool registry failed, can't be monitored", K(ret), K(typeid(T).name()), KP(this), K(this));
-      } else {
-        COMMON_LOG(INFO, "register server object pool finish",
-                   "tpye_name", typeid(T).name(),
-                   "type_size", sizeof(T),
-                   KP(this), K(this));
+      if (regist_) {
+        // Register to the global list, display and print the log in the virtual table
+        if (OB_FAIL(ObServerObjectPoolRegistry::add(typeid(T).name(), arena_, arena_num_))) {
+          COMMON_LOG(WARN, "add to pool registry failed, can't be monitored", K(ret), K(typeid(T).name()), KP(this), K(this));
+        } else {
+          COMMON_LOG(INFO, "register server object pool finish",
+                     "tpye_name", typeid(T).name(),
+                     "type_size", sizeof(T),
+                     KP(this), K(this));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+    return ret;
+  }
+
+  void destroy() {
+    if (is_inited_) {
+      bool has_unfree = false;
+      for (int64_t i = 0; !has_unfree && i < arena_num_; ++i) {
+        ObPoolArenaHead &arena = arena_[i];
+        ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+        has_unfree = arena.all_using_cnt > 0;
+      }
+      if (!has_unfree) {
+        for (int64_t i = 0; i < arena_num_; ++i) {
+          Meta *meta = NULL;
+          {
+            ObPoolArenaHead &arena = arena_[i];
+            ObLatchWGuard lock_guard(arena.lock, ObLatchIds::SERVER_OBJECT_POOL_ARENA_LOCK);
+            meta = static_cast<Meta*>(arena.next);
+            arena.next = NULL;
+          }
+          while (meta != NULL) {
+            T *x = PTR_META2OBJ(meta);
+            x->reset();
+            x->~T();
+            meta = meta->next;
+          }
+        }
+        if (buf_ != NULL) {
+          ob_free(buf_);
+          buf_ = NULL;
+        }
+        if (arena_ != NULL) {
+          ob_free(arena_);
+          arena_ = NULL;
+        }
+        is_inited_ = false;
+      }
+      if (has_unfree) {
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "server object leak", K(tenant_id_), K(typeid(T).name()));
       }
     }
   }
 
   ~ObServerObjectPool() {
+    destroy();
   }
-
 private:
   struct Meta
   {
@@ -326,14 +395,35 @@ private:
     int64_t magic;
     char padding__[8];
   };
-  ObPoolArenaArray arena_;
+  const int64_t tenant_id_;
+  const bool regist_;
+  const bool is_mini_mode_;
+  int32_t arena_num_;
+  ObPoolArenaHead *arena_;
   int64_t cnt_per_arena_;
   int64_t item_size_;
   void *buf_;
+  bool is_inited_;
 };
 
-#define sop_borrow(type) ObServerObjectPool<type>::get_instance().borrow_object()
-#define sop_return(type, ptr) ObServerObjectPool<type>::get_instance().return_object(ptr)
+template<typename T>
+inline ObServerObjectPool<T>& get_server_object_pool() {
+  class Wrapper {
+  public:
+    Wrapper()
+      : instance_(OB_SERVER_TENANT_ID, true/*regist*/, false/*is_mini_mode*/)
+    {
+      instance_.init(); // is_inited_ will be checked all invokes
+    }
+    ObServerObjectPool<T> instance_;
+  };
+  static Wrapper w;
+  return w.instance_;
+}
+
+#define sop_borrow(type) get_server_object_pool<type>().borrow_object()
+#define sop_return(type, ptr) get_server_object_pool<type>().return_object(ptr)
+
 
 }
 }

@@ -171,7 +171,7 @@ int ObBloomFilterMacroBlockWriter::init(const ObDataStoreDesc &desc)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init ObBloomFilterMacroBlockWriter", K(desc),
                 K(ret));
-  } else if (OB_UNLIKELY(is_major_merge(desc.merge_type_))) {
+  } else if (OB_UNLIKELY(is_major_merge_type(desc.merge_type_))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Major freeze would not build bloomfilter macro data", K(ret));
   } else if (OB_FAIL(data_buffer_.ensure_space(desc.macro_block_size_))) {
@@ -347,7 +347,6 @@ int ObBloomFilterMacroBlockWriter::flush_macro_block()
       macro_write_info.buffer_ = data_buffer_.data();
       macro_write_info.size_ = data_buffer_.capacity();
       macro_write_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-      macro_write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
       macro_write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       if (OB_FAIL(ObBlockManager::write_block(macro_write_info, macro_handle))) {
         STORAGE_LOG(WARN, "Failed to write bloomfilter macro block", K(ret));

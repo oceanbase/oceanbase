@@ -29,10 +29,11 @@ namespace libobcdc
 #define DEFAULT_STDERR_LOG_FILE DEFAULT_LOG_DIR "libobcdc.log.stderr"
 #define DEFAULT_LOG_FILE_NAME "libobcdc.log"
 #define DEFAULT_STDERR_LOG_FILE_NAME "libobcdc.log.stderr"
-#define DEFAULT_TIMEZONE_INFO "+8:00"
+#define DEFAULT_TIMEZONE "+8:00"
 #define DEFAULT_PID_FILE_DIR "./run/"
 #define DEFAULT_PID_FILE DEFAULT_PID_FILE_DIR "libobcdc.pid"
 #define DEFAULT_CONFIG_FPATN "etc/libobcdc.conf"
+#define DEFAULT_TIMEZONE_INFO_FPATH "etc/timezone_info.conf"
 
 #define DEFAULT_PENDING_TRANS_INFO_FILE "./log/pending_trans_info.log"
 

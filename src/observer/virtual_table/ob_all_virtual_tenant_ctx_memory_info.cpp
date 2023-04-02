@@ -57,7 +57,11 @@ int ObAllVirtualTenantCtxMemoryInfo::inner_get_next_row(ObNewRow *&row)
     for (int i = 0; i < tenant_cnt; ++i) {
       uint64_t tenant_id = tenant_ids_[i];
       for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
-        auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        if (NULL == ta) {
+          ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                                      ctx_id);
+        }
         if (OB_ISNULL(ta)) {
           // do nothing
         } else {

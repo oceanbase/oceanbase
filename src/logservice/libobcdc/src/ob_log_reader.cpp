@@ -85,6 +85,7 @@ int ObLogReader::init(const int64_t thread_num,
 void ObLogReader::destroy()
 {
   if (inited_) {
+    LOG_INFO("ObLogReader destroy begin");
     ReaderThread::destroy();
 
     inited_ = false;
@@ -96,6 +97,7 @@ void ObLogReader::destroy()
     store_service_stat_.reset();
     store_service_ = NULL;
     err_handler_ = NULL;
+    LOG_INFO("ObLogReader destroy end");
   }
 }
 
@@ -179,6 +181,7 @@ int ObLogReader::handle(void *data, const int64_t thread_index, volatile bool &s
       LOG_ERROR("handle_task_ fail", KR(ret), KPC(task), K(thread_index));
     }
   } else {
+    LOG_DEBUG("ObLogEntryTask read succ", KP(task));
     ATOMIC_DEC(&log_entry_task_count_);
   }
 
@@ -221,8 +224,12 @@ int ObLogReader::handle_task_(ObLogEntryTask &log_entry_task,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(log_entry_task.get_storage_key(key))) {
     LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str(), K(log_entry_task));
+  } else if (stop_flag) {
+    ret = OB_IN_STOP_STATE;
   } else if (OB_FAIL(read_store_service_(log_entry_task, column_family_handle, key, value))) {
-    LOG_ERROR("read_store_service_ fail", KR(ret), K(log_entry_task));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("read_store_service_ fail", KR(ret), K(log_entry_task));
+    }
   } else {
     store_service_stat_.do_data_stat(value.length());
   }
@@ -257,6 +264,8 @@ int ObLogReader::read_store_service_(ObLogEntryTask &log_entry_task,
   } else if (OB_ISNULL(store_service_)) {
     LOG_ERROR("store_service_ is NULL");
     ret = OB_ERR_UNEXPECTED;
+  } else if (ReaderThread::is_stoped()) {
+    ret = OB_IN_STOP_STATE;
   } else if (OB_FAIL(store_service_->get(column_family_handle, key, value))) {
     LOG_ERROR("StoreService get fail", KR(ret), K(key.c_str()), "value_len", value.length(), K(log_entry_task));
   } else {

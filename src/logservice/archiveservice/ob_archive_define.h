@@ -19,9 +19,14 @@
 #include "share/backup/ob_archive_piece.h"  // ObArchivePiece
 #include "share/backup/ob_backup_struct.h"  // ObBackupPathString
 #include "logservice/palf/lsn.h"            // LSN
+#include "share/scn.h"            // share::SCN
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace archive
 {
 using oceanbase::palf::LSN;
@@ -35,16 +40,30 @@ const int64_t OB_INVALID_ARCHIVE_PIECE_ID = -1;
 const int64_t OB_INVALID_ARCHIVE_LEASE_ID = -1;
 // 归档文件大小是CLOG虚拟文件大小的N倍, N至少为1
 const int64_t ARCHIVE_N = 1;
-const int64_t MAX_LOG_FILE_SIZE = palf::PALF_BLOCK_SIZE;  // 64M
+const int64_t MAX_LOG_FILE_SIZE = palf::PALF_BLOCK_SIZE;  // 64M - 16K
 //归档log文件大小, 是ob日志文件整数倍, 默认情况下等于ob日志文件
 const int64_t MAX_ARCHIVE_FILE_SIZE = ARCHIVE_N * MAX_LOG_FILE_SIZE;
 const int64_t OB_INVALID_ARCHIVE_FILE_ID = 0;
 const int64_t OB_INVALID_ARCHIVE_FILE_OFFSET = -1;
-const int64_t ARCHIVE_FILE_HEADER_SIZE = 4 * 1024L;  // 4k
+const int64_t COMMON_HEADER_SIZE = 4 * 1024L;    // 4K
+const int64_t ARCHIVE_FILE_HEADER_SIZE = COMMON_HEADER_SIZE;
 const int64_t DEFAULT_ARCHIVE_UNIT_SIZE = 16 * 1024L;   // 归档压缩加密单元大小
+const int64_t ARCHIVE_FILE_DATA_BUF_SIZE = MAX_ARCHIVE_FILE_SIZE + ARCHIVE_FILE_HEADER_SIZE;
 
 const int64_t DEFAULT_MAX_LOG_SIZE = palf::MAX_LOG_BUFFER_SIZE;
 const int64_t MAX_FETCH_TASK_NUM = 4;
+
+const int64_t MIN_FETCHER_THREAD_COUNT = 1;
+const int64_t MAX_FETCHER_THREAD_COUNT = 3;
+const int64_t MIN_SENDER_THREAD_COUNT = 1;
+const int64_t MAX_SENDER_THREAD_COUNT = 10;
+
+const int64_t DEFAULT_LS_RECORD_INTERVAL = 30 * 60 * 1000 * 1000L;   // 30min
+const int64_t MAX_META_RECORD_DATA_SIZE = 2 * 1024 * 1024L;
+const int64_t MAX_META_RECORD_FILE_SIZE = COMMON_HEADER_SIZE + MAX_META_RECORD_DATA_SIZE;  // 2M + 4K
+
+const int64_t MAX_LS_ARCHIVE_MEMORY_LIMIT = 3 * MAX_LOG_FILE_SIZE;
+const int64_t MAX_LS_SEND_TASK_COUNT_LIMIT = 4;
 // ================================================= //
 
 // 日志流leader授权备份zone内server归档, leader通过lease机制将授权下发给server
@@ -83,7 +102,7 @@ class LogFileTuple
 {
 public:
   LogFileTuple();
-  LogFileTuple(const LSN &lsn, const int64_t log_ts, const ObArchivePiece &piece);
+  LogFileTuple(const LSN &lsn, const share::SCN &scn, const ObArchivePiece &piece);
   ~LogFileTuple();
 
 public:
@@ -93,14 +112,14 @@ public:
   LogFileTuple &operator=(const LogFileTuple &other);
 
   const LSN &get_lsn() const { return offset_; }
-  int64_t get_log_ts() const { return log_ts_; }
+  const share::SCN &get_scn() const { return scn_; }
   const ObArchivePiece &get_piece() const { return piece_; };
   void compensate_piece();
-  TO_STRING_KV(K_(offset), K_(log_ts), K_(piece));
+  TO_STRING_KV(K_(offset), K_(scn), K_(piece));
 
 private:
   LSN offset_;            // 文件内偏移
-  int64_t log_ts_;        // 最大log ts, 单位ns
+  share::SCN scn_;        // 最大log scn
   ObArchivePiece piece_;  // 所属piece
 };
 
@@ -150,6 +169,7 @@ struct ObArchiveSendDestArg
   bool piece_dir_exist_;
 };
 
+// file header for common archive log file
 struct ObArchiveFileHeader
 {
   int16_t magic_;                    // FH
@@ -171,6 +191,30 @@ struct ObArchiveFileHeader
 
 private:
   static const int16_t ARCHIVE_FILE_HEADER_MAGIC = 0x4648; // FH means archive file header
+};
+
+// file header for ls meta file
+struct ObLSMetaFileHeader
+{
+  int16_t magic_;
+  int16_t version_;
+  int32_t place_holder_;
+  share::SCN timestamp_;
+  int64_t data_checksum_;
+  int64_t header_checksum_;
+
+  bool is_valid() const;
+  int generate_header(const share::SCN &timestamp, const int64_t data_checksum);
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  TO_STRING_KV(K_(magic),
+               K_(version),
+               K_(place_holder),
+               K_(timestamp),
+               K_(data_checksum),
+               K_(header_checksum));
+
+private:
+  static const int64_t LS_META_FILE_HEADER_MAGIC = 0x5348; // MH means ls meta file header
 };
 
 class ObArchiveInterruptReason

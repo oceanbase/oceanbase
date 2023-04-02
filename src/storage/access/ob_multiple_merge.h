@@ -28,6 +28,7 @@
 #include "ob_table_access_context.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/lob/ob_lob_data_reader.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,8 @@ private:
   int get_next_normal_rows(int64_t &count, int64_t capacity);
   int get_next_aggregate_row(blocksstable::ObDatumRow *&row);
   int fuse_default(blocksstable::ObDatumRow &row);
-  int fill_lob_locator(blocksstable::ObDatumRow &row, const bool allow_nop_pk, bool &need_fill_again);
+  int fill_lob_locator(blocksstable::ObDatumRow &row);
+  int fuse_lob_default(ObObj &def_cell, const uint64_t col_id);
   int pad_columns(blocksstable::ObDatumRow &row);
   int fill_virtual_columns(blocksstable::ObDatumRow &row);
   int project_row(const blocksstable::ObDatumRow &unprojected_row, blocksstable::ObDatumRow &projected_row);
@@ -99,7 +101,6 @@ private:
   OB_INLINE int check_need_refresh_table(bool &need_refresh);
   int save_curr_rowkey();
   int reset_tables();
-  OB_INLINE int report_table_store_stat();
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
   int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param);
   int alloc_iter_pool(common::ObIAllocator &allocator);
@@ -107,11 +108,15 @@ private:
                        blocksstable::ObDatumRow &in_row,
                        blocksstable::ObDatumRow *&out_row);
   int fill_group_idx_if_need(blocksstable::ObDatumRow &row);
-  OB_INLINE int update_and_report_scan_stat();
   int init_lob_reader(const ObTableIterParam &iter_param,
                      ObTableAccessContext &access_ctx);
-  int read_lob_columns(blocksstable::ObDatumRow &row);
+  int read_lob_columns_full_data(blocksstable::ObDatumRow &row);
   bool need_read_lob_columns(const blocksstable::ObDatumRow &row);
+  int handle_lob_before_fuse_row();
+  void reuse_lob_locator();
+  void report_tablet_stat();
+  OB_INLINE int update_and_report_tablet_stat();
+
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
@@ -121,7 +126,6 @@ protected:
   common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables_;
   blocksstable::ObDatumRow cur_row_;
   blocksstable::ObDatumRow unprojected_row_;
-  blocksstable::ObDatumRow full_row_;
   const ObIArray<int32_t> *out_cols_projector_;
   int64_t curr_scan_index_;
   blocksstable::ObDatumRowkey curr_rowkey_;
@@ -139,7 +143,6 @@ protected:
   ObBlockRowStore *block_row_store_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
-  bool has_lob_column_;
 private:
   enum ScanState
   {
@@ -157,7 +160,7 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
   int ret = OB_SUCCESS;
   need_refresh = get_table_param_.tablet_iter_.table_iter_.check_store_expire();
 #ifdef ERRSIM
-  ret = E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
+  ret = OB_E(EventTable::EN_FORCE_REFRESH_TABLE) ret;
   if (OB_FAIL(ret)) {
     ret = OB_SUCCESS;
     need_refresh = true;
@@ -166,39 +169,31 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
   return ret;
 }
 
-OB_INLINE int ObMultipleMerge::report_table_store_stat()
+OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
 {
   int ret = OB_SUCCESS;
-  if (lib::is_diagnose_info_enabled())
-  {
-    collect_merge_stat(access_ctx_->table_store_stat_);
-    //report access cnt and output cnt to the main table, ignore ret
-    if(OB_FAIL(ObTableStoreStatMgr::get_instance().report_stat(access_ctx_->table_store_stat_))) {
-      STORAGE_LOG(WARN, "report tablestat to main table fail,", K(ret));
+  if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
+    EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
+    access_ctx_->table_store_stat_.access_row_cnt_ += row_stat_.filt_del_count_;
+    if (NULL != access_ctx_->table_scan_stat_) {
+      access_ctx_->table_scan_stat_->access_row_cnt_ += row_stat_.filt_del_count_;
+      access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
+      access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
+      access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
+      access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.get_empty_read_cnt();
+      access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
+      access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
+      access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
+      access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
+      access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
+      access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
     }
+    if (lib::is_diagnose_info_enabled()) {
+      collect_merge_stat(access_ctx_->table_store_stat_);
+    }
+    report_tablet_stat();
   }
-  access_ctx_->table_store_stat_.reuse();
   return ret;
-}
-
-OB_INLINE int ObMultipleMerge::update_and_report_scan_stat()
-{
-  EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
-  access_ctx_->table_store_stat_.access_row_cnt_ += row_stat_.filt_del_count_;
-  if (NULL != access_ctx_->table_scan_stat_) {
-    access_ctx_->table_scan_stat_->access_row_cnt_ += row_stat_.filt_del_count_;
-    access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
-    access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
-    access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
-    access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.get_empty_read_cnt();
-    access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
-    access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
-    access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
-  }
-  return report_table_store_stat();
 }
 
 }

@@ -35,7 +35,7 @@ int ObOptEstVectorCostModel::cost_table_scan_one_batch_inner(double row_count,
   const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
   const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
   bool is_index_back = index_meta_info.is_index_back_;
-  
+
   if (OB_ISNULL(table_meta_info) ||
       OB_UNLIKELY(row_count < 0)) {
     ret = OB_INVALID_ARGUMENT;

@@ -29,7 +29,7 @@ using namespace common;
 ObLogSvrBlacklist::ObLogSvrBlacklist() :
     is_inited_(false),
     is_sql_server_(false),
-    lock_(),
+    lock_(ObLatchIds::OBCDC_SVR_BLACKLIST_LOCK),
     svrs_buf_size_(0),
     cur_svr_list_idx_(0),
     svrs_()

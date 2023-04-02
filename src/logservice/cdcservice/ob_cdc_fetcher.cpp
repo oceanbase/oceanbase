@@ -16,6 +16,7 @@
 #include "ob_cdc_fetcher.h"
 #include "ob_cdc_define.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "logservice/restoreservice/ob_remote_log_source_allocator.h"
 
 namespace oceanbase
 {
@@ -25,10 +26,12 @@ using namespace oceanbase::palf;
 
 namespace cdc
 {
+
 ObCdcFetcher::ObCdcFetcher()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
-    ls_service_(NULL)
+    ls_service_(NULL),
+    large_buffer_pool_(NULL)
 {
 }
 
@@ -38,7 +41,8 @@ ObCdcFetcher::~ObCdcFetcher()
 }
 
 int ObCdcFetcher::init(const uint64_t tenant_id,
-    ObLSService *ls_service)
+    ObLSService *ls_service,
+    archive::LargeBufferPool *buffer_pool)
 {
   int ret = OB_SUCCESS;
 
@@ -46,13 +50,14 @@ int ObCdcFetcher::init(const uint64_t tenant_id,
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
-      || OB_ISNULL(ls_service)) {
+      || OB_ISNULL(ls_service) || OB_ISNULL(buffer_pool)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(tenant_id), K(ls_service));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_service), K(buffer_pool));
   } else {
     is_inited_ = true;
     tenant_id_ = tenant_id;
     ls_service_ = ls_service;
+    large_buffer_pool_ = buffer_pool;
   }
 
   return ret;
@@ -64,6 +69,7 @@ void ObCdcFetcher::destroy()
     is_inited_ = false;
     tenant_id_ = OB_INVALID_TENANT_ID;
     ls_service_ = NULL;
+    large_buffer_pool_ = NULL;
   }
 }
 
@@ -89,12 +95,48 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     const LSN &start_lsn = req.get_start_lsn();
     PalfHandleGuard palf_handle_guard;
     PalfGroupBufferIterator group_iter;
+    const ObCdcRpcId &rpc_id = req.get_client_id();
+    ClientLSKey ls_key(rpc_id.get_addr(), rpc_id.get_pid(), ls_id);
+    ClientLSCtxMap &ctx_map = MTL(ObLogService*)->get_cdc_service()->get_ls_ctx_map();
+    ClientLSCtx *ls_ctx = NULL;
+    int8_t fetch_log_flag = req.get_flag();
 
-    if (OB_FAIL(init_group_iterator_(ls_id, start_lsn, palf_handle_guard, group_iter))) {
-      LOG_WARN("init_group_iterator_ fail", KR(ret), K(tenant_id_), K(ls_id), K(start_lsn));
-    } else if (OB_FAIL(do_fetch_log_(req, palf_handle_guard, group_iter, frt, resp))) {
+    // create ClientLSCtx when fetch_log for better maintainablity
+    // about the reason why not create ClientLSCtx when locating start lsn, considering the case:
+    // 1. Client locate lsn at server1 and server1 create the clientlsctx;
+    // 2. when client is about to fetch log in server1, server1 becomes unavailable;
+    // 3. then the client switch to server2 to fetch log;
+    // 4. server2 doesn't have the context of clientls, and need to create one
+    // So we just create ctx when fetching log
+    if (OB_FAIL(ctx_map.get(ls_key, ls_ctx))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        if (OB_FAIL(ctx_map.create(ls_key, ls_ctx))) {
+          LOG_WARN("create client ls ctx failed", KR(ret), K(ls_key));
+        } else if (OB_FAIL(ls_ctx->init(req.get_progress()))) {
+          LOG_WARN("failed to init client ls ctx", KR(ret), K(req));
+        } else {
+          // if test_switch_mode is enabled, set the init fetch mode to FETCHMODE_ARCHIVE
+          // so that the fetch mode could be switched to FETCHMODE_ONLINE in the next rpc in some test cases.
+          if (fetch_log_flag & ObCdcRpcTestFlag::OBCDC_RPC_TEST_SWITCH_MODE) {
+            ls_ctx->set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "InitTestSwitchMode");
+          }
+          LOG_INFO("create client ls ctx succ", K(ls_key), K(ls_ctx));
+        }
+      } else {
+        LOG_ERROR("get client ls ctx from ctx map failed", KR(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ls_ctx->update_touch_ts();
+      if (OB_FAIL(do_fetch_log_(req, frt, resp, *ls_ctx))) {
       LOG_WARN("do fetch log error", KR(ret), K(req));
-    } else {}
+      } else {}
+    }
+
+    if (OB_NOT_NULL(ls_ctx)) {
+      ctx_map.revert(ls_ctx);
+    }
   }
 
   // set debug error
@@ -116,6 +158,8 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     ObCdcServiceMonitor::fetch_log_count(fetch_log_count);
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
+
+  LOG_INFO("fetch_log done", K(req), K(resp));
 
   resp.set_err(ret);
   return ret;
@@ -141,12 +185,23 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
   } else {
     const ObLSID &ls_id = req.get_ls_id();
     PalfHandleGuard palf_handle_guard;
+    const ObCdcRpcId &rpc_id = req.get_client_id();
+    ClientLSKey ls_key(rpc_id.get_addr(), rpc_id.get_pid(), ls_id);
+    ClientLSCtxMap &ctx_map = MTL(ObLogService*)->get_cdc_service()->get_ls_ctx_map();
+    ClientLSCtx *ls_ctx = NULL;
 
-    if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
-      LOG_WARN("init_palf_handle_guard_ fail", KR(ret), K(tenant_id_), K(ls_id));
-    } else if (OB_FAIL(do_fetch_missing_log_(req, palf_handle_guard, frt, resp))) {
-      LOG_WARN("do fetch log error", KR(ret), K(req));
-    } else {}
+    if (OB_FAIL(ctx_map.get(ls_key, ls_ctx))) {
+      LOG_WARN("get client ls ctx from ctx map failed", KR(ret));
+    } else if (OB_ISNULL(ls_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls ctx is null, unexpected", KR(ret), K(ls_key));
+    } else {
+      ls_ctx->update_touch_ts();
+      if (OB_FAIL(do_fetch_missing_log_(req, frt, resp, *ls_ctx))) {
+        LOG_WARN("do fetch log error", KR(ret), K(req));
+      } else {}
+      ctx_map.revert(ls_ctx);
+    }
   }
 
   // set debug error
@@ -168,6 +223,8 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
     ObCdcServiceMonitor::fetch_log_count(fetch_log_count);
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
+
+  LOG_INFO("fetch_missing_log done", K(req), K(resp));
 
   resp.set_err(ret);
   return ret;
@@ -210,13 +267,14 @@ int ObCdcFetcher::init_group_iterator_(const ObLSID &ls_id,
 }
 
 int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
-    PalfHandleGuard &palf_handle_guard,
-    PalfGroupBufferIterator &group_iter,
     FetchRunTime &frt,
-    ObCdcLSFetchLogResp &resp)
+    ObCdcLSFetchLogResp &resp,
+    ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = req.get_ls_id();
+  const LSN &start_lsn = req.get_start_lsn();
+  const int8_t fetch_flag = req.get_flag();
   const int64_t end_tstamp = frt.rpc_deadline_ - RPC_QIT_RESERVED_TIME;
   bool reach_upper_limit = false;
   bool reach_max_lsn = false;
@@ -225,18 +283,16 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
   // The start LSN of the next RPC request.
   // 1. The initial value is start LSN of the current request. So next RPC request will retry even if without fetching one log.
   // 2. We will update next_req_lsn when fetching log, in order to help next RPC request.
+  // 3. the next req lsn is used to record the lsn of the next log, so when switch fetching mode, we can use the lsn
+  //    recorded in the resp to initialize a new iterator.
   resp.set_next_req_lsn(req.get_start_lsn());
   resp.set_ls_id(ls_id);
 
   // execute specific logging logic
-  if (OB_FAIL(ls_fetch_log_(ls_id, group_iter, end_tstamp, resp, frt, reach_upper_limit,
-          reach_max_lsn, scan_round_count, fetched_log_count))) {
+  if (OB_FAIL(ls_fetch_log_(ls_id, end_tstamp, fetch_flag, resp, frt, reach_upper_limit,
+          reach_max_lsn, scan_round_count, fetched_log_count, ctx))) {
     LOG_WARN("ls_fetch_log_ error", KR(ret), K(ls_id), K(frt));
-  } else {
-    if (reach_max_lsn) {
-      handle_when_reach_max_lsn_(ls_id, palf_handle_guard, fetched_log_count, frt, resp);
-    }
-  }
+  } else { }
 
   // Update statistics
   if (OB_SUCC(ret)) {
@@ -252,18 +308,184 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
   return ret;
 }
 
+// ------------ template method, used in this file only --------------
+// can't use iter.is_inited to replace need_init_iter, because they have different semantics.
+// don't block any error code here, let the caller handle the errcode for generality
+template <class LogEntryType>
+int ObCdcFetcher::fetch_log_in_palf_(PalfIterator<DiskIteratorStorage, LogEntryType> &iter,
+    PalfHandleGuard &palf_guard,
+    const LSN &start_lsn,
+    const bool need_init_iter,
+    const SCN &replayable_point_scn,
+    LogEntryType &log_group_entry,
+    LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  if (need_init_iter && OB_FAIL(palf_guard.seek(start_lsn, iter))) {
+    LOG_WARN("PalfHandleGuard seek fail", KR(ret), K(ls_id), K(lsn));
+  } else if (OB_FAIL(iter.next(replayable_point_scn))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("palf_iter next fail", KR(ret), K(tenant_id_), K(ls_id));
+    }
+  } else if (OB_FAIL(iter.get_entry(log_group_entry, lsn))) {
+    LOG_WARN("group_iter get_entry fail", KR(ret), K(tenant_id_), K(ls_id));
+  }
+  return ret;
+}
+
+// ------------ template method, used in this file only --------------
+// init archive source when it's used
+// don't block any error code here, let the caller handle the errcode for generality
+// return OB_SUCCESS when log_entry is successfully fetched
+template <class LogEntryType>
+int ObCdcFetcher::fetch_log_in_archive_(
+    const ObLSID &ls_id,
+    ObRemoteLogIterator<LogEntryType> &remote_iter,
+    const LSN &start_lsn,
+    const bool need_init_iter,
+    LogEntryType &log_entry,
+    LSN &lsn,
+    ClientLSCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.get_source()) && OB_FAIL(init_archive_source_(ctx, ls_id))) {
+    LOG_WARN("init archive source failed", K(ctx), K(ls_id));
+  } else {
+    const char *buf = NULL;
+    int64_t buf_size = 0;
+    share::SCN pre_scn;
+    if (OB_FAIL(pre_scn.convert_from_ts(ctx.get_progress()/1000L))) {
+      LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
+    } else if (need_init_iter && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
+                                                   start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_))) {
+      LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
+    } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
+      // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
+      if (OB_ITER_END != ret) {
+        LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
+      }
+    } else if (start_lsn != lsn) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
+          K(remote_iter));
+    } else {
+
+    }
+  }
+  return ret;
+}
+
+int ObCdcFetcher::set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
+    const bool test_switch_fetch_mode,
+    bool &ls_exist_in_palf,
+    palf::PalfHandleGuard &palf_guard,
+    ClientLSCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_guard))) {
+    if (OB_LS_NOT_EXIST != ret) {
+      LOG_WARN("ObLogService open_palf fail", KR(ret), K(tenant_id_), K(ls_id));
+    } else if (OB_SYS_TENANT_ID != tenant_id_) {
+      LOG_INFO("ls not exist in palf, switch mode to archive", KR(ret), K(tenant_id_), K(ls_id));
+      ls_exist_in_palf = false;
+      ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "LSNotExistInPalf");
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("logstream in sys tenant doesn't exist, unexpected", KR(ret), K(ls_id));
+    }
+  } else if (FetchMode::FETCHMODE_ARCHIVE == ctx.get_fetch_mode()) {
+    int64_t end_ts_ns = OB_INVALID_TIMESTAMP;
+    int64_t time_diff = OB_INVALID_TIMESTAMP;
+    const int64_t ctx_progress = ctx.get_progress();
+    // if the gap between current progress and the latest is less than 1 min, which means
+    // current fetch progress close to the latest log progress, try to switch fetch mode
+    // set the switch interval to 10s in test switch fetch mode, the unit of measurement of log_ts(scn) is nano second.
+    const int64_t SECOND_NS = 1000L * 1000 * 1000;
+    SCN end_scn;
+    const int64_t SWITCH_INTERVAL = test_switch_fetch_mode ? 10L * SECOND_NS : 60L * SECOND_NS;
+    if (OB_FAIL(palf_guard.get_end_scn(end_scn))) {
+      LOG_WARN("get palf end ts failed", KR(ret));
+    } else {
+      end_ts_ns = end_scn.get_val_for_logservice();
+      time_diff = end_ts_ns - ctx_progress;
+      if (time_diff <= SWITCH_INTERVAL) {
+        ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "LogNearLatest");
+      }
+    }
+  } else {}
+
+  return ret;
+}
+
+int ObCdcFetcher::get_replayable_point_scn_(SCN &replayable_point_scn)
+{
+  int ret = OB_SUCCESS;
+  ObLogService *log_service = MTL(ObLogService*);
+  if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log service is null, unexpected", KR(ret), K(tenant_id_), K(ls_id));
+  } else if (OB_FAIL(log_service->get_replayable_point(replayable_point_scn))) {
+    LOG_WARN("get replayable point scn failed", KR(ret), K(ls_id));
+  }
+  return ret;
+}
+
+FetchMode ObCdcFetcher::get_fetch_mode_when_fetching_log_(const ClientLSCtx &ctx,
+          const bool fetch_archive_only)
+{
+  FetchMode ret_mode = FetchMode::FETCHMODE_UNKNOWN;
+  if (OB_SYS_TENANT_ID == tenant_id_) {
+    ret_mode = FetchMode::FETCHMODE_ONLINE;
+  } else if (fetch_archive_only) {
+    ret_mode = FetchMode::FETCHMODE_ARCHIVE;
+  } else {
+    ret_mode = ctx.get_fetch_mode();
+  }
+  return ret_mode;
+}
+
+// make sure ctx is not null
+// set need_init_iter true when switching fetch mode
 int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
-    palf::PalfGroupBufferIterator &group_iter,
     const int64_t end_tstamp,
+    const int8_t fetch_flag,
     obrpc::ObCdcLSFetchLogResp &resp,
     FetchRunTime &frt,
     bool &reach_upper_limit,
     bool &reach_max_lsn,
     int64_t &scan_round_count,
-    int64_t &log_count)
+    int64_t &fetched_log_count,
+    ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
-
+  PalfGroupBufferIterator palf_iter;
+  PalfHandleGuard palf_guard;
+  // use cached remote_iter
+  ObCdcGetSourceFunctor get_source_func(ctx);
+  ObCdcUpdateSourceFunctor update_source_func(ctx);
+  ObRemoteLogGroupEntryIterator remote_iter(get_source_func, update_source_func);
+  bool ls_exist_in_palf = true;
+  // always reset remote_iter when need_init_iter is true
+  // always set need_init_inter=true when switch fetch_mode
+  bool need_init_iter = true;
+  bool log_exist_in_palf = true;
+  int64_t retry_count = 0;
+  const bool fetch_archive_only = ObCdcRpcTestFlag::is_fetch_archive_only(fetch_flag);
+  // test switch fetch mode requires that the fetch mode should be FETCHMODE_ARCHIVE at first, and then
+  // switch to FETCHMODE_ONLINE when processing next rpc
+  const bool test_switch_fetch_mode = ObCdcRpcTestFlag::is_test_switch_mode(fetch_flag);
+  SCN replayable_point_scn;
+  // find out whether logstream exists in palf, if it exists try switch mode to online when
+  // the gap between progress in ctx and the latest log progress is less than 1 min
+  if (OB_FAIL(get_replayable_point_scn_(replayable_point_scn))) {
+    LOG_WARN("get replayable point scn failed", KR(ret), K(ls_id));
+  } else if (OB_FAIL(set_fetch_mode_before_fetch_log_(ls_id, test_switch_fetch_mode,
+          ls_exist_in_palf, palf_guard, ctx))) {
+    LOG_WARN("set fetch mode before fetch log failed", KR(ret), K(ls_id), K(tenant_id_));
+  } else if (fetch_archive_only) {
+    // overwrite ls_exist_in_palf for test
+    ls_exist_in_palf = false;
+  }
   // Support cyclic scanning multiple rounds
   // Stop condition:
   // 1. Time up, timeout
@@ -273,31 +495,101 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
   while (OB_SUCC(ret) && ! frt.is_stopped()) {
     LogGroupEntry log_group_entry;
     LSN lsn;
+    FetchMode fetch_mode = get_fetch_mode_when_fetching_log_(ctx, fetch_archive_only);
     // update fetching rounds
     scan_round_count++;
     int64_t start_fetch_ts = ObTimeUtility::current_time();
-
-    if (is_time_up_(log_count, end_tstamp)) { // time up, stop fetching logs globally
+    bool fetch_log_succ = false;
+    const int64_t MAX_RETRY_COUNT = 3;
+    if (is_time_up_(scan_round_count, end_tstamp)) { // time up, stop fetching logs globally
       frt.stop("TimeUP");
-      LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(log_count));
-    } else if (OB_FAIL(group_iter.next())) {
-      if (OB_ITER_END == ret) {
-        // If return OB_ITER_END, considered that the maximum lsn of the server is reached.
-        reach_max_lsn = true;
-      } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-        // Lower bound, no log get
-      } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-        // retry
-        ret = OB_SUCCESS;
+      LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(fetched_log_count));
+    } // time up
+    else if (FetchMode::FETCHMODE_ONLINE == fetch_mode) {
+      if (OB_FAIL(fetch_log_in_palf_(palf_iter, palf_guard, resp.get_next_req_lsn(),
+           need_init_iter, replayable_point_scn, log_group_entry, lsn))) {
+        if (OB_ITER_END == ret) {
+          reach_max_lsn = true;
+        } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          need_init_iter = false;
+          ret = OB_SUCCESS;
+        } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+          // switch to fetchmode_archive, when in FETCHMODE_ONLINE, remote_iter is not inited
+          if (OB_SYS_TENANT_ID != tenant_id_) {
+            need_init_iter = true;
+            log_exist_in_palf = false;
+            ctx.set_fetch_mode(FetchMode::FETCHMODE_ARCHIVE, "PalfOutOfLowerBound");
+            ret = OB_SUCCESS;
+          } else {
+            LOG_INFO("log in sys tenant may be recycled", KR(ret), K(ls_id), K(resp));
+          }
+        } else {
+          LOG_WARN("fetching log in palf failed", KR(ret));
+        }
       } else {
-        LOG_WARN("group_iter next fail", KR(ret), K(tenant_id_), K(ls_id));
-      }
-    } else if (OB_FAIL(group_iter.get_entry(log_group_entry, lsn))) {
-      LOG_WARN("group_iter get_entry fail", KR(ret), K(tenant_id_), K(ls_id));
-    } else {
-      resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
-      check_next_group_entry_(lsn, log_group_entry, log_count, resp, frt, reach_upper_limit);
+        log_exist_in_palf = true;
+        need_init_iter = false;
+        fetch_log_succ = true;
+      } // fetch log succ
+    } // fetch palf log
+    else if (FetchMode::FETCHMODE_ARCHIVE == fetch_mode) {
+      if (OB_FAIL(fetch_log_in_archive_(ls_id, remote_iter, resp.get_next_req_lsn(),
+              need_init_iter, log_group_entry, lsn, ctx))) {
+        if (OB_ITER_END == ret) {
+          // when fetch to the end, the iter become invalid even if the new log is archived later,
+          // cdcservice would continue to fetch log in palf or return result to cdc-connector,
+          // reset remote_iter in either condition.
+          remote_iter.update_source_cb();
+          remote_iter.reset();
+          if (ls_exist_in_palf) {
+            if (log_exist_in_palf) {
+              // switch to palf, reset remote_iter
+              need_init_iter = true;
+              ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "ArchiveIterEnd");
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_ERR_OUT_OF_LOWER_BOUND;
+            }
+          } else {
+            // exit
+            reach_max_lsn = true;
+          }
+        } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
+          // archive is not on
+          ret = OB_ERR_OUT_OF_LOWER_BOUND;
+        } else {
+          // other error code, retry because various error code would be returned, retry could fix some problem
+          // TODO: process the error code with clear semantic
+          LOG_WARN("fetching log in archive failed", KR(ret), K(remote_iter), K(ls_id), K(resp));
+          remote_iter.reset();
+          if (retry_count < MAX_RETRY_COUNT) {
+            LOG_TRACE("retry on fetching remote log failure", KR(ret), K(retry_count), K(ctx));
+            retry_count++;
+            need_init_iter = true;
+            ret = OB_SUCCESS;
+          }
+        }
+      } else { // OB_SUCCESS
+        log_exist_in_palf = true;
+        need_init_iter = false;
+        fetch_log_succ = true;
+      } // fetch log succ
+    } // fetch archive log
+    else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fetch mode is invalid", KR(ret), K(fetch_mode));
+    } // unexpected branch
 
+    // inc log fetch time in any condition
+    resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
+
+    // retry on OB_ITER_END (when fetching logs in archive), OB_ALLOCATE_MEMORY_FAILED and
+    // OB_ERR_OUT_OF_LOWER_BOUND (when fetching logs in palf), thus some return codes are blocked and the
+    // return code is unable to be used for determine whether logEntry is successfully fetched.
+    // update the resp/frt/ctx when the logentry is successfully fetched
+    if (OB_SUCC(ret) && fetch_log_succ) {
+      check_next_group_entry_(lsn, log_group_entry, fetched_log_count, resp, frt, reach_upper_limit, ctx);
+      resp.set_progress(ctx.get_progress());
       if (frt.is_stopped()) {
         // Stop fetching log
       } else if (OB_FAIL(prefill_resp_with_group_entry_(ls_id, lsn, log_group_entry, resp))) {
@@ -309,15 +601,24 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
         }
       } else {
         // log fetched successfully
-        log_count++;
+        fetched_log_count++;
 
-        LOG_TRACE("LS fetch a log", K(ls_id), K(log_count), K(frt));
+        LOG_TRACE("LS fetch a log", K(ls_id), K(fetched_log_count), K(frt));
       }
     }
   } // while
 
+  // update source back when remote_iter is valid, needn't reset remote iter,
+  // because it won't be used afterwards
+  if (remote_iter.is_init()) {
+    remote_iter.update_source_cb();
+  }
+
   if (OB_SUCCESS == ret) {
     // do nothing
+    if (ls_exist_in_palf && reach_max_lsn) {
+      handle_when_reach_max_lsn_in_palf_(ls_id, palf_guard, fetched_log_count, frt, resp);
+    }
   } else if (OB_ITER_END == ret) {
     // has iterated to the end of block.
     ret = OB_SUCCESS;
@@ -331,7 +632,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     // other error code
   }
 
-  LOG_TRACE("LS fetch log done", KR(ret), K(log_count), K(frt), K(resp));
+  LOG_TRACE("LS fetch log done", KR(ret), K(fetched_log_count), K(frt), K(resp));
 
   return ret;
 }
@@ -341,11 +642,17 @@ void ObCdcFetcher::check_next_group_entry_(const LSN &next_lsn,
     const int64_t fetched_log_count,
     obrpc::ObCdcLSFetchLogResp &resp,
     FetchRunTime &frt,
-    bool &reach_upper_limit)
+    bool &reach_upper_limit,
+    ClientLSCtx &ctx)
 {
-  int64_t submit_ts = next_log_group_entry.get_log_ts();
+  //TODO(scn)
+  int64_t submit_ts = next_log_group_entry.get_scn().get_val_for_logservice();
   int64_t entry_size = next_log_group_entry.get_serialize_size();
   bool is_buf_full = (! resp.has_enough_buffer(entry_size));
+  // if a valid log entry is fetched, update the ctx progress
+  if (entry_size > 0) {
+    ctx.set_progress(submit_ts);
+  }
 
   if (is_buf_full) {
     // This log may not have the desired timestamp, but it is still regarded as buf_full.
@@ -419,7 +726,7 @@ int ObCdcFetcher::handle_log_not_exist_(const ObLSID &ls_id,
   return ret;
 }
 
-void ObCdcFetcher::handle_when_reach_max_lsn_(const ObLSID &ls_id,
+void ObCdcFetcher::handle_when_reach_max_lsn_in_palf_(const ObLSID &ls_id,
     palf::PalfHandleGuard &palf_handle_guard,
     const int64_t fetched_log_count,
     FetchRunTime &frt,
@@ -485,81 +792,108 @@ int ObCdcFetcher::check_lag_follower_(const ObLSID &ls_id,
 }
 
 int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req,
-    palf::PalfHandleGuard &palf_handle_guard,
     FetchRunTime &frt,
-    obrpc::ObCdcLSFetchLogResp &resp)
+    obrpc::ObCdcLSFetchLogResp &resp,
+    ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = req.get_ls_id();
   const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array = req.get_miss_log_array();
   const int64_t end_tstamp = frt.rpc_deadline_ - RPC_QIT_RESERVED_TIME;
-  bool reach_max_lsn = false;
   int64_t scan_round_count = 0;        // epoch of fetching
   int64_t fetched_log_count = 0;       // count of log fetched
+  const FetchMode ctx_fetch_mode = ctx.get_fetch_mode();
+  int8_t req_flag = req.get_flag();
+  bool fetch_archive_only = is_sys_tenant(tenant_id_) ? false : ObCdcRpcTestFlag::is_fetch_archive_only(req_flag);
 
   if (OB_UNLIKELY(miss_log_array.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("miss_log_array is not valid", KR(ret));
   } else {
+    PalfHandleGuard palf_guard;
+    GetSourceFunc get_source_func = ObCdcGetSourceFunctor(ctx);
+    bool ls_exist_in_palf = true;
+    bool archive_is_on = true;
+    bool need_init_iter = true;
     // The missing LSN of the next RPC request.
-    // 1. The initial value is the first missing LSN of the current request. So next RPC request will retry even if without fetching one missing log.
+    // 1. The initial value is the first missing LSN of the current request.
+    //    So next RPC request will retry even if without fetching one missing log.
     // 2. We will update next_miss_lsn when fetching log, in order to help next RPC request.
     resp.set_next_miss_lsn(miss_log_array[0].miss_lsn_);
     resp.set_ls_id(ls_id);
+    SCN replayable_point_scn;
+    if (OB_FAIL(get_replayable_point_scn_(replayable_point_scn))) {
+      LOG_WARN("get replayable point scn failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(prepare_berfore_fetch_missing_(ls_id, ctx, palf_guard, ls_exist_in_palf, archive_is_on))) {
+      LOG_WARN("failed to prepare before fetching missing log", KR(ret), K(ls_id), K(tenant_id_));
+    } else {
+      for (int64_t idx = 0; OB_SUCC(ret) && ! frt.is_stopped() && idx < miss_log_array.count(); idx++) {
+        // need_init_iter should always be true, declared here to ensure need init iter be true in each loop
+        PalfBufferIterator palf_iter;
+        ObRemoteLogpEntryIterator remote_iter(get_source_func);
+        const obrpc::ObCdcLSFetchMissLogReq::MissLogParam &miss_log_info = miss_log_array[idx];
+        const LSN &missing_lsn = miss_log_info.miss_lsn_;
+        palf::PalfBufferIterator log_entry_iter;
+        LogEntry log_entry;
+        LSN lsn;
+        resp.set_next_miss_lsn(missing_lsn);
+        int64_t start_fetch_ts = ObTimeUtility::current_time();
+        bool log_fetched_in_palf = false;
 
-    for (int64_t idx = 0; OB_SUCC(ret) && ! frt.is_stopped() && idx < miss_log_array.count(); idx++) {
-      const obrpc::ObCdcLSFetchMissLogReq::MissLogParam &miss_log_info = miss_log_array[idx];
-      const LSN &missing_lsn = miss_log_info.miss_lsn_;
-      palf::PalfBufferIterator log_entry_iter;
-      LogEntry log_entry;
-      LSN lsn;
-      resp.set_next_miss_lsn(missing_lsn);
-      int64_t start_fetch_ts = ObTimeUtility::current_time();
-
-      if (is_time_up_(fetched_log_count, end_tstamp)) { // time up, stop fetching logs globally
-        frt.stop("TimeUP");
-        LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(fetched_log_count));
-      } else if (OB_FAIL(palf_handle_guard.seek(missing_lsn, log_entry_iter))) {
-        LOG_WARN("PalfHandleGuard seek fail", KR(ret), K(ls_id), K(log_entry_iter));
-      } else if (OB_FAIL(log_entry_iter.next())) {
-        if (OB_ITER_END == ret) {
-          // If return OB_ITER_END, considered that the maximum lsn of the server is reached.
-          reach_max_lsn = true;
-        } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-          // Lower bound, no log get
-        } else if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-          // retry
-          ret = OB_SUCCESS;
+        if (is_time_up_(fetched_log_count, end_tstamp)) { // time up, stop fetching logs globally
+          frt.stop("TimeUP");
+          LOG_INFO("fetch log quit in time", K(end_tstamp), K(frt), K(fetched_log_count));
         } else {
-          LOG_WARN("log_entry_iter next fail", KR(ret), K(tenant_id_), K(ls_id));
-        }
-      } else if (OB_FAIL(log_entry_iter.get_entry(log_entry, lsn))) {
-        LOG_WARN("log_entry_iter get_entry fail", KR(ret), K(tenant_id_), K(ls_id));
-      } else if (OB_UNLIKELY(missing_lsn != lsn)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("do_fetch_missing_log missing_lsn not match", KR(ret), K(tenant_id_), K(ls_id),
-            K(missing_lsn), K(lsn));
-      } else {
-        resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
-        check_next_entry_(lsn, log_entry, resp, frt);
-
-        if (frt.is_stopped()) {
-          // Stop fetching log
-        } else if (OB_FAIL(prefill_resp_with_log_entry_(ls_id, lsn, log_entry, resp))) {
-          if (OB_BUF_NOT_ENOUGH == ret) {
-            handle_when_buffer_full_(frt); // stop
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("prefill_resp_with_log_entry fail", KR(ret), K(frt), K(end_tstamp), K(resp));
+          // first, try to fetch logs in palf
+          if (!fetch_archive_only && ls_exist_in_palf)  {
+            if (OB_FAIL(fetch_log_in_palf_(palf_iter, palf_guard, missing_lsn,
+                    need_init_iter, replayable_point_scn, log_entry, lsn))) {
+              if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+                // block OB_ERR_OUT_OF_LOWER_BOUND
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("fetch missing log in palf failed", KR(ret), K(missing_lsn));
+              }
+            } else {
+              log_fetched_in_palf = true;
+            }
           }
-        } else {
-          // log fetched successfully
-          fetched_log_count++;
-
-          LOG_TRACE("LS fetch a missing log", K(tenant_id_), K(ls_id), K(fetched_log_count), K(frt));
+          // if no log fetched in palf, try to fetch log in archive
+          if (OB_SUCC(ret) && !log_fetched_in_palf && archive_is_on) {
+            if (OB_FAIL(fetch_log_in_archive_(ls_id, remote_iter, missing_lsn,
+                    need_init_iter, log_entry, lsn, ctx))) {
+              LOG_WARN("fetch missng log in archive failed", KR(ret), K(missing_lsn));
+            }
+          }
         }
-      }
-    } // for
+        if (OB_SUCC(ret)) {
+          if (OB_UNLIKELY(missing_lsn != lsn)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("do_fetch_missing_log missing_lsn not match", KR(ret), K(tenant_id_), K(ls_id),
+                K(missing_lsn), K(lsn));
+          } else {
+            resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
+            check_next_entry_(lsn, log_entry, resp, frt);
+
+            if (frt.is_stopped()) {
+              // Stop fetching log
+            } else if (OB_FAIL(prefill_resp_with_log_entry_(ls_id, lsn, log_entry, resp))) {
+              if (OB_BUF_NOT_ENOUGH == ret) {
+                handle_when_buffer_full_(frt); // stop
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("prefill_resp_with_log_entry fail", KR(ret), K(frt), K(end_tstamp), K(resp));
+              }
+            } else {
+              // log fetched successfully
+              fetched_log_count++;
+
+              LOG_TRACE("LS fetch a missing log", K(tenant_id_), K(ls_id), K(fetched_log_count), K(frt));
+            }
+          }
+        }
+      } // for
+    } // else
 
     if (OB_SUCCESS == ret) {
       // do nothing
@@ -575,7 +909,6 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
     } else {
       // other error code
     }
-
     LOG_TRACE("LS fetch missing log done", KR(ret), K(fetched_log_count), K(frt), K(resp));
   }
 
@@ -624,6 +957,58 @@ int ObCdcFetcher::prefill_resp_with_log_entry_(const ObLSID &ls_id,
     }
   }
 
+  return ret;
+}
+
+// called when source in ctx is null
+int ObCdcFetcher::init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id) {
+  int ret = OB_SUCCESS;
+  ObRemoteLogParent *source = ctx.get_source();
+  if (OB_NOT_NULL(source)) {
+    LOG_WARN("archive source is not null, no need to init");
+  } else if (OB_ISNULL(source = logservice::ObResSrcAlloctor::alloc(ObLogRestoreSourceType::LOCATION, ls_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc RemoteLocationParent failed", KR(ret), K(tenant_id_), K(ls_id));
+  } else {
+    share::ObBackupDest archive_dest;
+    if (OB_FAIL(ObCdcService::get_backup_dest(ls_id, archive_dest))) {
+      LOG_WARN("get backupdest from archivedestinfo failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(static_cast<ObRemoteLocationParent*>(source)->set(archive_dest, SCN::max_scn()))) {
+      LOG_WARN("source set archive dest info failed", KR(ret), K(archive_dest));
+    } else {
+      ctx.set_source(source);
+      LOG_INFO("init archive source succ", K(ctx), K(ls_id));
+    }
+  }
+  return ret;
+}
+
+int ObCdcFetcher::prepare_berfore_fetch_missing_(const ObLSID &ls_id,
+    ClientLSCtx &ctx,
+    palf::PalfHandleGuard &palf_handle_guard,
+    bool &ls_exist_in_palf,
+    bool &archive_is_on)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
+      if (OB_LS_NOT_EXIST != ret) {
+        LOG_WARN("ObLogService open_palf fail", KR(ret), K(tenant_id_), K(ls_id));
+      } else {
+        ret = OB_SUCCESS;
+        ls_exist_in_palf = false;
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_ISNULL(ctx.get_source()) && OB_FAIL(init_archive_source_(ctx, ls_id))) {
+      if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
+        ret = OB_SUCCESS;
+        archive_is_on = false;
+      }
+    }
+    if (OB_SUCC(ret) && OB_UNLIKELY(!ls_exist_in_palf && !archive_is_on)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls not exist in palf and archive is not on, not able to fetch missing log", KR(ret), K(ls_id));
+    }
   return ret;
 }
 

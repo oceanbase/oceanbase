@@ -15,11 +15,13 @@
 #include "storage/access/ob_dml_param.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/dml/ob_dml_service.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::storage;
 using namespace oceanbase::common::serialization;
+using namespace oceanbase::observer;
 
 OB_SERIALIZE_MEMBER((ObPxMultiPartInsertOpInput, ObPxMultiPartModifyOpInput));
 
@@ -45,6 +47,18 @@ int ObPxMultiPartInsertOp::inner_open()
   } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), ins_rtdef_, this, this,
                                        nullptr, MY_SPEC.ins_ctdef_.is_heap_table_))) {
     LOG_WARN("failed to init data driver", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+    if (ObTableDirectInsertService::is_direct_insert(*plan)) {
+      int64_t task_id = ctx_.get_px_task_id() + 1;
+      if (OB_FAIL(ObTableDirectInsertService::open_task(plan->get_append_table_id(), task_id))) {
+        LOG_WARN("failed to open table direct insert task", KR(ret),
+            K(plan->get_append_table_id()), K(task_id));
+      } else {
+        ins_rtdef_.das_rtdef_.direct_insert_task_id_ = task_id;
+      }
+    }
   }
   LOG_TRACE("pdml static insert op", K(ret), K_(MY_SPEC.row_desc), K_(MY_SPEC.ins_ctdef));
   return ret;
@@ -89,6 +103,17 @@ int ObPxMultiPartInsertOp::inner_get_next_row()
 int ObPxMultiPartInsertOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+  if (ObTableDirectInsertService::is_direct_insert(*plan)) {
+    int64_t task_id = ctx_.get_px_task_id() + 1;
+    int error_code = (static_cast<const ObPxMultiPartInsertOpInput *>(input_))->get_error_code();
+    if (OB_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(),
+                                                task_id,
+                                                error_code))) {
+      LOG_WARN("failed to close table direct insert task", KR(ret),
+          K(plan->get_append_table_id()), K(task_id), K(error_code));
+    }
+  }
   if (OB_FAIL(ObTableModifyOp::inner_close())) {
     LOG_WARN("failed to inner close table modify", K(ret));
   } else {
@@ -176,6 +201,7 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
     LOG_WARN("get physical plan context failed", K(ret));
   } else {
     while (OB_SUCC(ret)) {
+      ObChunkDatumStore::StoredRow* stored_row = nullptr;
       clear_evaluated_flag();
       if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
@@ -185,8 +211,10 @@ int ObPxMultiPartInsertOp::write_rows(ObExecContext &ctx,
         } else {
           iter_end_ = true;
         }
-      } else if (OB_FAIL(ObDMLService::insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::insert_row(MY_SPEC.ins_ctdef_, ins_rtdef_, tablet_loc, dml_rtctx_, stored_row))) {
         LOG_WARN("insert row to das failed", K(ret));
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
+        LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
       }
     }
 

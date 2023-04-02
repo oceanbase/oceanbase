@@ -25,122 +25,60 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-int32_t ObLogExchange::get_explain_name_length() const
+int ObLogExchange::get_explain_name_internal(char *buf,
+                                             const int64_t buf_len,
+                                             int64_t &pos)
 {
-  int32_t length = 0;
-
-  length += (int32_t) strlen(get_name());
-  ++length;
-
-  if (is_remote_) {
-    length += (int32_t) strlen("REMOTE");
-  } else {
-    if (is_rescanable()) {
+  int ret = OB_SUCCESS;
+  ret = BUF_PRINTF("%s ", get_name());
+  if (OB_SUCC(ret)) {
+    if (is_remote_) {
+      ret = BUF_PRINTF("REMOTE");
+    } else if (is_rescanable()) {
       //PX COORDINATOR, do nothing
     } else {
-      length += (int32_t) strlen("DISTR");
+      ret = BUF_PRINTF("DISTR");
     }
   }
-
-  if (is_producer() && is_repart_exchange()) {
-    ++length;
-    if (dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM) {
-      length += (int32_t) strlen("(PKEY RANDOM)");
-    } else if (dist_method_ == ObPQDistributeMethod::PARTITION_HASH) {
-      length += (int32_t) strlen("(PKEY HASH)");
-    } else if (dist_method_ == ObPQDistributeMethod::PARTITION_RANGE) {
-      length += (int32_t) strlen("(PKEY RANGE)");
-     } else if (dist_method_ == ObPQDistributeMethod::RANGE) {
-      length += (int32_t) strlen("(RANGE)");
-    } else {
-      length += (int32_t) strlen("(PKEY)");
-    }
-  }
-
-  if (is_producer()) {
-    if (is_repart_exchange()) {
-      if (is_slave_mapping()) {
-        length += static_cast<int32_t>(strlen(" LOCAL"));
+  if (OB_SUCC(ret) && is_producer() &&
+      (is_repart_exchange() || is_pq_dist())) {
+    ret = BUF_PRINTF(" (");
+    if (OB_FAIL(ret)){
+    } else if (is_repart_exchange()) {
+      if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM) {
+        ret = BUF_PRINTF("PKEY RANDOM");
+      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_HASH) {
+        ret = BUF_PRINTF("PKEY HASH");
+      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANGE) {
+        ret = BUF_PRINTF("PKEY RANGE");
+      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::RANGE) {
+        ret = BUF_PRINTF("RANGE");
+      } else {
+        ret = BUF_PRINTF("PKEY");
       }
     } else if (is_pq_dist()) {
       auto print_method = (ObPQDistributeMethod::SM_BROADCAST == dist_method_)
           ? ObPQDistributeMethod::BROADCAST : dist_method_;
       print_method = (ObPQDistributeMethod::PARTITION_HASH == dist_method_)
           ? ObPQDistributeMethod::HASH : print_method;
-      const char *str = ObPQDistributeMethod::get_type_string(print_method);
-      length += static_cast<int32_t>(strlen(" ()") + strlen(str));
-      if (is_slave_mapping()) {
-        length += static_cast<int32_t>(strlen(" LOCAL"));
-      } else if (is_rollup_hybrid_) {
-        length += static_cast<int32_t>(strlen(" HYBRID"));
-      }
-    }
-  }
-
-  return length;
-}
-int ObLogExchange::get_explain_name_internal(char *buf,
-                                             const int64_t buf_len,
-                                             int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-
-  ret = BUF_PRINTF("%s", get_name());
-  if (OB_SUCC(ret)) {
-    ret = BUF_PRINTF(" ");
-  }
-
-  if (OB_SUCC(ret)) {
-    if (is_remote_) {
-      ret = BUF_PRINTF("REMOTE");
-    } else {
-      if (is_rescanable()) {
-        //PX COORDINATOR, do nothing
-      } else {
-        ret = BUF_PRINTF("DISTR");
-      }
-    }
-  } else { /* Do nothing */ }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("BUF_PRINTF failed", K(ret));
-  } else { /* Do nothing */ }
-
-  if (OB_SUCC(ret) && is_producer()) {
-    if (is_repart_exchange()) {
-      if (OB_SUCC(ret)) {
-        ret = BUF_PRINTF(" ");
-      }
-      if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM) {
-        ret = BUF_PRINTF("(PKEY RANDOM");
-      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_HASH) {
-        ret = BUF_PRINTF("(PKEY HASH");
-      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANGE) {
-        ret = BUF_PRINTF("(PKEY RANGE");
-      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::RANGE) {
-        ret = BUF_PRINTF("(RANGE)");
-      } else {
-        ret = BUF_PRINTF("(PKEY");
-      }
-    } else {
-      if (is_pq_dist()) {
-        auto print_method = (ObPQDistributeMethod::SM_BROADCAST == dist_method_)
-            ? ObPQDistributeMethod::BROADCAST : dist_method_;
-        print_method = (ObPQDistributeMethod::PARTITION_HASH == dist_method_)
+      print_method = (ObPQDistributeMethod::HYBRID_HASH_BROADCAST == dist_method_)
             ? ObPQDistributeMethod::HASH : print_method;
-        const char *str = ObPQDistributeMethod::get_type_string(print_method);
-        ret = BUF_PRINTF(" (%s", str);
+      print_method = (ObPQDistributeMethod::HYBRID_HASH_RANDOM == dist_method_)
+            ? ObPQDistributeMethod::HASH : print_method;
+      const char *str = ObPQDistributeMethod::get_type_string(print_method);
+      ret = BUF_PRINTF("%s", str);
+    }
+    if (OB_SUCC(ret)) {
+      if (is_slave_mapping()) {
+        ret = BUF_PRINTF(" LOCAL");
+      } else if (is_rollup_hybrid_ || is_wf_hybrid_
+                || ObPQDistributeMethod::HYBRID_HASH_RANDOM == dist_method_
+                || ObPQDistributeMethod::HYBRID_HASH_BROADCAST == dist_method_) {
+        ret = BUF_PRINTF(" HYBRID");
       }
     }
-
-    if (OB_SUCC(ret) && (is_pq_dist() || is_repart_exchange())) {
-      if (is_slave_mapping()) {
-        ret = BUF_PRINTF(" LOCAL)");
-      } else {
-        if (is_rollup_hybrid_) {
-          ret = BUF_PRINTF(" HYBRID");
-        }
-        ret = BUF_PRINTF(")");
-      }
+    if (OB_SUCC(ret)) {
+      ret = BUF_PRINTF(")");
     }
   }
   return ret;
@@ -173,7 +111,7 @@ const char *ObLogExchange::get_name() const
   return result;
 }
 
-int ObLogExchange::inner_replace_generated_agg_expr(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs)
+int ObLogExchange::inner_replace_op_exprs(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(replace_exprs_action(to_replace_exprs, repartition_keys_))) {
@@ -182,6 +120,9 @@ int ObLogExchange::inner_replace_generated_agg_expr(const common::ObIArray<std::
     LOG_WARN("failed to replace agg exprs", K(ret));
   } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, repartition_func_exprs_))) {
     LOG_WARN("failed to replace agg exprs", K(ret));
+  } else if (calc_part_id_expr_ != NULL
+             && OB_FAIL(replace_expr_action(to_replace_exprs, calc_part_id_expr_))) {
+    LOG_WARN("failed to replace calc part id expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < hash_dist_exprs_.count(); i++) {
       if (OB_ISNULL(hash_dist_exprs_.at(i).expr_)) {
@@ -199,68 +140,63 @@ int ObLogExchange::inner_replace_generated_agg_expr(const common::ObIArray<std::
       } else { /* Do nothing */ }
     }
   }
-
   return ret;
 }
 
-int ObLogExchange::print_plan_head_annotation(char* buf,
-                                              int64_t &buf_len,
-                                              int64_t &pos,
-                                              ExplainType type)
+int ObLogExchange::get_plan_item_info(PlanText &plan_text,
+                                      ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  auto print_annotation_keys = [&](const ObIArray<ObRawExpr *> &keys) {
-    if (OB_FAIL(BUF_PRINTF("(#keys=%ld", keys.count()))) {
-      LOG_WARN("buf print failed", K(ret));
-    } else {
-      if (keys.count() == 0) { // PDML情况下，非分区表进行pkey reshuffle
-        if (OB_FAIL(BUF_PRINTF("), "))) {
-          LOG_WARN("failed print ),", K(ret));
-        }
-      } else {
-        if (OB_FAIL(BUF_PRINTF(", "))) {
-          LOG_WARN("failed print , ", K(ret));
-        }
-      }
-      for (int64_t i = 0; i < keys.count() && OB_SUCC(ret); i++) {
-        auto key = keys.at(i);
-        if (OB_FAIL(BUF_PRINTF("["))) {
-          LOG_WARN("failed print [", K(ret));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(key)) {
-          ret = BUF_PRINTF("nil");
-        } else if (OB_FAIL(key->get_name(buf, buf_len, pos, type))) {
-          LOG_WARN("print expr name failed", K(ret));
-        } else if (key->get_result_type().is_numeric_type()) {
-          //屏蔽numeric的打印
-        } else if (OB_FAIL(key->get_type_and_length(buf, buf_len, pos, type))) {
-          LOG_WARN("print expr type and length failed", K(ret));
-        } else { /*Do nothing*/ }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(BUF_PRINTF("]"))) {
-            LOG_WARN("failed print ]", K(ret));
-          }
-        }
-
-        if(i == keys.count() - 1) {
-          if (OB_FAIL(BUF_PRINTF("), "))) {
-            LOG_WARN("failed to BUF_PRINTF", K(ret));
-          }
-        } else if (OB_FAIL(BUF_PRINTF(", "))) {
-          LOG_WARN("failed to BUF_PRINTF", K(ret));
-        }
-      }
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else if (OB_FAIL(get_plan_special_expr_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan special expr info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(get_explain_name_internal(buf, buf_len, pos))) {
+      LOG_WARN("failed to get explain name", K(ret));
     }
-  };
-  if (is_producer()) {
+    END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(get_plan_distribution(plan_text, plan_item))) {
+      LOG_WARN("failed to get plan distribution", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_INVALID_ID != get_dfo_id()) {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(BUF_PRINTF(":EX%ld%04ld",
+                            get_px_id(),
+                            get_dfo_id()))) {
+      LOG_WARN("failed to print str", K(ret));
+    }
+    END_BUF_PRINT(plan_item.object_alias_,
+                  plan_item.object_alias_len_);
+  }
+  return ret;
+}
+
+
+int ObLogExchange::get_plan_special_expr_info(PlanText &plan_text,
+                                              ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  int parallel = get_parallel();
+  BEGIN_BUF_PRINT;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (is_producer()) {
     if (is_repart_exchange()) {
       ObSEArray<ObRawExpr *, 16> exprs;
       OZ(append(exprs, repartition_keys_));
       OZ(append(exprs, repartition_sub_keys_));
       if (OB_SUCC(ret)) {
-        print_annotation_keys(exprs);
+        ret = print_annotation_keys(buf,
+                                    buf_len,
+                                    pos,
+                                    type,
+                                    exprs);
       }
     }
     if (OB_SUCC(ret) && is_pq_hash_dist()) {
@@ -269,7 +205,11 @@ int ObLogExchange::print_plan_head_annotation(char* buf,
         OZ(exprs.push_back(e->expr_));
       }
       if (OB_SUCC(ret)) {
-        print_annotation_keys(exprs);
+        ret = print_annotation_keys(buf,
+                                    buf_len,
+                                    pos,
+                                    type,
+                                    exprs);
       }
     }
     if (OB_SUCC(ret) && is_pq_range()) {
@@ -278,45 +218,128 @@ int ObLogExchange::print_plan_head_annotation(char* buf,
         OZ(exprs.push_back(sk->expr_));
       }
       if (OB_SUCC(ret)) {
-        print_annotation_keys(exprs);
+        ret = print_annotation_keys(buf,
+                                    buf_len,
+                                    pos,
+                                    type,
+                                    exprs);
       }
     }
+    if (is_px_single() &&
+        OB_PHY_PLAN_REMOTE != get_plan()->get_optimizer_context().get_phy_plan_type()) {
+      ret = BUF_PRINTF("is_single, ");
+    }
+    if (OB_SUCC(ret) && parallel > 0 &&
+        OB_PHY_PLAN_REMOTE != get_plan()->get_optimizer_context().get_phy_plan_type()) {
+      ret = BUF_PRINTF("dop=%d", parallel);
+    }
+    if (OB_SUCC(ret) && EXPLAIN_EXTENDED == type && popular_values_.count() > 0) {
+      if (OB_FAIL(BUF_PRINTF(",\n      "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        EXPLAIN_PRINT_POPULAR_VALUES(popular_values_);
+      }
+    }
+  } else {
+    if (is_task_order_) {
+      ret = BUF_PRINTF("task_order");
+    } else if (is_merge_sort_) {
+      const ObIArray<OrderItem> &sort_keys = get_sort_keys();
+      EXPLAIN_PRINT_SORT_ITEMS(sort_keys, type);
+      if (OB_SUCC(ret) && is_sort_local_order_) {
+        ret = BUF_PRINTF(", Local Order");
+      }
+    }
+  }
+  END_BUF_PRINT(plan_item.special_predicates_,
+                plan_item.special_predicates_len_);
+  return ret;
+}
+
+int ObLogExchange::get_plan_distribution(PlanText &plan_text,
+                                         ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (is_producer()) {
+    BEGIN_BUF_PRINT;
+    if (is_repart_exchange()) {
+      if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM) {
+        ret = BUF_PRINTF("PKEY RANDOM");
+      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_HASH) {
+        ret = BUF_PRINTF("PKEY HASH");
+      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::PARTITION_RANGE) {
+        ret = BUF_PRINTF("PKEY RANGE");
+      } else if (OB_SUCC(ret) && dist_method_ == ObPQDistributeMethod::RANGE) {
+        ret = BUF_PRINTF("RANGE)");
+      } else {
+        ret = BUF_PRINTF("PKEY");
+      }
+    } else {
+      if (is_pq_dist()) {
+        auto print_method = (ObPQDistributeMethod::SM_BROADCAST == dist_method_)
+            ? ObPQDistributeMethod::BROADCAST : dist_method_;
+        print_method = (ObPQDistributeMethod::PARTITION_HASH == dist_method_)
+            ? ObPQDistributeMethod::HASH : print_method;
+        const char *str = ObPQDistributeMethod::get_type_string(print_method);
+        ret = BUF_PRINTF("%s", str);
+      }
+    }
+
+    if (OB_SUCC(ret) && (is_pq_dist() || is_repart_exchange())) {
+      if (is_slave_mapping()) {
+        ret = BUF_PRINTF(" LOCAL)");
+      } else {
+        if (is_rollup_hybrid_ || is_wf_hybrid_) {
+          ret = BUF_PRINTF(" HYBRID");
+        }
+      }
+    }
+    END_BUF_PRINT(plan_item.distribution_, plan_item.distribution_len_);
   }
   return ret;
 }
 
-int ObLogExchange::print_my_plan_annotation(char *buf,
-                                            int64_t &buf_len,
-                                            int64_t &pos,
-                                            ExplainType type)
+int ObLogExchange::print_annotation_keys(char *buf,
+                                        int64_t &buf_len,
+                                        int64_t &pos,
+                                        ExplainType type,
+                                        const ObIArray<ObRawExpr *> &keys)
 {
   int ret = OB_SUCCESS;
-  int parallel = get_parallel();
-  if (OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (is_producer()) {
-    // some information is print by function print_plan_head_annotation
-    if (is_px_single() &&
-        OB_PHY_PLAN_REMOTE != get_plan()->get_optimizer_context().get_phy_plan_type()) {
-      ret = BUF_PRINTF(", is_single");
-    }
-    if (OB_SUCC(ret) && parallel > 0 &&
-        OB_PHY_PLAN_REMOTE != get_plan()->get_optimizer_context().get_phy_plan_type()) {
-      ret = BUF_PRINTF(", dop=%d", parallel);
+  if (OB_FAIL(BUF_PRINTF("(#keys=%ld", keys.count()))) {
+    LOG_WARN("buf print failed", K(ret));
+  } else if (keys.count() == 0) {
+    if (OB_FAIL(BUF_PRINTF("), "))) {
+      LOG_WARN("failed print ),", K(ret));
     }
   } else {
-    if (is_task_order_) {
-      ret = BUF_PRINTF(", task_order");
-    } else if (is_merge_sort_) {
-      ret = BUF_PRINTF(", ");
-      if (OB_SUCC(ret)) {
-        const ObIArray<OrderItem> &sort_keys = get_sort_keys();
-        EXPLAIN_PRINT_SORT_ITEMS(sort_keys, type);
+    if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("failed print , ", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < keys.count() && OB_SUCC(ret); i++) {
+    auto key = keys.at(i);
+    if (OB_FAIL(BUF_PRINTF("["))) {
+      LOG_WARN("failed print [", K(ret));
+    } else if (OB_ISNULL(key)) {
+      ret = BUF_PRINTF("nil");
+    } else if (OB_FAIL(key->get_name(buf, buf_len, pos, type))) {
+      LOG_WARN("print expr name failed", K(ret));
+    } else if (key->get_result_type().is_numeric_type()) {
+      //屏蔽numeric的打印
+    } else if (OB_FAIL(key->get_type_and_length(buf, buf_len, pos, type))) {
+      LOG_WARN("print expr type and length failed", K(ret));
+    } else { /*Do nothing*/ }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(BUF_PRINTF("]"))) {
+      LOG_WARN("failed print ]", K(ret));
+    } else if(i == keys.count() - 1) {
+      if (OB_FAIL(BUF_PRINTF("), "))) {
+        LOG_WARN("failed to BUF_PRINTF", K(ret));
       }
-      if (OB_SUCC(ret) && is_sort_local_order_) {
-        ret = BUF_PRINTF(", Local Order");
-      }
+    } else if (OB_FAIL(BUF_PRINTF(", "))) {
+      LOG_WARN("failed to BUF_PRINTF", K(ret));
     }
   }
   return ret;
@@ -358,14 +381,34 @@ int ObLogExchange::compute_op_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator* child = NULL;
-  if (OB_ISNULL(child = get_child(first_child))) {
+  if (OB_ISNULL(get_plan()) ||
+      OB_ISNULL(child = get_child(first_child))) {
     LOG_WARN("unexpect null child", K(ret));
   } else if (is_single()) {
     set_parallel(1);
     set_server_cnt(1);
+    if (is_local() || is_remote()) {
+      if (OB_FAIL(server_list_.assign(child->get_server_list()))) {
+        LOG_WARN("failed to assign server list", K(ret));
+      }
+    } else if (is_match_all()) {
+      if (OB_FAIL(server_list_.push_back(get_plan()->get_optimizer_context().get_local_server_addr()))) {
+        LOG_WARN("failed to assign das path server list", K(ret));
+      }
+    }
   } else {
     set_parallel(child->get_parallel());
     set_server_cnt(child->get_server_cnt());
+    if (dist_method_ == ObPQDistributeMethod::HASH) {
+      common::ObAddr all_server_list;
+      // a special ALL server list indicating hash data distribution
+      all_server_list.set_max();
+      if (OB_FAIL(server_list_.push_back(all_server_list))) {
+        LOG_WARN("failed to assign all server list", K(ret));
+      }
+    } else if (OB_FAIL(server_list_.assign(child->get_server_list()))) {
+      LOG_WARN("failed to assign server list", K(ret));
+    }
   }
   return ret;
 }
@@ -530,6 +573,8 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
       LOG_WARN("failed to assign part func exprs", K(ret));
     } else if (OB_FAIL(hash_dist_exprs_.assign(exch_info.hash_dist_exprs_))) {
       LOG_WARN("array assign failed", K(ret));
+    } else if (OB_FAIL(popular_values_.assign(exch_info.popular_values_))) {
+      LOG_WARN("array assign failed", K(ret));
     } else if ((dist_method_ == ObPQDistributeMethod::RANGE ||
                 dist_method_ == ObPQDistributeMethod::PARTITION_RANGE) &&
                 OB_FAIL(sort_keys_.assign(exch_info.sort_keys_))) {
@@ -538,8 +583,16 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
       is_rollup_hybrid_ = exch_info.is_rollup_hybrid_;
       need_null_aware_shuffle_ = exch_info.need_null_aware_shuffle_;
       calc_part_id_expr_ = exch_info.calc_part_id_expr_;
+      is_wf_hybrid_ = exch_info.is_wf_hybrid_;
+      if (is_wf_hybrid_) {
+        wf_hybrid_aggr_status_expr_ = exch_info.wf_hybrid_aggr_status_expr_;
+        if (OB_FAIL(wf_hybrid_pby_exprs_cnt_array_.assign(
+                    exch_info.wf_hybrid_pby_exprs_cnt_array_))) {
+          LOG_WARN("array assign failed", K(ret), K(exch_info.wf_hybrid_pby_exprs_cnt_array_));
+        }
+      }
     }
-  } else {
+  } else { // consumer
     if ((exch_info.is_merge_sort_
          || (dist_method_ != ObPQDistributeMethod::RANGE
              && dist_method_ != ObPQDistributeMethod::PARTITION_RANGE))
@@ -548,7 +601,11 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
     } else if (OB_FAIL(weak_sharding_.assign(exch_info.weak_sharding_))) {
       LOG_WARN("failed to assign weak sharding", K(ret));
     } else {
-      strong_sharding_ = exch_info.strong_sharding_;
+      if (exch_info.is_wf_hybrid_) {
+        strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+      } else {
+        strong_sharding_ = exch_info.strong_sharding_;
+      }
       is_task_order_ = exch_info.is_task_order_;
       is_merge_sort_ = exch_info.is_merge_sort_;
       is_sort_local_order_ = exch_info.is_sort_local_order_;
@@ -957,15 +1014,3 @@ int ObLogExchange::allocate_startup_expr_post()
   return ret;
 }
 
-int ObLogExchange::copy_part_expr_pre(CopyPartExprCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != calc_part_id_expr_) {
-    if(OB_FAIL(copy_part_expr(ctx, calc_part_id_expr_))) {
-      LOG_WARN("failed to copy part expr", K(ret));
-    }
-    LOG_TRACE("succeed to deep copy calc_part_id_expr_ in ObLogExchange",
-          K(ret), K(calc_part_id_expr_), K(*calc_part_id_expr_));
-  }
-  return ret;
-}

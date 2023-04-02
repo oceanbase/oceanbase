@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #ifndef OCEANBASE_STORAGE_OB_TABLE_STORE_UTIL_H_
 #define OCEANBASE_STORAGE_OB_TABLE_STORE_UTIL_H_
 
@@ -18,6 +17,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 
 namespace storage
 {
@@ -110,7 +113,7 @@ public:
   int rebuild(common::ObIArray<ObTableHandleV2> &handle_array);
   int prepare_allocate();
   int find(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
-  int find(const int64_t start_log_ts, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
+  int find(const share::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
   TO_STRING_KV(K_(is_inited), KPC_(array));
 private:
   int add_table(ObITable * const table);
@@ -143,6 +146,7 @@ public:
   int copy(const ObTableStoreIterator &other);
   int add_tables(ObMemtableArray &array, const int64_t start_pos = 0);
   int add_tables(ObITable **start, const int64_t count = 1);
+  int add_table(ObITable *input_table);
   int get_next(ObITable *&table);
 
   ObITable *get_boundary_table(const bool is_last);
@@ -215,14 +219,14 @@ struct ObTableStoreUtil
     int &result_code_;
   };
 
-  static int compare_table_by_log_ts_range(const ObITable *ltable, const ObITable *rtable, bool &bret);
+  static int compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, bool &bret);
   static int compare_table_by_snapshot_version(const ObITable *ltable, const ObITable *rtable, bool &bret);
 
   static int sort_minor_tables(ObArray<ObITable *> &tables);
-  static int sort_major_tables(ObArray<ObITable *> &tables);
+  static int sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables);
 
-  static bool check_include_by_log_ts_range(const ObITable &ltable, const ObITable &rtable);
-  static bool check_intersect_by_log_ts_range(const ObITable &ltable, const ObITable &rtable);
+  static bool check_include_by_scn_range(const ObITable &ltable, const ObITable &rtable);
+  static bool check_intersect_by_scn_range(const ObITable &ltable, const ObITable &rtable);
 };
 
 } // storage

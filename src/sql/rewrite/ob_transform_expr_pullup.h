@@ -61,21 +61,25 @@ public:
 protected:
 
 private:
-  int build_parent_reject_exprs_map(ObSelectStmt &parent, ObExprNodeMap &expr_map);
+  int build_parent_reject_exprs_map(ObSelectStmt &parent,
+                                    ObExprNodeMap &expr_reject_map,
+                                    ObExprNodeMap &subquery_reject_map);
   int check_stmt_validity(const ObDMLStmt *stmt, bool &is_valid);
   int rewrite_decision_by_hint(ObSelectStmt &parent, ObSelectStmt &ref_query,
                                bool stmt_may_reduce_row_count, bool &go_rewrite);
   int transform_view_recursively(TableItem *table_item, ObSelectStmt &stmt,
                                  ObExprNodeMap &parent_reject_expr_map,
+                                 ObExprNodeMap &parent_reject_subquery_map,
                                  common::ObIArray<ObSelectStmt *> &transformed_views,
                                  bool stmt_may_reduce_row_count, bool &trans_happened);
   int pullup_expr_from_view(TableItem *view, ObSelectStmt &select_stmt,
                             ObExprNodeMap &parent_reject_expr_map,
+                            ObExprNodeMap &parent_reject_subquery_map,
                             common::ObIArray<ObSelectStmt *> &transformed_stmts,
                             bool stmt_may_reduce_row_count, bool &trans_happened);
   int extract_params(ObRawExpr *expr, ObExprNodeMap &child_reject_map,
                      common::ObIArray<ObRawExpr*> &param_exprs);
-  int search_expr_cannot_pullup(ObRawExpr *expr, 
+  int search_expr_cannot_pullup(ObRawExpr *expr,
                                 ObExprNodeMap &expr_map,
                                 common::ObIArray<ObRawExpr *> &expr_cannot_pullup);
   int adjust_subquery(ObRawExpr *expr, ObSelectStmt &child, ObSelectStmt &parent);

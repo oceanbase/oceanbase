@@ -154,3 +154,27 @@ int ObLogDelete::generate_rowid_expr_for_trigger()
   }
   return ret;
 }
+
+int ObLogDelete::get_plan_item_info(PlanText &plan_text,
+                                    ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(print_table_infos(ObString::make_string("table_columns"),
+                                  buf,
+                                  buf_len,
+                                  pos,
+                                  type))) {
+      LOG_WARN("failed to print table infos", K(ret));
+    } else if (need_barrier()) {
+      ret = BUF_PRINTF(", ");
+      ret = BUF_PRINTF("with_barrier");
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item. special_predicates_len_);
+  }
+  return ret;
+}

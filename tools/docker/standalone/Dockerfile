@@ -12,8 +12,6 @@ RUN mkdir /root/pkg && \
     cd /root/pkg && \
     yum install --downloadonly --downloaddir=. oceanbase-ce-${VERSION}.el7 oceanbase-ce-libs-${VERSION}.el7 obagent && \
     rm -rf /usr/obd/mirror/remote/* && \
-    obd mirror clone /root/pkg/*.rpm && obd mirror list local && \
-    rm -rf /root/pkg/* && \
     yum clean all
 
 COPY boot /root/boot/

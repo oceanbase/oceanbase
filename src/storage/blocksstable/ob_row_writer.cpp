@@ -439,6 +439,8 @@ int ObRowWriter::write_col_in_cluster(
   if (OB_UNLIKELY(cluster_idx < 0 || start_col_idx < 0 || start_col_idx > end_col_idx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(cluster_idx), K(start_col_idx), K(end_col_idx));
+  } else if (pos_ + ObColClusterInfoMask::get_serialized_size() > buf_size_) {
+    ret = OB_BUF_NOT_ENOUGH;
   } else {
     // serialize info mask for current cluster
     const int64_t offset_start_pos = pos_;

@@ -22,6 +22,7 @@ namespace palf
 {
 LogLoopThread::LogLoopThread()
     : palf_env_impl_(NULL),
+      run_interval_(DEFAULT_PALF_LOG_LOOP_INTERVAL_US),
       is_inited_(false)
 {
 }
@@ -31,7 +32,7 @@ LogLoopThread::~LogLoopThread()
   destroy();
 }
 
-int LogLoopThread::init(PalfEnvImpl *palf_env_impl)
+int LogLoopThread::init(const bool is_normal_mode, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -43,6 +44,9 @@ int LogLoopThread::init(PalfEnvImpl *palf_env_impl)
   } else {
     palf_env_impl_ = palf_env_impl;
     share::ObThreadPool::set_run_wrapper(MTL_CTX());
+    if (false == is_normal_mode) {
+      run_interval_ = PALF_LOG_LOOP_INTERVAL_US_UPPER_BOUND;
+    }
     is_inited_ = true;
   }
 
@@ -56,7 +60,9 @@ int LogLoopThread::init(PalfEnvImpl *palf_env_impl)
 void LogLoopThread::destroy()
 {
   stop();
+  PALF_LOG(INFO, "runlin trace stop");
   wait();
+  PALF_LOG(INFO, "runlin trace wait");
   is_inited_ = false;
   palf_env_impl_ = NULL;
 }
@@ -73,40 +79,49 @@ void LogLoopThread::log_loop_()
   int64_t last_switch_state_time = OB_INVALID_TIMESTAMP;
   int64_t last_check_freeze_mode_time = OB_INVALID_TIMESTAMP;
   int64_t last_sw_freeze_time = OB_INVALID_TIMESTAMP;
+
   while (!has_set_stop()) {
     int tmp_ret = OB_SUCCESS;
     const int64_t start_ts = ObTimeUtility::current_time();
-    // try check and switch state for all replicas
+
+    auto switch_state_func = [](IPalfHandleImpl *ipalf_handle_impl) {
+      return ipalf_handle_impl->check_and_switch_state();
+    };
     if (start_ts - last_switch_state_time >= 10 * 1000) {
-      if (OB_SUCCESS != (tmp_ret = palf_env_impl_->try_switch_state_for_all())) {
-        PALF_LOG(WARN, "try_switch_state_for_all failed", K(tmp_ret));
+      if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(switch_state_func))) {
+        PALF_LOG_RET(WARN, tmp_ret, "for_each switch_state_func failed", K(tmp_ret));
       }
       last_switch_state_time = start_ts;
     }
-    // try switch freeze mode
-    const int64_t now = ObTimeUtility::current_time();
-    if (now - last_check_freeze_mode_time >= 1 * 1000 * 1000) {
-      if (OB_SUCCESS != (tmp_ret = palf_env_impl_->check_and_switch_freeze_mode())) {
-        PALF_LOG(WARN, "check_and_switch_freeze_mode failed", K(tmp_ret));
+
+    auto switch_freeze_mode_func  = [](IPalfHandleImpl *ipalf_handle_impl) {
+      return ipalf_handle_impl->check_and_switch_freeze_mode();
+    };
+    if (start_ts - last_check_freeze_mode_time >= 1 * 1000 * 1000) {
+      if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(switch_freeze_mode_func))) {
+        PALF_LOG_RET(WARN, tmp_ret, "for_each switch_freeze_mode_func failed", K(tmp_ret));
       }
-      last_check_freeze_mode_time = now;
+      last_check_freeze_mode_time = start_ts;
     }
-    // try freeze log
-    if (OB_SUCCESS != (tmp_ret = palf_env_impl_->try_freeze_log_for_all())) {
-      PALF_LOG(WARN, "try_freeze_log_for_all failed", K(tmp_ret));
+
+    auto try_freeze_log_func = [](IPalfHandleImpl *ipalf_handle_impl) {
+      return ipalf_handle_impl->period_freeze_last_log();
+    };
+    if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(try_freeze_log_func))) {
+      PALF_LOG_RET(WARN, tmp_ret, "for_each try_freeze_log_func failed", K(tmp_ret));
     }
+
     const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;
-    int32_t sleep_ts = PALF_LOG_LOOP_INTERVAL_US - static_cast<const int32_t>(round_cost_time);
+    int32_t sleep_ts = run_interval_ - static_cast<const int32_t>(round_cost_time);
     if (sleep_ts < 0) {
       sleep_ts = 0;
     }
     ob_usleep(sleep_ts);
 
-    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
       PALF_LOG(INFO, "LogLoopThread round_cost_time", K(round_cost_time));
     }
   }
 }
-
 } // namespace palf
 } // namespace oceanbase

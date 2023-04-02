@@ -164,7 +164,7 @@ bool LSInfoPrinter::operator()(
 {
   if (tls_id.get_tenant_id() == tenant_id_) {
     if (OB_ISNULL(ls_info)) {
-      LOG_ERROR("ls_info is invalid", K(tls_id), K(ls_info));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls_info is invalid", K(tls_id), K(ls_info));
     } else if (ls_info->is_offline()) {
       offline_ls_count_++;
     } else if (ls_info->is_not_serving()) {

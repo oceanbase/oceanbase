@@ -229,6 +229,7 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
                 GCONF.cluster_id,
                 ls_status_info.tenant_id_,
                 ls_status_info.ls_id_,
+                share::ObLSTable::COMPOSITE_MODE,
                 ls_info))) {
           LOG_WARN("fail to get log stream info", KR(ret));
         } else if (OB_FAIL(dr_ls_info.build_disaster_ls_info(

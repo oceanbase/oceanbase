@@ -136,6 +136,8 @@ int ObCreateIndexResolver::add_new_indexkey_for_oracle_temp_table()
 // child 2 of root node, resolve index column
 int ObCreateIndexResolver::resolve_index_column_node(
     ParseNode *index_column_node,
+    const int64_t index_keyname_value,
+    ParseNode *table_option_node,
     ObCreateIndexStmt *crt_idx_stmt,
     const ObTableSchema *tbl_schema)
 {
@@ -180,6 +182,19 @@ int ObCreateIndexResolver::resolve_index_column_node(
       } else {
         sort_item.prefix_len_ = 0;
       }
+
+      // spatial index constraint
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else {
+        bool is_explicit_order = (NULL != col_node->children_[2]
+            && 1 != col_node->children_[2]->is_empty_);
+        if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
+            index_column_node->num_child_, index_keyname_value, is_explicit_order))) {
+          LOG_WARN("fail to resolve spatial index constraint", K(ret), K(sort_item.column_name_));
+        }
+      }
+
       // 索引排序方式
       if (OB_FAIL(ret)) {
       } else if (col_node->children_[2]
@@ -352,6 +367,10 @@ int ObCreateIndexResolver::resolve_index_option_node(
     }
     if (OB_FAIL(set_table_option_to_stmt(is_partitioned))) {
       LOG_WARN("fail to set table option to stmt", K(ret));
+    } else if (tbl_schema->is_partitioned_table()
+        && INDEX_TYPE_SPATIAL_GLOBAL == crt_idx_stmt->get_create_index_arg().index_type_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "spatial global index");
     }
   }
   return ret;
@@ -469,7 +488,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret) && has_synonym) {
     ObString tmp_new_db_name;
     ObString tmp_new_tbl_name;
-    // related issue : https://work.aone.alibaba-inc.com/issue/41062639
+    // related issue :
     if (OB_FAIL(deep_copy_str(new_db_name, tmp_new_db_name))) {
       LOG_WARN("failed to deep copy new_db_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(new_tbl_name, tmp_new_tbl_name))) {
@@ -483,6 +502,8 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   if (FAILEDx(resolve_index_name_node(parse_node.children_[0], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index name node", K(ret));
   } else if (OB_FAIL(resolve_index_column_node(parse_node.children_[2],
+                                               parse_tree.children_[0]->value_,
+                                               parse_tree.children_[3],
                                                crt_idx_stmt,
                                                tbl_schema))) {
     LOG_WARN("fail to resolve index column node", K(ret));
@@ -620,6 +641,12 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
         index_arg.index_type_ = INDEX_TYPE_NORMAL_GLOBAL;
       } else {
         index_arg.index_type_ = INDEX_TYPE_NORMAL_LOCAL;
+      }
+    } else if (SPATIAL_KEY == index_keyname_) {
+      if (global_) {
+        index_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL;
+      } else {
+        index_arg.index_type_ = INDEX_TYPE_SPATIAL_LOCAL;
       }
     }
     index_arg.data_table_id_ = data_table_id_;

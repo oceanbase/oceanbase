@@ -81,9 +81,10 @@ int ObIndexBuilderUtil::add_column(
     // (generated column expression) is not needed, and it introduce failure on global index
     // partition location lookup (refer columns not exist in index table).
     // Fulltext column's default value is needed, because we need to set GENERATED_CTXCAT_CASCADE_FLAG
+    // spatial column's default value is needed, because we need to set SPATIAL_INDEX_GENERATED_COLUMN_FLAG
     // flag by parsing the default value.
-    if ((column.is_generated_column() && !column.is_fulltext_column()) ||
-         column.is_identity_column()) {
+    if ((column.is_generated_column() && !column.is_fulltext_column() &&
+        !column.is_spatial_generated_column()) || column.is_identity_column()) {
       if (column.is_virtual_generated_column()) {
         column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
       } else if (column.is_stored_generated_column()) {
@@ -120,7 +121,12 @@ int ObIndexBuilderUtil::add_column(
     //index column are not auto increment
     column.set_autoincrement(false);
 
-    if (OB_FAIL(table_schema.add_column(column))) {
+    if (column.is_spatial_generated_column()) {
+      column.set_geo_col_id(data_column->get_geo_col_id());
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(table_schema.add_column(column))) {
       LOG_WARN("add_column failed", K(column), K(ret));
     }
   }
@@ -494,7 +500,24 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
     ObIArray<ObColumnSchemaV2*> &gen_columns)
 {
   int ret = OB_SUCCESS;
-  if (arg.fulltext_columns_.count() > 0) {
+  if (ObSimpleTableSchemaV2::is_spatial_index(arg.index_type_)) {
+    ObSEArray<ObColumnSchemaV2*, 2>  spatial_cols;
+    uint64_t tenant_id = data_schema.get_tenant_id();
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("get tenant data version failed", K(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_1_0_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant version is less than 4.1, spatial index not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, spatial index");
+    } else if (OB_FAIL(adjust_spatial_args(arg, data_schema, allocator, spatial_cols))) {
+      LOG_WARN("adjust spatial args failed", K(ret));
+    } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(0)))) {
+      LOG_WARN("push back cellid column to gen columns failed", K(ret));
+    } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(1)))) {
+      LOG_WARN("push back mbr column to gen columns failed", K(ret));
+    }
+  } else if (arg.fulltext_columns_.count() > 0) {
     ObColumnSchemaV2 *ft_col = NULL;
     if (OB_FAIL(adjust_fulltext_args(arg, data_schema, allocator, ft_col))) {
       LOG_WARN("adjust fulltext args failed", K(ret));
@@ -649,14 +672,6 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
                        new_sort_item.column_name_.length(),
                        new_sort_item.column_name_.ptr());
       }
-    } else if (lib::is_mysql_mode()) {
-      const ObColumnSchemaV2 *col_schema = data_schema.get_column_schema(new_sort_item.column_name_);
-      if (OB_ISNULL(col_schema)) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS,
-                       new_sort_item.column_name_.length(),
-                       new_sort_item.column_name_.ptr());
-      }
     } else {
       //parse ordinary index expr as the real expr(maybe column expression)
       const ObString &index_expr_def = new_sort_item.column_name_;
@@ -706,7 +721,7 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
         } else if (!expr->is_column_ref_expr()) {
           //real index expr, so generate hidden generated column in data table schema
           if (OB_FAIL(generate_ordinary_generated_column(
-              *expr, arg.sql_mode_, data_schema, gen_col))) {
+              *expr, arg.sql_mode_, data_schema, gen_col, &guard))) {
             LOG_WARN("generate ordinary generated column failed", K(ret));
           } else if (OB_FAIL(ObRawExprUtils::check_generated_column_expr_str(
               gen_col->get_cur_default_value().get_string(), session, data_schema))) {
@@ -876,6 +891,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
     const ObSQLMode sql_mode,
     ObTableSchema &data_schema,
     ObColumnSchemaV2 *&gen_col,
+    ObSchemaGetterGuard *schema_guard,
     const uint64_t index_id)
 {
   int ret = OB_SUCCESS;
@@ -883,7 +899,7 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
   SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_def_buf) {
     MEMSET(expr_def_buf, 0, sizeof(expr_def_buf));
     int64_t pos = 0;
-    ObRawExprPrinter expr_printer(expr_def_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos);
+    ObRawExprPrinter expr_printer(expr_def_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos, schema_guard);
     const bool is_invalid = (index_id < OB_APP_MIN_COLUMN_ID || index_id > OB_MIN_SHADOW_COLUMN_ID);
     if (OB_FAIL(expr_printer.do_print(&expr, T_NONE_SCOPE, true))) {
       LOG_WARN("print expr definition failed", K(ret));
@@ -1092,5 +1108,193 @@ int ObIndexBuilderUtil::generate_prefix_column(
   }
   return ret;
 }
+
+int ObIndexBuilderUtil::adjust_spatial_args(
+    ObCreateIndexArg &arg,
+    ObTableSchema &data_schema,
+    ObIAllocator &allocator,
+    ObIArray<ObColumnSchemaV2*> &spatial_cols)
+{
+  int ret = OB_SUCCESS;
+  // spatial index needs to create two columns with type of uint64_t, varchar respectively
+  // and add index on them
+  ObIArray<ObColumnSortItem> &sort_items = arg.index_columns_;
+  ObArray<ObColumnSortItem> new_sort_items;
+  ObColumnSortItem cellid_sort_item;
+  ObColumnSortItem mbr_sort_item;
+  if (OB_UNLIKELY(sort_items.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid arguments", K(ret));
+  } else if (OB_FAIL(generate_spatial_columns(sort_items.at(0).column_name_, data_schema, spatial_cols))) {
+    LOG_WARN("generate spatial column failed", K(ret));
+  } else if (OB_UNLIKELY(spatial_cols.count() != 2) ||
+             OB_ISNULL(spatial_cols.at(0)) || OB_ISNULL(spatial_cols.at(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid spatial cols", K(ret), K(spatial_cols.count()));
+  } else if (OB_FAIL(ob_write_string(allocator, spatial_cols.at(0)->get_column_name_str(),
+                                     cellid_sort_item.column_name_))) {
+    LOG_WARN("failed to copy column name", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, spatial_cols.at(1)->get_column_name_str(),
+                                     mbr_sort_item.column_name_))) {
+    LOG_WARN("failed to copy column name", K(ret));
+  } else if (OB_FAIL(new_sort_items.push_back(cellid_sort_item))) {
+    LOG_WARN("push back cellid sort item to new sort items failed", K(ret));
+  } else if (OB_FAIL(new_sort_items.push_back(mbr_sort_item))) {
+    LOG_WARN("push back mbr sort item to new sort items failed", K(ret));
+  } else {
+    sort_items.reset();
+    if (OB_FAIL(sort_items.assign(new_sort_items))) {
+      LOG_WARN("assign sort items failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObIndexBuilderUtil::generate_spatial_columns(
+    const common::ObString &col_name,
+    ObTableSchema &data_schema,
+    ObIArray<ObColumnSchemaV2*> &spatial_cols)
+{
+  int ret = OB_SUCCESS;
+  ObColumnSchemaV2 *col_schema = NULL;
+  ObColumnSchemaV2 *cellid_col = NULL;
+  ObColumnSchemaV2 *mbr_col = NULL;
+  if (OB_ISNULL(col_schema = data_schema.get_column_schema(col_name))) {
+    ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+    LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, col_name.length(), col_name.ptr());
+  } else if (OB_FAIL(generate_spatial_cellid_column(*col_schema, data_schema, cellid_col))) {
+    LOG_WARN("generate spatial cellid column failed", K(ret), K(col_name), K(*col_schema));
+  } else if (OB_FAIL(generate_spatial_mbr_column(*col_schema, data_schema, mbr_col))) {
+    LOG_WARN("generate spatial mbr column failed", K(ret), K(col_name), K(*col_schema));
+  } else if (OB_FAIL(spatial_cols.push_back(cellid_col))) {
+    LOG_WARN("push back spatial cellid column failed", K(ret), K(col_name), K(*cellid_col));
+  } else if (OB_FAIL(spatial_cols.push_back(mbr_col))) {
+    LOG_WARN("push back spatial mbr column failed", K(ret), K(col_name), K(*mbr_col));
+  }
+  return ret;
+}
+
+int ObIndexBuilderUtil::generate_spatial_cellid_column(
+    ObColumnSchemaV2 &col_schema,
+    ObTableSchema &data_schema,
+    ObColumnSchemaV2 *&cellid_col)
+{
+  cellid_col = NULL;
+  int ret = OB_SUCCESS;
+  ObColumnSchemaV2 column_schema;
+  char col_name_buf[OB_MAX_COLUMN_NAMES_LENGTH] = {'\0'};
+  SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], cellid_expr_def) {
+    MEMSET(cellid_expr_def, 0, sizeof(cellid_expr_def));
+    int64_t name_pos = 0;
+    int64_t def_pos = 0;
+    uint64_t geo_col_id = col_schema.get_column_id();
+    if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH,
+        name_pos, "__cellid"))) {
+      LOG_WARN("print __cellid to col_name_buf failed", K(ret));
+    } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH,
+        name_pos, "_%ld", geo_col_id))) {
+      LOG_WARN("print column id to col_name_buf failed", K(ret), K(geo_col_id));
+    } else if (OB_FAIL(databuff_printf(cellid_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
+        def_pos, "SPATIAL_CELLID(`%s`)", col_schema.get_column_name()))) {
+      LOG_WARN("print cellid expr to cellid_expr_def failed", K(ret), K(col_schema.get_column_name()));
+    } else if (OB_FAIL(column_schema.add_cascaded_column_id(geo_col_id))) {
+      LOG_WARN("add cascaded column to generated column failed", K(ret));
+    } else {
+      col_schema.add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
+      ObObj default_value;
+      default_value.set_varchar(cellid_expr_def, static_cast<int32_t>(def_pos));
+      column_schema.set_rowkey_position(0); //非主键列
+      column_schema.set_index_position(0); //非索引列
+      column_schema.set_tbl_part_key_pos(0); //非partition key
+      column_schema.set_tenant_id(data_schema.get_tenant_id());
+      column_schema.set_table_id(data_schema.get_table_id());
+      column_schema.set_column_id(data_schema.get_max_used_column_id() + 1);
+      column_schema.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
+      column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+      column_schema.set_is_hidden(true);
+      column_schema.set_data_type(ObUInt64Type);
+      column_schema.set_collation_type(col_schema.get_collation_type());
+      column_schema.set_prev_column_id(UINT64_MAX);
+      column_schema.set_next_column_id(UINT64_MAX);
+      column_schema.set_geo_col_id(geo_col_id);
+      if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
+        LOG_WARN("set column name failed", K(ret));
+      } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
+        LOG_WARN("set orig default value failed", K(ret));
+      } else if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
+        LOG_WARN("set current default value failed", K(ret));
+      } else if (OB_FAIL(data_schema.add_column(column_schema))) {
+        LOG_WARN("add cellid column schema to data table failed", K(ret));
+      } else {
+        cellid_col = data_schema.get_column_schema(column_schema.get_column_id());
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObIndexBuilderUtil::generate_spatial_mbr_column(
+    ObColumnSchemaV2 &col_schema,
+    ObTableSchema &data_schema,
+    ObColumnSchemaV2 *&mbr_col)
+{
+  mbr_col = NULL;
+  int ret = OB_SUCCESS;
+  ObColumnSchemaV2 column_schema;
+  char col_name_buf[OB_MAX_COLUMN_NAMES_LENGTH] = {'\0'};
+  SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], mbr_expr_def) {
+    MEMSET(mbr_expr_def, 0, sizeof(mbr_expr_def));
+    int64_t name_pos = 0;
+    int64_t def_pos = 0;
+    uint64_t geo_col_id = col_schema.get_column_id();
+    if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH,
+        name_pos, "__mbr"))) {
+      LOG_WARN("print generate column mbr name failed", K(ret));
+    } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH,
+        name_pos, "_%ld", geo_col_id))) {
+      LOG_WARN("print column id to buffer failed", K(ret), K(geo_col_id));
+    } else if (OB_FAIL(databuff_printf(mbr_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH,
+        def_pos, "SPATIAL_MBR(`%s`)", col_schema.get_column_name()))) {
+      LOG_WARN("print mbr expr to mbr_expr_def failed", K(ret), K(col_schema.get_column_name()));
+    } else if (OB_FAIL(column_schema.add_cascaded_column_id(geo_col_id))) {
+      LOG_WARN("add cascaded column to generated column failed", K(ret));
+    } else {
+      col_schema.add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
+      ObObj default_value;
+      default_value.set_varchar(mbr_expr_def, static_cast<int32_t>(def_pos));
+      column_schema.set_rowkey_position(0); //非主键列
+      column_schema.set_index_position(0); //非索引列
+      column_schema.set_tbl_part_key_pos(0); //非partition key
+      column_schema.set_tenant_id(data_schema.get_tenant_id());
+      column_schema.set_table_id(data_schema.get_table_id());
+      column_schema.set_column_id(data_schema.get_max_used_column_id() + 1);
+      column_schema.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
+      column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+      column_schema.set_is_hidden(true);
+      column_schema.set_data_type(ObVarcharType);
+      column_schema.set_data_length(OB_DEFAULT_MBR_SIZE);
+      column_schema.set_collation_type(col_schema.get_collation_type());
+      column_schema.set_prev_column_id(UINT64_MAX);
+      column_schema.set_next_column_id(UINT64_MAX);
+      column_schema.set_geo_col_id(geo_col_id);
+      if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
+        LOG_WARN("set column name failed", K(ret));
+      } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
+        LOG_WARN("set orig default value failed", K(ret));
+      } else if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
+        LOG_WARN("set current default value failed", K(ret));
+      } else if (OB_FAIL(data_schema.add_column(column_schema))) {
+        LOG_WARN("add mbr column schema to data table failed", K(ret));
+      } else {
+        mbr_col = data_schema.get_column_schema(column_schema.get_column_id());
+      }
+    }
+  }
+
+  return ret;
+}
+
 }//end namespace rootserver
 }//end namespace oceanbase

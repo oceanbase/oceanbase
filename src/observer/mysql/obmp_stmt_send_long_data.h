@@ -77,6 +77,7 @@ private:
   int16_t param_id_;
   uint64_t buffer_len_;
   common::ObString buffer_;
+  bool need_disconnect_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtSendLongData);

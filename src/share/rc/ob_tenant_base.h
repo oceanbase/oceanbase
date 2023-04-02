@@ -22,18 +22,22 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_malloc.h"
 #include "share/ob_tenant_role.h"//ObTenantRole
-
+#include "lib/mysqlclient/ob_tenant_oci_envs.h"
 namespace oceanbase
 {
 namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
+  template<typename T> class ObServerObjectPool;
 }
 namespace omt {
  class ObPxPools;
  class ObTenant;
 }
-namespace obmysql { class ObMySQLRequestManager; }
+namespace obmysql {
+  class ObMySQLRequestManager;
+  class ObSqlNioServer;
+}
 namespace sql {
   namespace dtl { class ObTenantDfc; }
   class ObTenantSqlMemoryManager;
@@ -41,6 +45,14 @@ namespace sql {
   class ObPlanBaselineMgr;
   class ObDataAccessService;
   class ObDASIDService;
+  class ObFLTSpanMgr;
+  class ObSqlPlanMgr;
+  class ObUDRMgr;
+  class ObPlanCache;
+  class ObPsCache;
+}
+namespace blocksstable {
+  class ObSharedMacroBlockMgr;
 }
 namespace storage {
   struct ObTenantStorageInfo;
@@ -56,6 +68,7 @@ namespace storage {
   class ObStorageHAHandlerService;
   class ObLSRestoreService;
   class ObTenantSSTableMergeInfoMgr;
+  class ObTenantTabletStatMgr;
   namespace checkpoint {
     class ObCheckPointService;
     class ObTabletGCService;
@@ -71,9 +84,13 @@ namespace transaction {
   class ObTimestampAccess;
   class ObTransIDService;
   class ObTxLoopWorker;
+  class ObPartTransCtx;
   namespace tablelock {
     class ObTableLockService;
   }
+}
+namespace concurrency_control {
+  class ObMultiVersionGarbageCollector; // MVCC GC
 }
 
 namespace logservice
@@ -85,6 +102,10 @@ namespace coordinator
   class ObFailureDetector;
   class ObLeaderCoordinator;
 }
+}
+namespace datadict
+{
+  class ObDataDictService;
 }
 namespace archive
 {
@@ -101,18 +122,23 @@ namespace memtable
 }
 namespace rootserver
 {
-  class ObMajorFreezeService;
+  class ObPrimaryMajorFreezeService;
+  class ObRestoreMajorFreezeService;
   class ObTenantRecoveryReportor;
+  class ObTenantInfoLoader;
   class ObPrimaryLSService;
   class ObRestoreService;
   class ObRecoveryLSService;
+  class ObArbitrationService;
 }
 namespace observer
 {
   class ObTenantMetaChecker;
+  class QueueThread;
+  class ObTableLoadService;
 }
 
-// for ObTenamtSwitchGuard 临时使用>>>>>>>>
+// for ObTenantSwitchGuard 临时使用>>>>>>>>
 namespace observer
 {
   class ObAllVirtualTabletInfo;
@@ -125,8 +151,6 @@ namespace observer
 namespace storage {
   class MockTenantModuleEnv;
 }
-
-
 
 namespace share
 {
@@ -144,14 +168,18 @@ namespace detector
   class ObDeadLockDetectorMgr;
 }
 
+#define ArbMTLMember
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。
 // 使用MTL接口可以获取实例。
+using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTransCtx>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      ObPartTransCtxObjPool*,                        \
       common::ObTenantIOManager*,                    \
-      storage::ObStorageLogger*,                   \
+      storage::ObStorageLogger*,                     \
+      blocksstable::ObSharedMacroBlockMgr*,          \
       storage::ObTenantMetaMemMgr*,                  \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
@@ -161,13 +189,17 @@ namespace detector
       storage::ObTenantCheckpointSlogHandler*,       \
       compaction::ObTenantCompactionProgressMgr*,    \
       compaction::ObServerCompactionEventHistory*,   \
+      storage::ObTenantTabletStatMgr*,               \
       memtable::ObLockWaitMgr*,                      \
       logservice::ObGarbageCollector*,               \
       transaction::tablelock::ObTableLockService*,   \
-      rootserver::ObMajorFreezeService*,             \
+      rootserver::ObPrimaryMajorFreezeService*,      \
+      rootserver::ObRestoreMajorFreezeService*,      \
       observer::ObTenantMetaChecker*,                \
+      observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
+      rootserver::ObTenantInfoLoader*,         \
       rootserver::ObPrimaryLSService*,               \
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \
@@ -181,7 +213,9 @@ namespace detector
       transaction::ObStandbyTimestampService*,       \
       transaction::ObTimestampAccess*,               \
       transaction::ObTransIDService*,                \
-      sql::ObPlanBaselineMgr*,                  \
+      sql::ObPlanBaselineMgr*,                       \
+      sql::ObPsCache*,                               \
+      sql::ObPlanCache*,                             \
       sql::dtl::ObTenantDfc*,                        \
       omt::ObPxPools*,                               \
       lib::Worker::CompatMode,                       \
@@ -203,8 +237,17 @@ namespace detector
       storage::ObTenantFreezeInfoMgr*,               \
       transaction::ObTxLoopWorker *,                 \
       storage::ObAccessService*,                     \
-      ObTestModule*                                  \
+      datadict::ObDataDictService*,                  \
+      ArbMTLMember                                   \
+      observer::ObTableLoadService*,                 \
+      concurrency_control::ObMultiVersionGarbageCollector*, \
+      sql::ObUDRMgr*,                        \
+      sql::ObFLTSpanMgr*,                            \
+      sql::ObSqlPlanMgr*,                            \
+      ObTestModule*,                                 \
+      oceanbase::common::sqlclient::ObTenantOciEnvs* \
   )
+
 
 // 获取租户ID
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
@@ -226,6 +269,7 @@ namespace detector
 // 取消线程池动态变更
 #define MTL_UNREGISTER_THREAD_DYNAMIC(th) \
   share::ObTenantEnv::get_tenant() == nullptr ? OB_ERR_UNEXPECTED : share::ObTenantEnv::get_tenant()->unregister_module_thread_dynamic(th)
+#define MTL_IS_MINI_MODE() share::ObTenantEnv::get_tenant()->is_mini_mode()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
 #define MTL_BIND(INIT, DESTROY) \
@@ -237,7 +281,7 @@ namespace detector
 //
 // 需要和租户上下文配合使用，获取指定类型的租户局部实例。
 // 比如MTL(ObPxPools*)就可以获取当前租户的PX池子。
-#define MTL(TYPE) share::ObTenantEnv::mtl<TYPE>()
+#define MTL(TYPE) ::oceanbase::share::ObTenantEnv::mtl<TYPE>()
 
 // 辅助函数
 #define MTL_LIST(...) __VA_ARGS__
@@ -328,6 +372,21 @@ public:
   }
 
   int update_thread_cnt(double tenant_unit_cpu);
+  int64_t update_memory_size(int64_t memory_size)
+  {
+    int64_t orig_size = memory_size_;
+    memory_size_ = memory_size;
+    return orig_size;
+  }
+  int64_t get_memory_size() { return memory_size_; }
+  bool update_mini_mode(bool mini_mode)
+  {
+    bool orig_mode = mini_mode_;
+    mini_mode_ = mini_mode;
+    return orig_mode;
+  }
+  bool is_mini_mode() const { return mini_mode_; }
+  int64_t get_max_session_num(const int64_t rl_max_session_num);
   int register_module_thread_dynamic(double dynamic_factor, int tg_id);
   int unregister_module_thread_dynamic(int tg_id);
 
@@ -449,6 +508,8 @@ private:
   ObCgroupCtrl *cgroups_;
   bool enable_tenant_ctx_check_;
   int64_t thread_count_;
+  int64_t memory_size_;
+  bool mini_mode_;
 };
 
 using ReleaseCbFunc = std::function<int (common::ObLDHandle&)>;
@@ -528,6 +589,7 @@ private:
   ObTenantBase *stash_tenant_;
   common::ObLDHandle lock_handle_;
   ReleaseCbFunc release_cb_;
+  lib::ObTLTaGuard ta_guard_;
 };
 
 inline ObTenantSwitchGuard _make_tenant_switch_guard()
@@ -565,21 +627,21 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
     return ob_free(ptr);
   }
 
-  inline void *mtl_malloc_align(int64_t nbyte, int64_t alignment, const common::ObMemAttr & attr = default_memattr)
+  inline void *mtl_malloc_align(int64_t alignment, int64_t nbyte, const common::ObMemAttr & attr = default_memattr)
   {
     common::ObMemAttr inner_attr = attr;
     if (OB_SERVER_TENANT_ID == inner_attr.tenant_id_ &&
         nullptr != MTL_CTX()) {
       inner_attr.tenant_id_ = MTL_ID();
     }
-    return ob_malloc_align(nbyte, alignment, inner_attr);
+    return ob_malloc_align(alignment, nbyte, inner_attr);
   }
 
-  inline void *mtl_malloc_align(int64_t nbyte, int64_t alignment, const lib::ObLabel &label)
+  inline void *mtl_malloc_align(int64_t alignment , int64_t byte, const lib::ObLabel &label)
   {
     common::ObMemAttr attr;
     attr.label_ = label;
-    return mtl_malloc_align(nbyte, alignment, attr);
+    return mtl_malloc_align(alignment, byte, attr);
   }
 
   inline void mtl_free_align(void *ptr)
@@ -607,6 +669,10 @@ inline ObTenantSwitchGuard _make_tenant_switch_guard()
         ptr = NULL;                               \
       }                                           \
     } while(0)
+
+
+#define mtl_sop_borrow(type) MTL(common::ObServerObjectPool<type>*)->borrow_object()
+#define mtl_sop_return(type, ptr) MTL(common::ObServerObjectPool<type>*)->return_object(ptr)
 
 } // end of namespace share
 

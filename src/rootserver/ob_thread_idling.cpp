@@ -15,6 +15,8 @@
 #include "ob_thread_idling.h"
 #include "share/ob_define.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/thread/thread.h"
+
 namespace oceanbase
 {
 namespace rootserver
@@ -33,7 +35,7 @@ void ObThreadIdling::wakeup()
   wakeup_cnt_++;
   int tmp_ret = cond_.broadcast();
   if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("condition broadcast fail", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "condition broadcast fail", K(tmp_ret));
   }
 }
 
@@ -56,6 +58,7 @@ int ObThreadIdling::idle(const int64_t max_idle_time_us)
     const int64_t now_ms = ObTimeUtility::current_time() / 1000;
     const int64_t idle_time_ms = std::min(max_idle_time_us, get_idle_interval_us()) / 1000;
     int64_t wait_time_ms = begin_time_ms + idle_time_ms - now_ms;
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     if (wait_time_ms <= 0) {
       break;
     }

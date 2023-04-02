@@ -18,6 +18,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
 #include "lib/profile/ob_perf_event.h"
@@ -99,7 +100,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     sqc_handler_(nullptr),
     px_task_id_(-1),
     px_sqc_id_(-1),
-    bf_ctx_(),
+    bloom_filter_ctx_array_(),
     frames_(NULL),
     frame_cnt_(0),
     op_kit_store_(),
@@ -122,7 +123,9 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     nested_level_(0),
     is_ps_prepare_stage_(false),
     register_op_id_(OB_INVALID_ID),
-    tmp_alloc_used_(false)
+    tmp_alloc_used_(false),
+    table_direct_insert_ctx_(),
+    errcode_(OB_SUCCESS)
 {
 }
 
@@ -179,6 +182,7 @@ ObExecContext::~ObExecContext()
     temp_expr_ctx_map_.destroy();
   }
   update_columns_ = nullptr;
+  errcode_ = OB_SUCCESS;
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -197,7 +201,7 @@ void ObExecContext::clean_resolve_ctx()
 
 uint64_t ObExecContext::get_ser_version() const
 {
-  return GET_UNIS_CLUSTER_VERSION() < CLUSTER_VERSION_2250 ? SER_VERSION_0 : SER_VERSION_1;
+  return SER_VERSION_1;
 }
 
 void ObExecContext::reset_op_ctx()
@@ -224,25 +228,25 @@ void ObExecContext::reset_op_env()
   }
 }
 
-int ObExecContext::get_root_ctx(ObExecContext* &root_ctx)
+int ObExecContext::get_fk_root_ctx(ObExecContext* &fk_root_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(this->get_parent_ctx())) {
-    root_ctx = this;
-  } else if (get_parent_ctx()->get_pl_stack_ctx() != nullptr && get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
-    root_ctx = this;
-  } else if (OB_FAIL( SMART_CALL(get_parent_ctx()->get_root_ctx(root_ctx)))) {
-    LOG_WARN("failed to get root ctx", K(ret));
+    fk_root_ctx = this;
+  } else if (!this->get_my_session()->is_foreign_key_cascade()) {
+    fk_root_ctx = this;
+  } else if (OB_FAIL(SMART_CALL(get_parent_ctx()->get_fk_root_ctx(fk_root_ctx)))) {
+    LOG_WARN("failed to get fk root ctx", K(ret));
   }
   return ret;
 }
 
-bool ObExecContext::is_root_ctx()
+bool ObExecContext::is_fk_root_ctx()
 {
   bool ret = false;
   if (OB_ISNULL(this->get_parent_ctx())) {
     ret = true;
-  } else if (get_parent_ctx()->get_pl_stack_ctx() != nullptr && get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
+  } else if (!this->get_my_session()->is_foreign_key_cascade()) {
     ret = true;
   }
   return ret;
@@ -280,15 +284,16 @@ int ObExecContext::init_phy_op(const uint64_t phy_op_size)
   return ret;
 }
 
-int ObExecContext::init_expr_op(uint64_t expr_op_size)
+int ObExecContext::init_expr_op(uint64_t expr_op_size, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+  ObIAllocator &real_alloc = allocator != NULL ? *allocator : allocator_;
   if (OB_UNLIKELY(expr_op_size_ > 0)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init exec ctx twice", K(ret), K_(expr_op_size));
   } else if (expr_op_size > 0) {
     int64_t ctx_store_size = static_cast<int64_t>(expr_op_size * sizeof(ObExprOperatorCtx *));
-    if (OB_ISNULL(expr_op_ctx_store_ = static_cast<ObExprOperatorCtx **>(allocator_.alloc(ctx_store_size)))) {
+    if (OB_ISNULL(expr_op_ctx_store_ = static_cast<ObExprOperatorCtx **>(real_alloc.alloc(ctx_store_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc expr_op_ctx_store_ memory", K(ret), K(ctx_store_size));
     } else {
@@ -464,7 +469,7 @@ ObStmtFactory *ObExecContext::get_stmt_factory()
 {
   if (OB_ISNULL(stmt_factory_)) {
     if (OB_ISNULL(stmt_factory_ = OB_NEWx(ObStmtFactory, (&allocator_), allocator_))) {
-      LOG_WARN("fail to create log plan factory", K(stmt_factory_));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to create log plan factory", K(stmt_factory_));
     }
   } else {
     // do nothing
@@ -476,7 +481,7 @@ ObRawExprFactory *ObExecContext::get_expr_factory()
 {
   if (OB_ISNULL(expr_factory_)) {
     if (OB_ISNULL(expr_factory_ = OB_NEWx(ObRawExprFactory, (&allocator_), allocator_))) {
-      LOG_WARN("fail to create log plan factory", K(expr_factory_));
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to create log plan factory", K(expr_factory_));
     }
   } else {
     // do nothing
@@ -490,7 +495,7 @@ int ObExecContext::check_status()
   if (OB_ISNULL(phy_plan_ctx_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical plan ctx is null");
-  } else if (phy_plan_ctx_->is_timeout()) {
+  } else if (phy_plan_ctx_->is_exec_timeout()) {
     ret = OB_TIMEOUT;
     LOG_WARN("query is timeout", K(ret));
   } else if (OB_ISNULL(my_session_)) {
@@ -558,11 +563,6 @@ int ObExecContext::fast_check_status_ignore_interrupt(const int64_t n)
     ret = check_status_ignore_interrupt();
   }
   return ret;
-}
-
-ObPlanCacheManager* ObExecContext::get_plan_cache_manager()
-{
-  return GCTX.sql_engine_->get_plan_cache_manager();
 }
 
 int ObExecContext::init_pl_ctx()
@@ -719,10 +719,9 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
 {
   int ret = OB_SUCCESS;
   int64_t foreign_key_checks = 0;
-  if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("physical_plan or ctx is NULL", K_(phy_plan_ctx), K_(my_session), K(ret));
-    ret = OB_ERR_UNEXPECTED;
+  if (OB_ISNULL(phy_plan_ctx_) || OB_ISNULL(my_session_) || OB_ISNULL(sql_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K_(phy_plan_ctx), K_(my_session), K(ret));
   } else if (OB_FAIL(my_session_->get_foreign_key_checks(foreign_key_checks))) {
     LOG_WARN("failed to get foreign_key_checks", K(ret));
   } else {
@@ -747,7 +746,9 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
     }
     if (OB_SUCC(ret)) {
       if (stmt::T_SELECT == plan.get_stmt_type()) { // select才有weak
-        if (OB_UNLIKELY(phy_plan_hint.read_consistency_ != INVALID_CONSISTENCY)) {
+        if (sql_ctx_->is_protocol_weak_read_) {
+          consistency = WEAK;
+        } else if (OB_UNLIKELY(phy_plan_hint.read_consistency_ != INVALID_CONSISTENCY)) {
           consistency = phy_plan_hint.read_consistency_;
         } else {
           consistency = my_session_->get_consistency_level();
@@ -859,7 +860,8 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
   return ret;
 }
 
-int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch_id)
+int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params,
+    int64_t batch_id, sql::ObExpr::ObExprIArray &array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(phy_plan_ctx_)) {
@@ -871,7 +873,6 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
   } else {
     common::ObIArray<common::ObObjParam> &one_params =
         params.get_one_batch_params(batch_id);
-    sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
     ObEvalCtx eval_ctx(*this);
     for (int i = 0; OB_SUCC(ret) && i < one_params.count(); ++i) {
       if (i > params.param_idxs_.count()) {
@@ -883,16 +884,21 @@ int ObExecContext::fill_px_batch_info(ObBatchRescanParams &params, int64_t batch
           sql::ObExpr *expr = NULL;
           int64_t idx = params.param_expr_idxs_.at(i);
           if (OB_FAIL(ret)) {
-          } else if (OB_UNLIKELY(NULL == array) || OB_UNLIKELY(idx > array->count())) {
+          } else if (OB_UNLIKELY(idx > array.count())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr index out of expr array range", K(ret), KP(array), K(idx), K(array->count()));
+            LOG_WARN("expr index out of expr array range", K(ret), K(array), K(idx), K(array.count()));
           } else {
-            expr = &array->at(idx - 1);
+            expr = &array.at(idx - 1);
             expr->get_eval_info(eval_ctx).clear_evaluated_flag();
             ObDynamicParamSetter::clear_parent_evaluated_flag(eval_ctx, *expr);
             ObDatum &param_datum = expr->locate_datum_for_write(eval_ctx);
             if (OB_FAIL(param_datum.from_obj(one_params.at(i), expr->obj_datum_map_))) {
               LOG_WARN("fail to cast datum", K(ret));
+            } else if (is_lob_storage(one_params.at(i).get_type()) &&
+                       OB_FAIL(ob_adjust_lob_datum(one_params.at(i), expr->obj_meta_,
+                                                   expr->obj_datum_map_, get_allocator(), param_datum))) {
+              LOG_WARN("adjust lob datum failed", K(ret), K(i),
+                       K(one_params.at(i).get_meta()), K(expr->obj_meta_));
             } else {
               expr->get_eval_info(eval_ctx).evaluated_ = true;
             }

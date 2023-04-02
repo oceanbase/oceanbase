@@ -17,6 +17,7 @@
 #include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "ob_dtl_interm_result_manager.h"
+#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 
 using namespace oceanbase::common;
 
@@ -99,21 +100,26 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer *&buf)
         ret = OB_SUCCESS;
         tmp_ret = OB_SUCCESS;
       } else if (buf->is_data_msg() && 1 == buf->seq_no()) {
-        LOG_TRACE("first msg blocked", K(is_block), KP(peer_id_), K(ret),
-            K(buf->tenant_id()), K(buf->seq_no()), K(buf->is_data_msg()), KP(buf),
-            K(buf->is_eof()));
-        bool is_eof = buf->is_eof();
-        if (OB_FAIL(DTL.get_dfc_server().cache(/*buf->tenant_id(), */peer_id_, buf, true))) {
-          LOG_WARN("get DTL channel fail", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
-        } else {
-          // return block after cache first msg
-          is_block = !is_eof;
-          if (nullptr != buf) {
-            free_buf(buf);
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("expect buffer is null", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
+        if (!ObInitChannelPieceMsgCtx::enable_dh_channel_sync(buf->enable_channel_sync())) {
+          LOG_TRACE("first msg blocked", K(is_block), KP(peer_id_), K(ret),
+              K(buf->tenant_id()), K(buf->seq_no()), K(buf->is_data_msg()), KP(buf),
+              K(buf->is_eof()));
+          bool is_eof = buf->is_eof();
+          if (OB_FAIL(DTL.get_dfc_server().cache(/*buf->tenant_id(), */peer_id_, buf, true))) {
+            LOG_WARN("get DTL channel fail", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
+          } else {
+            // return block after cache first msg
+            is_block = !is_eof;
+            if (nullptr != buf) {
+              free_buf(buf);
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("expect buffer is null", KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret));
+            }
+            buf = nullptr;
           }
-          buf = nullptr;
+        } else {
+          ret = tmp_ret;
+          LOG_WARN("failed to get channel", K(ret));
         }
       } else {
         LOG_TRACE("get DTL channel fail", K(buf->seq_no()), KP(peer_id_), "peer", get_peer(), K(ret), K(tmp_ret), K(buf->is_data_msg()));
@@ -142,8 +148,9 @@ int ObDtlLocalChannel::send_shared_message(ObDtlLinkedBuffer *&buf)
       metric_.mark_first_out();
     }
     if (is_eof) {
-      metric_.mark_last_out();
+      metric_.mark_eof();
     }
+    metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
   }
   //统一返回消息
   msg_response_.on_finish(is_block, ret);

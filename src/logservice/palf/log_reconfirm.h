@@ -15,11 +15,11 @@
 
 #include "lib/lock/ob_spin_lock.h"
 #include "common/ob_member_list.h"
+#include "log_ack_info.h"
 #include "log_simple_member_list.h"
 #include "log_define.h"
 #include "log_task.h"
 #include "log_meta_info.h"
-#include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 
 namespace oceanbase
 {
@@ -52,15 +52,18 @@ public:
   virtual void destroy();
   virtual void reset_state();
   virtual bool need_start_up();
+  virtual bool can_receive_log() const;
+  virtual bool can_do_degrade() const;
   virtual int reconfirm();
   virtual int handle_prepare_response(const common::ObAddr &server,
-                              const int64_t &src_proposal_id,
-                              const int64_t &accept_proposal_id,
-                              const LSN &last_lsn);
+                                      const int64_t &src_proposal_id,
+                                      const int64_t &accept_proposal_id,
+                                      const LSN &last_lsn,
+                                      const LSN &committed_end_lsn);
   TO_STRING_KV(K_(palf_id), K_(self), "state", state_to_string(state_), K_(new_proposal_id), K_(prepare_log_ack_list), \
   K_(curr_paxos_follower_list), K_(majority_cnt), K_(majority_max_log_server),       \
-  K_(majority_max_accept_pid), K_(majority_max_lsn), K_(saved_end_lsn), K_(last_submit_prepare_req_ts_ns),         \
-  K_(last_fetch_log_ts_ns), K_(last_record_sw_start_id), KP(this));
+  K_(majority_max_accept_pid), K_(majority_max_lsn), K_(saved_end_lsn), K_(last_submit_prepare_req_time_us),         \
+  K_(last_fetch_log_time_us), K_(last_record_sw_start_id), K_(has_notify_fetch), KP(this));
 private:
   int init_reconfirm_();
   int submit_prepare_log_();
@@ -68,6 +71,9 @@ private:
   bool is_fetch_log_finished_() const;
   bool is_confirm_log_finished_() const;
   int try_fetch_log_();
+  int update_follower_end_lsn_(const common::ObAddr &server, const LSN &committed_end_lsn);
+  int ack_log_with_end_lsn_();
+  bool is_majority_catch_up_();
 private:
   enum State
   {
@@ -76,24 +82,24 @@ private:
 	// consensus protocol still works, because when START_WORKING has committed,
 	// all previous logs have been confirmed, the only effect is to avoid unnecessary
 	// pulling logs.
-    WAITING_LOG_FLUSHED,
+    WAITING_LOG_FLUSHED = 1,
 	// this state is not correctness guarantee, because we guarantee that: for each follower
 	// replica, it will not response any ack until flush log finished(redo log or meta log).
 	// NB: we should keep the prospoal_id comes from log_state_mgr is the maxest of redo log and
 	// meta log.
-    WRITING_PREAPRE_LOG,
+    WRITING_PREAPRE_LOG = 3,
 	// this state is used to query who is the newest server, records it as 'newest_server_',
 	// actually, FETCH_MAX_LOG_LSN and WRITING_PREAPRE_LOG is one phase.
-    FETCH_MAX_LOG_LSN,
+    FETCH_MAX_LOG_LSN = 4,
 	// this state is used to reconfirm mode_meta to majority.
-    RECONFIRM_MODE_META,
+    RECONFIRM_MODE_META = 5,
 	// this state is used to fetch all logs from the 'newest_server_'.
-    RECONFIRM_FETCH_LOG,
+    RECONFIRM_FETCH_LOG = 6,
 	// this state is used to wait fetch log finished, and then write START_WORKING log.
-    RECONFIRMING,
+    RECONFIRMING = 7,
 	// this state is used to wait write START_WORKING finished.
-    START_WORKING,
-    FINISHED,
+    START_WORKING = 8,
+    FINISHED = 9,
   };
 
   const char *state_to_string(const State &state) const
@@ -114,7 +120,7 @@ private:
     }
   }
 
-  static const int64_t RECONFIRM_PREPARE_RETRY_INTERVAL_NS = 2 * 1000 * 1000 * 1000; // 2s
+  static const int64_t RECONFIRM_PREPARE_RETRY_INTERVAL_US = 2 * 1000 * 1000; // 2s
 private:
   State state_;
   int64_t palf_id_;
@@ -162,6 +168,8 @@ private:
   LSN majority_max_lsn_;
   // the max lsn when generate start_working log
   LSN saved_end_lsn_;
+  LogMemberAckInfoList follower_end_lsn_list_;
+  LogConfigVersion sw_config_version_;
 
   LogSlidingWindow *sw_;
   LogStateMgr *state_mgr_;
@@ -169,13 +177,15 @@ private:
   LogModeMgr *mode_mgr_;
   LogEngine *log_engine_;
 
-  common::ObSpinLock lock_;
+  mutable common::ObSpinLock lock_;
   // last time of sending prepare log
-  int64_t last_submit_prepare_req_ts_ns_;
+  int64_t last_submit_prepare_req_time_us_;
   // last time of fetching log
-  int64_t last_fetch_log_ts_ns_;
+  int64_t last_fetch_log_time_us_;
   int64_t last_record_sw_start_id_;
   int64_t wait_slide_print_time_us_;
+  int64_t wait_majority_time_us_;
+  bool has_notify_fetch_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogReconfirm);

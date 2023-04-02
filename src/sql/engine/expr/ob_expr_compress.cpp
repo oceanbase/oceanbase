@@ -15,6 +15,7 @@
 
 #include "sql/engine/ob_exec_context.h"
 #include "lib/compress/zlib/zlib_src/zlib.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -124,28 +125,22 @@ int ObExprUncompress::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr)
   return ret;
 }
 
-int ObExprUncompress::eval_uncompress(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+static int eval_uncompress_length(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  ObDatum &expr_datum,
+                                  const ObString &str_val,
+                                  uint64_t &orig_len,
+                                  bool &not_final)
 {
   int ret = OB_SUCCESS;
-  ObDatum *arg = NULL;
-  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
-    LOG_WARN("evaluate parameter value failed", K(ret));
-  } else if (arg->is_null()) {
-    expr_datum.set_null();
-  } else if (arg->get_string().empty()) {
+  if (str_val.empty()) {
     expr_datum.set_string(ObString::make_empty_string());
-  } else if (OB_UNLIKELY((arg->len_ <= COMPRESS_HEADER_LEN))) {
+  } else if (OB_UNLIKELY((str_val.length() <= COMPRESS_HEADER_LEN))) {
     expr_datum.set_null();
     LOG_USER_WARN(OB_ERR_ZLIB_DATA);
   } else {
-    const ObString& str_val = arg->get_string();
     int32_t compress_header = 0;
-    uint64_t orig_len = 0;
     int64_t max_size = 0;
-    char *buf = NULL;
     MEMCPY(&compress_header, str_val.ptr(), sizeof(compress_header));
     orig_len = compress_header & COMPRESS_HEADER_MASK;
     if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
@@ -154,15 +149,49 @@ int ObExprUncompress::eval_uncompress(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
       expr_datum.set_null();
       LOG_WARN("orig_len is larger than max_allow_packet", K(orig_len), K(max_size), K(ret));
       LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "uncompress", static_cast<int>(max_size));
-    } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, orig_len))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else if (OB_UNLIKELY(Z_OK != uncompress(reinterpret_cast<unsigned char*>(buf), &orig_len,
-        reinterpret_cast<const unsigned char*>(str_val.ptr() + COMPRESS_HEADER_LEN), str_val.length()))) {
-      expr_datum.set_null();
-      LOG_USER_WARN(OB_ERR_ZLIB_DATA);
     } else {
-      expr_datum.set_string(buf, orig_len);
+      not_final = true;
+    }
+  }
+  return ret;
+}
+
+int ObExprUncompress::eval_uncompress(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *arg = NULL;
+  ObObjType type = expr.args_[0]->datum_meta_.type_;
+  uint64_t orig_len = 0;
+  bool not_final = false;
+  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
+    LOG_WARN("evaluate parameter value failed", K(ret));
+  } else if (arg->is_null()) {
+    expr_datum.set_null();
+  } else {
+    const ObString& str_val = arg->get_string();
+    // input always varchar,  result always blob
+    ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &expr_datum);
+    if (OB_FAIL(eval_uncompress_length(expr, ctx, expr_datum, str_val, orig_len, not_final))) {
+      LOG_WARN("eval uncompress length failed", K(ret));
+    } else if (not_final) {
+      char *buf = NULL;
+      int64_t buf_size = 0;
+      if (OB_FAIL(output_result.init(orig_len))) {
+        LOG_WARN("init stringtext result failed");
+      } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
+        LOG_WARN("stringtext result reserve buffer failed");
+      } else if (OB_UNLIKELY(Z_OK != uncompress(reinterpret_cast<unsigned char*>(buf), &orig_len,
+          reinterpret_cast<const unsigned char*>(str_val.ptr() + COMPRESS_HEADER_LEN), str_val.length()))) {
+        expr_datum.set_null();
+        LOG_USER_WARN(OB_ERR_ZLIB_DATA);
+      } else if (OB_FAIL(output_result.lseek(orig_len, 0))) {
+        LOG_WARN("result lseek failed", K(ret));
+      } else {
+        output_result.set_result();
+      }
     }
   }
   return ret;

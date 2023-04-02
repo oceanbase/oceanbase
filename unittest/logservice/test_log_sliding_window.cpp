@@ -87,16 +87,18 @@ public:
 TestLogSlidingWindow::TestLogSlidingWindow() {}
 TestLogSlidingWindow::~TestLogSlidingWindow() {}
 
+const static uint64_t tenant_id = 1001;
 void TestLogSlidingWindow::SetUp()
 {
   palf_id_ = 1001;
   self_.set_ip_addr("127.0.0.1", 12345);
 
-  const uint64_t tenant_id = 1001;
+  int ret = ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id);
+  OB_ASSERT(OB_SUCCESS == ret);
   ObMemAttr attr(tenant_id, ObModIds::OB_TENANT_MUTIL_ALLOCATOR);
   void *buf = ob_malloc(sizeof(common::ObTenantMutilAllocator), attr);
   if (NULL == buf) {
-    CLOG_LOG(WARN, "alloc memory failed");
+    CLOG_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
     OB_ASSERT(FALSE);
   }
   alloc_mgr_ = new (buf) common::ObTenantMutilAllocator(tenant_id);
@@ -110,6 +112,7 @@ void TestLogSlidingWindow::TearDown()
 {
   ob_free(alloc_mgr_);
   ob_free(data_buf_);
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
 }
 
 void gen_default_palf_base_info_(PalfBaseInfo &palf_base_info)
@@ -118,7 +121,7 @@ void gen_default_palf_base_info_(PalfBaseInfo &palf_base_info)
   LSN default_prev_lsn(PALF_INITIAL_LSN_VAL);
   LogInfo prev_log_info;
   prev_log_info.log_id_ = 0;
-  prev_log_info.log_ts_ = 0;
+  prev_log_info.scn_.set_min();
   prev_log_info.lsn_ = default_prev_lsn;
   prev_log_info.log_proposal_id_ = INVALID_PROPOSAL_ID;
   prev_log_info.accum_checksum_ = -1;
@@ -145,19 +148,19 @@ TEST_F(TestLogSlidingWindow, test_init)
   gen_default_palf_base_info_(base_info);
 
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.init(palf_id_, self_, NULL,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, NULL, &palf_fs_cb_, NULL, base_info));
+        &mock_mm_, &mock_mode_mgr_, NULL, &palf_fs_cb_, NULL, base_info, true));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        NULL, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        NULL, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, NULL, NULL, &palf_fs_cb_, NULL, base_info));
+        &mock_mm_, NULL, NULL, &palf_fs_cb_, NULL, base_info, true));
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   // init twice
   EXPECT_EQ(OB_INIT_TWICE, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
 }
 
 TEST_F(TestLogSlidingWindow, test_private_func_batch_01)
@@ -172,7 +175,7 @@ TEST_F(TestLogSlidingWindow, test_private_func_batch_01)
   gen_default_palf_base_info_(base_info);
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   log_id = 10 + PALF_SLIDING_WINDOW_SIZE;
   EXPECT_EQ(false, log_sw_.can_receive_larger_log_(log_id));
   EXPECT_EQ(false, log_sw_.leader_can_submit_larger_log_(log_id));
@@ -180,7 +183,7 @@ TEST_F(TestLogSlidingWindow, test_private_func_batch_01)
   EXPECT_EQ(OB_SUCCESS, log_sw_.get_last_submit_log_info(lsn, log_id, log_pid));
   EXPECT_EQ(OB_SUCCESS, log_sw_.get_max_flushed_log_info(lsn, end_lsn, log_pid));
   EXPECT_EQ(OB_SUCCESS, log_sw_.get_last_slide_end_lsn(end_lsn));
-  int64_t log_ts = log_sw_.get_last_slide_log_ts();
+  share::SCN scn = log_sw_.get_last_slide_scn();
 }
 
 TEST_F(TestLogSlidingWindow, test_to_follower_pending)
@@ -191,15 +194,15 @@ TEST_F(TestLogSlidingWindow, test_to_follower_pending)
   gen_default_palf_base_info_(base_info);
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   char *buf = data_buf_;
   int64_t buf_len = 1 * 1024 * 1024;
-  int64_t ref_ts = 99;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(99);
   LSN lsn;
-  int64_t log_ts = -1;
-  ref_ts = 99;
+  share::SCN scn;
   buf_len = 2 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.to_follower_pending(last_lsn));
 }
 
@@ -218,7 +221,7 @@ TEST_F(TestLogSlidingWindow, test_fetch_log)
   gen_default_palf_base_info_(base_info);
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   prev_lsn.val_ = 1;
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.try_fetch_log(fetch_log_type, prev_lsn, fetch_start_lsn, fetch_start_log_id));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.try_fetch_log_for_reconfirm(dest, fetch_end_lsn, is_fetched));
@@ -241,16 +244,16 @@ TEST_F(TestLogSlidingWindow, test_report_log_task_trace)
   gen_default_palf_base_info_(base_info);
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   EXPECT_EQ(OB_SUCCESS, log_sw_.report_log_task_trace(1));
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;
-  int64_t ref_ts = 99;
   LSN lsn;
-  int64_t log_ts = -1;
-  ref_ts = 99;
+  share::SCN scn;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(99);
   buf_len = 2 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.report_log_task_trace(1));
 }
 
@@ -262,7 +265,7 @@ TEST_F(TestLogSlidingWindow, test_set_location_cache_cb)
   gen_default_palf_base_info_(base_info);
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.set_location_cache_cb(NULL));
   EXPECT_EQ(OB_SUCCESS, log_sw_.set_location_cache_cb(&cb));
   EXPECT_EQ(OB_NOT_SUPPORTED, log_sw_.set_location_cache_cb(&cb));
@@ -275,7 +278,7 @@ TEST_F(TestLogSlidingWindow, test_reset_location_cache_cb)
   gen_default_palf_base_info_(base_info);
   // init succ
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   EXPECT_EQ(OB_SUCCESS, log_sw_.reset_location_cache_cb());
 }
 
@@ -286,35 +289,36 @@ TEST_F(TestLogSlidingWindow, test_submit_log)
   gen_default_palf_base_info_(base_info);
   char *buf = data_buf_;
   int64_t buf_len = 1000;
-  int64_t ref_ts = 99;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(99);
   LSN lsn;
-  int64_t log_ts = -1;
-  EXPECT_EQ(OB_NOT_INIT, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  share::SCN scn;
+  EXPECT_EQ(OB_NOT_INIT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(NULL, buf_len, ref_ts, lsn, log_ts));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(NULL, buf_len, ref_scn, lsn, scn));
   buf_len = 0;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   buf_len = 64 * 1024 * 1024;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   buf_len = 1000;
-  ref_ts = -1;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
-  ref_ts = 99;
+  ref_scn.reset();
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
+  ref_scn.convert_for_logservice(99);
   buf_len = 2 * 1024 * 1024;
   for (int i = 0; i < 8; ++i) {
-    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   }
   // append to last group log
   buf_len = 1 * 1024 * 1024;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   buf_len = 2 * 1024 * 1024;
   for (int i = 0; i < 11; ++i) {
-    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+    EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   }
   PALF_LOG(INFO, "current lsn", K(lsn), K(buf_len));
   // 40M已填充39M，无法继续submit 2M log
-  EXPECT_EQ(OB_EAGAIN, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_EAGAIN, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
 }
 
 TEST_F(TestLogSlidingWindow, test_submit_group_log)
@@ -323,7 +327,7 @@ TEST_F(TestLogSlidingWindow, test_submit_group_log)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   mock_state_mgr_.mock_proposal_id_ = 100;
   LSN lsn(10);
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.submit_group_log(lsn, NULL, 1024));
@@ -331,14 +335,15 @@ TEST_F(TestLogSlidingWindow, test_submit_group_log)
   // generate log entry and group entry
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;
-  int64_t max_log_ts = 111111;
+  share::SCN max_scn;
+  max_scn.convert_for_logservice(111111);
   int64_t log_id = 1;
   LSN committed_end_lsn(0);
   int64_t log_proposal_id = 10;
   char log_data[2048];
   int64_t log_data_len = 2048;
   int64_t group_data_checksum = -1;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   static const int64_t DATA_BUF_LEN = 64 * 1024 * 1024;
   int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
   int64_t pos = 0;
@@ -348,7 +353,7 @@ TEST_F(TestLogSlidingWindow, test_submit_group_log)
   LogWriteBuf write_buf;
   int64_t log_entry_size = pos + log_data_len;
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, log_entry_size+group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   int64_t accum_checksum = 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -381,26 +386,28 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
 
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;
-  int64_t ref_ts = 999;
-  int64_t log_ts = -1;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(999);
+  share::SCN scn;
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   // update lsn for next group entry
   lsn.val_ = lsn.val_ + LogEntryHeader::HEADER_SER_SIZE + buf_len;
   // generate new group entry
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;
-  int64_t max_log_ts = 111111;
+  share::SCN max_scn;
+  max_scn.convert_for_logservice(111111);
   int64_t log_id = 2;
   LSN committed_end_lsn(0);
   int64_t log_proposal_id = 20;
   char log_data[2048];
   log_data_len = 2048;
   int64_t group_data_checksum = -1;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   static const int64_t DATA_BUF_LEN = 64 * 1024 * 1024;
   int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
   int64_t pos = 0;
@@ -409,8 +416,8 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   memcpy(data_buf_ + group_header_size + pos, log_data, log_data_len);
   log_entry_size = pos + log_data_len;
   // gen 2nd log entry
-  max_log_ts = 222222;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  max_scn.convert_for_logservice(222222);
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   pos = 0;
   log_entry_header.serialize(data_buf_ + group_header_size + log_entry_size, DATA_BUF_LEN, pos);
   EXPECT_TRUE(pos > 0);
@@ -419,7 +426,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   // gen group log
   LogWriteBuf write_buf;
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, log_entry_size + group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   int64_t accum_checksum = 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -460,7 +467,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   lsn.val_ = lsn.val_ + group_entry_size;
   // test log_id exceeds range case
   log_id = 999999;
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   // calculate header parity flag
   (void) group_header.update_header_checksum();
@@ -473,7 +480,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   // test cache log case
   log_id = 102;
   lsn.val_ += 4096 * 1024;
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   // calculate header parity flag
   (void) group_header.update_header_checksum();
@@ -488,7 +495,7 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   lsn.val_ -= 4096 * 1024;
   prev_lsn = old_lsn;
   prev_log_proposal_id = log_proposal_id;
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   // inc log_proposal_id to trigger clean cached log_task
   log_proposal_id += 1;
@@ -516,10 +523,11 @@ TEST_F(TestLogSlidingWindow, test_receive_log)
   log_sw_.max_flushed_end_lsn_.val_ += 100;
   // 增大log_id，构造prev log空洞
   log_id += 100;
-  max_log_ts -= 10;
+  uint64_t new_val = max_scn.get_val_for_logservice() - 10;
+  max_scn.convert_for_logservice(new_val);
   LogWriteBuf write_buf1;
   EXPECT_EQ(OB_SUCCESS, write_buf1.push_back(data_buf_, log_entry_size+group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf1, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf1, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   // calculate header parity flag
   (void) group_header.update_header_checksum();
@@ -541,7 +549,7 @@ TEST_F(TestLogSlidingWindow, test_after_flush_log)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   int64_t curr_proposal_id = 10;
 
   // set default config meta
@@ -560,14 +568,15 @@ TEST_F(TestLogSlidingWindow, test_after_flush_log)
 
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;
-  int64_t ref_ts = 999;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(999);
   LSN lsn;
-  int64_t log_ts = -1;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  share::SCN scn;
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.after_flush_log(flush_log_ctx));
 
   flush_log_ctx.log_id_ = PALF_SLIDING_WINDOW_SIZE + 100;
-  flush_log_ctx.log_ts_ = log_ts;
+  flush_log_ctx.scn_ = scn;
   LSN group_log_lsn;
   group_log_lsn.val_ = lsn.val_ - LogGroupEntryHeader::HEADER_SER_SIZE;
   flush_log_ctx.lsn_ = group_log_lsn;
@@ -603,29 +612,31 @@ TEST_F(TestLogSlidingWindow, test_truncate_log)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   int64_t curr_proposal_id = 10;
   mock_state_mgr_.mock_proposal_id_ = curr_proposal_id;
 
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;
-  int64_t ref_ts = 999;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(999);
   LSN lsn;
-  int64_t log_ts = -1;
+  share::SCN scn;
   // submit first log
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
   // generate new group entry
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;
-  int64_t max_log_ts = 111111;
+  share::SCN max_scn;
+  max_scn.convert_for_logservice(111111);
   int64_t log_id = 2;
   LSN committed_end_lsn(0);
   int64_t log_proposal_id = 20;
   char log_data[2048];
   int64_t log_data_len = 2048;
   int64_t group_data_checksum = -1;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   static const int64_t DATA_BUF_LEN = 64 * 1024 * 1024;
   int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
   int64_t pos = 0;
@@ -634,8 +645,8 @@ TEST_F(TestLogSlidingWindow, test_truncate_log)
   memcpy(data_buf_ + group_header_size + pos, log_data, log_data_len);
   int64_t log_entry_size = pos + log_data_len;
   // gen 2nd log entry
-  max_log_ts = 222222;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  max_scn.convert_for_logservice(222222);
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   pos = 0;
   log_entry_header.serialize(data_buf_ + group_header_size + log_entry_size, DATA_BUF_LEN, pos);
   EXPECT_TRUE(pos > 0);
@@ -644,7 +655,7 @@ TEST_F(TestLogSlidingWindow, test_truncate_log)
   // gen group log
   LogWriteBuf write_buf;
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, log_entry_size+group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   int64_t accum_checksum = 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -709,7 +720,7 @@ TEST_F(TestLogSlidingWindow, test_ack_log)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   int64_t curr_proposal_id = 10;
   mock_state_mgr_.mock_proposal_id_ = curr_proposal_id;
   log_sw_.self_ = self_;
@@ -728,10 +739,11 @@ TEST_F(TestLogSlidingWindow, test_ack_log)
 
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;
-  int64_t ref_ts = 999;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(999);
   LSN lsn;
-  int64_t log_ts = -1;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  share::SCN scn;
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   LSN end_lsn = lsn + LogEntryHeader::HEADER_SER_SIZE + buf_len;
   ObAddr server;
   server.set_ip_addr("127.0.0.1", 12346);
@@ -747,7 +759,7 @@ TEST_F(TestLogSlidingWindow, test_ack_log)
 
   FlushLogCbCtx flush_log_ctx;
   flush_log_ctx.log_id_ = 1;
-  flush_log_ctx.log_ts_ = log_ts;
+  flush_log_ctx.scn_ = scn;
   LSN group_log_lsn;
   group_log_lsn.val_ = lsn.val_ - LogGroupEntryHeader::HEADER_SER_SIZE;
   flush_log_ctx.lsn_ = group_log_lsn;
@@ -766,27 +778,29 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   int64_t curr_proposal_id = 10;
   mock_state_mgr_.mock_proposal_id_ = curr_proposal_id;
 
   char *buf = data_buf_;
   int64_t buf_len = 2 * 1024 * 1024;
-  int64_t ref_ts = 999;
+  share::SCN ref_scn;
+  ref_scn.convert_for_logservice(999);
   LSN lsn;
-  int64_t log_ts = -1;
-  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_ts, lsn, log_ts));
+  share::SCN scn;
+  EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   // generate new group entry
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;
-  int64_t max_log_ts = 111111;
+  share::SCN max_scn;
+  max_scn.convert_for_logservice(111111);
   int64_t log_id = 2;
   LSN committed_end_lsn(0);
   int64_t log_proposal_id = 20;
   char log_data[2048];
   int64_t log_data_len = 2048;
   int64_t group_data_checksum = -1;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   static const int64_t DATA_BUF_LEN = 64 * 1024 * 1024;
   int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
   int64_t pos = 0;
@@ -795,8 +809,8 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
   memcpy(data_buf_ + group_header_size + pos, log_data, log_data_len);
   int64_t log_entry_size = pos + log_data_len;
   // gen 2nd log entry
-  max_log_ts = 222222;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  max_scn.convert_for_logservice(222222);
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   pos = 0;
   log_entry_header.serialize(data_buf_ + group_header_size + log_entry_size, DATA_BUF_LEN, pos);
   EXPECT_TRUE(pos > 0);
@@ -805,7 +819,7 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
   // gen group log
   LogWriteBuf write_buf;
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, log_entry_size+group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   int64_t accum_checksum = 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -831,10 +845,11 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
   EXPECT_EQ(OB_SUCCESS, log_sw_.receive_log(src_server, push_log_type, prev_lsn, prev_log_proposal_id, lsn, data_buf_, group_entry_size, false, truncate_log_info));
   // gen next group log
   log_id = 10;
-  max_log_ts += 100;
+  uint64_t new_val = max_scn.get_val_for_logservice() + 100;
+  max_scn.convert_for_logservice(new_val);
   LogWriteBuf write_buf1;
   EXPECT_EQ(OB_SUCCESS, write_buf1.push_back(data_buf_, log_entry_size+group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf1, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf1, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   accum_checksum += 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -856,7 +871,8 @@ TEST_F(TestLogSlidingWindow, test_truncate_for_rebuild)
 
   EXPECT_EQ(OB_SUCCESS, log_sw_.truncate_for_rebuild(new_base_info));
   new_base_info.prev_log_info_.log_id_ = 6;
-  new_base_info.prev_log_info_.log_ts_ = max_log_ts - 50;
+  new_val = max_scn.get_val_for_logservice() - 50;
+  new_base_info.prev_log_info_.scn_.convert_for_logservice(new_val);
   new_base_info.prev_log_info_.log_proposal_id_ = curr_proposal_id;
   new_base_info.prev_log_info_.lsn_ = lsn - 200;
   new_base_info.curr_lsn_ = lsn - 100;
@@ -873,21 +889,22 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   int64_t curr_proposal_id = 10;
   mock_state_mgr_.mock_proposal_id_ = curr_proposal_id;
   // generate new group entry
   LogEntry log_entry;
   LogEntryHeader log_entry_header;
   LogGroupEntryHeader group_header;
-  int64_t max_log_ts = 111111;
+  share::SCN max_scn;
+  max_scn.convert_for_logservice(111111);
   int64_t log_id = 1;
   LSN committed_end_lsn(0);
   int64_t log_proposal_id = 20;
   char log_data[2048];
   int64_t log_data_len = 2048;
   int64_t group_data_checksum = -1;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   static const int64_t DATA_BUF_LEN = 64 * 1024 * 1024;
   int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
   int64_t pos = 0;
@@ -909,8 +926,8 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
 
   int64_t log_entry_size = pos + log_data_len;
   // gen 2nd log entry
-  max_log_ts = 222222;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  max_scn.convert_for_logservice(222222);
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   pos = 0;
   log_entry_header.serialize(data_buf_ + group_header_size + log_entry_size, DATA_BUF_LEN, pos);
   EXPECT_TRUE(pos > 0);
@@ -918,7 +935,7 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   log_entry_size += (pos + log_data_len);
   // gen group log
   LogWriteBuf write_buf;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   const int64_t total_group_log_size = group_header_size + log_entry_size;
   const int64_t first_part_len = total_group_log_size / 2;
@@ -927,7 +944,7 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   // continous buf
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, first_part_len));
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_ + first_part_len, second_part_len));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   // non-continous buf
   group_header.reset();
@@ -937,7 +954,7 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   memcpy(second_buf, data_buf_ + first_part_len, second_part_len);
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, first_part_len));
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(second_buf, second_part_len));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   int64_t accum_checksum = 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -959,12 +976,13 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   EXPECT_EQ(OB_SUCCESS, log_sw_.append_disk_log(lsn, group_entry));
   // gen new group entry
   log_id++;
-  max_log_ts += 100;
+  uint64_t new_val = max_scn.get_val_for_logservice() + 100;
+  max_scn.convert_for_logservice(new_val);
   lsn.val_ += group_entry_size;
   // gen group log
   LogWriteBuf write_buf1;
   EXPECT_EQ(OB_SUCCESS, write_buf1.push_back(data_buf_, log_entry_size+group_header_size));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   accum_checksum += 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -985,27 +1003,29 @@ TEST_F(TestLogSlidingWindow, test_group_entry_truncate)
   LSN lsn(0);
   LogGroupEntry group_entry;
   LogGroupEntryHeader group_header;
-  int64_t truncate_log_ts = 111113;
+  share::SCN truncate_scn;
+  truncate_scn.convert_for_logservice(111113);
   int64_t pre_accum_checksum = 123456;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.truncate(NULL, 1024, truncate_log_ts, pre_accum_checksum));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.truncate(data_buf_, 0, truncate_log_ts, pre_accum_checksum));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.truncate(NULL, 1024, truncate_scn, pre_accum_checksum));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.truncate(data_buf_, 0, truncate_scn, pre_accum_checksum));
   PalfBaseInfo base_info;
   gen_default_palf_base_info_(base_info);
   EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
-        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info));
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, base_info, true));
   int64_t curr_proposal_id = 10;
   mock_state_mgr_.mock_proposal_id_ = curr_proposal_id;
   // generate new group entry
   LogEntry log_entry;
   LogEntryHeader log_entry_header;
-  int64_t max_log_ts = 111111;
+  share::SCN max_scn;
+  max_scn.convert_for_logservice(111111);
   int64_t log_id = 1;
   LSN committed_end_lsn(0);
   int64_t log_proposal_id = 20;
   char log_data[2048];
   int64_t log_data_len = 2048;
   int64_t group_data_checksum = -1;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   static const int64_t DATA_BUF_LEN = 64 * 1024 * 1024;
   int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
   int64_t pos = 0;
@@ -1015,8 +1035,8 @@ TEST_F(TestLogSlidingWindow, test_group_entry_truncate)
   int64_t dser_pos = 0;
   int64_t log_entry_size = pos + log_data_len;
   // gen 2nd log entry
-  max_log_ts = 222222;
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_log_ts));
+  max_scn.convert_for_logservice(222222);
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, log_data_len, max_scn));
   pos = 0;
   log_entry_header.serialize(data_buf_ + group_header_size + log_entry_size, DATA_BUF_LEN, pos);
   EXPECT_TRUE(pos > 0);
@@ -1024,7 +1044,7 @@ TEST_F(TestLogSlidingWindow, test_group_entry_truncate)
   log_entry_size += (pos + log_data_len);
   // gen group log
   LogWriteBuf write_buf;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_INVALID_ARGUMENT, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   const int64_t total_group_log_size = group_header_size + log_entry_size;
   const int64_t first_part_len = total_group_log_size / 2;
@@ -1033,7 +1053,7 @@ TEST_F(TestLogSlidingWindow, test_group_entry_truncate)
   // continous buf
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, first_part_len));
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_ + first_part_len, second_part_len));
-  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_log_ts, log_id,
+  EXPECT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, log_entry_size, max_scn, log_id,
       committed_end_lsn, log_proposal_id, group_data_checksum));
   int64_t accum_checksum = 100;
   (void) group_header.update_accumulated_checksum(accum_checksum);
@@ -1048,7 +1068,7 @@ TEST_F(TestLogSlidingWindow, test_group_entry_truncate)
   EXPECT_TRUE(group_header.check_integrity(data_buf_ + group_header_size, group_entry_size - group_header_size));
   EXPECT_EQ(OB_SUCCESS, group_entry.generate(group_header, data_buf_ + group_header_size));
   EXPECT_TRUE(group_entry.check_integrity());
-  EXPECT_EQ(OB_SUCCESS, group_header.truncate(data_buf_ + group_header_size, log_entry_size, truncate_log_ts, pre_accum_checksum));
+  EXPECT_EQ(OB_SUCCESS, group_header.truncate(data_buf_ + group_header_size, log_entry_size, truncate_scn, pre_accum_checksum));
 }
 
 } // END of unittest

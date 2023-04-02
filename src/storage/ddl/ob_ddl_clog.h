@@ -16,6 +16,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 #include "logservice/ob_append_callback.h"
 
 namespace oceanbase
@@ -27,10 +28,10 @@ enum class ObDDLClogType : int64_t
 {
   UNKNOWN = -1,
   DDL_REDO_LOG = 0x1,
-  DDL_COMMIT_LOG = 0x2,
+  OLD_DDL_COMMIT_LOG = 0x2, // deprecated, only compatable use
   DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG = 0x10,
   DDL_START_LOG = 0x20,
-  DDL_PREPARE_LOG = 0x40
+  DDL_COMMIT_LOG = 0x40,// rename from DDL_PREPARE_LOG
 };
 
 enum ObDDLClogState : uint8_t
@@ -52,6 +53,7 @@ public:
   bool try_set_release_flag();
   void set_ret_code(const int ret_code) { ret_code_ = ret_code; }
   int get_ret_code() const { return ret_code_; }
+  TO_STRING_KV(K(the_other_release_this_), K(state_), K(ret_code_));
 private:
   bool the_other_release_this_;
   ObDDLClogState state_;
@@ -73,6 +75,30 @@ private:
   ObDDLClogCbStatus status_;
 };
 
+class ObDDLStartClogCb : public logservice::AppendCb
+{
+public:
+  ObDDLStartClogCb();
+  virtual ~ObDDLStartClogCb() = default;
+  int init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id, const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  inline bool is_success() const { return status_.is_success(); }
+  inline bool is_failed() const { return status_.is_failed(); }
+  inline bool is_finished() const { return status_.is_finished(); }
+  int get_ret_code() const { return status_.get_ret_code(); }
+  void try_release();
+  TO_STRING_KV(K(is_inited_), K(status_), K_(table_key), K_(data_format_version), K_(execution_id), K_(lock_tid));
+private:
+  bool is_inited_;
+  ObDDLClogCbStatus status_;
+  ObITable::TableKey table_key_;
+  int64_t data_format_version_;
+  int64_t execution_id_;
+  uint32_t lock_tid_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+};
+
 class ObDDLMacroBlockClogCb : public logservice::AppendCb
 {
 public:
@@ -80,7 +106,8 @@ public:
   virtual ~ObDDLMacroBlockClogCb() = default;
   int init(const share::ObLSID &ls_id,
            const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
-           const blocksstable::MacroBlockId &macro_block_id);
+           const blocksstable::MacroBlockId &macro_block_id,
+           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -97,6 +124,35 @@ private:
   ObArenaAllocator arena_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+};
+
+class ObDDLCommitClogCb : public logservice::AppendCb
+{
+public:
+  ObDDLCommitClogCb();
+  virtual ~ObDDLCommitClogCb() = default;
+  int init(const share::ObLSID &ls_id,
+           const common::ObTabletID &tablet_id,
+           const share::SCN &start_scn,
+           const uint32_t lock_tid,
+           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  inline bool is_success() const { return status_.is_success(); }
+  inline bool is_failed() const { return status_.is_failed(); }
+  inline bool is_finished() const { return status_.is_finished(); }
+  int get_ret_code() const { return status_.get_ret_code(); }
+  void try_release();
+  TO_STRING_KV(K(is_inited_), K(status_), K(ls_id_), K(tablet_id_), K(start_scn_), K_(lock_tid));
+private:
+  bool is_inited_;
+  ObDDLClogCbStatus status_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  share::SCN start_scn_;
+  uint32_t lock_tid_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
 class ObDDLClogHeader final
@@ -120,15 +176,15 @@ class ObDDLStartLog final
 public:
   ObDDLStartLog();
   ~ObDDLStartLog() = default;
-  int init(const ObITable::TableKey &table_key, const int64_t cluster_version, const int64_t execution_id);
-  bool is_valid() const { return table_key_.is_valid() && cluster_version_ >= 0 && execution_id_ >= 0; }
+  int init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id);
+  bool is_valid() const { return table_key_.is_valid() && data_format_version_ >= 0 && execution_id_ >= 0; }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_cluster_version() const { return cluster_version_; }
+  int64_t get_data_format_version() const { return data_format_version_; }
   int64_t get_execution_id() const { return execution_id_; }
-  TO_STRING_KV(K_(table_key), K_(cluster_version), K_(execution_id));
+  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id));
 private:
   ObITable::TableKey table_key_;
-  int64_t cluster_version_; // used for compatibility
+  int64_t data_format_version_; // used for compatibility
   int64_t execution_id_;
 };
 
@@ -146,23 +202,6 @@ private:
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
 };
 
-class ObDDLPrepareLog final
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObDDLPrepareLog();
-  ~ObDDLPrepareLog() = default;
-  int init(const ObITable::TableKey &table_key,
-           const int64_t start_log_ts);
-  bool is_valid() const { return table_key_.is_valid() && start_log_ts_ >= 0; }
-  ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_start_log_ts() const { return start_log_ts_; }
-  TO_STRING_KV(K_(table_key), K_(start_log_ts));
-private:
-  ObITable::TableKey table_key_;
-  int64_t start_log_ts_;
-};
-
 class ObDDLCommitLog final
 {
   OB_UNIS_VERSION_V(1);
@@ -170,17 +209,14 @@ public:
   ObDDLCommitLog();
   ~ObDDLCommitLog() = default;
   int init(const ObITable::TableKey &table_key,
-           const int64_t start_log_ts,
-           const int64_t prepare_log_ts);
-  bool is_valid() const { return table_key_.is_valid() && start_log_ts_ >= 0 && prepare_log_ts_ >= 0; }
+           const share::SCN &start_scn);
+  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid(); }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_start_log_ts() const { return start_log_ts_; }
-  int64_t get_prepare_log_ts() const { return prepare_log_ts_; }
-  TO_STRING_KV(K_(table_key), K_(start_log_ts), K_(prepare_log_ts));
+  share::SCN get_start_scn() const { return start_scn_; }
+  TO_STRING_KV(K_(table_key), K_(start_scn));
 private:
   ObITable::TableKey table_key_;
-  int64_t start_log_ts_;
-  int64_t prepare_log_ts_;
+  share::SCN start_scn_;
 };
 
 class ObTabletSchemaVersionChangeLog final

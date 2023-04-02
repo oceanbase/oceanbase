@@ -18,6 +18,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_package_manager.h"
@@ -109,6 +110,8 @@ int ObExprGetPackageVar::calc_result_typeN(ObExprResType &type,
     type.set_collation_type(result_type->get_collation_type());
     type.set_collation_level(result_type->get_collation_level());
     type.set_scale(result_type->get_scale());
+  } else if (ob_is_extend(result_type->get_type())) {
+    type.set_extend_type(result_type->get_extend_type());
   }
   return ret;
 }
@@ -129,27 +132,43 @@ int ObExprGetPackageVar::eval_get_package_var(const ObExpr &expr,
   } else if (package_id->is_null()
              || var_idx->is_null()
              || result_type->is_null()
-             || spec_version->is_null()
-             || body_version->is_null()) {
+             || spec_version->is_null()) {
     res.set_null();
   } else {
     ObObj res_obj;
     OZ(calc(res_obj,
             package_id->get_uint(),
             spec_version->get_int(),
-            body_version->get_int(),
+            body_version->is_null() ? OB_INVALID_VERSION : body_version->get_int(),
             var_idx->get_int(),
             &ctx.exec_ctx_,
-            ctx.exec_ctx_.get_my_session()));
+            ctx.exec_ctx_.get_my_session()),
+            KPC(package_id), KPC(spec_version), KPC(body_version), KPC(var_idx));
     if (OB_SUCC(ret)) {
-      if (res_obj.is_string_type()) {
+      if (ob_is_string_tc(res_obj.get_type())) {
         ObString res_str;
         ObExprStrResAlloc res_alloc(expr, ctx);
         OZ(res_obj.get_string(res_str));
         OZ(ObExprUtil::deep_copy_str(res_str, res_str, res_alloc));
         OX(res.set_string(res_str));
+      } else if (ob_is_text_tc(res_obj.get_type())) {
+        if (res_obj.has_lob_header() != expr.obj_meta_.has_lob_header()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid lob header", K(ret), K(res_obj.has_lob_header()), K(expr.obj_meta_.has_lob_header()));
+        } else {
+          ObString res_str;
+          ObExprStrResAlloc res_alloc(expr, ctx);
+          res_str = res_obj.get_string();
+          OZ(ObExprUtil::deep_copy_str(res_str, res_str, res_alloc));
+          if (OB_SUCC(ret)) {
+            res.set_string(res_str);
+          }
+        }
       } else {
         OZ(res.from_obj(res_obj));
+        if (is_lob_storage(res_obj.get_type())) {
+          OZ(ob_adjust_lob_datum(res_obj, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));
+        }
       }
     }
   }

@@ -25,6 +25,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "lib/function/ob_function.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -219,7 +220,7 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
       if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size, true /*ignore shared block*/))) {
         STORAGE_LOG(WARN, "failed to get new tablet's disk usage", K(ret), K(sstable_size));
       } else {
         data_size += sstable_size;
@@ -228,6 +229,7 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     }
     if (OB_ITER_END == ret || OB_SUCCESS == ret) {
       ret = OB_SUCCESS;
+      data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
       report_key.tenant_id_ = tenant_id;
       report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA;
       if (OB_FAIL(result_map_.set_refactored(report_key, data_size, 1))) {

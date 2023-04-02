@@ -61,8 +61,7 @@ static void easy_session_on_write_success(easy_session_t *s);
 static int easy_connection_send_rlmtr(easy_io_thread_t *ioth);
 
 #define CONN_DESTROY_LOG(msg) easy_error_log("easy_destroy_conn: %s %s", msg, easy_connection_str(c))
-#define EASY_CONNECTION_TIME_GUARD(name, c) EASY_TIME_GUARD("%s: %p", name, c)
-#define SERVER_PROCESS(c, r) ({ EASY_STAT_TIME_GUARD((ev_server_process_count++, ev_server_process_time += cost), "server_process"); (c->handler->process(r)); })
+#define SERVER_PROCESS(c, r) ({ EASY_STAT_TIME_GUARD(ev_server_process_count, ev_server_process_time); (c->handler->process(r)); })
 inline int64_t current_time()
 {
     struct timeval t;
@@ -403,7 +402,7 @@ void easy_connection_wakeup_session(easy_connection_t *c, int err)
         easy_list_del(&r->request_list_node);
         // SERVER_PROCESS(c, r);
         {
-            EASY_STAT_TIME_GUARD((ev_server_process_count++, ev_server_process_time += cost), "server_process");
+            EASY_STAT_TIME_GUARD(ev_server_process_count, ev_server_process_time);
             c->handler->process(r);
         }
     }
@@ -1228,7 +1227,7 @@ void easy_connection_on_listen(struct ev_loop *loop, ev_timer *w, int revents)
  */
 void easy_connection_on_wakeup(struct ev_loop *loop, ev_async *w, int revents)
 {
-    EASY_CONNECTION_TIME_GUARD("on_thread_wakeup", NULL);
+    EASY_TIME_GUARD();
     easy_connection_t       *c, *c2;
     easy_io_thread_t        *ioth;
     easy_list_t             conn_list;
@@ -1550,7 +1549,7 @@ void easy_connection_on_readable(struct ev_loop *loop, ev_io *w, int revents)
     mod_stat_t **mod_stat __attribute__((cleanup(__mod_stat_cleanup))) = &easy_cur_mod_stat;
     *mod_stat = c->pool->mod_stat;
 
-    EASY_CONNECTION_TIME_GUARD("on_readable", c);
+    EASY_TIME_GUARD();
     assert(c->fd == w->fd);
 
     // 防止请求过多
@@ -1611,6 +1610,7 @@ void easy_connection_on_readable(struct ev_loop *loop, ev_io *w, int revents)
                         easy_error_log("Failed to do response on client, conn(%p).", c);
                     }
                 }
+                c->status = EASY_CONN_CLOSE_BY_PEER;
             } else {
                 c->conn_has_error = 1;
                 easy_info_log("Failed to read from connection(%p), n(%d).", c, n);
@@ -2008,7 +2008,7 @@ void easy_connection_on_writable(struct ev_loop *loop, ev_io *w, int revents)
     int                     ret;
 
     c = (easy_connection_t *)w->data;
-    EASY_CONNECTION_TIME_GUARD("on_writable", c);
+    EASY_TIME_GUARD();
     assert(c->fd == w->fd);
 
     /* if not openssl, start negotiation here, or do negotiation in easy_ssl_client_handshake */
@@ -2048,7 +2048,7 @@ void easy_connection_on_writable(struct ev_loop *loop, ev_io *w, int revents)
     if (c->type == EASY_TYPE_CLIENT) {
         // connected.
         if (c->status == EASY_CONN_CONNECTING) {
-            EASY_CONNECTION_TIME_GUARD("on_connect", c);
+            EASY_TIME_GUARD();
             c->status = EASY_CONN_OK;
             ev_io_start(c->loop, &c->read_watcher);
             ev_timer_set(&c->timeout_watcher, 0.0, 0.5);
@@ -2120,7 +2120,7 @@ static void easy_connection_on_timeout_session(struct ev_loop *loop, ev_timer *w
     s = (easy_session_t *)w->data;
     c = s->c;
 
-    EASY_CONNECTION_TIME_GUARD("on_timeout_session", c);
+    EASY_TIME_GUARD();
     if ((now != (int)ev_now(loop)) && (s->error == 0)) {
         easy_info_log("Session has timed out, session(%p), time(%fs), packet_id(%" PRIu64 "),"
                 " pcode(%d), trace_id(" OB_TRACE_ID_FORMAT "), conn(%s).",
@@ -2146,7 +2146,7 @@ static int easy_connection_update_ack_bytes_and_time(easy_connection_t* c, ev_ts
     int ret;
     int64_t qlen = 0;
 
-    EASY_CONNECTION_TIME_GUARD("check_send_queue", c);
+    EASY_TIME_GUARD();
 
     ret = ioctl(c->fd, TIOCOUTQ, &qlen);
     if (0 != ret) {
@@ -2257,7 +2257,7 @@ static void easy_connection_on_timeout_conn(struct ev_loop *loop, ev_timer *w, i
     int ev_timer_pending = ev_watch_pending;
 
     conn = (easy_connection_t *)w->data;
-    EASY_CONNECTION_TIME_GUARD("on_timeout_conn", conn);
+    EASY_TIME_GUARD();
 
     if (conn->status == EASY_CONN_AUTO_CONN) {
         easy_connection_autoconn(conn);
@@ -2574,7 +2574,7 @@ static int easy_connection_send_response(easy_list_t *request_list)
     easy_io_thread_t            *ioth = EASY_IOTH_SELF, *dst_ioth;
     char                        dest_addr[32];
 
-    EASY_TIME_GUARD("send_response: count=%ld", send_count);
+    EASY_TIME_GUARD();
 
     // encode
     easy_list_for_each_entry_safe(r, rn, request_list, request_list_node) {
@@ -2696,7 +2696,7 @@ int easy_connection_send_session_list(easy_list_t *list)
     easy_io_thread_t        *ioth = EASY_IOTH_SELF;
     char                    dest_addr[32];
 
-    EASY_TIME_GUARD("send_session_list: count=%ld", send_count);
+    EASY_TIME_GUARD();
 
     // foreach encode
     easy_list_for_each_entry_safe(s, s1, list, session_list_node) {
@@ -3263,7 +3263,7 @@ static int easy_connection_process_request(easy_connection_t *c, easy_list_t *li
         EASY_IOTH_SELF->rx_done_request_count++;
 
         {
-            EASY_STAT_TIME_GUARD((ev_server_process_count++, ev_server_process_time += cost), "server_process");
+            EASY_STAT_TIME_GUARD(ev_server_process_count, ev_server_process_time);
             ret = (c->handler->process(r));
         }
         if (ret == EASY_ABORT || ret == EASY_ASYNC || ret == EASY_ERROR) {

@@ -44,11 +44,12 @@ public:
 
 public:
   // This function will be invoked when init sys/meta tenant's schema.
-  // For meta tenant, it needs to insert both user and its data. 
+  // For meta tenant, it needs to insert both user and its data.
   // For sys tenant, just insert itself data.
   static int init_service_epoch(common::ObISQLClient &sql_proxy,
                                 const int64_t tenant_id,
-                                const int64_t freeze_service_epoch);
+                                const int64_t freeze_service_epoch,
+                                const int64_t arbitration_service_epoch);
 
   static int insert_service_epoch(common::ObISQLClient &sql_proxy,
                                   const int64_t tenant_id,
@@ -67,9 +68,20 @@ public:
                                              const int64_t tenant_id,
                                              const char *name,
                                              int64_t &epoch_value);
+  static int check_service_epoch_with_trans(ObMySQLTransaction &trans,
+                                            const int64_t tenant_id,
+                                            const char *name,
+                                            const int64_t expected_epoch,
+                                            bool &is_match);
+  static int check_service_epoch(common::ObISQLClient &sql_proxy,
+                                 const int64_t tenant_id,
+                                 const char *name,
+                                 const int64_t expected_epoch,
+                                 bool &is_match);
 
 public:
   constexpr static const char * const FREEZE_SERVICE_EPOCH = "freeze_service_epoch";
+  constexpr static const char * const ARBITRATION_SERVICE_EPOCH = "arbitration_service_epoch";
 
 private:
   static int inner_get_service_epoch_(common::ObISQLClient &sql_proxy,

@@ -1655,6 +1655,7 @@ static int easy_ssl_certificate_for_mysql_memory(easy_ssl_ctx_t *ssl, const char
     easy_error_log("PEM_read_bio_RSAPrivateKey(\"%s\") failed", key);
     return EASY_ERROR;
   } else if (SSL_CTX_use_RSAPrivateKey(ssl->ctx, rsa) <= 0) {
+    RSA_free(rsa);
     easy_error_log("SSL_CTX_use_RSAPrivateKey(\"%s\") failed", key);
     return EASY_ERROR;
   }

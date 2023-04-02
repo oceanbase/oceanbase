@@ -62,19 +62,19 @@ int ObMemLeakCheckerInfo::inner_get_next_row(common::ObNewRow *&row)
   if (OB_FAIL(sanity_check())) {
     // error
   } else if (!opened_) {
-    int ret = info_map_.create(10000, ObModIds::TEST);
+    int ret = info_map_.create(10000);
     if (OB_FAIL(ret)) {
       SERVER_LOG(WARN, "failed to create hashmap", K(ret));
     } else if (OB_FAIL(leak_checker_->load_leak_info_map(info_map_))) {
       SERVER_LOG(WARN, "failed to collection leak info", K(ret));
     } else {
       opened_ = true;
-      it_ = info_map_.begin();
+      it_ = info_map_->begin();
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (it_ != info_map_.end()) {
+    if (it_ != info_map_->end()) {
       if (OB_FAIL(fill_row(row))) {
         SERVER_LOG(WARN, "failed to fill row", K(ret));
       }

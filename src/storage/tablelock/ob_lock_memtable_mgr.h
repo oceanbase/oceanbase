@@ -61,9 +61,9 @@ public:
                    storage::ObTenantMetaMemMgr *t3m) override;
   virtual void destroy() override;
 
-  virtual int create_memtable(const int64_t last_replay_log_ts,
+  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
-                              const bool for_replay=false) override;
+                              const bool for_replay = false) override;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -75,6 +75,7 @@ private:
 
 private:
   share::ObLSID ls_id_;
+  common::ObQSyncLock lock_def_;
 };
 
 } // namespace tablelock

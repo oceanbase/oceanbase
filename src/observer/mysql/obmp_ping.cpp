@@ -13,7 +13,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/mysql/obmp_ping.h"
+#include "observer/mysql/obmp_utils.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
+
 
 namespace oceanbase
 {
@@ -40,13 +42,22 @@ int ObMPPing::process()
 {
   int ret = OB_SUCCESS;
   sql::ObSQLSessionInfo *session = NULL;
+  const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   if (OB_FAIL(get_session(session))) {
     LOG_WARN("get session fail", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session info is null", K(ret));
+  } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+  } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+    LOG_WARN("fail to update sess info", K(ret));
+  } else if (FALSE_IT(session->post_sync_session_info())) {
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
+  } else if (FALSE_IT(session->update_last_active_time())) {
+    // COM_PING used for keepping connection alive
   } else {
     ObOKPParam ok_param; // use default values
     if (OB_FAIL(send_ok_packet(*session, ok_param))) {

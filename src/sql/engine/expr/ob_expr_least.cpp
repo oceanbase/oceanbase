@@ -312,11 +312,20 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
           info->cmp_meta_.scale_ = cmp_meta.get_scale();
           info->cm_ = cm;
           rt_expr.extra_info_ = info;
+
+          bool has_lob_header = false;
+          if (is_lob_storage(info->cmp_meta_.type_)) {
+            if (op_cg_ctx.session_->get_exec_min_cluster_version() >= CLUSTER_VERSION_4_1_0_0) {
+              has_lob_header = true;
+            }
+          }
           ObDatumCmpFuncType cmp_func = ObDatumFuncs::get_nullsafe_cmp_func(cmp_meta.get_type(),
                                                                             cmp_meta.get_type(),
                                                                             NULL_LAST,
                                                                             cmp_meta.get_collation_type(),
-                                                                            lib::is_oracle_mode());
+                                                                            info->cmp_meta_.scale_,
+                                                                            lib::is_oracle_mode(),
+                                                                            has_lob_header);
           if (OB_ISNULL(cmp_func)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid cmp type of params", K(ret), K(cmp_meta));

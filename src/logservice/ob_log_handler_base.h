@@ -47,6 +47,18 @@ public:
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) = 0;
   int revoke_leader();
   int change_leader_to(const common::ObAddr &dst_addr);
+
+protected:
+  // @brief query role and proposal_id from ObLogHandler or ObLogRestoreHandler
+  // @param[out], role:
+  //    LEADER, if 'role_' of ObLogHandler or ObLogRestoreHandler is LEADER and 'proposal_id' is same with PalfHandle.
+  //    FOLLOWER, otherwise.
+  // @param[out], proposal_id, global monotonically increasing.
+  // @retval
+  //   OB_SUCCESS
+  // NB: for standby, ObLogHandler is always FOLLOWER and for primary, ObLogRestoreHandler is always FOLLOWER
+  int get_role(common::ObRole &role, int64_t &proposal_id) const;
+
 public:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -57,6 +69,8 @@ public:
   int64_t id_;
   palf::PalfHandle palf_handle_;
   palf::PalfEnv *palf_env_;
+  bool is_in_stop_state_;
+  bool is_inited_;
 };
 } // end namespace logservice
 } // end namespace oceanbase

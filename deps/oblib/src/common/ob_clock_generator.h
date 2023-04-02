@@ -63,7 +63,7 @@ inline int64_t ObClockGenerator::getClock()
   int64_t ts = 0;
 
   if (OB_UNLIKELY(!clock_generator_.inited_)) {
-    TRANS_LOG(WARN, "clock generator not inited");
+    TRANS_LOG_RET(WARN, common::OB_NOT_INIT, "clock generator not inited");
     ts = clock_generator_.get_us();
   } else {
     ts = ATOMIC_LOAD(&clock_generator_.cur_ts_);
@@ -120,7 +120,7 @@ inline void ObClockGenerator::try_advance_cur_ts(const int64_t cur_ts)
     if (origin_cur_ts < cur_ts) {
       break;
     } else {
-      TRANS_LOG(WARN, "timestamp rollback, need advance cur ts", K(origin_cur_ts), K(cur_ts));
+      TRANS_LOG_RET(WARN, common::OB_ERR_SYS, "timestamp rollback, need advance cur ts", K(origin_cur_ts), K(cur_ts));
     }
   } while (false == ATOMIC_BCAS(&clock_generator_.cur_ts_, origin_cur_ts, cur_ts));
 }

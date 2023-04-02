@@ -63,7 +63,7 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
     ObRawExpr *value_expr = NULL;
     void *tmp_ptr = NULL;
     if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(my_session) || OB_ISNULL(plan_ctx)) {
+    } else if (OB_ISNULL(my_session) || OB_ISNULL(plan_ctx) || OB_ISNULL(ctx.get_sql_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data member from ObExecContext is Null", K(ret), K(my_session), K(plan_ctx));
     } else {
@@ -90,7 +90,8 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get value expr", K(ret), K(value_expr));
         } else if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(value_expr,
-             row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr))) {
+             row_desc, ctx.get_allocator(), ctx.get_my_session(),
+             ctx.get_sql_ctx()->schema_guard_, temp_expr))) {
           LOG_WARN("fail to fill sql expression", K(ret));
         } else if (OB_ISNULL(temp_expr)) {
           ret = OB_INVALID_ARGUMENT;

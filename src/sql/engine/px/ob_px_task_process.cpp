@@ -30,8 +30,9 @@
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/join/ob_hash_join_op.h"
+#include "sql/engine/window_function/ob_window_function_op.h"
 #include "sql/engine/px/ob_px_basic_info.h"
-#include "sql/engine/pdml/static/ob_px_multi_part_modify_op.h"
+#include "sql/engine/pdml/static/ob_px_multi_part_insert_op.h"
 #include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "observer/mysql/obmp_base.h"
@@ -191,6 +192,7 @@ int ObPxTaskProcess::process()
             ? obmysql::REQUEST_SUCC : ret;
         session->get_cur_sql_id(audit_record.sql_id_, OB_MAX_SQL_ID_LENGTH + 1);
         audit_record.db_id_ = session->get_database_id();
+        audit_record.user_group_ = THIS_WORKER.get_group_id();
         audit_record.execution_id_ = GCTX.sql_engine_->get_execution_id();
         audit_record.client_addr_ = session->get_client_addr();
         audit_record.user_client_addr_ = session->get_user_client_addr();
@@ -223,6 +225,7 @@ int ObPxTaskProcess::process()
       }
     }
   }
+  release();
   ObActiveSessionGuard::get_stat().in_px_execution_ = false;
   return ret;
 }
@@ -267,10 +270,11 @@ int ObPxTaskProcess::execute(ObOpSpec &root_spec)
     for (int i = 0; i < batch_count && OB_SUCC(ret); ++i) {
       if (need_fill_batch_info) {
         if (OB_FAIL(ctx.fill_px_batch_info(arg_.get_sqc_handler()->
-          get_sqc_init_arg().sqc_.get_rescan_batch_params(), i))) {
+          get_sqc_init_arg().sqc_.get_rescan_batch_params(), i,
+          arg_.des_phy_plan_->get_expr_frame_info().rt_exprs_))) {
           LOG_WARN("fail to fill batch info", K(ret));
         } else if (OB_FAIL(arg_.get_sqc_handler()->get_sub_coord().
-          get_sqc_ctx().gi_pump_.regenerate_gi_task(true))) {
+          get_sqc_ctx().gi_pump_.regenerate_gi_task())) {
           LOG_WARN("fail to generate gi task array", K(ret));
         }
       }
@@ -461,7 +465,8 @@ int ObPxTaskProcess::do_process()
       // nop
     } else if (IS_INTERRUPTED()) {
       //当前是被QC中断的，不再向QC发送中断，退出即可。
-    } else if (arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()) {
+    } else if (arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()
+               && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
       (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret);
@@ -498,7 +503,7 @@ void ObPxTaskProcess::release() {
   if (NULL != arg_.sqc_task_ptr_) {
     arg_.sqc_task_ptr_->set_task_state(SQC_TASK_EXIT);
   } else {
-    LOG_ERROR("Unexpected px task process", K(arg_.sqc_task_ptr_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Unexpected px task process", K(arg_.sqc_task_ptr_));
   }
 }
 
@@ -542,12 +547,13 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       if (OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
-      } else if (gi->pwj_gi() && on_set_tscs_) {
+      } else if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_) && on_set_tscs_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the partition-wise join's subplan contain a gi operator", K(*gi), K(ret));
       } else {
         input->set_worker_id(task_id_);
-        if (gi->pwj_gi()) {
+        input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
+        if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_)) {
           pw_gi_spec_ = gi;
           on_set_tscs_ = true;
         }
@@ -582,14 +588,15 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
     }
   } else if (IS_PX_BLOOM_FILTER(op.get_type())) {
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&op);
-    if (filter_spec->is_shared_join_filter()) {
-      /*do nothing*/
-    } else if (OB_ISNULL(kit->input_)) {
+    if (OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), K(op.id_), KP(kit));
     } else {
       ObJoinFilterOpInput *input = static_cast<ObJoinFilterOpInput *>(kit->input_);
-      input->set_task_id(task_id_);
+      input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
+      if (!filter_spec->is_shared_join_filter()) {
+        input->set_task_id(task_id_);
+      }
     }
   } else if (PHY_TEMP_TABLE_INSERT == op.type_) {
     ObOperatorKit *kit = ctx.get_operator_kit(op.id_);
@@ -632,7 +639,7 @@ int ObPxTaskProcess::OpPreparation::reset(ObOpSpec &op)
   int ret = OB_SUCCESS;
   if (PHY_GRANULE_ITERATOR == op.type_) {
     ObGranuleIteratorSpec *gi = static_cast<ObGranuleIteratorSpec *>(&op);
-    if (gi->pwj_gi()) {
+    if ((ObGranuleUtil::pwj_gi(gi->gi_attri_flag_))) {
       if (pw_gi_spec_ == nullptr || !on_set_tscs_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid state", K(pw_gi_spec_), K(on_set_tscs_));
@@ -686,6 +693,39 @@ int ObPxTaskProcess::OpPostparation::apply(ObExecContext &ctx, ObOpSpec &op)
         LOG_TRACE("debug post apply info", K(ret_));
       }
     }
+  } else if (PHY_WINDOW_FUNCTION == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObWindowFunctionSpec &wf_spec = static_cast<ObWindowFunctionSpec&>(op);
+      ObWindowFunctionOpInput *input = static_cast<ObWindowFunctionOpInput*>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (wf_spec.is_participator() && OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
+  } else if (PHY_PX_MULTI_PART_INSERT == op.get_type()) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObPxMultiPartInsertOpInput *input = static_cast<ObPxMultiPartInsertOpInput *>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else if (OB_SUCCESS != ret_) {
+        input->set_error_code(ret_);
+        LOG_TRACE("debug post apply info", K(ret_));
+      } else {
+        LOG_TRACE("debug post apply info", K(ret_));
+      }
+    }
   }
   return ret;
 }
@@ -703,9 +743,9 @@ uint64_t ObPxTaskProcess::get_session_id() const
   ObExecContext *exec_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(exec_ctx = arg_.exec_ctx_)) {
-    LOG_WARN("exec ctx is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "exec ctx is NULL", K(exec_ctx));
   } else if (OB_ISNULL(session = exec_ctx->get_my_session())) {
-    LOG_WARN("session is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is NULL", K(exec_ctx));
   } else {
     session_id = session->get_sessid();
   }
@@ -718,9 +758,9 @@ uint64_t ObPxTaskProcess::get_tenant_id() const
   ObExecContext *exec_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(exec_ctx = arg_.exec_ctx_)) {
-    LOG_WARN("exec ctx is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "exec ctx is NULL", K(exec_ctx));
   } else if (OB_ISNULL(session = exec_ctx->get_my_session())) {
-    LOG_WARN("session is NULL", K(exec_ctx));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "session is NULL", K(exec_ctx));
   } else {
     tenant_id = session->get_effective_tenant_id();
   }

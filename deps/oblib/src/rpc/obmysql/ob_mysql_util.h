@@ -430,6 +430,8 @@ public:
   static int lob_locator_cell_str(char *buf, const int64_t len,
                                   const common::ObLobLocator &lob_locator, int64_t &pos);
   static int json_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
+  static int geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
+  static inline int16_t float_length(const int16_t scale);
 public:
   static const uint64_t NULL_;
 
@@ -564,7 +566,7 @@ int ObMySQLUtil::store_int8(char *buf, int64_t len, int64_t v, int64_t &pos)
 void ObMySQLUtil::get_int1(const char *&pos, int8_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = sint1korr(pos);
     pos++;
@@ -573,7 +575,7 @@ void ObMySQLUtil::get_int1(const char *&pos, int8_t &v)
 void ObMySQLUtil::get_int2(const char *&pos, int16_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = sint2korr(pos);
     pos += 2;
@@ -582,7 +584,7 @@ void ObMySQLUtil::get_int2(const char *&pos, int16_t &v)
 void ObMySQLUtil::get_int3(const char *&pos, int32_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = sint3korr(pos);
     pos += 3;
@@ -591,7 +593,7 @@ void ObMySQLUtil::get_int3(const char *&pos, int32_t &v)
 void ObMySQLUtil::get_int4(const char *&pos, int32_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = sint4korr(pos);
     pos += 4;
@@ -600,7 +602,7 @@ void ObMySQLUtil::get_int4(const char *&pos, int32_t &v)
 void ObMySQLUtil::get_int8(const char *&pos, int64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = sint8korr(pos);
     pos += 8;
@@ -611,7 +613,7 @@ void ObMySQLUtil::get_int8(const char *&pos, int64_t &v)
 void ObMySQLUtil::get_uint1(const char *&pos, uint8_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint1korr(pos);
     pos ++;
@@ -620,7 +622,7 @@ void ObMySQLUtil::get_uint1(const char *&pos, uint8_t &v)
 void ObMySQLUtil::get_uint2(const char *&pos, uint16_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint2korr(pos);
     pos += 2;
@@ -629,7 +631,7 @@ void ObMySQLUtil::get_uint2(const char *&pos, uint16_t &v)
 void ObMySQLUtil::get_uint3(const char *&pos, uint32_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint3korr(pos);
     pos += 3;
@@ -638,7 +640,7 @@ void ObMySQLUtil::get_uint3(const char *&pos, uint32_t &v)
 void ObMySQLUtil::get_uint4(const char *&pos, uint32_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint4korr(pos);
     pos += 4;
@@ -647,7 +649,7 @@ void ObMySQLUtil::get_uint4(const char *&pos, uint32_t &v)
 void ObMySQLUtil::get_uint5(const char *&pos, uint64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint5korr(pos);
     pos += 5;
@@ -656,7 +658,7 @@ void ObMySQLUtil::get_uint5(const char *&pos, uint64_t &v)
 void ObMySQLUtil::get_uint6(const char *&pos, uint64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint6korr(pos);
     pos += 6;
@@ -665,7 +667,7 @@ void ObMySQLUtil::get_uint6(const char *&pos, uint64_t &v)
 void ObMySQLUtil::get_uint8(const char *&pos, uint64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint8korr(pos);
     pos += 8;
@@ -675,7 +677,7 @@ void ObMySQLUtil::get_uint8(const char *&pos, uint64_t &v)
 void ObMySQLUtil::get_uint1(char *&pos, uint8_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint1korr(pos);
     pos ++;
@@ -684,7 +686,7 @@ void ObMySQLUtil::get_uint1(char *&pos, uint8_t &v)
 void ObMySQLUtil::get_uint2(char *&pos, uint16_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint2korr(pos);
     pos += 2;
@@ -693,7 +695,7 @@ void ObMySQLUtil::get_uint2(char *&pos, uint16_t &v)
 void ObMySQLUtil::get_uint3(char *&pos, uint32_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint3korr(pos);
     pos += 3;
@@ -702,7 +704,7 @@ void ObMySQLUtil::get_uint3(char *&pos, uint32_t &v)
 void ObMySQLUtil::get_uint4(char *&pos, uint32_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint4korr(pos);
     pos += 4;
@@ -711,7 +713,7 @@ void ObMySQLUtil::get_uint4(char *&pos, uint32_t &v)
 void ObMySQLUtil::get_uint5(char *&pos, uint64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint5korr(pos);
     pos += 5;
@@ -720,7 +722,7 @@ void ObMySQLUtil::get_uint5(char *&pos, uint64_t &v)
 void ObMySQLUtil::get_uint6(char *&pos, uint64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint6korr(pos);
     pos += 6;
@@ -729,11 +731,19 @@ void ObMySQLUtil::get_uint6(char *&pos, uint64_t &v)
 void ObMySQLUtil::get_uint8(char *&pos, uint64_t &v)
 {
   if (OB_ISNULL(pos)) {
-    OB_LOG(WARN, "invalid argument", KP(pos));
+    OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", KP(pos));
   } else {
     v = uint8korr(pos);
     pos += 8;
   }
+}
+
+/*
+ * get precision for double type, keep same with MySQL
+ */
+int16_t ObMySQLUtil::float_length(const int16_t scale)
+{
+  return (scale >= 0 && scale <= OB_MAX_DOUBLE_FLOAT_SCALE) ? DBL_DIG + 2 + scale : DBL_DIG + 8;
 }
 
 }      // namespace obmysql

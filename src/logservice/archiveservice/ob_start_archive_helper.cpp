@@ -30,26 +30,27 @@ namespace archive
 {
 using namespace oceanbase::logservice;
 using namespace oceanbase::palf;
+using namespace oceanbase::share;
 StartArchiveHelper::StartArchiveHelper(const ObLSID &id,
     const uint64_t tenant_id,
     const ArchiveWorkStation &station,
-    const int64_t min_log_ts,
+    const SCN &min_scn,
     const int64_t piece_interval,
-    const int64_t genesis_ts,
+    const SCN &genesis_scn,
     const int64_t base_piece_id,
     ObArchivePersistMgr *persist_mgr)
   : id_(id),
     tenant_id_(tenant_id),
     station_(station),
     log_gap_exist_(false),
-    min_log_ts_(min_log_ts),
+    min_scn_(min_scn),
     piece_interval_(piece_interval),
-    genesis_ts_(genesis_ts),
+    genesis_scn_(genesis_scn),
     base_piece_id_(base_piece_id),
     start_offset_(),
     archive_file_id_(OB_INVALID_ARCHIVE_FILE_ID),
     archive_file_offset_(OB_INVALID_ARCHIVE_FILE_OFFSET),
-    max_archived_ts_(OB_INVALID_TIMESTAMP),
+    max_archived_scn_(),
     piece_(),
     persist_mgr_(persist_mgr)
 {}
@@ -60,14 +61,14 @@ StartArchiveHelper::~StartArchiveHelper()
   tenant_id_ = OB_INVALID_TENANT_ID;
   station_.reset();
   log_gap_exist_ = false;
-  min_log_ts_ = OB_INVALID_TIMESTAMP;
+  min_scn_.reset();
   piece_interval_ = 0;
-  genesis_ts_ = OB_INVALID_TIMESTAMP;
+  genesis_scn_.reset();
   base_piece_id_ = 0;
   start_offset_.reset();
   archive_file_id_ = OB_INVALID_ARCHIVE_FILE_ID;
   archive_file_offset_ = OB_INVALID_ARCHIVE_FILE_OFFSET;
-  max_archived_ts_ = OB_INVALID_TIMESTAMP;
+  max_archived_scn_.reset();
   piece_.reset();
   persist_mgr_ = NULL;
 }
@@ -78,7 +79,7 @@ bool StartArchiveHelper::is_valid() const
     && OB_INVALID_TENANT_ID != tenant_id_
     && station_.is_valid()
     && piece_.is_valid()
-    && OB_INVALID_TIMESTAMP != max_archived_ts_
+    && max_archived_scn_.is_valid()
     && (log_gap_exist_
         || (start_offset_.is_valid()
           && OB_INVALID_ARCHIVE_FILE_ID != archive_file_id_
@@ -93,7 +94,7 @@ int StartArchiveHelper::handle()
 
   if (OB_UNLIKELY(! id_.is_valid()
         || ! station_.is_valid()
-        || min_log_ts_ == OB_INVALID_TIMESTAMP
+        || ! min_scn_.is_valid()
         || NULL == persist_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argumetn", K(ret), K(id_), K(station_), K(persist_mgr_));
@@ -134,10 +135,10 @@ int StartArchiveHelper::fetch_exist_archive_progress_(bool &record_exist)
     ARCHIVE_LOG(WARN, "cal archive file id offset failed", K(ret), K(id_), K(persist_info));
   } else {
     record_exist = true;
-    piece_min_lsn_ = persist_info.start_lsn_;
-    start_offset_ = persist_info.lsn_;
-    max_archived_ts_ = persist_info.checkpoint_scn_;
-    piece_.set(persist_info.key_.piece_id_, piece_interval_, genesis_ts_, base_piece_id_);
+    piece_min_lsn_ = LSN(persist_info.start_lsn_);
+    start_offset_ = LSN(persist_info.lsn_);
+    max_archived_scn_ = persist_info.checkpoint_scn_;
+    piece_.set(persist_info.key_.piece_id_, piece_interval_, genesis_scn_, base_piece_id_);
     ARCHIVE_LOG(INFO, "fetch exist archive progress succ", KPC(this));
   }
   return ret;
@@ -148,20 +149,20 @@ int StartArchiveHelper::locate_round_start_archive_point_()
   int ret = OB_SUCCESS;
   LSN lsn;
   bool log_gap = false;
-  int64_t start_ts = OB_INVALID_TIMESTAMP;
+  SCN start_scn;
 
   if (OB_FAIL(get_local_base_lsn_(lsn, log_gap))) {
     ARCHIVE_LOG(WARN, "get local base lsn failed", K(ret));
-  } else if (OB_FAIL(get_local_start_ts_(start_ts))) {
-    ARCHIVE_LOG(WARN, "get local start ts failed", K(ret));
+  } else if (OB_FAIL(get_local_start_scn_(start_scn))) {
+    ARCHIVE_LOG(WARN, "get local start scn failed", K(ret));
   } else {
-    piece_ = ObArchivePiece(start_ts, piece_interval_, genesis_ts_, base_piece_id_);
-    max_archived_ts_ = start_ts;
+    piece_ = ObArchivePiece(start_scn, piece_interval_, genesis_scn_, base_piece_id_);
+    max_archived_scn_ = start_scn;
     // 缺失日志场景下, 依然以足够安全的值初始化最大归档进度
     // 这是为开启归档后创建日志流, 为归档任何日志即回收, 有足够大的piece_id
     // piece_id既是归档进度表主键, 也是统计归档进度基准不能回退
     if (log_gap) {
-      ARCHIVE_LOG(ERROR, "locate round start archive point, log gap exist", K(id_), K(min_log_ts_));
+      ARCHIVE_LOG(ERROR, "locate round start archive point, log gap exist", K(id_), K(min_scn_));
       log_gap_exist_ = log_gap;
     } else if (OB_FAIL(cal_archive_file_id_offset_(lsn, OB_INVALID_ARCHIVE_FILE_ID, 0))) {
       ARCHIVE_LOG(WARN, "cal archive file id and offset failed", K(ret), K_(id));
@@ -177,15 +178,15 @@ int StartArchiveHelper::locate_round_start_archive_point_()
 // 基于日志流定位归档起点
 //
 // 1. OB_SUCCESS
-//    可以locate到小于等于start_ts的日志, 会定位到准确block
-//    其中对于写了offline日志, 并且小于归档start_ts, 会定位到最后一个block,
-//    对于这种情况不依赖palf实现, gc时即便没有归档进度也依赖归档start_ts检查是否可以回收
+//    可以locate到小于等于start_scn的日志, 会定位到准确block
+//    其中对于写了offline日志, 并且小于归档start_scn, 会定位到最后一个block,
+//    对于这种情况不依赖palf实现, gc时即便没有归档进度也依赖归档start_scn检查是否可以回收
 //
 // 2. OB_ENTRY_NOT_EXIST
 //    对于新建日志流且未写过任何日志的日志流, 重试即可
 //
 // 3. OB_ERR_OUT_OF_LOWER_BOUND
-//    日志流剩余所有日志都大于start_ts
+//    日志流剩余所有日志都大于start_scn
 //    a) 如果日志流base_lsn等于0, 说明是新建日志流, 从0开始归档
 //    b) 对于日志流base_lsn大于0, 说明日志已经被回收, 需要断流
 int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
@@ -194,10 +195,10 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
   palf::PalfHandleGuard guard;
   if (OB_FAIL(MTL(logservice::ObLogService*)->open_palf(id_, guard))) {
     ARCHIVE_LOG(WARN, "open palf failed", K(ret), KPC(this));
-  } else if (OB_FAIL(guard.locate_by_ts_ns_coarsely(min_log_ts_, lsn))) {
+  } else if (OB_FAIL(guard.locate_by_scn_coarsely(min_scn_, lsn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_EAGAIN;
-      ARCHIVE_LOG(WARN, "no log bigger than min_log_ts_, wait next turn", K(ret), K_(id), K_(min_log_ts));
+      ARCHIVE_LOG(WARN, "no log bigger than min_scn_, wait next turn", K(ret), K_(id), K_(min_scn));
     } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = guard.get_begin_lsn(lsn))) {
@@ -212,12 +213,12 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
         ret = OB_SUCCESS;
       }
     } else {
-      ARCHIVE_LOG(WARN, "locate by ts_ns coarsely failed", K(ret), KPC(this));
+      ARCHIVE_LOG(WARN, "locate by scn coarsely failed", K(ret), KPC(this));
     }
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_START_ARCHIVE_LOG_GAP) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_START_ARCHIVE_LOG_GAP) OB_SUCCESS;
   }
   if (OB_FAIL(ret)) {
     log_gap = true;
@@ -232,14 +233,19 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
 // 2. piece是汇总整体归档进度基准, 对于已经冻结的piece, 不可以偏小
 //
 // 使用开启归档时间以及日志流创建时间作为基准piece_id
-int StartArchiveHelper::get_local_start_ts_(int64_t &timestamp)
+int StartArchiveHelper::get_local_start_scn_(SCN &scn)
 {
   int ret = OB_SUCCESS;
-  int64_t create_ts = OB_INVALID_TIMESTAMP;
-  if (OB_FAIL(persist_mgr_->get_ls_create_ts(id_, create_ts))) {
-    ARCHIVE_LOG(WARN, "get ls create ts failed", K(ret), K(id_));
+  SCN create_scn;
+  if (OB_FAIL(persist_mgr_->get_ls_create_scn(id_, create_scn))) {
+    ARCHIVE_LOG(WARN, "get ls create scn failed", K(ret), K(id_));
   } else {
-    timestamp = std::max(create_ts, min_log_ts_ - 1);
+    SCN last_scn = SCN::minus(min_scn_, 1);
+    scn = create_scn > last_scn ? create_scn : last_scn;
+    if (!scn.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(WARN, "scn is invalid", K(ret), K(id_), K(scn));
+    }
   }
   return ret;
 }

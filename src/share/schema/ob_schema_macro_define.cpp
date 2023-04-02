@@ -44,6 +44,13 @@ int ADD_COLUMN_SCHEMA_FULL(share::schema::ObTableSchema &table_schema,
     ret = OB_SIZE_OVERFLOW;
     SHARE_SCHEMA_LOG(WARN, "col name is too long, ", K(col_name_len));
   }
+
+  if (OB_SUCC(ret)) {
+    if (data_len < INT32_MIN || data_len > INT32_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_SCHEMA_LOG(ERROR, "invalid data_len", K(ret), K(data_len));
+    }
+  }
  
   if(OB_SUCC(ret)) {
     ObObj orig_default_value;
@@ -56,9 +63,9 @@ int ADD_COLUMN_SCHEMA_FULL(share::schema::ObTableSchema &table_schema,
     column.set_data_type(data_type);
     const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
-      column.set_data_length(data_len);
+      column.set_data_length(static_cast<int32_t>(data_len));
       column.set_data_precision(data_precision);
-    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type) || ob_is_geometry_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
     } else if (ob_is_datetime_tc(data_type) || ob_is_time_tc(data_type)) {
       ObScale scale = -1 == data_scale ? default_accuracy.get_scale() :
@@ -164,7 +171,7 @@ int ADD_COLUMN_SCHEMA_WITH_DEFAULT_VALUE(share::schema::ObTableSchema &table_sch
     const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
-    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type) || ob_is_geometry_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
       if (DEFAULT_PRECISION_FOR_STRING != data_precision) {
         column.set_data_precision(data_precision);
@@ -277,7 +284,7 @@ int ADD_COLUMN_SCHEMA_TS_WITH_DEFAULT_VALUE(share::schema::ObTableSchema &table_
     const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
-    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type) || ob_is_geometry_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
     } else if (ob_is_datetime_tc(data_type) || ob_is_time_tc(data_type)) {
       ObScale scale = -1 == data_scale ? default_accuracy.get_scale() :
@@ -386,7 +393,7 @@ int ADD_COLUMN_SCHEMA_TS_FULL(share::schema::ObTableSchema &table_schema,
     const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[data_type];
     if (ob_is_string_tc(data_type)) {
       column.set_data_length(data_len);
-    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type)) {
+    } else if (ob_is_text_tc(data_type) || ob_is_json_tc(data_type) || ob_is_geometry_tc(data_type)) {
       column.set_data_length(default_accuracy.get_length());
     } else if (ob_is_datetime_tc(data_type) || ob_is_time_tc(data_type)) {
       ObScale scale = -1 == data_scale ? default_accuracy.get_scale() :

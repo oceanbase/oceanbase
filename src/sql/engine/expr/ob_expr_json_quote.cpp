@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_quote
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -56,12 +57,12 @@ int ObExprJsonQuote::calc_result_type1(ObExprResType &type,
 }
 
 
-template <typename T>
-int ObExprJsonQuote::calc(const T &data, ObObjType type, ObCollationType cs_type, 
-                          ObJsonBuffer &j_buf, bool &is_null)
+int ObExprJsonQuote::calc(ObEvalCtx &ctx, ObIAllocator &temp_allocator, const ObDatum &data,
+                          ObDatumMeta meta, bool has_lob_header, ObJsonBuffer &j_buf, bool &is_null)
 {
   INIT_SUCC(ret);
-
+  ObObjType type = meta.type_;
+  ObCollationType cs_type = meta.cs_type_;
   if (type == ObIntType || type == ObDoubleType) {
     // special for mathematical function, consistent with mysql
     if (data.is_null()) {
@@ -80,8 +81,9 @@ int ObExprJsonQuote::calc(const T &data, ObObjType type, ObCollationType cs_type
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
   } else { // string type
     ObString json_val = data.get_string();
-    size_t len = json_val.length();
-    if (len == 0) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, data, meta, has_lob_header, json_val))) {
+      LOG_WARN("fail to get real data.", K(ret), K(json_val));
+    } else if (json_val.length() == 0) {
       if (OB_FAIL(j_buf.append("\"\"", 2))) {
         LOG_WARN("failed: jbuf append", K(ret));        
       }
@@ -100,26 +102,18 @@ int ObExprJsonQuote::eval_json_quote(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObJsonBuffer j_buf(&temp_allocator);
   ObExpr *arg = expr.args_[0];
-  ObObjType type = arg->datum_meta_.type_;
-  ObCollationType cs_type = arg->datum_meta_.cs_type_;
   ObDatum* json_datum = NULL;
   bool is_null = false;
 
   if (OB_FAIL(arg->eval(ctx, json_datum))) {
     LOG_WARN("failed: eval json args datum.", K(ret));
-  } else if (OB_FAIL(calc(*json_datum, type, cs_type, j_buf, is_null))) {
-    LOG_WARN("fail to calc json quote result in new engine", K(ret), K(type));
+  } else if (OB_FAIL(calc(ctx, temp_allocator, *json_datum, arg->datum_meta_,
+                          arg->obj_meta_.has_lob_header(), j_buf, is_null))) {
+    LOG_WARN("fail to calc json quote result in new engine", K(ret), K(arg->datum_meta_));
   } else if (is_null) {
     res.set_null();
-  } else {
-    char *buf = expr.get_str_res_mem(ctx, j_buf.length());
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory for json quote result", K(ret), K(j_buf.length()));
-    } else {
-      MEMCPY(buf, j_buf.ptr(), j_buf.length());
-      res.set_string(buf, j_buf.length());
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, j_buf))) {
+    LOG_WARN("fail to pack json result", K(ret));
   }
 
   return ret;

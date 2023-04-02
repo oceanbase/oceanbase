@@ -14,8 +14,8 @@
 #include "share/ob_errno.h"                   // errno...
 #include "share/ob_thread_define.h"           // TGDefIDs
 #include "share/ob_thread_mgr.h"              // TG_START
-#include "logservice/palf/log_io_task.h"                   // LogIOTask
-#include "palf_env_impl.h"                       // PalfEnvImpl
+#include "logservice/palf/log_io_task.h"      // LogIOTask
+#include "palf_env_impl.h"                    // PalfEnvImpl
 
 namespace oceanbase
 {
@@ -33,7 +33,8 @@ LogIOTaskCbThreadPool::~LogIOTaskCbThreadPool()
   destroy();
 }
 
-int LogIOTaskCbThreadPool::init(PalfEnvImpl *palf_env_impl)
+int LogIOTaskCbThreadPool::init(const int64_t log_io_cb_num,
+                                IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   const int tg_id = lib::TGDefIDs::LogIOTaskCbThreadPool;
@@ -43,13 +44,13 @@ int LogIOTaskCbThreadPool::init(PalfEnvImpl *palf_env_impl)
   } else if (NULL == palf_env_impl) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), KPC(palf_env_impl));
-  } else if (OB_FAIL(TG_CREATE_TENANT(tg_id, tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(tg_id, tg_id_, log_io_cb_num))) {
     PALF_LOG(WARN, "LogIOTaskCbThreadPool TG_CREATE failed", K(ret));
   } else {
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
     PALF_LOG(INFO, "LogIOTaskCbThreadPool init success", K(ret),
-        K(tg_id_), KP(palf_env_impl_), KP(palf_env_impl));
+        K(tg_id_), KP(palf_env_impl_), KP(palf_env_impl), K(log_io_cb_num));
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
     destroy();
@@ -104,7 +105,6 @@ void LogIOTaskCbThreadPool::destroy()
   wait();
   is_inited_ = false;
   if (-1 != tg_id_) {
-    MTL_UNREGISTER_THREAD_DYNAMIC(tg_id_);
     TG_DESTROY(tg_id_);
   }
   tg_id_ = -1;

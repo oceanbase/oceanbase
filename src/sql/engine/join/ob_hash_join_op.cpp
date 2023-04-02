@@ -32,7 +32,7 @@ OB_SERIALIZE_MEMBER(ObHashJoinInput, shared_hj_info_);
 
 // The ctx is owned by thread
 // sync_event is shared
-int ObHashJoinInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPred pred, bool ignore_interrupt)
+int ObHashJoinInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPred pred, bool ignore_interrupt, bool is_open)
 {
   int ret = OB_SUCCESS;
   ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
@@ -82,12 +82,18 @@ int ObHashJoinInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPre
         LOG_DEBUG("debug sync event", K(ret), K(lbt()), K(sync_event),
           K(loop), K(exit_cnt));
         break;
+      } else if (ignore_interrupt /*close stage*/ && OB_SUCCESS != ATOMIC_LOAD(&shared_hj_info->open_ret_)) {
+        LOG_WARN("some op have failed in open stage", K(ATOMIC_LOAD(&shared_hj_info->open_ret_)));
+        break;
       } else {
         auto key = shared_hj_info->cond_.get_key();
         // wait one time per 1000 us
         shared_hj_info->cond_.wait(key, 1000);
       }
     } // end while
+    if (OB_FAIL(ret) && is_open) {
+      set_open_ret(ret);
+    }
   }
   return ret;
 }
@@ -390,6 +396,9 @@ int ObHashJoinOp::inner_open()
   ObSQLSessionInfo *session = NULL;
   if (OB_FAIL(set_shared_info())) {
     LOG_WARN("failed to set shared info", K(ret));
+  } else if (is_shared_ && OB_FAIL(sync_wait_open())) {
+    is_shared_ = false;
+    LOG_WARN("failed to sync open for shared hj", K(ret));
   } else if ((OB_UNLIKELY(MY_SPEC.all_join_keys_.count() <= 0
       || MY_SPEC.all_join_keys_.count() != MY_SPEC.all_hash_funcs_.count()
       || OB_ISNULL(left_)))) {
@@ -1443,6 +1452,11 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
   }
   buf_mgr_->reuse();
   buf_mgr_->set_reserve_memory_size(remain_data_memory_size_, 1.0);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sync_wait_part_count())) {
+      LOG_WARN("failed to sync part count", K(ret));
+    }
+  }
   if (OB_SUCC(ret) && is_vectorized()) {
     char *buf = NULL;
     if (part_count_ <= 0) {
@@ -1456,11 +1470,6 @@ int ObHashJoinOp::get_max_memory_size(int64_t input_size)
       part_selectors_ = reinterpret_cast<uint16_t *>(buf);
       part_selector_sizes_ = reinterpret_cast<uint16_t *>(buf +
                              sizeof(uint16_t) * (MY_SPEC.max_batch_size_ * part_count_));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(sync_wait_part_count())) {
-      LOG_WARN("failed to sync part count", K(ret));
     }
   }
 
@@ -2388,6 +2397,25 @@ int ObHashJoinOp::sync_wait_close()
     LOG_WARN("failed to sync fetch next batch", K(ret), K(spec_.id_));
   } else {
     LOG_TRACE("debug sync fetch next batch", K(ret), K(spec_.id_));
+  }
+  return ret;
+}
+
+int ObHashJoinOp::sync_wait_open()
+{
+  int ret = OB_SUCCESS;
+  ObHashJoinInput *hj_input = static_cast<ObHashJoinInput*>(input_);
+  if (OB_ISNULL(hj_input)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: shared hash join info is null", K(ret));
+  } else if (OB_FAIL(hj_input->sync_wait(
+      ctx_, hj_input->get_open_cnt(),
+      [&](int64_t n_times) {
+        UNUSED(n_times);
+      }, false /*ignore_interrupt*/, true /*is_open*/))) {
+    LOG_WARN("failed to sync open", K(ret), K(spec_.id_));
+  } else {
+    LOG_TRACE("debug sync sync open", K(ret), K(spec_.id_));
   }
   return ret;
 }
@@ -3510,7 +3538,7 @@ int ObHashJoinOp::partition_and_build_histograms()
 {
   int ret = OB_SUCCESS;
   enable_batch_ = 0 == level2_part_count_ && level1_part_count_ == part_count_;
-  ret = E(EventTable::EN_SET_DISABLE_HASH_JOIN_BATCH) ret;
+  ret = OB_E(EventTable::EN_SET_DISABLE_HASH_JOIN_BATCH) ret;
   if (OB_FAIL(ret)) {
     ret = -ret;
     enable_batch_ = (0 == ret % 2) ? true : false;
@@ -4459,7 +4487,7 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
       if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs->skip_, brs->size_))) {
         LOG_WARN("eval failed", K(ret));
       } else {
-        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_batch_;
+        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_v2_batch_;
         const bool is_batch_seed = (idx > 0);
         hash_func(hash_vals,
                   expr->locate_batch_datums(eval_ctx_), expr->is_batch_result(),
@@ -4471,10 +4499,7 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
     if (OB_SUCC(ret)) {
       uint16_t selector_idx = 0;
       bool skip_null = (is_left_side && skip_left_null_) || (!is_left_side && skip_right_null_);
-      for (int64_t i = 0; i < brs->size_; ++i) {
-        if (brs->skip_->at(i)) {
-          continue;
-        }
+      auto op = [&](const int64_t i) __attribute__((always_inline)) {
         bool need_null_random = false;
         for (int64_t j = 0; j < join_keys.count() && !need_null_random; ++j) {
           ObDatum &curr_key = join_keys.at(j)->locate_batch_datums(eval_ctx_)[i];
@@ -4491,7 +4516,9 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
           right_selector_[selector_idx++] = i;
         }
         hash_vals[i] = hash_vals[i] & ObHashJoinStoredJoinRow::HASH_VAL_MASK;
-      }
+        return OB_SUCCESS;
+      };
+      ObBitVector::flip_foreach(*brs->skip_, brs->size_, op);
       right_selector_cnt_ = selector_idx;
     }
   } else {

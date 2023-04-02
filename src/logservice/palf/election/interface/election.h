@@ -94,7 +94,7 @@ inline int64_t get_monotonic_ts()
   int64_t ts = 0;
   timespec tm;
   if (OB_UNLIKELY(0 != clock_gettime(CLOCK_MONOTONIC, &tm))) {
-    ELECT_LOG(ERROR, "FATAL ERROR!!! get monotonic clock ts failed!");
+    ELECT_LOG_RET(ERROR, common::OB_ERROR, "FATAL ERROR!!! get monotonic clock ts failed!");
     abort();
   } else {
     ts = tm.tv_sec * 1000000 + tm.tv_nsec / 1000;
@@ -105,7 +105,7 @@ inline int64_t get_monotonic_ts()
 extern int64_t INIT_TS;
 extern ObOccamTimer GLOBAL_REPORT_TIMER;// used to report election event to inner table
 
-inline int GLOBAL_INIT_ELECTION_MODULE()
+inline int GLOBAL_INIT_ELECTION_MODULE(const int64_t queue_size_square_of_2 = 14)
 {
   int ret = common::OB_SUCCESS;
   static int64_t call_times = 0;
@@ -113,7 +113,7 @@ inline int GLOBAL_INIT_ELECTION_MODULE()
     if (ATOMIC_LOAD(&INIT_TS) <= 0) {
       ATOMIC_STORE(&INIT_TS, get_monotonic_ts());
     }
-    if (OB_FAIL(GLOBAL_REPORT_TIMER.init_and_start(1, 10_ms, "GEleTimer"))) {
+    if (OB_FAIL(GLOBAL_REPORT_TIMER.init_and_start(1, 10_ms, "GEleTimer", queue_size_square_of_2))) {
       ELECT_LOG(ERROR, "int global report timer failed", KR(ret));
     } else {
       ELECT_LOG(INFO, "election module global init success");

@@ -46,16 +46,22 @@ struct ObRoutePolicyCtx
   ObRoutePolicyCtx()
     :policy_type_(POLICY_TYPE_MAX),
      consistency_level_(common::INVALID_CONSISTENCY),
-     is_proxy_priority_hit_support_(false)
+     is_proxy_priority_hit_support_(false),
+     tenant_id_(OB_INVALID_TENANT_ID),
+     max_read_stale_time_(0)
    {}
 
   TO_STRING_KV(K(policy_type_),
                K(consistency_level_),
-               K(is_proxy_priority_hit_support_));
+               K(is_proxy_priority_hit_support_),
+               K(tenant_id_),
+               K(max_read_stale_time_));
 
   ObRoutePolicyType policy_type_;
   common::ObConsistencyLevel consistency_level_;
   bool is_proxy_priority_hit_support_;
+  uint64_t tenant_id_;
+  int64_t max_read_stale_time_;
 };
 
 class ObRoutePolicy
@@ -164,7 +170,10 @@ public:
   {}
   ~ObRoutePolicy() {}
   int init();
-  int calculate_replica_priority(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);
+  int calculate_replica_priority(const ObAddr &local_server,
+                                 const share::ObLSID &ls_id,
+                                 common::ObIArray<CandidateReplica>& candi_replicas,
+                                 ObRoutePolicyCtx &ctx);
   int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas);
   int select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
                                    const common::ObIArray<CandidateReplica> &replica_array,
@@ -204,7 +213,10 @@ protected:
   int get_merge_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
   int get_zone_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
 
-  int filter_replica(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);
+  int filter_replica(const ObAddr &local_server,
+                     const share::ObLSID &ls_id,
+                     common::ObIArray<CandidateReplica>& candi_replicas,
+                     ObRoutePolicyCtx &ctx);
   int weak_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);
   int strong_sort_replicas(common::ObIArray<CandidateReplica>& candi_replicas, ObRoutePolicyCtx &ctx);
   inline ObRoutePolicyType get_calc_route_policy_type(const ObRoutePolicyCtx &ctx) const

@@ -15,6 +15,9 @@
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
+#include "share/scn.h"
+#include "share/ob_version.h"
+#include "share/ob_cluster_version.h"
 
 using namespace oceanbase::share;
 
@@ -27,14 +30,14 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
     const common::ObAddr &src_addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
-  int64_t compaction_scn = 0;
+  SCN compaction_scn;
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_addr.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
   } else if (OB_FAIL(check_merge_error_(tenant_id, sql_client))) {
-    LOG_WARN("failed to check merge error", K(ret), K(tenant_id));
+    LOG_WARN("failed to check merge error", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(fetch_src_tablet_meta_info_(tenant_id, tablet_id, ls_id, src_addr, sql_client, compaction_scn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -43,7 +46,30 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
       LOG_WARN("failed to fetch src tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
     }
   } else if (OB_FAIL(check_tablet_replica_checksum_(tenant_id, tablet_id, ls_id, compaction_scn, sql_client))) {
-    LOG_WARN("failed to check tablet replica checksum", K(ret), K(compaction_scn));
+    LOG_WARN("failed to check tablet replica checksum", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(compaction_scn));
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::get_server_version(uint64_t &server_version)
+{
+  int ret = OB_SUCCESS;
+  server_version = CLUSTER_CURRENT_VERSION;
+  return ret;
+}
+
+int ObStorageHAUtils::check_server_version(const uint64_t server_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t cur_server_version = 0;
+  if (OB_FAIL(get_server_version(cur_server_version))) {
+    LOG_WARN("failed to get server version", K(ret));
+  } else {
+    bool can_migrate = cur_server_version >= server_version;
+    if (!can_migrate) {
+      ret = OB_MIGRATE_NOT_COMPATIBLE;
+      LOG_WARN("migrate server not compatible", K(ret), K(server_version), K(cur_server_version));
+    }
   }
   return ret;
 }
@@ -62,7 +88,7 @@ int ObStorageHAUtils::check_merge_error_(const uint64_t tenant_id, common::ObISQ
 }
 
 int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client, int64_t &compaction_scn)
+    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client, SCN &compaction_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletTableOperator op;
@@ -71,14 +97,14 @@ int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, cons
     LOG_WARN("failed to init operator", K(ret));
   } else if (OB_FAIL(op.get(tenant_id, tablet_id, ls_id, src_addr, tablet_replica))) {
     LOG_WARN("failed to get tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
-  } else {
-    compaction_scn = tablet_replica.get_snapshot_version();
-  }
+  } else if (OB_FAIL(compaction_scn.convert_for_tx(tablet_replica.get_snapshot_version()))) {
+    LOG_WARN("failed to get tablet meta info", K(ret), K(compaction_scn), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
+  } else {/*do nothing*/}
   return ret;
 }
 
 int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const int64_t compaction_scn, common::ObISQLClient &sql_client)
+    const share::ObLSID &ls_id, const SCN &compaction_scn, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletReplicaChecksumItem> items;
@@ -88,13 +114,13 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
     LOG_WARN("failed to init pair", K(ret), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, sql_client, items))) {
-    LOG_WARN("failed to batch get replica checksum item", K(ret));
+  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn, sql_client, items))) {
+    LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;
     for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); ++i) {
       const ObTabletReplicaChecksumItem &item = items.at(i);
-      if (item.snapshot_version_ == compaction_scn) {
+      if (item.compaction_scn_ == compaction_scn) {
         if (OB_FAIL(filter_items.push_back(item))) {
           LOG_WARN("failed to push back", K(ret), K(item));
         }
@@ -104,7 +130,8 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
       const ObTabletReplicaChecksumItem &first_item = filter_items.at(0);
       const ObTabletReplicaChecksumItem &item = filter_items.at(i);
       if (OB_FAIL(first_item.verify_checksum(item))) {
-        LOG_ERROR("failed to verify checksum", K(ret), K(item));
+        LOG_ERROR("failed to verify checksum", K(ret), K(tenant_id), K(tablet_id),
+            K(ls_id), K(compaction_scn), K(first_item), K(item), K(filter_items));
       }
     }
   }

@@ -229,7 +229,7 @@ void ObLeaseResponse::reset()
   server_id_ = OB_INVALID_ID;
   frozen_status_.reset();
   force_frozen_status_ = false;
-  rs_server_status_ = RSS_IS_WORKING; // for compatibility
+  rs_server_status_ = RSS_INVALID;
   refresh_schema_info_.reset();
   server_service_status_ = OBSERVER_INVALID_STATUS;
   tenant_config_version_.reset();

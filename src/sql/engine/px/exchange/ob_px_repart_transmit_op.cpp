@@ -50,7 +50,9 @@ ObPxRepartTransmitSpec::ObPxRepartTransmitSpec(ObIAllocator &alloc, const ObPhyO
 int ObPxRepartTransmitSpec::register_to_datahub(ObExecContext &exec_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(exec_ctx.get_sqc_handler())) {
+  if (OB_FAIL(ObPxTransmitSpec::register_to_datahub(exec_ctx))) {
+    LOG_WARN("failed to register init channel msg", K(ret));
+  } else if (OB_ISNULL(exec_ctx.get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ret));
   } else {
@@ -62,7 +64,7 @@ int ObPxRepartTransmitSpec::register_to_datahub(ObExecContext &exec_ctx) const
     } else {
       MsgProvider *provider = new (buf) MsgProvider();
       ObSqcCtx &sqc_ctx = exec_ctx.get_sqc_handler()->get_sqc_ctx();
-      if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), *provider))) {
+      if (OB_FAIL(sqc_ctx.add_whole_msg_provider(get_id(), dtl::DH_DYNAMIC_SAMPLE_WHOLE_MSG, *provider))) {
         LOG_WARN("fail add whole msg provider", K(ret));
       } else {
         buf = nullptr;

@@ -15,6 +15,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "share/config/ob_server_config.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 #include "ob_opt_stat_service.h"
 
@@ -22,16 +23,6 @@ namespace oceanbase {
 namespace common {
 
 using namespace share::schema;
-namespace opt_stat_service {
-static bool is_non_stat_table(const int64_t table_id)
-{
-  const uint64_t id = table_id;
-  return (is_core_table(id)
-          || id == share::OB_ALL_TABLE_STAT_TID
-          || id == share::OB_ALL_COLUMN_STAT_TID
-          || id == share::OB_ALL_HISTOGRAM_STAT_TID);
-}
-}
 
 int ObOptStatService::get_table_stat(const uint64_t tenant_id,
                                      const ObOptTableStat::Key &key,
@@ -124,16 +115,6 @@ int ObOptStatService::get_column_stat(const uint64_t tenant_id,
       if (OB_ISNULL(keys.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(keys.at(i)));
-      } else if (common::opt_stat_service::is_non_stat_table(keys.at(i)->table_id_)) {
-        common::ObOptColumnStat tmp_col_stat;
-        tmp_col_stat.set_table_id(keys.at(i)->table_id_);
-        tmp_col_stat.set_partition_id(keys.at(i)->partition_id_);
-        tmp_col_stat.set_column_id(keys.at(i)->column_id_);
-        if (OB_FAIL(column_stat_cache_.put_and_fetch_row(*keys.at(i), tmp_col_stat, handle))) {
-          LOG_WARN("puts column stat into cache failed.", K(ret));
-        } else if (OB_FAIL(handles.push_back(handle))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
       } else if (OB_FAIL(column_stat_cache_.get_row(*keys.at(i), handle))) {
         // we need to fetch statistics from inner table if it is not yet available from cache
         if (OB_ENTRY_NOT_EXIST != ret) {
@@ -168,10 +149,10 @@ int ObOptStatService::load_table_stat_and_put_cache(const uint64_t tenant_id,
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("table statistics service is not initialized. ", K(ret), K(key));
-  } else if (common::opt_stat_service::is_non_stat_table(key.table_id_)) {
-    tstat.reset();
   } else if (OB_FAIL(sql_service_.fetch_table_stat(tenant_id, key, all_part_stats))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
+    if (OB_ENTRY_NOT_EXIST != ret &&
+        !is_sys_table(key.table_id_) &&
+        !is_virtual_table(key.table_id_)) {//sys table and virtual table failed, use default
       LOG_WARN("fetch table stat failed. ", K(ret), K(key));
     } else {
       // it's not guaranteed that table stat exists.
@@ -300,6 +281,113 @@ int ObOptStatService::init_key_column_stats(ObIAllocator &allocator,
       if (OB_FAIL(key_column_stats.push_back(tmp_key_col_stat))) {
         LOG_WARN("failed to push back", K(ret));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObOptStatService::get_table_rowcnt(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       const ObIArray<ObTabletID> &all_tablet_ids,
+                                       const ObIArray<share::ObLSID> &all_ls_ids,
+                                       int64_t &table_rowcnt)
+{
+  int ret = OB_SUCCESS;
+  table_rowcnt = 0;
+  if (OB_UNLIKELY(all_tablet_ids.count() != all_ls_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error");
+  } else {
+    ObSEArray<ObTabletID, 16> reload_tablet_ids;
+    ObSEArray<share::ObLSID, 16> reload_ls_ids;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_tablet_ids.count(); ++i) {
+      ObOptTableStat::Key key(tenant_id, table_id, all_tablet_ids.at(i).id());
+      ObOptTableStatHandle handle;
+      if (OB_FAIL(table_stat_cache_.get_value(key, handle))) {
+        // we need to fetch statistics from inner table if it is not yet available from cache
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("get table stat from cache failed", K(ret), K(key));
+        } else if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
+                   OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else if (OB_ISNULL(handle.stat_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cache hit but value is NULL. BUG here.", K(ret), K(key));
+      //check is stale
+      } else if (handle.stat_->is_arrived_expired_time()) {
+        if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
+            OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {/*do nothing*/}
+      } else {
+        storage::ObTenantTabletStatMgr *stat_mgr = MTL(storage::ObTenantTabletStatMgr *);
+        storage::ObTabletStat tablet_stat;
+        //try check the latest tablet stat from stroage
+        if (stat_mgr != NULL) {
+          if (OB_FAIL(stat_mgr->get_latest_tablet_stat(all_ls_ids.at(i), all_tablet_ids.at(i), tablet_stat))) {
+            if (OB_HASH_NOT_EXIST != ret) {
+              LOG_WARN("failed to get latest tablet stat", K(ret), K(all_ls_ids.at(i)), K(all_tablet_ids.at(i)));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+        LOG_TRACE("cache stat compare", KPC(handle.stat_), K(tablet_stat));
+        if (handle.stat_->get_row_count() < tablet_stat.merge_logical_row_cnt_) {
+          if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
+              OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
+          } else {/*do nothing*/}
+        } else {
+          table_rowcnt += handle.stat_->get_row_count();
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !reload_tablet_ids.empty()) {
+      int64_t reload_row_cnt = 0;
+      if (OB_FAIL(load_table_rowcnt_and_put_cache(tenant_id, table_id, reload_tablet_ids,
+                                                  reload_ls_ids, reload_row_cnt))) {
+        LOG_WARN("load and put cache table stat failed.", K(ret));
+      } else {
+        table_rowcnt += reload_row_cnt;
+      }
+    }
+    LOG_TRACE("Succeed to get table rowcnt", K(table_id), K(table_rowcnt),
+                                             K(all_tablet_ids), K(reload_tablet_ids));
+  }
+  return ret;
+}
+
+int ObOptStatService::load_table_rowcnt_and_put_cache(const uint64_t tenant_id,
+                                                      const uint64_t table_id,
+                                                      const ObIArray<ObTabletID> &all_tablet_ids,
+                                                      const ObIArray<share::ObLSID> &all_ls_ids,
+                                                      int64_t &table_rowcnt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObOptTableStat, 4> tstats;
+  table_rowcnt = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table statistics service is not initialized. ", K(ret));
+  } else if (OB_FAIL(sql_service_.fetch_table_rowcnt(tenant_id, table_id,
+                                                     all_tablet_ids, all_ls_ids,
+                                                     tstats))) {
+    if (!is_sys_table(table_id) && !is_virtual_table(table_id)) {//sys table and virtual table failed, use default
+      LOG_WARN("failed to fetch table rowcnt ", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tstats.count(); ++i) {
+      ObOptTableStat::Key key(tenant_id, table_id, tstats.at(i).get_tablet_id());
+      ObOptTableStatHandle handle;
+      if (OB_FAIL(table_stat_cache_.put_and_fetch_value(key, tstats.at(i), handle))) {
+        LOG_WARN("put and fetch table stat failed.", K(ret), K(key));
+      } else {
+        table_rowcnt += tstats.at(i).get_row_count();
+      }
     }
   }
   return ret;

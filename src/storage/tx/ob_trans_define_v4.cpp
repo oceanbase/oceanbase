@@ -24,10 +24,14 @@
 #include "common/storage/ob_sequence.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/stat/ob_latch_define.h"
+#include "ob_trans_functor.h"
+#include "ob_tx_stat.h"
+#include "ob_xa_ctx.h"
 
 #define USING_LOG_PREFIX TRANS
 namespace oceanbase
 {
+using namespace oceanbase::share;
 namespace transaction
 {
 ObTxIsolationLevel tx_isolation_from_str(const ObString &s)
@@ -50,7 +54,7 @@ ObTxIsolationLevel tx_isolation_from_str(const ObString &s)
 }
 
 ObTxSavePoint::ObTxSavePoint()
-  : type_(T::INVL), scn_(0), name_() {}
+  : type_(T::INVL), scn_(0), session_id_(0), user_create_(false), name_() {}
 
 ObTxSavePoint::ObTxSavePoint(const ObTxSavePoint &a)
 {
@@ -63,11 +67,33 @@ ObTxSavePoint &ObTxSavePoint::operator=(const ObTxSavePoint &a)
   scn_ = a.scn_;
   switch(type_) {
   case T::SAVEPOINT:
-  case T::STASH: name_ = a.name_; break;
+  case T::STASH: {
+    name_ = a.name_;
+    session_id_ = a.session_id_;
+    user_create_ = a.user_create_;
+    break;
+  }
   case T::SNAPSHOT: snapshot_ = a.snapshot_; break;
   default: break;
   }
   return *this;
+}
+
+bool ObTxSavePoint::operator==(const ObTxSavePoint &a) const
+{
+  bool is_equal = false;
+  if (type_ == a.type_ && scn_== a.scn_) {
+    switch(type_) {
+    case T::SAVEPOINT:
+    case T::STASH: {
+      is_equal = name_ == a.name_ && session_id_ == a.session_id_ && user_create_ == a.user_create_;
+      break;
+    }
+    case T::SNAPSHOT: is_equal = snapshot_ == a.snapshot_; break;
+    default: break;
+    }
+  }
+  return is_equal;
 }
 
 ObTxSavePoint::~ObTxSavePoint()
@@ -80,6 +106,8 @@ void ObTxSavePoint::release()
   type_ = T::INVL;
   snapshot_ = NULL;
   scn_ = 0;
+  session_id_ = 0;
+  user_create_ = false;
 }
 
 void ObTxSavePoint::rollback()
@@ -97,7 +125,7 @@ void ObTxSavePoint::init(ObTxReadSnapshot *snapshot)
   scn_ = snapshot->core_.scn_;
 }
 
-int ObTxSavePoint::init(int64_t scn, const ObString &name, const bool stash)
+int ObTxSavePoint::init(int64_t scn, const ObString &name, const uint32_t session_id, const bool user_create, const bool stash)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(name_.assign(name))) {
@@ -109,6 +137,8 @@ int ObTxSavePoint::init(int64_t scn, const ObString &name, const bool stash)
   } else {
     type_ = stash ? T::STASH : T::SAVEPOINT;
     scn_ = scn;
+    session_id_ = session_id;
+    user_create_ = user_create;
   }
   return ret;
 }
@@ -125,10 +155,11 @@ DEF_TO_STRING(ObTxSavePoint)
   }
   J_COMMA();
   J_KV(K_(scn));
+  J_KV(K_(session_id));
+  J_KV(K_(user_create));
   J_OBJ_END();
   return pos;
 }
-
 OB_SERIALIZE_MEMBER(ObTxExecResult, incomplete_, parts_, cflict_txs_);
 OB_SERIALIZE_MEMBER(ObTxSnapshot, tx_id_, version_, scn_, elr_);
 OB_SERIALIZE_MEMBER(ObTxReadSnapshot, valid_, core_, source_, uncertain_bound_, snapshot_lsid_, parts_);
@@ -150,13 +181,20 @@ OB_SERIALIZE_MEMBER(ObTxDesc,
                     timeout_us_,
                     lock_timeout_us_,
                     active_scn_,
-                    parts_);
+                    parts_,
+                    xid_);
 OB_SERIALIZE_MEMBER(ObTxParam,
                     timeout_us_,
                     lock_timeout_us_,
                     access_mode_,
                     isolation_,
                     cluster_id_);
+OB_SERIALIZE_MEMBER(ObTxSavePoint,
+                    type_,
+                    scn_,
+                    session_id_,
+                    user_create_,
+                    name_);
 
 OB_SERIALIZE_MEMBER(ObTxInfo,
                     tenant_id_,
@@ -174,12 +212,15 @@ OB_SERIALIZE_MEMBER(ObTxInfo,
                     timeout_us_,
                     expire_ts_,
                     active_scn_,
-                    parts_);
+                    parts_,
+                    session_id_,
+                    savepoints_);
 OB_SERIALIZE_MEMBER(ObTxStmtInfo,
                     tx_id_,
                     op_sn_,
                     parts_,
-                    state_);
+                    state_,
+                    savepoints_);
 
 int ObTxDesc::trans_deep_copy(const ObTxDesc &x)
 {
@@ -195,15 +236,20 @@ ObTxDesc::ObTxDesc()
     addr_(),
     tx_id_(),
     xid_(),
+    xa_tightly_couple_(true),
+    xa_start_addr_(),
     isolation_(ObTxIsolationLevel::RC), // default is RC
     access_mode_(ObTxAccessMode::RW),   // default is RW
-    snapshot_version_(-1),
+    snapshot_version_(),
     snapshot_uncertain_bound_(0),
     snapshot_scn_(0),
     sess_id_(0),
+    assoc_sess_id_(0),
+    global_tx_type_(ObGlobalTxType::PLAIN),
     op_sn_(0),                          // default is from 0
     state_(State::INVL),
     flags_({ 0 }),
+    state_change_flags_({ 0 }),
     alloc_ts_(-1),
     active_ts_(-1),
     timeout_us_(-1),
@@ -219,7 +265,7 @@ ObTxDesc::ObTxDesc()
     coord_id_(),
     commit_expire_ts_(0),
     commit_parts_(),
-    commit_version_(-1),
+    commit_version_(),
     commit_out_(-1),
     abort_cause_(0),
     can_elr_(false),
@@ -231,6 +277,9 @@ ObTxDesc::ObTxDesc()
     rpc_cond_(),
     commit_task_(),
     xa_ctx_(NULL)
+#ifndef NDEBUG
+  , alloc_link_()
+#endif
 {}
 
 /**
@@ -249,6 +298,7 @@ int ObTxDesc::switch_to_idle()
   tx_id_.reset();
   trace_info_.reset();
   flags_.switch_to_idle_();
+  state_change_flags_.reset();
   active_ts_ = 0;
   timeout_us_ = 0;
   lock_timeout_us_ = -1;
@@ -260,7 +310,7 @@ int ObTxDesc::switch_to_idle()
   cflict_txs_.reset();
   coord_id_.reset();
   commit_parts_.reset();
-  commit_version_ = 0;
+  commit_version_.reset();
   commit_out_ = 0;
   abort_cause_ = 0;
   can_elr_ = false;
@@ -276,6 +326,15 @@ inline void ObTxDesc::FLAG::switch_to_idle_()
   const FLAG sv = *this;
   v_ = 0;
   REPLICA_ = sv.REPLICA_;
+}
+
+ObTxDesc::FLAG ObTxDesc::FLAG::update_with(const ObTxDesc::FLAG &flag)
+{
+  auto n = flag;
+#define KEEP_(x) n.x = x
+LST_DO(KEEP_, (;), SHADOW_, REPLICA_, TRACING_, INTERRUPTED_, RELEASED_, BLOCK_);
+#undef KEEP_
+  return n;
 }
 
 ObTxDesc::~ObTxDesc()
@@ -308,17 +367,22 @@ void ObTxDesc::reset()
   addr_.reset();
   tx_id_.reset();
   xid_.reset();
+  xa_tightly_couple_ = true;
+  xa_start_addr_.reset();
   isolation_ = ObTxIsolationLevel::INVALID;
   access_mode_ = ObTxAccessMode::INVL;
-  snapshot_version_ = -1;
+  snapshot_version_.reset();
   snapshot_uncertain_bound_ = 0;
   snapshot_scn_ = 0;
+  global_tx_type_ = ObGlobalTxType::PLAIN;
 
   op_sn_ = -1;
 
   state_ = State::INVL;
 
   flags_.v_ = 0;
+  flags_.SHADOW_ = true;
+  state_change_flags_.reset();
 
   alloc_ts_ = -1;
   active_ts_ = -1;
@@ -337,7 +401,7 @@ void ObTxDesc::reset()
   coord_id_.reset();
   commit_expire_ts_ = -1;
   commit_parts_.reset();
-  commit_version_ = -1;
+  commit_version_.reset();
   commit_out_ = -1;
   abort_cause_ = 0;
   can_elr_ = false;
@@ -349,6 +413,7 @@ void ObTxDesc::reset()
   commit_task_.reset();
   xa_ctx_ = NULL;
   tlog_.reset();
+  xa_ctx_ = NULL;
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {
@@ -395,15 +460,41 @@ void ObTxDesc::print_trace()
   }
 }
 
-bool ObTxDesc::can_free_route() const
+bool ObTxDesc::in_tx_or_has_extra_state()
 {
-  bool can_not = is_in_tx()
-    || savepoints_.count() > 0  // FIXME: acc valid snapshot only
-    || ((isolation_ == ObTxIsolationLevel::RR
-         || isolation_ == ObTxIsolationLevel::SERIAL)
-        && snapshot_version_ > 0
-        );
-  return !can_not;
+  ObSpinLockGuard guard(lock_);
+  return in_tx_or_has_extra_state_();
+}
+
+bool ObTxDesc::in_tx_or_has_extra_state_() const
+{
+  return is_in_tx() || has_extra_state_();
+}
+
+bool ObTxDesc::has_extra_state_() const
+{
+  if (snapshot_version_.is_valid()) {
+    return true;
+  }
+  // TODO(yunxing.cyx): refine this iter for performance
+  ARRAY_FOREACH_NORET(savepoints_, i) {
+    if (savepoints_[i].is_savepoint()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ObTxDesc::in_tx_for_free_route()
+{
+  ObSpinLockGuard guard(lock_);
+  return in_tx_for_free_route_();
+}
+
+bool ObTxDesc::in_tx_for_free_route_()
+{
+  return (addr_.is_valid() && (addr_ != GCONF.self_addr_)) // txn free route temporary node
+    || in_tx_or_has_extra_state_();
 }
 
 bool ObTxDesc::contain_savepoint(const ObString &sp)
@@ -456,6 +547,7 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       ret = OB_ENTRY_NOT_EXIST;
     }
   }
+  state_change_flags_.PARTS_CHANGED_ = true;
   return ret;
 }
 
@@ -479,6 +571,7 @@ int ObTxDesc::update_clean_part(const share::ObLSID &id,
  */
 int ObTxDesc::update_part(ObTxPart &p)
 {
+  ObSpinLockGuard guard(lock_);
   return update_part_(p, true);
 }
 
@@ -511,6 +604,7 @@ void ObTxDesc::implicit_start_tx_()
     active_ts_ = ObClockGenerator::getClock();
     expire_ts_ = active_ts_ + timeout_us_;
     active_scn_ = ObSequence::get_max_seq_no();
+    state_change_flags_.mark_all();
   }
 }
 
@@ -569,6 +663,7 @@ int ObTxDesc::get_inc_exec_info(ObTxExecResult &exec_info)
     exec_info_reap_ts_ += 1;
   }
   (void) exec_info.merge_cflict_txs(cflict_txs_);
+  cflict_txs_.reset();
   DETECT_LOG(TRACE, "merge conflict txs to exec result", K(cflict_txs_), K(exec_info));
   return ret;
 }
@@ -614,7 +709,7 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
     if (ret == OB_EAGAIN) {
       if (OB_NOT_NULL(commit_cb_)) {
         if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
-          TRANS_LOG(WARN, "use too much time wait lock", K_(tx_id));
+          TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "use too much time wait lock", K_(tx_id));
         }
         if (++cnt < 200) { PAUSE(); }
         else { ob_usleep(5000); }
@@ -649,14 +744,19 @@ inline bool ObTxDesc::acq_commit_cb_lock_if_need_()
  * shortcut and return.
  * for more detail, refer to 'acq_commit_cb_lock_if_need_' function.
  */
-void ObTxDesc::execute_commit_cb()
+bool ObTxDesc::execute_commit_cb()
 {
+  bool executed = false;
+  /*
+   * load_acquire state_ and commit_out_
+   * pair with ObTransService::handle_tx_commit_result_
+   */
+  ATOMIC_LOAD_ACQ((int*)&state_);
   if (is_tx_end() || is_xa_terminate_state_()) {
     auto tx_id = tx_id_;
     auto cb = commit_cb_;
     int ret = OB_SUCCESS;
-    bool executed = false;
-    if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
+     if (OB_NOT_NULL(commit_cb_) && acq_commit_cb_lock_if_need_()) {
       if (OB_NOT_NULL(commit_cb_)) {
         executed = true;
         cb = commit_cb_;
@@ -673,6 +773,7 @@ void ObTxDesc::execute_commit_cb()
     }
     TRANS_LOG(TRACE, "execute_commit_cb", KP(this), K(tx_id), KP(cb), K(executed));
   }
+  return executed;
 }
 
 ObITxCallback *ObTxDesc::cancel_commit_cb()
@@ -722,11 +823,41 @@ void ObTxDesc::release_implicit_savepoint(const int64_t savepoint)
     min_implicit_savepoint_ = INT64_MAX;
   }
   // invalid txn snapshot if it was created after the savepoint
-  if (snapshot_version_ > 0 && savepoint < snapshot_scn_) {
-    snapshot_version_ = -1;
+  if (snapshot_version_.is_valid() && savepoint < snapshot_scn_) {
     TRANS_LOG(INFO, "release txn snapshot_version", K_(snapshot_version),
               K(savepoint), K_(snapshot_scn), K_(tx_id));
+    snapshot_version_.reset();
   }
+}
+
+int ObTxDesc::fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(array.assign(cflict_txs_))) {
+    DETECT_LOG(WARN, "fail to fetch conflict txs", K(ret), K(cflict_txs_));
+  }
+  cflict_txs_.reset();
+  return ret;
+}
+
+int ObTxDesc::add_conflict_tx(const ObTransIDAndAddr conflict_tx) {
+  ObSpinLockGuard guard(lock_);
+  return add_conflict_tx_(conflict_tx);
+}
+
+int ObTxDesc::add_conflict_tx_(const ObTransIDAndAddr &conflict_tx) {
+  int ret = OB_SUCCESS;
+  if (cflict_txs_.count() >= MAX_RESERVED_CONFLICT_TX_NUM) {
+    ret = OB_SIZE_OVERFLOW;
+    int64_t max_reserved_conflict_tx_num = MAX_RESERVED_CONFLICT_TX_NUM;
+    DETECT_LOG(WARN, "too many conflict trans id", K(max_reserved_conflict_tx_num), K(cflict_txs_), K(conflict_tx));
+  } else if (!is_contain(cflict_txs_, conflict_tx)) {
+    if (OB_FAIL(cflict_txs_.push_back(conflict_tx))) {
+      DETECT_LOG(WARN, "fail to push conflict tx to cflict_txs_", K(ret), K(cflict_txs_), K(conflict_tx));
+    }
+  }
+  return ret;
 }
 
 int ObTxDesc::merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_txs)
@@ -738,18 +869,64 @@ int ObTxDesc::merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_txs)
 int ObTxDesc::merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_txs)
 {
   int ret = OB_SUCCESS;
-  for (int64_t idx = 0; idx < conflict_txs.count() && OB_SUCC(ret); ++idx) {
-    if (cflict_txs_.count() > MAX_RESERVED_CONFLICT_TX_NUM) {
-      int64_t max_reserved_conflict_tx_num = MAX_RESERVED_CONFLICT_TX_NUM;
-      DETECT_LOG(WARN, "too many conflict trans id", K(max_reserved_conflict_tx_num), K(cflict_txs_), K(conflict_txs));
-      break;
-    } else if (is_contain(cflict_txs_, conflict_txs.at(idx))) {
-      continue;
-    } else if (OB_FAIL(cflict_txs_.push_back(conflict_txs.at(idx)))) {
-      DETECT_LOG(WARN, "fail to push conflict id to cflict_txs_", K(cflict_txs_), K(conflict_txs));
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t idx = 0; idx < conflict_txs.count() && OB_SUCC(tmp_ret); ++idx) {
+    // This function should try its best to push the conflict_tx into the array.
+    // However, whether the insertion is successful or not
+    // should not affect the normal execution process.
+    // So we just use tmp_ret to catch the error code here.
+    if (OB_TMP_FAIL(add_conflict_tx_(conflict_txs.at(idx)))) {
+      DETECT_LOG(WARN, "fail to add conflict tx to cflict_txs_", K(tmp_ret), K(cflict_txs_), K(conflict_txs.at(idx)));
     }
   }
   return ret;
+}
+
+// get global trans type for session
+// 1. if xid is empty or xa_ctx is null, PLAIN is returned.
+// 2. if xid from session is equal to xid in desc and global_tx_type is DBLINK_TRANS,
+//    DBLINK_TRANS is returned.
+// 3. if xid from session is not equal to xid in desc and global_tx_type is DBLINK_TRANS,
+//    XA_TRANS is returned.
+ObGlobalTxType ObTxDesc::get_global_tx_type(const ObXATransID &xid) const
+{
+  ObGlobalTxType tx_type = ObGlobalTxType::PLAIN;
+  if (NULL == xa_ctx_ || xid_.empty()) {
+    // return PLAIN
+  } else if (!xid_.all_equal_to(xid)) {
+    tx_type = ObGlobalTxType::XA_TRANS;
+  } else {
+    tx_type = global_tx_type_;
+  }
+  return tx_type;
+}
+int ObTxDesc::get_parts_copy(ObTxPartList &copy_parts)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(copy_parts.assign(parts_))) {
+    TRANS_LOG(WARN, "TxDesc get participants copy error", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObTxDesc::get_savepoints_copy(ObTxSavePointList &copy_savepoints)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (OB_FAIL(copy_savepoints.assign(savepoints_))) {
+    TRANS_LOG(WARN, "TxDesc get savepoints copy error", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+void ObTxDesc::set_xa_ctx(ObXACtx *xa_ctx)
+{
+  xa_ctx_ = xa_ctx;
+  if (OB_NOT_NULL(xa_ctx)) {
+    xa_tightly_couple_ = xa_ctx->is_tightly_coupled();
+    xa_start_addr_ = GCONF.self_addr_;
+  }
 }
 
 ObTxParam::ObTxParam()
@@ -777,18 +954,17 @@ ObTxParam::~ObTxParam()
 }
 
 ObTxSnapshot::ObTxSnapshot()
-  : version_(-1), tx_id_(), scn_(-1), elr_(false) {}
+  : version_(), tx_id_(), scn_(-1), elr_(false) {}
 
 ObTxSnapshot::~ObTxSnapshot()
 {
-  version_ = -1;
   scn_ = -1;
   elr_ = false;
 }
 
 void ObTxSnapshot::reset()
 {
-  version_ = -1;
+  version_.reset();
   tx_id_.reset();
   scn_ = -1;
   elr_ = false;
@@ -843,7 +1019,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
   return ret;
 }
 
-void ObTxReadSnapshot::init_weak_read(const int64_t snapshot)
+void ObTxReadSnapshot::init_weak_read(const SCN snapshot)
 {
   core_.version_ = snapshot;
   core_.tx_id_.reset();
@@ -854,7 +1030,7 @@ void ObTxReadSnapshot::init_weak_read(const int64_t snapshot)
   valid_ = true;
 }
 
-void ObTxReadSnapshot::init_special_read(const int64_t snapshot)
+void ObTxReadSnapshot::init_special_read(const SCN snapshot)
 {
   core_.version_ = snapshot;
   core_.tx_id_.reset();
@@ -1103,7 +1279,11 @@ int ObTxDescMgr::wait()
       ret = OB_TIMEOUT;
       TRANS_LOG(WARN, "txDescMgr.wait timeout", K(ret));
       PrintTxDescFunctor fn(128);
+#ifndef NDEBUG
+      (void)map_.alloc_handle_.for_each(fn);
+#else
       (void)map_.for_each(fn);
+#endif
     }
   }
   TRANS_LOG(INFO, "txDescMgr.wait", K(ret), K(inited_), K(stoped_), K(active_cnt));
@@ -1141,6 +1321,7 @@ int ObTxDescMgr::add(ObTxDesc &tx_desc)
   if (OB_FAIL(ret) && tx_id.is_valid()) {
     tx_desc.reset_tx_id();
   }
+  OX(tx_desc.flags_.SHADOW_ = false);
   TRANS_LOG(TRACE, "txDescMgr.register trans", K(ret), K(tx_id), K(tx_desc));
   return ret;
 }
@@ -1148,27 +1329,32 @@ int ObTxDescMgr::add(ObTxDesc &tx_desc)
 int ObTxDescMgr::add_with_txid(const ObTransID &tx_id, ObTxDesc &tx_desc)
 {
   int ret = OB_SUCCESS;
+  auto desc_tx_id = tx_desc.get_tx_id();
   if (!inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTxDescMgr not inited", K(ret));
   } else if (stoped_) {
     ret = OB_IN_STOP_STATE;
     TRANS_LOG(WARN, "ObTxDescMgr has been stopped", K(ret));
-  } else if (tx_desc.get_tx_id().is_valid() || !tx_id.is_valid()) {
+  } else if (!tx_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), K(tx_desc));
-  } else {
-    // set_tx_id should before insert_and_get
-    tx_desc.set_tx_id(tx_id);
-    if (OB_FAIL(map_.insert_and_get(tx_id, &tx_desc, NULL))) {
+  } else if (desc_tx_id.is_valid() && desc_tx_id != tx_id) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx desc with different tx id", K(ret), K(tx_id), K(tx_desc));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!desc_tx_id.is_valid()) { tx_desc.set_tx_id(tx_id); }
+    if (OB_FAIL(map_.insert(tx_id, &tx_desc))) {
       TRANS_LOG(WARN, "fail to register trans", K(ret), K(tx_desc));
     }
     // if fail revert tx_desc.tx_id_ member
-    if (OB_FAIL(ret)) {
-      tx_desc.reset_tx_id();
-    }
+    if (OB_FAIL(ret) && !desc_tx_id.is_valid()) { tx_desc.reset_tx_id(); }
+    if (OB_SUCC(ret) && tx_desc.flags_.SHADOW_) { tx_desc.flags_.SHADOW_ = false; }
   }
-  TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id), K(tx_desc));
+  TRANS_LOG(INFO, "txDescMgr.register trans with txid", K(ret), K(tx_id),
+      K(map_.alloc_cnt()));
   return ret;
 }
 
@@ -1176,7 +1362,9 @@ int ObTxDescMgr::get(const ObTransID &tx_id, ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
   OV(inited_, OB_NOT_INIT);
-  OZ(map_.get(tx_id, tx_desc));
+  if (OB_SUCC(ret)) {
+    ret = map_.get(tx_id, tx_desc);
+  }
   TRANS_LOG(TRACE, "txDescMgr.get trans", K(tx_id), KPC(tx_desc));
   return ret;
 }
@@ -1200,6 +1388,7 @@ int ObTxDescMgr::remove(ObTxDesc &tx)
   TRANS_LOG(TRACE, "txDescMgr.unregister trans:", K(tx_id));
   OV(inited_, OB_NOT_INIT);
   OX(map_.del(tx_id, &tx));
+  OX(tx.flags_.SHADOW_ = true);
   return ret;
 }
 
@@ -1219,6 +1408,22 @@ int ObTxDescMgr::release_tx_ref(ObTxDesc *tx_desc)
   CK(OB_NOT_NULL(tx_desc));
   OX(revert(*tx_desc));
   LOG_TRACE("txDescMgr.release tx ref", K(ret), KP(tx_desc));
+  return ret;
+}
+
+int ObTxDescMgr::iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    TRANS_LOG(WARN, "ObTxDescMgr not inited");
+    ret = OB_NOT_INIT;
+  } else {
+    IterateTxSchedulerFunctor fn(tx_scheduler_stat_iter);
+    if (OB_FAIL(map_.for_each(fn))) {
+      TRANS_LOG(WARN, "for each transaction scheduler error", KR(ret));
+    }
+  }
+
   return ret;
 }
 

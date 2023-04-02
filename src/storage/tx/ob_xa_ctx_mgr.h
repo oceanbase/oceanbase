@@ -38,6 +38,7 @@ public:
       ctx->destroy();
       op_reclaim_free(ctx);
       ctx = NULL;
+      ObXAStatistics::get_instance().dec_ctx_count();
     }
   }
   XACtxHashNode* alloc_node(ObXACtx* node)
@@ -128,12 +129,12 @@ public:
     // always return true so as to traverse all ctx
     int tmp_ret = common::OB_SUCCESS;
     if (!trans_id.is_valid() || OB_ISNULL(xa_ctx)) {
-      TRANS_LOG(WARN, "invalid argument", K(trans_id), KP(xa_ctx));
+      TRANS_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", K(trans_id), KP(xa_ctx));
     } else {
       bool is_original = (GCTX.self_addr() == xa_ctx->get_original_sche_addr());
       if (is_original) {
         if (OB_SUCCESS != (tmp_ret = xa_ctx->try_heartbeat())) {
-          TRANS_LOG(WARN, "xa scheduler hb failed", K(tmp_ret), K(*xa_ctx));
+          TRANS_LOG_RET(WARN, tmp_ret, "xa scheduler hb failed", K(tmp_ret), K(*xa_ctx));
         }
       }
     }

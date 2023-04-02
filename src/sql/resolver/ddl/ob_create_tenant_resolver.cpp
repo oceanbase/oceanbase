@@ -177,7 +177,7 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
         charset_type = ObCharset::charset_type_by_coll(collation_type);
       } else {
         //这里需要考虑到charset_type已经是一个有效的字符集时，需要重新设置对应的collation_type
-        //bug:https://work.aone.alibaba-inc.com/issue/24637119
+        //bug:
         collation_type = ObCharset::get_default_collation_oracle(charset_type);
       }
 

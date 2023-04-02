@@ -99,8 +99,11 @@ public:
 };
 
 template <typename TAKEOVER_OP>
-vector<ElectionImpl *> create_election_group(const int election_num, TAKEOVER_OP &&op)
+vector<ElectionImpl *> create_election_group(const int election_num, const vector<uint64_t> &priority_seed, TAKEOVER_OP &&op)
 {
+  if (priority_seed.size() != election_num) {
+    abort();
+  }
   vector<ElectionImpl *> v;
 
   MemberList member_list;
@@ -130,10 +133,15 @@ vector<ElectionImpl *> create_election_group(const int election_num, TAKEOVER_OP
       1,
       &timer,
       &GlobalNetService,
-      ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + index++),
+      ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + index),
+      priority_seed[index],
       1,
-      [](const int64_t, const ObAddr &){ return OB_SUCCESS; },
-      [op](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
+      [&election](const int64_t, const ObAddr &dest_addr) {
+        return THREAD_POOL.commit_task_ignore_ret([&election, dest_addr]() {
+          election->change_leader_to(dest_addr);
+        });
+      },
+      [op, ret](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
         if (before == ObRole::FOLLOWER && after == ObRole::LEADER) {
           ELECT_LOG(INFO, "i become LEADER", K(obj_to_string(reason)), KPC(election));
           op();
@@ -168,17 +176,17 @@ vector<ElectionImpl *> create_election_group(const int election_num, TAKEOVER_OP
         }
       }
     );
-    assert(ret == OB_SUCCESS);
+    index++;
+    OB_ASSERT(ret == OB_SUCCESS);
     ret = election->set_memberlist(member_list);
-    assert(ret == OB_SUCCESS);
+    OB_ASSERT(ret == OB_SUCCESS);
   }
   port += election_num;
   return v;
 }
 
 TEST_F(TestElection, 3replica_disconnect_leader) {
-  auto election_list = create_election_group(3, [](){});
-  
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
   this_thread::sleep_for(chrono::seconds(7));
 
   ELECT_LOG(INFO, "disconnect leader");
@@ -275,7 +283,7 @@ void calculate_and_print_max_min_average(const vector<int64_t> &leader_takeover_
 //   int64_t min = INT64_MAX, max = 0, average = 0;
 //   calculate_and_print_max_min_average(leader_takeover_time, disconnect_leader_time,
 //                                       min, max, average);
-//   // see: https://yuque.antfin.com/ob/transaction/auf9pn
+//   // see:
 //   int64_t expected_min = 4 * MAX_TST + 3 * MSG_DELAY - (0.5 * MAX_TST - MSG_DELAY);
 //   int64_t expected_max = 4 * (MAX_TST + MSG_DELAY);
 //   int64_t expected_average = 4 * MAX_TST + 3.5 * MSG_DELAY - 0.5 * (0.5 * MAX_TST - MSG_DELAY);
@@ -339,7 +347,7 @@ void calculate_and_print_max_min_average(const vector<int64_t> &leader_takeover_
 //   int64_t min = INT64_MAX, max = 0, average = 0;
 //   calculate_and_print_max_min_average(leader_takeover_time, disconnect_leader_time,
 //                                       min, max, average);
-//   // see: https://yuque.antfin.com/ob/transaction/auf9pn
+//   // see:
 //   int64_t expected_min = 4 * MAX_TST + 3 * MSG_DELAY - (0.5 * MAX_TST - MSG_DELAY);
 //   int64_t expected_max = 4 * (MAX_TST + MSG_DELAY);
 //   int64_t expected_average = 4 * MAX_TST + 3.5 * MSG_DELAY - 0.5 * (0.5 * MAX_TST - MSG_DELAY);
@@ -359,7 +367,7 @@ void calculate_and_print_max_min_average(const vector<int64_t> &leader_takeover_
 // }
 
 TEST_F(TestElection, 1replica_elect_leader) {
-  auto election_list = create_election_group(1, [](){});
+  auto election_list = create_election_group(1, {0}, [](){});
 
   this_thread::sleep_for(chrono::seconds(7));
 
@@ -379,7 +387,7 @@ TEST_F(TestElection, 1replica_elect_leader) {
 }
 
 TEST_F(TestElection, change_leader) {
-  auto election_list = create_election_group(3, [](){});
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
   
   this_thread::sleep_for(chrono::seconds(7));
 
@@ -404,7 +412,7 @@ TEST_F(TestElection, change_leader) {
 }
 
 TEST_F(TestElection, config_vresion_not_same_and_wont_split_vote) {
-  auto election_list = create_election_group(3, [](){});
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
 
   MemberList member_list;
   ObArray<ObAddr> addr_list;
@@ -414,10 +422,10 @@ TEST_F(TestElection, config_vresion_not_same_and_wont_split_vote) {
 
   for (int i = 0; i < 3; ++i) {
     palf::LogConfigVersion version;
-    assert(OB_SUCCESS == version.generate(2, i));
+    OB_ASSERT(OB_SUCCESS == version.generate(2, i));
     member_list.set_new_member_list(addr_list, version, 3);
     int ret = election_list[i]->set_memberlist(member_list);
-    assert(OB_SUCCESS == ret);
+    OB_ASSERT(OB_SUCCESS == ret);
   }
 
   this_thread::sleep_for(chrono::seconds(10));
@@ -438,7 +446,7 @@ TEST_F(TestElection, config_vresion_not_same_and_wont_split_vote) {
 }
 
 TEST_F(TestElection, change_member_concurrent_with_change_leader) {
-  auto election_list = create_election_group(3, [](){});
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
 
   this_thread::sleep_for(chrono::seconds(7));
 
@@ -446,6 +454,132 @@ TEST_F(TestElection, change_member_concurrent_with_change_leader) {
   ELECT_LOG(INFO, "call change leader, but dest addr not in member list");
 
   this_thread::sleep_for(chrono::seconds(1));
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+  ASSERT_EQ(leader_takeover_times, 2);
+  ASSERT_EQ(leader_revoke_times, 2);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 1);
+  ASSERT_EQ(change_leader_to_be_follower_count, 1);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, not_allowed_smallest_ip_be_leader) {
+  auto election_list = create_election_group(3, {1, 0, 0}, [](){});
+
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+  this_thread::sleep_for(chrono::seconds(7));
+  ObRole role;
+  int64_t _;
+  election_list[1]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+
+  ASSERT_EQ(leader_takeover_times, 1);
+  ASSERT_EQ(leader_revoke_times, 1);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 0);
+  ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, inner_priority_seed_not_valid_when_membership_version_not_equal) {
+  auto election_list = create_election_group(3, {0, 1, 2}, [](){});
+  MemberList member_list;
+  ObArray<ObAddr> addr_list;
+  int port = 1;
+  for (int i = 0; i < 3; ++i)
+    addr_list.push_back(ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + i));
+
+  for (int i = 0; i < 3; ++i) {
+    palf::LogConfigVersion version;
+    OB_ASSERT(OB_SUCCESS == version.generate(2, i));
+    member_list.set_new_member_list(addr_list, version, 3);
+    int ret = election_list[i]->set_memberlist(member_list);
+    OB_ASSERT(OB_SUCCESS == ret);
+  }
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+  this_thread::sleep_for(chrono::seconds(7));
+  ObRole role;
+  int64_t _;
+  election_list[2]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+
+  ASSERT_EQ(leader_takeover_times, 1);
+  ASSERT_EQ(leader_revoke_times, 1);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 0);
+  ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, inner_priority_seed_valid_when_membership_version_equal) {
+  auto election_list = create_election_group(3, {3, 2, 1}, [](){});
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+  this_thread::sleep_for(chrono::seconds(7));
+  ObRole role;
+  int64_t _;
+  election_list[2]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
+    (*iter)->stop();
+  this_thread::sleep_for(chrono::seconds(2));
+  for (auto &election_ : election_list)
+    delete election_;
+
+  ASSERT_EQ(leader_takeover_times, 1);
+  ASSERT_EQ(leader_revoke_times, 1);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 0);
+  ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, set_inner_priority_seed) {
+  auto election_list = create_election_group(3, {(uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED, (uint64_t)PRIORITY_SEED_BIT::DEFAULT_SEED}, [](){});
+  for (auto &election_1 : election_list) {
+    for (auto &election_2 : election_list) {
+      GlobalNetService.connect(election_1, election_2);
+    }
+  }
+  this_thread::sleep_for(chrono::seconds(7));
+  ObRole role;
+  int64_t _;
+  election_list[0]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
+
+  ASSERT_EQ(OB_SUCCESS, election_list[0]->add_inner_priority_seed_bit(PRIORITY_SEED_BIT::SEED_IN_REBUILD_PHASE_BIT));
+  this_thread::sleep_for(chrono::seconds(3));
+  election_list[1]->get_role(role, _);
+  ASSERT_EQ(role, ObRole::LEADER);
 
   for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter)
     (*iter)->stop();

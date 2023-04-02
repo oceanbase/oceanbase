@@ -44,8 +44,7 @@ int ObTablePartitionInfo::init_table_location(ObSqlSchemaGuard &schema_guard,
                                               const ObIArray<ObObjectID> *part_ids,
                                               const common::ObDataTypeCastParams &dtc_params,
                                               bool is_dml_table,
-                                              ObIArray<ObRawExpr *> *sort_exprs,
-                                              bool is_link /* = false */)
+                                              ObIArray<ObRawExpr *> *sort_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
@@ -58,8 +57,7 @@ int ObTablePartitionInfo::init_table_location(ObSqlSchemaGuard &schema_guard,
                                         part_ids,
                                         dtc_params,
                                         is_dml_table,
-                                        sort_exprs,
-                                        is_link))) {
+                                        sort_exprs))) {
       LOG_WARN("fail to init table location", K(ret));
     }
   }
@@ -141,7 +139,7 @@ int ObTablePartitionInfo::calc_phy_table_loc_and_select_leader(ObExecContext &ex
     LOG_WARN("fail to calculate phy table location info", K(ret));
   } else if (OB_FAIL(candi_table_loc_.all_select_leader(is_on_same_server, same_server))) {
     LOG_WARN("fail to all select leader", K(ret), K(candi_table_loc_));
-    // https://work.aone.alibaba-inc.com/issue/24886577
+    //
     //
     // 考虑没有 leader 的场景下，all_select_leader 一定会失败
     // 导致 optimize 失败。optimize 失败后，不会进入执行期，进而
@@ -240,19 +238,9 @@ int ObTablePartitionInfo::get_location_type(const common::ObAddr &server, ObTabl
 int ObTablePartitionInfo::get_all_servers(ObIArray<common::ObAddr> &servers) const
 {
 	int ret = OB_SUCCESS;
-  const ObCandiTabletLocIArray &phy_part_loc_info_list =
-      candi_table_loc_.get_phy_part_loc_info_list();
-  FOREACH_CNT_X(it, phy_part_loc_info_list, OB_SUCC(ret)) {
-    share::ObLSReplicaLocation replica_location;
-    if (OB_FAIL((*it).get_selected_replica(replica_location))) {
-      LOG_WARN("fail to get selected replica", K(*it));
-    } else if (!replica_location.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("replica location is invalid", K(ret), K(replica_location));
-    } else if (OB_FAIL(add_var_to_array_no_dup(servers, replica_location.get_server()))) {
-      LOG_WARN("failed to push back server", K(ret));
-    }
-  }
+  if (OB_FAIL(candi_table_loc_.get_all_servers(servers))) {
+    LOG_WARN("failed to get all servers", K(ret));
+  } else { /* do nothing */ }
   return ret;
 }
 

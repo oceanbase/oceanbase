@@ -153,18 +153,18 @@ public:
       const char **micro_data,
       const int64_t micro_cnt,
       const int64_t rowkey_cnt,
-      const ObLogTsRange &log_ts_range,
+      const ObScnRange &scn_range,
       const int64_t snapshot_version);
 public:
   ObITable::TableType get_merged_table_type() const;
-  void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObLogTsRange &log_ts_range, const int64_t snapshot_version);
+  void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObScnRange &scn_range, const int64_t snapshot_version);
   void reset_writer(const int64_t snapshot_version);
   void prepare_one_macro(
       const char **micro_data,
       const int64_t micro_cnt,
       const int64_t max_merged_trans_version = INT64_MAX - 2,
       const bool contain_uncommitted = false);
-  void prepare_data_end(ObTableHandleV2 &handle);
+  void prepare_data_end(ObTableHandleV2 &handle, const ObITable::TableType &table_type = ObITable::MINI_SSTABLE);
   void append_micro_block(ObMockIterator &data_iter);
 
 protected:
@@ -294,13 +294,13 @@ ObITable::TableType ObMultiVersionSSTableTest::get_merged_table_type() const
   ObITable::TableType table_type = ObITable::MAX_TABLE_TYPE;
   if (MAJOR_MERGE == merge_type_) {
     table_type = ObITable::TableType::MAJOR_SSTABLE;
-  } else if (MINI_MERGE == merge_type_ || MINI_MINOR_MERGE == merge_type_) {
+  } else if (MINI_MERGE == merge_type_) {
     table_type = ObITable::TableType::MINI_SSTABLE;
-  } else if (BUF_MINOR_MERGE == merge_type_) {
-    table_type = ObITable::TableType::BUF_MINOR_SSTABLE;
+  } else if (META_MAJOR_MERGE == merge_type_) {
+    table_type = ObITable::TableType::META_MAJOR_SSTABLE;
   } else if (DDL_KV_MERGE == merge_type_) {
-    table_type = ObITable::TableType::KV_DUMP_SSTABLE;
-  } else { // MINOR_MERGE || HISTORY_MINI_MINOR_MERGE
+    table_type = ObITable::TableType::DDL_DUMP_SSTABLE;
+  } else { // MINOR_MERGE
     table_type = ObITable::TableType::MINOR_SSTABLE;
   }
   return table_type;
@@ -309,7 +309,7 @@ ObITable::TableType ObMultiVersionSSTableTest::get_merged_table_type() const
 void ObMultiVersionSSTableTest::prepare_table_schema(
     const char **micro_data,
     const int64_t schema_rowkey_cnt,
-    const ObLogTsRange &log_ts_range,
+    const ObScnRange &scn_range,
     const int64_t snapshot_version)
 {
   full_read_info_.reset();
@@ -407,7 +407,7 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
 
   table_key_.table_type_ = get_merged_table_type();
   table_key_.tablet_id_ = tablet_id_;
-  table_key_.log_ts_range_ = log_ts_range;
+  table_key_.scn_range_ = scn_range;
   if (MAJOR_MERGE == merge_type_) {
     table_key_.version_range_.snapshot_version_ = snapshot_version;
   }
@@ -442,7 +442,7 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
 
   ObLSID ls_id(ls_id_);
   ObTabletID tablet_id(tablet_id_);
-  ASSERT_EQ(OB_SUCCESS, data_desc_.init(table_schema_, ls_id, tablet_id, merge_type_, snapshot_version));
+  ASSERT_EQ(OB_SUCCESS, data_desc_.init(table_schema_, ls_id, tablet_id, merge_type_, snapshot_version, 1000000));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder();
   ASSERT_NE(nullptr, root_index_builder_);
@@ -452,7 +452,7 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   data_desc_.row_store_type_ = row_store_type_;
   ASSERT_TRUE(data_desc_.is_valid());
 
-  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version));
+  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version, DATA_VERSION_4_1_0_0));
   ASSERT_TRUE(index_desc_.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_));
 
@@ -509,7 +509,9 @@ void ObMultiVersionSSTableTest::append_micro_block(ObMockIterator &data_iter)
   }
 }
 
-void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
+void ObMultiVersionSSTableTest::prepare_data_end(
+    ObTableHandleV2 &handle,
+    const ObITable::TableType &table_type)
 {
   ASSERT_EQ(OB_SUCCESS, macro_writer_.close());
   ObSSTableMergeRes res;
@@ -518,6 +520,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(column_cnt, res));
 
   ObTabletCreateSSTableParam param;
+  table_key_.table_type_ = table_type;
   param.table_key_ = table_key_;
   param.schema_version_ = SCHEMA_VERSION;
   param.create_snapshot_version_ = 0;
@@ -525,6 +528,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   param.progressive_merge_step_ = 0;
   param.table_mode_ = table_schema_.get_table_mode_struct();
   param.index_type_ = table_schema_.get_index_type();
+  param.latest_row_store_type_ = table_schema_.get_row_store_type();
   param.rowkey_column_cnt_ = table_schema_.get_rowkey_column_num()
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
 
@@ -532,6 +536,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
                                         param.root_block_addr_, param.root_block_data_);
   ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
                                         param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+  param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
   param.root_row_store_type_ = res.root_desc_.row_type_;
   param.data_index_tree_height_ = res.root_desc_.height_;
   param.index_blocks_cnt_ = res.index_blocks_cnt_;
@@ -544,7 +549,10 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
-  if (merge_type_ == MAJOR_MERGE) {
+  param.nested_size_ = res.nested_size_;
+  param.nested_offset_ = res.nested_offset_;
+  param.ddl_scn_.set_min();
+  if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }
 
@@ -560,10 +568,10 @@ void ObMultiVersionSSTableTest::prepare_data(
     const char **micro_data,
     const int64_t micro_cnt,
     const int64_t schema_rowkey_cnt,
-    const ObLogTsRange &log_ts_range,
+    const ObScnRange &scn_range,
     const int64_t snapshot_version)
 {
-  prepare_table_schema(micro_data, schema_rowkey_cnt, log_ts_range, snapshot_version);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, micro_cnt);
   prepare_data_end(handle);

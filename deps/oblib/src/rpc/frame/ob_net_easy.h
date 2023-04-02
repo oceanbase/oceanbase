@@ -18,6 +18,8 @@
 #include "rpc/frame/ob_req_transport.h"
 #include "rpc/obrpc/ob_listener.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "lib/ssl/ob_ssl_config.h"
+
 using namespace oceanbase::obrpc;
 namespace oceanbase
 {

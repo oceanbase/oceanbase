@@ -90,9 +90,9 @@ rpc::frame::ObReqTransport::AsyncCB *ObWrsRpc::ClusterHeartbeatCB::clone(const r
   void *buf = NULL;
   ClusterHeartbeatCB *cb = NULL;
   if (OB_ISNULL(buf = alloc(sizeof(*this)))) {
-    LOG_ERROR("allocate memory for AsyncCB fail", K(buf));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory for AsyncCB fail", K(buf));
   } else if (OB_ISNULL(cb = new(buf) ClusterHeartbeatCB())) {
-    LOG_ERROR("construct ClusterHeartbeatCB fail", K(cb), K(buf));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct ClusterHeartbeatCB fail", K(cb), K(buf));
   } else {
     *cb = *this;
   }

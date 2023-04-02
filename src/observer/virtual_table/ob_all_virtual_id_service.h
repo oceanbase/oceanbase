@@ -63,8 +63,8 @@ private:
   int64_t cur_tenant_id_;
   int64_t last_id_;
   int64_t limit_id_;
-  int64_t rec_log_ts_;
-  int64_t latest_log_ts_;
+  share::SCN rec_log_ts_;
+  share::SCN latest_log_ts_;
   int64_t pre_allocated_range_;
   int64_t submit_log_ts_;
   bool is_master_;

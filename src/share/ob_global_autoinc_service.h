@@ -18,6 +18,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "logservice/ob_log_base_type.h"
+#include "share/scn.h"
 #include "share/ob_autoincrement_param.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/ob_gais_msg.h"
@@ -82,7 +83,8 @@ class ObGlobalAutoIncService : public logservice::ObIReplaySubHandler,
                                public logservice::ObIRoleChangeSubHandler
 {
 public:
-  ObGlobalAutoIncService() : is_inited_(false), is_leader_(false), cache_ls_(NULL) {}
+  ObGlobalAutoIncService() : is_inited_(false), is_leader_(false),
+    cache_ls_lock_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK), cache_ls_(NULL) {}
   virtual ~ObGlobalAutoIncService() {}
 
   const static int MUTEX_NUM = 1024;
@@ -141,26 +143,26 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const int64_t ts_ns) override final
+             const SCN &scn) override final
   {
     int ret = OB_SUCCESS;
     UNUSED(buffer);
     UNUSED(nbytes);
     UNUSED(lsn);
-    UNUSED(ts_ns);
+    UNUSED(scn);
     return ret;
   }
 
   // for checkpoint, do nothing
-  int64_t get_rec_log_ts() override final
+  SCN get_rec_scn() override final
   {
-    return INT64_MAX;
+    return share::SCN::max_scn();;
   }
 
-  int flush(int64_t rec_log_ts) override final
+  int flush(share::SCN &scn) override final
   {
     int ret = OB_SUCCESS;
-    UNUSED(rec_log_ts);
+    UNUSED(scn);
     return ret;
   }
 

@@ -117,6 +117,10 @@ public:
   inline bool is_calc_part_expr() const { return T_FUN_SYS_CALC_PARTITION_ID == type_
                                                       || T_FUN_SYS_CALC_TABLET_ID == type_
                                                       || T_FUN_SYS_CALC_PARTITION_TABLET_ID == type_; }
+  inline bool is_basic_const_expr_mysql() const { return EXPR_CONST == expr_class_
+                                                    || T_FUN_SYS_VERSION == type_
+                                                    || T_FUN_SYS_OB_VERSION == type_
+                                                    || T_FUN_SYS_ICU_VERSION == type_; }
   inline void set_expr_type(ObItemType v) { type_ = v; }
   inline ObItemType get_expr_type() const { return type_; }
 
@@ -131,6 +135,7 @@ public:
   const common::ObAccuracy &get_accuracy() const;
   uint64_t get_udt_id() const;
   uint32_t get_result_flag() const;
+  inline ExprClass get_expr_class() {return expr_class_;}
   int get_length_for_meta_in_bytes(common::ObLength &length) const;
   void set_meta_type(const common::ObObjMeta &meta_type);
   void set_result_type(const sql::ObExprResType &result_type);

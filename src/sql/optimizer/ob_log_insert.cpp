@@ -89,56 +89,63 @@ const char* ObLogInsert::get_name() const
   return ret;
 }
 
-int ObLogInsert::print_my_plan_annotation(char *buf,
-                                          int64_t &buf_len,
-                                          int64_t &pos,
-                                          ExplainType type)
+int ObLogInsert::get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if(OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
-                                       buf, buf_len, pos, type))) {
-    LOG_WARN("failed to print table info", K(ret));
-  }
-  // print partitions
-  if (NULL != table_partition_info_) {
-    if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(explain_print_partitions(*table_partition_info_, buf, buf_len, pos))) {
-      LOG_WARN("Failed to print partitions");
-    } else { }//do nothing
-  }
-  // print column convert exprs
-  if (OB_SUCC(ret) && !get_index_dml_infos().empty() && NULL != get_index_dml_infos().at(0)) {
-    const ObIArray<ObRawExpr *> &column_values = get_index_dml_infos().at(0)->column_convert_exprs_;
-    if(OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else {
-      EXPLAIN_PRINT_EXPRS(column_values, type);
+  if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
+                                  buf,
+                                  buf_len,
+                                  pos,
+                                  type))) {
+      LOG_WARN("failed to print table info", K(ret));
+    } else if (NULL != table_partition_info_) {
+      if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(explain_print_partitions(*table_partition_info_,
+                                                  buf,
+                                                  buf_len,
+                                                  pos))) {
+        LOG_WARN("Failed to print partitions");
+      } else { }//do nothing
     }
-  }
+    // print column convert exprs
+    if (OB_SUCC(ret) && !get_index_dml_infos().empty() && NULL != get_index_dml_infos().at(0)) {
+      const ObIArray<ObRawExpr *> &column_values = get_index_dml_infos().at(0)->column_convert_exprs_;
+      if(OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else {
+        EXPLAIN_PRINT_EXPRS(column_values, type);
+      }
+    }
 
-  if (OB_SUCC(ret) && insert_up_ ) {
-    const IndexDMLInfo *table_insert_info = get_insert_up_index_dml_infos().at(0);
-    if (OB_ISNULL(table_insert_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("index dml info is null", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(",\n"))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("      update("))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (OB_FAIL(print_assigns(table_insert_info->assignments_,
-                                     buf, buf_len, pos, type))) {
-      LOG_WARN("failed to print assigns", K(ret));
+    if (OB_SUCC(ret) && insert_up_ ) {
+      const IndexDMLInfo *table_insert_info = get_insert_up_index_dml_infos().at(0);
+      if (OB_ISNULL(table_insert_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index dml info is null", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(",\n"))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("      update("))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(print_assigns(table_insert_info->assignments_,
+                                       buf,
+                                       buf_len,
+                                       pos,
+                                       type))) {
+        LOG_WARN("failed to print assigns", K(ret));
+      } else { /* Do nothing */ }
+      BUF_PRINTF(")");
     } else { /* Do nothing */ }
-    BUF_PRINTF(")");
-  } else { /* Do nothing */ }
-
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
   return ret;
 }
 
@@ -382,26 +389,129 @@ int ObLogInsert::generate_multi_part_partition_id_expr()
   } else if (is_replace()) {
     // delete in replace only old part id expr is required
     for (int64_t i = 0; OB_SUCC(ret) && i < get_replace_index_dml_infos().count(); ++i) {
-      if (OB_ISNULL(get_replace_index_dml_infos().at(i))) {
+      IndexDMLInfo *index_info = get_replace_index_dml_infos().at(i);
+      ObSqlSchemaGuard *schema_guard = NULL;
+      const ObTableSchema *table_schema = NULL;
+      bool is_heap_table = false;
+      ObArray<ObRawExpr *> column_exprs;
+      if (OB_ISNULL(get_plan()) ||
+          OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("replae dml info is null", K(ret));
-      } else if (OB_FAIL(generate_old_calc_partid_expr(*get_replace_index_dml_infos().at(i)))) {
-        LOG_WARN("failed to generate calc partid expr", K(ret));
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(index_info->ref_table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+        // do nothing.
+      } else {
+        // When lookup_part_id_expr is a virtual generated column,
+        // the table with the primary key needs to be replaced,
+        // and the table without the primary key does not need to be replaced
+        ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+        if (OB_ISNULL(index_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("replae dml info is null", K(ret));
+        } else if (OB_FAIL(generate_old_calc_partid_expr(*index_info))) {
+          LOG_WARN("failed to generate calc partid expr", K(ret));
+        } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
+                                            index_info->old_part_id_expr_,
+                                            index_info->lookup_part_id_expr_))){
+          LOG_WARN("failed to replace expr", K(ret));
+        } else if (is_heap_table) {
+          if (OB_FAIL(generate_lookup_part_id_expr(*index_info))) {
+            LOG_WARN("failed to generate lookup part id expr", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(
+                    index_info->lookup_part_id_expr_, column_exprs))) {
+            LOG_WARN("failed to extract column exprs", K(ret));
+          } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+            LOG_WARN("failed to add skipped exprs", K(ret));
+          } else if (OB_FAIL(copier.copy(index_info->lookup_part_id_expr_,
+                                        index_info->lookup_part_id_expr_))) {
+            LOG_WARN("failed to copy lookup part id expr", K(ret));
+          }
+        }
       }
     }
   } else if (get_insert_up()) {
     // generate the calc_part_id_expr_ of update caluse
     for (int64_t i = 0; OB_SUCC(ret) && i < get_insert_up_index_dml_infos().count(); ++i) {
       IndexDMLInfo *dml_info = get_insert_up_index_dml_infos().at(i);
-      // insert on duplicate update stmt
-      if (OB_ISNULL(dml_info)) {
+      ObSqlSchemaGuard *schema_guard = NULL;
+      const ObTableSchema *table_schema = NULL;
+      bool is_heap_table = false;
+      ObArray<ObRawExpr *> column_exprs;
+      if (OB_ISNULL(get_plan()) ||
+          OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("insert_up dml info is null", K(ret));
-      } else if (OB_FAIL(generate_old_calc_partid_expr(*dml_info))) {
-        LOG_WARN("fail to generate calc partid expr", K(ret));
-      } else if (OB_FAIL(generate_update_new_calc_partid_expr(*dml_info))) {
-        LOG_WARN("failed to generate update new part id expr", K(ret));
-      } else { /*do nothing*/ }
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(dml_info->ref_table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (table_schema != NULL && FALSE_IT(is_heap_table = table_schema->is_heap_table())) {
+        // do nothing.
+      } else {
+        // When lookup_part_id_expr is a virtual generated column,
+        // the table with the primary key needs to be replaced,
+        // and the table without the primary key does not need to be replaced
+        ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+        // insert on duplicate update stmt
+        if (OB_ISNULL(dml_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("insert_up dml info is null", K(ret));
+        } else if (OB_FAIL(generate_old_calc_partid_expr(*dml_info))) {
+          LOG_WARN("fail to generate calc partid expr", K(ret));
+        } else if (OB_FAIL(generate_update_new_calc_partid_expr(*dml_info))) {
+          LOG_WARN("failed to generate update new part id expr", K(ret));
+        } else if (!is_heap_table && OB_FAIL(ObLogTableScan::replace_gen_column(get_plan(),
+                                            dml_info->old_part_id_expr_,
+                                            dml_info->lookup_part_id_expr_))){
+          LOG_WARN("failed to replace expr", K(ret));
+        } else if (is_heap_table) {
+          if (OB_FAIL(generate_lookup_part_id_expr(*dml_info))) {
+            LOG_WARN("failed to generate lookup part id expr", K(ret));
+          } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(
+                    dml_info->lookup_part_id_expr_, column_exprs))) {
+            LOG_WARN("failed to extract column exprs", K(ret));
+          } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+            LOG_WARN("failed to add skipped exprs", K(ret));
+          } else if (OB_FAIL(copier.copy(dml_info->lookup_part_id_expr_,
+                            dml_info->lookup_part_id_expr_))) {
+            LOG_WARN("failed to copy lookup part id expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogInsert::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogDelUpd::inner_replace_op_exprs(to_replace_exprs))) {
+    LOG_WARN("failed to replace op exprs", K(ret));
+  } else if (is_replace() &&
+             OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_replace_index_dml_infos()))) {
+    LOG_WARN("failed to replace dml info exprs", K(ret));
+  } else if (get_insert_up() &&
+             OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_insert_up_index_dml_infos()))) {
+    LOG_WARN("failed to replace dml info exprs", K(ret));
+  } else if (NULL != constraint_infos_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < constraint_infos_->count(); ++i) {
+      const ObIArray<ObColumnRefRawExpr*> &constraint_columns =
+          constraint_infos_->at(i).constraint_columns_;
+      for (int64_t i = 0; OB_SUCC(ret) && i < constraint_columns.count(); ++i) {
+        ObColumnRefRawExpr *expr = constraint_columns.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (expr->is_virtual_generated_column()) {
+          ObRawExpr *&dependant_expr = static_cast<ObColumnRefRawExpr *>(
+                                      expr)->get_dependant_expr();
+          if (OB_FAIL(replace_expr_action(to_replace_exprs, dependant_expr))) {
+            LOG_WARN("failed to push back generate replace pair", K(ret));
+          }
+        }
+      }
     }
   }
   return ret;

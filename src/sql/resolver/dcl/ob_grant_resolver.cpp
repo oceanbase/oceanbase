@@ -281,7 +281,8 @@ int ObGrantResolver::priv_exists(
       因此，这里只需要判断原来的privs里是否只有一个select any dictiony即可 */
     if (sys_privs.count() != 1) {
       exists = FALSE;
-    } else if (sys_privs.at(0) != PRIV_ID_SELECT_ANY_DICTIONARY) { 
+    } else if (sys_privs.at(0) != PRIV_ID_SELECT_ANY_DICTIONARY
+               && sys_privs.at(0) != PRIV_ID_EXEMPT_ACCESS_POLICY) {
       exists = FALSE;  
     } else {
       exists = TRUE;
@@ -304,7 +305,7 @@ int ObGrantResolver::push_pack_sys_priv(
   } else {
     for (int i = PRIV_ID_NONE + 1; 
              OB_SUCC(ret) &&  i < PRIV_ID_MAX; i++) {
-      if (i != PRIV_ID_SELECT_ANY_DICTIONARY) {
+      if (i != PRIV_ID_SELECT_ANY_DICTIONARY && i != PRIV_ID_EXEMPT_ACCESS_POLICY) {
         OZ (sys_privs.push_back(i));
       }
     }

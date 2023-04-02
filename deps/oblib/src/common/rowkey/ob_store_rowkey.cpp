@@ -32,8 +32,15 @@ ObStoreRowkey ObStoreRowkey::MAX_STORE_ROWKEY(&ObStoreRowkey::MAX_OBJECT, 1);
 //now it is used in liboblog,which is OK as liboblog only tests equality
 ObRowkey ObStoreRowkey::to_rowkey() const
 {
-  COMMON_LOG(WARN, "converting ObStoreRowkey to ObRowkey, potentially dangerous!");
+  COMMON_LOG_RET(WARN, OB_SUCCESS, "converting ObStoreRowkey to ObRowkey, potentially dangerous!");
   return key_;
+}
+
+void ObStoreRowkey::destroy(ObIAllocator &allocator)
+{
+  key_.destroy(allocator);
+  hash_ = 0;
+  group_idx_ = 0;
 }
 
 uint64_t ObStoreRowkey::murmurhash(const uint64_t hash) const

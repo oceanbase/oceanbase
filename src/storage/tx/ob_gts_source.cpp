@@ -233,7 +233,9 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
             if (EXECUTE_COUNT_PER_SEC(16)) {
               TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K(leader), K_(server), K(tmp_ret));
             }
-            refresh_gts_location();
+            if (OB_GTS_NOT_READY != tmp_ret) {
+              refresh_gts_location();
+            }
           }
         } else {
           ret = OB_SUCCESS;
@@ -299,20 +301,14 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
       gts_cache_leader_ = leader;
     }
     const MonotonicTs tmp_receive_gts_ts = MonotonicTs::current_time();
-    bool is_cross_barrier = false;
     if (OB_FAIL(gts_local_cache_.update_gts_and_check_barrier(srr,
                                                               tmp_gts,
-                                                              tmp_receive_gts_ts,
-                                                              is_cross_barrier))) {
-      TRANS_LOG(WARN, "update gts fail", K(srr), K(gts), K(receive_gts_ts),
-                K(is_cross_barrier), KR(ret));
-    } else if (is_cross_barrier) {
+                                                              tmp_receive_gts_ts))) {
+      TRANS_LOG(WARN, "update gts fail", K(srr), K(gts), K(receive_gts_ts), KR(ret));
+    } else {
       // get gts success, need to overwrite the OB_EAGAIN error code to OB_SUCCESS
       gts = tmp_gts;
       receive_gts_ts = tmp_receive_gts_ts;
-      ret = OB_SUCCESS;
-    } else {
-      ret = OB_EAGAIN;
     }
   }
 
@@ -522,51 +518,12 @@ int ObGtsSource::refresh_gts(const bool need_refresh)
   return ret;
 }
 
-int ObGtsSource::update_base_ts(const int64_t base_ts)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 > base_ts)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(base_ts));
-  } else if (OB_FAIL(gts_local_cache_.update_base_ts(base_ts))) {
-    TRANS_LOG(WARN, "update base ts failed", KR(ret), K(base_ts));
-  } else {
-  }
-  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
-    TRANS_LOG(WARN, "update base ts failed", K(ret), K_(tenant_id), K(base_ts),
-        K_(gts_local_cache));
-  } else {
-    TRANS_LOG(INFO, "update base ts success", K_(tenant_id), K(base_ts),
-        K_(gts_local_cache));
-  }
-  return ret;
-}
-
-int ObGtsSource::get_base_ts(int64_t &base_ts)
-{
-  int ret = OB_SUCCESS;
-  int64_t tmp_base_ts = 0;
-  if (OB_UNLIKELY(!is_inited_)) {
-    TRANS_LOG(WARN, "not inited");
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(gts_local_cache_.get_gts(tmp_base_ts))) {
-  } else {
-    base_ts = tmp_base_ts;
-  }
-  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
-    TRANS_LOG(WARN, "get base ts failed", K(ret), K_(tenant_id));
-  } else {
-    TRANS_LOG(INFO, "get base ts success", K_(tenant_id), K(base_ts));
-  }
-  return ret;
-}
-
 int ObGtsSource::get_gts_leader_(ObAddr &leader)
 {
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
 #ifdef ERRSIM
-  ret = E(EventTable::EN_GET_GTS_LEADER) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_GET_GTS_LEADER) OB_SUCCESS;
   if (OB_LS_LOCATION_LEADER_NOT_EXIST == ret) {
     ObClockGenerator::msleep(100);
     return ret;
@@ -606,7 +563,6 @@ int ObGtsSource::query_gts_(const ObAddr &leader)
     (void)refresh_gts_location_();
   } else {
     gts_statistics_.inc_gts_rpc_cnt();
-    ObTransStatistic::get_instance().add_gts_rpc_count(tenant_id_, 1);
     TRANS_LOG(DEBUG, "post gts request success", K(srr), K_(gts_local_cache));
   }
   return ret;

@@ -100,7 +100,8 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                                             false,
-                                            date_sql_mode))) {
+                                            date_sql_mode,
+                                            expr.args_[0]->obj_meta_.has_lob_header()))) {
     LOG_WARN("failed to convert datum to ob time");
     if (CM_IS_WARN_ON_FAIL(cast_mode) && OB_ALLOCATE_MEMORY_FAILED != ret) {
       ret = OB_SUCCESS;

@@ -247,12 +247,6 @@ class ObValuesSpec;
 class ObValuesOp;
 REGISTER_OPERATOR(ObLogValues, PHY_VALUES, ObValuesSpec, ObValuesOp, NOINPUT);
 
-class ObLogTableLookup;
-class ObTableLookupSpec;
-class ObTableLookupOp;
-REGISTER_OPERATOR(ObLogTableLookup, PHY_TABLE_LOOKUP, ObTableLookupSpec,
-                  ObTableLookupOp, NOINPUT, VECTORIZED_OP);
-
 class ObLogTableScan;
 class ObTableScanOpInput;
 class ObTableScanSpec;
@@ -430,8 +424,9 @@ REGISTER_OPERATOR(ObLogGroupBy, PHY_HASH_GROUP_BY, ObHashGroupBySpec,
 class ObLogWindowFunction;
 class ObWindowFunctionSpec;
 class ObWindowFunctionOp;
+class ObWindowFunctionOpInput;
 REGISTER_OPERATOR(ObLogWindowFunction, PHY_WINDOW_FUNCTION, ObWindowFunctionSpec,
-                  ObWindowFunctionOp, NOINPUT, VECTORIZED_OP);
+                  ObWindowFunctionOp, ObWindowFunctionOpInput, VECTORIZED_OP);
 
 class ObLogJoin;
 class ObMergeJoinSpec;
@@ -556,11 +551,16 @@ class ObSelectIntoSpec;
 class ObSelectIntoOp;
 REGISTER_OPERATOR(ObLogSelectInto, PHY_SELECT_INTO, ObSelectIntoSpec, ObSelectIntoOp,
                   NOINPUT, VECTORIZED_OP);
-class ObLogLink;
+class ObLogLinkScan;
 class ObLinkScanSpec;
 class ObLinkScanOp;
-REGISTER_OPERATOR(ObLogLink, PHY_LINK, ObLinkScanSpec, ObLinkScanOp,
+REGISTER_OPERATOR(ObLogLinkScan, PHY_LINK_SCAN, ObLinkScanSpec, ObLinkScanOp,
                   NOINPUT, VECTORIZED_OP);
+
+class ObLogLinkDml;
+class ObLinkDmlSpec;
+class ObLinkDmlOp;
+REGISTER_OPERATOR(ObLogLinkDml, PHY_LINK_DML, ObLinkDmlSpec, ObLinkDmlOp, NOINPUT);
 
 class ObLogFunctionTable;
 class ObFunctionTableSpec;
@@ -581,6 +581,18 @@ class ObStatCollectorSpec;
 class ObStatCollectorOp;
 REGISTER_OPERATOR(ObLogStatCollector, PHY_STAT_COLLECTOR, ObStatCollectorSpec, ObStatCollectorOp, NOINPUT,
                   VECTORIZED_OP);
+
+class ObLogJsonTable;
+class ObJsonTableSpec;
+class ObJsonTableOp;
+REGISTER_OPERATOR(ObLogJsonTable, PHY_JSON_TABLE, ObJsonTableSpec,
+                  ObJsonTableOp, NOINPUT);
+
+class ObLogOptimizerStatsGathering;
+class ObOptimizerStatsGatheringSpec;
+class ObOptimizerStatsGatheringOp;
+REGISTER_OPERATOR(ObLogOptimizerStatsGathering, PHY_OPTIMIZER_STATS_GATHERING,
+                  ObOptimizerStatsGatheringSpec, ObOptimizerStatsGatheringOp, NOINPUT, VECTORIZED_OP);
 
 #undef REGISTER_OPERATOR
 #undef REGISTER_OPERATOR_FULL

@@ -48,7 +48,9 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     partition_pruning_table_locations_,
                     ignore_vtable_error_,
                     temp_table_ctx_,
-                    access_table_location_keys_);
+                    access_table_location_keys_,
+                    adjoining_root_dfo_,
+                    is_single_tsc_leaf_dfo_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -130,6 +132,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     recieve_use_interm_result_ = other.recieve_use_interm_result_;
     ignore_vtable_error_ = other.ignore_vtable_error_;
     server_not_alive_ = other.server_not_alive_;
+    adjoining_root_dfo_ = other.adjoining_root_dfo_;
+    is_single_tsc_leaf_dfo_ = other.is_single_tsc_leaf_dfo_;
   }
   return ret;
 }
@@ -579,7 +583,7 @@ int ObPxRpcInitSqcArgs::serialize_common_parts_2(
                 buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
       LOG_WARN("failed to serialize rt expr", K(ret));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
-                buf, buf_len, pos, *op_spec_root_, sqc_.is_fulltree(), &seri_ctx))) {
+                buf, buf_len, pos, *op_spec_root_, sqc_.is_fulltree(), sqc_.get_exec_addr(), &seri_ctx))) {
       LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
                 buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store(), sqc_.is_fulltree()))) {
@@ -719,7 +723,7 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
     }
     if (OB_SUCC(ret)) {
       // Compact mode may not set while rpc argument deserialize, set it manually.
-      // See: https://work.aone.alibaba-inc.com/issue/22053604
+      // See:
       lib::CompatModeGuard g(ORACLE_MODE == exec_ctx_->get_my_session()->get_compatibility_mode()
           ? lib::Worker::CompatMode::ORACLE
           : lib::Worker::CompatMode::MYSQL);
@@ -777,7 +781,6 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
     ret = OB_NOT_INIT;
     LOG_WARN("task not init", K_(exec_ctx), K_(ser_phy_plan));
   }
-
   uint64_t sqc_task_ptr_val = reinterpret_cast<uint64_t>(sqc_task_ptr_);
   uint64_t sqc_handler_ptr_val = reinterpret_cast<uint64_t>(sqc_handler_);
 
@@ -798,7 +801,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
         buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
       LOG_WARN("failed to serialize rt expr", K(ret));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
-                buf, buf_len, pos, *op_spec_root_, task_.is_fulltree()))) {
+                buf, buf_len, pos, *op_spec_root_, task_.is_fulltree(), task_.get_exec_addr()))) {
       LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
         buf, buf_len, pos, *op_spec_root_, exec_ctx_->get_kit_store(), task_.is_fulltree()))) {

@@ -94,14 +94,12 @@ ObDmlTableInfo(ObDmlTableType table_type)
   virtual int deep_copy(ObIRawExprCopier &expr_copier,
                         const ObDmlTableInfo &other);
 
-  virtual int get_relation_exprs(RelExprCheckerBase &expr_checker);
-  virtual int replace_exprs(const common::ObIArray<ObRawExpr*> &other_exprs,
-                            const common::ObIArray<ObRawExpr*> &new_exprs);
+  virtual int iterate_stmt_expr(ObStmtExprVisitor &visitor);
 
   inline bool is_update_table() { return ObDmlTableType::UPDATE_TABLE == table_type_; }
   inline bool is_delete_table() { return ObDmlTableType::DELETE_TABLE == table_type_; }
   inline bool is_merge_table() { return ObDmlTableType::MERGE_TABLE == table_type_; }
-  inline bool is_insert_table() { return ObDmlTableType::INSERT_TABLE == table_type_; }
+  inline bool is_insert_table() const { return ObDmlTableType::INSERT_TABLE == table_type_; }
   inline bool is_insert_all_table() { return ObDmlTableType::INSERT_ALL_TABLE == table_type_; }
 
   TO_STRING_KV(K_(table_id),
@@ -168,9 +166,7 @@ public:
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObUpdateTableInfo &other);
 
-  virtual int get_relation_exprs(RelExprCheckerBase &expr_checker) override;
-  virtual int replace_exprs(const common::ObIArray<ObRawExpr*> &other_exprs,
-                            const common::ObIArray<ObRawExpr*> &new_exprs) override;
+  int iterate_stmt_expr(ObStmtExprVisitor &visitor) override;
 
   TO_STRING_KV(K_(table_id),
                K_(loc_table_id),
@@ -215,9 +211,7 @@ public:
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObInsertTableInfo &other);
 
-  virtual int get_relation_exprs(RelExprCheckerBase &expr_checker) override;
-  virtual int replace_exprs(const common::ObIArray<ObRawExpr*> &other_exprs,
-                            const common::ObIArray<ObRawExpr*> &new_exprs) override;
+  int iterate_stmt_expr(ObStmtExprVisitor &visitor) override;
 
   TO_STRING_KV(K_(table_id),
                K_(loc_table_id),
@@ -271,9 +265,7 @@ public:
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObMergeTableInfo &other);
 
-  virtual int get_relation_exprs(RelExprCheckerBase &expr_checker) override;
-  virtual int replace_exprs(const common::ObIArray<ObRawExpr*> &other_exprs,
-                            const common::ObIArray<ObRawExpr*> &new_exprs) override;
+  int iterate_stmt_expr(ObStmtExprVisitor &visitor) override;
 
   TO_STRING_KV(K_(table_id),
                K_(loc_table_id),
@@ -313,9 +305,7 @@ public:
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObInsertAllTableInfo &other);
 
-  virtual int get_relation_exprs(RelExprCheckerBase &expr_checker) override;
-  virtual int replace_exprs(const common::ObIArray<ObRawExpr*> &other_exprs,
-                            const common::ObIArray<ObRawExpr*> &new_exprs) override;
+  int iterate_stmt_expr(ObStmtExprVisitor &visitor) override;
 
   TO_STRING_KV(K_(table_id),
                K_(loc_table_id),
@@ -425,7 +415,6 @@ public:
   int add_returning_agg_item(ObAggFunRawExpr &agg_expr)
   {
     agg_expr.set_explicited_reference();
-    agg_expr.set_expr_level(current_level_);
     return returning_agg_items_.push_back(&agg_expr);
   }
   int64_t get_returning_aggr_item_size() const { return returning_agg_items_.size(); }
@@ -438,8 +427,8 @@ public:
   bool is_dml_table_from_join() const;
   virtual int64_t get_instead_of_trigger_column_count() const;
   int update_base_tid_cid();
-  virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                      const common::ObIArray<ObRawExpr*> &new_exprs) override;
+  virtual int iterate_stmt_expr(ObStmtExprVisitor &visitor) override;
+
   void set_is_error_logging(bool is_error_logging) { error_log_info_.is_error_log_ = is_error_logging; }
   bool is_error_logging() const { return error_log_info_.is_error_log_; }
   void set_err_log_table_name(ObString err_log_table_name) { error_log_info_.table_name_ = err_log_table_name; }
@@ -467,10 +456,9 @@ public:
   virtual int get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs) const;
   virtual int get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const;
   virtual int remove_table_item_dml_info(const TableItem* table);
+  int has_dml_table_info(const uint64_t table_id, bool &has) const;
   int check_dml_need_filter_null();
   int extract_need_filter_null_table(const JoinedTable *cur_table, ObIArray<uint64_t> &table_ids);
-protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase &expr_checker) override;
 protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;

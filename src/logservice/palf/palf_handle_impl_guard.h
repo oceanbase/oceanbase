@@ -14,31 +14,30 @@
 #define OCEANBASE_LOGSERVICE_LOG_SERVICE_GUARD_
 #include "lib/utility/ob_print_utils.h"                 // TO_STRING_KV
 #include "lib/utility/ob_macro_utils.h"                 // DISALLOW_COPY_AND_ASSIGN
-#include "palf_handle_impl.h"                           // PalfHandleImpl
-#include "palf_env_impl.h"                              // PalfHandleImplMap
 
 namespace oceanbase
 {
 namespace palf
 {
-struct PalfHandleImplGuard
+class IPalfHandleImpl;
+class IPalfEnvImpl;
+class PalfHandleImpl;
+class PalfEnvImpl;
+
+struct IPalfHandleImplGuard
 {
-  PalfHandleImplGuard();
-  ~PalfHandleImplGuard();
-  int set_palf_handle_impl(const int64_t palf_id,
-                      PalfHandleImplMap *palf_handle_impl_map);
-  int set_palf_handle_impl(const int64_t palf_id,
-                      PalfHandleImpl *palf_handle_impl,
-                      PalfHandleImplMap *palf_handle_impl_map);
+  IPalfHandleImplGuard();
+  ~IPalfHandleImplGuard();
   bool is_valid() const;
-  IPalfHandleImpl *get_palf_handle_impl() const { return static_cast<IPalfHandleImpl*>(palf_handle_impl_); }
-  TO_STRING_KV(K_(palf_id), KP_(palf_handle_impl), KP_(palf_handle_impl_map));
+  void reset();
+  IPalfHandleImpl *get_palf_handle_impl() const { return palf_handle_impl_; }
+  TO_STRING_KV(K_(palf_id), KP_(palf_handle_impl), KP_(palf_env_impl));
 
   int64_t  palf_id_;
-  PalfHandleImpl *palf_handle_impl_;
-  PalfHandleImplMap *palf_handle_impl_map_;
+  IPalfHandleImpl *palf_handle_impl_;
+  IPalfEnvImpl *palf_env_impl_;
 private:
-  DISALLOW_COPY_AND_ASSIGN(PalfHandleImplGuard);
+  DISALLOW_COPY_AND_ASSIGN(IPalfHandleImplGuard);
 };
 } // end namespace palf
 } // end namespace oceanbase

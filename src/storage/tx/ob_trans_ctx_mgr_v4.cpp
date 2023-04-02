@@ -189,8 +189,8 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     lock_table_ = lock_table;
     txs_ = txs;
     ts_mgr_ = ts_mgr;
-    aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-    prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+    aggre_rec_scn_.reset();
+    prev_aggre_rec_scn_.reset();
     online_ts_ = 0;
     TRANS_LOG(INFO, "ObLSTxCtxMgr inited success", KP(this), K(ls_id));
   }
@@ -217,9 +217,9 @@ void ObLSTxCtxMgr::reset()
   lock_table_ = NULL;
   total_tx_ctx_count_ = 0;
   leader_takeover_ts_.reset();
-  max_replay_commit_version_ = 0;
-  aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-  prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_replay_commit_version_.reset();
+  aggre_rec_scn_.reset();
+  prev_aggre_rec_scn_.reset();
   online_ts_ = 0;
   txs_ = NULL;
   ts_mgr_ = NULL;
@@ -232,8 +232,8 @@ void ObLSTxCtxMgr::reset()
 
 int ObLSTxCtxMgr::offline()
 {
-  aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-  prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+  aggre_rec_scn_.reset();
+  prev_aggre_rec_scn_.reset();
 
   return OB_SUCCESS;
 }
@@ -366,6 +366,8 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
   ObTransCtx *tmp_ctx = NULL, *exist_ctx = NULL;
   bool leader = false, insert_succ = false;
   int64_t epoch = 0;
+
+  exist = false;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
     ret = OB_NOT_INIT;
@@ -391,7 +393,6 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     TRANS_LOG(WARN, "alloc transaction context error", K(arg));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    exist = false;
     CtxLockGuard ctx_lock_guard;
     ObPartTransCtx *tmp = static_cast<ObPartTransCtx *>(tmp_ctx);
     if (OB_FAIL(tmp->init(arg.tenant_id_,
@@ -404,7 +405,6 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           arg.trans_service_,
                           arg.cluster_id_,
                           epoch,
-                          arg.can_elr_,
                           this,
                           arg.for_replay_))) {
     } else if (FALSE_IT(inc_total_tx_ctx_count())) {
@@ -469,7 +469,6 @@ int ObLSTxCtxMgr::get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObP
   const int64_t MAX_LOOP_COUNT = 100;
   int64_t count = 0;
   int64_t gts = 0;
-  MonotonicTs unused_ts = MonotonicTs::current_time();
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
@@ -581,7 +580,7 @@ int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(ObMemtable* mt)
   return ret;
 }
 
-int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, int64_t start_working_ts)
+int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
   UNUSED(log);
@@ -595,15 +594,21 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, int64
   return ret;
 }
 
-int ObLSTxCtxMgr::on_start_working_log_cb_succ(int64_t start_working_ts)
+int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
+  bool ignore_ret = false;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   StateHelper state_helper(ls_id_, state_);
   if (State::T_PENDING == state_ || State::T_BLOCKED_PENDING == state_) {
     SwitchToLeaderFunctor fn(start_working_ts);
     if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
       TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ls_id_));
+      if (OB_NOT_MASTER == fn.get_ret()) {
+        // ignore ret
+        // PALF will switch to follower when submitting log return OB_NOT_MASTER
+        ignore_ret = true;
+      }
     }
   } else if (State::R_PENDING == state_ || State::R_BLOCKED_PENDING == state_) {
     ResumeLeaderFunctor fn(start_working_ts);
@@ -615,11 +620,15 @@ int ObLSTxCtxMgr::on_start_working_log_cb_succ(int64_t start_working_ts)
     TRANS_LOG(ERROR, "unexpected state", KR(ret), K(ls_id_), K(state_));
   }
   if (OB_FAIL(ret)) {
+    if (ignore_ret) {
+      ret = OB_SUCCESS;
+    }
     // TODO dingxi, takeover failed, notify palf to revoke itself
     int tmp_ret = OB_SUCCESS;
     // restore to follower
     if (OB_TMP_FAIL(state_helper.switch_state(Ops::SWL_CB_FAIL))) {
       TRANS_LOG(ERROR, "restore follower failed", KR(tmp_ret), K(ls_id_), K(state_));
+      ret = tmp_ret;
     }
   } else {
     int tmp_ret = OB_SUCCESS;
@@ -649,9 +658,9 @@ int ObLSTxCtxMgr::on_start_working_log_cb_fail()
 int ObLSTxCtxMgr::submit_start_working_log_()
 {
   int ret = OB_SUCCESS;
-  int64_t log_ts = 0;
+  SCN scn;
   const int64_t fake_epoch = 0xbaba;
-  if (OB_FAIL(ls_log_writer_.submit_start_working_log(fake_epoch, log_ts))) {
+  if (OB_FAIL(ls_log_writer_.submit_start_working_log(fake_epoch, scn))) {
     TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(*this));
   }
   return ret;
@@ -692,7 +701,7 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
   // run callback out of lock, ignore ret
   (void)process_callback_(cb_array);
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
   }
   TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] switch_to_follower_forcedly", K(ret), KPC(this));
   return ret;
@@ -702,7 +711,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
 {
   int ret = OB_SUCCESS;
   if (!is_leader_serving_) {
-    int64_t gts = 0;
+    SCN gts;
     MonotonicTs receive_gts_ts(0);
 
     if (OB_FAIL(ts_mgr_->get_gts(tenant_id_,
@@ -717,7 +726,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
         ret = OB_NOT_MASTER;
       }
     } else {
-      if (max_replay_commit_version_ > 0 && max_replay_commit_version_ >= gts) {
+      if (max_replay_commit_version_.is_valid() && max_replay_commit_version_ >= gts) {
         ret = OB_NOT_MASTER;
       } else {
         is_leader_serving_ = true;
@@ -824,7 +833,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   timeguard.click();
   TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
   if (timeguard.get_diff() > 1000000) {
-    TRANS_LOG(ERROR, "use too much time", K(timeguard), K(process_count));
+    TRANS_LOG(WARN, "use too much time", K(timeguard), K(process_count));
   }
   return ret;
 }
@@ -909,7 +918,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
     }
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "stop trans use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "stop trans use too much time", K(timeguard), "manager", *this);
   }
   process_callback_(cb_array);
   TRANS_LOG(INFO, "[LsTxCtxMgr] stop done", K(timeguard), "manager", *this);
@@ -933,7 +942,7 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
     is_all_tx_cleaned_up = (get_tx_ctx_count_() == 0);
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "kill_all_tx use too much time", K(timeguard), "manager", *this);
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "kill_all_tx use too much time", K(timeguard), "manager", *this);
   }
   (void)process_callback_(cb_array);
   TRANS_LOG(INFO, "[LsTxCtxMgr] kill_all_tx done", K(timeguard), "manager", *this);
@@ -968,7 +977,7 @@ int ObLSTxCtxMgr::online()
   return ret;
 }
 
-int ObLSTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(int64_t &min_prepare_version)
+int ObLSTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -980,25 +989,25 @@ int ObLSTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(int64_t &min_prepare_ve
       min_prepare_version = fn.get_min_prepare_version();
     }
   } else {
-    min_prepare_version = INT64_MAX;
+    min_prepare_version.set_max();
   }
 
   return ret;
 }
 
-int ObLSTxCtxMgr::get_min_undecided_log_ts(int64_t &log_ts)
+int ObLSTxCtxMgr::get_min_undecided_scn(SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObGetMinUndecidedLogTsFunctor fn;
   if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
   } else {
-    log_ts = fn.get_min_undecided_log_ts();
+    scn = fn.get_min_undecided_scn();
   }
   return ret;
 }
 
-int ObLSTxCtxMgr::check_scheduler_status(int64_t &min_start_scn, MinStartScnStatus &status)
+int ObLSTxCtxMgr::check_scheduler_status(SCN &min_start_scn, MinStartScnStatus &status)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard tg("ObLSTxCtxMgr::check_scheduler_status", 100000);
@@ -1008,7 +1017,7 @@ int ObLSTxCtxMgr::check_scheduler_status(int64_t &min_start_scn, MinStartScnStat
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
   } else {
     if (0 == ls_tx_ctx_map_.count()) {
-      min_start_scn = OB_INVALID_TIMESTAMP;
+      min_start_scn.reset();
       status = MinStartScnStatus::NO_CTX;
     } else {
       min_start_scn = functor.get_min_start_scn();
@@ -1016,6 +1025,25 @@ int ObLSTxCtxMgr::check_scheduler_status(int64_t &min_start_scn, MinStartScnStat
     }
   }
 
+  return ret;
+}
+
+int ObLSTxCtxMgr::get_max_decided_scn(share::SCN &scn)
+{
+  RLockGuard guard(rwlock_);
+
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
+    ret = OB_NOT_INIT;
+    // There is no need to check whether it is master
+    // this interface is called by leader or follower
+  } else if (is_stopped_()) {
+    ret = OB_STATE_NOT_MATCH;
+    TRANS_LOG(WARN, "this ls has beend stopped", KPC(this));
+  } else if (OB_FAIL(tx_log_adapter_->get_max_decided_scn(scn))) {
+    TRANS_LOG(WARN, "get max decided scn failed", K(ret));
+  }
   return ret;
 }
 
@@ -1043,7 +1071,7 @@ int ObLSTxCtxMgr::check_modify_schema_elapsed(const ObTabletID &tablet_id,
     block_tx_id = fn.get_tx_id();
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr::check_modify_schema_elapsed use too much time",
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObLSTxCtxMgr::check_modify_schema_elapsed use too much time",
               K(timeguard), "manager", *this);
   }
 
@@ -1072,7 +1100,7 @@ int ObLSTxCtxMgr::check_modify_time_elapsed(const ObTabletID &tablet_id,
     block_tx_id = fn.get_tx_id();
   }
   if (timeguard.get_diff() > 3 * 1000000) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr::check_modify_time_elapsed use too much time",
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObLSTxCtxMgr::check_modify_time_elapsed use too much time",
               K(timeguard), "manager", *this);
   }
 
@@ -1123,6 +1151,8 @@ int ObLSTxCtxMgr::iterate_tx_ctx_stat(ObTxStatIterator &tx_stat_iter)
   } else {
     IterateTxStatFunctor fn(tx_stat_iter);
     if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      // rewrite eagain to real ret
+      ret = fn.get_ret();
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     }
   }
@@ -1243,7 +1273,7 @@ int ObLSTxCtxMgr::check_with_tx_data(const ObTransID& tx_id, ObITxDataCheckFunct
   return ret;
 }
 
-int ObLSTxCtxMgr::get_rec_log_ts(int64_t &rec_log_ts)
+int ObLSTxCtxMgr::get_rec_scn(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -1258,13 +1288,13 @@ int ObLSTxCtxMgr::get_rec_log_ts(int64_t &rec_log_ts)
   } else {
     GetRecLogTSFunctor fn;
     if (OB_FAIL(fn.init())) {
-      TRANS_LOG(WARN, "failed to init get rec log ts functor", K(ret), K(*this));
+      TRANS_LOG(WARN, "failed to init get rec scn functor", K(ret), K(*this));
     } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     } else {
-      int64_t aggre_rec_log_ts = get_aggre_rec_log_ts_();
-      rec_log_ts = MIN(fn.get_rec_log_ts(), aggre_rec_log_ts);
-      TRANS_LOG(INFO, "succ to get rec log ts", K(*this), K(aggre_rec_log_ts));
+      SCN aggre_rec_scn = get_aggre_rec_scn_();
+      rec_scn = SCN::min(fn.get_rec_log_ts(), aggre_rec_scn);
+      TRANS_LOG(INFO, "succ to get rec scn", K(*this), K(aggre_rec_scn));
     }
   }
 
@@ -1290,66 +1320,67 @@ int ObLSTxCtxMgr::on_tx_ctx_table_flushed()
     } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     } else {
-      // To mark the checkpoint is succeed, we reset the prev_aggre_rec_log_ts
-      prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+      // To mark the checkpoint is succeed, we reset the prev_aggre_rec_scn
+      prev_aggre_rec_scn_.reset();
       TRANS_LOG(INFO, "succ to on tx ctx table flushed", K(*this));
     }
   }
   return ret;
 }
 
-int ObLSTxCtxMgr::get_min_start_log_ts(int64_t &min_start_log_ts)
+int ObLSTxCtxMgr::get_min_start_scn(SCN &min_start_scn)
 {
   int ret = OB_SUCCESS;
 
-  GetMinStartLogTsFunctor fn;
+  GetMinStartSCNFunctor fn;
   if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
   } else {
-    min_start_log_ts = fn.get_min_start_log_ts();
+    min_start_scn = fn.get_min_start_scn();
   }
 
   return ret;
 }
 
-int64_t ObLSTxCtxMgr::get_aggre_rec_log_ts_()
+SCN ObLSTxCtxMgr::get_aggre_rec_scn_()
 {
-  // Default means no necessary to recover
-  int64_t ret = INT64_MAX;
-  int64_t prev_aggre_rec_log_ts = ATOMIC_LOAD(&prev_aggre_rec_log_ts_);
-  int64_t aggre_rec_log_ts = ATOMIC_LOAD(&aggre_rec_log_ts_);
+  SCN ret;
+  SCN prev_aggre_rec_scn = prev_aggre_rec_scn_.atomic_get();
+  SCN aggre_rec_scn = aggre_rec_scn_.atomic_get();
 
   // Before the checkpoint of the tx ctx table is succeed, we should still use
   // the prev_aggre_log_ts. And after successfully checkpointed, we can use the
-  // new aggre_rec_log_ts if exist
-  if (OB_INVALID_TIMESTAMP != prev_aggre_rec_log_ts &&
-      OB_INVALID_TIMESTAMP != aggre_rec_log_ts) {
-    ret = MIN(prev_aggre_rec_log_ts, aggre_rec_log_ts);
-  } else if (OB_INVALID_TIMESTAMP != prev_aggre_rec_log_ts) {
-    ret = prev_aggre_rec_log_ts;
-  } else if (OB_INVALID_TIMESTAMP != aggre_rec_log_ts) {
-    ret = aggre_rec_log_ts;
+  // new aggre_rec_scn if exist
+  if (prev_aggre_rec_scn.is_valid() &&
+      aggre_rec_scn.is_valid()) {
+    ret = MIN(prev_aggre_rec_scn, aggre_rec_scn);
+  } else if (prev_aggre_rec_scn.is_valid()) {
+    ret = prev_aggre_rec_scn;
+  } else if (aggre_rec_scn.is_valid()) {
+    ret = aggre_rec_scn;
+  } else {
+    ret.set_max();
   }
 
   return ret;
 }
 
-int ObLSTxCtxMgr::refresh_aggre_rec_log_ts()
+int ObLSTxCtxMgr::refresh_aggre_rec_scn()
 {
   int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
-  if (OB_INVALID_TIMESTAMP == prev_aggre_rec_log_ts_) {
+  if (!prev_aggre_rec_scn_.is_valid()) {
     // We should remember the rec_log_ts before the tx ctx table is successfully
     // checkpointed
-    int64_t old_v = 0;
-    int64_t new_v = 0;
+    SCN old_v;
+    SCN new_v;
     do {
-      old_v = aggre_rec_log_ts_;
-      new_v = OB_INVALID_TIMESTAMP;
-    } while (ATOMIC_CAS(&aggre_rec_log_ts_, old_v, new_v) != old_v);
+      old_v = aggre_rec_scn_;
+      new_v.reset();
+    } while (aggre_rec_scn_.atomic_vcas(old_v, new_v) != old_v);
 
-    prev_aggre_rec_log_ts_ = old_v;
+    prev_aggre_rec_scn_ = old_v;
   } else {
     TRANS_LOG(WARN, "Concurrent merge may be because of previous failure", K(*this));
   }
@@ -1357,24 +1388,24 @@ int ObLSTxCtxMgr::refresh_aggre_rec_log_ts()
   return ret;
 }
 
-int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(int64_t rec_log_ts)
+int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(SCN rec_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_INVALID_TIMESTAMP != rec_log_ts) {
+  if (rec_scn.is_valid()) {
     // we cannot lock here, because the lock order must be
     // ObLSTxCtxMgr -> ObPartTransCtx, otherwise we may be
     // deadlocked
-    int64_t old_v = 0;
-    int64_t new_v = 0;
+    SCN old_v;
+    SCN new_v;
     do {
-      old_v = aggre_rec_log_ts_;
-      if (OB_INVALID_TIMESTAMP == old_v) {
-        new_v = rec_log_ts;
+      old_v = aggre_rec_scn_;
+      if (!old_v.is_valid()) {
+        new_v = rec_scn;
       } else {
-        new_v = MIN(old_v, rec_log_ts);
+        new_v = MIN(old_v, rec_scn);
       }
-    } while (ATOMIC_CAS(&aggre_rec_log_ts_, old_v, new_v) != old_v);
+    } while (aggre_rec_scn_.atomic_vcas(old_v, new_v) != old_v);
   }
 
   return ret;
@@ -1495,8 +1526,8 @@ int ObTxCtxMgr::init(const int64_t tenant_id,
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "ObTxCtxMgr inited twice", K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.init(ObModIds::OB_HASH_BUCKET_PARTITION_TRANS_CTX))) {
-    TRANS_LOG(WARN, "ls_tx_ctx_mgr_map_ init error", KR(ret));
+  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.init(lib::ObMemAttr(tenant_id, "TxCtxMgr")))) {
+    TRANS_LOG(WARN, "ls_tx_ctx_mgr_map_ init error", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(ts_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "ts mgr is null");
@@ -1609,7 +1640,7 @@ void ObTxCtxMgr::destroy()
 
   if (is_inited_) {
     if (OB_TMP_FAIL(remove_all_ls_())) {
-      TRANS_LOG(WARN, "remove all ls error", K(tmp_ret));
+      TRANS_LOG_RET(WARN, tmp_ret, "remove all ls error", K(tmp_ret));
     } else {
       tenant_id_ = OB_INVALID_TENANT_ID;
       ls_tx_ctx_mgr_map_.destroy();
@@ -1849,6 +1880,8 @@ int ObTxCtxMgr::iterate_all_observer_tx_stat(ObTxStatIterator &tx_stat_iter)
   } else {
     IterateAllLSTxStatFunctor fn(tx_stat_iter);
     if (OB_FAIL(foreach_ls_(fn))) {
+      // rewrite eagain to real ret code
+      ret = fn.get_ret();
       TRANS_LOG(WARN, "foreach_ls_ tx_stat error", KR(ret));
     } else {
       // do nothing
@@ -1952,7 +1985,7 @@ int ObTxCtxMgr::iterate_tx_ctx_mgr_stat(const ObAddr &addr,
   return ret;
 }
 
-int ObTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(const ObLSID &ls_id, int64_t &min_prepare_version)
+int ObTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(const ObLSID &ls_id, SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
@@ -1979,7 +2012,7 @@ int ObTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(const ObLSID &ls_id, int6
   return ret;
 }
 
-int ObTxCtxMgr::get_min_undecided_log_ts(const ObLSID &ls_id, int64_t &log_ts)
+int ObTxCtxMgr::get_min_undecided_scn(const ObLSID &ls_id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
@@ -1994,10 +2027,10 @@ int ObTxCtxMgr::get_min_undecided_log_ts(const ObLSID &ls_id, int64_t &log_ts)
     TRANS_LOG(WARN, "get participant transaction context mgr error", K(ls_id));
     ret = OB_PARTITION_NOT_EXIST;
   } else {
-    if (OB_FAIL(ls_tx_ctx_mgr->get_min_undecided_log_ts(log_ts))) {
+    if (OB_FAIL(ls_tx_ctx_mgr->get_min_undecided_scn(scn))) {
       TRANS_LOG(WARN, "get min_uncommit_log_id failed", KR(ret), K(ls_id));
     } else {
-      TRANS_LOG(DEBUG, "ObTxCtxMgr get min_uncommit_log_id success", K(ls_id), K(log_ts));
+      TRANS_LOG(DEBUG, "ObTxCtxMgr get min_uncommit_log_id success", K(ls_id), K(scn));
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
@@ -2060,7 +2093,7 @@ int ObTxCtxMgr::create_ls(const int64_t tenant_id,
     TRANS_LOG(WARN, "ls tx service init failed", K(ret), K(ls_id));
     ObLSTxCtxMgrFactory::release(ls_tx_ctx_mgr);
     ls_tx_ctx_mgr = NULL;
-  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.insert_and_get(ls_id, ls_tx_ctx_mgr))) {
+  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.insert_and_get(ls_id, ls_tx_ctx_mgr, NULL))) {
     TRANS_LOG(WARN, "ls_tx_ctx_mgr_map_ insert error", KR(ret), K(ls_id));
     ObLSTxCtxMgrFactory::release(ls_tx_ctx_mgr);
     ls_tx_ctx_mgr = NULL;
@@ -2141,7 +2174,7 @@ int ObTxCtxMgr::remove_ls(const ObLSID &ls_id, const bool graceful)
       // if ls_id has been removed, OB_SUCCESS is returned.
       if (OB_SUCC(get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
         // remove ls_id transaction context from map
-        if (OB_FAIL(ls_tx_ctx_mgr_map_.del(ls_id))) {
+        if (OB_FAIL(ls_tx_ctx_mgr_map_.del(ls_id, ls_tx_ctx_mgr))) {
           TRANS_LOG(WARN, "remove ls error", KR(ret), K(ls_id));
         } else {
           ATOMIC_INC(&ls_release_cnt_);
@@ -2170,7 +2203,7 @@ int ObTxCtxMgr::check_scheduler_status(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
-  int64_t min_start_scn = OB_INVALID_TIMESTAMP;
+  SCN min_start_scn;
   MinStartScnStatus min_status = MinStartScnStatus::UNKOWN;
 
   if (IS_NOT_INIT) {

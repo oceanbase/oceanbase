@@ -124,17 +124,27 @@ public:
       const ObIArray<ObTabletReplica> &replicas);
   // remove residual tablet in __all_tablet_meta_table for ObServerMetaTableChecker
   //
+  // @param [in] sql_client, client for executing query
   // @param [in] tenant_id, tenant for query
   // @param [in] server, target ObAddr
   // @param [in] limit, limit number for delete sql
   // @param [out] residual_count, count of residual tablets in table
   int remove_residual_tablet(
+      ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const ObAddr &server,
       const int64_t limit,
       int64_t &affected_rows);
+public:
+  static int get_tablet_info(
+      common::ObISQLClient *sql_proxy,
+      const uint64_t tenant_id,
+      const common::ObTabletID &tablet_id,
+      const ObLSID &ls_id,
+      ObTabletInfo &tablet_info);
 private:
-  int inner_batch_get_by_sql_(
+  static int inner_batch_get_by_sql_(
+      ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const ObIArray<ObTabletLSPair> &tablet_ls_pairs,
       const int64_t start_idx,
@@ -146,10 +156,10 @@ private:
       const int64_t start_idx,
       const int64_t end_idx,
       common::ObISQLClient &sql_client);
-  int construct_tablet_infos_(
+  static int construct_tablet_infos_(
       common::sqlclient::ObMySQLResult &res,
       ObIArray<ObTabletInfo> &tablet_infos);
-  int construct_tablet_replica_(
+  static int construct_tablet_replica_(
       common::sqlclient::ObMySQLResult &res,
       ObTabletReplica &replica);
   int fill_dml_splicer_(

@@ -86,19 +86,19 @@ void BlockGCTimerTask::destroy()
 
 void BlockGCTimerTask::runTimerTask()
 {
-  int64_t start_ts_ns = ObTimeUtility::current_time_ns();
+  int64_t start_time_us = ObTimeUtility::current_time();
   int ret = OB_SUCCESS;
   if (NULL == palf_env_impl_) {
     PALF_LOG(ERROR, "palf_env_impl_ is NULL, unexpected error");
   } else if (OB_FAIL(palf_env_impl_->try_recycle_blocks())) {
     PALF_LOG(WARN, "PalfEnvImpl try_recycle_blocks failed");
   } else {
-    int64_t cost_ts_ns = ObTimeUtility::current_time_ns() - start_ts_ns;
-    if (cost_ts_ns >= 1 * 1000 *1000) {
-      PALF_LOG(WARN, "try_recycle_blocks cost too much time", K(ret), K(cost_ts_ns), KPC(palf_env_impl_));
+    int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us;
+    if (cost_time_us >= 1 * 1000) {
+      PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "try_recycle_blocks cost too much time", K(ret), K(cost_time_us), KPC(palf_env_impl_));
     }
     if (palf_reach_time_interval(10 * 1000 * 1000, warn_time_)) {
-      PALF_LOG(INFO, "BlockGCTimerTask success", K(ret), K(cost_ts_ns), KPC(palf_env_impl_));
+      PALF_LOG(INFO, "BlockGCTimerTask success", K(ret), K(cost_time_us), KPC(palf_env_impl_));
     }
   }
 }

@@ -17,6 +17,13 @@
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "lib/geo/ob_geometry_cast.h"
+#include "sql/engine/expr/ob_expr_subquery_ref.h"
+#include "sql/engine/subquery/ob_subplan_filter_op.h"
+#include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_allocator.h"
+#include "pl/ob_pl_stmt.h"
+#include "pl/ob_pl_resolver.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -159,7 +166,8 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
     case ObEnumInnerType:
     case ObSetInnerType:
     case ObLobType:
-    case ObJsonType: {
+    case ObJsonType:
+    case ObGeometryType: {
       res_len = type1.get_length();
       length_semantics = type1.get_length_semantics();
       break;
@@ -268,7 +276,9 @@ bool ObExprCast::check_cast_allowed(const ObObjType orig_type,
   if (is_oracle_mode() && is_explicit_cast) {
     // can't cast lob to other type except char/varchar/nchar/nvarchar2/raw. clob to raw not allowed too.
     if (ObLobTC == ori_tc || ObTextTC == ori_tc) {
-      if (ObStringTC == expect_tc) {
+      if (expect_tc == ObJsonTC) {
+        /* oracle mode, json text use lob store */
+      } else if (ObStringTC == expect_tc) {
         // do nothing
       } else if (ObRawTC == expect_tc) {
         res = CS_TYPE_BINARY == orig_cs_type;
@@ -294,6 +304,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   ObRawExpr *cast_raw_expr = NULL;
   const sql::ObSQLSessionInfo *session = NULL;
   bool is_explicit_cast = false;
+  ObCollationLevel cs_level = CS_LEVEL_INVALID;
   if (OB_ISNULL(session = type_ctx.get_session()) ||
       OB_ISNULL(cast_raw_expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -307,9 +318,13 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
-             "dst", ob_obj_type_str(dst_type.get_type()));
+               "dst", ob_obj_type_str(dst_type.get_type()));
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
+  } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
+                                                             type1.get_collation_level(),
+                                                             cs_level))) {
+    LOG_WARN("failed to get collation level", K(ret));
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
@@ -328,13 +343,25 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // however, ob use -1 as default precision, so it is a valid value
       type.set_collation_type(dst_type.get_collation_type());
       ObPrecision float_precision = dst_type.get_precision();
-      if (float_precision < -1 || float_precision > OB_MAX_DOUBLE_FLOAT_PRECISION) {
+      ObScale float_scale = dst_type.get_scale();
+      if (OB_UNLIKELY(float_scale > OB_MAX_DOUBLE_FLOAT_SCALE)) {
+        ret = OB_ERR_TOO_BIG_SCALE;
+        LOG_USER_ERROR(OB_ERR_TOO_BIG_SCALE, float_scale, "CAST", OB_MAX_DOUBLE_FLOAT_SCALE);
+        LOG_WARN("scale of float overflow", K(ret), K(float_scale), K(float_precision));
+      } else if (float_precision < -1 ||
+          (SCALE_UNKNOWN_YET == float_scale && float_precision > OB_MAX_DOUBLE_FLOAT_PRECISION)) {
         ret = OB_ERR_TOO_BIG_PRECISION;
         LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, float_precision, "CAST", OB_MAX_DOUBLE_FLOAT_PRECISION);
-      } else if (float_precision <= OB_MAX_FLOAT_PRECISION) {
-        type.set_type(ObFloatType);
+      } else if (SCALE_UNKNOWN_YET == float_scale) {
+        if (float_precision <= OB_MAX_FLOAT_PRECISION) {
+          type.set_type(ObFloatType);
+        } else {
+          type.set_type(ObDoubleType);
+        }
       } else {
-        type.set_type(ObDoubleType);
+        type.set_type(ObFloatType);
+        type.set_precision(float_precision);
+        type.set_scale(float_scale);
       }
     } else {
       type.set_type(dst_type.get_type());
@@ -354,10 +381,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())) {
-        type.set_collation_level(is_explicit_cast
-                                 ? CS_LEVEL_IMPLICIT
-                                 : type1.get_collation_level());
+      if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())
+          || ob_is_geometry(dst_type.get_type())) {
+        type.set_collation_level(cs_level);
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
             ? dst_type.get_length_semantics()
@@ -404,6 +430,10 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][dst_type.get_type()];
           type.set_accuracy(acc);
           type1.set_accuracy(acc);
+        } else if (ObYearType == dst_type.get_type()) {
+          ObAccuracy acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[compatibility_mode][dst_type.get_type()];
+          type.set_accuracy(acc);
+          type1.set_accuracy(acc);
         } else {
           type.set_precision(dst_type.get_precision());
         }
@@ -413,7 +443,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     CK(OB_NOT_NULL(type_ctx.get_session()));
     if (OB_SUCC(ret)) {
       // interval expr need NOT_NULL_FLAG
-      // bug: https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/2961005
+      // bug:
       calc_result_flag2(type, type1, type2);
     }
   }
@@ -430,7 +460,11 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // eg: select cast(18446744073709551615 as signed) -> -1
       //     because exprlicit case need CM_NO_RANGE_CHECK
       type_ctx.set_cast_mode(explicit_cast_cm & ~CM_EXPLICIT_CAST);
-      type1.set_calc_accuracy(type.get_accuracy());
+      if (lib::is_mysql_mode() && !ob_is_numeric_type(type.get_type()) && type1.is_double()) {
+        // for double type cast non-numeric type, no need set calc accuracy to dst type.
+      } else {
+        type1.set_calc_accuracy(type.get_accuracy());
+      }
 
       // in engine 3.0, let implicit cast do the real cast
       bool need_extra_cast_for_src_type = false;
@@ -458,8 +492,23 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
           // need_warp is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
           // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
         } else {
-          // need_warp is false, set calc_type to type1 itself.
-          type1.set_calc_meta(type1.get_obj_meta());
+          if (ob_is_geometry_tc(dst_type.get_type())) {
+            ObCastMode cast_mode = cast_raw_expr->get_extra();
+            const ObObj &param = type2.get_param();
+            ParseNode parse_node;
+            parse_node.value_ = param.get_int();
+            ObGeoType geo_type = static_cast<ObGeoType>(parse_node.int16_values_[OB_NODE_CAST_GEO_TYPE_IDX]);
+            if (OB_FAIL(ObGeoCastUtils::set_geo_type_to_cast_mode(geo_type, cast_mode))) {
+              LOG_WARN("fail to set geometry type to cast mode", K(ret), K(geo_type));
+            } else {
+              cast_raw_expr->set_extra(cast_mode);
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            // need_warp is false, set calc_type to type1 itself.
+            type1.set_calc_meta(type1.get_obj_meta());
+          }
         }
       }
     } else {
@@ -489,23 +538,50 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
     ParseNode parse_node;
     parse_node.value_ = param.get_int();
     ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+    bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_mode);
     dst_type.set_collation_type(static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]));
     dst_type.set_type(obj_type);
-    if (ob_is_string_type(obj_type) || ob_is_lob_locator(obj_type)) {
+    int64_t maxblen = ObCharset::CharConvertFactorNum;
+    if (ob_is_lob_locator(obj_type)) {
       // cast(x as char(10)) or cast(x as binary(10))
       dst_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX], param_type2.get_accuracy().get_length_semantics());
+    } else if (ob_is_string_type(obj_type)) {
+      dst_type.set_full_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX], param_type2.get_accuracy().get_length_semantics());
+      if (lib::is_mysql_mode() && is_explicit_cast && !dst_type.is_binary() && !dst_type.is_varbinary()) {
+        if (dst_type.get_length() > OB_MAX_CAST_CHAR_VARCHAR_LENGTH && dst_type.get_length() <= OB_MAX_CAST_CHAR_TEXT_LENGTH) {
+          dst_type.set_type(ObTextType);
+          dst_type.set_length(OB_MAX_CAST_CHAR_TEXT_LENGTH);
+        } else if (dst_type.get_length() > OB_MAX_CAST_CHAR_TEXT_LENGTH && dst_type.get_length() <= OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH) {
+          dst_type.set_type(ObMediumTextType);
+          dst_type.set_length(OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH);
+        } else if (dst_type.get_length() > OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH) {
+          dst_type.set_type(ObLongTextType);
+          dst_type.set_length(OB_MAX_LONGTEXT_LENGTH / maxblen);
+        }
+      }
     } else if (ob_is_raw(obj_type)) {
       dst_type.set_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
     } else if (ob_is_extend(obj_type)) {
       dst_type.set_udt_id(param_type2.get_udt_id());
     } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (ob_is_geometry(obj_type)) {
+      if (lib::is_mysql_mode()) {
+        dst_type.set_collation_type(CS_TYPE_BINARY);
+        dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support cast to geometry in oracle mode", K(ret));
+      }
     } else if (ob_is_interval_tc(obj_type)) {
       if (CM_IS_EXPLICIT_CAST(cast_mode) &&
-          (!ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]) ||
+          ((ObIntervalYMType != obj_type && !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX])) ||
            !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]))) {
         ret = OB_ERR_DATETIME_INTERVAL_PRECISION_OUT_OF_RANGE;
         LOG_WARN("target interval type precision out of range", K(ret), K(obj_type));
+      } else if (ObIntervalYMType == obj_type) {
+        // interval year to month type has no precision
+        dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
       } else if (ob_is_interval_ds(obj_type)) {
         //scale in day seconds type is day_scale * 10 + seconds_scale.
         dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] * 10 +
@@ -522,6 +598,118 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
   }
   return ret;
 }
+
+int ObExprCast::get_subquery_iter(const sql::ObExpr &expr,
+                                  sql::ObEvalCtx &ctx,
+                                  ObExpr **&subquery_row,
+                                  ObEvalCtx *&subquery_ctx,
+                                  ObSubQueryIterator *&iter)
+{
+  int ret = OB_SUCCESS;
+  iter = NULL;
+  subquery_row = NULL;
+  subquery_ctx = NULL;
+  sql::ObDatum *subquery_datum = NULL;
+  const ObExprCast::CastMultisetExtraInfo *info =
+    static_cast<const ObExprCast::CastMultisetExtraInfo *>(expr.extra_info_);
+  if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, subquery_datum))){
+    LOG_WARN("expr evaluate failed", K(ret));
+  } else if (OB_ISNULL(subquery_datum) || subquery_datum->is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL subquery ref info returned", K(ret));
+  } else if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
+                ctx, ObExprSubQueryRef::Extra::get_info(subquery_datum->get_int()), iter))) {
+    LOG_WARN("get subquery iterator failed", K(ret));
+  } else if (OB_ISNULL(iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL subquery iterator", K(ret));
+  } else if (OB_FAIL(iter->rewind())) {
+    LOG_WARN("start iterate failed", K(ret));
+  } else if (OB_ISNULL(subquery_row = &const_cast<ExprFixedArray &>(iter->get_output()).at(0))){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null row", K(ret));
+  } else if (OB_ISNULL(subquery_ctx = &iter->get_eval_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ctx", K(ret));
+  } else if (OB_UNLIKELY(iter->get_output().count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected output column count", K(ret), K(iter->get_output().count()));
+  } else if (ObNullType != iter->get_output().at(0)->datum_meta_.type_
+        && iter->get_output().at(0)->datum_meta_.type_ != info->elem_type_.get_obj_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check type failed", K(ret), K(expr), KPC(iter->get_output().at(0)), K(info->elem_type_));
+  }
+  return ret;
+}
+
+int ObExprCast::construct_collection(const sql::ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     sql::ObDatum &res_datum,
+                                     ObExpr **subquery_row,
+                                     ObEvalCtx *subquery_ctx,
+                                     ObSubQueryIterator *subquery_iter)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support", K(ret));
+  return ret;
+}
+
+int ObExprCast::fill_element(const sql::ObExpr &expr,
+                             ObEvalCtx &ctx,
+                             sql::ObDatum &res_datum,
+                             pl::ObPLCollection *coll,
+                             pl::ObPLINS *ns,
+                             const pl::ObCollectionType *collection_type,
+                             ObExpr **subquery_row,
+                             ObEvalCtx *subquery_ctx,
+                             ObSubQueryIterator *subquery_iter)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support", K(ret));
+  return ret;
+}
+
+int ObExprCast::eval_cast_multiset(const sql::ObExpr &expr,
+                                   sql::ObEvalCtx &ctx,
+                                   sql::ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "eval cast multiset");
+  return ret;
+}
+
+int ObExprCast::cg_cast_multiset(ObExprCGCtx &op_cg_ctx,
+                                 const ObRawExpr &raw_expr,
+                                 ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast multiset");
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObExprCast::CastMultisetExtraInfo,
+                    pl_type_, not_null_, elem_type_, capacity_, udt_id_);
+
+int ObExprCast::CastMultisetExtraInfo::deep_copy(common::ObIAllocator &allocator,
+                                                    const ObExprOperatorType type,
+                                                    ObIExprExtraInfo *&copied_info) const
+{
+  int ret = OB_SUCCESS;
+  OZ(ObExprExtraInfoFactory::alloc(allocator, type, copied_info));
+  CastMultisetExtraInfo &other = *static_cast<CastMultisetExtraInfo *>(copied_info);
+  if (OB_SUCC(ret)) {
+    other = *this;
+  }
+  return ret;
+}
+
 
 int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
                         const ObRawExpr &raw_expr,
@@ -555,19 +743,33 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
         if (OB_UNLIKELY(UINT_MAX8 < src_res_type.get_length())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected zerofill length", K(ret), K(src_res_type.get_length()));
-        } else {
+        } else if (ob_is_string_or_lob_type(out_type)) {
+          // The zerofill information will only be used when cast to string/lob type.
+          // for these types, scale is unused, so the previous design is to save child length
+          // to the scale of the rt_expr.
           rt_expr.datum_meta_.scale_ = static_cast<int8_t>(src_res_type.get_length());
         }
       }
     }
     rt_expr.is_called_in_sql_ = is_called_in_sql();
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
-              out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
-        LOG_WARN("choose_cast_func failed", K(ret));
+      const ObRawExpr *src_raw_expr = raw_expr.get_param_expr(0);
+      if (OB_ISNULL(src_raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (src_raw_expr->is_multiset_expr()) {
+        if (OB_FAIL(cg_cast_multiset(op_cg_ctx, raw_expr, rt_expr))) {
+          LOG_WARN("failed to cg cast multiset", K(ret));
+        }
       } else {
-        rt_expr.extra_ = cast_mode;
+        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
+                    out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
+          LOG_WARN("choose_cast_func failed", K(ret));
+        }
       }
+    }
+    if (OB_SUCC(ret)) {
+      rt_expr.extra_ = cast_mode;
     }
   }
   return ret;

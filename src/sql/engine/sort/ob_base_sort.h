@@ -69,7 +69,7 @@ public:
     index_ = index;
     cs_type_ = cs_type;
     if (is_asc) {
-      extra_info_ |= SORT_COL_ASC_BIT;      
+      extra_info_ |= SORT_COL_ASC_BIT;
     } else {
       extra_info_ &= SORT_COL_ASC_MASK;
     }
@@ -86,7 +86,7 @@ public:
     cs_type_ = cs_type;
     extra_info_ &= SORT_COL_ASC_MASK;
     if (is_asc) {
-      extra_info_ |= SORT_COL_ASC_BIT;      
+      extra_info_ |= SORT_COL_ASC_BIT;
     }
     extra_info_ &= SORT_COL_EXTRA_MASK;
     extra_info_ |= SORT_COL_EXTRA_BIT;

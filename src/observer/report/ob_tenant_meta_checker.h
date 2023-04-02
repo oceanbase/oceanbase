@@ -16,6 +16,7 @@
 #include "lib/task/ob_timer.h" // ObTimerTask
 #include "share/ls/ob_ls_info.h" // ObLSReplica
 #include "share/tablet/ob_tablet_info.h" // ObTabletReplica
+#include "share/ls/ob_ls_table.h" // ObLSTable::Mode
 
 namespace oceanbase
 {
@@ -71,14 +72,15 @@ public:
   int check_tablet_table();
   int schedule_ls_meta_check_task();
   int schedule_tablet_meta_check_task();
-
+private:
+  int check_ls_table_(const share::ObLSTable::Mode mode);
 private:
   static const int64_t LS_REPLICA_MAP_BUCKET_NUM = 10;
   static const int64_t TABLET_REPLICA_MAP_BUCKET_NUM = 64 * 1024;
   typedef common::hash::ObHashMap<share::ObLSID, share::ObLSReplica> ObLSReplicaMap;
   typedef common::hash::ObHashMap<share::ObTabletLSPair, share::ObTabletReplica> ObTabletReplicaMap;
 
-  int build_replica_map_(ObLSReplicaMap &replica_map);
+  int build_replica_map_(ObLSReplicaMap &replica_map, const share::ObLSTable::Mode mode);
   int build_replica_map_(ObTabletReplicaMap &replica_map);
   int check_dangling_replicas_(ObLSReplicaMap &replica_map, int64_t &dangling_count);
   int check_dangling_replicas_(ObTabletReplicaMap &replica_map, int64_t &dangling_count);

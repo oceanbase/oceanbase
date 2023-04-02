@@ -64,31 +64,53 @@ int ObExprRegexp::calc_result_type2(ObExprResType &type,
                                     ObExprResType &type2,
                                     ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
   int ret = OB_SUCCESS;
+  ObRawExpr * raw_expr = type_ctx.get_raw_expr();
+  ObCollationType res_cs_type = CS_TYPE_INVALID;
+  ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
+  CK(NULL != type_ctx.get_raw_expr());
   if (type1.is_null() || type2.is_null()) {
     type.set_int32();
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  } else if (OB_UNLIKELY(!is_type_valid(type1.get_type()) || !is_type_valid(type2.get_type()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the param is not castable", K(ret), K(type1), K(type2));
+  } else if (OB_FAIL(ObCharset::aggregate_collation(type1.get_calc_collation_level(),
+                                              type1.get_calc_collation_type(),
+                                              type2.get_calc_collation_level(),
+                                              type2.get_calc_collation_type(),
+                                              res_cs_level,
+                                              res_cs_type))) {
+      LOG_WARN("fail to aggregate collation", K(ret), K(type1), K(type2));
   } else {
-    if (OB_UNLIKELY(!is_type_valid(type1.get_type()) || !is_type_valid(type2.get_type()))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("the param is not castable", K(ret), K(type1), K(type2));
+    type.set_int32();
+    type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+    type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+    //why we set the calc collation type is utf16, because the ICU regexp engine is used uft16,
+    //we need convert it the need collation in advance, and no need to think about in regexp.
+    bool is_case_sensitive = ObCharset::is_bin_sort(res_cs_type);
+    bool need_utf8 = false;
+    type1.set_calc_type(ObVarcharType);
+    type1.set_calc_collation_level(type.get_collation_level());
+    type2.set_calc_type(ObVarcharType);
+    type2.set_calc_collation_level(type.get_collation_level());
+    if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
+      LOG_WARN("fail to check need utf8", K(ret));
+    } else if (need_utf8) {
+      type2.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
     } else {
-      type.set_int32();
-      type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
-      type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-      //set calc type
-      type1.set_calc_type(ObVarcharType);
-      type2.set_calc_type(ObVarcharType);
-      ObObjMeta types[2] = {type1, type2};
-      if (OB_FAIL(aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx.get_coll_type()))) {
-        LOG_WARN("fail to aggregate charsets for comparison", K(ret), K(type1), K(type2));
-      } else {
-        ObExprOperator::calc_result_flag2(type, type1, type2);
-        type1.set_calc_collation(type);
-        type2.set_calc_collation(type);
-      }
+      type2.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
+    }
+
+    need_utf8 = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
+      LOG_WARN("fail to check need utf8", K(ret));
+    } else if (need_utf8) {
+      type1.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+    } else {
+      type1.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
     }
   }
   return ret;
@@ -142,6 +164,17 @@ int ObExprRegexp::eval_regexp(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     LOG_WARN("evaluate parameters failed", K(ret));
   } else if (text->is_null() || pattern->is_null()) {
     expr_datum.set_null();
+  } else if (OB_UNLIKELY(expr.arg_cnt_ != 2 ||
+                         (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
+                           expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN) ||
+                         (expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_GENERAL_CI &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF16_GENERAL_CI &&
+                          expr.args_[1]->datum_meta_.cs_type_ != CS_TYPE_UTF16_BIN))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(expr));
   } else if (0 == pattern->len_) {
     ret = OB_ERR_REGEXP_ERROR;
     LOG_WARN("empty regex expression", K(ret));
@@ -165,18 +198,32 @@ int ObExprRegexp::eval_regexp(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     if (OB_SUCC(ret)) {
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
-      const int64_t start_off = 0;
       bool match = false;
-      int flags = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_)
-          ? OB_REG_EXTENDED | OB_REG_NOSUB
-          : OB_REG_EXTENDED | OB_REG_NOSUB | OB_REG_ICASE;
-      if (OB_FAIL(regex_ctx->init(
-                  pattern->get_string(), flags,
-                  reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
-                  reusable))) {
-        LOG_WARN("init regex context failed",
-                 K(ret), K(pattern->get_string()));
-      } else if (OB_FAIL(regex_ctx->match(text->get_string(), start_off, match, tmp_alloc))) {
+      uint32_t flags = 0;
+      ObString match_string;
+      int64_t start_pos = 1;
+      bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
+      ObString text_utf16;
+      if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_string, is_case_sensitive, flags))) {
+        LOG_WARN("failed to get regexp flags", K(ret));
+      } else if (OB_FAIL(regex_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
+                                         ctx.exec_ctx_.get_my_session(),
+                                         pattern->get_string(), flags, reusable, expr.args_[1]->datum_meta_.cs_type_))) {
+        LOG_WARN("init regex context failed", K(ret), K(pattern->get_string()));
+      } else if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||
+                 expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_GENERAL_CI) {
+        if (OB_FAIL(ObExprUtil::convert_string_collation(text->get_string(),
+                                                         expr.args_[0]->datum_meta_.cs_type_,
+                                                         text_utf16,
+                                                         is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI,
+                                                         tmp_alloc))) {
+          LOG_WARN("convert charset failed", K(ret));
+        }
+      } else {
+        text_utf16 = text->get_string();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(regex_ctx->match(tmp_alloc, text_utf16, start_pos - 1, match))) {
         LOG_WARN("regex match failed", K(ret));
       } else {
         expr_datum.set_int32(match);

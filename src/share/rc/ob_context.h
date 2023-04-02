@@ -322,7 +322,7 @@ public:
   ~_SBase()
   {
     if (OB_UNLIKELY(0 == i_)) {
-      OB_LOG(WARN, "has break statement!!!");
+      OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "has break statement!!!");
     }
   }
   int i_;

@@ -37,7 +37,8 @@ struct ObTxStat
            const int64_t pending_log_size, const int64_t flushed_log_size,
            const int64_t role_state,
            const int64_t session_id, const common::ObAddr &scheduler,
-           const bool is_exiting);
+           const bool is_exiting, const ObXATransID &xid,
+           const share::ObLSID &coord, const int64_t last_request_ts);
   TO_STRING_KV(K_(addr), K_(tx_id), K_(tenant_id),
       K_(has_decided), K_(ls_id), K_(participants),
       K_(tx_ctx_create_time), K_(tx_expired_time), K_(ref_cnt),
@@ -45,8 +46,8 @@ struct ObTxStat
       KP_(tx_ctx_addr),
       K_(pending_log_size), K_(flushed_log_size),
       K_(role_state), K_(session_id),
-      K_(scheduler_addr),
-      K_(is_exiting));
+      K_(scheduler_addr), K_(is_exiting),
+      K_(xid), K_(coord), K_(last_request_ts));
 public:
   bool is_inited_;
   common::ObAddr addr_;
@@ -70,6 +71,9 @@ public:
   int64_t session_id_;
   common::ObAddr scheduler_addr_;
   bool is_exiting_;
+  ObXATransID xid_;
+  share::ObLSID coord_;
+  int64_t last_request_ts_;
 };
 
 class ObTxLockStat
@@ -118,6 +122,67 @@ private:
   ObTransID tx_id_;
   int64_t tx_ctx_create_time_;
   int64_t tx_expired_time_;
+};
+
+class ObTxSchedulerStat
+{
+public:
+  ObTxSchedulerStat() { reset(); }
+  ~ObTxSchedulerStat() { }
+  void reset();
+  int init(const uint64_t tenant_id,
+            const common::ObAddr &addr,
+            const uint32_t sess_id,
+            const ObTransID &tx_id,
+            const int64_t state,
+            const int64_t cluster_id,
+            const ObXATransID &xid,
+            const share::ObLSID &coord_id,
+            const ObTxPartList &parts,
+            const ObTxIsolationLevel &isolation,
+            const int64_t snapshot_version,
+            const ObTxAccessMode &access_mode,
+            const uint64_t op_sn,
+            const uint64_t flag,
+            const int64_t active_ts,
+            const int64_t expire_ts,
+            const int64_t timeout_us,
+            const ObTxSavePointList &savepoints,
+            const int16_t abort_cause,
+            const bool can_elr);
+  TO_STRING_KV(K_(tenant_id), K_(addr), K_(sess_id),
+               K_(tx_id), K_(state), K_(cluster_id),
+               K_(xid), K_(coord_id), K_(parts),
+               K_(isolation), K_(snapshot_version),
+               K_(access_mode), K_(op_sn),
+               K_(flag), K_(active_ts), K_(expire_ts),
+               K_(timeout_us), K_(savepoints),
+               K_(abort_cause), K_(can_elr));
+  int64_t get_parts_str(char* buf, const int64_t buf_len);
+  int get_valid_savepoints(const ObTxSavePointList &savepoints);
+
+public:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  common::ObAddr addr_;
+  uint32_t sess_id_;
+  ObTransID tx_id_;
+  int64_t state_;
+  int64_t cluster_id_;
+  ObXATransID xid_;
+  share::ObLSID coord_id_;
+  ObTxPartList parts_;
+  ObTxIsolationLevel isolation_;
+  int64_t snapshot_version_;
+  ObTxAccessMode access_mode_;
+  uint64_t op_sn_;
+  uint64_t flag_;
+  int64_t active_ts_;
+  int64_t expire_ts_;
+  int64_t timeout_us_;
+  ObTxSavePointList savepoints_;
+  int16_t abort_cause_;
+  bool can_elr_;
 };
 
 } // transaction

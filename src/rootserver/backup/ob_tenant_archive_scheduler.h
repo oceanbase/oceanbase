@@ -51,10 +51,15 @@ public:
       obrpc::ObSrvRpcProxy &rpc_proxy,
       common::ObMySQLProxy &sql_proxy);
 
+  int open_archive_mode();
+  int close_archive_mode();
+
   // Just mark archive is open, actual actions to open archive is a background task.
   int enable_archive(const int64_t dest_no);
   // Just mark archive is stop, actual actions to close archive is a background task.
   int disable_archive(const int64_t dest_no);
+  // Just mark archive is suspend, actual actions to suspend archive is a background task.
+  int defer_archive(const int64_t dest_no);
   int check_can_do_archive(bool &can) const;
   int checkpoint();
 
@@ -67,7 +72,7 @@ private:
   int notify_(const share::ObTenantArchiveRoundAttr &round_attr);
   int do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info);
   int check_archive_dest_validity_(const int64_t dest_no);
-  int get_max_checkpoint_scn_(const uint64_t tenant_id, share::ARCHIVE_SCN_TYPE &max_checkpoint_scn) const;
+  int get_max_checkpoint_scn_(const uint64_t tenant_id, share::SCN &max_checkpoint_scn) const;
 
 private:
   bool is_inited_;

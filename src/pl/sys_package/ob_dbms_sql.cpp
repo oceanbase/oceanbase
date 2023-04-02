@@ -88,19 +88,45 @@ int ObDbmsInfo::deep_copy_field_columns(ObIAllocator& allocator,
   return ret;
 }
 
+int ObDbmsInfo::deep_copy_field_columns(ObIAllocator& allocator,
+                                        const common::ColumnsFieldArray src_fields,
+                                        common::ColumnsFieldArray &dst_fields)
+{
+  int ret = OB_SUCCESS;
+  dst_fields.reset();
+  dst_fields.set_allocator(&allocator);
+  if (src_fields.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src fields is null.", K(ret), K(src_fields.count()));
+  } else if (OB_FAIL(dst_fields.reserve(src_fields.count()))) {
+    LOG_WARN("fail to reserve column fields",
+             K(ret), K(dst_fields.count()), K(src_fields.count()));
+  } else {
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < src_fields.count(); ++i) {
+      ObField tmp_field;
+      if (OB_FAIL(tmp_field.deep_copy(src_fields.at(i), &allocator))) {
+        LOG_WARN("deep copy field failed", K(ret));
+      } else if (OB_FAIL(dst_fields.push_back(tmp_field))) {
+        LOG_WARN("push back field param failed", K(ret));
+      } else { }
+    }
+  }
+  return ret;
+}
+
 int ObDbmsInfo::init_params(int64_t param_count)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *alloc = NULL;
-  OV (OB_NOT_NULL(entity_), OB_NOT_INIT, stmt_id_, param_count);
+  OV (OB_NOT_NULL(entity_), OB_NOT_INIT, ps_sql_, param_count);
   OX (alloc = &entity_->get_arena_allocator());
   CK (OB_NOT_NULL(alloc));
   OX (param_names_.reset());
   OX (param_names_.set_allocator(alloc));
-  OZ (param_names_.init(param_count), stmt_id_, param_count);
+  OZ (param_names_.init(param_count), ps_sql_, param_count);
   OX (bind_params_.reset());
   OX (bind_params_.set_allocator(alloc));
-  OZ (bind_params_.init(param_count), stmt_id_, param_count);
+  OZ (bind_params_.init(param_count), ps_sql_, param_count);
   OX (exec_params_.~Ob2DArray());
   OX (new (&exec_params_) ParamStore(ObWrapperAllocator(alloc)));
   return ret;
@@ -129,7 +155,7 @@ const ObObjParam *ObDbmsInfo::get_bind_param(const ObString &param_name) const
         }
       } else { /*do nothing*/ }
     } else {
-      LOG_ERROR("BUG!!!: param name is not start with colon", K(param_name));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "BUG!!!: param name is not start with colon", K(param_name));
     }
   }
   return param_value;
@@ -181,12 +207,12 @@ int ObDbmsInfo::add_param_name(ObString &clone_name)
     ObIAllocator *alloc = NULL;
     int64_t param_cnt = param_names_.count();
     CK (into_cnt <= param_cnt);
-    OV (OB_NOT_NULL(entity_), OB_NOT_INIT, stmt_id_, param_cnt);
+    OV (OB_NOT_NULL(entity_), OB_NOT_INIT, ps_sql_, param_cnt);
     OX (alloc = &entity_->get_arena_allocator());
     CK (OB_NOT_NULL(alloc));
     OX (into_names_.reset());
     OX (into_names_.set_allocator(alloc));
-    OZ (into_names_.init(into_cnt), stmt_id_, into_cnt);
+    OZ (into_names_.init(into_cnt), ps_sql_, into_cnt);
     for (int64_t i = param_cnt - into_cnt; OB_SUCC(ret) && i < param_cnt; ++i) {
       OZ (into_names_.push_back(param_names_.at(i)));
     }
@@ -253,6 +279,7 @@ int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
   OZ (prepare_entity(session), sql_stmt);
   OV (OB_NOT_NULL(get_dbms_entity()), OB_ALLOCATE_MEMORY_FAILED, sql_stmt);
   OV (OB_NOT_NULL(get_cursor_entity()), OB_ALLOCATE_MEMORY_FAILED, sql_stmt);
+  OX (set_spi_cursor(NULL));
   if (OB_SUCC(ret)) {
     ObIAllocator &alloc = get_dbms_entity()->get_arena_allocator();
     ObParser parser(alloc, session.get_sql_mode(), session.get_local_collation_connection());

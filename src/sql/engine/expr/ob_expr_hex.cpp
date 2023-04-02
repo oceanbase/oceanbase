@@ -21,6 +21,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 
@@ -203,9 +204,23 @@ int ObExprHex::eval_hex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
       }
     } else {
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      if (OB_FAIL(ObDatumHexUtils::hex(expr, arg->get_string(), ctx,
-                                       alloc_guard.get_allocator(), expr_datum))) {
-        LOG_WARN("to hex failed", K(ret));
+      if (!ob_is_text_tc(in_type)) {
+        if (OB_FAIL(ObDatumHexUtils::hex(expr, arg->get_string(), ctx,
+                                         alloc_guard.get_allocator(), expr_datum))) {
+          LOG_WARN("to hex failed", K(ret));
+        }
+      } else { // text tc
+        ObString str;
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(),
+                                                              *arg,
+                                                              expr.args_[0]->datum_meta_,
+                                                              expr.args_[0]->obj_meta_.has_lob_header(),
+                                                              str))) {
+          LOG_WARN("failed to get lob data", K(ret));
+        } else if (OB_FAIL(ObDatumHexUtils::hex(expr, str, ctx,
+                                                alloc_guard.get_allocator(), expr_datum))) {
+          LOG_WARN("to hex failed", K(ret));
+        }
       }
     }
   }

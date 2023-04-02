@@ -116,7 +116,7 @@ int ObAllVirtualReplayStat::insert_stat_(logservice::LSReplayStat &replay_stat)
         cur_row_.cells_[i].set_uint64(replay_stat.unsubmitted_lsn_.val_);
         break;
       case OB_APP_MIN_COLUMN_ID + 8: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(replay_stat.unsubmitted_log_ts_ns_));
+        cur_row_.cells_[i].set_uint64(replay_stat.unsubmitted_scn_.get_val_for_inner_table_field());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 9:

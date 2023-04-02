@@ -11,6 +11,11 @@
  */
 
 #include "ob_archive_task_queue.h"
+#include "lib/atomic/ob_atomic.h"
+#include "lib/ob_errno.h"
+#include "lib/time/ob_time_utility.h"
+#include "logservice/archiveservice/ob_archive_task.h"
+#include "logservice/archiveservice/ob_archive_util.h"
 #include "share/ob_errno.h"             // ret
 #include "ob_archive_worker.h"          // ObArchiveWorker
 
@@ -26,7 +31,7 @@ ObArchiveTaskStatus::ObArchiveTaskStatus(const ObLSID &id) :
   num_(0),
   id_(id),
   queue_(),
-  rwlock_()
+  rwlock_(common::ObLatchIds::ARCHIVE_TASK_QUEUE_LOCK)
 {
 }
 
@@ -85,7 +90,7 @@ int ObArchiveTaskStatus::pop(ObLink *&link, bool &task_exist)
   int ret = OB_SUCCESS;
   task_exist = false;
 
-  RLockGuard guard(rwlock_);
+  WLockGuard guard(rwlock_);
 
   if (OB_UNLIKELY(0 >= ref_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -120,23 +125,47 @@ int ObArchiveTaskStatus::top(ObLink *&link, bool &task_exist)
   return ret;
 }
 
-int ObArchiveTaskStatus::pop_front(const int64_t num)
+int ObArchiveTaskStatus::get_next(ObLink *&link, bool &task_exist)
 {
   int ret = OB_SUCCESS;
+  task_exist = false;
+  link = NULL;
+  int64_t basic_file_id = 0;
   RLockGuard guard(rwlock_);
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
-    ObLink *link = NULL;
-    if (queue_.is_empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(ERROR, "queue_ is empty", KR(ret));
-    } else if (OB_FAIL(queue_.pop(link))) {
-      ARCHIVE_LOG(WARN, "pop task fail", KR(ret));
-    } else {
-      num_--;
+  // pop with write lock, so if queue is not empty, top should succeed
+  if (queue_.is_empty()) {
+    // skip it
+  } else if (OB_FAIL(queue_.top(link))) {
+    ARCHIVE_LOG(WARN, "top task fail", KR(ret));
+  } else if (OB_ISNULL(link)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "link is NULL, unexpected", K(ret), KPC(this));
+  } else {
+    while (NULL != link && ! task_exist) {
+      ObArchiveSendTask *task = static_cast<ObArchiveSendTask*>(link);
+      const int64_t file_id = cal_archive_file_id(task->get_start_lsn(), MAX_ARCHIVE_FILE_SIZE);
+      ARCHIVE_LOG(TRACE, "print cur_task", KPC(task), KPC(this));
+      if (0 != basic_file_id && file_id != basic_file_id + 1) {
+        // 1. archive parallel only supports inter-files
+        // 2. file id gap of adjoint tasks should not be bigger than 1,
+        //    they are pushed in sequentially
+        break;
+      } else if (task->issue_task()) {
+        task_exist = true;
+        ATOMIC_SET(&last_issue_timestamp_, common::ObTimeUtility::fast_current_time());
+      } else {
+        link = link->next_;
+      }
+      basic_file_id = file_id;
     }
   }
 
+  if (! task_exist
+      && ! queue_.is_empty()
+      && common::ObTimeUtility::fast_current_time() - ATOMIC_LOAD(&last_issue_timestamp_) > PRINT_WARN_THRESHOLD) {
+    print_self_();
+  }
   return ret;
 }
 
@@ -153,7 +182,7 @@ int ObArchiveTaskStatus::retire(bool &is_empty, bool &is_discarded)
     ARCHIVE_LOG(ERROR, "task status ref_ already not bigger than zero",
         K(ret), K(ref_), K(id_));
   } else if (queue_.is_empty()) {
-    if (OB_FAIL(retire_unlock(is_discarded))) {
+    if (OB_FAIL(retire_unlock_(is_discarded))) {
       ARCHIVE_LOG(WARN, "ObArchiveTaskStatus retire fail", K(ret));
     }
   } else {
@@ -163,7 +192,13 @@ int ObArchiveTaskStatus::retire(bool &is_empty, bool &is_discarded)
   return ret;
 }
 
-int ObArchiveTaskStatus::retire_unlock(bool &is_discarded)
+void ObArchiveTaskStatus::print_self()
+{
+  RLockGuard guard(rwlock_);
+  print_self_();
+}
+
+int ObArchiveTaskStatus::retire_unlock_(bool &is_discarded)
 {
   int ret = OB_SUCCESS;
   is_discarded = false;
@@ -196,40 +231,28 @@ void ObArchiveTaskStatus::free(bool &is_discarded)
   }
 }
 
-/*
-int ObArchiveSendTaskStatus::top(ObLink *&link, bool &task_exist)
+void ObArchiveTaskStatus::print_self_()
 {
   int ret = OB_SUCCESS;
-  task_exist = false;
-
-  RLockGuard guard(rwlock_);
-
-  if (queue_.is_empty()) {
-    // skip it
-  } else if (OB_FAIL(queue_.top(link))) {
-    ARCHIVE_LOG(WARN, "top task fail", K(ret));
-  } else {
-    task_exist = true;
-  }
-
-  return ret;
-}
-
-ObLink *ObArchiveSendTaskStatus::next(ObLink &pre)
-{
+  int64_t index = 0;
+  const int64_t max_count = 10;
   ObLink *link = NULL;
-
-  RLockGuard guard(rwlock_);
-
   if (queue_.is_empty()) {
-    // skip it
+    ARCHIVE_LOG(INFO, "task status is empty", KPC(this));
+  } else if (OB_FAIL(queue_.top(link))) {
+    ARCHIVE_LOG(WARN, "top task fail", KR(ret), KPC(this));
+  } else if (OB_ISNULL(link)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "link is NULL, unexpected", K(ret), KPC(this));
   } else {
-    link = pre.next_;
+    while (NULL != link && index < max_count) {
+      ObArchiveSendTask *task = static_cast<ObArchiveSendTask*>(link);
+      ARCHIVE_LOG(INFO, "print send task in queue", K(index), KPC(task), KPC(this));
+      link = link->next_;
+      index++;
+    }
   }
-
-  return link;
 }
-*/
 
 } // namespace archive
 } // namespace oceanbase

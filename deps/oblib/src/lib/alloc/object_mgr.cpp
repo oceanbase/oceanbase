@@ -17,8 +17,8 @@
 using namespace oceanbase;
 using namespace lib;
 
-SubObjectMgr::SubObjectMgr(const bool for_logger)
-  : mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
+SubObjectMgr::SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id)
+  : IBlockMgr(tenant_id, ctx_id), mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK),
     normal_locker_(mutex_), logger_locker_(mutex_),
     locker_(!for_logger ? static_cast<ISetLocker&>(normal_locker_) :
             static_cast<ISetLocker&>(logger_locker_)),
@@ -60,12 +60,12 @@ void SubObjectMgr::free_block(ABlock *block)
 }
 
 ObjectMgr::ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id)
-  : ta_(allocator), attr_(tenant_id, nullptr, ctx_id),
+  : IBlockMgr(tenant_id, ctx_id), ta_(allocator),
     sub_cnt_(1),
-    root_mgr_(common::ObCtxIds::LOGGER_CTX_ID == attr_.ctx_id_),
+    root_mgr_(common::ObCtxIds::LOGGER_CTX_ID == ctx_id, tenant_id, ctx_id),
     last_wash_ts_(0), last_washed_size_(0)
 {
-  root_mgr_.set_tenant_ctx_allocator(allocator, attr_);
+  root_mgr_.set_tenant_ctx_allocator(allocator);
   MEMSET(sub_mgrs_, 0, sizeof(sub_mgrs_));
   sub_mgrs_[0] = &root_mgr_;
 }
@@ -101,7 +101,7 @@ AObject *ObjectMgr::alloc_object(uint64_t size, const ObMemAttr &attr)
     }
   }
   if (OB_ISNULL(obj)) {
-    const int limit = common::ObCtxParallel::instance().parallel_of_ctx(attr_.ctx_id_);
+    const int limit = common::ObCtxParallel::instance().parallel_of_ctx(ctx_id_);
     auto cnt = ATOMIC_LOAD(&sub_cnt_);
     if (cnt < limit) {
       if (OB_NOT_NULL(sub_mgr = create_sub_mgr())) {
@@ -179,7 +179,7 @@ ABlock *ObjectMgr::alloc_block(uint64_t size, const ObMemAttr &attr)
     }
   }
   if (OB_ISNULL(block)) {
-    const int limit = common::ObCtxParallel::instance().parallel_of_ctx(attr_.ctx_id_);
+    const int limit = common::ObCtxParallel::instance().parallel_of_ctx(ctx_id_);
     auto cnt = ATOMIC_LOAD(&sub_cnt_);
     if (cnt < limit) {
       if (OB_NOT_NULL(sub_mgr = create_sub_mgr())) {
@@ -217,7 +217,8 @@ void ObjectMgr::free_block(ABlock *block)
 SubObjectMgr *ObjectMgr::create_sub_mgr()
 {
   SubObjectMgr *sub_mgr = nullptr;
-  auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID);
+  auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID,
+                                                                        ObCtxIds::DEFAULT_CTX_ID);
   auto &root_mgr = static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_;
   ObMemAttr attr;
   attr.tenant_id_ = OB_SERVER_TENANT_ID;
@@ -228,8 +229,9 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   root_mgr.unlock();
   if (OB_NOT_NULL(obj)) {
     SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
-    sub_mgr = new (obj->data_) SubObjectMgr(common::ObCtxIds::LOGGER_CTX_ID == attr_.ctx_id_);
-    sub_mgr->set_tenant_ctx_allocator(ta_, attr_);
+    sub_mgr = new (obj->data_) SubObjectMgr(common::ObCtxIds::LOGGER_CTX_ID == ctx_id_,
+                                            tenant_id_, ctx_id_);
+    sub_mgr->set_tenant_ctx_allocator(ta_);
   }
   return sub_mgr;
 }
@@ -237,7 +239,8 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
 void ObjectMgr::destroy_sub_mgr(SubObjectMgr *sub_mgr)
 {
   if (sub_mgr != nullptr) {
-    auto *ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID);
+    auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID,
+                                                                          ObCtxIds::DEFAULT_CTX_ID);
     auto &root_mgr = static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_;
     sub_mgr->~SubObjectMgr();
     auto *obj = reinterpret_cast<AObject*>((char*)sub_mgr - AOBJECT_HEADER_SIZE);
@@ -291,4 +294,18 @@ ObjectMgr::Stat ObjectMgr::get_stat()
       .last_washed_size_ = ATOMIC_LOAD(&last_washed_size_),
       .last_wash_ts_ = ATOMIC_LOAD(&last_wash_ts_)
       };
+}
+
+bool ObjectMgr::check_has_unfree()
+{
+  bool has_unfree = false;
+  for (uint64_t idx = 0; idx < ATOMIC_LOAD(&sub_cnt_) && !has_unfree; idx++) {
+    auto sub_mgr = ATOMIC_LOAD(&sub_mgrs_[idx]);
+    if (OB_ISNULL(sub_mgr)) {
+      // do nothing
+    } else {
+      has_unfree = sub_mgr->check_has_unfree();
+    }
+  }
+  return has_unfree;
 }

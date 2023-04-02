@@ -26,7 +26,6 @@ public:
   virtual ~ObLogErrLog() {}
   virtual const char *get_name() const;
   virtual int est_cost() override;
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
   virtual uint64_t hash(uint64_t seed) const override;
   int extract_err_log_info();
   ObErrLogDefine &get_err_log_define() { return err_log_define_; }
@@ -35,6 +34,10 @@ public:
   const ObDelUpdStmt *get_del_upd_stmt() const { return del_upd_stmt_; }
   int get_err_log_type(stmt::StmtType &type);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  virtual int inner_replace_op_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
 private:
   ObErrLogDefine err_log_define_;
   const ObDelUpdStmt *del_upd_stmt_;

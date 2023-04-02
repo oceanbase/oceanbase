@@ -12,6 +12,9 @@
 
 #include "log_request_handler.h"
 #include "log_req.h"
+#include "palf_handle_impl_guard.h"
+#include "palf_handle_impl.h"
+#include "palf_env_impl.h"
 #include "share/ob_occam_time_guard.h"
 
 namespace oceanbase
@@ -21,7 +24,7 @@ namespace palf
 
 using namespace election;
 
-LogRequestHandler::LogRequestHandler(PalfEnvImpl *palf_env_impl) : palf_env_impl_(palf_env_impl)
+LogRequestHandler::LogRequestHandler(IPalfEnvImpl *palf_env_impl) : palf_env_impl_(palf_env_impl)
 {
 }
 
@@ -41,7 +44,7 @@ int LogRequestHandler::handle_request<LogPushReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     const char *buf = req.write_buf_.write_buf_[0].buf_;
     const int64_t buf_len = req.write_buf_.write_buf_[0].buf_len_;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
@@ -74,7 +77,7 @@ int LogRequestHandler::handle_request<LogPushResp>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->ack_log(server, req.msg_proposal_id_,
@@ -98,13 +101,37 @@ int LogRequestHandler::handle_request<NotifyRebuildReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
-    } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_notify_rebuild_req(server, req.base_lsn_, req.base_prev_log_info_))){
+    } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_notify_rebuild_req(server,
+            req.base_lsn_, req.base_prev_log_info_))){
       PALF_LOG(WARN, "PalfHandleImpl handle_notify_rebuild_req failed", K(ret), K(server), K(req), KPC(palf_env_impl_));
     } else {
       PALF_LOG(TRACE, "PalfHandleImpl handle_notify_rebuild_req success", K(ret), K(server), K(req), KPC(palf_env_impl_));
+    }
+  }
+  return ret;
+}
+
+template <>
+int LogRequestHandler::handle_request<NotifyFetchLogReq>(
+    const int64_t palf_id,
+    const ObAddr &server,
+    const NotifyFetchLogReq &req)
+{
+  int ret = common::OB_SUCCESS;
+  if (false == is_valid_palf_id(palf_id) || false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
+  } else {
+    IPalfHandleImplGuard guard;
+    if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
+      PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
+    } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_notify_fetch_log_req(server))){
+      PALF_LOG(WARN, "PalfHandleImpl handle_notify_fetch_log_req failed", K(ret), K(server), K(req), KPC(palf_env_impl_));
+    } else {
+      PALF_LOG(TRACE, "PalfHandleImpl handle_notify_fetch_log_req success", K(ret), K(server), K(req), KPC(palf_env_impl_));
     }
   }
   return ret;
@@ -121,7 +148,7 @@ int LogRequestHandler::handle_request<CommittedInfo>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_committed_info(server,
@@ -150,7 +177,7 @@ int LogRequestHandler::handle_request<LogFetchReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->get_log(server, (FetchLogType) req.fetch_type_, req.msg_proposal_id_,
@@ -174,7 +201,7 @@ int LogRequestHandler::handle_request<LogPrepareReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id,guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_prepare_request(server, req.log_proposal_id_))) {
@@ -197,11 +224,11 @@ int LogRequestHandler::handle_request<LogPrepareResp>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_prepare_response(server, req.msg_proposal_id_,
-          req.vote_granted_, req.log_proposal_id_, req.lsn_, req.log_mode_meta_))) {
+          req.vote_granted_, req.log_proposal_id_, req.max_flushed_lsn_, req.committed_end_lsn_, req.log_mode_meta_))) {
       PALF_LOG(WARN, "PalfHandleImpl handle_prepare_response failed", K(ret), K(server),
           K(palf_id), K(req), KPC(palf_env_impl_));
     } else {
@@ -224,7 +251,7 @@ int LogRequestHandler::handle_request<LogChangeConfigMetaReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->receive_config_log(server, req.msg_proposal_id_,
@@ -248,7 +275,7 @@ int LogRequestHandler::handle_request<LogChangeConfigMetaResp>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->ack_config_log(server, req.proposal_id_, req.config_version_))) {
@@ -272,13 +299,14 @@ int LogRequestHandler::handle_request<LogChangeModeMetaReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
-    } else if (OB_FAIL(guard.get_palf_handle_impl()->receive_mode_meta(server, req.msg_proposal_id_, req.meta_))) {
+    } else if (OB_FAIL(guard.get_palf_handle_impl()->receive_mode_meta(server, req.msg_proposal_id_,
+        req.is_applied_mode_meta_, req.meta_))) {
       PALF_LOG(WARN, "receive_mode_meta failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
     } else {
-      PALF_LOG(TRACE, "receive_mode_meta success", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
+      PALF_LOG(INFO, "receive_mode_meta success", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
     }
   }
   return ret;
@@ -295,7 +323,7 @@ int LogRequestHandler::handle_request<LogChangeModeMetaResp>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->ack_mode_meta(server, req.msg_proposal_id_))) {
@@ -318,7 +346,7 @@ int LogRequestHandler::handle_request<LogLearnerReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_learner_req(req.sender_, req.req_type_))) {
@@ -341,7 +369,7 @@ int LogRequestHandler::handle_request<LogRegisterParentReq>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_register_parent_req(req.child_, req.is_to_leader_))) {
@@ -364,7 +392,7 @@ int LogRequestHandler::handle_request<LogRegisterParentResp>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
+    IPalfHandleImplGuard guard;
     if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_register_parent_resp(req.parent_, req.candidate_list_, req.reg_ret_))) {
@@ -390,7 +418,7 @@ int LogRequestHandler::handle_request<MsgType>(\
     ret = OB_INVALID_ARGUMENT;\
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req));\
   } else {\
-    PalfHandleImplGuard guard;\
+    IPalfHandleImplGuard guard;\
     if (CLICK_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {\
       PALF_LOG(WARN, "ObLogMgr get_log_service failed", K(ret), K(palf_id), KP(palf_env_impl_));\
     } else if (CLICK_FAIL(guard.get_palf_handle_impl()->handle_election_message(req))) {\
@@ -419,16 +447,47 @@ int LogRequestHandler::handle_sync_request<LogGetMCStReq, LogGetMCStResp>(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
   } else {
-    PalfHandleImplGuard guard;
-    if (false == palf_env_impl_->check_disk_space_enough() ||
-        false == palf_env_impl_->check_tenant_memory_enough()) {
+    IPalfHandleImplGuard guard;
+    if (false == palf_env_impl_->check_disk_space_enough()) {
       resp.is_normal_replica_ = false;
     } else if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
-    } else if (OB_FAIL(guard.get_palf_handle_impl()->get_memberchange_status(server, req, resp))) {
-      PALF_LOG(WARN, "PalfHandleImpl get_memberchange_status failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
+    } else if (OB_FAIL(guard.get_palf_handle_impl()->config_change_pre_check(server, req, resp))) {
+      PALF_LOG(WARN, "PalfHandleImpl config_change_pre_check failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
     } else {
-      PALF_LOG(TRACE, "PalfHandleImpl get_memberchange_status success", K(ret), K(palf_id), K(server), K(req), K(resp), KPC(palf_env_impl_));
+      PALF_LOG(INFO, "PalfHandleImpl config_change_pre_check success", K(ret), K(palf_id), K(server), K(req), K(resp), KPC(palf_env_impl_));
+    }
+  }
+  return ret;
+}
+
+template <>
+int LogRequestHandler::handle_sync_request<LogGetStatReq, LogGetStatResp>(
+    const int64_t palf_id,
+    const ObAddr &server,
+    const LogGetStatReq &req,
+    LogGetStatResp &resp)
+{
+  int ret = common::OB_SUCCESS;
+  IPalfHandleImplGuard guard;
+  if (false == is_valid_palf_id(palf_id) || false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
+  } else if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
+    PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
+  } else if (req.get_type_ == LogGetStatType::GET_LEADER_MAX_SCN) {
+    common::ObRole role = FOLLOWER;
+    int64_t unused_pid;
+    bool is_pending_state = true;
+    if (OB_FAIL(guard.get_palf_handle_impl()->get_role(role, unused_pid, is_pending_state))) {
+      CLOG_LOG(WARN, "palf_handle get_role failed", K(ret), K(palf_id), K(server));
+    } else if ((role != LEADER || true == is_pending_state)) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(INFO, "i am not leader", K(ret), K(palf_id), K(req), K(role), K(is_pending_state));
+    } else {
+      resp.max_scn_ = guard.get_palf_handle_impl()->get_max_scn();
+      resp.end_lsn_ = guard.get_palf_handle_impl()->get_end_lsn();
+      CLOG_LOG(TRACE, "get_leader_max_scn success", K(ret), K(palf_id), K(server), K(req), K(resp));
     }
   }
   return ret;

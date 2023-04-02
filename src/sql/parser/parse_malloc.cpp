@@ -232,7 +232,10 @@ char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection
         case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
         case 46/*CS_TYPE_UTF8MB4_BIN*/:
         case 63/*CS_TYPE_BINARY*/:
-        case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/: {
+        case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
+        //case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
+        //case 47/*CS_TYPE_LATIN1_BIN*/:
+        {
           if (i + 2 < dup_len) {
             if (str[i] == (char)0xe3 && str[i+1] == (char)0x80 && str[i+2] == (char)0x80) {
               //utf8 multi byte space

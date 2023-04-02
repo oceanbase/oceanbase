@@ -36,7 +36,7 @@ struct ObTenantRestoreCtx
   int assign(const ObTenantRestoreCtx &args);
   int64_t get_job_id() const { return job_id_; }
   const share::ObRestoreType &get_restore_type() const { return restore_type_; }
-  uint64_t get_restore_scn() const { return restore_scn_; }
+  const share::SCN &get_restore_scn() const { return restore_scn_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_backup_cluster_version() const { return backup_cluster_version_; }
   const common::ObArray<share::ObRestoreBackupSetBriefInfo> &get_backup_set_list() const { return backup_set_list_; }
@@ -52,7 +52,7 @@ struct ObTenantRestoreCtx
   
   int64_t job_id_;
   share::ObRestoreType restore_type_; // quick restore or normal restore
-  uint64_t restore_scn_; // restore end scn
+  share::SCN restore_scn_; // restore end scn
   uint64_t tenant_id_;
   int64_t backup_cluster_version_;
   // every set path is integral.

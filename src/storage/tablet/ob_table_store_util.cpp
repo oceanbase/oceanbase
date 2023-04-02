@@ -23,9 +23,11 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "observer/ob_server_struct.h"
+#include "share/scn.h"
 
 
 using namespace oceanbase;
+using namespace share;
 using namespace common;
 using namespace storage;
 using namespace blocksstable;
@@ -69,10 +71,15 @@ void ObITableArray::reset_table(const int64_t pos)
   // maybe called by thread without tenant, such as iocallback, comment until remove tablet_handle from iocallback
   // } else if (OB_UNLIKELY(meta_mem_mgr_ != MTL(ObTenantMetaMemMgr *) || nullptr == meta_mem_mgr_)) {
   } else if (OB_ISNULL(meta_mem_mgr_) || OB_ISNULL(allocator_)) {
-    LOG_ERROR("[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KP(allocator_), KPC(array_[pos]));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KP(allocator_), KPC(array_[pos]));
   } else if (0 == array_[pos]->dec_ref()) {
     if (meta_mem_mgr_->is_used_obj_pool(allocator_)) {
-      if (array_[pos]->is_sstable()) {
+      if (OB_UNLIKELY(OB_INVALID_TENANT_ID == MTL_ID()
+          && array_[pos]->is_sstable()
+          && reinterpret_cast<ObSSTable*>(array_[pos])->is_small_sstable())) {
+        FLOG_INFO("this thread doesn't have MTL ctx, push sstable into gc queue", KP(array_[pos]), K(array_[pos]->get_key()));
+        meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);
+      } else if (array_[pos]->is_sstable() && !array_[pos]->is_ddl_mem_sstable()) {
         meta_mem_mgr_->gc_sstable(reinterpret_cast<ObSSTable*>(array_[pos]));
       } else {
         meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);
@@ -441,9 +448,9 @@ int ObExtendTableArray::deserialize(
         LOG_WARN("unexpected error, sstable is nullptr", K(ret), K(table_handle));
       } else if (OB_FAIL(sstable->deserialize(allocator, buf, data_len, pos))) {
         LOG_WARN("failed to deserialize sstable", K(ret));
-      } else if (table_handle.get_table()->is_buf_minor_sstable()) {
-        if (OB_FAIL(assign(ObTabletTableStore::BUF_MINOR, table_handle.get_table()))) {
-          LOG_WARN("failed to add buf minor table", K(ret));
+      } else if (table_handle.get_table()->is_meta_major_sstable()) {
+        if (OB_FAIL(assign(ObTabletTableStore::META_MAJOR, table_handle.get_table()))) {
+          LOG_WARN("failed to add meta major table", K(ret));
         }
       }
     }
@@ -586,7 +593,7 @@ int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
     LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
   } else {
     ObITable *last_memtable = get_table(count() - 1);
-    int64_t end_log_ts = (NULL == last_memtable) ? 0 : last_memtable->get_end_log_ts();
+    SCN end_scn = (NULL == last_memtable) ? SCN::min_scn() : last_memtable->get_end_scn();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
       memtable::ObMemtable *memtable = nullptr;
@@ -597,8 +604,8 @@ int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
       } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
-      } else if (table->get_end_log_ts() < end_log_ts) {
-      } else if (table->get_end_log_ts() == end_log_ts && table == last_memtable) { //fix issue 41996395
+      } else if (table->get_end_scn() < end_scn) {
+      } else if (table->get_end_scn() == end_scn && table == last_memtable) { //fix issue 41996395
       } else if (OB_FAIL(add_table(table))) {
         LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
       }
@@ -654,7 +661,7 @@ int ObMemtableArray::find(
 }
 
 int ObMemtableArray::find(
-    const int64_t start_log_ts,
+    const SCN &start_scn,
     const int64_t base_version,
     ObITable *&table,
     int64_t &mem_pos) const
@@ -666,10 +673,10 @@ int ObMemtableArray::find(
   if (OB_UNLIKELY(empty())) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no memtable", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(start_log_ts < 0)) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(start_log_ts), K(base_version));
-  } else if (0 == start_log_ts) {
+    LOG_WARN("get invalid arguments", K(ret), K(start_scn), K(base_version));
+  } else if (SCN::min_scn() == start_scn) {
     mem_pos = 0;
     table = get_table(0);
   } else {
@@ -678,13 +685,13 @@ int ObMemtableArray::find(
       if (OB_ISNULL(memtable)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table must not null", K(ret), KPC(memtable), KPC(this));
-      } else if (memtable->get_end_log_ts() == start_log_ts) {
+      } else if (memtable->get_end_scn() == start_scn) {
         if (static_cast<memtable::ObIMemtable *>(memtable)->get_snapshot_version() > base_version) {
           mem_pos = i;
           table = memtable;
           break;
         }
-      } else if (memtable->get_end_log_ts() > start_log_ts) {
+      } else if (memtable->get_end_scn() > start_scn) {
         mem_pos = i;
         table = memtable;
         break;
@@ -724,7 +731,7 @@ void ObMemtableArray::reset_table(const int64_t pos)
   if (pos < 0 || pos >= count()) { // do nothing
   } else if (OB_ISNULL(table = get_table(pos))) {
   } else if (OB_ISNULL(meta_mem_mgr_)) {
-    LOG_ERROR("[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KPC(table));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KPC(table));
   } else if (0 == table->dec_ref()) {
     meta_mem_mgr_->push_table_into_gc_queue(table, table->get_key().table_type_);
   }
@@ -823,6 +830,18 @@ int ObTableStoreIterator::add_tables(ObITable **start, const int64_t count)
   return ret;
 }
 
+int ObTableStoreIterator::add_table(ObITable *input_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(input_table)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(input_table));
+  } else if (OB_FAIL(array_.push_back(input_table))) {
+    LOG_WARN("failed to add table to iterator", K(ret), KP(input_table));
+  }
+  return ret;
+}
+
 int ObTableStoreIterator::get_next(ObITable *&table)
 {
   int ret = OB_SUCCESS;
@@ -905,7 +924,7 @@ int64_t ObPrintTableStoreIterator::to_string(char *buf, const int64_t buf_len) c
       BUF_PRINTF(" ] ");
       BUF_PRINTF(" %-10s %-19s %-19s %-19s %-19s %-19s %-4s %-16s \n",
           "table_type", "table_addr", "upper_trans_ver", "max_merge_ver",
-          "start_log_ts", "end_log_ts", "ref", "uncommit_row");
+          "start_scn", "end_scn", "ref", "uncommit_row");
       for (int64_t i = 0; i < array_.count(); ++i) {
         if (i > 0) {
           J_NEWLINE();
@@ -940,13 +959,13 @@ void ObPrintTableStoreIterator::table_to_string(
       ? (static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().contain_uncommitted_row_ ? "true" : "false")
       : "unused";
 
-    BUF_PRINTF(" %-10s %-19p %-19lu %-19lu %-19lu %-19lu %-4ld %-16s ",
+    BUF_PRINTF(" %-10s %-19p %-19lu %-19lu %-19s %-19s %-4ld %-16s ",
       table_name,
       reinterpret_cast<const void *>(table),
       table->get_upper_trans_version(),
       table->get_max_merged_trans_version(),
-      table->get_start_log_ts(),
-      table->get_end_log_ts(),
+      to_cstring(table->get_start_scn()),
+      to_cstring(table->get_end_scn()),
       table->get_ref(),
       uncommit_row);
   } else {
@@ -962,8 +981,8 @@ bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
 {
   bool bret = false;
   if (OB_SUCCESS != result_code_) {
-  } else if (OB_SUCCESS != (result_code_ = compare_table_by_log_ts_range(ltable, rtable, bret))) {
-    LOG_WARN("failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
+  } else if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
+    LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
 }
@@ -974,7 +993,7 @@ bool ObTableStoreUtil::ObITableSnapshotVersionCompare::operator()(
   bool bret = false;
   if (OB_SUCCESS != result_code_) {
   } else if (OB_SUCCESS != (result_code_ = compare_table_by_snapshot_version(ltable, rtable, bret))) {
-    LOG_WARN("failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
+    LOG_WARN_RET(result_code_, "failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
 }
@@ -987,8 +1006,8 @@ bool ObTableStoreUtil::ObTableHandleV2LogTsRangeCompare::operator()(
   } else {
     const ObITable *ltable = lhandle.get_table();
     const ObITable *rtable = rhandle.get_table();
-    if (OB_SUCCESS != (result_code_ = compare_table_by_log_ts_range(ltable, rtable, bret))) {
-      LOG_WARN("failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
+    if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
+      LOG_WARN_RET(result_code_, "failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
     }
   }
   return bret;
@@ -1005,14 +1024,14 @@ bool ObTableStoreUtil::ObTableHandleV2SnapshotVersionCompare::operator()(
     const ObITable *ltable = lhandle.get_table();
     const ObITable *rtable = rhandle.get_table();
     if (OB_SUCCESS != (result_code_ = compare_table_by_snapshot_version(ltable, rtable, bret))) {
-      LOG_WARN("failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
+      LOG_WARN_RET(result_code_, "failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
     }
   }
   return bret;
 }
 
 
-int ObTableStoreUtil::compare_table_by_log_ts_range(const ObITable *ltable, const ObITable *rtable, bool &bret)
+int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, bool &bret)
 {
   int ret = OB_SUCCESS;
   bret = false;
@@ -1030,12 +1049,12 @@ int ObTableStoreUtil::compare_table_by_log_ts_range(const ObITable *ltable, cons
     bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid rtable type", K(ret), KPC(rtable));
-  } else if (ltable->get_end_log_ts() == rtable->get_end_log_ts()) {
+  } else if (ltable->get_end_scn() == rtable->get_end_scn()) {
     bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table end log ts shouldn't be equal", KPC(ltable), KPC(rtable));
   } else { // log ts not equal
-    bret = ltable->get_end_log_ts() < rtable->get_end_log_ts();
+    bret = ltable->get_end_scn() < rtable->get_end_scn();
   }
   return ret;
 }
@@ -1060,7 +1079,7 @@ int ObTableStoreUtil::compare_table_by_snapshot_version(const ObITable *ltable, 
   return ret;
 }
 
-int ObTableStoreUtil::sort_major_tables(ObArray<ObITable *> &tables)
+int ObTableStoreUtil::sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables)
 {
   int ret = OB_SUCCESS;
 
@@ -1083,7 +1102,7 @@ int ObTableStoreUtil::sort_minor_tables(ObArray<ObITable *> &tables)
   if (tables.empty()) {
     // no need sort
   } else {
-    // There is an assumption: either all tables are with log_ts range, or none
+    // There is an assumption: either all tables are with scn range, or none
     ObITableLogTsRangeCompare comp(ret);
     std::sort(tables.begin(), tables.end(), comp);
     if (OB_FAIL(ret)) {
@@ -1093,20 +1112,20 @@ int ObTableStoreUtil::sort_minor_tables(ObArray<ObITable *> &tables)
   return ret;
 }
 
-bool ObTableStoreUtil::check_include_by_log_ts_range(const ObITable &a, const ObITable &b)
+bool ObTableStoreUtil::check_include_by_scn_range(const ObITable &a, const ObITable &b)
 {
   bool bret = false;
-  if (a.get_end_log_ts() >= b.get_end_log_ts() && a.get_start_log_ts() <= b.get_start_log_ts()) {
+  if (a.get_end_scn() >= b.get_end_scn() && a.get_start_scn() <= b.get_start_scn()) {
     bret = true;
   }
   return bret;
 }
 
-bool ObTableStoreUtil::check_intersect_by_log_ts_range(const ObITable &a, const ObITable &b)
+bool ObTableStoreUtil::check_intersect_by_scn_range(const ObITable &a, const ObITable &b)
 {
   bool bret = false;
-  if (!(a.get_end_log_ts() <= b.get_start_log_ts()
-        || a.get_start_log_ts() >= b.get_end_log_ts())) {
+  if (!(a.get_end_scn() <= b.get_start_scn()
+        || a.get_start_scn() >= b.get_end_scn())) {
     bret = true;
   }
   return bret;

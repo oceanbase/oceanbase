@@ -133,7 +133,8 @@ public:
         flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
         rows_cnt_(0), batch_info_(),
         dfo_id_(common::OB_INVALID_ID),
-        sqc_id_(common::OB_INVALID_ID)
+        sqc_id_(common::OB_INVALID_ID),
+        enable_channel_sync_(false)
   {}
   ObDtlLinkedBuffer(char * buf, int64_t size)
       : buf_(buf), size_(size), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
@@ -141,11 +142,12 @@ public:
         flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
         rows_cnt_(0), batch_info_(),
         dfo_id_(common::OB_INVALID_ID),
-        sqc_id_(common::OB_INVALID_ID)
+        sqc_id_(common::OB_INVALID_ID),
+        enable_channel_sync_(false)
   {}
   ~ObDtlLinkedBuffer() { reset_batch_info(); }
   TO_STRING_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid),
-      K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()));
+      K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(enable_channel_sync));
 
   ObDtlLinkedBuffer *next() const {
     return reinterpret_cast<ObDtlLinkedBuffer*>(next_);
@@ -258,6 +260,9 @@ public:
     remove_flag(DTL_BROADCAST);
   }
 
+  uint64_t enable_channel_sync() const { return enable_channel_sync_; }
+  void set_enable_channel_sync(const bool enable_channel_sync) { enable_channel_sync_ = enable_channel_sync; }
+
   //不包含allocated_chid_ copy，谁申请谁释放
   static void assign(const ObDtlLinkedBuffer &src, ObDtlLinkedBuffer *dst) {
     MEMCPY(dst->buf_, src.buf_, src.size_);
@@ -274,6 +279,7 @@ public:
     dst->use_interm_result_ = src.use_interm_result_;
     dst->dfo_id_ = src.dfo_id_;
     dst->sqc_id_ = src.sqc_id_;
+    dst->enable_channel_sync_ = src.enable_channel_sync_;
   }
 
   void shallow_copy(const ObDtlLinkedBuffer &src)
@@ -291,6 +297,7 @@ public:
     dfo_key_ = src.dfo_key_;
     dfo_id_ = src.dfo_id_;
     sqc_id_ = src.sqc_id_;
+    enable_channel_sync_ = src.enable_channel_sync_;
   }
 
   OB_INLINE ObDtlDfoKey &get_dfo_key() {
@@ -408,6 +415,7 @@ The memory layout is as below:
   common::ObSArray<ObDtlBatchInfo> batch_info_;
   int64_t dfo_id_;
   int64_t sqc_id_;
+  bool enable_channel_sync_;
 };
 
 }  // dtl

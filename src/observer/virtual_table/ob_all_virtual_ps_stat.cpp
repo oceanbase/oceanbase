@@ -12,8 +12,6 @@
 
 #include "observer/virtual_table/ob_all_virtual_ps_stat.h"
 
-#include "sql/plan_cache/ob_plan_cache_manager.h"
-
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
 #include "share/inner_table/ob_inner_table_schema.h"
@@ -30,12 +28,8 @@ int ObAllVirtualPsStat::inner_open()
   int ret = OB_SUCCESS;
   // sys tenant show all tenant infos
   if (is_sys_tenant(effective_tenant_id_)) {
-    ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
-    if (OB_UNLIKELY(OB_ISNULL(pcm_))) {
-      ret = OB_NOT_INIT;
-      SERVER_LOG(WARN, "pcm_ is NULL", KR(ret), K(pcm_));
-    } else if (OB_FAIL(pcm_->get_ps_cache_map().foreach_refactored(op))) {
-      SERVER_LOG(WARN, "failed to traverse pcm", K(ret));
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
+      SERVER_LOG(WARN, "failed to add tenant id", K(ret));
     }
   } else {
     // user tenant show self tenant infos
@@ -112,28 +106,28 @@ int ObAllVirtualPsStat::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(pcm_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-  } else if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
+  if (tenant_id_array_idx_ >= tenant_id_array_.count()) {
     ret = OB_ITER_END;
   } else {
     uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
     ++tenant_id_array_idx_;
-    ObPsCache *ps_cache = pcm_->get_ps_cache(tenant_id);
-    if (OB_ISNULL(ps_cache)) {
-      SERVER_LOG(DEBUG, "ps_cache is NULL, ignore this", K(ret), K(tenant_id),
-          K(effective_tenant_id_));
-    } else if (false == ps_cache->is_inited()) {
-      SERVER_LOG(DEBUG, "ps_cache is not init, ignore this", K(ret));
-    } else if (false == ps_cache->is_valid()) {
-      SERVER_LOG(DEBUG, "ps_cache is not valid, ignore this", K(ret));
-    } else if (OB_FAIL(fill_cells(*ps_cache, tenant_id))) {
-      SERVER_LOG(WARN, "fill_cells failed", K(ret), K(tenant_id));
-    } else {
-      SERVER_LOG(DEBUG, "fill_cells succeed", K(tenant_id), K(effective_tenant_id_),
-          K(tenant_id_array_), K(tenant_id_array_idx_));
-      ps_cache->dec_ref_count();
+    MTL_SWITCH(tenant_id) {
+      ObPsCache *ps_cache = MTL(ObPsCache*);
+      if (OB_ISNULL(ps_cache)) {
+        SERVER_LOG(DEBUG, "ps_cache is NULL, ignore this", K(ret), K(tenant_id),
+            K(effective_tenant_id_));
+      } else if (false == ps_cache->is_inited()) {
+        SERVER_LOG(DEBUG, "ps_cache is not init, ignore this", K(ret));
+      } else if (OB_FAIL(fill_cells(*ps_cache, tenant_id))) {
+        SERVER_LOG(WARN, "fill_cells failed", K(ret), K(tenant_id));
+      } else {
+        SERVER_LOG(DEBUG, "fill_cells succeed", K(tenant_id), K(effective_tenant_id_),
+            K(tenant_id_array_), K(tenant_id_array_idx_));
+      }
+    }
+    // ignore error
+    if (ret != OB_SUCCESS) {
+      ret = OB_SUCCESS;
     }
   }
   return ret;

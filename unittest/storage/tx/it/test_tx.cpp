@@ -27,42 +27,18 @@ using namespace ::testing;
 using namespace transaction;
 using namespace share;
 
-namespace common
+namespace concurrent_control
 {
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t )
 {
-  int ret = OB_SUCCESS;
-  int64_t align_size = upper_align(size, sizeof(int64_t));
-  uint64_t tenant_id = arena_.get_tenant_id();
-  bool is_out_of_mem = false;
-  if (!handle.is_id_valid()) {
-    COMMON_LOG(TRACE, "MTALLOC.first_alloc", KP(&handle.mt_));
-    LockGuard guard(lock_);
-    if (!handle.is_id_valid()) {
-      handle.set_clock(arena_.retired());
-      hlist_.set_active(handle);
-    }
-  }
-  MTL_SWITCH(tenant_id) {
-    storage::ObTenantFreezer *freezer = nullptr;
-    if (handle.mt_.is_inner_tablet()) {
-      // inner table memory not limited by memstore
-    } else if (is_virtual_tenant_id(tenant_id)) {
-      // virtual tenant should not have memstore.
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "virtual tenant should not have memstore", K(ret), K(tenant_id));
-    } else if (FALSE_IT(freezer = MTL(storage::ObTenantFreezer*))) {
-    } else if (OB_FAIL(freezer->check_tenant_out_of_memstore_limit(is_out_of_mem))) {
-      COMMON_LOG(ERROR, "fail to check tenant out of mem limit", K(ret), K(tenant_id));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    is_out_of_mem = true;
-  }
-  if (is_out_of_mem && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    STORAGE_LOG(WARN, "this tenant is already out of memstore limit or some thing wrong.", K(tenant_id));
-  }
-  return is_out_of_mem ? nullptr : arena_.alloc(handle.id_, handle.arena_handle_, align_size);
+  return OB_SUCCESS;
 }
 }
 
@@ -71,6 +47,7 @@ class ObTestTx : public ::testing::Test
 public:
   virtual void SetUp() override
   {
+    ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
     const uint64_t tv = ObTimeUtility::current_time();
     ObCurTraceId::set(&tv);
     GCONF._ob_trans_rpc_timeout = 500;
@@ -87,6 +64,7 @@ public:
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> tearDown test : %s", test_name);
     ObClockGenerator::destroy();
+    ObMallocAllocator::get_instance()->recycle_tenant_allocator(1001);
   }
   MsgBus bus_;
 };
@@ -96,27 +74,12 @@ TEST_F(ObTestTx, basic)
   GCONF._ob_trans_rpc_timeout = 50;
   ObTxNode::reset_localtion_adapter();
 
-  auto n1 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
-  auto n2 = new ObTxNode(2, ObAddr(ObAddr::VER::IPV4, "127.0.0.2", 8888), bus_);
-
-  DEFER(delete(n1));
-  DEFER(delete(n2));
-
-  ASSERT_EQ(OB_SUCCESS, n1->start());
-  ASSERT_EQ(OB_SUCCESS, n2->start());
-  ObTxDesc *tx_ptr = NULL;
-  ASSERT_EQ(OB_SUCCESS, n1->acquire_tx(tx_ptr));
-  ObTxDesc &tx = *tx_ptr;
-  ObTxParam tx_param;
-  tx_param.timeout_us_ = 5000000;
-  tx_param.access_mode_ = ObTxAccessMode::RW;
-  tx_param.isolation_ = ObTxIsolationLevel::RC;
-  tx_param.cluster_id_ = 100;
-  int64_t sp0 = 0, sp1 = 0;
-  ObTxReadSnapshot snapshot;
-  ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx, tx_param.isolation_, n1->ts_after_ms(100), snapshot));
-  ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp0));
-  ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp1));
+  START_TWO_TX_NODE(n1, n2);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp0);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp1);
   ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
   ASSERT_EQ(OB_SUCCESS, n2->write(tx, snapshot, 101, 113));
   int64_t val1 = 0, val2 = 0;
@@ -125,7 +88,7 @@ TEST_F(ObTestTx, basic)
   ASSERT_EQ(112, val1);
   ASSERT_EQ(113, val2);
   // rollback to savepoint
-  ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp1, n1->ts_after_ms(1000), nullptr));
+  ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp1, 1000 * 1000);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 100, val1));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, n2->read(tx, 101, val2));
   // write after rollback
@@ -136,9 +99,7 @@ TEST_F(ObTestTx, basic)
   ASSERT_EQ(OB_SUCCESS, n2->read(tx, 101, val2));
   ASSERT_EQ(114, val1);
   ASSERT_EQ(115, val2);
-  ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(500)));
-
-  ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx));
+  COMMIT_TX(n1, tx, 500 * 1000);
 }
 
 TEST_F(ObTestTx, start_trans_expired)
@@ -789,7 +750,7 @@ TEST_F(ObTestTx, replay_basic)
     int64_t retry_count = 0;
     while(ls_tx_ctx_mgr->get_tx_ctx_count() > 0)
     {
-      TRANS_LOG(ERROR, "unexpected tx ctx counts", K(ls_tx_ctx_mgr->get_ls_id()), K(ls_tx_ctx_mgr->get_tx_ctx_count()));
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected tx ctx counts", K(ls_tx_ctx_mgr->get_ls_id()), K(ls_tx_ctx_mgr->get_tx_ctx_count()));
       ls_tx_ctx_mgr->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT, true);
       ls_tx_ctx_mgr->get_retain_ctx_mgr().print_retain_ctx_info(ls_tx_ctx_mgr->get_ls_id());
       retry_count++;
@@ -1006,7 +967,7 @@ TEST_F(ObTestTx, wait_commit_version_elapse_block)
     ASSERT_EQ(OB_ENTRY_NOT_EXIST, n2->read(snapshot, 100, val1));
   }
 
-  ObTxNode::get_ts_mgr_().update_fake_gts(ls_tx_ctx_mgr2->max_replay_commit_version_);
+  ObTxNode::get_ts_mgr_().update_fake_gts(ls_tx_ctx_mgr2->max_replay_commit_version_.get_val_for_gts());
   { // prepare snapshot for read
     ObTxReadSnapshot snapshot;
     ASSERT_EQ(OB_SUCCESS, n2->get_read_snapshot(tx2,
@@ -1108,7 +1069,7 @@ TEST_F(ObTestTx, wait_commit_version_elapse_block_and_switch_to_follower_forcedl
     ASSERT_EQ(OB_ENTRY_NOT_EXIST, n2->read(snapshot, 100, val1));
   }
 
-  ObTxNode::get_ts_mgr_().update_fake_gts(ls_tx_ctx_mgr2->max_replay_commit_version_);
+  ObTxNode::get_ts_mgr_().update_fake_gts(ls_tx_ctx_mgr2->max_replay_commit_version_.get_val_for_gts());
   { // prepare snapshot for read
     ObTxReadSnapshot snapshot;
     ASSERT_EQ(OB_SUCCESS, n2->get_read_snapshot(tx2,
@@ -2341,6 +2302,8 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
 
 int main(int argc, char **argv)
 {
+  int64_t tx_id = 21533427;
+  uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
   system("rm -rf test_tx.log*");
   ObLogger &logger = ObLogger::get_logger();
   logger.set_file_name("test_tx.log", true, false,
@@ -2349,5 +2312,6 @@ int main(int argc, char **argv)
                        "test_tx.log"); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
+  TRANS_LOG(INFO, "mmhash:", K(h));
   return RUN_ALL_TESTS();
 }

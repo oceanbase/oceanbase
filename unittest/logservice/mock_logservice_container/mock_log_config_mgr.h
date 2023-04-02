@@ -87,11 +87,36 @@ public:
     UNUSED(learner_list);
     return ret;
   }
-  int get_curr_member_list(common::ObMemberList &member_list) const
+  int get_degraded_learner_list(common::GlobalLearnerList &learner_list) const
+  {
+    int ret = OB_SUCCESS;
+    UNUSED(learner_list);
+    return ret;
+  }
+  int get_curr_member_list(common::ObMemberList &member_list, int64_t &replica_num) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(log_ms_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
+      PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), K_(palf_id), K_(self));
+    }
+    return ret;
+  }
+  int get_log_sync_member_list(common::ObMemberList &member_list, int64_t &replica_num) const
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(member_list.deep_copy(log_ms_meta_.curr_.log_sync_memberlist_))) {
       PALF_LOG(WARN, "deep_copy member_list failed", KR(ret), KPC(this));
+    } else {
+      replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
+    }
+    return ret;
+  }
+  int get_alive_member_list_with_arb(common::ObMemberList &member_list, int64_t &replica_num) const
+  {
+    int ret = OB_SUCCESS;
+    GlobalLearnerList all_learners;
+    if (OB_FAIL(log_ms_meta_.curr_.convert_to_complete_config(member_list, replica_num, all_learners))) {
+      PALF_LOG(WARN, "convert_to_complete_config failed", K(ret), KPC(this));
     }
     return ret;
   }
@@ -108,10 +133,6 @@ public:
     int ret = OB_SUCCESS;
     return ret;
   }
-  int get_paxos_log_sync_list(ObMemberList &member_list) const
-  {
-    return get_curr_member_list(member_list);
-  }
   int get_config_version(LogConfigVersion &config_version) const
   {
     int ret = OB_SUCCESS;
@@ -121,12 +142,11 @@ public:
   int get_replica_num(int64_t &replica_num) const
   {
     int ret = OB_SUCCESS;
-    replica_num = log_ms_meta_.curr_.log_sync_replica_num_;
+    common::ObMemberList member_list;
+    if (OB_FAIL(log_ms_meta_.curr_.get_expected_paxos_memberlist(member_list, replica_num))) {
+      PALF_LOG(WARN, "get_expected_paxos_memberlist failed", KR(ret), KPC(this));
+    }
     return ret;
-  }
-  int get_paxos_log_sync_replica_num(int64_t &replica_num) const
-  {
-    return get_replica_num(replica_num);
   }
   int leader_do_loop_work()
   {
@@ -189,7 +209,7 @@ public:
   }
 
   // for PalfHandleImpl::receive_config_log
-  bool can_receive_ms_log(const LogConfigVersion &config_version) const
+  bool can_receive_config_log(const LogConfigVersion &config_version) const
   {
     int ret = OB_SUCCESS;
     UNUSED(config_version);

@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"                  // Serialization
 #include "lib/utility/ob_print_utils.h"     // Print*
 #include "log_meta_entry_header.h"          // LogMetaEntryHeader
+#include "share/scn.h"                      // SCN
 #include "log_define.h"                     // PALF_META_BLOCK_SIZE
 namespace oceanbase
 {
@@ -40,6 +41,7 @@ public:
   int64_t get_payload_offset() const { return header_.get_serialize_size(); }
   int64_t get_data_len() const { return header_.get_data_len(); }
   int64_t get_entry_size() const { return header_.get_serialize_size() + get_data_len(); }
+  share::SCN get_scn() const { return share::SCN::invalid_scn(); };
   const LogMetaEntryHeader &get_header() const { return header_; }
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K_(header), KP(buf_));

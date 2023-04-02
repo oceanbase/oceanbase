@@ -467,9 +467,9 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
         break;
       }
     case PART_KEY_SCALE: {
-      cells[i].set_int(static_cast<int64_t>(accuracy.get_scale()));
-      break;
-    }
+        cells[i].set_int(static_cast<int64_t>(accuracy.get_scale()));
+        break;
+      }
     case SPARE1: {// int, unused
         cells[i].set_int(0);
         break;
@@ -494,6 +494,34 @@ int ObAllVirtualProxyPartitionInfo::fill_row_(const ObTableSchema &table_schema)
       }
     case SPARE6: {// varchar, unused
         cells[i].set_varchar("");
+        cells[i].set_collation_type(coll_type);
+        break;
+      }
+    case PART_KEY_DEFAULT_VALUE: {
+        if (column_schema->is_generated_column()
+            || column_schema->is_identity_column()
+            || column_schema->get_cur_default_value().is_null()) {
+          cells[i].set_null();
+        } else {
+          char *buf = NULL;
+          const ObObj &obj = column_schema->get_cur_default_value();
+          const int64_t buf_len = obj.get_serialize_size();
+          int64_t pos = 0;
+          if (OB_ISNULL(allocator_)) {
+            ret = OB_NOT_INIT;
+            LOG_WARN("data member doesn't init", KR(ret));
+          } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(buf_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc tmp_buf fail", KR(ret));
+          } else if (OB_FAIL(obj.serialize(buf, buf_len, pos))) {
+            LOG_WARN("fail to serialize", KR(ret));
+          } else if (OB_UNLIKELY(pos > buf_len) || pos < 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get buf", K(pos), K(buf_len), KR(ret));
+          } else {
+            cur_row_.cells_[i].set_lob_value(ObLongTextType, buf, static_cast<int32_t>(pos));
+          }
+        }
         cells[i].set_collation_type(coll_type);
         break;
       }
@@ -608,6 +636,7 @@ int ObAllVirtualProxyPartitionInfo::gen_proxy_part_pruning_str_(
                 sql::ObRawExprPrinter expr_printer(expr_str_buf + pos,
                                                    OB_MAX_DEFAULT_VALUE_LENGTH - pos,
                                                    &tmp_pos,
+                                                   &tenant_schema_guard_,
                                                    session_->get_timezone_info());
                 if (OB_FAIL(expr_printer.do_print(part_pruning_expr, sql::T_NONE_SCOPE, true))) {
                   LOG_WARN("print expr definition failed", KR(ret));

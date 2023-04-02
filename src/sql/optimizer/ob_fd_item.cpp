@@ -24,7 +24,6 @@ int ObFdItem::assign(const ObFdItem &other)
 {
   parent_exprs_ = other.parent_exprs_;
   is_unique_ = other.is_unique_;
-  stmt_level_ = other.stmt_level_;
   return OB_SUCCESS;
 }
 
@@ -125,7 +124,7 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr *expr,
     LOG_WARN("get null expr", K(ret));
   } else if (expr->has_flag(CNT_AGG)) {
     //do nothing
-  } else if (expr->get_expr_levels().has_member(stmt_level_)) {
+  } else if (expr->has_flag(CNT_COLUMN) || expr->has_flag(CNT_SET_OP)) {
     if (!expr->get_relation_ids().is_empty() &&
         child_tables_.is_superset(expr->get_relation_ids())) {
       is_in_child = true;
@@ -243,8 +242,7 @@ int ObFdItemFactory::get_parent_exprs_ptr(const ObIArray<ObRawExpr *> &parent_ex
 
 int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
                                           const bool is_unique,
-                                          ObRawExprSet *parent_exprs,
-                                          const int32_t stmt_level)
+                                          ObRawExprSet *parent_exprs)
 {
   int ret = OB_SUCCESS;
   fd_item = NULL;
@@ -253,7 +251,7 @@ int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("no memory to create ObTableFdItem", K(ret));
   } else {
-    fd_item = new(ptr) ObTableFdItem(is_unique, parent_exprs, stmt_level);
+    fd_item = new(ptr) ObTableFdItem(is_unique, parent_exprs);
     if (OB_FAIL(item_store_.store_obj(fd_item))) {
       LOG_WARN("failed to store obj", K(ret));
       fd_item->~ObTableFdItem();
@@ -266,7 +264,6 @@ int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
 int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
                                           const bool is_unique,
                                           const ObIArray<ObRawExpr *> &parent_exprs,
-                                          const int32_t stmt_level,
                                           const ObRelIds &table_set)
 {
   int ret = OB_SUCCESS;
@@ -274,7 +271,7 @@ int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
   ObRawExprSet *parent_exprs_ptr = NULL;
   if (OB_FAIL(get_parent_exprs_ptr(parent_exprs, parent_exprs_ptr))) {
     LOG_WARN("failed to get parent exprs ptr", K(ret));
-  } else if (OB_FAIL(create_table_fd_item(fd_item, is_unique, parent_exprs_ptr, stmt_level))) {
+  } else if (OB_FAIL(create_table_fd_item(fd_item, is_unique, parent_exprs_ptr))) {
     LOG_WARN("failed to create table fd item", K(ret));
   } else if (OB_FAIL(fd_item->get_child_tables().add_members(table_set))) {
     LOG_WARN("failed to add members to child tables", K(ret));
@@ -289,8 +286,7 @@ int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
   fd_item = NULL;
   if (OB_FAIL(create_table_fd_item(fd_item,
                                    other.is_unique(),
-                                   other.get_parent_exprs(),
-                                   other.get_stmt_level()))) {
+                                   other.get_parent_exprs()))) {
     LOG_WARN("failed to create table fd item", K(ret));
   } else if (OB_FAIL(fd_item->get_child_tables().add_members(other.get_child_tables()))) {
     LOG_WARN("failed to add member to child tables", K(ret));
@@ -300,8 +296,7 @@ int ObFdItemFactory::create_table_fd_item(ObTableFdItem *&fd_item,
 
 int ObFdItemFactory::create_expr_fd_item(ObExprFdItem *&fd_item,
                                          const bool is_unique,
-                                         ObRawExprSet *parent_exprs,
-                                         const int32_t stmt_level)
+                                         ObRawExprSet *parent_exprs)
 {
   int ret = OB_SUCCESS;
   fd_item = NULL;
@@ -310,7 +305,7 @@ int ObFdItemFactory::create_expr_fd_item(ObExprFdItem *&fd_item,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("no memory to create ObExprFdItem", K(ret));
   } else {
-    fd_item = new(ptr) ObExprFdItem(is_unique, parent_exprs, stmt_level);
+    fd_item = new(ptr) ObExprFdItem(is_unique, parent_exprs);
     if (OB_FAIL(item_store_.store_obj(fd_item))) {
       LOG_WARN("failed to store obj", K(ret));
       fd_item->~ObExprFdItem();
@@ -323,7 +318,6 @@ int ObFdItemFactory::create_expr_fd_item(ObExprFdItem *&fd_item,
 int ObFdItemFactory::create_expr_fd_item(ObExprFdItem *&fd_item,
                                          const bool is_unique,
                                          const ObIArray<ObRawExpr *> &parent_exprs,
-                                         const int32_t stmt_level,
                                          const ObIArray<ObRawExpr *> &child_exprs)
 {
   int ret = OB_SUCCESS;
@@ -331,7 +325,7 @@ int ObFdItemFactory::create_expr_fd_item(ObExprFdItem *&fd_item,
   ObRawExprSet *parent_exprs_ptr = NULL;
   if (OB_FAIL(get_parent_exprs_ptr(parent_exprs, parent_exprs_ptr))) {
     LOG_WARN("failed to get parent exprs ptr", K(ret));
-  } else if (OB_FAIL(create_expr_fd_item(fd_item, is_unique, parent_exprs_ptr, stmt_level))) {
+  } else if (OB_FAIL(create_expr_fd_item(fd_item, is_unique, parent_exprs_ptr))) {
     LOG_WARN("failed to create table fd item", K(ret));
   } else if (OB_FAIL(ObRawExprSetUtils::to_expr_set(&allocator_,
                                                     child_exprs,
@@ -348,8 +342,7 @@ int ObFdItemFactory::create_expr_fd_item(ObExprFdItem *&fd_item,
   fd_item = NULL;
   if (OB_FAIL(create_expr_fd_item(fd_item,
                                   other.is_unique(),
-                                  other.get_parent_exprs(),
-                                  other.get_stmt_level()))) {
+                                  other.get_parent_exprs()))) {
     LOG_WARN("failed to create table fd item", K(ret));
   } else if (OB_FAIL(fd_item->get_child_exprs().assign(other.get_child_exprs()))) {
     LOG_WARN("failed to assign child exprs", K(ret));

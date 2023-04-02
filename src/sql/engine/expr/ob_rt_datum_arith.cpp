@@ -123,7 +123,8 @@ int ObRTDatumArith::generate(const ObRTDatumArith::Item item)
                                  &session_,
                                  NULL /* schema_guard */,
                                  0 /* original_param_cnt*/,
-                                 0 /* param_cnt */);
+                                 0 /* param_cnt */,
+                                 exec_ctx_.get_min_cluster_version());
     ObRawExprUniqueSet raw_exprs(false);
     OZ(raw_exprs.append(item.expr_));
     OZ(raw_exprs.append(raw_cols_));

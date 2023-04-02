@@ -19,6 +19,7 @@
 #include "share/ls/ob_ls_status_operator.h" //ObLSStatus
 #include "share/ls/ob_ls_i_life_manager.h"//ObLSTemplateOperator
 #include "logservice/palf/log_define.h"//SCN
+#include "share/scn.h"//SCN
 
 
 namespace oceanbase
@@ -37,6 +38,7 @@ class ObMySQLResult;
 }
 namespace share
 {
+class SCN;
 //TODO for duplicate ls
 enum ObLSFlag
 {
@@ -75,8 +77,8 @@ struct ObLSAttr
         ls_group_id_(OB_INVALID_ID),
         flag_(OB_LS_FLAG_NORMAL),
         status_(OB_LS_EMPTY),
-        operation_type_(OB_LS_OP_INVALID_TYPE),
-        create_scn_(OB_LS_INVALID_SCN_VALUE) {}
+        operation_type_(OB_LS_OP_INVALID_TYPE)
+  { create_scn_.set_min();}
   virtual ~ObLSAttr() {}
   bool is_valid() const;
   int init(const ObLSID &id,
@@ -84,7 +86,7 @@ struct ObLSAttr
            const ObLSFlag &flag,
            const ObLSStatus &status,
            const ObLSOperationType &type,
-           const int64_t create_scn);
+           const SCN &create_scn);
   void reset();
   int assign(const ObLSAttr &other);
   bool ls_is_creating() const
@@ -130,7 +132,7 @@ struct ObLSAttr
   {
     return flag_;
   }
-  int64_t get_create_scn() const
+  SCN get_create_scn() const
   {
     return create_scn_;
   }
@@ -143,7 +145,7 @@ private:
   ObLSFlag flag_;
   ObLSStatus status_;
   ObLSOperationType operation_type_;
-  int64_t create_scn_;
+  SCN create_scn_;
 };
 
 typedef common::ObArray<ObLSAttr> ObLSAttrArray;
@@ -170,11 +172,24 @@ public:
   bool is_valid() const;
   int get_all_ls_by_order(
       ObLSAttrIArray &ls_array);
-  int insert_ls(const ObLSAttr &ls_attr, const uint64_t max_ls_group_id);
+  /**
+   * @description:
+   *    get ls list from all_ls table,
+   *    if want to get accurate LS list, set lock_sys_ls to true to lock SYS LS in __all_ls table
+   *    to make sure mutual exclusion with load balancing thread
+   * @param[in] lock_sys_ls whether lock SYS LS in __all_ls table
+   * @param[out] ls_operation_array ls list
+   * @return return code
+   */
+  int get_all_ls_by_order(const bool lock_sys_ls, ObLSAttrIArray &ls_operation_array);
+  int insert_ls(const ObLSAttr &ls_attr, const uint64_t max_ls_group_id,
+                const ObTenantSwitchoverStatus &working_sw_status);
   //prevent the concurrency of create and drop ls
   int delete_ls(const ObLSID &id,
-                const share::ObLSStatus &old_status);
-  int update_ls_status(const ObLSID &id, const share::ObLSStatus &old_status, const share::ObLSStatus &new_status);
+                const share::ObLSStatus &old_status,
+                const ObTenantSwitchoverStatus &working_sw_status);
+  int update_ls_status(const ObLSID &id, const share::ObLSStatus &old_status, const share::ObLSStatus &new_status,
+                       const ObTenantSwitchoverStatus &working_sw_status);
   static ObLSOperationType get_ls_operation_by_status(const ObLSStatus &ls_status);
   int get_ls_attr(const ObLSID &id, const bool for_update, common::ObISQLClient &client, ObLSAttr &ls_attr);
   /*
@@ -182,12 +197,13 @@ public:
    * @param[out] read_scn:the snapshot of read_version
    * @param[out] ObLSAttrIArray ls_info in __all_ls
    * */
-  int load_all_ls_and_snapshot(int64_t &read_scn, ObLSAttrIArray &ls_array);
-  static int get_tenant_gts(const uint64_t &tenant_id, int64_t &gts_ts_ns);
+  int load_all_ls_and_snapshot(share::SCN &read_scn, ObLSAttrIArray &ls_array);
+  static int get_tenant_gts(const uint64_t &tenant_id, SCN &gts_scn);
 
 private:
   int process_sub_trans_(const ObLSAttr &ls_attr, ObMySQLTransaction &trans);
-  int operator_ls_(const ObLSAttr &ls_attr, const common::ObSqlString &sql, const uint64_t max_ls_group_id);
+  int operator_ls_(const ObLSAttr &ls_attr, const common::ObSqlString &sql, const uint64_t max_ls_group_id,
+                   const ObTenantSwitchoverStatus &working_sw_status);
 private:
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;

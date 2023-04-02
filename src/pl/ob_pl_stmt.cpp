@@ -259,7 +259,7 @@ int ObPLConditionTable::add_condition(const common::ObString &name, const ObPLCo
 
 int ObPLCursor::set(const ObString &sql,
                const ObIArray<int64_t> &expr_idxs,
-               ObPsStmtId id,
+               const ObString &ps_sql,
                sql::stmt::StmtType type,
                bool for_update,
                ObRecordType *record_type,
@@ -272,7 +272,7 @@ int ObPLCursor::set(const ObString &sql,
   int ret = OB_SUCCESS;
   set_sql(sql);
   set_sql_params(expr_idxs);
-  set_ps(id, type);
+  set_ps_sql(ps_sql, type);
   set_for_update(for_update);
   set_row_desc(record_type);
   set_cursor_type(cursor_type);
@@ -287,7 +287,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 int64_t idx,
                                 const ObString &sql,
                                 const ObIArray<int64_t> &sql_params,
-                                ObPsStmtId ps_id,
+                                const ObString &ps_sql,
                                 sql::stmt::StmtType stmt_type,
                                 bool for_update,
                                 bool has_hidden_rowid,
@@ -312,7 +312,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_index(idx);
       cursor->set_sql(sql);
       cursor->set_sql_params(sql_params);
-      cursor->set_ps(ps_id, stmt_type);
+      cursor->set_ps_sql(ps_sql, stmt_type);
       cursor->set_for_update(for_update);
       cursor->set_hidden_rowid(has_hidden_rowid);
       cursor->set_row_desc(row_desc);
@@ -515,7 +515,7 @@ bool ObPLRoutineInfo::has_self_param() const
   for (int64_t i = 0; !bret && i < params_.count(); ++i) {
     param = params_.at(i);
     if (OB_ISNULL(param)) {
-      LOG_WARN("get unexpected null param", K(i));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null param", K(i));
       break;
     } else {
       bret = bret || param->get_is_self_param();
@@ -532,7 +532,7 @@ int64_t ObPLRoutineInfo::get_self_param_pos() const
   for (int64_t i = 0; !stop && i < params_.count(); ++i) {
     param = params_.at(i);
     if (OB_ISNULL(param)) {
-      LOG_WARN("get unexpected null param", K(i));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null param", K(i));
       break;
     } else if (param->get_is_self_param()) {
       pos = i;
@@ -993,7 +993,7 @@ int ObPLBlockNS::add_label(const ObString &name,
     LOG_USER_ERROR(OB_ERR_IDENTIFIER_TOO_LONG, name.length(), name.ptr());
   } else {
     bool is_dup = false;
-    if (OB_FAIL(check_dup_label(name, is_dup, true))) {
+    if (OB_FAIL(check_dup_label(name, is_dup))) {
       LOG_INFO("check dup label fail. ", K(ret), K(name));
     } else if (is_dup) {
       ret = OB_ERR_REDEFINE_LABEL;
@@ -1062,7 +1062,7 @@ int ObPLBlockNS::add_questionmark_cursor(const int64_t symbol_idx)
 {
   int ret = OB_SUCCESS;
   ObArray<int64_t> dummy_params;
-  ObPsStmtId dummy_ps_id = OB_INVALID_ID;
+  ObString dummy_sql;
   sql::stmt::StmtType dummy_stmt_type = sql::stmt::T_NONE;
   bool dummy_for_update = false;
   bool dummy_hidden_rowid = false;
@@ -1076,7 +1076,7 @@ int ObPLBlockNS::add_questionmark_cursor(const int64_t symbol_idx)
                                                     symbol_idx,
                                                     "?",
                                                     dummy_params,
-                                                    dummy_ps_id,
+                                                    dummy_sql,
                                                     dummy_stmt_type,
                                                     false,
                                                     false,
@@ -1095,7 +1095,7 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const ObPLDataType &type,
                             const ObString &sql,
                             const ObIArray<int64_t> &sql_params,
-                            ObPsStmtId ps_id,
+                            const ObString &ps_sql,
                             sql::stmt::StmtType stmt_type,
                             bool for_update,
                             bool has_hidden_rowid,
@@ -1127,7 +1127,7 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       get_symbol_table()->get_count() - 1,
                                                       sql,
                                                       sql_params,
-                                                      ps_id,
+                                                      ps_sql,
                                                       stmt_type,
                                                       for_update,
                                                       has_hidden_rowid,
@@ -1218,29 +1218,29 @@ int ObPLBlockNS::check_dup_symbol(const ObString &name, const ObPLDataType &type
   return ret;
 }
 
-int ObPLBlockNS::check_dup_label(const ObString &name, bool &is_dup, bool check_parent) const
+int ObPLBlockNS::check_dup_label(const ObString &name, bool &is_dup) const
 {
   int ret = OB_SUCCESS;
   is_dup = false;
   if (lib::is_oracle_mode()) {
     // do nothing
-  } else if (OB_ISNULL(label_table_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("label table is NULL", K(ret));
   } else {
-    const ObPLBlockNS *ns = check_parent ? pre_ns_ : this;
-    while (NULL != ns && !is_dup && !ns->stop_search_label()) {
+    const ObPLBlockNS *ns = this;
+    while (NULL != ns && !is_dup) {
       for (int64_t i = 0; OB_SUCC(ret) && !is_dup && i < ns->get_labels().count(); ++i) {
-        if (OB_ISNULL(ns->get_label_table()->get_label(ns->get_labels().at(i)))) {
+        if (OB_ISNULL(ns->get_label_table())
+            || OB_ISNULL(ns->get_label_table()->get_label(ns->get_labels().at(i)))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("label is NULL", K(i), K(ns->get_labels().at(i)), K(ret));
-        } else if (*ns->get_label_table()->get_label(ns->get_labels().at(i)) == name &&
-                   ns->get_label_table()->is_ended(ns->get_labels().at(i)) == false) {
+        } else if (*ns->get_label_table()->get_label(ns->get_labels().at(i)) == name
+                    && ns->get_label_table()->is_ended(ns->get_labels().at(i)) == false) {
           is_dup = true;
-        } else { /*do nothing*/ }
+        }
       }
-      if (!is_dup && check_parent) {
+      if (!is_dup && !ns->stop_search_label()) {
         ns = ns->get_pre_ns();
+      } else {
+        break;
       }
     }
   }
@@ -2141,8 +2141,8 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       LOG_WARN("PLS-00302: component 'A' must be declared", K(ret), K(access_ident), K(user_type));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected user type in find_sub_attr_by_name", K(ret), K(user_type));
+    ret = OB_ERR_COMPONENT_UNDECLARED;
+    LOG_USER_ERROR(OB_ERR_COMPONENT_UNDECLARED, attr_name.length(), attr_name.ptr());
   }
   return ret;
 }
@@ -2715,6 +2715,13 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
     }
     if (OB_SUCC(ret) && routine_infos.empty()) {
       if (OB_NOT_NULL(external_ns_)) {
+        bool need_clear = false;
+        if (OB_ISNULL(external_ns_->get_resolve_ctx().params_.secondary_namespace_)
+            && OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_)) {
+          need_clear = true;
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
+          = resolve_ctx.params_.secondary_namespace_;
+        }
         if (OB_FAIL(SMART_CALL(external_ns_->resolve_external_routine(
                                                         db_name,
                                                         package_name,
@@ -2724,6 +2731,9 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
                                                         routine_infos)))) {
           LOG_WARN("resolve routine failed", K(db_name), K(package_name), K(routine_name),
                    K(expr_params), K(ret));
+        }
+        if (need_clear) {
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = NULL;
         }
       }
     }
@@ -3057,16 +3067,21 @@ int ObPLBlockNS::get_cursor_by_name(const ObExprResolveContext &ctx,
     CK (OB_NOT_NULL(get_symbol_table()));
     for (int64_t i = 0; OB_SUCC(ret) && i < get_cursor_table()->get_count() && !found; i++) {
       const ObPLCursor *cur = get_cursor_table()->get_cursor(i);
-      CK (OB_NOT_NULL(cur));
-      CK (OB_NOT_NULL(get_symbol_table()->get_symbol(cur->get_index())));
-      if (OB_SUCC(ret) && 0 == get_symbol_table()->get_symbol(cur->get_index())
-                                ->get_name().case_compare(cursor_name)) {
-        cursor = cur;
-        found = true;
+      if (OB_NOT_NULL(cur)) {
+        const ObPLVar *var = get_symbol_table()->get_symbol(cur->get_index());
+        if (OB_NOT_NULL(var) && 0 == var->get_name().case_compare(cursor_name)) {
+          cursor = cur;
+          found = true;
+        }
       }
     }
     if (OB_SUCC(ret) && !found && NULL != pre_ns_) {
-      pre_ns_->get_cursor_by_name(ctx, database_name, package_name, cursor_name, cursor);
+      OZ (pre_ns_->get_cursor_by_name(ctx, database_name, package_name, cursor_name, cursor));
+    }
+    // maybe local package cursor
+    if (OB_SUCC(ret) && !found && NULL != external_ns_ && NULL != external_ns_->get_parent_ns()) {
+      OZ (external_ns_->get_parent_ns()->get_cursor_by_name(
+            ctx, database_name, package_name, cursor_name, cursor));
     }
   } else {
     // package cursor
@@ -4032,7 +4047,6 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
     } else if (type.is_cursor_type()) {
       ObString dummy_sql;
       ObArray<int64_t> dummy_params;
-      ObPsStmtId dummy_ps_id = OB_INVALID_ID;
       sql::stmt::StmtType dummy_stmt_type = sql::stmt::T_NONE;
       bool dummy_for_update = false;
       bool dummy_hidden_rowid = false;
@@ -4044,7 +4058,7 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
                                         get_symbol_table().get_count() -1,
                                         dummy_sql,
                                         dummy_params,
-                                        dummy_ps_id,
+                                        dummy_sql,
                                         dummy_stmt_type,
                                         dummy_for_update,
                                         dummy_hidden_rowid,

@@ -20,12 +20,14 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_utils.h"
 #include "sql/das/ob_das_utils.h"
+#include "storage/tx/wrs/ob_black_list.h"
 
 namespace oceanbase
 {
 using namespace common;
 using namespace share;
 using namespace share::schema;
+using namespace transaction;
 namespace sql
 {
 OB_SERIALIZE_MEMBER(DASRelatedTabletMap::MapEntry,
@@ -99,6 +101,7 @@ int VirtualSvrPair::get_part_and_tablet_id_by_server(const ObAddr &addr,
   if (!tablet_id.is_valid()) {
     LOG_DEBUG("virtual table partition not exists", K(ret), K(addr));
   }
+
   return ret;
 }
 
@@ -316,12 +319,25 @@ int ObDASTabletMapper::get_non_partition_tablet_id(ObIArray<ObTabletID> &tablet_
                                                    ObIArray<ObObjectID> &out_part_ids)
 {
   int ret = OB_SUCCESS;
-  ObNewRange range;
-  // here need whole range, for virtual table calc tablet and object id
-  range.set_whole_range();
-  OZ(get_tablet_and_object_id(PARTITION_LEVEL_ZERO, OB_INVALID_ID,
-                              range, tablet_ids, out_part_ids));
-
+  if (is_non_partition_optimized_) {
+    if (OB_FAIL(tablet_ids.push_back(tablet_id_))) {
+      LOG_WARN("failed to push back tablet ids", K(ret));
+    } else if (OB_FAIL(out_part_ids.push_back(object_id_))) {
+      LOG_WARN("failed to push back partition ids", K(ret));
+    } else {
+      DASRelatedTabletMap *map = static_cast<DASRelatedTabletMap *>(related_info_.related_map_);
+      if (OB_NOT_NULL(map) && OB_NOT_NULL(related_list_)
+          && OB_FAIL(map->get_list().assign(*related_list_))) {
+        LOG_WARN("failed to assign related map list", K(ret));
+      }
+    }
+  } else {
+    ObNewRange range;
+    // here need whole range, for virtual table calc tablet and object id
+    range.set_whole_range();
+    OZ(get_tablet_and_object_id(PARTITION_LEVEL_ZERO, OB_INVALID_ID,
+                                range, tablet_ids, out_part_ids));
+  }
   return ret;
 }
 
@@ -616,13 +632,23 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
   }
 
   if (OB_UNLIKELY(tablet_loc.need_refresh_)){
+    ObAddr strong_leader;
+    ObBLKey bl_key;
+    bool in_black_list = true;
     for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ls_loc.get_replica_locations().count(); ++i) {
       const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(i);
       if (tmp_replica_loc.is_strong_leader()) {
-        //in version 4.0, if das task in retry, we force to choose the leader replica
+        strong_leader = tmp_replica_loc.get_server();
+      } else if (OB_SUCC(bl_key.init(tmp_replica_loc.get_server(), tenant_id, tablet_loc.ls_id_))
+                 && OB_SUCC(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))
+                 && !in_black_list) {
         tablet_loc.server_ = tmp_replica_loc.get_server();
         is_found = true;
       }
+    }
+    if (!is_found && strong_leader.is_valid()) {
+      tablet_loc.server_ = strong_leader;
+      is_found = true;
     }
   }
 
@@ -874,7 +900,7 @@ OB_NOINLINE int ObDASLocationRouter::get_vt_ls_location(uint64_t table_id,
       LOG_WARN("get server by tablet id failed", K(ret));
     } else if (OB_FAIL(ls_replica.init(server, common::LEADER,
                        GCONF.mysql_port, REPLICA_TYPE_FULL, mock_prop,
-                       restore_status))) {
+                       restore_status, 1 /*proposal_id*/))) {
       LOG_WARN("init ls replica failed", K(ret));
     } else if (OB_FAIL(location.add_replica_location(ls_replica))) {
       LOG_WARN("add replica location failed", K(ret));

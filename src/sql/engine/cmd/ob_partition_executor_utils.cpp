@@ -283,7 +283,9 @@ int ObPartitionExecutorUtils::cast_list_expr_to_obj(
         LOG_WARN("get unexpected expr", K(ret), K(value_expr));
       } else if (ObMaxType == value_expr->get_data_type()) {
         ++default_count;
-        if (row_expr->get_param_count() != 1) {
+        if (i != list_values_exprs.count() - 1) {
+          ret = OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART;
+        } else if (row_expr->get_param_count() != 1) {
           ret = OB_ERR_MULTIPLE_DEF_CONST_IN_LIST_PART;
         } else if (default_count > 1) {
           ret = OB_ERR_MULTIPLE_DEF_CONST_IN_LIST_PART;
@@ -679,8 +681,10 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
     ObNewRow tmp_row;
     RowDesc row_desc;
     ObTempExpr *temp_expr = NULL;
+    CK(OB_NOT_NULL(ctx.get_sql_ctx()));
     OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
-       row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr));
+       row_desc, ctx.get_allocator(), ctx.get_my_session(),
+       ctx.get_sql_ctx()->schema_guard_, temp_expr));
     CK(OB_NOT_NULL(temp_expr));
     OZ(temp_expr->eval(ctx, tmp_row, temp_obj));
     if (OB_FAIL(ret)) {
@@ -765,8 +769,10 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
     ObNewRow tmp_row;
     RowDesc row_desc;
     ObTempExpr *temp_expr = NULL;
+    CK(OB_NOT_NULL(ctx.get_sql_ctx()));
     OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
-       row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr));
+       row_desc, ctx.get_allocator(), ctx.get_my_session(),
+       ctx.get_sql_ctx()->schema_guard_, temp_expr));
     CK(OB_NOT_NULL(temp_expr));
     if (OB_SUCC(ret)
         && NULL != temp_expr->rt_exprs_.at(temp_expr->expr_idx_).args_

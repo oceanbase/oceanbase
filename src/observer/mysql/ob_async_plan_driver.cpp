@@ -63,13 +63,8 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
   } else if (OB_FAIL(result.update_last_insert_id_to_client())) {
     LOG_WARN("failed to update last insert id after open", K(ret));
   } else {
-    ObSqlEndTransCb &sql_end_cb = session_.get_mysql_end_trans_cb();
-    ObEndTransCbPacketParam pkt_param;
     if (is_prexecute_ && OB_FAIL(sender_.flush_buffer(false))) {
       LOG_WARN("flush buffer fail before send async ok packet.", K(ret));
-    } else if (OB_FAIL(sql_end_cb.set_packet_param(
-                  pkt_param.fill(result, session_, *cur_trace_id)))) {
-        LOG_ERROR("fail set packet param", K(ret));
     } else {
       result.set_end_trans_async(true);
     }

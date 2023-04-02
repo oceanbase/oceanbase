@@ -530,7 +530,6 @@ public:
                K_(access_exprs),
                K_(max_batch_size),
                K_(pushdown_filters),
-               K_(filters_before_index_back),
                K_(pd_storage_flag));
 
   int set_calc_exprs(const ExprFixedArray &calc_exprs, int64_t max_batch_size)
@@ -545,11 +544,9 @@ public:
 
   // filters push down to storage.
   ExprFixedArray pushdown_filters_;
-  ExprFixedArray filters_before_index_back_;
 
   int32_t pd_storage_flag_;
   ObPushdownFilter pd_storage_filters_;
-  ObPushdownFilter pd_storage_index_back_filters_;
   // used to pushdown aggregate expression now.
   ExprFixedArray pd_storage_aggregate_output_;
 };
@@ -577,7 +574,6 @@ public:
   int deep_copy(const sql::ObExprPtrIArray *exprs, const int64_t batch_idx);
 public:
   ObPushdownFilterExecutor *pd_storage_filters_;
-  ObPushdownFilterExecutor *pd_storage_index_back_filters_;
   ObEvalCtx &eval_ctx_;
   const ObPushdownExprSpec &expr_spec_;
 };
@@ -587,10 +583,13 @@ OB_INLINE int ObPushdownOperator::filter_row_outside(const ObExprPtrIArray &expr
 {
   int ret = common::OB_SUCCESS;
   ret = ObOperator::filter_row(eval_ctx_, exprs, filtered);
-  // For filter on data table (not before index back), clear evaluated flag if row filtered,
-  // to reuse the expression result. Table scan inner_get_next_row() will do the clear work
-  // if row not filtered.
-  if (OB_SUCC(ret) && filtered) {
+  // always clear evaluated flag, because filter expr and table scan output expr may have
+  // common expr, when eval filter expr, memory of dependence column may from storage,
+  // if not filter and we don't clear eval flag, output expr will used the result datum
+  // of filter expr which memory may expired, so we need clear eval flag after eval filter expr,
+  // and the common expr in table scan output need evaluate again,
+  // now the memory of dependence column have been deep copy
+  if (OB_SUCC(ret)) {
     clear_datum_eval_flag();
   }
   return ret;

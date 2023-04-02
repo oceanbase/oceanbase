@@ -300,7 +300,7 @@ Block *ObLogBatchBuffer::get_block_(const int64_t block_id)
 
   if (!is_inited_ || NULL == block_array_ || 0 == block_count_ || OB_INVALID_COUNT == block_count_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_ERROR( "not init", K(tmp_ret), K_(block_array), K_(block_count));
+    LOG_ERROR_RET(tmp_ret, "not init", K(tmp_ret), K_(block_array), K_(block_count));
   } else {
     ptr_ret =  block_array_ + (block_id % block_count_);
   }

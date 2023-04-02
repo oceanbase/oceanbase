@@ -15,6 +15,8 @@
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
 #include "storage/ob_file_system_router.h"
+#include <sys/utsname.h>
+#include "share/ob_version.h"
 
 namespace oceanbase
 {
@@ -89,8 +91,9 @@ int ObServerUtils::cal_all_part_disk_size(const int64_t suggested_data_disk_size
 {
   int ret = OB_SUCCESS;
 
-// background information about default disk percentage
-// https://yuque.antfin-inc.com/ob/rootservice/buzmfz
+// background information about default disk percentage:
+// If not in shared mode, disk will be used up to 90%.
+// If in shared mode, data and clog disk usage will be up to 60% and 30%
   const int64_t DEFAULT_DISK_PERCENTAGE_IN_SEPRATE_MODE = 90;
   const int64_t DEFAULT_DATA_DISK_PERCENTAGE_IN_SHARED_MODE = 60;
   const int64_t DEFAULT_CLOG_DISK_PERCENTAGE_IN_SHARED_MODE = 30;
@@ -227,6 +230,51 @@ int ObServerUtils::check_slog_data_binding(
   return ret;
 }
 
+const char *ObServerUtils::build_syslog_file_info(const common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  const static int64_t max_info_len = 512;
+  static char info[max_info_len];
+
+  // self address
+  const char *self_addr = addr.is_valid() ? to_cstring(addr) : "";
+
+  // OS info
+  struct utsname uts;
+  if (0 != ::uname(&uts)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("call uname failed");
+  }
+
+  // time zone info
+  int gmtoff_hour = 0;
+  int gmtoff_minute = 0;
+  if (OB_SUCC(ret)) {
+    time_t t = time(NULL);
+    struct tm lt;
+    if (NULL == localtime_r(&t, &lt)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("call localtime failed");
+    } else {
+      gmtoff_hour = (std::abs(lt.tm_gmtoff) / 3600) * (lt.tm_gmtoff < 0 ? -1 : 1);
+      gmtoff_minute = std::abs(lt.tm_gmtoff) % 3600 / 60;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int n = snprintf(info, max_info_len,
+                     "address: %s, observer version: %s, revision: %s, "
+                     "sysname: %s, os release: %s, machine: %s, tz GMT offset: %02d:%02d",
+                     self_addr, PACKAGE_STRING, build_version(),
+                     uts.sysname, uts.release, uts.machine, gmtoff_hour, gmtoff_minute);
+    if (n <= 0) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("snprintf failed");
+    }
+  }
+
+  return OB_SUCCESS == ret ? info : nullptr;
+}
 
 } // namespace observer
 } // namespace oceanbase

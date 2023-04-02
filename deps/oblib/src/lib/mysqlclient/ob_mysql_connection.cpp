@@ -112,7 +112,77 @@ int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const c
   return ret;
 }
 
-int ObMySQLConnection::connect(const char *user, const char *pass, const char *db, const bool use_ssl)
+int ObMySQLConnection::connect(const char *user, const char *pass, const char *db,
+                               oceanbase::common::ObAddr &addr, int64_t timeout,
+                               bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
+{
+  int ret = OB_SUCCESS;
+  const static int MAX_IP_BUFFER_LEN = 32;
+  char host[MAX_IP_BUFFER_LEN];
+  host[0] = '\0';
+  // if db is NULL, the default database is used.
+  if (OB_ISNULL(user) || OB_ISNULL(pass) /*|| OB_ISNULL(db)*/) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(user), KP(pass), KP(db), K(ret));
+  } else if (!addr.ip_to_string(host, MAX_IP_BUFFER_LEN)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("fail to get host.", K(addr), K(ret));
+  } else {
+    close();
+    LOG_INFO("connecting to mysql server", "ip", host, "port", addr.get_port());
+    mysql_init(&mysql_);
+    timeout_ = timeout;
+    mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
+    if (read_write_no_timeout) {
+      int64_t zero_second = 0;
+      mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &zero_second);
+      mysql_options(&mysql_, MYSQL_OPT_WRITE_TIMEOUT, &zero_second);
+    } else {
+      mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &timeout_);
+      mysql_options(&mysql_, MYSQL_OPT_WRITE_TIMEOUT, &timeout_);
+    }
+    switch (sql_req_level)
+    {
+    case 1:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL1);
+      break;
+    case 2:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL2);
+      break;
+    case 3:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL3);
+      break;
+    default:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL0);
+    }
+    int32_t port = addr.get_port();
+    MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
+    if (OB_ISNULL(mysql)) {
+      ret = -mysql_errno(&mysql_);
+      LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), K(port),
+               "info", mysql_error(&mysql_), K(ret));
+    } else {
+      /*Note: mysql_real_connect() incorrectly reset the MYSQL_OPT_RECONNECT option
+       * to its default value before MySQL 5.0.19. Therefore, prior to that version,
+       * if you want reconnect to be enabled for each connection, you must
+       * call mysql_options() with the MYSQL_OPT_RECONNECT option after each call
+       * to mysql_real_connect(). This is not necessary as of 5.0.19: Call mysql_options()
+       * only before mysql_real_connect() as usual.
+       */
+      my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
+      mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
+      closed_ = false;
+      set_usable(true);
+      tenant_id_ = OB_SYS_TENANT_ID;
+      read_consistency_ = -1;
+    }
+  }
+  return ret;
+}
+
+
+int ObMySQLConnection::connect(const char *user, const char *pass, const char *db, const bool use_ssl,
+                               bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
 {
   int ret = OB_SUCCESS;
   const static int MAX_IP_BUFFER_LEN = 32;
@@ -133,13 +203,33 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     LOG_INFO("connecting to mysql server", "ip", host, "port", root_->get_server().get_port());
     mysql_init(&mysql_);
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
-    mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &timeout_);
-    mysql_options(&mysql_, MYSQL_OPT_WRITE_TIMEOUT, &timeout_);
+    if (read_write_no_timeout) {
+      int64_t zero_second = 0;
+      mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &zero_second);
+      mysql_options(&mysql_, MYSQL_OPT_WRITE_TIMEOUT, &zero_second);
+    } else {
+      mysql_options(&mysql_, MYSQL_OPT_READ_TIMEOUT, &timeout_);
+      mysql_options(&mysql_, MYSQL_OPT_WRITE_TIMEOUT, &timeout_);
+    }
+    switch (sql_req_level)
+    {
+    case 1:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL1);
+      break;
+    case 2:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL2);
+      break;
+    case 3:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL3);
+      break;
+    default:
+       mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL0);
+    }
     int32_t port = root_->get_server().get_port();
     MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
     if (OB_ISNULL(mysql)) {
       ret = -mysql_errno(&mysql_);
-      LOG_WARN("fail to connect to mysql server", KCSTRING(host), KCSTRING(user), K(port),
+      LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), K(port),
                "info", mysql_error(&mysql_), K(ret));
     } else {
       /*Note: mysql_real_connect() incorrectly reset the MYSQL_OPT_RECONNECT option
@@ -152,6 +242,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
       closed_ = false;
+      set_usable(true);
       db_name_ = db;
       tenant_id_ = OB_SYS_TENANT_ID;
       read_consistency_ = -1;
@@ -165,7 +256,9 @@ void ObMySQLConnection::close()
   if (!closed_) {
     mysql_close(&mysql_);
     closed_ = true;
+    sessid_ = 0;
     memset(&mysql_, 0, sizeof(MYSQL));
+    set_init_remote_env(false);
   }
 }
 
@@ -372,16 +465,17 @@ int ObMySQLConnection::switch_tenant(const uint64_t tenant_id)
 }
 
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
-                                     int64_t &affected_rows, bool is_user_sql)
+    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
-  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql);
+  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql, sql_exec_addr);
   return OB_NOT_SUPPORTED;
 }
 
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
-    int64_t &affected_rows, bool is_user_sql)
+    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   UNUSED(is_user_sql);
+  UNUSED(sql_exec_addr);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(closed_)) {
     ret = OB_NOT_INIT;
@@ -398,17 +492,18 @@ int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
 }
 
 int ObMySQLConnection::execute_read(const int64_t cluster_id, const uint64_t tenant_id,
-    const ObString &sql, ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl)
+    const ObString &sql, ObISQLClient::ReadResult &res, bool is_user_sql,
+    const common::ObAddr *sql_exec_addr)
 {
-  UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl);
+  UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, sql_exec_addr);
   return OB_NOT_SUPPORTED;
 }
 
 int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
-    ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl)
+    ObISQLClient::ReadResult &res, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   UNUSED(is_user_sql);
-  UNUSED(is_from_pl);
+  UNUSED(sql_exec_addr);
   int ret = OB_SUCCESS;
   ObMySQLReadContext *read_ctx = NULL;
   if (OB_UNLIKELY(closed_)) {
@@ -418,7 +513,7 @@ int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
     LOG_ERROR("create result handler failed", K(ret));
   } else if (OB_FAIL(create_statement(read_ctx->stmt_, tenant_id, sql))) {
     LOG_WARN("create statement failed", KCSTRING(sql), K(ret));
-  } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query())) {
+  } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query(res.is_enable_use_result()))) {
     ret = get_last_error();
     const int ER_LOCK_WAIT_TIMEOUT = -1205;
     if (ER_LOCK_WAIT_TIMEOUT == ret) {
@@ -426,6 +521,8 @@ int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
     } else {
       LOG_WARN("query failed", K(get_server()), KCSTRING(sql), K(ret));
     }
+  } else {
+    LOG_DEBUG("query succeed", K(get_server()), KCSTRING(sql), K(ret));
   }
   return ret;
 }
@@ -487,9 +584,40 @@ int ObMySQLConnection::set_session_variable(const ObString &name, int64_t val)
   return ret;
 }
 
+int ObMySQLConnection::set_session_variable(const ObString &name, const ObString &val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not established. call connect first", K(ret));
+  } else {
+    ObMySQLStatement stmt;
+    ObSqlString sql;
+    if (name.compare("_set_reverse_dblink_infos")) { // const char *ObReverseLink::SESSION_VARIABLE = "_set_reverse_dblink_infos";
+      if (OB_FAIL(sql.append_fmt("/*$BEFPARSEdblink_req_level=1*/ set \"%.*s\" = '%.*s'", name.length(), name.ptr(), val.length(), val.ptr()))) {
+        LOG_WARN("assign sql failed", K(ret), K(name), K(val), K(sql));
+      }
+    } else {
+      if (OB_FAIL(sql.append_fmt("set \"%.*s\" = '%.*s'", name.length(), name.ptr(), val.length(), val.ptr()))) {
+        LOG_WARN("assign sql failed", K(ret), K(name), K(val), K(sql));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(stmt.init(*this, sql.ptr()))) {
+      LOG_WARN("create statement failed", K(ret), K(sql));
+    } else if (OB_FAIL(stmt.execute_update())) {
+      LOG_WARN("execute sql failed", K(sql), K(ret));
+    } else {
+      LOG_DEBUG("set session variable", K(name), K(val), K(sql));
+    }
+  }
+  return ret;
+}
+
 // When the main database is in the switching state, the external SQL will be affected by the ob_read_consistency set by the user, and the standby database may weakly read the internal table, but an error is reported because multiple versions do not exist.
 // In fact, the current code does not require external SQL to weaken consistent reads. For the implementation of ObMySqlConnection, it is restricted to use strong consistent reads.
-// bug: https://work.aone.alibaba-inc.com/issue/23188074
+// bug:
 int ObMySQLConnection::reset_read_consistency()
 {
   int ret = OB_SUCCESS;
@@ -506,13 +634,13 @@ int ObMySQLConnection::reset_read_consistency()
   return ret;
 }
 
-int ObMySQLConnection::connect_dblink(const bool use_ssl)
+int ObMySQLConnection::connect_dblink(const bool use_ssl, int64_t sql_request_level)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(root_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root is NULL", K(ret));
-  } else if (OB_FAIL(connect(root_->get_db_user(), root_->get_db_pass(), root_->get_db_name(), use_ssl))) {
+  } else if (OB_FAIL(connect(root_->get_db_user(), root_->get_db_pass(), root_->get_db_name(), use_ssl, true, sql_request_level))) {
     LOG_WARN("fail to connect", K(ret));
   }
   return ret;

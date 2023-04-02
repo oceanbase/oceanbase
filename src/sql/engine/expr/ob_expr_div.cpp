@@ -17,6 +17,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_batch_eval_util.h"
+#include "share/object/ob_obj_cast_util.h"
 
 namespace oceanbase
 {
@@ -56,7 +57,7 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
   OC( (ObArithExprOperator::calc_result_type2)(type, type1, type2, type_ctx));
   if (OB_SUCC(ret)) {
     const ObObjTypeClass result_tc = type.get_type_class();
-    if (ObNumberTC == result_tc  || ObDoubleTC == result_tc || ObFloatTC == result_tc) {
+    if (ObNumberTC == result_tc) {
       if (is_oracle_mode()) {
         type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
         type.set_precision(PRECISION_UNKNOWN_YET);
@@ -91,6 +92,34 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
         LOG_DEBUG("div calc_result_type2", K(type.get_calc_scale()), K(scale1), K(scale2),
                   "new_scale1", ROUND_UP(scale1), "new_scale2", ROUND_UP(scale2),
                   K(div_precision_increment));
+      }
+    } else if (ObDoubleTC == result_tc || ObFloatTC == result_tc) {
+      if (is_oracle_mode()) {
+        type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+        type.set_precision(PRECISION_UNKNOWN_YET);
+      } else {
+        ObScale scale = SCALE_UNKNOWN_YET;
+        ObPrecision precision = PRECISION_UNKNOWN_YET;
+        if (SCALE_UNKNOWN_YET != type1.get_scale() && SCALE_UNKNOWN_YET != type2.get_scale()) {
+          ObScale scale1 = static_cast<ObScale>(MAX(type1.get_scale(), 0));
+          ObScale scale2 = static_cast<ObScale>(MAX(type2.get_scale(), 0));
+          scale = MAX(scale1, scale2) + div_precision_increment;
+          if (scale > OB_MAX_DOUBLE_FLOAT_SCALE) {
+            scale = SCALE_UNKNOWN_YET;
+          }
+        }
+        if (PRECISION_UNKNOWN_YET != type1.get_precision() &&
+            PRECISION_UNKNOWN_YET != type2.get_precision() &&
+            SCALE_UNKNOWN_YET != scale) {
+          ObPrecision p1 = ObMySQLUtil::float_length(scale);
+          ObPrecision p2 = type1.get_precision() - type1.get_scale() + scale;
+          if (ObNumberTC == type1.get_type_class()) {
+            p2 += decimal_to_double_precision_inc(type1.get_type(), type1.get_scale());
+          }
+          precision = MIN(p1, p2);
+        }
+        type.set_scale(scale);
+        type.set_precision(precision);
       }
     } else if (ObIntervalTC == type.get_type_class()) {
       type.set_scale(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][type.get_type()].get_scale());
@@ -580,16 +609,11 @@ struct ObNumberDivFunc
             //          const int64_t new_scale2 = ROUND_UP(scale2);
             //          const int64_t calc_scale = ROUND_UP(new_scale1 + new_scale2 + div_pi);
             const int64_t calc_scale = expr.div_calc_scale_;
-            if (calc_scale > 0) {
-              if (T_OP_AGG_DIV == expr.type_) {
-                if (OB_FAIL(result_num.round(expr.datum_meta_.scale_))) {
-                  LOG_WARN("failed to round result number", K(ret), K(result_num), K(calc_scale));
-                }
-              } else if (OB_FAIL(result_num.trunc(calc_scale))) {
-                LOG_WARN("failed to round result number", K(ret), K(result_num), K(calc_scale));
-              }
-            }
-            if (OB_SUCC(ret)) {
+            if (calc_scale > 0 && OB_FAIL(result_num.trunc(calc_scale))) {
+              //calc_scale is calc_scale ,not res_scale.
+              //trunc with calc_scale and round with res_scale
+              LOG_WARN("failed to trunc result number", K(ret), K(result_num), K(calc_scale));
+            } else {
               res.set_number(result_num);
             }
             LOG_DEBUG("finish div", K(ret), K(calc_scale),

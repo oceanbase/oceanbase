@@ -46,13 +46,14 @@ enum ExtraInfoKeyType {
 class Obp20Encoder {
   public:
   ExtraInfoKeyType type_;
-  Obp20Encoder() : type_(OBP20_SVR_END) {}
+  bool is_serial_; // indicate this encoder has accomplish serialization
+  Obp20Encoder() : type_(OBP20_SVR_END), is_serial_(false) {}
   ~Obp20Encoder() {}
   virtual int serialize(char *buf, int64_t len, int64_t &pos) = 0;
   virtual int get_serialize_size() = 0;
   virtual bool has_value() = 0;
   virtual void reset() = 0;
-  TO_STRING_KV(K_(type));
+  TO_STRING_KV(K_(type), K_(is_serial));
 };
 
 class Obp20Decoder {

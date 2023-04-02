@@ -11,9 +11,11 @@
  */
 
 #define USING_LOG_PREFIX EXTLOG
+#include "share/scn.h"
 #include "ob_cdc_start_lsn_locator.h"
 #include "ob_cdc_util.h"
 #include "logservice/ob_log_service.h"          // ObLogService
+#include "logservice/restoreservice/ob_remote_log_source_allocator.h" // ObResSrcAlloctor::alloc
 
 namespace oceanbase
 {
@@ -21,7 +23,8 @@ namespace cdc
 {
 ObCdcStartLsnLocator::ObCdcStartLsnLocator()
   : is_inited_(false),
-    tenant_id_(OB_INVALID_TENANT_ID)
+    tenant_id_(OB_INVALID_TENANT_ID),
+    large_buffer_pool_(NULL)
 {
 }
 
@@ -30,19 +33,21 @@ ObCdcStartLsnLocator::~ObCdcStartLsnLocator()
   destroy();
 }
 
-int ObCdcStartLsnLocator::init(const uint64_t tenant_id)
+int ObCdcStartLsnLocator::init(const uint64_t tenant_id,
+    archive::LargeBufferPool *buffer_pool)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_ISNULL(buffer_pool)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(buffer_pool));
   } else {
     is_inited_ = true;
     tenant_id_ = tenant_id;
+    large_buffer_pool_ = buffer_pool;
   }
 
   return ret;
@@ -53,6 +58,7 @@ void ObCdcStartLsnLocator::destroy()
   if (is_inited_) {
     is_inited_ = false;
     tenant_id_ = OB_INVALID_TENANT_ID;
+    large_buffer_pool_ = NULL;
   }
 }
 
@@ -108,6 +114,8 @@ int ObCdcStartLsnLocator::do_req_start_lsn_(const ObLocateLSNByTsReq &req,
   } else if (OB_FAIL(qit.init(get_rpc_deadline_()))) {
     EXTLOG_LOG(WARN, "init qit error", K(ret));
   } else {
+    int8_t req_flag= req.get_flag();
+    const bool fetch_archive_only = ObCdcRpcTestFlag::is_fetch_archive_only(req_flag);
     for (int64_t idx = 0; ! stop_flag && OB_SUCC(ret) && idx < locate_params.count(); ++idx) {
       const ObLocateLSNByTsReq::LocateParam &locate_param = locate_params[idx];
 
@@ -115,7 +123,7 @@ int ObCdcStartLsnLocator::do_req_start_lsn_(const ObLocateLSNByTsReq &req,
         if (OB_FAIL(handle_when_hurry_quit_(locate_param, resp))) {
           LOG_WARN("handle_when_hurry_quit_ failed", KR(ret), K(tenant_id_), K(locate_param));
         }
-      } else if (OB_FAIL(do_locate_ls_(locate_param, resp))) {
+      } else if (OB_FAIL(do_locate_ls_(fetch_archive_only, locate_param, resp))) {
         LOG_WARN("do_locate_ls_ failed", KR(ret), K(tenant_id_), K(locate_param));
       } else {}
     } // for
@@ -151,38 +159,108 @@ int ObCdcStartLsnLocator::handle_when_hurry_quit_(const ObLocateLSNByTsReq::Loca
   return ret;
 }
 
-int ObCdcStartLsnLocator::do_locate_ls_(const ObLocateLSNByTsReq::LocateParam &locate_param,
+int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
+    const ObLocateLSNByTsReq::LocateParam &locate_param,
     ObLocateLSNByTsResp &resp)
 {
   int ret = OB_SUCCESS;
   palf::PalfHandleGuard palf_handle_guard;
   palf::PalfGroupBufferIterator group_iter;
+  share::SCN start_scn;
   LogGroupEntry log_group_entry;
   ObLocateLSNByTsResp::LocateResult locate_res;
   const ObLSID &ls_id = locate_param.ls_id_;
   const int64_t start_ts_ns = locate_param.start_ts_ns_;
   LSN result_lsn;
   int64_t result_ts_ns = OB_INVALID_TIMESTAMP;
+  bool need_seek_archive = false;
 
-  if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret= OB_LS_NOT_EXIST;
-    } else {
-      LOG_WARN("init_palf_handle_guard_ fail", KR(ret), K(ls_id));
-    }
-  // - OB_SUCCESS: seek success
-  // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
-  // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
-  } else if (OB_FAIL(palf_handle_guard.seek(start_ts_ns, group_iter))) {
-    LOG_WARN("PalfHandle seek fail", KR(ret), K(tenant_id_), K(locate_param));
-  } else if (OB_FAIL(group_iter.next())) {
-    LOG_WARN("PalfGroupBufferIterator next failed, unexpected", KR(ret), K_(tenant_id), K(ls_id));
-  } else if (OB_FAIL(group_iter.get_entry(log_group_entry, result_lsn))) {
-    LOG_WARN("group_iter get_entry fail", KR(ret), K_(tenant_id), K(ls_id));
+  if (OB_FAIL(start_scn.convert_from_ts(start_ts_ns / 1000L))) {
+    LOG_WARN("convert_from_ts failed", KR(ret), K(start_ts_ns), K(start_scn), K(ls_id));
+  } else if (fetch_archive_only && OB_SYS_TENANT_ID != tenant_id_) {
+    need_seek_archive = true;
   } else {
-    result_ts_ns = log_group_entry.get_log_ts();
+    if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        need_seek_archive = true;
+      } else {
+        LOG_WARN("init_palf_handle_guard_ fail", KR(ret), K(ls_id));
+      }
+    // - OB_SUCCESS: seek success
+    // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
+    // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
+    } else if (OB_FAIL(palf_handle_guard.seek(start_scn, group_iter))) {
+      if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+        ret = OB_SUCCESS;
+        need_seek_archive = true;
+      } else {
+        LOG_WARN("PalfHandle seek fail", KR(ret), K(tenant_id_), K(locate_param));
+      }
+    } else if (OB_FAIL(group_iter.next())) {
+      LOG_WARN("PalfGroupBufferIterator next failed, unexpected", KR(ret), K_(tenant_id), K(ls_id));
+    } else if (OB_FAIL(group_iter.get_entry(log_group_entry, result_lsn))) {
+      LOG_WARN("group_iter get_entry fail", KR(ret), K_(tenant_id), K(ls_id));
+    } else {
+      result_ts_ns = log_group_entry.get_scn().get_val_for_logservice();
+    }
+
+    if (OB_SYS_TENANT_ID == tenant_id_) {
+      need_seek_archive = false;
+    }
+  // Note: us
   }
 
+  if (OB_SUCC(ret) && need_seek_archive) {
+    logservice::ObLogArchivePieceContext piece_ctx;
+    share::ObBackupDest backup_dest;
+    if (OB_FAIL(ObCdcService::get_backup_dest(ls_id, backup_dest))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_ERR_OUT_OF_LOWER_BOUND;
+        LOG_WARN("try to seek start lsn in archive, but archive dest doesn't exist", KR(ret), K(ls_id));
+      } else {
+        LOG_WARN("failed to get backup dest", KR(ret), K(ls_id), K(tenant_id_));
+      }
+    } else if (OB_FAIL(piece_ctx.init(ls_id, backup_dest))) {
+      LOG_WARN("init piece ctx failed", KR(ret), K(ls_id), K(backup_dest));
+    } else if (OB_FAIL(piece_ctx.seek(start_scn, result_lsn))) {
+      LOG_WARN("archivelog seek fail", KR(ret), K(tenant_id_), K(locate_param));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_ERR_OUT_OF_LOWER_BOUND;
+      }
+    } else {
+      result_ts_ns = start_ts_ns;
+      // for RemoteLogIterator::init
+      logservice::GetSourceFunc get_source_func = [&](const ObLSID& ls_id, logservice::ObRemoteSourceGuard &guard) ->int {
+        int ret = OB_SUCCESS;
+        logservice::ObRemoteLogParent *source = logservice::ObResSrcAlloctor::alloc(share::ObLogRestoreSourceType::LOCATION, ls_id);
+        logservice::ObRemoteLocationParent *location_source = static_cast<logservice::ObRemoteLocationParent*>(source);
+        if (OB_ISNULL(location_source)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("source allocated is null", KR(ret), K(ls_id));
+        } else if (OB_FAIL(location_source->set(backup_dest, SCN::max_scn()))) {
+          LOG_WARN("set backup dest failed", KR(ret), K(backup_dest), K(ls_id));
+        } else if (OB_FAIL(guard.set_source(location_source))) {
+          LOG_WARN("remote source guard set source failed", KR(ret), K(ls_id));
+        }
+        return ret;
+      };
+      logservice::ObRemoteLogGroupEntryIterator remote_group_iter(get_source_func);
+      // for RemoteLogIterator::next
+      int64_t next_buf_size = 0;
+      const char *next_buf = NULL;
+      LSN lsn;
+
+      if (OB_FAIL(remote_group_iter.init(tenant_id_, ls_id, start_scn,
+              result_lsn, LSN(palf::LOG_MAX_LSN_VAL), large_buffer_pool_))) {
+        LOG_WARN("init remote group iter failed when retriving log group entry in start lsn locator", KR(ret), K(ls_id), K(tenant_id_));
+      } else if (OB_FAIL(remote_group_iter.next(log_group_entry, lsn, next_buf, next_buf_size))) {
+        LOG_WARN("iterate through archive log failed", KR(ret), K(ls_id), K(tenant_id_));
+      } else {
+        result_ts_ns = log_group_entry.get_scn().get_val_for_logservice();
+      }
+    }
+  }
   // Unconditional setting ret code
   locate_res.reset(ret, result_lsn, result_ts_ns);
   // Reset ret

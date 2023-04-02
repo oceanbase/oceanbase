@@ -17,9 +17,14 @@
 #include "logservice/ob_log_base_header.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "lib/hash/ob_linear_hash_map.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 class PalfEnv;
@@ -113,6 +118,18 @@ public:
     int64_t replayed_log_size_;
     int64_t unreplayed_log_size_;
   };
+  class FetchLogFunctor
+  {
+  public:
+    explicit FetchLogFunctor()
+        : ret_code_(common::OB_SUCCESS) {}
+    ~FetchLogFunctor(){}
+    bool operator()(const share::ObLSID &id, ObReplayStatus *replay_status);
+    int get_ret_code() const { return ret_code_; }
+    TO_STRING_KV(K(ret_code_));
+  private:
+    int ret_code_;
+  };
 public:
   void handle(void *task);
   int add_ls(const share::ObLSID &id,
@@ -120,21 +137,22 @@ public:
   int remove_ls(const share::ObLSID &id);
   int enable(const share::ObLSID &id,
              const palf::LSN &base_lsn,
-             const int64_t base_log_ts);
+             const share::SCN &base_scn);
   int disable(const share::ObLSID &id);
   int is_enabled(const share::ObLSID &id, bool &is_enabled);
-  int set_submit_log_pending(const share::ObLSID &id);
-  int erase_submit_log_pending(const share::ObLSID &id);
+  int block_submit_log(const share::ObLSID &id);
+  int unblock_submit_log(const share::ObLSID &id);
   int switch_to_leader(const share::ObLSID &id);
   int switch_to_follower(const share::ObLSID &id,
                          const palf::LSN &begin_lsn);
   int is_replay_done(const share::ObLSID &id,
                      const palf::LSN &end_lsn,
                      bool &is_done);
-  int get_min_unreplayed_log_ts_ns(const share::ObLSID &id,
-                                   int64_t &log_ts);
+  int flashback(const share::ObLSID &id);
+  int get_max_replayed_scn(const share::ObLSID &id, share::SCN &scn);
   int submit_task(ObReplayServiceTask *task);
-  int update_replayable_point(const int64_t replayable_ts_ns);
+  int update_replayable_point(const share::SCN &replayable_scn);
+  int get_replayable_point(share::SCN &replayable_scn);
   int stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func);
   int stat_all_ls_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
   int diagnose(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
@@ -158,7 +176,7 @@ private:
   int fetch_and_submit_single_log_(ObReplayStatus &replay_status,
                                    ObReplayServiceSubmitTask *submit_task,
                                    palf::LSN &cur_lsn,
-                                   int64_t &cur_log_submit_ts,
+                                   share::SCN &cur_log_submit_scn,
                                    int64_t &log_size);
   int fetch_pre_barrier_log_(ObReplayStatus &replay_status,
                              ObReplayServiceSubmitTask *submit_task,
@@ -166,7 +184,7 @@ private:
                              const ObLogBaseHeader &header,
                              const char *log_buf,
                              const palf::LSN &cur_lsn,
-                             const int64_t cur_log_submit_ts,
+                             const share::SCN &cur_log_submit_scn,
                              const int64_t log_size,
                              const bool is_raw_write);
   bool is_tenant_out_of_memory_() const;
@@ -196,7 +214,9 @@ private:
   const int64_t MAX_SUBMIT_TIME_PER_ROUND = 100 * 1000; //100ms
   const int64_t TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD = 5 * 1000 * 1000; //5s
   const int64_t PENDING_TASK_MEMORY_LIMIT = 128 * (1LL << 20); //128MB
-
+  //每个日志流累计拉日志到阈值时batch提交所有task queue
+  static const int64_t BATCH_PUSH_REPLAY_TASK_COUNT_THRESOLD = 1024;
+  static const int64_t BATCH_PUSH_REPLAY_TASK_SIZE_THRESOLD = 16 * (1LL << 20); //16MB
   // params of adaptive thread pool
   const int64_t LEAST_THREAD_NUM = 8;
   const int64_t ESTIMATE_TS = 200000;
@@ -210,7 +230,7 @@ private:
   ObLSAdapter *ls_adapter_;
   palf::PalfEnv *palf_env_;
   ObILogAllocator *allocator_;
-  int64_t replayable_point_;
+  share::SCN replayable_point_;
   // 考虑到迁出迁入场景, 不能只通过map管理replay status的生命周期
   common::ObLinearHashMap<share::ObLSID, ObReplayStatus*> replay_status_map_;
   int64_t pending_replay_log_size_;

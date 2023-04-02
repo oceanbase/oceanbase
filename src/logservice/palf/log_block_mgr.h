@@ -13,8 +13,6 @@
 #ifndef OCEANBASE_LOGSERVICE_LOG_FILE_MGR_
 #define OCEANBASE_LOGSERVICE_LOG_FILE_MGR_
 
-#include "lib/hash/ob_hashmap.h"          // ObHashMap
-#include "lib/container/ob_se_array.h"    // ObSEArray
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/ob_define.h"
 #include "log_define.h"
@@ -29,6 +27,7 @@ namespace palf
 {
 
 class LogWriteBuf;
+class LogGroupEntryHeader;
 
 class LogBlockMgr {
 public:
@@ -37,6 +36,8 @@ public:
 
   // @brief this function used to initialize.
   int init(const char *log_dir, const block_id_t block_id,
+           const int64_t align_size,
+           const int64_t align_buf_size,
            int64_t log_block_size, ILogBlockPool *log_block_pool);
   void reset(const block_id_t init_block_id);
 
@@ -69,10 +70,14 @@ public:
 
   int load_block_handler(const block_id_t block_id,
                          const offset_t offset);
-  const char *get_log_dir() const { return log_dir_; }
 
+	int create_tmp_block_handler(const block_id_t block_id);
+
+  // ======================= flashback =====================
+  int delete_block_from_back_to_front_until(const block_id_t block_id);
+  int rename_tmp_block_handler_to_normal(const block_id_t block_id);
+  // =======================================================
   TO_STRING_KV(K_(log_dir), K_(dir_fd), K_(min_block_id), K_(max_block_id), K_(curr_writable_block_id));
-
 private:
   // @brief this function used to rebuild 'blocks_'
   // Firstly, scan the directory, get the name of all blocks;
@@ -82,11 +87,14 @@ private:
   // Finally, reopen the last virtual block.
   // int reload_(const block_id_t block_id, const offset_t offset);
   int do_delete_block_(const block_id_t block_id);
+  int delete_block_from_back_to_front_until_(const block_id_t block_id);
   int do_truncate_(const block_id_t block_id, const offset_t offset);
-  int do_scan_dir_(const char *dir, const block_id_t initial_block_id);
+  int do_scan_dir_(const char *dir, const block_id_t initial_block_id, ILogBlockPool *log_block_pool);
   int do_rename_and_fsync_(const char *block_path, const char *tmp_block_path);
   bool empty_() const;
   int try_recovery_last_block_(const char *log_dir);
+
+  int check_after_truncate_(const char *block_path, const offset_t offset);
   const int64_t SLEEP_TS_US = 1 * 1000;
 
 private:
@@ -115,6 +123,8 @@ private:
   mutable block_id_t max_block_id_;
   ILogBlockPool *log_block_pool_;
   int dir_fd_;
+  int64_t align_size_;
+  int64_t align_buf_size_;
   bool is_inited_;
 };
 } // end of logservice

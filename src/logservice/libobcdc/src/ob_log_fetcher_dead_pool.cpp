@@ -21,6 +21,7 @@
 
 #include "ob_log_instance.h"              // IObLogErrHandler
 #include "ob_log_ls_fetch_mgr.h"          // IObLogLSFetchMgr
+#include "ob_log_fetcher.h"               // IObLogFetcher
 
 namespace oceanbase
 {
@@ -41,6 +42,7 @@ ObLogFetcherDeadPool::~ObLogFetcherDeadPool()
 
 
 int ObLogFetcherDeadPool::init(const int64_t thread_num,
+    void *fetcher_host,
     IObLogLSFetchMgr &ls_fetch_mgr,
     IObLogErrHandler &err_handler)
 {
@@ -56,6 +58,7 @@ int ObLogFetcherDeadPool::init(const int64_t thread_num,
   } else {
     reset_task_list_array_();
 
+    fetcher_host_ = fetcher_host;
     err_handler_ = &err_handler;
     ls_fetch_mgr_ = &ls_fetch_mgr;
     inited_ = true;
@@ -230,10 +233,11 @@ int ObLogFetcherDeadPool::handle_task_list_(const int64_t thread_index, FetchTas
 {
   int ret = OB_SUCCESS;
   LSFetchCtx *task = list.head();
+  IObLogFetcher *fetcher = static_cast<IObLogFetcher *>(fetcher_host_);
 
-  if (OB_ISNULL(ls_fetch_mgr_)) {
-    LOG_ERROR("invalid part fetch mgr", K(ls_fetch_mgr_));
+  if (OB_ISNULL(fetcher)) {
     ret = OB_INVALID_ERROR;
+    LOG_ERROR("fetcher is nullptr", KR(ret), K(fetcher));
   } else {
     while (OB_SUCCESS == ret && NULL != task) {
       LSFetchCtx *next = task->get_next();
@@ -255,7 +259,7 @@ int ObLogFetcherDeadPool::handle_task_list_(const int64_t thread_index, FetchTas
           }
         }
         // Then physically delete the partition from the partition fetch log manager
-        else if (OB_FAIL(ls_fetch_mgr_->remove_ls(tls_id))) {
+        else if (OB_FAIL(fetcher->remove_ls(tls_id))) {
           LOG_ERROR("remove partition fail", KR(ret), K(tls_id), K(task));
         } else {
           // You can't continue operating the task afterwards

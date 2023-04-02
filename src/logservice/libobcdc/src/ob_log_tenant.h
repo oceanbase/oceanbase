@@ -231,6 +231,13 @@ public:
     return part_mgr_.add_all_user_tablets_info(timeout);
   }
 
+  int add_all_user_tablets_info(
+      const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
+      const int64_t timeout)
+  {
+    return part_mgr_.add_all_user_tablets_info(table_metas, timeout);
+  }
+
   int get_table_info_of_tablet(const common::ObTabletID &tablet_id, ObCDCTableInfo &table_info) const
   {
     return part_mgr_.get_table_info_of_tablet_id(tablet_id, table_info);

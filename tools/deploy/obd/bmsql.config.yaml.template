@@ -3,6 +3,7 @@
   tag: {{%% TAG %%}}
   global:
     devname: lo
+    production_mode: false
     cluster_id: 1
     memory_limit: '64G'
     datafile_disk_percentage: '50'

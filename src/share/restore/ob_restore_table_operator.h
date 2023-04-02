@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace share
 {
-class ObLogArchiveSourceItem;
+class ObLogRestoreSourceItem;
 class ObTenantRestoreTableOperator
 {
 public:
@@ -31,21 +31,21 @@ public:
   // init restore table operator
   int init(const uint64_t user_tenant_id, ObISQLClient *proxy);
 
-  // insert log archive source
-  int insert_source(const ObLogArchiveSourceItem &item);
+  // insert log restore source
+  int insert_source(const ObLogRestoreSourceItem &item);
 
-  // update log archive source until ts, success only if until ts is modified bigger
-  int update_source_until_ts(const ObLogArchiveSourceItem &item);
+  // update log restore source until ts, success only if until ts is modified bigger
+  int update_source_until_scn(const ObLogRestoreSourceItem &item);
 
-  // delete log archive source
+  // delete log restore source
   int delete_source();
 
-  int get_source(ObLogArchiveSourceItem &item);
+  int get_source(ObLogRestoreSourceItem &item);
 
 private:
-  int fill_log_archive_source_(const ObLogArchiveSourceItem &item, ObDMLSqlSplicer &dml);
+  int fill_log_restore_source_(const ObLogRestoreSourceItem &item, ObDMLSqlSplicer &dml);
   int fill_select_source_(common::ObSqlString &sql);
-  int parse_log_archive_source_(sqlclient::ObMySQLResult &result, ObLogArchiveSourceItem &itm);
+  int parse_log_restore_source_(sqlclient::ObMySQLResult &result, ObLogRestoreSourceItem &itm);
   uint64_t get_exec_tenant_id_() const;
 private:
   bool is_inited_;

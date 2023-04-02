@@ -33,7 +33,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
-  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;                                                                                                                                                                                 
+  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
 
   int do_transform(ObDMLStmt *stmt,
                    bool ignore_all_select_exprs,
@@ -48,7 +48,7 @@ private:
       exclude_expr_(NULL),
       new_expr_(NULL),
       equal_infos_(),
-      need_add_constraint_(false),
+      need_add_constraint_(PRE_CALC_RESULT_NONE),
       can_pullup_(false),
       is_used_(false),
       is_complex_const_info_(false),
@@ -65,13 +65,13 @@ private:
     ObRawExpr* exclude_expr_;
     ObRawExpr* new_expr_;
     common::ObSEArray<ObPCParamEqualInfo, 2> equal_infos_;
-    bool need_add_constraint_;
+    PreCalcExprExpectResult need_add_constraint_;
     bool can_pullup_;
     bool is_used_;
     //record or/in predicate const exprs
     bool is_complex_const_info_;
     common::ObSEArray<ObRawExpr*, 4> multi_const_exprs_;
-    common::ObSEArray<bool, 4> multi_need_add_constraints_;
+    common::ObSEArray<PreCalcExprExpectResult, 4> multi_need_add_constraints_;
 
     TO_STRING_KV(K_(column_expr),
                  K_(const_expr),
@@ -87,10 +87,12 @@ private:
   };
 
   struct ConstInfoContext {
-    ConstInfoContext() : active_const_infos_(),
+    ConstInfoContext(const ObSharedExprChecker &shared_expr_checker,
+                     bool hint_allowed_trans) : active_const_infos_(),
                          expired_const_infos_(),
                          extra_excluded_exprs_(),
-                         hint_allowed_trans_(true)
+                         hint_allowed_trans_(hint_allowed_trans),
+                         shared_expr_checker_(shared_expr_checker)
     {
     }
     ~ConstInfoContext() {}
@@ -105,6 +107,7 @@ private:
     common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
     common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
     bool hint_allowed_trans_;
+    const ObSharedExprChecker &shared_expr_checker_;
 
     TO_STRING_KV(K_(active_const_infos),
                  K_(expired_const_infos),
@@ -156,6 +159,14 @@ private:
   int replace_select_exprs(ObSelectStmt *stmt,
                            ConstInfoContext &const_ctx,
                            bool &trans_happened);
+  int replace_select_exprs_skip_agg(ObSelectStmt *stmt,
+                                  ConstInfoContext &const_ctx,
+                                  bool &trans_happened);
+  int replace_select_exprs_skip_agg_internal(ObRawExpr *&cur_expr,
+                                          ConstInfoContext &const_ctx,
+                                          ObIArray<ObRawExpr *> &parent_exprs,
+                                          bool &trans_happened,
+                                          bool used_in_compare);
 
   int replace_assignment_exprs(ObIArray<ObAssignment> &assignments,
                                ConstInfoContext &const_ctx,
@@ -266,12 +277,14 @@ private:
                                     bool &trans_happened);
 
   int do_remove_const_exec_param(ObRawExpr *&expr,
-                                 ObRawExpr *parent_expr,
+                                 ObIArray<ObRawExpr *> &parent_exprs,
                                  bool &trans_happened);
 
   int check_need_cast_when_replace(ObRawExpr *expr,
-                                   ObRawExpr *parent_expr,
+                                   ObIArray<ObRawExpr *> &parent_exprs,
                                    bool &need_cast);
+
+  int check_is_in_or_notin_param(ObIArray<ObRawExpr *> &parent_exprs, bool &is_right_param);
 
   int collect_equal_param_constraints(ObIArray<ExprConstInfo> &expr_const_infos);
 

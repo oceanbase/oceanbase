@@ -17,6 +17,8 @@
 #include "lib/hash/ob_linear_hash_map.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/thread/ob_thread_lease.h"
+#include "log_ack_info.h"
+#include "share/scn.h"
 #include "log_group_entry.h"
 #include "log_group_buffer.h"
 #include "log_checksum.h"
@@ -61,6 +63,8 @@ enum FetchTriggerType
   LEARNER_REGISTER = 4,
   CLEAN_CACHED_LOG = 5,
   MODE_META_BARRIER = 6,
+  RECONFIRM_NOTIFY_FETCH = 7,
+  ADD_MEMBER_PRE_CHECK = 8,
 };
 
 enum TruncateType
@@ -97,6 +101,48 @@ struct TruncateLogInfo
   TO_STRING_KV(K_(truncate_type), K_(truncate_log_id), K_(truncate_begin_lsn), K_(truncate_log_proposal_id));
 };
 
+class UpdateMatchLsnFunc
+{
+public:
+  UpdateMatchLsnFunc(const LSN &end_lsn, const int64_t new_ack_time_us)
+      : new_end_lsn_(end_lsn), old_end_lsn_(), new_ack_time_us_(new_ack_time_us), old_advance_time_us_(OB_INVALID_TIMESTAMP)
+  {}
+  ~UpdateMatchLsnFunc() {}
+  bool operator()(const common::ObAddr &server, LsnTsInfo &value);
+  bool is_advance_delay_too_long() const {
+    bool bool_ret = false;
+    if (old_end_lsn_ < new_end_lsn_
+        && (new_ack_time_us_ - old_advance_time_us_) > MATCH_LSN_ADVANCE_DELAY_THRESHOLD_US) {
+      // Return true when advance delay exceeds 1s.
+      bool_ret = true;
+    }
+    return bool_ret;
+  }
+  TO_STRING_KV(K_(old_end_lsn), K_(new_end_lsn), K_(old_advance_time_us), K_(new_ack_time_us),
+      "advance delay(us)", new_ack_time_us_ - old_advance_time_us_);
+private:
+  LSN new_end_lsn_;
+  LSN old_end_lsn_;
+  int64_t new_ack_time_us_;
+  int64_t old_advance_time_us_;
+};
+
+class GetLaggedListFunc
+{
+public:
+  GetLaggedListFunc(const LSN &dst_lsn)
+      : dst_lsn_(dst_lsn), lagged_list_()
+  {}
+  ~GetLaggedListFunc() {}
+  bool operator()(const common::ObAddr &server, LsnTsInfo &value);
+  int get_lagged_list(common::ObMemberList &out_list) const
+  { return out_list.deep_copy(lagged_list_); }
+  TO_STRING_KV(K_(dst_lsn), K_(lagged_list));
+private:
+  LSN dst_lsn_;
+  common::ObMemberList lagged_list_;
+};
+
 class LogSlidingWindow : public ISlidingCallBack
 {
 public:
@@ -104,38 +150,40 @@ public:
   virtual ~LogSlidingWindow() { destroy(); }
 public:
   virtual void destroy();
+  virtual int flashback(const PalfBaseInfo &palf_base_info, const int64_t palf_id, common::ObILogAllocator *alloc_mgr);
   virtual int init(const int64_t palf_id,
-           const common::ObAddr &self,
-           LogStateMgr *state_mgr,
-           LogConfigMgr *mm,
-           LogModeMgr *mode_mgr,
-           LogEngine *log_engine,
-           palf::PalfFSCbWrapper *palf_fs_cb,
-           common::ObILogAllocator *alloc_mgr,
-           const PalfBaseInfo &palf_base_info);
+                   const common::ObAddr &self,
+                   LogStateMgr *state_mgr,
+                   LogConfigMgr *mm,
+                   LogModeMgr *mode_mgr,
+                   LogEngine *log_engine,
+                   palf::PalfFSCbWrapper *palf_fs_cb,
+                   common::ObILogAllocator *alloc_mgr,
+                   const PalfBaseInfo &palf_base_info,
+                   const bool is_normal_replica);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
-  virtual int64_t get_max_log_ts() const;
+  virtual const share::SCN get_max_scn() const;
   virtual LSN get_max_lsn() const;
   virtual int64_t get_start_id() const;
   virtual int get_committed_end_lsn(LSN &committed_end_lsn) const;
-  virtual int get_majority_lsn(const ObMemberList &member_list,
-                      const int64_t replica_num,
-                      LSN &result_lsn) const;
   virtual int try_fetch_log(const FetchTriggerType &fetch_log_type,
                             const LSN prev_lsn = LSN(),
                             const LSN fetch_start_lsn = LSN(),
                             const int64_t fetch_start_log_id = OB_INVALID_LOG_ID);
   virtual int try_fetch_log_for_reconfirm(const common::ObAddr &dest, const LSN &fetch_end_lsn, bool &is_fetched);
+  virtual int submit_push_log_resp(const common::ObAddr &server);
   virtual bool is_empty() const;
   virtual bool check_all_log_has_flushed();
+  virtual int get_majority_match_lsn(LSN &majority_match_lsn);
+  virtual int get_lagged_member_list(const LSN &dst_lsn, ObMemberList &lagged_list);
   virtual bool is_all_committed_log_slided_out(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
   // ================= log sync part begin
   virtual int submit_log(const char *buf,
                  const int64_t buf_len,
-                 const int64_t ref_ts_ns,
+                 const share::SCN &ref_scn,
                  LSN &lsn,
-                 int64_t &log_timestamp);
+                 share::SCN &scn);
   virtual int submit_group_log(const LSN &lsn,
                        const char *buf,
                        const int64_t buf_len);
@@ -169,7 +217,9 @@ public:
                                     const int64_t &prev_log_proposal_id,
                                     const LSN &committed_end_lsn);
   virtual int config_change_update_match_lsn_map(const ObMemberList &added_memberlist,
-                                                 const ObMemberList &removed_memberlist);
+                                                 const ObMemberList &removed_memberlist,
+                                                 const ObMemberList &new_log_sync_memberlist,
+                                                 const int64_t new_replica_num);
   // ================= log sync part end
   virtual int append_disk_log(const LSN &lsn, const LogGroupEntry &group_entry);
   virtual int report_log_task_trace(const int64_t log_id);
@@ -190,10 +240,14 @@ public:
   virtual void get_last_submit_end_lsn_(LSN &end_lsn) const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
-  virtual int64_t get_last_slide_log_ts() const;
+  virtual const share::SCN get_last_slide_scn() const;
   virtual int check_and_switch_freeze_mode();
   virtual int period_freeze_last_log();
-  virtual int inc_update_log_ts_base(const int64_t log_ts);
+  virtual int inc_update_scn_base(const share::SCN &scn);
+  virtual int get_server_ack_info(const common::ObAddr &server, LsnTsInfo &ack_info) const;
+  virtual int get_ack_info_array(LogMemberAckInfoList &ack_info_array) const;
+  virtual int pre_check_before_degrade_upgrade(const LogMemberAckInfoList &servers,
+                                               bool is_degrade);
   // location cache will be removed TODO by yunlong
   virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
   virtual int reset_location_cache_cb();
@@ -205,10 +259,13 @@ public:
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
-  K_(last_slide_log_id), K_(last_slide_log_ts), K_(last_slide_lsn), K_(last_slide_end_lsn),        \
+  K_(last_slide_log_id), K_(last_slide_scn), K_(last_slide_lsn), K_(last_slide_end_lsn),        \
   K_(last_slide_log_pid), K_(last_slide_log_accum_checksum), K_(last_fetch_end_lsn),               \
   K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn), KP(this));
 private:
+  int do_init_mem_(const int64_t palf_id,
+                   const PalfBaseInfo &palf_base_info,
+                   common::ObILogAllocator *alloc_mgr);
   int get_fetch_log_dst_(common::ObAddr &leader) const;
   int clean_log_();
   int reset_match_lsn_map_();
@@ -216,7 +273,7 @@ private:
   int leader_wait_sw_slot_ready_(const int64_t log_id);
   bool can_receive_larger_log_(const int64_t log_id) const;
   bool leader_can_submit_larger_log_(const int64_t log_id) const;
-  bool leader_can_submit_new_log_(const int64_t valid_log_size);
+  bool leader_can_submit_new_log_(const int64_t valid_log_size, LSN &lsn_upper_bound);
   bool leader_can_submit_group_log_(const LSN &lsn, const int64_t group_log_size);
   void get_committed_end_lsn_(LSN &out_lsn) const;
   int get_max_flushed_log_info_(LSN &lsn,
@@ -225,7 +282,7 @@ private:
   int get_prev_log_info_(const int64_t log_id,
                          LSN &prev_lsn,
                          LSN &prev_end_lsn,
-                         int64_t &prev_log_ts,
+                         share::SCN &prev_log_iscn,
                          int64_t &prev_log_pid,
                          int64_t &prev_log_accum_checksum);
   int inc_update_max_flushed_log_info_(const LSN &lsn,
@@ -237,13 +294,13 @@ private:
   void get_last_slide_end_lsn_(LSN &out_end_lsn) const;
   int64_t get_last_slide_log_id_() const;
   void get_last_slide_log_info_(int64_t &log_id,
-                                int64_t &log_ts,
+                                share::SCN &scn,
                                 LSN &lsn,
                                 LSN &end_lsn,
                                 int64_t &log_proposal_id,
                                 int64_t &accum_checksum) const;
   int try_update_last_slide_log_info_(const int64_t log_id,
-                                      const int64_t log_ts,
+                                      const share::SCN &scn,
                                       const LSN &lsn,
                                       const LSN &end_lsn,
                                       const int64_t &proposal_id,
@@ -262,7 +319,7 @@ private:
   int try_freeze_last_log_task_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
   int generate_new_group_log_(const LSN &lsn,
                               const int64_t log_id,
-                              const int64_t log_ts,
+                              const share::SCN &scn,
                               const int64_t log_body_size,
                               const LogType &log_type,
                               const char *log_data,
@@ -270,7 +327,7 @@ private:
                               bool &is_need_handle);
   int append_to_group_log_(const LSN &lsn,
                            const int64_t log_id,
-                           const int64_t log_ts,
+                           const share::SCN &scn,
                            const int64_t log_entry_size,
                            const char *log_data,
                            const int64_t data_len,
@@ -281,8 +338,12 @@ private:
   int generate_group_entry_header_(const int64_t log_id,
                                    LogTask *log_task,
                                    LogGroupEntryHeader &header,
-                                   int64_t &group_log_checksum);
+                                   int64_t &group_log_checksum,
+                                   bool &is_accum_checksum_acquired);
   int gen_committed_end_lsn_(LSN &new_committed_end_lsn);
+  int gen_committed_end_lsn_with_memberlist_(
+    const ObMemberList &member_list,
+    const int64_t replica_num);
   int get_majority_lsn_(const ObMemberList &member_list,
                         const int64_t replica_num,
                         LSN &result_lsn) const;
@@ -296,7 +357,7 @@ private:
   int wait_group_buffer_ready_(const LSN &lsn, const int64_t data_len);
   int append_disk_log_to_sw_(const LSN &lsn, const LogGroupEntry &group_entry);
   int try_update_max_lsn_(const LSN &lsn, const LogGroupEntryHeader &header);
-  int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const int64_t last_log_ts);
+  int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const share::SCN &last_scn);
   bool is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
   void get_last_fetch_info_(LSN &last_fetch_end_lsn,
                             LSN &last_committed_end_lsn,
@@ -315,10 +376,10 @@ private:
                     const int64_t fetch_start_log_id);
   int freeze_pending_log_(LSN &last_lsn);
   int check_all_log_task_freezed_(bool &is_all_freezed);
-  int get_min_log_ts_ns_from_buf_(const LogGroupEntryHeader &group_entry_header,
+  int get_min_scn_from_buf_(const LogGroupEntryHeader &group_entry_header,
                                   const char *buf,
                                   const int64_t buf_len,
-                                  int64_t &min_log_ts_ns);
+                                  share::SCN &min_scn);
   int leader_get_committed_log_info_(const LSN &committed_end_lsn,
                                      int64_t &log_id,
                                      int64_t &log_proposal_id);
@@ -334,12 +395,14 @@ private:
                                 const LSN &prev_lsn,
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
+  bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
 public:
-  typedef common::ObLinearHashMap<common::ObAddr, LSN> SvrMatchOffsetMap;
+  typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
+  static const int64_t INITIAL_LAST_ACK_TS = 0;      // last_ack_ts默认值为0
   static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
   static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
-  static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 130000;   // 切为PERIOD_FREEZE_MODE的append count下界
+  static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 140000;   // 切为PERIOD_FREEZE_MODE的append count下界
 private:
   struct LogTaskGuard
   {
@@ -399,12 +462,14 @@ private:
   // last_slide_log_pid_: it is used for forward checking when receive log.
   mutable common::ObSpinLock last_slide_info_lock_;
   int64_t last_slide_log_id_;   // used by clean log
-  int64_t last_slide_log_ts_;
+  share::SCN last_slide_scn_;
   LSN last_slide_lsn_;
   LSN last_slide_end_lsn_;
   int64_t last_slide_log_pid_;
   int64_t last_slide_log_accum_checksum_;
   // ---------------- fetch log info begin --------------------------
+  // last_fetch_req_time_:
+  //    record the request time of the last fetch operation.
   // last_fetch_end_lsn_:
   //    记录本轮fetch的lsn终点，根据group_buffer容量算出
   // last_fetch_max_log_id_:
@@ -421,9 +486,11 @@ private:
   //    下一轮fetch的起点是(last_submit_log_id + 1).
   //
   mutable common::ObSpinLock fetch_info_lock_;
+  int64_t last_fetch_req_time_;
   LSN last_fetch_end_lsn_;
   int64_t last_fetch_max_log_id_;
   LSN last_fetch_committed_end_lsn_;
+  FetchTriggerType last_fetch_trigger_type_;
   // ---------------- fetch log info end --------------------------
   // used to record synchronization points for each replica
   mutable common::ObSpinLock match_lsn_map_lock_;
@@ -435,7 +502,7 @@ private:
   mutable int64_t larger_log_warn_time_;
   mutable int64_t log_life_long_warn_time_;
   mutable int64_t lc_cb_get_warn_time_;
-  mutable int64_t fetch_dst_invalid_warn_time_;
+  mutable int64_t fetch_failure_print_time_;
   common::ObThreadLease commit_log_handling_lease_;  // thread lease for handling committed logs
   common::ObThreadLease submit_log_handling_lease_;  // thread lease for handling committed logs
   // last_renew_leader_ts in fetch_log

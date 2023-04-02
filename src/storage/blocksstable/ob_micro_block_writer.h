@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_WRITER_H_
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_MICRO_BLOCK_WRITER_H_
 #include "ob_block_sstable_struct.h"
-#include "ob_data_buffer.h"
 #include "ob_row_writer.h"
 #include "ob_imicro_block_writer.h"
 
@@ -31,12 +30,14 @@ namespace blocksstable
 //        |- row data
 //  |- row index buffer
 //        |- ObRowIndex
+//  |- row hash index builder(optional)
 //
 // build output
 //  |- compressed data
 //        |- ObMicroBlockHeader
 //        |- row data
 //        |- RowIndex
+//        |- RowHashIndex(optional)
 class ObMicroBlockWriter : public ObIMicroBlockWriter
 {
   static const int64_t INDEX_ENTRY_SIZE = sizeof(int32_t);
@@ -50,8 +51,8 @@ public:
       const int64_t micro_block_size_limit,
       const int64_t rowkey_column_count,
       const int64_t column_count = 0,
-      const bool need_calc_column_chksum = false,
-      const common::ObRowStoreType row_store_type = common::FLAT_ROW_STORE);
+      const common::ObIArray<share::schema::ObColDesc> *col_desc_array = nullptr,
+      const bool need_calc_column_chksum = false);
 
   virtual int append_row(const ObDatumRow &row);
   virtual int build_block(char *&buf, int64_t &size);
@@ -62,16 +63,18 @@ public:
   virtual int64_t get_data_size() const override;
   virtual int64_t get_column_count() const override;
   virtual int64_t get_original_size() const override;
+  virtual int append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder);
+  virtual bool has_enough_space_for_hash_index(const int64_t hash_index_size) const;
   void reset();
 private:
   int inner_init();
   inline int64_t get_index_size() const;
+  inline int64_t get_future_block_size(const int64_t row_length) const;
   int try_to_append_row(const int64_t &row_length);
   int check_input_param(
       const int64_t macro_block_size,
       const int64_t column_count,
-      const int64_t rowkey_column_count,
-      const ObRowStoreType row_store_type);
+      const int64_t rowkey_column_count);
   int finish_row(const int64_t length);
   int reserve_header(
       const int64_t column_count,
@@ -80,14 +83,15 @@ private:
   bool is_exceed_limit(const int64_t row_length);
   int64_t get_data_base_offset() const;
   int64_t get_index_base_offset() const;
+  int process_out_row_columns(const ObDatumRow &row);
 private:
   int64_t micro_block_size_limit_;
   int64_t column_count_;
   ObRowWriter row_writer_;
   int64_t rowkey_column_count_;
-  ObMicroBlockHeader *header_;
   ObSelfBufferWriter data_buffer_;
   ObSelfBufferWriter index_buffer_;
+  const common::ObIArray<share::schema::ObColDesc> *col_desc_array_;
   bool need_calc_column_chksum_;
   bool is_inited_;
 };
@@ -120,6 +124,10 @@ inline int64_t ObMicroBlockWriter::get_index_size() const
   }
   return index_size;
 }
+inline int64_t ObMicroBlockWriter::get_future_block_size(const int64_t row_length) const {
+  return get_data_size() + row_length
+             + get_index_size() + INDEX_ENTRY_SIZE;
+}
 
 inline int64_t ObMicroBlockWriter::get_data_base_offset() const
 {
@@ -143,4 +151,3 @@ inline int64_t ObMicroBlockWriter::get_original_size() const
 }//end namespace blocksstable
 }//end namespace oceanbase
 #endif
-

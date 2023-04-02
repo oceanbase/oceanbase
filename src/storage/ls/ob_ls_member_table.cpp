@@ -97,7 +97,7 @@ int ObLSMemberTable::prepare_create_tablets(const obrpc::ObBatchCreateTabletArg 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(ls_handle));
   } else if (trans_flags.for_replay_
-             && trans_flags.log_ts_ <= ls->get_tablet_change_checkpoint_ts()) {
+             && trans_flags.scn_ <= ls->get_tablet_change_checkpoint_scn()) {
     LOG_INFO("replay skip for create tablet", KR(ret), K(trans_flags), K(arg), K(ls->get_ls_meta()));
   } else if (OB_ISNULL(tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -164,7 +164,7 @@ int ObLSMemberTable::on_commit_create_tablets(const obrpc::ObBatchCreateTabletAr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(ls_handle));
   } else if (trans_flags.for_replay_
-             && trans_flags.log_ts_ <= ls->get_tablet_change_checkpoint_ts()) {
+             && trans_flags.scn_ <= ls->get_tablet_change_checkpoint_scn()) {
     LOG_INFO("replay skip for create tablet", KR(ret), K(trans_flags), K(arg), K(ls->get_ls_meta()));
   } else if (OB_ISNULL(tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -283,7 +283,7 @@ int ObLSMemberTable::prepare_remove_tablets(const obrpc::ObBatchRemoveTabletArg 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(ls_handle));
   } else if (trans_flags.for_replay_    // dropping tablet triggers dumpping memtable
-             && trans_flags.log_ts_ <= ls->get_tablet_change_checkpoint_ts()) {
+             && trans_flags.scn_ <= ls->get_tablet_change_checkpoint_scn()) {
     LOG_INFO("replay skip for remove tablet", KR(ret), K(trans_flags), K(arg), K(ls->get_ls_meta()));
   } else if (OB_ISNULL(tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -349,7 +349,7 @@ int ObLSMemberTable::on_commit_remove_tablets(const obrpc::ObBatchRemoveTabletAr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), K(ls_handle));
   } else if (trans_flags.for_replay_
-             && trans_flags.log_ts_ <= ls->get_tablet_change_checkpoint_ts()) {
+             && trans_flags.scn_ <= ls->get_tablet_change_checkpoint_scn()) {
     LOG_INFO("replay skip for remove tablet", KR(ret), K(trans_flags), K(arg), K(ls->get_ls_meta()));
   } else if (OB_ISNULL(tablet_svr = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;

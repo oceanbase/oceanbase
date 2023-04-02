@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_keys.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -44,7 +45,6 @@ int ObExprJsonKeys::calc_result_typeN(ObExprResType& type,
     // set result to json
     type.set_json();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-    
     // set type of json_doc
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_KEYS))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[0].get_type()));
@@ -123,7 +123,9 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       ObJsonBaseVector sub_json_targets;
       ObJsonPath *json_path;
       ObString path_val = path_data->get_string();
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 1, false))) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[1], ctx, temp_allocator, path_val, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(path_val));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, 1, false))) {
         LOG_WARN("json parse failed", K(path_data->get_string()), K(ret));
       } else if (OB_FAIL(json_doc->seek(*json_path, json_path->path_node_cnt(),
                                         false, true, sub_json_targets))) {
@@ -138,7 +140,7 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     }
   }
 
-  if (!is_null_result && OB_SUCC(ret) && json_doc->json_type() != ObJsonNodeType::J_OBJECT) {
+  if (!is_null_result && OB_SUCC(ret) && !OB_ISNULL(json_doc) && json_doc->json_type() != ObJsonNodeType::J_OBJECT) {
     is_null_result = true;
   }
 
@@ -151,15 +153,8 @@ int ObExprJsonKeys::eval_json_keys(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ObString str;
     if (OB_FAIL(get_keys_from_wrapper(json_doc, &temp_allocator, str))) {
       LOG_WARN("get_keys_from_wrapper failed", K(ret));
-    } else {
-      char *buf = expr.get_str_res_mem(ctx, str.length());
-      if (OB_ISNULL(buf)){
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("json_keys alloc jsonString failed", K(ret), K(str.length()));
-      } else {
-        MEMCPY(buf, str.ptr(), str.length());
-        res.set_string(buf, str.length());
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 

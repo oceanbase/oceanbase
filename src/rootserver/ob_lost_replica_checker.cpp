@@ -21,7 +21,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/ls/ob_ls_table_iterator.h"//ObLSTableIterator
+#include "share/ls/ob_ls_table_iterator.h"//ObTenantLSTableIterator
 #include "share/ls/ob_ls_info.h"//ObLSInfo
 #include "rootserver/ob_server_manager.h"
 #include "observer/ob_server_struct.h"
@@ -162,35 +162,46 @@ int ObLostReplicaChecker::check_lost_replicas()
 int ObLostReplicaChecker::check_lost_replica_by_ls_(const share::ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   bool is_lost_replica = false;
   int64_t lost_count = 0;
   LOG_DEBUG("start checking lost replicas by ls", K(ls_info));
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret));
   } else if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls info invalid", K(ret), K(ls_info));
+    LOG_WARN("ls info invalid", KR(ret), K(ls_info));
   } else if (OB_ISNULL(lst_operator_)) {
     ret  = OB_ERR_UNEXPECTED;
     LOG_WARN("ls operator is null", KR(ret), KP(lst_operator_));
   } else {
     const share::ObLSInfo::ReplicaArray &replicas = ls_info.get_replicas();
-    FOREACH_CNT_X(replica, replicas, OB_SUCCESS == ret) {
+    FOREACH_CNT_X(replica, replicas, OB_SUCC(ret)) {
       is_lost_replica = false;
       if (OB_FAIL(check_lost_replica_(ls_info, *replica, is_lost_replica))) {
-        LOG_WARN("check_lost_replica failed", K(ls_info), "replica",
-                 *replica, KR(ret));
+        LOG_WARN("check_lost_replica failed", KR(ret), K(ls_info), KPC(replica));
       } else if (is_lost_replica) {
         lost_count++;
         if (OB_FAIL(lst_operator_->remove(replica->get_tenant_id(),
                                           replica->get_ls_id(),
-                                          replica->get_server()))) {
-          LOG_WARN("lst_operator remove replica failed", KR(ret), "replica", *replica);
+                                          replica->get_server(),
+                                          false/*inner_table_only*/))) {
+          LOG_WARN("lst_operator remove replica failed", KR(ret), KPC(replica));
         } else {
-          LOG_INFO("lost replica checker remove lost replica finish", "replica",
-                   *replica, KR(ret), K(tmp_ret));
+          LOG_INFO("lost replica checker remove lost replica finish", KR(ret), KPC(replica));
+        }
+
+        if (OB_SUCC(ret) && is_sys_tenant(replica->get_tenant_id())) {
+          if (OB_FAIL(lst_operator_->remove(replica->get_tenant_id(),
+                                            replica->get_ls_id(),
+                                            replica->get_server(),
+                                            true/*inner_table_only*/))) {
+            LOG_WARN("lst_operator remove replica from inner table failed",
+                     KR(ret), KPC(replica));
+          } else {
+            LOG_INFO("lost replica checker remove lost replica from inner table finish",
+                     KR(ret), KPC(replica));
+          }
         }
       } else {
         // do nothing

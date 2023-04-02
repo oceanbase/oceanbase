@@ -10,9 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
+
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_start_lsn_locator.h"
+#include "logservice/restoreservice/ob_log_archive_piece_mgr.h"
 
 #include "lib/allocator/ob_mod_define.h"          // ObModIds
 
@@ -34,6 +36,7 @@ int64_t ObLogStartLSNLocator::g_rpc_timeout =
 
 ObLogStartLSNLocator::ObLogStartLSNLocator() :
     is_inited_(false),
+    archive_dest_(),
     worker_cnt_(0),
     locate_count_(0),
     rpc_(NULL),
@@ -51,6 +54,8 @@ ObLogStartLSNLocator::~ObLogStartLSNLocator()
 int ObLogStartLSNLocator::init(
     const int64_t worker_cnt,
     const int64_t locate_count,
+    const ClientFetchingMode fetching_mode,
+    const share::ObBackupPathString &archive_dest_str,
     IObLogRpc &rpc,
     IObLogErrHandler &err_handle)
 {
@@ -84,6 +89,12 @@ int ObLogStartLSNLocator::init(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      if (is_direct_fetching_mode(fetching_mode) && OB_FAIL(archive_dest_.set(archive_dest_str))) {
+        LOG_ERROR("set archive dest failed", KR(ret), K(archive_dest_str));
+      }
+    }
+
     if (OB_SUCCESS == ret) {
       locate_count_ = locate_count;
       rpc_ = &rpc;
@@ -108,7 +119,7 @@ void ObLogStartLSNLocator::destroy()
   is_inited_ = false;
 
   LocateWorker::destroy();
-
+  archive_dest_.reset();
   if (NULL != worker_data_) {
     for (int64_t idx = 0, cnt = worker_cnt_; idx < cnt; ++idx) {
       // free SvrReq memory here
@@ -170,38 +181,50 @@ int ObLogStartLSNLocator::dispatch_worker_(StartLSNLocateReq *req)
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid request, state is not REQ", KR(ret), KPC(req), K(req->get_state()));
   } else {
-    StartLSNLocateReq::SvrItem *item = NULL;
+    const ClientFetchingMode fetching_mode = req->get_fetching_mode();
+    if (is_integrated_fetching_mode(fetching_mode)) {
+      StartLSNLocateReq::SvrItem *item = NULL;
 
-    // Mark DONE if the request is completed, or if all servers are requested.
-    if (req->is_request_ended(locate_count_)) {
-      // If the request ends, set to DONE
-      // NOTE: After setting to DONE, no further access is possible
-      LOG_DEBUG("start lsn locate request ended", KPC(req));
-      req->set_state_done();
-    } else if (OB_FAIL(req->next_svr_item(item)) || OB_ISNULL(item)) {
-      LOG_ERROR("get next server item fail", KR(ret), KPC(req), K(item));
-      ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
-    } else {
-      const uint64_t tenant_id = req->tls_id_.get_tenant_id();
-      const ObAddr &request_svr = item->svr_;
-
-      // Hashing by server to the corresponding worker thread
-      // The purpose is to ensure that requests from the same server and tenant are aggregated
-      uint64_t hash_val = 0;
-      uint64_t svr_hash = request_svr.hash();
-      hash_val = common::murmurhash(&tenant_id, sizeof(tenant_id), hash_val);
-      hash_val = common::murmurhash(&svr_hash, sizeof(svr_hash), hash_val);
-
-      LOG_DEBUG("dispatch start lsn locate request",
-          "worker_idx", hash_val % worker_cnt_,
-          K(request_svr),
-          KPC(req));
-
-      if (OB_FAIL(LocateWorker::push(req, hash_val))) {
-        LOG_ERROR("push req to worker fail", KR(ret), KPC(req), K(hash_val), K(request_svr));
+      // Mark DONE if the request is completed, or if all servers are requested.
+      if (req->is_request_ended(locate_count_)) {
+        // If the request ends, set to DONE
+        // NOTE: After setting to DONE, no further access is possible
+        LOG_DEBUG("start lsn locate request ended", KPC(req));
+        req->set_state_done();
+      } else if (OB_FAIL(req->next_svr_item(item)) || OB_ISNULL(item)) {
+        LOG_ERROR("get next server item fail", KR(ret), KPC(req), K(item));
+        ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
       } else {
-        // done
+        const uint64_t tenant_id = req->tls_id_.get_tenant_id();
+        const ObAddr &request_svr = item->svr_;
+
+        // Hashing by server to the corresponding worker thread
+        // The purpose is to ensure that requests from the same server and tenant are aggregated
+        uint64_t hash_val = 0;
+        uint64_t svr_hash = request_svr.hash();
+        hash_val = common::murmurhash(&tenant_id, sizeof(tenant_id), hash_val);
+        hash_val = common::murmurhash(&svr_hash, sizeof(svr_hash), hash_val);
+
+        LOG_DEBUG("dispatch start lsn locate request",
+            "worker_idx", hash_val % worker_cnt_,
+            K(request_svr),
+            KPC(req));
+
+        if (OB_FAIL(LocateWorker::push(req, hash_val))) {
+          LOG_ERROR("push req to worker fail", KR(ret), KPC(req), K(hash_val), K(request_svr));
+        } else {
+          // done
+        }
       }
+    } else if (is_direct_fetching_mode(fetching_mode)) {
+      static int64_t seq_no = 0;
+      int64_t seq_no_local = ATOMIC_AAF(&seq_no, 1);
+      if (OB_FAIL(LocateWorker::push(req, seq_no_local))) {
+        LOG_ERROR("push req to worker fail", KR(ret), KPC(req), K(seq_no));
+      } else { }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid fetching log mode", KR(ret), K(fetching_mode), KPC(req));
     }
   }
 
@@ -251,7 +274,7 @@ void ObLogStartLSNLocator::run(const int64_t thread_index)
         LOG_ERROR("retrieve request fail", KR(ret), K(thread_index));
       } else if (OB_FAIL(do_request_(data))) {
 				if (OB_IN_STOP_STATE != ret) {
-		LOG_ERROR("do request fail", KR(ret));
+		      LOG_ERROR("do request fail", KR(ret));
 				}
       } else {
         cond_timedwait(thread_index, DATA_OP_TIMEOUT);
@@ -304,16 +327,29 @@ int ObLogStartLSNLocator::do_retrieve_(const int64_t thread_index, WorkerData &w
     } else if (OB_ISNULL(request = static_cast<StartLSNLocateReq *>(data))) {
       LOG_ERROR("request is NULL", K(request), K(thread_index));
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(request->cur_svr_item(item)) || OB_ISNULL(item)) {
-      LOG_ERROR("get current server item fail", KR(ret), KPC(request), K(item));
-      ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
-    } else if (OB_FAIL(get_svr_req_(worker_data, request->tls_id_.get_tenant_id(), item->svr_, svr_req)) || OB_ISNULL(svr_req)) {
-      LOG_ERROR("get svr req fail", KR(ret), "actual_svr", item->svr_, K(svr_req));
-      ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
-    } else if (OB_FAIL(svr_req->push(request))) {
-      LOG_ERROR("push request into request list fail", KR(ret), KPC(svr_req), K(request));
     } else {
-      // succ
+      const ClientFetchingMode fetching_mode = request->get_fetching_mode();
+      if (is_integrated_fetching_mode(fetching_mode)) {
+        if (OB_FAIL(request->cur_svr_item(item)) || OB_ISNULL(item)) {
+          LOG_ERROR("get current server item fail", KR(ret), KPC(request), K(item));
+          ret = (OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret);
+        } else if (OB_FAIL(get_svr_req_(worker_data, request->tls_id_.get_tenant_id(), item->svr_, svr_req)) || OB_ISNULL(svr_req)) {
+          LOG_ERROR("get svr req fail", KR(ret), "actual_svr", item->svr_, K(svr_req));
+          ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
+        } else if (OB_FAIL(svr_req->push(request))) {
+          LOG_ERROR("push request into request list fail", KR(ret), KPC(svr_req), K(request));
+        } else {
+          // succ
+        }
+      } else if (is_direct_fetching_mode(fetching_mode)) {
+        DirectReqList &archive_req_list = worker_data.archive_req_list_;
+        if (OB_FAIL(archive_req_list.push_back(request))) {
+          LOG_ERROR("push request into archive request lis fail", KR(ret), K(request));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid fetching mode", KR(ret), K(fetching_mode), KPC(request));
+      }
     }
   }
 
@@ -405,6 +441,23 @@ void ObLogStartLSNLocator::free_all_svr_req_(WorkerData &data)
 int ObLogStartLSNLocator::do_request_(WorkerData &data)
 {
   int ret = OB_SUCCESS;
+
+  if (OB_FAIL(do_integrated_request_(data))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("locate start lsn for integrated request failed", KR(ret));
+    }
+  } else if (OB_FAIL(do_direct_request_(data))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("locate start lsn for direct request failed", KR(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogStartLSNLocator::do_integrated_request_(WorkerData &data)
+{
+  int ret = OB_SUCCESS;
   SvrReqList &svr_req_list = data.svr_req_list_;
 
   if (OB_ISNULL(rpc_)) {
@@ -458,6 +511,50 @@ int ObLogStartLSNLocator::do_request_(WorkerData &data)
 
   if (stop_flag_) {
 		ret = OB_IN_STOP_STATE;
+  }
+
+  return ret;
+}
+
+int ObLogStartLSNLocator::do_direct_request_(WorkerData &data)
+{
+  int ret = OB_SUCCESS;
+  DirectReqList &archive_req_lst = data.archive_req_list_;
+  const int64_t lst_cnt = archive_req_lst.count();
+  for (int64_t idx = lst_cnt - 1;
+          OB_SUCC(ret) && !stop_flag_ && idx >= 0; --idx) {
+    LSN start_lsn;
+    StartLSNLocateReq *req = archive_req_lst.at(idx);
+    if (OB_ISNULL(req)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("archive req is null", KR(ret), K(idx));
+    } else {
+      logservice::ObLogArchivePieceContext piece_ctx;
+      const ObLSID &ls_id = req->tls_id_.get_ls_id();
+      const uint64_t tenant_id = req->tls_id_.get_tenant_id();
+      const int64_t start_ts_ns = req->start_tstamp_ns_;
+      StartLSNLocateReq::DirectLocateResult &loc_rs = req->archive_locate_rs_;
+      share::SCN start_scn;
+      if (OB_FAIL(piece_ctx.init(ls_id, archive_dest_))) {
+        LOG_ERROR("init piece ctx failed", KR(ret), K(ls_id), K(tenant_id), KPC(req), K_(archive_dest));
+      } else if (OB_FAIL(start_scn.convert_from_ts(start_ts_ns/1000L))) {
+        LOG_ERROR("convert ts to scn failed", KR(ret), K(start_ts_ns), K(ls_id), K(tenant_id));
+      } else if (OB_FAIL(piece_ctx.seek(start_scn, start_lsn))) {
+        LOG_ERROR("piece ctx seek start lsn failed", KR(ret), K(start_scn), K(ls_id), K(tenant_id));
+      }
+      // set result no matter start lsn is successfully located or not
+      loc_rs.reset(start_lsn, ret);
+      // overwrite the return code
+      ret = OB_SUCCESS;
+      // no need to call dispatch_worker_, only do_direct_request_ once.
+      // whether retry upon failure relies on the implement of need_locate_start_lsn
+      req->set_state_done();
+      archive_req_lst.remove(idx);
+    }
+  }
+
+  if (stop_flag_) {
+    ret = OB_IN_STOP_STATE;
   }
 
   return ret;
@@ -606,6 +703,7 @@ int ObLogStartLSNLocator::WorkerData::init()
   } else {
     svr_req_list_.set_label(ObModIds::OB_LOG_START_LOG_ID_LOCATOR);
     svr_req_list_.reset();
+    archive_req_list_.reset();
   }
 
   return ret;
@@ -615,6 +713,7 @@ void ObLogStartLSNLocator::WorkerData::destroy()
 {
   svr_req_list_.reset();
   (void)svr_req_map_.destroy();
+  archive_req_list_.destroy();
 }
 
 
@@ -631,9 +730,13 @@ void StartLSNLocateReq::reset()
   cur_max_start_lsn_.reset();
   cur_max_start_log_tstamp_ = OB_INVALID_TIMESTAMP;
   succ_locate_count_ = 0;
+  fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
+  archive_locate_rs_.reset();
 }
 
-void StartLSNLocateReq::reset(const TenantLSID &tls_id, const int64_t start_tstamp_ns)
+void StartLSNLocateReq::reset(
+    const TenantLSID &tls_id,
+    const int64_t start_tstamp_ns)
 {
   reset();
   tls_id_ = tls_id;
@@ -684,7 +787,7 @@ void StartLSNLocateReq::check_locate_result_(const int64_t start_log_tstamp,
       && start_log_tstamp >= start_tstamp_ns_
       && cur_max_start_log_tstamp_ >= start_tstamp_ns_
       && start_log_tstamp != cur_max_start_log_tstamp_) {
-    LOG_ERROR("start lsn locate results from different servers are not consistent, "
+    LOG_ERROR_RET(OB_ERROR, "start lsn locate results from different servers are not consistent, "
         "may be OceanBase server BUG, need check manually",
         K_(tls_id), K(svr), K(start_lsn), K(start_log_tstamp), K(cur_max_start_log_tstamp_),
         K(start_tstamp_ns_), K(cur_max_start_lsn_), K(svr_list_consumed_),
@@ -811,12 +914,18 @@ bool StartLSNLocateReq::get_result(palf::LSN &start_lsn, common::ObAddr &svr)
   }
 
   if (! succeed) {
-    LOG_ERROR("request start lsn from all server fail", K_(tls_id),
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "request start lsn from all server fail", K_(tls_id),
         K_(start_tstamp_ns), "svr_cnt", svr_list_.count(), K_(svr_list_consumed),
         K_(result_svr_list_idx), K_(svr_list));
   }
 
   return succeed;
+}
+
+void StartLSNLocateReq::get_direct_result(LSN &start_lsn, int &err)
+{
+  start_lsn = archive_locate_rs_.start_lsn_;
+  err = archive_locate_rs_.loc_err_;
 }
 
 void StartLSNLocateReq::SvrItem::reset()

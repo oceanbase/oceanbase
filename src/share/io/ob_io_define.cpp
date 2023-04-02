@@ -16,6 +16,7 @@
 #include "share/io/ob_io_define.h"
 #include "share/io/ob_io_struct.h"
 #include "share/io/ob_io_manager.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #include "lib/time/ob_time_utility.h"
 
 using namespace oceanbase::lib;
@@ -56,54 +57,6 @@ ObIOMode oceanbase::common::get_io_mode_enum(const char *mode_string)
   return mode;
 }
 
-/******************             IOCategory              **********************/
-static const char *log_category_name = "LOG";
-static const char *user_category_name = "USER";
-static const char *sys_category_name = "SYS";
-static const char *prewarm_category_name = "PREWARM";
-static const char *large_query_category_name = "LARGE";
-const char *oceanbase::common::get_io_category_name(ObIOCategory category)
-{
-  const char *ret_name = "UNKNOWN";
-  switch (category) {
-    case ObIOCategory::LOG_IO:
-      ret_name = log_category_name;
-      break;
-    case ObIOCategory::USER_IO:
-      ret_name = user_category_name;
-      break;
-    case ObIOCategory::SYS_IO:
-      ret_name = sys_category_name;
-      break;
-    case ObIOCategory::PREWARM_IO:
-      ret_name = prewarm_category_name;
-      break;
-    case ObIOCategory::LARGE_QUERY_IO:
-      ret_name = large_query_category_name;
-      break;
-    default:
-      break;
-  }
-  return ret_name;
-}
-
-ObIOCategory oceanbase::common::get_io_category_enum(const char *category_name)
-{
-  ObIOCategory io_category = ObIOCategory::MAX_CATEGORY;
-  if (0 == strncasecmp(category_name, log_category_name, strlen(log_category_name))) {
-    io_category = ObIOCategory::LOG_IO;
-  } else if (0 == strncasecmp(category_name, user_category_name, strlen(user_category_name))) {
-    io_category = ObIOCategory::USER_IO;
-  } else if (0 == strncasecmp(category_name, sys_category_name, strlen(sys_category_name))) {
-    io_category = ObIOCategory::SYS_IO;
-  } else if (0 == strncasecmp(category_name, prewarm_category_name, strlen(prewarm_category_name))) {
-    io_category = ObIOCategory::PREWARM_IO;
-  } else if (0 == strncasecmp(category_name, large_query_category_name, strlen(large_query_category_name))) {
-    io_category = ObIOCategory::LARGE_QUERY_IO;
-  }
-  return io_category;
-}
-
 /******************             IOFlag              **********************/
 ObIOFlag::ObIOFlag()
   : flag_(0)
@@ -124,7 +77,7 @@ void ObIOFlag::reset()
 bool ObIOFlag::is_valid() const
 {
   return mode_ >= 0 && mode_ < static_cast<int>(ObIOMode::MAX_MODE)
-    && category_ >= 0 && category_ < static_cast<int>(ObIOCategory::MAX_CATEGORY)
+    && group_id_ >= 0
     && wait_event_id_ > 0;
 }
 
@@ -138,19 +91,19 @@ ObIOMode ObIOFlag::get_mode() const
   return static_cast<ObIOMode>(mode_);
 }
 
-void ObIOFlag::set_category(ObIOCategory category)
+void ObIOFlag::set_group_id(int64_t group_id)
 {
-  category_ = static_cast<int>(category);
-}
-
-ObIOCategory ObIOFlag::get_category() const
-{
-  return static_cast<ObIOCategory>(category_);
+  group_id_ = group_id;
 }
 
 void ObIOFlag::set_wait_event(int64_t wait_event_id)
 {
   wait_event_id_ = wait_event_id;
+}
+
+int64_t ObIOFlag::get_group_id() const
+{
+  return group_id_;
 }
 
 int64_t ObIOFlag::get_wait_event() const
@@ -198,9 +151,19 @@ void ObIOFlag::set_unlimited(const bool is_unlimited)
   is_unlimited_ = is_unlimited;
 }
 
+void ObIOFlag::set_detect(const bool is_detect)
+{
+  is_detect_ = is_detect;
+}
+
 bool ObIOFlag::is_unlimited() const
 {
   return is_unlimited_;
+}
+
+bool ObIOFlag::is_detect() const
+{
+  return is_detect_;
 }
 
 /******************             IOCallback              **********************/
@@ -347,6 +310,7 @@ ObIORequest::ObIORequest()
     has_estimated_(false),
     io_info_(),
     deadline_ts_(0),
+    sender_index_(0),
     control_block_(nullptr),
     raw_buf_(nullptr),
     io_buf_(nullptr),
@@ -422,6 +386,7 @@ void ObIORequest::destroy()
   is_canceled_ = false;
   has_estimated_ = false;
   deadline_ts_ = 0;
+  sender_index_ = 0;
   if (nullptr != control_block_ && nullptr != io_info_.fd_.device_handle_) {
     io_info_.fd_.device_handle_->free_iocb(control_block_);
     control_block_ = nullptr;
@@ -465,6 +430,22 @@ int64_t ObIORequest::get_data_size() const
   return data_size;
 }
 
+int64_t ObIORequest::get_group_id() const
+{
+  return io_info_.flag_.get_group_id();
+}
+
+uint64_t ObIORequest::get_io_usage_index()
+{
+  uint64_t index = 0;
+  if (get_group_id() < GROUP_START_ID) {
+    //other group , do nothing
+  } else {
+    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
+  }
+  return index;
+}
+
 const char *ObIORequest::get_data()
 {
   const char *buf = nullptr;
@@ -484,11 +465,6 @@ const char *ObIORequest::get_data()
 const ObIOFlag &ObIORequest::get_flag() const
 {
   return io_info_.flag_;
-}
-
-ObIOCategory ObIORequest::get_category() const
-{
-  return io_info_.flag_.get_category();
 }
 
 ObIOMode ObIORequest::get_mode() const
@@ -559,7 +535,7 @@ int ObIORequest::alloc_aligned_io_buf()
 int ObIORequest::prepare()
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard tg("prepare");
+  ObTimeGuard tg("prepare", 100000); //100ms
   if (OB_ISNULL(control_block_)
       && (OB_ISNULL(io_info_.fd_.device_handle_) || OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -661,7 +637,7 @@ void ObIORequest::inc_ref(const char *msg)
     int tmp_ret = OB_SUCCESS;
     ObIOTracer::TraceType trace_type = 0 == old_ref_cnt ? ObIOTracer::TraceType::IS_FIRST : ObIOTracer::TraceType::OTHER;
     if (OB_TMP_FAIL(tenant_io_mgr_.get_ptr()->trace_request_if_need(this, msg, trace_type))) {
-      LOG_WARN("add trace for io request failed", K(tmp_ret), KP(this), K(trace_type));
+      LOG_WARN_RET(tmp_ret, "add trace for io request failed", K(tmp_ret), KP(this), K(trace_type));
     }
   }
 }
@@ -709,15 +685,16 @@ void ObIORequest::dec_out_ref()
 
 ObPhyQueue::ObPhyQueue()
   : is_inited_(false),
+    stop_accept_(false),
     reservation_ts_(INT_MAX64),
-    category_limitation_ts_(INT_MAX64),
+    group_limitation_ts_(INT_MAX64),
     tenant_limitation_ts_(INT_MAX64),
     proportion_ts_(INT_MAX64),
-    is_category_ready_(false),
+    is_group_ready_(false),
     is_tenant_ready_(false),
-    category_index_(-1),
+    queue_index_(-1),
     reservation_pos_(-1),
-    category_limitation_pos_(-1),
+    group_limitation_pos_(-1),
     tenant_limitation_pos_(-1),
     proportion_pos_(-1),
     req_list_()
@@ -730,17 +707,17 @@ ObPhyQueue::~ObPhyQueue()
   destroy();
 }
 
-int ObPhyQueue::init(const int index)
+int ObPhyQueue::init(const int64_t index)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("phy queue init twice", K(ret), K(is_inited_));
-  } else if (index < 0 || index > static_cast<int>(ObIOCategory::MAX_CATEGORY)){
+  } else if (index < 0 || index > INT64_MAX){
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("index out of boundary", K(ret), K(index));
   } else {
-    category_index_=index;
+    queue_index_ = index;
     is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {
@@ -752,33 +729,34 @@ int ObPhyQueue::init(const int index)
 void ObPhyQueue::destroy()
 {
   is_inited_ = false;
+  stop_accept_ = true;
   reservation_ts_ = INT_MAX64;
-  category_limitation_ts_ = INT_MAX64;
+  group_limitation_ts_ = INT_MAX64;
   tenant_limitation_ts_ = INT_MAX64;
   proportion_ts_ = INT_MAX64;
-  is_category_ready_ = false;
+  is_group_ready_ = false;
   is_tenant_ready_ = false;
   reservation_pos_ = -1;
-  category_limitation_pos_ = -1;
+  group_limitation_pos_ = -1;
   tenant_limitation_pos_ = -1;
   proportion_pos_ = -1;
-  category_index_ = -1;
+  queue_index_ = -1;
 }
 
 void ObPhyQueue::reset_time_info()
 {
   reservation_ts_ = INT_MAX64;
-  category_limitation_ts_ = INT_MAX64;
+  group_limitation_ts_ = INT_MAX64;
   tenant_limitation_ts_ = INT_MAX64;
   proportion_ts_ = INT_MAX64;
 }
 
 void ObPhyQueue::reset_queue_info()
 {
-  is_category_ready_ = false;
+  is_group_ready_ = false;
   is_tenant_ready_ = false;
   reservation_pos_ = -1;
-  category_limitation_pos_ = -1;
+  group_limitation_pos_ = -1;
   tenant_limitation_pos_ = -1;
   proportion_pos_ = -1;
 }
@@ -846,7 +824,7 @@ int ObIOHandle::wait(const int64_t timeout_ms)
     ObWaitEventGuard wait_guard(req_->io_info_.flag_.get_wait_event(),
                                 timeout_ms,
                                 req_->io_info_.size_);
-    int real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
+    const int64_t real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
 
     if (real_wait_timeout > 0) {
       ObThreadCondGuard guard(req_->cond_);
@@ -916,7 +894,7 @@ void ObIOHandle::estimate()
     }
     static const int64_t LONG_IO_PRINT_TRIGGER_US = 1000L * 1000L * 3L; // 3s
     if (request_delay > LONG_IO_PRINT_TRIGGER_US) {
-      LOG_WARN("io request wait too long", KPC(req_),
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "io request wait too long", KPC(req_),
           K(prepare_delay),
           K(schedule_queue_delay),
           K(submit_delay),
@@ -998,21 +976,41 @@ bool ObTenantIOConfig::UnitConfig::is_valid() const
   return min_iops_ > 0 && max_iops_ >= min_iops_ && weight_ >= 0;
 }
 
-ObTenantIOConfig::CategoryConfig::CategoryConfig()
-  : min_percent_(0), max_percent_(0), weight_percent_(0)
+ObTenantIOConfig::GroupConfig::GroupConfig()
+  : deleted_(false), cleared_(false), min_percent_(0), max_percent_(0), weight_percent_(0)
 {
 
 }
 
-bool ObTenantIOConfig::CategoryConfig::is_valid() const
+ObTenantIOConfig::GroupConfig::~GroupConfig()
 {
-  return min_percent_ > 0 && max_percent_ >= min_percent_ && max_percent_ <= 100 && weight_percent_ >= 0 && weight_percent_ <= 100;
+
+}
+
+bool ObTenantIOConfig::GroupConfig::is_valid() const
+{
+  return min_percent_ >= 0 && min_percent_ <= 100 &&
+         max_percent_ >= 0 && max_percent_ <= 100 &&
+         weight_percent_ >= 0 && weight_percent_ <= 100 &&
+         max_percent_ >= min_percent_;
 }
 
 ObTenantIOConfig::ObTenantIOConfig()
-  : memory_limit_(0), callback_thread_count_(0), enable_io_tracer_(false)
+  : memory_limit_(0), callback_thread_count_(0), group_num_(0), group_ids_(), group_configs_(),
+    other_group_config_(), group_config_change_(false), enable_io_tracer_(false)
 {
 
+}
+
+ObTenantIOConfig::~ObTenantIOConfig()
+{
+  destroy();
+}
+
+void ObTenantIOConfig::destroy()
+{
+  group_ids_.destroy();
+  group_configs_.destroy();
 }
 
 const ObTenantIOConfig &ObTenantIOConfig::default_instance()
@@ -1020,12 +1018,14 @@ const ObTenantIOConfig &ObTenantIOConfig::default_instance()
   static ObTenantIOConfig instance;
   instance.memory_limit_ = 512L * 1024L * 1024L; // min_tenant_memory: 512M
   instance.callback_thread_count_ = 8;
-  instance.other_config_.min_percent_ = 100;
-  instance.other_config_.max_percent_ = 100;
-  instance.other_config_.weight_percent_ = 100;
+  instance.group_num_ = 0;
   instance.unit_config_.min_iops_ = 10000;
   instance.unit_config_.max_iops_ = 50000;
   instance.unit_config_.weight_ = 10000;
+  instance.other_group_config_.min_percent_ = 100;
+  instance.other_group_config_.max_percent_ = 100;
+  instance.other_group_config_.weight_percent_ = 100;
+  instance.group_config_change_ = false;
   instance.enable_io_tracer_ = false;
   return instance;
 }
@@ -1036,21 +1036,22 @@ bool ObTenantIOConfig::is_valid() const
   if (bret) {
     int64_t sum_min_percent = 0;
     int64_t sum_weight_percent = 0;
-    for (int64_t i = 0; i < static_cast<int>(ObIOCategory::MAX_CATEGORY); ++i) {
-      if (category_configs_[i].is_valid()) {
-        sum_min_percent += category_configs_[i].min_percent_;
-        sum_weight_percent += category_configs_[i].weight_percent_;
+    for (int64_t i = 0; i < group_num_; ++i) {
+      if (group_configs_.at(i).is_valid() && !group_configs_.at(i).deleted_) {
+        sum_min_percent += group_configs_.at(i).min_percent_;
+        sum_weight_percent += group_configs_.at(i).weight_percent_;
       }
     }
-    sum_min_percent += other_config_.min_percent_;
-    sum_weight_percent += other_config_.weight_percent_;
-    bret = 100 == sum_min_percent && 100 == sum_weight_percent;
+    sum_min_percent += other_group_config_.min_percent_;
+    sum_weight_percent += other_group_config_.weight_percent_;
+    bret = 100 >= sum_min_percent && 100 == sum_weight_percent;
   }
   return bret;
 }
 
 bool ObTenantIOConfig::operator ==(const ObTenantIOConfig &other) const
 {
+  //for basic config, group config is judged by flag
   bool bret = false;
   if (memory_limit_ != other.memory_limit_) {
     LOG_INFO("memory limit not equal", K(memory_limit_), K(other.memory_limit_));
@@ -1062,24 +1063,34 @@ bool ObTenantIOConfig::operator ==(const ObTenantIOConfig &other) const
     LOG_INFO("unit config not equal", K(unit_config_), K(other.unit_config_));
   } else if (enable_io_tracer_ != other.enable_io_tracer_) {
     LOG_INFO("enable io tracer not equal", K(enable_io_tracer_), K(other.enable_io_tracer_));
-  } else {
-    bret = true;
-    const int64_t max_category_count = static_cast<int64_t>(ObIOCategory::MAX_CATEGORY);
-    for (int64_t i = 0; bret && i < max_category_count + 1; ++i) {
-      const CategoryConfig &category_config = max_category_count == i ? other_config_ : category_configs_[i];
-      const CategoryConfig &other_category_config = max_category_count == i ? other.other_config_ : other.category_configs_[i];
-      if (category_config.weight_percent_ != other_category_config.weight_percent_
-          || category_config.max_percent_ != other_category_config.max_percent_
-          || category_config.min_percent_ != other_category_config.min_percent_) {
-        bret = false;
-        LOG_INFO("category config not equal", K(category_config), K(other_category_config), K(i), K(max_category_count));
-      }
-    }
   }
   return bret;
 }
 
-int ObTenantIOConfig::parse_category_config(const char *config_str)
+int ObTenantIOConfig::deep_copy(const ObTenantIOConfig &other_config)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(group_configs_.assign(other_config.group_configs_))) {
+    LOG_WARN("fail to assign group_configs", K(ret));
+  } else if (OB_FAIL(group_ids_.assign(other_config.group_ids_))) {
+    LOG_WARN("fail to assign group_ids", K(ret));
+  } else {
+    group_num_ = other_config.group_num_;
+    other_group_config_ = other_config.other_group_config_;
+  }
+
+  if (OB_SUCC(ret)) {
+    memory_limit_ = other_config.memory_limit_;
+    callback_thread_count_ = other_config.callback_thread_count_;
+    unit_config_ = other_config.unit_config_;
+    group_config_change_ = other_config.group_config_change_;
+    enable_io_tracer_ = other_config.enable_io_tracer_;
+  }
+  return ret;
+}
+
+//for unittest and performance test script
+int ObTenantIOConfig::parse_group_config(const char *config_str)
 {
   int ret = OB_SUCCESS;
   const int64_t max_config_length = 512;
@@ -1093,7 +1104,7 @@ int ObTenantIOConfig::parse_category_config(const char *config_str)
   } else {
     str_trim(copied_str);
     int pos = 0;
-    int len = strlen(copied_str);
+    const int64_t len = strlen(copied_str);
     for (int64_t i = 0; OB_SUCC(ret) && i < len; ++i) {
       if (';' == copied_str[i]) {
         copied_str[i] = '\0';
@@ -1103,89 +1114,149 @@ int ObTenantIOConfig::parse_category_config(const char *config_str)
     }
     while (OB_SUCC(ret) && pos < len) {
       const char *tmp_config_str = copied_str + pos;
-      char category_name[max_config_length] = { 0 };
-      ObTenantIOConfig::CategoryConfig tmp_category_config;
-      int scan_count = sscanf(tmp_config_str, "%s %ld,%ld,%ld",
-                              category_name,
-                              &tmp_category_config.min_percent_,
-                              &tmp_category_config.max_percent_,
-                              &tmp_category_config.weight_percent_);
-      if (4 != scan_count) {
+      int64_t group_id = 0;
+      char group_idx[max_config_length] = { 0 };
+      char group_namex[max_config_length] = { 0 };
+      ObTenantIOConfig::GroupConfig tmp_group_config;
+      int scan_count = sscanf(tmp_config_str, "%s %s %ld,%ld,%ld",
+                              group_idx,
+                              group_namex,
+                              &tmp_group_config.min_percent_,
+                              &tmp_group_config.max_percent_,
+                              &tmp_group_config.weight_percent_);
+      if (5 != scan_count) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("scan current category config failed", K(ret), K(scan_count), KCSTRING(tmp_config_str), K(tmp_category_config));
+        LOG_WARN("scan current group config failed", K(ret), K(scan_count), KCSTRING(tmp_config_str), K(tmp_group_config));
       } else {
-        ObIOCategory io_category = get_io_category_enum(category_name);
-        ObTenantIOConfig::CategoryConfig &target_category_config = ObIOCategory::MAX_CATEGORY == io_category ? other_config_ : category_configs_[static_cast<int>(io_category)];
-        target_category_config = tmp_category_config;
-        pos += strlen(tmp_config_str) + 1;
+        const int64_t group_id = atoi(group_idx);
+        if (0 == group_id) {
+          // other group
+          other_group_config_ = tmp_group_config;
+          pos += strlen(tmp_config_str) + 1;
+        } else {
+          // add single group
+          if (OB_FAIL(group_configs_.push_back(tmp_group_config))) {
+            LOG_WARN("push back group config failed", K(ret), K(tmp_group_config));
+          } else if (OB_FAIL(group_ids_.push_back(group_id))) {
+            LOG_WARN("push back group id failed", K(ret), K(group_id));
+          } else {
+            ATOMIC_INC(&group_num_);
+            pos += strlen(tmp_config_str) + 1;
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      // decide the config of other category
+      // decide the config of other group
       int64_t sum_min_percent = 0;
       int64_t sum_weight_percent = 0;
-      for (int64_t i = 0; i < static_cast<int>(ObIOCategory::MAX_CATEGORY); ++i) {
-        if (category_configs_[i].is_valid()) {
-          sum_min_percent += category_configs_[i].min_percent_;
-          sum_weight_percent += category_configs_[i].weight_percent_;
+      for (int64_t i = 0; i < group_configs_.count(); ++i) {
+        if (group_configs_.at(i).is_valid()) {
+          sum_min_percent += group_configs_.at(i).min_percent_;
+          sum_weight_percent += group_configs_.at(i).weight_percent_;
         }
       }
-      if (0 == other_config_.min_percent_
-          && 0 == other_config_.max_percent_
-          && 0 == other_config_.weight_percent_
+      if (0 == other_group_config_.min_percent_
+          && 0 == other_group_config_.max_percent_
+          && 0 == other_group_config_.weight_percent_
           && sum_min_percent < 100
           && sum_weight_percent < 100) {
-        other_config_.min_percent_ = 100 - sum_min_percent;
-        other_config_.max_percent_ = 100;
-        other_config_.weight_percent_ = 100 - sum_weight_percent;
+        other_group_config_.min_percent_ = 100 - sum_min_percent;
+        other_group_config_.max_percent_ = 100;
+        other_group_config_.weight_percent_ = 100 - sum_weight_percent;
       }
     }
   }
   return ret;
 }
 
-int ObTenantIOConfig::get_category_config(const ObIOCategory category, int64_t &min_iops, int64_t &max_iops, int64_t &iops_weight) const
+int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id, const int64_t group_id, int64_t min_percent, int64_t max_percent, int64_t weight_percent)
+{
+  int ret = OB_SUCCESS;
+  if (group_id < GROUP_START_ID || !is_valid_tenant_id(tenant_id) ||
+      min_percent < 0 || min_percent > 100 ||
+      max_percent < 0 || max_percent > 100 ||
+      weight_percent < 0 || weight_percent > 100 ||
+      min_percent > max_percent) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("invalid group config", K(ret), K(tenant_id), K(group_id), K(min_percent), K(max_percent), K(weight_percent));
+  } else {
+    ObTenantIOConfig::GroupConfig tmp_group_config;
+    tmp_group_config.min_percent_ = min_percent;
+    tmp_group_config.max_percent_ = max_percent;
+    tmp_group_config.weight_percent_ = weight_percent;
+    if (OB_UNLIKELY(!tmp_group_config.is_valid())) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("invalid group config", K(ret), K(tmp_group_config));
+    } else if (OB_FAIL(group_configs_.push_back(tmp_group_config))) {
+      LOG_WARN("push back group config failed", K(ret), K(tmp_group_config));
+    } else if (OB_FAIL(group_ids_.push_back(group_id))) {
+      group_configs_.pop_back();
+      LOG_WARN("push back group id failed", K(ret), K(tmp_group_config));
+    }
+  }
+  return ret;
+}
+
+int ObTenantIOConfig::get_group_config(const uint64_t index, int64_t &min_iops, int64_t &max_iops, int64_t &iops_weight) const
 {
   int ret = OB_SUCCESS;
   min_iops = 0;
   max_iops = 0;
   iops_weight = 0;
-  if (OB_UNLIKELY(category >= ObIOCategory::MAX_CATEGORY)) {
+  if (OB_UNLIKELY(index < 0 || (index >= group_configs_.count() && index != INT64_MAX))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(index));
+  } else if (index == INT64_MAX) {
+    //OTHER GROUPS
+    const GroupConfig &group_config = other_group_config_;
+    min_iops = unit_config_.min_iops_ * group_config.min_percent_ / 100;
+    max_iops = unit_config_.max_iops_ * group_config.max_percent_ / 100;
+    iops_weight = unit_config_.weight_ * group_config.weight_percent_ / 100;
   } else {
-    const CategoryConfig &category_config = category_configs_[static_cast<int64_t>(category)].is_valid()
-      ? category_configs_[static_cast<int64_t>(category)] : other_config_;
-    min_iops = unit_config_.min_iops_ * category_config.min_percent_ / 100;
-    max_iops = unit_config_.max_iops_ * category_config.max_percent_ / 100;
-    iops_weight = unit_config_.weight_ * category_config.weight_percent_ / 100;
+    const GroupConfig &group_config = group_configs_.at(index);
+    min_iops = unit_config_.min_iops_ * group_config.min_percent_ / 100;
+    max_iops = unit_config_.max_iops_ * group_config.max_percent_ / 100;
+    iops_weight = unit_config_.weight_ * group_config.weight_percent_ / 100;
   }
   return ret;
+}
+
+int64_t ObTenantIOConfig::get_all_group_num() const
+{
+  int64_t all_group_num = ATOMIC_LOAD(&group_num_) +1;
+  //include other_groups
+  return all_group_num;
 }
 
 int64_t ObTenantIOConfig::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K(memory_limit_), K(callback_thread_count_), K(unit_config_), K_(enable_io_tracer));
-  // if self invalid, print all category configs, otherwise, only print valid category configs
+  J_KV(K(group_num_), K(memory_limit_), K(callback_thread_count_), K(unit_config_), K_(enable_io_tracer));
+  // if self invalid, print all group configs, otherwise, only print valid group configs
   const bool self_valid = is_valid();
-  BUF_PRINTF(", category_configs:[");
+  BUF_PRINTF(", group_configs:[");
   bool need_comma = false;
-  for (int64_t i = 0; i < static_cast<int>(ObIOCategory::MAX_CATEGORY); ++i) {
-    if (!self_valid || category_configs_[i].is_valid()) {
+  for (int64_t i = 0; i < group_configs_.count(); ++i) {
+    if (group_configs_.at(i).deleted_ || group_configs_.at(i).cleared_) {
+      continue;
+    } else if (!self_valid || group_configs_.at(i).is_valid()) {
       if (need_comma) {
         J_COMMA();
       }
-      J_KV(get_io_category_name(static_cast<ObIOCategory>(i)), category_configs_[i]);
+      BUF_PRINTF("group_id = ");
+      char group_id[8];
+      snprintf(group_id, sizeof(group_id), "%ld", group_ids_.at(i));
+      J_KV(group_id, group_configs_.at(i));
       need_comma = true;
     }
   }
-  if (!self_valid || other_config_.is_valid()) {
+  if (!self_valid || other_group_config_.is_valid()) {
     if (need_comma) {
       J_COMMA();
     }
-    J_KV("other", other_config_);
+    J_KV("other_groups", other_group_config_);
   }
   BUF_PRINTF("]");
   J_OBJ_END();
@@ -1218,7 +1289,7 @@ void ObAtomIOClock::reset()
 ObMClockQueue::ObMClockQueue()
   : is_inited_(false),
     r_heap_(r_cmp_),
-    cl_heap_(cl_cmp_),
+    gl_heap_(gl_cmp_),
     tl_heap_(tl_cmp_),
     ready_heap_(p_cmp_)
 {
@@ -1250,6 +1321,30 @@ void ObMClockQueue::destroy()
   is_inited_ = false;
 }
 
+int ObMClockQueue::get_time_info(int64_t &reservation_ts,
+                                  int64_t &group_limitation_ts,
+                                  int64_t &tenant_limitation_ts,
+                                  int64_t &proportion_ts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_ || r_heap_.empty())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init yet", K(ret), K(is_inited_));
+  } else {
+    ObPhyQueue *r_phy_queue = r_heap_.top();
+    if (OB_ISNULL(r_phy_queue)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("phy_queue is null", K(ret));
+    } else {
+      reservation_ts = r_phy_queue->reservation_ts_;
+      group_limitation_ts = gl_heap_.empty() ? INT64_MAX : gl_heap_.top()->group_limitation_ts_;
+      tenant_limitation_ts = tl_heap_.empty() ? INT64_MAX : tl_heap_.top()->tenant_limitation_ts_;
+      proportion_ts = ready_heap_.empty() ? INT64_MAX : ready_heap_.top()->proportion_ts_;
+    }
+  }
+  return ret;
+}
+
 int ObMClockQueue::push_phyqueue(ObPhyQueue *phy_queue)
 {
   int ret = OB_SUCCESS;
@@ -1262,7 +1357,7 @@ int ObMClockQueue::push_phyqueue(ObPhyQueue *phy_queue)
     LOG_WARN("phy_queue is null", K(ret), KP(phy_queue));
   } else if (OB_FAIL(r_heap_.push(phy_queue))) {
     LOG_WARN("push r heap failed", K(ret));
-  } else if (OB_FAIL(cl_heap_.push(phy_queue))) {
+  } else if (OB_FAIL(gl_heap_.push(phy_queue))) {
     LOG_WARN("push cl heap failed", K(ret));
     int tmp_ret = r_heap_.remove(phy_queue);
     if (OB_SUCCESS != tmp_ret) {
@@ -1284,8 +1379,8 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (r_heap_.empty()){
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("r heap is empty, phy queue not init", K(ret));
   } else {
+    ObTimeGuard time_guard("pop_phyqueue", 100000); //100ms
     ObPhyQueue *tmp_phy_queue = r_heap_.top();
     if (OB_ISNULL(tmp_phy_queue)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1296,6 +1391,7 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
       //R schedule
       if(OB_FAIL(remove_from_heap(tmp_phy_queue))) {
         LOG_WARN("remove phy queue from heap failed(R schedule)", K(ret));
+      } else if (FALSE_IT(time_guard.click("R_leave_heap"))) {
       } else {
         req = tmp_phy_queue->req_list_.remove_first();
         if (OB_ISNULL(req)) {
@@ -1313,10 +1409,12 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
               LOG_WARN("get null next_req", KP(next_req));
             } else if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, *next_req))) {
               LOG_WARN("calc phyqueue clock failed", K(ret), KPC(next_req));
+            } else if (FALSE_IT(time_guard.click("R_calc_clock"))) {
             }
           }
         }
         int tmp_ret = push_phyqueue(tmp_phy_queue);
+        time_guard.click("R_into_heap");
         if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
           LOG_WARN("re_into heap failed(R schedule)", K(tmp_ret));
           abort();
@@ -1328,8 +1426,10 @@ int ObMClockQueue::pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts)
         if (OB_EAGAIN != ret) {
           LOG_WARN("pop with ready queue failed", K(ret));
         }
+      } else {
+        time_guard.click("P_schedule");
       }
-    }    
+    }
   }
   return ret;  
 }
@@ -1342,15 +1442,15 @@ int ObMClockQueue::remove_from_heap(ObPhyQueue *phy_queue)
     LOG_WARN("phy_queue is null", K(ret), KP(phy_queue));
   } else if (OB_FAIL(r_heap_.remove(phy_queue))) {
     LOG_WARN("remove phy queue from r heap failed", K(ret));
-  } else if (!phy_queue->is_category_ready_ && !phy_queue->is_tenant_ready_) {
-    if (OB_FAIL(cl_heap_.remove(phy_queue))) {
+  } else if (!phy_queue->is_group_ready_ && !phy_queue->is_tenant_ready_) {
+    if (OB_FAIL(gl_heap_.remove(phy_queue))) {
       LOG_WARN("remove phy queue from cl heap failed", K(ret));
     }
-  } else if (phy_queue->is_category_ready_ && !phy_queue->is_tenant_ready_) {
+  } else if (phy_queue->is_group_ready_ && !phy_queue->is_tenant_ready_) {
     if (OB_FAIL(tl_heap_.remove(phy_queue))) {
       LOG_WARN("remove phy queue from tl heap failed", K(ret));
     }
-  } else if (phy_queue->is_category_ready_ && phy_queue->is_tenant_ready_) {
+  } else if (phy_queue->is_group_ready_ && phy_queue->is_tenant_ready_) {
     if (OB_FAIL(ready_heap_.remove(phy_queue))) {
       LOG_WARN("remove phy queue from ready heap failed", K(ret));
     }
@@ -1366,24 +1466,24 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   int64_t iter_count = 0;
   ObPhyQueue *tmp_phy_queue = nullptr;
   req = nullptr;
-  while (OB_SUCC(ret) && !cl_heap_.empty() && !cl_heap_.top()->req_list_.is_empty()) {
-    tmp_phy_queue = cl_heap_.top();
+  while (OB_SUCC(ret) && !gl_heap_.empty() && !gl_heap_.top()->req_list_.is_empty()) {
+    tmp_phy_queue = gl_heap_.top();
     deadline_ts = 0 == iter_count ? tmp_phy_queue->tenant_limitation_ts_ : deadline_ts;
     ++iter_count;
-    if (tmp_phy_queue->category_limitation_ts_ > current_ts) {
+    if (tmp_phy_queue->group_limitation_ts_ > current_ts) {
       break;
-    } else if (OB_FAIL(cl_heap_.pop())) {
+    } else if (OB_FAIL(gl_heap_.pop())) {
       LOG_WARN("remove PhyQueue from c_limitation queue failed", K(ret));
     } else {
-      tmp_phy_queue->is_category_ready_ = true;
+      tmp_phy_queue->is_group_ready_ = true;
       if (tmp_phy_queue->tenant_limitation_ts_ <= current_ts) {
         tmp_phy_queue->is_tenant_ready_ = true;
         if (OB_FAIL(ready_heap_.push(tmp_phy_queue))) {
-          LOG_WARN("push phy_queue from cl_heap to ready_heap failed", K(ret));
+          LOG_WARN("push phy_queue from gl_heap to ready_heap failed", K(ret));
         }
       } else {
         if (OB_FAIL(tl_heap_.push(tmp_phy_queue))) {
-          LOG_WARN("push phy_queue from cl_heap to tl_heap failed", K(ret));
+          LOG_WARN("push phy_queue from gl_heap to tl_heap failed", K(ret));
         }
       }
     }

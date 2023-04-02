@@ -1665,10 +1665,6 @@ class GTEST_API_ Mutex {
   // Initializes owner_thread_id_ and critical_section_ in static mutexes.
   void ThreadSafeLazyInit();
 
-  // Per http://blogs.msdn.com/b/oldnewthing/archive/2004/02/23/78395.aspx,
-  // we assume that 0 is an invalid value for thread IDs.
-  unsigned int owner_thread_id_;
-
   // For static mutexes, we rely on these members being initialized to zeros
   // by the linker.
   MutexType type_;

@@ -262,6 +262,7 @@ bool ObMockIterator::equals(uint16_t *col_id1, uint16_t *col_id2, const int64_t 
 bool ObMockIterator::equals(const ObStoreRow &r1, const ObStoreRow &r2,
     const bool cmp_multi_version_row_flag, const bool cmp_is_get_and_scan_index)
 {
+  int ret = OB_SUCCESS;
   bool bool_ret = false;
   STORAGE_LOG(INFO, "compare two rows", K(r1), K(r2));
   if (r1.flag_ != r2.flag_) {
@@ -294,7 +295,7 @@ bool ObMockIterator::equals(int64_t idx, ObNewRow &other_row) const
   bool bool_ret = false;
   const ObStoreRow *this_row = NULL;
   if (OB_SUCCESS != get_row(idx, this_row)) {
-    STORAGE_LOG(WARN, "invalid idx");
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid idx");
     bool_ret = false;
   } else {
     bool_ret = equals(this_row->row_val_, other_row);
@@ -309,6 +310,7 @@ bool ObMockIterator::equals(int64_t idx, ObNewRow &other_row) const
 bool ObMockIterator::equals(int64_t idx, ObStoreRow &other_row) const
 {
   bool bool_ret = false;
+  int ret = OB_SUCCESS;
   const ObStoreRow *this_row = NULL;
   if (OB_SUCCESS != get_row(idx, this_row)) {
     STORAGE_LOG(WARN, "invalid idx");
@@ -1613,6 +1615,7 @@ int ObMockDirectReadIterator::init(ObStoreRowIterator *iter,
     end_ = scanner_->last_;
     row_.init(alloc, column_cnt);
     read_info_ = &read_info;
+    sstable_row_.capacity_ = read_info.get_request_count();
     sstable_row_.row_val_.cells_ = reinterpret_cast<common::ObObj *>(alloc.alloc(sizeof(ObObj) * column_cnt));
     sstable_row_.row_val_.count_ = read_info.get_request_count();
     const ObIArray<ObColDesc> &cols_desc = read_info.get_columns_desc();

@@ -54,7 +54,7 @@ ob_convert_internal(char *to, uint32 to_length,
         wc= replaced_char;
       } else {
         break;
-      } 
+      }
     }
 
     pbool go = TRUE;

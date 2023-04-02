@@ -197,7 +197,7 @@ public:
   int64_t get_free_macro_block_count() const;
   int64_t get_used_macro_block_count() const;
 
-  int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
+  int check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const;
   int get_bad_block_infos(common::ObIArray<ObBadBlockInfo> &bad_block_infos);
   int report_bad_block(
       const MacroBlockId &macro_block_id,
@@ -215,6 +215,9 @@ public:
   int dec_ref(const MacroBlockId &macro_id);
   int inc_disk_ref(const MacroBlockId &macro_id);
   int dec_disk_ref(const MacroBlockId &macro_id);
+  // If update_to_max_time is true, it means modify the last_write_time_ of the block to max,
+  // which is used to skip the bad block inspection.
+  int update_write_time(const MacroBlockId &macro_id, const bool update_to_max_time = false);
 
   // mark and sweep
   int get_marker_status(ObMacroBlockMarkerStatus &status);
@@ -227,14 +230,16 @@ private:
     int32_t mem_ref_cnt_;
     int32_t disk_ref_cnt_;
     int64_t access_time_;
-    BlockInfo() : mem_ref_cnt_(0), disk_ref_cnt_(0), access_time_(0) {}
+    int64_t last_write_time_;
+    BlockInfo() : mem_ref_cnt_(0), disk_ref_cnt_(0), access_time_(0), last_write_time_(INT64_MAX) {}
     void reset()
     {
       mem_ref_cnt_ = 0;
       disk_ref_cnt_ = 0;
       access_time_ = 0;
+      last_write_time_ = INT64_MAX;
     }
-    TO_STRING_KV(K_(mem_ref_cnt), K_(disk_ref_cnt), K_(access_time));
+    TO_STRING_KV(K_(mem_ref_cnt), K_(disk_ref_cnt), K_(access_time), K_(last_write_time));
   };
 
   class GetAllMacroBlockIdFunctor final
@@ -324,6 +329,7 @@ private:
   };
 
 private:
+  int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
   bool is_bad_block(const MacroBlockId &macro_block_id);
 
   void reset_mark_status();

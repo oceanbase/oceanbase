@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "gtest/gtest.h"
 #include "storage/backup/ob_backup_index_merger.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 #define private public
 #define protected public
 
@@ -169,8 +170,8 @@ void ObFakeBackupMacroBlockIndexIterator::make_random_macro_range_index_(const i
     const int64_t backup_set_id, const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id,
     const int64_t file_id, ObBackupMacroRangeIndex &range_index)
 {
-  range_index.start_key_ = ObLogicMacroBlockId(1, 1, tablet_id);
-  range_index.end_key_ = ObLogicMacroBlockId(1, 1, tablet_id);
+  range_index.start_key_ = blocksstable::ObLogicMacroBlockId(1, 1, tablet_id);
+  range_index.end_key_ = blocksstable::ObLogicMacroBlockId(1, 1, tablet_id);
   range_index.backup_set_id_ = backup_set_id;
   range_index.ls_id_ = ls_id;
   range_index.turn_id_ = turn_id;

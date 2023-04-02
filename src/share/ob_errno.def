@@ -1,4 +1,4 @@
-// @see http://oceanbase.alibaba-inc.com/wiki/index.php?title=%E9%94%99%E8%AF%AF%E7%A0%81%E7%9A%84%E8%A7%84%E8%8C%83
+// @see
 // 错误码总数不超过10000个
 // 不能使用的值域[-1, -4000)，这一段值为兼容MySQL目的使用。MySQL Server端错误码范围1000-3000，客户端错误码2000-3000, 1-1000预留。实际上，Oracle的常用错误码的范围大约在这个范围内。
 // 通用错误码值域[-4000, -4500)，含sstable等
@@ -249,6 +249,7 @@ DEFINE_ERROR(OB_SCHEDULER_TASK_CNT_MISMATCH, -4188, -1, "HY000", "Running task c
 DEFINE_ERROR(OB_INVALID_MACRO_BLOCK_TYPE, -4189, -1, "HY000", "the macro block type does not exist");
 DEFINE_ORACLE_ERROR_DEP(OB_INVALID_DATE_FORMAT_END, -4190, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", 1830, "date format picture ends before converting entire input string");
 DEFINE_ERROR(OB_PG_IS_REMOVED, -4191, -1, "HY000", "partition group is removed");
+DEFINE_ERROR_DEP(OB_DDL_TASK_EXECUTE_TOO_MUCH_TIME, -4192, -1, "42000", "ddl task executes too much time");
 DEFINE_ERROR_EXT_DEP(OB_HASH_EXIST, -4200, -1, "HY000", "hash map/set entry exist", "%s");
 DEFINE_ERROR_EXT_DEP(OB_HASH_NOT_EXIST, -4201, -1, "HY000", "hash map/set entry not exist", "%s");
 DEFINE_ERROR_DEP(OB_HASH_GET_TIMEOUT, -4204, -1, "HY000", "hash map/set get timeout");
@@ -434,11 +435,16 @@ DEFINE_ORACLE_ERROR(OB_ERR_DUP_RESTART_SPEC, -4382,-1, "HY000", "duplicate RESTA
 DEFINE_ERROR(OB_GTI_NOT_READY, -4383, -1, "HY000", "transaction id is not ready");
 DEFINE_ERROR(OB_STACK_OVERFLOW, -4385, -1, "HY000", "stack overflow");
 DEFINE_ERROR(OB_NOT_ALLOW_REMOVING_LEADER, -4386, -1, "HY000", "Do not allow removing leader");
-DEFINE_ERROR(OB_NEED_SWITCH_CONSUMER_GROUP, -4387, -1, "HY000", "Need switch consumer group");
-DEFINE_ERROR(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected internal error happen, please checkout the internal errcode");
-DEFINE_ERROR(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
+DEFINE_ERROR(OB_NEED_SWITCH_CONSUMER_GROUP, -4387, 13937, "HY000", "Failed to switch resource group");
+DEFINE_ERROR_DEP(OB_UNEXPECT_INTERNAL_ERROR, -4388, -1, "HY000", "Unexpected internal error happen, please checkout the internal errcode");
+DEFINE_ERROR_DEP(OB_ERR_TOO_MUCH_TIME, -4389, -1, "HY000", "Porcessing time is too long");
 DEFINE_ERROR(OB_ERR_REMOTE_SCHEMA_NOT_FULL, -4390, -1, "HY000", "Schema of remote server is not refreshed yet");
 DEFINE_ERROR(OB_DDL_SSTABLE_RANGE_CROSS, -4391, -1, "HY000", "ddl sstable version range cross");
+DEFINE_ERROR(OB_DISK_HUNG, -4392, -1, "HY000", "disk is hung");
+DEFINE_ERROR(OB_ERR_OBSERVER_START, -4393, -1, "HY000", "observer start process failure");
+DEFINE_ERROR(OB_ERR_OBSERVER_STOP, -4394, -1, "HY000", "observer stop process failure");
+DEFINE_ERROR(OB_ERR_OBSERVICE_START, -4395, -1, "HY000", "observice start process has failure");
+DEFINE_ERROR_DEP(OB_ERR_THREAD_PANIC, -4396, -1, "HY000", "Worker thread pannic, thread may be terminated or hung");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
@@ -624,8 +630,16 @@ DEFINE_ERROR(OB_FREEZE_SERVICE_EPOCH_MISMATCH, -4743, -1, "HY000", "freeze servi
 DEFINE_ERROR_EXT_DEP(OB_FROZEN_INFO_ALREADY_EXIST, -4744, -1, "HY000", "already exist larger frozen_scn in __all_freeze_info", "%s");
 DEFINE_ERROR_EXT(OB_DELETE_SERVER_NOT_ALLOWED, -4745, -1, "HY000", "delete server not allowed", "%s");
 DEFINE_ERROR(OB_PACKET_STATUS_UNKNOWN, -4746, -1, "HY000", "Network error and packet status unknown. Abort auto retry.");
-//4747: OB_ARBITRATION_SERVICE_NOT_EXIST
-//4748: OB_ARBITRATION_SERVICE_ALREADY_EXIST
+DEFINE_ERROR(OB_ARBITRATION_SERVICE_NOT_EXIST, -4747, -1, "HY000", "arbitration service does not exist");
+DEFINE_ERROR(OB_ARBITRATION_SERVICE_ALREADY_EXIST, -4748, -1, "HY000", "arbitration service already exist");
+DEFINE_ERROR_EXT(OB_UNEXPECTED_TABLET_STATUS, -4749, -1, "HY000", "unexpected tablet status", "%s");
+DEFINE_ERROR_EXT(OB_INVALID_TABLE_STORE, -4750, -1, "HY000", "invalid table store", "%s");
+DEFINE_ERROR(OB_WAIT_DEGRATION_TIMEOUT, -4751, -1, "HY000", "wait degration finished timeout")
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_START, -4752, -1, "HY000", "rootservice start process has failure");
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop process has failure");
+DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
+DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
+DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -729,7 +743,7 @@ DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_USEC_TO_TIME, -5111, -1, "42000", "
 DEFINE_ERROR_EXT(OB_ERR_USER_VARIABLE_UNKNOWN, -5112, -1, "42P01", "Unknown user variable", "Variable %.*s does not exists");
 DEFINE_ERROR_EXT(OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME, -5113, -1, "42000", "Illegal usage of merging_frozen_time()", "MERGING_FROZEN_TIME() system function only be used in daily merging.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_NUMERIC, -5114, -1, "42000", "Invalid numeric", "Invalid numeric char '%c'", 1722, "invalid number", "invalid number char '%c'");
-DEFINE_ERROR_DEP(OB_ERR_REGEXP_ERROR, -5115, ER_REGEXP_ERROR, "42000", "Got error 'empty (sub)expression' from regexp");
+DEFINE_ERROR_EXT_DEP(OB_ERR_REGEXP_ERROR, -5115, ER_REGEXP_ERROR, "42000", "Got error from regexp", "Got error '%s' from regexp");
 DEFINE_ERROR(OB_SQL_LOG_OP_SETCHILD_OVERFLOW, -5116, -1, "HY000", "Logical operator child index overflow");
 DEFINE_ERROR(OB_SQL_EXPLAIN_FAILED, -5117, -1, "HY000", "fail to explain plan");
 DEFINE_ERROR(OB_SQL_OPT_COPY_OP_FAILED, -5118, -1, "HY000", "fail to copy logical operator");
@@ -739,6 +753,7 @@ DEFINE_ERROR(OB_SQL_OPT_JOIN_ORDER_FAILED, -5121, -1,  "HY000", "fail to generat
 DEFINE_ERROR(OB_SQL_OPT_ERROR, -5122, -1,  "HY000", "optimizer general error");
 DEFINE_ORACLE_ERROR(OB_ERR_OCI_INIT_TIMEZONE, -5123, -1, "HY000", "failure to initialize timezone information", 1804, "failure to initialize timezone information");
 DEFINE_ERROR(OB_ERR_ZLIB_DATA, -5124, ER_ZLIB_Z_DATA_ERROR, "HY000", "ZLIB: Input data corrupted");
+DEFINE_ORACLE_ERROR(OB_ERR_DBLINK_SESSION_KILLED, -5125, -1, "HY000", "your session has been killed", 28, "your session has been killed");
 DEFINE_ERROR(OB_SQL_RESOLVER_NO_MEMORY, -5130, -1, "HY000", "sql resolver no memory");
 DEFINE_ERROR(OB_SQL_DML_ONLY, -5131, -1, "HY000", "plan cache support dml only");
 DEFINE_ERROR(OB_ERR_NO_GRANT, -5133, -1, "42000", "No such grant defined");
@@ -998,14 +1013,20 @@ DEFINE_ORACLE_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTE
 DEFINE_ERROR(OB_ERR_GET_STACKED_DIAGNOSTICS, -5402, ER_GET_STACKED_DIAGNOSTICS_INACTIVE, "0Z002", "GET STACKED DIAGNOSTICS when handler not active");
 DEFINE_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH, -5403, -1, "HY000", "ddl schema version not match");
 DEFINE_ERROR_EXT(OB_ERR_COLUMN_GROUP_DUPLICATE, -5404, ER_DUP_FIELDNAME, "42S21", "Duplicate column group name", "Duplicate column group name '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_RESERVED_SYNTAX, -5405, ER_RESERVED_SYNTAX, "HY000", "The \'%.*s\' syntax is reserved for purposes internal to the OceanBase Server", "The \'%.*s\' syntax is reserved for purposes internal to the OceanBase Server");
+DEFINE_ERROR_EXT(OB_ERR_INVALID_PARAM_TO_PROCEDURE, -5406, ER_WRONG_PARAMETERS_TO_PROCEDURE, "HY000", "Incorrect parameters to procedure \'%.*s\'", "Incorrect parameters to procedure \'%.*s\'");
+DEFINE_ERROR_EXT(OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT, -5407, ER_WRONG_PARAMETERS_TO_NATIVE_FCT, "42000", "Incorrect parameters in the call to native function", "Incorrect parameters in the call to native function '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_CTE_MAX_RECURSION_DEPTH, -5408, ER_CTE_MAX_RECURSION_DEPTH, "HY000", "Recursive query aborted after multiple iterations. Try increasing @@cte_max_recursion_depth to a larger value.", "Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value.");
+DEFINE_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST, -5409, -1, "HY000", "Duplicate object name exists, schema refreshing may be hung");
+DEFINE_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG, -5410, -1, "HY000", "Refresh schema failed continuously, ddl may be hung");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values 
+//error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TEXT, -5411, ER_INVALID_JSON_TEXT, "22032", "Invalid JSON text.", "Invalid JSON text.", 600, "Invalid JSON text.", "Invalid JSON text.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TEXT_IN_PARAM, -5412, ER_INVALID_JSON_TEXT_IN_PARAM, "22032", "Invalid JSON text in argument.", "Invalid JSON text in argument.", 600, "Invalid JSON text in argument.", "Invalid JSON text in argument.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_BINARY_DATA, -5413, ER_INVALID_JSON_BINARY_DATA, "42000", "The JSON binary value contains invalid data.", "The JSON binary value contains invalid data.", 600, "The JSON binary value contains invalid data.", "The JSON binary value contains invalid data.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_PATH, -5414, ER_INVALID_JSON_PATH, "42000", "Invalid JSON path expression.", "Invalid JSON path expression.", 600, "Invalid JSON path expression.", "Invalid JSON path expression.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TEXT, -5411, ER_INVALID_JSON_TEXT, "22032", "Invalid JSON text.", "Invalid JSON text.", 40441, "JSON syntax error.", "JSON syntax error.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TEXT_IN_PARAM, -5412, ER_INVALID_JSON_TEXT_IN_PARAM, "22032", "Invalid JSON text in argument.", "Invalid JSON text in argument.", 40441, "JSON syntax error", "JSON syntax error");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_BINARY_DATA, -5413, ER_INVALID_JSON_BINARY_DATA, "42000", "The JSON binary value contains invalid data.", "The JSON binary value contains invalid data.", 40783, "invalid binary JSON data\nstring", "invalid binary JSON data\nstring");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_PATH, -5414, ER_INVALID_JSON_PATH, "42000", "Invalid JSON path expression.", "Invalid JSON path expression.", 40442, "JSON path expression syntax error ('INT')", "JSON path expression syntax error ('INT')");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_CHARSET, -5415, ER_INVALID_JSON_CHARSET, "22032", "Cannot create a JSON value from a string.", "Cannot create a JSON value from a string.", 600, "Cannot create a JSON value from a string.", "Cannot create a JSON value from a string.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_CHARSET_IN_FUNCTION, -5416, ER_INVALID_JSON_CHARSET_IN_FUNCTION, "22032", "Invalid JSON character data provided to function.", "Invalid JSON character data provided to function.", 600, "Invalid JSON character data provided to function.", "Invalid JSON character data provided to function.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_TYPE_FOR_JSON, -5417, ER_INVALID_TYPE_FOR_JSON, "22032", "Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required.", "Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required.", 600, "Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required.", "Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required.");
@@ -1013,23 +1034,76 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_CAST_TO_JSON, -5418, ER_INVALID_CAST_
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_PATH_CHARSET, -5419, ER_INVALID_JSON_PATH_CHARSET, "42000", "A path expression must be encoded in the utf8 character set.", "A path expression must be encoded in the utf8 character set.", 600, "A path expression must be encoded in the utf8 character set.", "A path expression must be encoded in the utf8 character set.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_PATH_WILDCARD, -5420, ER_INVALID_JSON_PATH_WILDCARD, "42000", "In this situation, path expressions may not contain the * and ** tokens.", "In this situation, path expressions may not contain the * and ** tokens.", 600, "In this situation, path expressions may not contain the * and ** tokens.", "In this situation, path expressions may not contain the * and ** tokens.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_VALUE_TOO_BIG, -5421, ER_JSON_VALUE_TOO_BIG, "22032", "The JSON value is too big to be stored in a JSON column.", "The JSON value is too big to be stored in a JSON column.", 600, "The JSON value is too big to be stored in a JSON column.", "The JSON value is too big to be stored in a JSON column.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_KEY_TOO_BIG, -5422, ER_JSON_KEY_TOO_BIG, "22032", "The JSON object contains a key name that is too long.", "The JSON object contains a key name that is too long.", 600, "The JSON object contains a key name that is too long.", "The JSON object contains a key name that is too long.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_KEY_TOO_BIG, -5422, ER_JSON_KEY_TOO_BIG, "22032", "The JSON object contains a key name that is too long.", "The JSON object contains a key name that is too long.", 40476, "JSON key too long.", "JSON key too long.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_USED_AS_KEY, -5423, ER_JSON_USED_AS_KEY, "42000", "JSON column cannot be used in key specification.", "JSON column '%.*s' cannot be used in key specification.", 600, "JSON column cannot be used in key specification.", "JSON column '%.*s' cannot be used in key specification.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_VACUOUS_PATH, -5424, ER_JSON_VACUOUS_PATH, "42000", "The path expression is not allowed in this context.", "The path expression is not allowed in this context.", 600, "The path expression is not allowed in this context.", "The path expression is not allowed in this context.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_BAD_ONE_OR_ALL_ARG, -5425, ER_JSON_BAD_ONE_OR_ALL_ARG, "42000", "The oneOrAll argument may take these values: \'one\' or \'all\'.", "The oneOrAll argument may take these values: \'one\' or \'all\'.", 600, "The oneOrAll argument may take these values: \'one\' or \'all\'.", "The oneOrAll argument may take these values: \'one\' or \'all\'.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_NUMERIC_JSON_VALUE_OUT_OF_RANGE, -5426, ER_NUMERIC_JSON_VALUE_OUT_OF_RANGE, "22003", "Out of range JSON value for CAST", "Out of range JSON value for CAST", 600, "Out of range JSON value for CAST", "Out of range JSON value for CAST");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_VALUE_FOR_CAST, -5427, ER_INVALID_JSON_VALUE_FOR_CAST, "22018", "Invalid JSON value for CAST", "Invalid JSON value for CAST", 600, "Invalid JSON value for CAST", "Invalid JSON value for CAST");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_OUT_OF_DEPTH, -5428, ER_JSON_DOCUMENT_TOO_DEEP, "22032", "The JSON document exceeds the maximum depth.", "The JSON document exceeds the maximum depth.", 600, "The JSON document exceeds the maximum depth.", "The JSON document exceeds the maximum depth.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_DOCUMENT_NULL_KEY, -5429, ER_JSON_DOCUMENT_NULL_KEY, "22032", "JSON documents may not contain NULL member names.", "JSON documents may not contain NULL member names.", 600, "JSON documents may not contain NULL member names.", "JSON documents may not contain NULL member names.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_DOCUMENT_NULL_KEY, -5429, ER_JSON_DOCUMENT_NULL_KEY, "22032", "JSON documents may not contain NULL member names.", "JSON documents may not contain NULL member names.", 40595, "Name input to JSON generation function cannot be null", "Name input to JSON generation function cannot be null");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BLOB_CANT_HAVE_DEFAULT, -5430, ER_BLOB_CANT_HAVE_DEFAULT, "42000", "BLOB, TEXT, GEOMETRY or JSON column can't have a default value", "BLOB, TEXT, GEOMETRY or JSON column '%.*s' can't have a default value", 600, "Invalid default value", "Invalid default value for \'%.*s\'");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_PATH_ARRAY_CELL, -5431, ER_INVALID_JSON_PATH_ARRAY_CELL, "42000", "A path expression is not a path to a cell in an array", "A path expression is not a path to a cell in an array", 600, "A path expression is not a path to a cell in an array", "A path expression is not a path to a cell in an array");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_MISSING_JSON_VALUE, -5432, ER_MISSING_JSON_VALUE, "22035", "No value was found by '%.*s' on the specified path.", "No value was found by '%.192s' on the specified path.", 600, "No value was found by '%.192s' on the specified path.", "No value was found by '%.192s' on the specified path.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_MULTIPLE_JSON_VALUES, -5433, ER_MULTIPLE_JSON_VALUES, "22034", "More than one value was found by '%.*s' on the specified path.", "More than one value was found by '%.192s' on the specified path.", 600, "More than one value was found by '%.192s' on the specified path.", "More than one value was found by '%.192s' on the specified path.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_MISSING_JSON_VALUE, -5432, ER_MISSING_JSON_VALUE, "22035", "No value was found by '%.*s' on the specified path.", "No value was found by '%.192s' on the specified path.", 40462, "JSON_VALUE evaluated to no value", "'%.192s' evaluated to no value");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_MULTIPLE_JSON_VALUES, -5433, ER_MULTIPLE_JSON_VALUES, "22034", "More than one value was found by '%.*s' on the specified path.", "More than one value was found by '%.192s' on the specified path.", 40470, "More than one value was found by '%.192s' on the specified path.", "More than one value was found by '%.192s' on the specified path.");
 DEFINE_ERROR(OB_SQL_RETRY_SPM, -5434, -1, "HY000", "retry sql due to spm");
 DEFINE_ERROR(OB_OUTLINE_NOT_REPRODUCIBLE, -5435, -1, "HY000", "outline not reproducible");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN, -5436, -1, "42000", "Invalid argument for timestamp_to_scn()", " TIMESTAMP_TO_SCN expected timestamp argument");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP, -5437, -1, "42000", "Invalid argument for scn_to_timestamp()", "SCN_TO_TIMESTAMP expected a interger number as nsec argument");
-
+DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_CHILD_PARTITIONING, -5438, ER_WINDOW_NO_CHILD_PARTITIONING, "HY000", "Named window cann't be modified by another partitioning property", "A window which depends on another cannot define partitioning");
+DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_INHERIT_FRAME, -5439, ER_WINDOW_NO_INHERIT_FRAME, "HY000", "Named window cann't be modified by another framing property", "Window '%.*s' has a frame definition, so cannot be referenced by another window");
+DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -5440, ER_WINDOW_NO_REDEFINE_ORDER_BY, "HY000", "Named window cann't be modified by another ordering property", "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TYPE, -5441, -1, "42000", "invalid JSON type.", "invalid JSON type.", 40587, "invalid JSON type.", "invalid JSON type.")
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_PATH_SYNTAX_ERROR, -5442, -1, "42000", "JSON path expression syntax error ('INT')", "JSON path expression syntax error ('%s')", 40442, "JSON path expression syntax error ('INT')", "JSON path expression syntax error ('%s')");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING, -5443, -1, "42000", "invalid data type for return value", 40449, "invalid data type for return value");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_VALUE_NO_SCALAR, -5444, -1, "42000", "JSON_VALUE evaluated to non-scalar value","JSON_VALUE evaluated to non-scalar value", 40456, "JSON_VALUE evaluated to non-scalar value", "JSON_VALUE evaluated to non-scalar value");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_VALUE_NO_VALUE, -5445, -1, "42000", "JSON_VALUE evaluated to no value", 40462, "JSON_VALUE evaluated to no value");
+DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_VALUE_NOT_LITERAL, -5446, -1, "42000", "default value not a literal", 40455, "default value not a literal");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_SYNTAX_ERROR, -5447, -1, "42000", "JSON syntax error", 40441, "JSON syntax error");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_EQUAL_OUTSIDE_PREDICATE, -5448, -1, "42000", "JSON_EQUAL used outside predicate", 40600, "JSON_EQUAL used outside predicate");
+DEFINE_ORACLE_ERROR(OB_ERR_WITHOUT_ARR_WRAPPER, -5449, -1, "42000", "result cannot be returned without array wrapper", 40480, "result cannot be returned without array wrapper");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_PATCH_INVALID, -5450, -1, "42000", "Patch specification is not valid JSON", 40629, "Patch specification is not valid JSON");
+DEFINE_ORACLE_ERROR(OB_ERR_ORDER_SIBLINGS_BY_NOT_ALLOWED, -5451, -1, "42000", "ORDER SIBLINGS BY clause not allowed here", 30929, "ORDER SIBLINGS BY clause not allowed here");
+DEFINE_ORACLE_ERROR(OB_ERR_LOB_TYPE_NOT_SORTING, -5452, -1, "42000", "Column of LOB type cannot be used for sorting", 40750, "Column of LOB type cannot be used for sorting");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUPLICATE_KEY, -5453, -1, "42000", "duplicate key names in JSON object", "duplicate key names in JSON object", 40473, "duplicate key names in JSON object", "duplicate key names in JSON object");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR, -5454, -1, "42000", "JSON path expression syntax error ('')", "JSON path expression syntax error ('%.*s')", 40597, "JSON path expression syntax error ('')", "JSON path expression syntax error ('%.*s')");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_ILLEGAL_ZERO_LENGTH_IDENTIFIER_ERROR, -5455, -1, "42000", "illegal zero-length identifier", 01741, "illegal zero-length identifier");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_VALUE_IN_PASSING, -5456, -1, "42000", "Variable in JSON path expression has no value in PASSING clause.", 40656, "Variable in JSON path expression has no value in PASSING clause.");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_COLUMN_SPE, -5457, -1, "42000", "JSON syntax error", 1747, "invalid user.table.column, table.column, or column specification");
+DEFINE_ORACLE_ERROR(OB_ERR_INPUT_JSON_NOT_BE_NULL, -5458, -1, "42000", "JSON syntax error", 40595, "Name input to JSON generation function cannot be null");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DATA_TYPE, -5459, -1, "42000", "invalid data type for '%s' column", 40484, "invalid data type for '%s' column");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CLAUSE, -5460, -1, "42000", "invalid '%s' clause", 40450, "invalid '%s' clause");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CMP_OP, -5461, -1, "42000", "invalid comparison operation involving JSON type value", 40796, "invalid comparison operation involving JSON type value");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_INPUT, -5462, -1, "42000", "Invalid Input", 30980, "Invalid Input");
+DEFINE_ORACLE_ERROR(OB_ERR_EMPTY_INPUT_TO_JSON_OPERATOR, -5463, -1, "42000", "empty input to JSON operator", 40833, "empty input to JSON operator");
+DEFINE_ORACLE_ERROR(OB_ERR_ADDITIONAL_IS_JSON, -5464, -1, "42000", "cannot add additional IS jSON check constraint", 40664, "cannot add additional IS jSON check constraint");
+DEFINE_ORACLE_ERROR(OB_ERR_FUNCTION_INVALID_STATE, -5465, -1, "42000", "Package or function PRO is in an invalid state", 6575, "Package or function PRO is in an invalid state");
+DEFINE_ORACLE_ERROR(OB_ERR_MISS_VALUE, -5466, -1, "HY000", "missing VALUE keyword", 2000, "missing VALUE keyword");
+DEFINE_ORACLE_ERROR(OB_ERR_DIFFERENT_TYPE_SELECTED, -5467, -1, "42000", "JSON path expression selected a value of different data type", 40566, "JSON path expression selected a value of different data type");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_VALUE_SELECTED, -5468, -1, "42000", "JSON path expression did not select a value.", 40565, "JSON path expression did not select a value.");
+DEFINE_ORACLE_ERROR(OB_ERR_NON_TEXT_RET_NOTSUPPORT, -5469, -1, "42000", "ASCII or PRETTY not supported for non-textual return data type", 40481, "ASCII or PRETTY not supported for non-textual return data type");
+DEFINE_ORACLE_ERROR(OB_ERR_PL_JSONTYPE_USAGE, -5470, -1, "42000", "Invalid use of PL/SQL JSON object type", 40573, "Invalid use of PL/SQL JSON object type");
+DEFINE_ORACLE_ERROR(OB_ERR_NULL_INPUT, -5471, -1, "42000", "Input cannot be null", 64403, "Input cannot be null");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_NOT_ISO_8601_FORMAT, -5472, -1, "42000", "date or time stamp string value does not conform to ISO 8601 format","Jdate or time stamp string value does not conform to ISO 8601 format", 40688, "date or time stamp string value does not conform to ISO 8601 format", "date or time stamp string value does not conform to ISO 8601 format");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_VALUE_EXCEEDED_MAX, -5473, -1, "42000", "value is out of range", "%d value is out of range in %d", 40459, "output value too large", "output value too large (actual: %d, maximum: %d)");
+DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_VALUE_NOT_MATCH, -5474, -1, "42000", "default value not matching type defined in RETURNING clause", 40452, "default value not matching type defined in RETURNING clause");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOL_NOT_CONVERT_NUMBER, -5475, -1, "42000", "cannot convert Boolean value to number", "cannot convert Boolean value to number", 40799, "cannot convert Boolean value to number", "cannot convert Boolean value to number");
+DEFINE_ORACLE_ERROR(OB_ERR_CONVERSION_FAIL, -5476, -1, "42000", "JSON conversion failed", 40570, "JSON conversion failed");
+DEFINE_ORACLE_ERROR(OB_ERR_NOT_OBJ_REF, -5477, -1, "42000", "not an object or REF", 22806, "not an object or REF");
+DEFINE_ORACLE_ERROR(OB_ERR_UNSUPPORT_TRUNCATE_TYPE, -5478, -1, "42000", "Truncation is not supported with data type in RETURNING clause", 40779, "Truncation is not supported with data type in RETURNING clause");
+DEFINE_ORACLE_ERROR(OB_ERR_UNIMPLEMENT_JSON_FEATURE, -5479, -1, "42000", "Unimplemented JSON feature", 40569, "Unimplemented JSON feature");
+DEFINE_ORACLE_ERROR(OB_ERR_USAGE_KEYWORD, -5480, -1, "42000", "invalid usage of keyword EXISTS", 40487, "invalid usage of keyword EXISTS");
+DEFINE_ORACLE_ERROR(OB_ERR_INPUT_JSON_TABLE, -5481, -1, "42000", "invalid input data type for JSON_TABLE", 40491, "invalid input data type for JSON_TABLE");
+DEFINE_ORACLE_ERROR(OB_ERR_BOOL_CAST_NUMBER, -5482, -1, "42000", "cannot convert Boolean value to number", 40799, "cannot convert Boolean value to number");
+DEFINE_ORACLE_ERROR(OB_ERR_NESTED_PATH_DISJUNCT, -5483, -1, "42000", "JSON_TABLE nested path expressions not disjunct", 40560, "JSON_TABLE nested path expressions not disjunct");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_VARIABLE_IN_JSON_PATH, -5484, -1, "42000", " Invalid use of bind variable in SQL/JSON path.", 40576, " Invalid use of bind variable in SQL/JSON path.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_KEY_NOT_FOUND, -5485, -1, "42000", "JSON key name not found.", "JSON key name not found.", 40571, "JSON key name not found.", "JSON key name not found."))
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED, -5486, -1, "42000", "Invalid numeric", 40451, "invalid default value provided");
+DEFINE_ORACLE_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL, -5487, -1, "42000", "path expression not a literal", 40454, "path expression not a literal");
+DEFINE_PLS_ERROR_EXT(OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL, -5488, -1, "HY000", "invalid argument for JSON call", "invalid argument for %s call", 185, "invalid argument for JSON call", "invalid argument for %s call");
+DEFINE_ERROR(OB_ERR_SCHEMA_HISTORY_EMPTY, -5489, -1, "HY000", "Schema history is empty");
+DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list"));
+DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART, -5491, -1, "42000", "DEFAULT partition must be last partition specified", 14318, "DEFAULT partition must be last partition specified");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
@@ -1234,11 +1308,11 @@ DEFINE_ORACLE_ERROR(OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER, -5736, -1, "HY000"
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_ILLEGAL_QUERY_NAME, -5737, -1, "HY000", "illegal reference of a query name in WITH clause", 32031, "illegal reference of a query name in WITH clause");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_UNSUPPORTED_COLUMN_ALIASING, -5738, -1, "HY000", "unsupported column aliasing", 32033, "unsupported column aliasing");
 DEFINE_ORACLE_ERROR(OB_ERR_UNSUPPORTED_USE_OF_CTE, -5739, -1, "HY000", "unsupported use of WITH clause", 32034, "unsupported use of WITH clause");
-DEFINE_ORACLE_ERROR(OB_ERR_CTE_COLUMN_NUMBER_NOT_MATCH, -5740, -1, "HY000", "number of WITH clause column names does not match number of elements in select list", 32038, "number of WITH clause column names does not match number of elements in select list");
+DEFINE_ORACLE_ERROR(OB_ERR_CTE_COLUMN_NUMBER_NOT_MATCH, -5740, ER_VIEW_WRONG_LIST, "HY000", "View's SELECT and view's field list have different column counts", 32038, "number of WITH clause column names does not match number of elements in select list");
 DEFINE_ORACLE_ERROR(OB_ERR_NEED_COLUMN_ALIAS_LIST_IN_RECURSIVE_CTE, -5741, -1, "HY000", "recursive WITH clause must have column alias list", 32039, "recursive WITH clause must have column alias list");
-DEFINE_ORACLE_ERROR(OB_ERR_NEED_UNION_ALL_IN_RECURSIVE_CTE, -5742, -1, "HY000", "recursive WITH clause must use a UNION ALL operation", 32040, "recursive WITH clause must use a UNION ALL operation");
+DEFINE_ORACLE_ERROR(OB_ERR_NEED_UNION_ALL_IN_RECURSIVE_CTE, -5742, ER_CTE_RECURSIVE_REQUIRES_UNION, "HY000", "recursive WITH clause must use a UNION ALL operation", 32040, "recursive WITH clause must use a UNION ALL operation");
 DEFINE_ORACLE_ERROR(OB_ERR_NEED_ONLY_TWO_BRANCH_IN_RECURSIVE_CTE, -5743, -1, "HY000", "UNION ALL operation in recursive WITH clause must have only two branches", 32041, "UNION ALL operation in recursive WITH clause must have only two branches");
-DEFINE_ORACLE_ERROR(OB_ERR_NEED_REFERENCE_ITSELF_DIRECTLY_IN_RECURSIVE_CTE, -5744, -1, "HY000", "recursive WITH clause must reference itself directly in one of the UNION ALL branches", 32042, "recursive WITH clause must reference itself directly in one of the UNION ALL branches");
+DEFINE_ORACLE_ERROR(OB_ERR_NEED_REFERENCE_ITSELF_DIRECTLY_IN_RECURSIVE_CTE, -5744, ER_CTE_RECURSIVE_REQUIRES_SINGLE_REFERENCE, "HY000", "In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery", 32042, "recursive WITH clause must reference itself directly in one of the UNION ALL branches");
 DEFINE_ORACLE_ERROR(OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE, -5745, -1, "HY000", "recursive WITH clause needs an initialization branch", 32043, "recursive WITH clause needs an initialization branch");
 DEFINE_ORACLE_ERROR(OB_ERR_CYCLE_FOUND_IN_RECURSIVE_CTE, -5746, -1, "HY000", "cycle detected while executing recursive WITH query", 32044, "cycle detected while executing recursive WITH query");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_REACH_MAX_LEVEL_RECURSION, -5747, -1, "HY000", "maximum level of recursion reached while executing recursive WITH query", 32045, "maximum level of recursion reached while executing recursive WITH query");
@@ -1252,8 +1326,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_CTE_DUPLICATE_SEQ_NAME_CYCLE_COLUMN, -5754, -1, "HY00
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_DUPLICATE_NAME_IN_SEARCH_CLAUSE, -5755, -1, "HY000", "duplicate name found in sort specification list for SEARCH clause of WITH clause", 32483, "duplicate name found in sort specification list for SEARCH clause of WITH clause");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_DUPLICATE_NAME_IN_CYCLE_CLAUSE, -5756, -1, "HY000", "duplicate name found in cycle column list for CYCLE clause of WITH clause", 32484, "duplicate name found in cycle column list for CYCLE clause of WITH clause");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_ILLEGAL_COLUMN_IN_CYCLE_CLAUSE, -5757, -1, "HY000", "element in cycle column list of CYCLE clause must appear in the column alias list of the WITH clause element", 32485, "element in cycle column list of CYCLE clause must appear in the column alias list of the WITH clause element");
-DEFINE_ORACLE_ERROR(OB_ERR_CTE_ILLEGAL_RECURSIVE_BRANCH, -5758, -1, "HY000", "unsupported operation in recursive branch of recursive WITH clause", 32486, "unsupported operation in recursive branch of recursive WITH clause");
-DEFINE_ORACLE_ERROR(OB_ERR_ILLEGAL_JOIN_IN_RECURSIVE_CTE, -5759, -1, "HY000", "unsupported join in recursive WITH query", 32487, "unsupported join in recursive WITH query");
+DEFINE_ORACLE_ERROR(OB_ERR_CTE_ILLEGAL_RECURSIVE_BRANCH, -5758, ER_CTE_RECURSIVE_FORBIDS_AGGREGATION, "HY000", "Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block", 32486, "unsupported operation in recursive branch of recursive WITH clause");
+DEFINE_ORACLE_ERROR(OB_ERR_ILLEGAL_JOIN_IN_RECURSIVE_CTE, -5759, ER_CTE_RECURSIVE_FORBIDDEN_JOIN_ORDER, "HY000", "In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints", 32487, "unsupported join in recursive WITH query");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_NEED_COLUMN_ALIAS_LIST, -5760, -1, "HY000", "WITH clause element did not have a column alias list", 32488, "WITH clause element did not have a column alias list");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_ILLEGAL_COLUMN_IN_SERACH_CALUSE, -5761, -1, "HY000", "element in sort specification list of SEARCH clause did not appear in the column alias list of the WITH clause element", 32489, "element in sort specification list of SEARCH clause did not appear in the column alias list of the WITH clause element");
 DEFINE_ORACLE_ERROR(OB_ERR_CTE_RECURSIVE_QUERY_NAME_REFERENCED_MORE_THAN_ONCE, -5762, -1, "HY000", "recursive query name referenced more than once in recursive branch of recursive WITH clause element", 32490, "recursive query name referenced more than once in recursive branch of recursive WITH clause element");
@@ -1594,10 +1668,15 @@ DEFINE_ORACLE_ERROR(OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_
 DEFINE_ERROR(OB_OBJ_LOCK_NOT_COMPLETED, -6275, -1, "HY000", "object lock not completed, and can not unlock.");
 DEFINE_ERROR(OB_OBJ_UNLOCK_CONFLICT, -6276, -1, "HY000", "there is an unlock operation doing, unlock conflict.");
 
-// for memtable log_ts
-DEFINE_ERROR(OB_LOG_TS_OUT_OF_BOUND, -6277, -1, "HY000", "log_ts is out of bounds of memtable");
+// for memtable scn
+DEFINE_ERROR(OB_SCN_OUT_OF_BOUND, -6277, -1, "HY000", "scn is out of bounds of memtable");
 
 DEFINE_ORACLE_ERROR(OB_TRANS_IDLE_TIMEOUT, -6278, 6002, "25000", "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction", 24761, "transaction rolled back: transaction idle timeout");
+// for transaction free route
+DEFINE_ORACLE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, 6279, "HY000", "Query is not supported to be executed on txn temporary node", 6279, "Query is not supported to be executed on txn temporary node");
+
+DEFINE_ERROR(OB_TRANS_LIVE_TOO_MUCH_TIME, -6280, -1, "HY000", "Transaction cost too much without commit or rollback");
+DEFINE_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME, -6281, -1, "HY000", "Transaction commit cost too much");
 
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
@@ -1622,8 +1701,11 @@ DEFINE_ERROR(OB_LOG_NEED_REBUILD, -6319, -1, "HY000", "need rebuild");
 DEFINE_ERROR(OB_TOO_MANY_LOG_TASK, -6320, -1, "HY000", "too many log tasks");
 DEFINE_ERROR(OB_INVALID_BATCH_SIZE, -6321, -1, "HY000", "ob invalid batch size");
 DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout");
+DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
+DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
 
-// for table lock
+// for freeze
+// DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
 
 ////////////////////////////////////////////////////////////////
 //error code for election -7000 ---- -7100
@@ -1674,6 +1756,101 @@ DEFINE_ERROR(OB_RG_NOT_MATCH, -7105, -1, "HY000", "replication group not match")
 DEFINE_ERROR(OB_TRANSFER_TASK_ABORTED, -7106, -1, "HY000", "transfer task aborted");
 DEFINE_ERROR(OB_TRANSFER_INVALID_MESSAGE, -7107, -1, "HY000", "transfer invalid message");
 DEFINE_ERROR(OB_TRANSFER_CTX_TS_NOT_MATCH, -7108, -1, "HY000", "transfer ctx_ts not match");
+DEFINE_ERROR(OB_TRANSFER_SYS_ERROR, -7109, -1, "HY000", "transfer system error");
+DEFINE_ERROR(OB_TRANSFER_MEMBER_LIST_NOT_SAME, -7110, -1, "HY000", "transfer src ls and dest ls member list not same");
+DEFINE_ERROR(OB_ERR_UNEXPECTED_LOCK_OWNER, -7111, -1, "HY000", "lock owner id is not expected");
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//error code for gis  -7201 ---- -7300
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_DIFFERENT_SRIDS, -7201, ER_GIS_DIFFERENT_SRIDS, "HY000", "Binary geometry function given two geometries of different srids.", "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical.", 600, "Binary geometry function given two geometries of different srids.", "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_UNSUPPORTED_ARGUMENT, -7202, ER_GIS_UNSUPPORTED_ARGUMENT, "HY000", "Calling geometry function with unsupported types of arguments.", "Calling geometry function %s with unsupported types of arguments.", 600, "Calling geometry function with unsupported types of arguments.", "Calling geometry function %s with unsupported types of arguments.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_UNKNOWN_ERROR, -7203, ER_GIS_UNKNOWN_ERROR, "HY000", "Unknown GIS error occurred in function.", "Unknown GIS error occurred in function %s.", 600, "Unknown GIS error occurred in function.", "Unknown GIS error occurred in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_UNKNOWN_EXCEPTION, -7204, ER_GIS_UNKNOWN_EXCEPTION, "HY000", "Unknown exception caught in GIS function.", "Unknown exception caught in GIS function %s.", 600, "Unknown exception caught in GIS function.", "Unknown exception caught in GIS function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_INVALID_DATA, -7205, ER_GIS_INVALID_DATA, "22023", "Invalid GIS data provided to function.", "Invalid GIS data provided to function %s.", 600, "Invalid GIS data provided to function.", "Invalid GIS data provided to function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_EMPTY_INPUT_EXCEPTION, -7206, ER_BOOST_GEOMETRY_EMPTY_INPUT_EXCEPTION, "HY000", "The geometry has no data in function.", "The geometry has no data in function %s.", 600, "The geometry has no data in function.", "The geometry has no data in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_CENTROID_EXCEPTION, -7207, ER_BOOST_GEOMETRY_CENTROID_EXCEPTION, "HY000", "Unable to calculate centroid because geometry is empty in function.", "Unable to calculate centroid because geometry is empty in function %s.", 600, "Unable to calculate centroid because geometry is empty in function.", "Unable to calculate centroid because geometry is empty in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_OVERLAY_INVALID_INPUT_EXCEPTION, -7208, ER_BOOST_GEOMETRY_OVERLAY_INVALID_INPUT_EXCEPTION, "HY000", "Geometry overlay calculation error: geometry data is invalid in function.", "Geometry overlay calculation error: geometry data is invalid in function %s.", 600, "Geometry overlay calculation error: geometry data is invalid in function.", "Geometry overlay calculation error: geometry data is invalid in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_TURN_INFO_EXCEPTION, -7209, ER_BOOST_GEOMETRY_TURN_INFO_EXCEPTION, "HY000", "Geometry turn info calculation error: geometry data is invalid in function.", "Geometry turn info calculation error: geometry data is invalid in function %s.", 600, "Geometry turn info calculation error: geometry data is invalid in function.", "Geometry turn info calculation error: geometry data is invalid in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_SELF_INTERSECTION_POINT_EXCEPTION, -7210, ER_BOOST_GEOMETRY_SELF_INTERSECTION_POINT_EXCEPTION, "HY000", "Analysis procedures of intersection points interrupted unexpectedly in function.", "Analysis procedures of intersection points interrupted unexpectedly in function %s.", 600, "Analysis procedures of intersection points interrupted unexpectedly in function.", "Analysis procedures of intersection points interrupted unexpectedly in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_UNKNOWN_EXCEPTION, -7211, ER_BOOST_GEOMETRY_UNKNOWN_EXCEPTION, "HY000", "Unknown exception thrown in function.", "Unknown exception thrown in function %s.", 600, "Unknown exception thrown in function.", "Unknown exception thrown in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_DATA_WRONG_ENDIANESS, -7212, ER_GIS_DATA_WRONG_ENDIANESS, "HY000", "Geometry byte string must be little endian.", "Geometry byte string must be little endian.", 600, "Geometry byte string must be little endian.", "Geometry byte string must be little endian.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS, -7213, ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS, "HY000", "Do not support online operation on table with GIS index", "Do not support online operation on table with GIS index", 600, "Do not support online operation on table with GIS index", "Do not support online operation on table with GIS index");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_BOOST_GEOMETRY_INCONSISTENT_TURNS_EXCEPTION, -7214, ER_BOOST_GEOMETRY_INCONSISTENT_TURNS_EXCEPTION, "HY000", "Inconsistent intersection points.", "Inconsistent intersection points.", 600, "Inconsistent intersection points.", "Inconsistent intersection points.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_MAX_POINTS_IN_GEOMETRY_OVERFLOWED, -7215, ER_GIS_MAX_POINTS_IN_GEOMETRY_OVERFLOWED, "HY000", "Parameter exceeds the maximum number of points in a geometryin function.", "Parameter %s exceeds the maximum number of points in a geometry (%lu) in function %s.", 600, "Parameter exceeds the maximum number of points in a geometry in function.", "Parameter %s exceeds the maximum number of points in a geometry (%lu) in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_UNEXPECTED_GEOMETRY_TYPE, -7216, ER_UNEXPECTED_GEOMETRY_TYPE, "22S01", "value is a geometry of unexpected type", "%.64s value is a geometry of unexpected type %.64s in %.64s.", 600, "Invalid value type", "%.64s value is a geometry of unexpected type %.64s in %.64s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_PARSE_ERROR, -7217, ER_SRS_PARSE_ERROR, "SR002", "Can\'t parse the spatial reference system definition of SRID.", "Can\'t parse the spatial reference system definition of SRID %u.", 600, "Can\'t parse the spatial reference system definition of SRID.", "Can\'t parse the spatial reference system definition of SRID %u.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_PROJ_PARAMETER_MISSING, -7218, ER_SRS_PROJ_PARAMETER_MISSING, "SR003", "The spatial reference system definition for SRID does not specify the mandatory (EPSG) projection parameter.", "The spatial reference system definition for SRID %u does not specify the mandatory %s (EPSG %u) projection parameter.", 600, "The spatial reference system definition for SRID does not specify the mandatory (EPSG) projection parameter.", "The spatial reference system definition for SRID %u does not specify the mandatory %s (EPSG %u) projection parameter.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_WARN_SRS_NOT_FOUND, -7219, ER_WARN_SRS_NOT_FOUND, "01000", "There\'s no spatial reference system with SRID.", "There\'s no spatial reference system with SRID %u.", 600, "There\'s no spatial reference system with SRID.", "There\'s no spatial reference system with SRID %u.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_NOT_CARTESIAN, -7220, ER_SRS_NOT_CARTESIAN, "22S00", "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which is not Cartesian.", "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which is not Cartesian.", 600, "Function is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID, which is not Cartesian.", "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which is not Cartesian.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_NOT_CARTESIAN_UNDEFINED, -7221, ER_SRS_NOT_CARTESIAN_UNDEFINED, "SR001", "Function is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID, which has not been defined.", "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which has not been defined.", 600, "Function is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID, which has not been defined.", "Function %s is only defined for Cartesian spatial reference systems, but one of its arguments is in SRID %u, which has not been defined.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_NOT_FOUND, -7222, ER_SRS_NOT_FOUND, "SR001", "There\'s no spatial reference system with SRID.", "There\'s no spatial reference system with SRID %u.", 600, "There\'s no spatial reference system with SRID.", "There\'s no spatial reference system with SRID %u.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_WARN_SRS_NOT_FOUND_AXIS_ORDER, -7223, ER_WARN_SRS_NOT_FOUND_AXIS_ORDER, "01000", "There\'s no spatial reference system with SRID. The axis order is unknown.", "There\'s no spatial reference system with SRID %u. The axis order is unknown.", 600, "There\'s no spatial reference system with SRID. The axis order is unknown.", "There\'s no spatial reference system with SRID %u. The axis order is unknown.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, -7224, ER_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, "22S00", "It has not been implemented for geographic spatial reference systems.", "%.192s(%.80s) has not been implemented for geographic spatial reference systems.", 600, "It has not been implemented for geographic spatial reference systems.", "%.192s(%.80s) has not been implemented for geographic spatial reference systems.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_WRONG_SRID_FOR_COLUMN, -7225, ER_WRONG_SRID_FOR_COLUMN, "HY000", "The SRID of the geometry does not match the SRID of the column.", "The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is %lu, but the SRID of the column is %lu. Consider changing the SRID of the geometry or the SRID property of the column.", 600, "The SRID of the geometry does not match the SRID of the column.", "The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is %lu, but the SRID of the column is %lu. Consider changing the SRID of the geometry or the SRID property of the column.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_CANNOT_ALTER_SRID_DUE_TO_INDEX, -7226, ER_CANNOT_ALTER_SRID_DUE_TO_INDEX, "HY000", "The SRID specification on the column cannot be changed because there is a spatial index on the column.", "The SRID specification on the column \'%.64s\' cannot be changed because there is a spatial index on the column. Please remove the spatial index before altering the SRID specification.", 600, "The SRID specification on the column cannot be changed because there is a spatial index on the column.", "The SRID specification on the column \'%.64s\' cannot be changed because there is a spatial index on the column. Please remove the spatial index before altering the SRID specification.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_WARN_USELESS_SPATIAL_INDEX, -7227, ER_WARN_USELESS_SPATIAL_INDEX, "HY000", "The spatial index on column will not be used by the query optimizer since the column does not have an SRID attribute.", "The spatial index on column \'%.64s\' will not be used by the query optimizer since the column does not have an SRID attribute. Consider adding an SRID attribute to the column.", 600, "The spatial index on column will not be used by the query optimizer since the column does not have an SRID attribute.", "The spatial index on column \'%.64s\' will not be used by the query optimizer since the column does not have an SRID attribute. Consider adding an SRID attribute to the column.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_ONLY_IMPLEMENTED_FOR_SRID_0_AND_4326, -7228, ER_ONLY_IMPLEMENTED_FOR_SRID_0_AND_4326, "22S00", "Function is only defined for SRID 0 and SRID 4326.", "Function %.192s is only defined for SRID 0 and SRID 4326.", 600, "Function is only defined for SRID 0 and SRID 4326.", "Function %.192s is only defined for SRID 0 and SRID 4326.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS, -7229, ER_NOT_IMPLEMENTED_FOR_CARTESIAN_SRS, "22S00", "It has not been implemented for Cartesian spatial reference systems.", "%.192s(%.80s) has not been implemented for Cartesian spatial reference systems.", 600, "It has not been implemented for Cartesian spatial reference systems.", "%.192s(%.80s) has not been implemented for Cartesian spatial reference systems.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_NOT_IMPLEMENTED_FOR_PROJECTED_SRS, -7230, ER_NOT_IMPLEMENTED_FOR_PROJECTED_SRS, "22S00", "It has not been implemented for projected spatial reference systems.", "%.192s(%.80s) has not been implemented for projected spatial reference systems.", 600, "It has not been implemented for projected spatial reference systems.", "%.192s(%.80s) has not been implemented for projected spatial reference systems.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_MISSING_MANDATORY_ATTRIBUTE, -7231, ER_SRS_MISSING_MANDATORY_ATTRIBUTE, "SR006", "Missing mandatory attribute.", "Missing mandatory attribute %s.", 600, "Missing mandatory attribute.", "Missing mandatory attribute %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_MULTIPLE_ATTRIBUTE_DEFINITIONS, -7232, ER_SRS_MULTIPLE_ATTRIBUTE_DEFINITIONS, "SR006", "Multiple definitions of attribute.", "Multiple definitions of attribute %s.", 600, "Multiple definitions of attribute.", "Multiple definitions of attribute %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_NAME_CANT_BE_EMPTY_OR_WHITESPACE, -7233, ER_SRS_NAME_CANT_BE_EMPTY_OR_WHITESPACE, "SR006", "The spatial reference system name can\'t be an empty string or start or end with whitespace.", "The spatial reference system name can\'t be an empty string or start or end with whitespace.", 600, "The spatial reference system name can\'t be an empty string or start or end with whitespace.", "The spatial reference system name can\'t be an empty string or start or end with whitespace.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_ORGANIZATION_CANT_BE_EMPTY_OR_WHITESPACE, -7234, ER_SRS_ORGANIZATION_CANT_BE_EMPTY_OR_WHITESPACE, "SR006", "The organization name can\'t be an empty string or start or end with whitespace.", "The organization name can\'t be an empty string or start or end with whitespace.", 600, "The organization name can\'t be an empty string or start or end with whitespace.", "The organization name can\'t be an empty string or start or end with whitespace.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_ID_ALREADY_EXISTS, -7235, ER_SRS_ID_ALREADY_EXISTS, "SR004", "There is already a spatial reference system with SRID.", "There is already a spatial reference system with SRID %u.", 600, "There is already a spatial reference system with SRID.", "There is already a spatial reference system with SRID %u.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_WARN_SRS_ID_ALREADY_EXISTS, -7236, ER_WARN_SRS_ID_ALREADY_EXISTS, "01S00", "There is already a spatial reference system with SRID.", "There is already a spatial reference system with SRID %u.", 600, "There is already a spatial reference system with SRID.", "There is already a spatial reference system with SRID %u.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_CANT_MODIFY_SRID_0, -7237, ER_CANT_MODIFY_SRID_0, "SR000", "SRID 0 is not modifiable.", "SRID 0 is not modifiable.", 600, "SRID 0 is not modifiable.", "SRID 0 is not modifiable.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_WARN_RESERVED_SRID_RANGE, -7238, ER_WARN_RESERVED_SRID_RANGE, "01S01", "The SRID range has been reserved for system use. SRSs in this range may be added, modified or removed without warning during upgrade.", "The SRID range [%u, %u] has been reserved for system use. SRSs in this range may be added, modified or removed without warning during upgrade.", 600, "The SRID range has been reserved for system use. SRSs in this range may be added, modified or removed without warning during upgrade.", "The SRID range [%u, %u] has been reserved for system use. SRSs in this range may be added, modified or removed without warning during upgrade.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_CANT_MODIFY_SRS_USED_BY_COLUMN, -7239, ER_CANT_MODIFY_SRS_USED_BY_COLUMN, "SR005", "Can\'t modify SRID. There is at least one column depending on it.", "Can\'t modify SRID %u. There is at least one column depending on it.", 600, "Can\'t modify SRID. There is at least one column depending on it.", "Can\'t modify SRID %u. There is at least one column depending on it.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_INVALID_CHARACTER_IN_ATTRIBUTE, -7240, ER_SRS_INVALID_CHARACTER_IN_ATTRIBUTE, "SR006", "Invalid character in attribute.", "Invalid character in attribute %s.", 600, "Invalid character in attribute.", "Invalid character in attribute %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_ATTRIBUTE_STRING_TOO_LONG, -7241, ER_SRS_ATTRIBUTE_STRING_TOO_LONG, "SR006", "Attribute is too long.", "Attribute %s is too long. The maximum length is %u characters.", 600, "Attribute is too long.", "Attribute %s is too long. The maximum length is %u characters.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_NOT_GEOGRAPHIC, -7242, ER_SRS_NOT_GEOGRAPHIC, "22S00", "Function is only defined for geographic spatial reference systems, but one of its arguments is in SRID, which is not geographic.", "Function %s is only defined for geographic spatial reference systems, but one of its arguments is in SRID %u, which is not geographic.", 600, "Function is only defined for geographic spatial reference systems, but one of its arguments is in SRID, which is not geographic.", "Function %s is only defined for geographic spatial reference systems, but one of its arguments is in SRID %u, which is not geographic.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_POLYGON_TOO_LARGE, -7243, ER_POLYGON_TOO_LARGE, "22023", "Function encountered a polygon that was too large. Polygons must cover less than half the planet.", "Function %s encountered a polygon that was too large. Polygons must cover less than half the planet.", 600, "Function encountered a polygon that was too large. Polygons must cover less than half the planet.", "Function %s encountered a polygon that was too large. Polygons must cover less than half the planet.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_UNIQUE_INDEX, -7244, ER_SPATIAL_UNIQUE_INDEX, "HY000", "Spatial indexes can\'t be primary or unique indexes.", "Spatial indexes can\'t be primary or unique indexes.", 600, "Spatial indexes can\'t be primary or unique indexes.", "Spatial indexes can\'t be primary or unique indexes.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, -7245, ER_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, "HY000", "The index type is not supported for spatial indexes.", "The index type %.20s is not supported for spatial indexes.", 600, "The index type is not supported for spatial indexes.", "The index type %.20s is not supported for spatial indexes.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE, -7246, ER_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE, "22S02", "A parameter of function contains a geometry with longitude, which is out of range.", "A parameter of function %.192s contains a geometry with longitude %f, which is out of range. It must be within (%f, %f].", 600, "A parameter of function contains a geometry with longitude, which is out of range.", "A parameter of function %.192s contains a geometry with longitude %f, which is out of range. It must be within (%f, %f].");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE, -7247, ER_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE, "22S03", "A parameter of function contains a geometry with latitude, which is out of range.", "A parameter of function %.192s contains a geometry with latitude %f, which is out of range. It must be within [%f, %f].", 600, "A parameter of function contains a geometry with latitude, which is out of range.", "A parameter of function %.192s contains a geometry with latitude %f, which is out of range. It must be within [%f, %f].");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_GEOGCS_INVALID_AXES, -7248, ER_SRS_GEOGCS_INVALID_AXES, "SR002", "The spatial reference system definition for SRID specifies invalid geographic axes. One axis must be NORTH or SOUTH and the other must be EAST or WEST.", "The spatial reference system definition for SRID %u specifies invalid geographic axes \'%.20s\' and \'%.20s\'. One axis must be NORTH or SOUTH and the other must be EAST or WEST.", 600, "The spatial reference system definition for SRID specifies invalid geographic axes. One axis must be NORTH or SOUTH and the other must be EAST or WEST.", "The spatial reference system definition for SRID %u specifies invalid geographic axes \'%.20s\' and \'%.20s\'. One axis must be NORTH or SOUTH and the other must be EAST or WEST.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_INVALID_SEMI_MAJOR_AXIS, -7249, ER_SRS_INVALID_SEMI_MAJOR_AXIS, "SR002", "The length of the semi-major axis must be a positive number.", "The length of the semi-major axis must be a positive number.", 600, "The length of the semi-major axis must be a positive number.", "The length of the semi-major axis must be a positive number.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_INVALID_INVERSE_FLATTENING, -7250, ER_SRS_INVALID_INVERSE_FLATTENING, "SR002", "The inverse flattening must be larger than 1.0, or 0.0 if the ellipsoid is a sphere.", "The inverse flattening must be larger than 1.0, or 0.0 if the ellipsoid is a sphere.", 600, "The inverse flattening must be larger than 1.0, or 0.0 if the ellipsoid is a sphere.", "The inverse flattening must be larger than 1.0, or 0.0 if the ellipsoid is a sphere.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_INVALID_ANGULAR_UNIT, -7251, ER_SRS_INVALID_ANGULAR_UNIT, "SR002", "The angular unit conversion factor must be a positive number.", "The angular unit conversion factor must be a positive number.", 600, "The angular unit conversion factor must be a positive number.", "The angular unit conversion factor must be a positive number.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_INVALID_PRIME_MERIDIAN, -7252, ER_SRS_INVALID_PRIME_MERIDIAN, "SR002", "The prime meridian must be within (-180, 180] degrees, specified in the SRS angular unit.", "The prime meridian must be within (-180, 180] degrees, specified in the SRS angular unit.", 600, "The prime meridian must be within (-180, 180] degrees, specified in the SRS angular unit.", "The prime meridian must be within (-180, 180] degrees, specified in the SRS angular unit.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, -7253, ER_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, "22S00", "Transformation from SRID is not supported.", "Transformation from SRID %u is not supported.", 600, "Transformation from SRID is not supported.", "Transformation from SRID %u is not supported.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TRANSFORM_TARGET_SRS_NOT_SUPPORTED, -7254, ER_TRANSFORM_TARGET_SRS_NOT_SUPPORTED, "22S00", "Transformation to SRID %u is not supported.", "Transformation to SRID %u is not supported.", 600, "Transformation to SRID is not supported.", "Transformation to SRID %u is not supported.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84, -7255, ER_TRANSFORM_SOURCE_SRS_MISSING_TOWGS84, "22S00", "Transformation from SRID is not supported. The spatial reference system has no TOWGS84 clause.", "Transformation from SRID %u is not supported. The spatial reference system has no TOWGS84 clause.", 600, "Transformation from SRID is not supported. The spatial reference system has no TOWGS84 clause.", "Transformation from SRID %u is not supported. The spatial reference system has no TOWGS84 clause.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_TRANSFORM_TARGET_SRS_MISSING_TOWGS84, -7256, ER_TRANSFORM_TARGET_SRS_MISSING_TOWGS84, "22S00", "Transformation to SRID is not supported. The spatial reference system has no TOWGS84 clause.", "Transformation to SRID %u is not supported. The spatial reference system has no TOWGS84 clause.", 600, "Transformation to SRID is not supported. The spatial reference system has no TOWGS84 clause.", "Transformation to SRID %u is not supported. The spatial reference system has no TOWGS84 clause.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION, -7257, ER_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION, "42000", "Cannot create a functional index on a function that returns a JSON or GEOMETRY value.", "Cannot create a functional index on a function that returns a JSON or GEOMETRY value.", 600, "Cannot create a functional index on a function that returns a JSON or GEOMETRY value.", "Cannot create a functional index on a function that returns a JSON or GEOMETRY value.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_FUNCTIONAL_INDEX, -7258, ER_SPATIAL_FUNCTIONAL_INDEX, "HY000", "Spatial functional index is not supported.", "Spatial functional index is not supported.", 600, "Spatial functional index is not supported.", "Spatial functional index is not supported.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT, -7259, ER_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT, "SU001", "The geometry passed to function is in SRID 0, which doesn\'t specify a length unit. Can\'t convert.", "The geometry passed to function %s is in SRID 0, which doesn\'t specify a length unit. Can\'t convert to \'%s\'.", 600, "The geometry passed to function is in SRID 0, which doesn\'t specify a length unit. Can\'t convert.", "The geometry passed to function %s is in SRID 0, which doesn\'t specify a length unit. Can\'t convert to \'%s\'.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_CAST_TO_GEOMETRY, -7260, ER_INVALID_CAST_TO_GEOMETRY, "22S01", "Invalid cast.", "Invalid cast from %s to %s.", 600, "Invalid cast.", "Invalid cast from %s to %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_CAST_POLYGON_RING_DIRECTION, -7261, ER_INVALID_CAST_POLYGON_RING_DIRECTION, "22S04", "Invalid cast. A polygon ring is in the wrong direction.", "Invalid cast from %s to %s. A polygon ring is in the wrong direction.", 600, "Invalid cast. A polygon ring is in the wrong direction.", "Invalid cast from %s to %s. A polygon ring is in the wrong direction.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION, -7262, ER_GIS_DIFFERENT_SRIDS_AGGREGATION, "22S05", "Arguments to function contains geometries with different SRIDs. All geometries must have the same SRID.", "Arguments to function %s contains geometries with different SRIDs: %u and %u. All geometries must have the same SRID.", 600, "Arguments to function contains geometries with different SRIDs. All geometries must have the same SRID.", "Arguments to function %s contains geometries with different SRIDs: %u and %u. All geometries must have the same SRID.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_LONGITUDE_OUT_OF_RANGE, -7263, ER_LONGITUDE_OUT_OF_RANGE, "22S02", "Longitude is out of range in function.", "Longitude %f is out of range in function %.192s. It must be within (%f, %f].", 600, "Longitude is out of range in function.", "Longitude %f is out of range in function %.192s. It must be within (%f, %f].");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_LATITUDE_OUT_OF_RANGE, -7264, ER_LATITUDE_OUT_OF_RANGE, "22S03", "Latitude is out of range in function.", "Latitude %f is out of range in function %.192s. It must be within [%f, %f].", 600, "Latitude is out of range in function.", "Latitude %f is out of range in function %.192s. It must be within [%f, %f].");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_BAD_ALLOC_ERROR, -7265, ER_STD_BAD_ALLOC_ERROR, "HY000", "Memory allocation error", "Memory allocation error: %-.256s in function %s.", 600, "Memory allocation error", "Memory allocation error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_DOMAIN_ERROR, -7266, ER_STD_DOMAIN_ERROR, "HY000", "Domain error", "Domain error: %-.256s in function %s.", 600, "Domain error", "Domain error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_LENGTH_ERROR, -7267, ER_STD_LENGTH_ERROR, "HY000", "Length error", "Length error: %-.256s in function %s.", 600, "Length error", "Length error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_INVALID_ARGUMENT, -7268, ER_STD_INVALID_ARGUMENT, "HY000", "Invalid argument error", "Invalid argument error: %-.256s in function %s.", 600, "Invalid argument error", "Invalid argument error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_OUT_OF_RANGE_ERROR, -7269, ER_STD_OUT_OF_RANGE_ERROR, "HY000", "Out of range error", "Out of range error: %-.256s in function %s.", 600, "Out of range error", "Out of range error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_OVERFLOW_ERROR, -7270, ER_STD_OVERFLOW_ERROR, "HY000", "Overflow error", "Overflow error: %-.256s in function %s.", 600, "Overflow error", "Overflow error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_RANGE_ERROR, -7271, ER_STD_RANGE_ERROR, "HY000", "Range error", "Range error: %-.256s in function %s.", 600, "Range error", "Range error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_UNDERFLOW_ERROR, -7272, ER_STD_UNDERFLOW_ERROR, "HY000", "Underflow error", "Underflow error: %-.256s in function %s.", 600, "Underflow error", "Underflow error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_LOGIC_ERROR, -7273, ER_STD_LOGIC_ERROR, "HY000", "Logic error", "Logic error: %-.256s in function %s.", 600, "Logic error", "Logic error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_RUNTIME_ERROR, -7274, ER_STD_RUNTIME_ERROR, "HY000", "Runtime error", "Runtime error: %-.256s in function %s.", 600, "Runtime error", "Runtime error: %-.256s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_UNKNOWN_EXCEPTION, -7275, ER_STD_UNKNOWN_EXCEPTION, "HY000", "Unknown exception", "Unknown exception: %-.384s in function %s.", 600, "Unknown exception", "Unknown exception: %-.384s in function %s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT, -7276, ER_CANT_CREATE_GEOMETRY_OBJECT, "22003", "Cannot get geometry object from data you send to the GEOMETRY field.", "Cannot get geometry object from data you send to the GEOMETRY field.", 600, "Cannot get geometry object from data you send to the GEOMETRY field.", "Cannot get geometry object from data you send to the GEOMETRY field.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRID_WRONG_USAGE, -7277, ER_WRONG_USAGE, "HY000", "Incorrect usage of srid, srid column attribute only support in geometry.", "Incorrect usage of srid.", 600, "Incorrect usage of srid.", "Incorrect usage of srid.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INDEX_ORDER_WRONG_USAGE, -7278, ER_WRONG_USAGE, "HY000", "Incorrect usage of spatial/fulltext/hash index and explicit index order.", "Incorrect usage of spatial/fulltext/hash index and explicit index order.", 600, "Incorrect usage of spatial/fulltext/hash index and explicit index order.", "Incorrect usage of spatial/fulltext/hash index and explicit index order.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL, -7279, ER_SPATIAL_MUST_HAVE_GEOM_COL, "42000", "A SPATIAL index may only contain a geometrical type column.", "A SPATIAL index may only contain a geometrical type column.", 600, "A SPATIAL index may only contain a geometrical type column.", "A SPATIAL index may only contain a geometrical type column.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_CANT_HAVE_NULL, -7280, ER_SPATIAL_CANT_HAVE_NULL, "42000", "All parts of a SPATIAL index must be NOT NULL.", "All parts of a SPATIAL index must be NOT NULL.", 600, "All parts of a SPATIAL index must be NOT NULL.", "All parts of a SPATIAL index must be NOT NULL.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, -7281, ER_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, "HY000", "The index type is not supported for spatial indexes.", "The index type %s is not supported for spatial indexes.", 600, "The index type is not supported for spatial indexes.", "The index type %s is not supported for spatial indexes.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_UNIT_NOT_FOUND, -7282, ER_UNIT_NOT_FOUND, "SU001", "There\'s no unit of measure.", "There\'s no unit of measure named \'%s\'.", 600, "There\'s no unit of measure.", "There\'s no unit of measure named \'%s\'.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR, -7283, ER_INVALID_OPTION_KEY_VALUE_PAIR, "22023", "The string is not a valid key value pair in function.", "The string \'%.192s\' is not a valid key %c value pair in function %.192s.", 600, "The string is not a valid key value pair in function.", "The string \'%.192s\' is not a valid key %c value pair in function %.192s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_NONPOSITIVE_RADIUS, -7284, ER_NONPOSITIVE_RADIUS, "22023", "Invalid radius provided to function: Radius must be greater than zero.", "Invalid radius provided to function %s: Radius(%lf) must be greater than zero.", 600, "Invalid radius provided to function: Radius must be greater than zero.", "Invalid radius provided to function %s: Radius(%lf) must be greater than zero.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_EMPTY, -7285, ER_SRS_NOT_FOUND, "SR001", "Spatial reference system is empty.", "Spatial reference system is empty", 600, "Spatial reference system is empty", "Spatial reference system is empty");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_KEY, -7286, ER_INVALID_OPTION_KEY, "22023", "Invalid option key in function.", "Invalid option key \'%.192s\' in function %.192s.", 600, "Invalid option key in function.", "Invalid option key \'%.192s\' in function %.192s.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_VALUE, -7287, ER_INVALID_OPTION_VALUE, "22023", "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.", 600, "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_GEOMETRY_TYPE, -7288, ER_UNEXPECTED_GEOMETRY_TYPE, "22S01", "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).", 600, "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).");
 
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
@@ -1682,9 +1859,10 @@ DEFINE_ERROR(OB_SERVER_IS_INIT, -8001, -1, "08004", "Server is initializing");
 DEFINE_ERROR(OB_SERVER_IS_STOPPING, -8002, -1, "08004", "Server is stopping");
 DEFINE_ERROR(OB_PACKET_CHECKSUM_ERROR, -8003, -1, "08004", "Packet checksum error");
 DEFINE_ERROR_DEP(OB_PACKET_CLUSTER_ID_NOT_MATCH, -8004, -1, "08004", "Packet cluster_id not match");
+DEFINE_ERROR_DEP(OB_TENANT_ID_NOT_MATCH, -8005, -1, "08005", "Tenant id not match");
 
 ////////////////////////////////////////////////////////////////
-// backup and restore error codes
+// backup and restore error codes 9000 - 9099
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR_DEP(OB_URI_ERROR, -9001, -1, "HY000", "URI error");
 DEFINE_ERROR_DEP(OB_FINAL_MD5_ERROR, -9002, -1, "HY000", "OSS file MD5 error");
@@ -1773,10 +1951,17 @@ DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, -9084, -1, "HY000", "the co
 
 DEFINE_ERROR(OB_BACKUP_MAJOR_NOT_COVER_MINOR, -9085, -1, "HY000", "backup major sstable range not cover minor sstable");
 DEFINE_ERROR(OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT, -9086, -1, "HY000", "backup advance checkpoint by flush timeout");
+DEFINE_ERROR(OB_CLOG_RECYCLE_BEFORE_ARCHIVE, -9087, -1, "HY000", "observer clog is recycled before archive");
 
-DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_CHILD_PARTITIONING, -9087, ER_WINDOW_NO_CHILD_PARTITIONING, "HY000", "Named window cann't be modified by another partitioning property", "A window which depends on another cannot define partitioning");
-DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_INHERIT_FRAME, -9088, ER_WINDOW_NO_INHERIT_FRAME, "HY000", "Named window cann't be modified by another framing property", "Window '%.*s' has a frame definition, so cannot be referenced by another window");
-DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -9089, ER_WINDOW_NO_REDEFINE_ORDER_BY, "HY000", "Named window cann't be modified by another ordering property", "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause");
+
+DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process session not exist");
+DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");
+DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARCHIVELOG mode");
+DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
+// end of backup and restore error codes 9001 ~ 9099
+
+DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");
+DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARCHIVELOG mode");
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~
@@ -2014,6 +2199,38 @@ DEFINE_ORACLE_ERROR(OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_INTO_KEYWORD, -9712, -1, "HY000", "missing INTO keyword", 925, "missing INTO keyword");
 DEFINE_ORACLE_ERROR(OB_ERR_CLAUSE_RETURN_ILLEGAL, -9713, -1, "HY000", "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements", 6547, "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements");
 DEFINE_ORACLE_ERROR(OB_ERR_NAME_HAS_TOO_MANY_PARTS, -9714, -1, "HY000", "name has too many parts", 6563, "name has too many parts");
+DEFINE_ORACLE_ERROR(OB_ERR_LOB_SPAN_TRANSACTION, -9715, -1, "HY000", "LOB locators cannot span transactions", 22990, "LOB locators cannot span transactions");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_MULTISET, -9716, -1, "HY000", "MULTISET expression not allowed", 22903, "MULTISET expression not allowed");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CAST_UDT, -9717, -1, "HY000", "invalid CAST to a type that is not a nested table or VARRAY", 22907, "invalid CAST to a type that is not a nested table or VARRAY");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_EXIST, -9718, -1, "HY000", "policy already exists", 28101, "policy already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_NOT_EXIST, -9719, -1, "HY000", "policy does not exist", 28102, "policy does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_ADD_POLICY_TO_SYS_OBJECT, -9720, -1, "HY000", "adding a policy to an object owned by SYS is not allowed", 28103, "adding a policy to an object owned by SYS is not allowed");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_INPUT_STRING, -9721, -1, "HY000", "input value for %s is not valid", 28104, "input value for %s is not valid");
+DEFINE_ORACLE_ERROR(OB_ERR_SEC_COLUMN_ON_VIEW, -9722, -1, "HY000", "cannot create security relevant column policy in an object view", 28105, "cannot create security relevant column policy in an object view");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_INPUT_FOR_ARGUMENT, -9723, -1, "HY000", "input value for argument %s is not valid", 28106, "input value for argument %s is not valid");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_DISABLED, -9724, -1, "HY000", "policy was disabled", 28107, "policy was disabled");
+DEFINE_ORACLE_ERROR(OB_ERR_CIRCULAR_POLICIES, -9725, -1, "HY000", "circular security policies detected", 28108, "circular security policies detected");
+DEFINE_ORACLE_ERROR(OB_ERR_TOO_MANY_POLICIES, -9726, -1, "HY000", "the number of related policies has exceeded the limit of 16", 28109, "the number of related policies has exceeded the limit of 16");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_FUNCTION, -9727, -1, "HY000", "policy function or package %.*s.%.*s has error", 28110, "policy function or package %.*s.%.*s has error");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_PRIV_EVAL_PREDICATE, -9728, -1, "HY000", "insufficient privilege to evaluate policy predicate", 28111, "insufficient privilege to evaluate policy predicate");
+DEFINE_ORACLE_ERROR(OB_ERR_EXECUTE_POLICY_FUNCTION, -9729, -1, "HY000", "failed to execute policy function", 28112, "failed to execute policy function");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_PREDICATE, -9730, -1, "HY000", "policy predicate has error", 28113, "policy predicate has error");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS, -9731, -1, "HY000", "insufficient privileges to do direct path access", 28116, "insufficient privileges to do direct path access");
+DEFINE_ORACLE_ERROR(OB_ERR_INTEGRITY_CONSTRAINT_VIOLATED, -9732, -1, "HY000", "integrity constraint violated - parent record not found", 28117, "integrity constraint violated - parent record not found");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_GROUP_EXIST, -9733, -1, "HY000", "policy group already exists", 28118, "policy group already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_POLICY_GROUP_NOT_EXIST, -9734, -1, "HY000", "policy group does not exist", 28119, "policy group does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_DRIVING_CONTEXT_EXIST, -9735, -1, "HY000", "driving context already exists", 28120, "driving context already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_DRIVING_CONTEXT_NOT_EXIST, -9736, -1, "HY000", "driving context does not exist", 28121, "driving context does not exist");
+DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_DEFAULT_GROUP, -9737, -1, "HY000", "can not update SYS_DEFAULT policy group", 28122, "can not update SYS_DEFAULT policy group");
+DEFINE_ORACLE_ERROR(OB_ERR_CONTEXT_CONTAIN_INVALID_GROUP, -9738, -1, "HY000", "Driving context %.*s,%.*s contains invalid group %.*s", 28123, "Driving context %.*s,%.*s contains invalid group %.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SEC_COLUMN_TYPE, -9739, -1, "HY000", "Column %.*s in sec_relevant_cols cannot be of an object data type", 28124, "Column %.*s in sec_relevant_cols cannot be of an object data type");
+DEFINE_ORACLE_ERROR(OB_ERR_UNPROTECTED_VIRTUAL_COLUMN, -9740, -1, "HY000", "A protected base column was referenced in an unprotected virtual column expression", 28125, "A protected base column was referenced in an unprotected virtual column expression");
+DEFINE_ORACLE_ERROR(OB_ERR_ATTRIBUTE_ASSOCIATION, -9741, -1, "HY000", "Attribute association failed for policy %.*s", 28126, "Attribute association failed for policy %.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_MERGE_INTO_WITH_POLICY, -9742, -1, "HY000", "The MERGE INTO syntax does not support the security policy", 28132, "The MERGE INTO syntax does not support the security policy");
+DEFINE_ERROR_EXT(OB_ERR_SP_NO_DROP_SP, -9743, ER_SP_NO_DROP_SP, "HY000", "Can't drop or alter a procedure/function from within another stored routine.", "Can't drop or alter a '%s' from within another stored routine.");
+DEFINE_ORACLE_ERROR(OB_ERR_RECOMPILATION_OBJECT, -9744, -1, "HY000", "errors during recompilation/revalidation of object", 4045, "errors during recompilation/revalidation of %.*s.%.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_VARIABLE_NOT_IN_SELECT_LIST, -9745, -1, "HY000", "variable not in select list", 1007, "variable not in select list");
+DEFINE_ORACLE_ERROR(OB_ERR_MULTI_RECORD, -9746, -1, "HY000", "coercion into multiple record targets not supported", 494, "coercion into multiple record targets not supported");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

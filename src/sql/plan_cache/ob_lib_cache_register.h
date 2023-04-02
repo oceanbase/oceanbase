@@ -10,14 +10,16 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifdef LIB_CAHCE_OBJ_DEF
-LIB_CAHCE_OBJ_DEF(NS_CRSR, "CRSR", ObPlanCacheKey, ObPCVSet, ObPhysicalPlan, ObNewModIds::OB_SQL_PHY_PLAN)  // physical plan cache
-LIB_CAHCE_OBJ_DEF(NS_PRCR, "PRCR", ObPlanCacheKey, ObPCVSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // procedure cache
-LIB_CAHCE_OBJ_DEF(NS_SFC, "SFC", ObPlanCacheKey, ObPCVSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // function cache
-LIB_CAHCE_OBJ_DEF(NS_ANON, "ANON", ObPlanCacheKey, ObPCVSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // anonymous cache
-LIB_CAHCE_OBJ_DEF(NS_TRGR, "TRGR", ObPlanCacheKey, ObPCVSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // trigger cache
-LIB_CAHCE_OBJ_DEF(NS_PKG, "PKG", ObPlanCacheKey, ObPCVSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)    // package cache
-#endif /*LIB_CAHCE_OBJ_DEF*/
+#ifdef LIB_CACHE_OBJ_DEF
+LIB_CACHE_OBJ_DEF(NS_CRSR, "CRSR", ObPlanCacheKey, ObPCVSet, ObPhysicalPlan, ObNewModIds::OB_SQL_PHY_PLAN)  // physical plan cache
+LIB_CACHE_OBJ_DEF(NS_PRCR, "PRCR", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // procedure cache
+LIB_CACHE_OBJ_DEF(NS_SFC, "SFC", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // function cache
+LIB_CACHE_OBJ_DEF(NS_ANON, "ANON", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLFunction, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // anonymous cache
+LIB_CACHE_OBJ_DEF(NS_TRGR, "TRGR", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)   // trigger cache
+LIB_CACHE_OBJ_DEF(NS_PKG, "PKG", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)    // package cache
+LIB_CACHE_OBJ_DEF(NS_TABLEAPI, "TABLEAPI", table::ObTableApiCacheKey, table::ObTableApiCacheNode, table::ObTableApiCacheObj, "OB_TABLEAPI_OBJ")    // tableapi cache
+
+#endif /*LIB_CACHE_OBJ_DEF*/
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_LIB_CACHE_REGISTER_
 #define OCEANBASE_SQL_PLAN_CACHE_OB_LIB_CACHE_REGISTER_
@@ -48,9 +50,9 @@ class ObPlanCache;
 enum ObLibCacheNameSpace
 {
 NS_INVALID,
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) ns,
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) ns,
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 NS_MAX
 };
 

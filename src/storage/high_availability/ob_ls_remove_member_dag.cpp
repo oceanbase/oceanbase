@@ -97,7 +97,7 @@ bool ObLSRemoveMemberDag::operator == (const ObIDag &other) const
 {
   bool is_same = true;
   if (!is_inited_) {
-    LOG_ERROR("ls remove mmeber dag do not init");
+    LOG_ERROR_RET(OB_NOT_INIT, "ls remove mmeber dag do not init");
     is_same = false;
   } else if (this == &other) {
     // same
@@ -116,7 +116,7 @@ int64_t ObLSRemoveMemberDag::hash() const
 {
   int64_t hash_value = 0;
   if (!is_inited_) {
-    LOG_ERROR("ls remove member dag do not init");
+    LOG_ERROR_RET(OB_NOT_INIT, "ls remove member dag do not init");
   } else {
     hash_value = common::murmurhash(
         &ctx_.arg_.ls_id_, sizeof(ctx_.arg_.ls_id_), hash_value);

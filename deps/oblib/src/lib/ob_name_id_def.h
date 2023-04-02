@@ -467,6 +467,17 @@ DEF_NAME(id, "id")
     DEF_NAME(replay_start_working_log, "replay start working log")
     DEF_NAME(replay_rollback_to, "replay rollback to")
     DEF_NAME(replay_active_info, "replay active info")
+    DEF_NAME(scn_val, "value of scn")
+
+    // txn_free_route
+    DEF_NAME(logic_clock, "the logical clock")
+    DEF_NAME(tx_free_route_update_static, "txn free route update static state")
+    DEF_NAME(tx_free_route_update_dynamic, "txn free route update dynamic state")
+    DEF_NAME(tx_free_route_update_participants, "txn free route update participants state")
+    DEF_NAME(tx_free_route_update_extra, "txn free route update extra state")
+    DEF_NAME(tx_free_route_send_state, "txn free route send state")
+    DEF_NAME(tx_free_route_recv_state, "txn free route receive state")
+
     // perf event
     DEF_NAME(S_scan_iter, "storage: scan iterator")
     DEF_NAME(pc_fast_gen_stmt_key_end, "plan cache: fast genarate stmt_key")
@@ -569,9 +580,11 @@ DEF_NAME(id, "id")
 
     DEF_NAME_PAIR(get_das_id, "get_das_id")
     DEF_NAME_PAIR(do_local_das_task, "do_local_das_task")
-    DEF_NAME_PAIR(do_remote_das_task, "do_remote_das_task")
+    DEF_NAME_PAIR(do_async_remote_das_task, "do_async_remote_das_task")
+    DEF_NAME_PAIR(do_sync_remote_das_task, "do_sync_remote_das_task")
     DEF_NAME_PAIR(rescan_das_task, "rescan_das_task")
-    DEF_NAME_PAIR(das_rpc_process, "das_rpc_process")
+    DEF_NAME_PAIR(das_async_rpc_process, "das_async_rpc_process")
+    DEF_NAME_PAIR(das_sync_rpc_process, "das_sync_rpc_process")
     DEF_NAME_PAIR(close_das_task, "close_das_task")
     DEF_NAME_PAIR(fetch_das_extra_result, "fetch_das_extra_result")
     DEF_NAME_PAIR(fetch_das_result_process, "fetch_das_result_process")
@@ -862,7 +875,7 @@ const char* get_description(int32_t id);
 
 #define OB_ID(name_sym) (::oceanbase::name::name_sym)
 #define NAME(name_id) (::oceanbase::name::get_name(name_id))
-#define Y(x) OB_ID(x), x
-#define Y_(x) OB_ID(x), x ##_
+#define OB_Y(x) OB_ID(x), x
+#define OB_Y_(x) OB_ID(x), x ##_
 
 #endif /* _OB_NAME_ID_DEF_H */

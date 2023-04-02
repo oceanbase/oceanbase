@@ -91,10 +91,10 @@ public:
   } CACHE_ALIGNED;
 public:
   ObVSliceAlloc(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
-  ObVSliceAlloc(const ObMemAttr &attr, int block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
+  ObVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
     : nway_(1), bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc) {}
   virtual ~ObVSliceAlloc() override { destroy(); }
-  int init(int block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
+  int init(int64_t block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = OB_SUCCESS;
     new(this)ObVSliceAlloc(attr, block_size, block_alloc);
     return ret;
@@ -111,7 +111,7 @@ public:
             destroy_block(old_blk);
           } else {
             // can not monitor all leak !!!
-            LIB_LOG(ERROR, "there was memory leak", K(old_blk->ref_));
+            LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "there was memory leak", K(old_blk->ref_));
           }
         }
       }
@@ -174,7 +174,9 @@ public:
               blk2destroy = blk;
             }
           }
+          arena.ref(-1);
         } else {
+          arena.ref(-1);
           Block* nb = prepare_block();
           if (NULL == nb) {
             // alloc block fail, end
@@ -186,7 +188,6 @@ public:
             }
           }
         }
-        arena.ref(-1);
         if (blk2destroy) {
           arena.sync();
           if (blk2destroy->retire(leak_pos)) {
@@ -212,7 +213,7 @@ public:
       abort_unless(bsize_ != 0);
 #else
       if (this != blk->get_vslice_alloc()) {
-        LIB_LOG(ERROR, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));
+        LIB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));
         return;
       }
 #endif

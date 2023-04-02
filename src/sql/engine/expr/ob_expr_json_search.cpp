@@ -274,7 +274,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("input type error", K(val_type));
     } else {
       ObString target_str = json_datum->get_string();
-      if (0 == target_str.case_compare("one")) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target_str, is_null))) {
+        LOG_WARN("fail to get real data.", K(ret), K(target_str));
+      } else if (0 == target_str.case_compare("one")) {
         one_flag = true;
       } else if (0 == target_str.case_compare("all")) {
         one_flag = false;
@@ -298,7 +300,10 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("input type error", K(val_type));
     } else {
       ObString escape = json_datum->get_string();
-      if (escape.length() > 0) {
+      bool is_null_str = false;
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, escape, is_null_str))) {
+        LOG_WARN("fail to get real data.", K(ret), K(escape));
+      } else if (escape.length() > 0) {
         const ObCollationType escape_coll = json_arg->datum_meta_.cs_type_;
         size_t length = ObCharset::strlen_char(escape_coll, escape.ptr(), escape.length());
         if (length != 1) {
@@ -326,6 +331,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       LOG_WARN("input type error", K(val_type));
     } else {
       target = json_datum->get_string();
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, target, is_null))) {
+        LOG_WARN("fail to get real data.", K(ret), K(target));
+      }
     }
   }
 
@@ -360,7 +368,9 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         } else {
           ObString j_path_text = json_datum->get_string();
           ObJsonPath *j_path;
-          if (j_path_text.length() == 0) {
+          if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, temp_allocator, j_path_text, is_null))) {
+            LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
+          } else if (j_path_text.length() == 0) {
             is_null = true;
           } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path,
               j_path_text, i, true))) {
@@ -467,16 +477,8 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       ObString raw_bin;
       if (OB_FAIL(j_res->get_raw_binary(raw_bin, &temp_allocator))) {
         LOG_WARN("json_keys get result binary failed", K(ret));
-      } else {
-        uint64_t length = raw_bin.length();
-        char *buf = expr.get_str_res_mem(ctx, length);
-        if (OB_ISNULL(buf)){
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("json_search alloc jsonString failed", K(ret), K(length));
-        } else {
-          MEMCPY(buf, raw_bin.ptr(), length);
-          res.set_string(buf, length);
-        }
+      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+        LOG_WARN("fail to pack json result", K(ret));
       }
     }
   }

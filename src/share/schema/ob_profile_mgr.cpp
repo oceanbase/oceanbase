@@ -67,7 +67,7 @@ int ObProfileMgr::init()
 void ObProfileMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("profile manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "profile manger not init");
   } else {
     schema_infos_.clear();
     name_map_.clear();

@@ -53,7 +53,12 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
       LOG_WARN("fail to deep_copy_sql", K(ret), K(pc_ctx.raw_sql_));
     } else {
       is_inited_ = true;
-      min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
+      if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
+        LOG_DEBUG("Lob Debug, using remote min cluster version",
+                K(pc_ctx.exec_ctx_.get_min_cluster_version()),
+                K(GET_MIN_CLUSTER_VERSION()));
+      }
+      min_cluster_version_ = pc_ctx.exec_ctx_.get_min_cluster_version();
       normal_parse_const_cnt_ = pc_ctx.normal_parse_const_cnt_;
       LOG_DEBUG("inited pcv set", K(pc_key_), K(ObTimeUtility::current_time()));
     }
@@ -107,23 +112,28 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   int ret = OB_SUCCESS;
   ObPlanCacheObject *plan = NULL;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-  if (pc_ctx.is_ps_mode_) {
-    if (normal_parse_const_cnt_ != pc_ctx.fp_result_.ps_params_.count()) {
-      ret = OB_NOT_SUPPORTED;
+  if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+    if (normal_parse_const_cnt_ != pc_ctx.fp_result_.parameterized_params_.count()) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("param num is not equal", K_(normal_parse_const_cnt),
-               "ps_params_count", pc_ctx.fp_result_.ps_params_.count());
+               "parameterized_params_count", pc_ctx.fp_result_.parameterized_params_.count());
     }
   } else {
     if (normal_parse_const_cnt_ != pc_ctx.fp_result_.raw_params_.count()) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_ERR_UNEXPECTED;
       SQL_PC_LOG(DEBUG, "const number of fast parse and normal parse is different",
                  "fast_parse_const_num", pc_ctx.fp_result_.raw_params_.count(),
                  K_(normal_parse_const_cnt),
                  K(pc_ctx.fp_result_.raw_params_));
     }
   }
+  if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
+    LOG_DEBUG("Lob Debug, using remote min cluster version",
+             K(pc_ctx.exec_ctx_.get_min_cluster_version()),
+             K(GET_MIN_CLUSTER_VERSION()));
+  }
   if (OB_FAIL(ret)) {
-  } else if (min_cluster_version_ != GET_MIN_CLUSTER_VERSION()) {
+  } else if (min_cluster_version_ != pc_ctx.exec_ctx_.get_min_cluster_version()) {
     ret = OB_OLD_SCHEMA_VERSION;
   } else if (need_check_gen_tbl_col_) {
     // 检查是否有generated table投影列同名的可能
@@ -179,7 +189,7 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     // 如果tenant schema变化了, 但table schema没有过期, 则更新tenant schema
     // plan必须不为NULL，因为下层可能会有覆盖错误码的行为，即使计划没有匹配上，
     // ret仍然为success，此时tenant schema version又会被推高，可能有正确性问题
-    // bug link：https://aone.alibaba-inc.com/issue/19829168
+    // bug link：
     if (OB_SUCC(ret) && NULL != matched_pcv && NULL != plan) {
       if (OB_FAIL(matched_pcv->lift_tenant_schema_version(new_tenant_schema_version))) {
         LOG_WARN("failed to lift pcv's tenant schema version", K(ret));
@@ -218,7 +228,7 @@ int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
              K(pc_ctx.sql_ctx_.session_info_));
   } else if (get_plan_num() >= MAX_PCV_SET_PLAN_NUM) {
     static const int64_t PRINT_PLAN_EXCEEDS_LOG_INTERVAL = 20 * 1000 * 1000; // 20s
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_ERR_UNEXPECTED;
     if (REACH_TIME_INTERVAL(PRINT_PLAN_EXCEEDS_LOG_INTERVAL)) {
       LOG_INFO("number of plans in a single pcv_set reach limit", K(ret), K(get_plan_num()), K(pc_ctx));
     }
@@ -493,6 +503,24 @@ int ObPCVSet::check_raw_param_for_dup_col(ObPlanCacheCtx &pc_ctx, bool &contain_
   }
   return ret;
 }
+int ObPCVSet::check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains)
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH(pcv, pcv_list_) {
+    if (OB_ISNULL(pcv)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(pcv), K(ret));
+    } else if (OB_FAIL(pcv->check_contains_table(db_id, tab_name, contains))) {
+      LOG_WARN("fail to check table name", K(ret), K(db_id), K(tab_name));
+    } else if (!contains) {
+      // continue find
+    } else {
+      break;
+    }
+  }
+  return ret;
+}
+
 
 }
 }

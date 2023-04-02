@@ -13,6 +13,7 @@
 #include "ob_trans_ctx_lock.h"
 #include "ob_trans_ctx.h"
 #include "ob_trans_service.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -58,18 +59,14 @@ void CtxLock::after_unlock(CtxLockArg &arg)
 int CtxLock::lock()
 {
   int ret = lock_.wrlock(common::ObLatchIds::TRANS_CTX_LOCK);
-  if (OB_SUCCESS == ret) {
-    lock_start_ts_ = ObTimeUtility::fast_current_time();
-  }
+  lock_start_ts_ = ObClockGenerator::getClock();
   return ret;
 }
 
 int CtxLock::lock(const int64_t timeout_us)
 {
   int ret = lock_.wrlock(common::ObLatchIds::TRANS_CTX_LOCK, ObTimeUtility::current_time() + timeout_us);
-  if (OB_SUCCESS == ret) {
-    lock_start_ts_ = ObTimeUtility::fast_current_time();
-  }
+  lock_start_ts_ = ObClockGenerator::getClock();
   return ret;
 }
 
@@ -77,7 +74,7 @@ int CtxLock::try_lock()
 {
   int ret = lock_.try_wrlock(common::ObLatchIds::TRANS_CTX_LOCK);
   if (OB_SUCCESS == ret) {
-    lock_start_ts_ = ObTimeUtility::fast_current_time();
+    lock_start_ts_ = ObClockGenerator::getClock();
   }
   return ret;
 }
@@ -87,10 +84,10 @@ void CtxLock::unlock()
   CtxLockArg arg;
   before_unlock(arg);
   lock_.unlock();
-  const int64_t lock_ts = ObTimeUtility::current_time() - lock_start_ts_;
+  const int64_t lock_ts = ObClockGenerator::getClock() - lock_start_ts_;
   if (lock_start_ts_ > 0 && lock_ts > WARN_LOCK_TS) {
     lock_start_ts_ = 0;
-    TRANS_LOG(WARN, "ctx lock too much time", K(arg.trans_id_), K(lock_ts), K(lbt()));
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ctx lock too much time", K(arg.trans_id_), K(lock_ts), K(lbt()));
   }
   after_unlock(arg);
 }
@@ -114,60 +111,6 @@ void CtxLockGuard::reset()
     lock_ = NULL;
   }
 }
-
-void TransTableSeqLock::write_lock()
-{
-  seq_++;
-  MEM_BARRIER();
-}
-
-void TransTableSeqLock::write_unlock()
-{
-  MEM_BARRIER();
-  if (seq_ & 1L) {
-    seq_++;
-  }
-}
-
-uint64_t TransTableSeqLock::read_begin()
-{
-  uint64_t seq = ATOMIC_LOAD(&seq_);
-  MEM_BARRIER();
-  return seq;
-}
-
-bool TransTableSeqLock::read_retry(const uint64_t seq)
-{
-  MEM_BARRIER();
-  if (ATOMIC_LOAD(&seq_) != seq) {
-    return true;
-  }
-  return seq & 1L;
-}
-
-CtxTransTableLockGuard::~CtxTransTableLockGuard()
-{
-  reset();
-}
-
-void CtxTransTableLockGuard::set(CtxLock &lock, TransTableSeqLock &seqlock)
-{
-  reset();
-
-  CtxLockGuard::set(lock);
-  lock_ = &seqlock;
-  lock_->write_lock();
-}
-
-void CtxTransTableLockGuard::reset()
-{
-  if (lock_) {
-    lock_->write_unlock();
-    lock_ = NULL;
-  }
-  CtxLockGuard::reset();
-}
-
 
 } // transaction
 } // oceanbase

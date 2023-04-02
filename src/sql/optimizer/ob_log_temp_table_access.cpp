@@ -141,21 +141,72 @@ int ObLogTempTableAccess::re_est_cost(EstimateCostInfo &param, double &card, dou
   return ret;
 }
 
-int ObLogTempTableAccess::print_my_plan_annotation(char *buf,
-                                                   int64_t &buf_len,
-                                                   int64_t &pos,
-                                                   ExplainType type)
+int ObLogTempTableAccess::get_plan_item_info(PlanText &plan_text,
+                                             ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  // print access
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    // print access
     const ObIArray<ObRawExpr*> &access = get_access_exprs();
     EXPLAIN_PRINT_EXPRS(access, type);
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
+  }
+  if (OB_SUCC(ret)) {
+    const ObString &temp_table_name = get_table_name();
+    const ObString &access_name = get_access_name();
+    BEGIN_BUF_PRINT;
+    if (access_name.empty()) {
+      if (OB_FAIL(BUF_PRINTF("%.*s",
+                             temp_table_name.length(),
+                             temp_table_name.ptr()))) {
+        LOG_WARN("failed to print str", K(ret));
+      }
+    } else {
+      if (OB_FAIL(BUF_PRINTF("%.*s(%.*s)",
+                             access_name.length(),
+                             access_name.ptr(),
+                             temp_table_name.length(),
+                             temp_table_name.ptr()))) {
+        LOG_WARN("failed to print str", K(ret));
+      }
+    }
+    END_BUF_PRINT(plan_item.object_alias_,
+                  plan_item.object_alias_len_);
+  }
+  return ret;
+}
+
+int ObLogTempTableAccess::get_temp_table_plan(ObLogicalOperator *& insert_op)
+{
+  int ret = OB_SUCCESS;
+  insert_op = NULL;
+  ObLogPlan *plan = get_plan();
+  const uint64_t temp_table_id = get_temp_table_id();
+  if (OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected null", K(ret));
+  } else {
+    ObIArray<ObSqlTempTableInfo*> &temp_tables = plan->get_optimizer_context().get_temp_table_infos();
+    bool find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < temp_tables.count(); ++i) {
+      if (OB_ISNULL(temp_tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpected null", K(ret));
+      } else if (temp_table_id != temp_tables.at(i)->temp_table_id_) {
+        /* do nothing */
+      } else {
+        find = true;
+        insert_op = temp_tables.at(i)->table_plan_;
+      }
+    }
+    if (OB_SUCC(ret) && !find) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to find table plan", K(ret));
+    }
   }
   return ret;
 }

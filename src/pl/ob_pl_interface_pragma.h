@@ -20,6 +20,8 @@
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_monitor.h"
 #include "pl/sys_package/ob_dbms_sql.h"
+#include "pl/sys_package/ob_dbms_user_define_rule.h"
+#include "pl/sys_package/ob_dbms_session.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (void*)(ObPLInterfaceImpl::call))
@@ -107,6 +109,21 @@
 #undef DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE
   //end of dbms_scheduler_mysql
 
+
+  // start of dbms_session
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_CLEAR_ALL_CONTEXT, "CLEAR_ALL_CONTEXT", (void*)(ObDBMSSession::clear_all_context))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_CLEAR_CONTEXT, "CLEAR_CONTEXT", (void*)(ObDBMSSession::clear_context))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_CLEAR_IDENTIFIER, "CLEAR_IDENTIFIER", (void*)(ObDBMSSession::clear_identifier))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_SET_CONTEXT, "SET_CONTEXT", (void*)(ObDBMSSession::set_context))
+  INTERFACE_DEF(INTERFACE_DBMS_SESSION_SET_IDENTIFIER, "SET_IDENTIFIER", (void*)(ObDBMSSession::set_identifier))
+  // end of dbms_session
+
+  // start of dbms_udr
+  INTERFACE_DEF(INTERFACE_DBMS_UDR_CREATE_RULE, "CREATE_RULE", (void *)(ObDBMSUserDefineRule::create_rule))
+  INTERFACE_DEF(INTERFACE_DBMS_UDR_REMOVE_RULE, "REMOVE_RULE", (void *)(ObDBMSUserDefineRule::remove_rule))
+  INTERFACE_DEF(INTERFACE_DBMS_UDR_ENABLE_RULE, "ENABLE_RULE", (void *)(ObDBMSUserDefineRule::enable_rule))
+  INTERFACE_DEF(INTERFACE_DBMS_UDR_DISABLE_RULE, "DISABLE_RULE", (void *)(ObDBMSUserDefineRule::disable_rule))
+  // end of dbms_udr
   /****************************************************************************/
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (void*)(NULL))

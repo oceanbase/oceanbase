@@ -30,7 +30,11 @@ public:
   uint16_t rowkey_column_count_;
   struct {
     uint16_t has_column_checksum_ : 1;
-    uint16_t reserved16_          : 15;
+    uint16_t has_string_out_row_ : 1; // flag for furture, varchar and char can be overflowed as lob handle
+    uint16_t all_lob_in_row_ : 1; // compatible with 4.0, we assume that all lob is out row in old data
+    uint16_t contains_hash_index_   : 1;
+    uint16_t hash_index_offset_from_end_ : 10;
+    uint16_t reserved16_          : 2;
   };
   uint32_t row_count_;
   uint8_t row_store_type_;
@@ -38,13 +42,12 @@ public:
     struct {
       uint8_t row_index_byte_    :3;
       uint8_t extend_value_bit_  :3;
-      uint8_t encoding_has_out_row_column_ : 1;
-      uint8_t reserved_          :1;
+      uint8_t reserved_          :2;
     }; // For encoding format
     struct {
       uint8_t single_version_rows_: 1;
       uint8_t contain_uncommitted_rows_: 1;
-      uint8_t flat_has_out_row_column_ : 1;
+      uint8_t is_last_row_last_flag_ : 1;
       uint8_t not_used_ : 5;
     }; // For flat format
     uint8_t opt_;
@@ -82,18 +85,21 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   uint32_t get_serialize_size() { return get_serialize_size(column_count_, has_column_checksum_); }
   static uint32_t get_serialize_size(const int64_t column_count, const bool need_calc_column_chksum) {
-    return ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET  +
-        (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0);
+    return static_cast<uint32_t>(ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET  +
+        (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0));
   }
   TO_STRING_KV(K_(magic), K_(version), K_(header_size), K_(header_checksum),
       K_(column_count), K_(rowkey_column_count), K_(has_column_checksum), K_(row_count), K_(row_store_type),
       K_(opt), K_(var_column_count), K_(row_offset), K_(original_length), K_(max_merged_trans_version),
-      K_(data_length), K_(data_zlength), K_(data_checksum), KP_(column_checksums),
-      K(is_valid()));
+      K_(data_length), K_(data_zlength), K_(data_checksum), KP_(column_checksums), K_(single_version_rows),
+      K_(contain_uncommitted_rows),  K_(is_last_row_last_flag), K(is_valid()));
 public:
   bool is_compressed_data() const { return data_length_ != data_zlength_; }
   bool contain_uncommitted_rows() const { return contain_uncommitted_rows_; }
-  bool has_out_row_column() const;
+  OB_INLINE bool has_string_out_row() const { return has_string_out_row_; }
+  OB_INLINE bool has_lob_out_row() const { return !all_lob_in_row_; }
+  bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
+  bool is_contain_hash_index() const;
 }__attribute__((packed));
 }//end namespace blocksstable
 }//end namespace oceanbase

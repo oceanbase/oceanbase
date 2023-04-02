@@ -17,7 +17,8 @@
 #include "logservice/palf_handle_guard.h"       // PalfHandleGuard
 #include "logservice/palf/lsn.h"                // LSN
 #include "ob_cdc_req.h"                         // RPC Request and Response
-
+#include "ob_cdc_struct.h"
+#include "logservice/archiveservice/large_buffer_pool.h" // LargeBufferPool
 namespace oceanbase
 {
 namespace cdc
@@ -33,7 +34,8 @@ class ObCdcStartLsnLocator
 public:
   ObCdcStartLsnLocator();
   ~ObCdcStartLsnLocator();
-  int init(const uint64_t tenant_id);
+  int init(const uint64_t tenant_id,
+      archive::LargeBufferPool *large_buffer_pool);
   void destroy();
   int req_start_lsn_by_ts_ns(const ObLocateLSNByTsReq &req_msg,
       ObLocateLSNByTsResp &result,
@@ -46,7 +48,8 @@ private:
   inline int64_t get_rpc_deadline_() const { return THIS_WORKER.get_timeout_ts(); }
   int handle_when_hurry_quit_(const ObLocateLSNByTsReq::LocateParam &locate_param,
       ObLocateLSNByTsResp &result);
-  int do_locate_ls_(const ObLocateLSNByTsReq::LocateParam &locate_param,
+  int do_locate_ls_(const bool fetch_archive_only,
+      const ObLocateLSNByTsReq::LocateParam &locate_param,
       ObLocateLSNByTsResp &resp);
 
   // @retval OB_SUCCESS         Success
@@ -57,6 +60,7 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
+  archive::LargeBufferPool *large_buffer_pool_;
 };
 
 } // namespace cdc

@@ -18,10 +18,12 @@
 #include "ob_timestamp_access.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
 
+using namespace oceanbase::share;
 namespace transaction
 {
 
@@ -97,7 +99,7 @@ int ObTimestampService::handle_request(const ObGtsRequest &request, ObGtsRpcResu
   const int64_t cost_us = request.get_srr().mts_ - end.mts_;
   //Print the gts request that takes a long time for network transmission
   if (cost_us > 500 * 1000) {
-    TRANS_LOG(WARN, "gts request fly too much time", K(request), K(result), K(cost_us));
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "gts request fly too much time", K(request), K(result), K(cost_us));
   }
   ATOMIC_INC(&total_cnt);
   ObTransStatistic::get_instance().add_gts_request_total_count(request.get_tenant_id(), 1);
@@ -169,26 +171,29 @@ int ObTimestampService::switch_to_leader()
   if (OB_FAIL(check_and_fill_ls())) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
   } else {
-    int64_t version = 0;
-    if (OB_FAIL(ls_->get_log_handler()->get_max_ts_ns(version))) {
+    SCN version;
+    if (OB_FAIL(ls_->get_log_handler()->get_max_scn(version))) {
       TRANS_LOG(WARN, "get max ts fail", K(ret));
     } else {
-      if (version >= ATOMIC_LOAD(&limited_id_)) {
-        inc_update(&last_id_, version);
+      int64_t version_val = version.is_valid() ? version.get_val_for_gts() : -1;
+      if (version_val >= ATOMIC_LOAD(&limited_id_)) {
+        inc_update(&last_id_, version_val);
         ATOMIC_STORE(&tmp_last_id_, 0);
-      } else if (ATOMIC_LOAD(&tmp_last_id_) != 0 && version > ATOMIC_LOAD(&tmp_last_id_)) {
-        inc_update(&tmp_last_id_, version);
+      } else if (ATOMIC_LOAD(&tmp_last_id_) != 0 && version_val > ATOMIC_LOAD(&tmp_last_id_)) {
+        inc_update(&tmp_last_id_, version_val);
       } else {
         // do nothing
       }
       const int64_t standby_last_id = MTL(ObStandbyTimestampService *)->get_last_id();
       const int64_t tmp_last_id = ATOMIC_LOAD(&tmp_last_id_);
       if ((tmp_last_id != 0 && standby_last_id > tmp_last_id)
-           || (tmp_last_id == 0 && standby_last_id > ATOMIC_LOAD(&limited_id_))) {
-        TRANS_LOG(ERROR, "snapshot rolls back", K(standby_last_id), K(tmp_last_id), "limit_id", ATOMIC_LOAD(&limited_id_));
+           || (tmp_last_id == 0 && standby_last_id > ATOMIC_LOAD(&last_id_))) {
+        TRANS_LOG(ERROR, "snapshot rolls back", K(standby_last_id), K(tmp_last_id), "limit_id", ATOMIC_LOAD(&limited_id_),
+                         "last_id", ATOMIC_LOAD(&last_id_), K(version));
       }
       MTL(ObTimestampAccess *)->set_service_type(ObTimestampAccess::ServiceType::GTS_LEADER);
-      TRANS_LOG(INFO, "ObTimestampService switch to leader success", K(ret), K(version), K(last_id_), "service_type", MTL(ObTimestampAccess *)->get_service_type());
+      TRANS_LOG(INFO, "ObTimestampService switch to leader success", K(ret), K(version), K(last_id_), K(limited_id_),
+                      "service_type", MTL(ObTimestampAccess *)->get_service_type());
     }
   }
 

@@ -14,8 +14,8 @@
 #include "lib/guard/ob_shared_guard.h"        // ObShareGuard
 #include "lib/ob_define.h"
 #include "lib/time/ob_time_utility.h"
-#include "ob_archive_define.h"
 #include "share/backup/ob_backup_struct.h"    // ObBackupPathString
+#include "share/ob_debug_sync.h"              // DEBUG
 #include "storage/ls/ob_ls.h"                 // ObLS
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
@@ -34,6 +34,7 @@ namespace archive
 {
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
+using namespace oceanbase::palf;
 
 int ObArchiveLSMgr::iterate_ls(const std::function<int (const ObLSArchiveTask &)> &func)
 {
@@ -79,24 +80,25 @@ public:
 
     if (! is_in_archive_) {
       bret = true;
+      ARCHIVE_LOG(INFO, "tenant not in archive, need gc ls archive task", K(id));
     } else if (OB_ISNULL(ls_svr_) || OB_ISNULL(log_service_)) {
       bret = true;
       ret = OB_ERR_UNEXPECTED;
       ARCHIVE_LOG(ERROR, "ls_svr_ or log_service_ is NULL", K(ret), K(ls_svr_), K(log_service_));
     } else if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
       bret = true;
-      ARCHIVE_LOG(WARN, "open ls failed", K(ret), K(id));
+      ARCHIVE_LOG(WARN, "open ls failed, gc ls archive task", K(ret), K(id));
     } else if (OB_FAIL(palf_handle_guard.get_role(role, epoch))) {
       ARCHIVE_LOG(WARN, "get role failed", K(ret), K(id));
     } else if (! check_ls_need_do_archive(role)) {
       bret = true;
+      ARCHIVE_LOG(INFO, "check_ls_need_do_archive return false, gc ls archive task", K(id), K(epoch), K(role));
     } else {
       // TODO: fake lease
       ObArchiveLease lease(epoch, 0, 0);
       ArchiveWorkStation station(key_, lease);
-      bret = task->check_task_valid(station);
+      bret = ! task->check_task_valid(station);
     }
-    ARCHIVE_LOG(INFO, "ls archive task need delete", K(id));
     return bret;
   }
 
@@ -131,7 +133,7 @@ public:
 ObArchiveLSMgr::ObArchiveLSMgr() :
   inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID),
-  round_start_ts_(OB_INVALID_TIMESTAMP),
+  round_start_scn_(),
   ls_map_(),
   last_print_ts_(OB_INVALID_TIMESTAMP),
   allocator_(NULL),
@@ -207,35 +209,35 @@ void ObArchiveLSMgr::wait()
 
 
 int ObArchiveLSMgr::set_archive_info(
-    const int64_t round_start_ts,
-    const int64_t piece_interval,
-    const int64_t genesis_ts,
+    const SCN &round_start_scn,
+    const int64_t piece_interval_us,
+    const SCN &genesis_scn,
     const int64_t base_piece_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(round_start_ts < 0
-        || piece_interval <= 0
-        || genesis_ts < 0
+  if (OB_UNLIKELY(!round_start_scn.is_valid()
+        || piece_interval_us <= 0
+        || !genesis_scn.is_valid()
         || base_piece_id < 1)) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(round_start_ts),
-        K(piece_interval), K(genesis_ts), K(base_piece_id));
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(round_start_scn),
+        K(piece_interval_us), K(genesis_scn), K(base_piece_id));
   } else {
-    round_start_ts_ = round_start_ts;
-    piece_interval_ = piece_interval;
-    genesis_ts_ = genesis_ts;
+    round_start_scn_ = round_start_scn;
+    piece_interval_ = piece_interval_us;
+    genesis_scn_ = genesis_scn;
     base_piece_id_ = base_piece_id;
-    ARCHIVE_LOG(INFO, "ls mgr set archive info succ", K(round_start_ts),
-        K(piece_interval), K(genesis_ts), K(base_piece_id));
+    ARCHIVE_LOG(INFO, "ls mgr set archive info succ", K(round_start_scn),
+        K(piece_interval_us), K(genesis_scn), K(base_piece_id));
   }
   return ret;
 }
 
 void ObArchiveLSMgr::clear_archive_info()
 {
-    round_start_ts_ = OB_INVALID_TIMESTAMP;
+    round_start_scn_.reset();
     piece_interval_ = 0;
-    genesis_ts_ = OB_INVALID_TIMESTAMP;
+    genesis_scn_.reset();
     base_piece_id_ = 0;
     ARCHIVE_LOG(INFO, "ls mgr clear info succ");
 }
@@ -258,7 +260,7 @@ void ObArchiveLSMgr::destroy()
   wait();
   reset_task();
   tenant_id_ = OB_INVALID_TENANT_ID;
-  round_start_ts_ = OB_INVALID_TIMESTAMP;
+  round_start_scn_.reset();
   ls_map_.destroy();
   allocator_ = NULL;
   log_service_ = NULL;
@@ -302,11 +304,11 @@ int ObArchiveLSMgr::get_ls_guard(const ObLSID &id, ObArchiveLSGuard &guard)
 // 单租户日志流数量有限, 不再提供额外添加日志流归档任务逻辑, 只是唤醒工作线程
 int ObArchiveLSMgr::authorize_ls_archive_task(const ObLSID &id,
     const int64_t epoch,
-    const int64_t start_ts)
+    const SCN &start_scn)
 {
   UNUSED(id);
   UNUSED(epoch);
-  UNUSED(start_ts);
+  UNUSED(start_scn);
   cond_.signal();
   return OB_SUCCESS;
 }
@@ -318,7 +320,7 @@ void ObArchiveLSMgr::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "LSArchiveMgr not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "LSArchiveMgr not init");
   } else {
     while (! has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
@@ -339,8 +341,12 @@ void ObArchiveLSMgr::do_thread_task_()
   ArchiveKey key;
   share::ObArchiveRoundState state;
   round_mgr_->get_archive_round_info(key, state);
-  const bool is_in_doing = state.is_doing();
-  gc_stale_ls_task_(is_in_doing);
+  // not only in doing state but also in interrupt or suspend state, ls mgr should work,
+  // otherwise ls archive state can not persist in table successfully
+  const bool is_in_doing = state.is_doing() || state.is_interrupted() || state.is_suspend();
+  gc_stale_ls_task_(key, is_in_doing);
+
+  DEBUG_SYNC(BEFORE_ARCHIVE_ADD_LS_TASK);
 
   if (is_in_doing) {
     add_ls_task_();
@@ -449,13 +455,13 @@ int ObArchiveLSMgr::add_task_(const ObLSID &id,
     const int64_t epoch)
 {
   int ret = OB_SUCCESS;
-  const int64_t min_log_ts = round_start_ts_;
+  const SCN &min_scn = round_start_scn_;
 
   //TODO fake lease
   ObArchiveLease lease(epoch, 0, 0);
   ArchiveWorkStation station(key, lease);
-  StartArchiveHelper helper(id, tenant_id_, station, min_log_ts, piece_interval_,
-      genesis_ts_, base_piece_id_, persist_mgr_);
+  StartArchiveHelper helper(id, tenant_id_, station, min_scn, piece_interval_,
+      genesis_scn_, base_piece_id_, persist_mgr_);
   if (OB_FAIL(helper.handle())) {
     ARCHIVE_LOG(WARN, "start archive helper handle failed", KR(ret), K(helper));
   } else if (OB_FAIL(insert_or_update_ls_(helper))) {
@@ -473,7 +479,7 @@ int ObArchiveLSMgr::add_task_(const ObLSID &id,
 int ObArchiveLSMgr::insert_or_update_ls_(const StartArchiveHelper &helper)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = helper.get_ls_id();
+  const ObLSID id = helper.get_ls_id();
 
   if (OB_UNLIKELY(! helper.is_valid())) {
     ARCHIVE_LOG(WARN, "helper is not valid", KR(ret), K(helper));
@@ -520,12 +526,9 @@ int ObArchiveLSMgr::insert_or_update_ls_(const StartArchiveHelper &helper)
   return ret;
 }
 
-void ObArchiveLSMgr::gc_stale_ls_task_(const bool is_in_doing)
+void ObArchiveLSMgr::gc_stale_ls_task_(const ArchiveKey &key, const bool is_in_doing)
 {
   int ret = OB_SUCCESS;
-  ArchiveKey key;
-  share::ObArchiveRoundState state;
-  round_mgr_->get_archive_round_info(key, state);
   CheckDeleteFunctor functor(key, is_in_doing, ls_svr_, log_service_);
 
   if (OB_FAIL(ls_map_.remove_if(functor))) {
@@ -548,7 +551,7 @@ void ObArchiveLSMgr::reset_task()
   ls_map_.reset();
 }
 
-int ObArchiveLSMgr::mark_fata_error(const ObLSID &id,
+int ObArchiveLSMgr::mark_fatal_error(const ObLSID &id,
     const ArchiveKey &key,
     const ObArchiveInterruptReason &reason)
 {
@@ -560,7 +563,7 @@ int ObArchiveLSMgr::mark_fata_error(const ObLSID &id,
     GET_LS_TASK_CTX(this, id) {
       if (OB_FAIL(ls_archive_task->mark_error(key))) {
         ARCHIVE_LOG(WARN, "ls archive task mark fatal error failed", K(ret), K(id), K(key), K(reason));
-      } else if (OB_FAIL(round_mgr_->mark_fata_error(id, key, reason))) {
+      } else if (OB_FAIL(round_mgr_->mark_fatal_error(id, key, reason))) {
         ARCHIVE_LOG(WARN, "archive round mgr  mark fatal error failed", K(ret),
             K(id), K(key), K(reason));
       }

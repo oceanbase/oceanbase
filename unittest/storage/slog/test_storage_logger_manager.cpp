@@ -135,6 +135,7 @@ TEST_F(TestStorageLoggerManager, test_slogger_basic)
   SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
 
   ObStorageLogger *tmp_slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
+  ASSERT_EQ(0, tmp_slogger->get_pwrite_ts());
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->init(SLOGGERMGR, 500));
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->start());
 
@@ -147,12 +148,7 @@ TEST_F(TestStorageLoggerManager, test_slogger_basic)
   guard.switch_to(5);
   ObStorageLogger *slogger = MTL(ObStorageLogger*);
   slogger->start_log(cursor);
-
-  // test is_logger_ok
-  bool is_ok = false;
-  ret = slogger->is_logger_ok(is_ok);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_TRUE(is_ok);
+  ASSERT_EQ(0, slogger->get_pwrite_ts());
 
   // test get_active_cursor
   ObLogCursor tmp_cursor;

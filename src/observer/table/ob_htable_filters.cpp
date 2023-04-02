@@ -97,6 +97,12 @@ bool CompareFilter::compare(CompareOperator op, int cmp_ret)
     case CompareOperator::NOT_EQUAL:
       bret = (cmp_ret == 0);
       break;
+    case CompareOperator::IS:
+      bret = (0 != cmp_ret);
+      break;
+    case CompareOperator::IS_NOT:
+      bret = (0 != cmp_ret);
+      break;
     default:
       break;
   }
@@ -161,7 +167,7 @@ int RegexStringComparator::compare_to(const ObString &b)
 {
   // @todo
   UNUSED(b);
-  LOG_WARN("regexstring comparator not supported yet");
+  LOG_WARN_RET(OB_NOT_SUPPORTED, "regexstring comparator not supported yet");
   return 0;
 }
 
@@ -172,7 +178,7 @@ int SubStringComparator::compare_to(const ObString &b)
   char *a_dup = strndupa(comparator_value_.ptr(), comparator_value_.length());
   char *b_dup = strndupa(b.ptr(), b.length());
   if (NULL == a_dup || NULL == b_dup) {
-    LOG_WARN("failed to dup string");
+    LOG_WARN_RET(common::OB_ALLOCATE_MEMORY_FAILED, "failed to dup string");
   } else {
     char* p = strcasestr(b_dup, a_dup);
     cmp_ret = (NULL == p) ? 1: 0;
@@ -557,7 +563,7 @@ Filter::ReturnCode FilterListOR::merge_return_code(ReturnCode rc, ReturnCode loc
             ret_code = ReturnCode::SKIP;
             break;
           default:
-            LOG_ERROR("BUG");
+            LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "BUG");
             break;
         }
       }
@@ -585,7 +591,7 @@ Filter::ReturnCode FilterListOR::merge_return_code(ReturnCode rc, ReturnCode loc
             ret_code = ReturnCode::SKIP;
             break;
           default:
-            LOG_ERROR("BUG");
+            LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "BUG");
             break;
         }
       }
@@ -607,13 +613,13 @@ Filter::ReturnCode FilterListOR::merge_return_code(ReturnCode rc, ReturnCode loc
             ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
             break;
           default:
-            LOG_ERROR("BUG", K(rc));
+            LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "BUG", K(rc));
             break;
         }
       }
       break;
     default:
-      LOG_ERROR("BUG", K(local_rc));
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "BUG", K(local_rc));
       break;
   }  // end switch
   return ret_code;

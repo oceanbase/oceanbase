@@ -4,7 +4,7 @@
  *  Version: $Id: ob_prepare_stmt_struct.h 10/27/2016 04:13:54 PM
  *
  *  Authors:
- *     hualong <shaohang.lsh@alibaba-inc.com>
+ *     hualong <>
  */
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_PREPARE_STMT_STRUCT_H_
@@ -166,6 +166,7 @@ public:
   inline int32_t get_num_of_returning_into() const { return num_of_returning_into_; }
   inline void set_is_sensitive_sql(const bool is_sensitive_sql) { is_sensitive_sql_ = is_sensitive_sql; }
   inline bool get_is_sensitive_sql() const { return is_sensitive_sql_; }
+  inline const common::ObString &get_raw_sql() const { return raw_sql_; }
 
   bool is_valid() const;
   bool check_erase_inc_ref_count();
@@ -174,6 +175,7 @@ public:
   int add_param_field(const common::ObField &param);
   int add_column_field(const common::ObField &column);
   int get_convert_size(int64_t &cv_size) const;
+  int assign_raw_sql(const common::ObString &raw_sql);
   int assign_no_param_sql(const common::ObString &no_param_sql);
   int assign_fixed_raw_params(const common::ObIArray<int64_t> &param_idxs,
                               const common::ObIArray<ObPCParam *> &raw_params);
@@ -248,6 +250,7 @@ private:
   int32_t num_of_returning_into_;
   common::ObString no_param_sql_;
   bool is_sensitive_sql_;
+  common::ObString raw_sql_;
   // raw_params_ records constants other than question mark in raw prepare sql
   // raw_params_idx_ records the offset of the constants in raw_params_ in param_store
   // E.g: prepare stmt from 'select 3 + ? + 2 from dual';
@@ -400,6 +403,41 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoGuard);
 };
 
+struct PsCacheInfoCtx
+{
+  PsCacheInfoCtx()
+  : param_cnt_(0),
+    num_of_returning_into_(-1),
+    is_inner_sql_(false),
+    is_sensitive_sql_(false),
+    normalized_sql_(),
+    raw_sql_(),
+    no_param_sql_(),
+    raw_params_(NULL),
+    fixed_param_idx_(NULL),
+    stmt_type_(stmt::T_NONE) {}
+
+
+  TO_STRING_KV(K_(param_cnt),
+               K_(num_of_returning_into),
+               K_(is_inner_sql),
+               K_(is_sensitive_sql),
+               K_(normalized_sql),
+               K_(raw_sql),
+               K_(no_param_sql),
+               K_(stmt_type));
+
+  int64_t param_cnt_;
+  int32_t num_of_returning_into_;
+  bool is_inner_sql_;
+  bool is_sensitive_sql_;
+  common::ObString normalized_sql_;
+  common::ObString raw_sql_;
+  common::ObString no_param_sql_;
+  common::ObIArray<ObPCParam*> *raw_params_;
+  common::ObIArray<int64_t> *fixed_param_idx_;
+  stmt::StmtType stmt_type_;
+};
 
 } //end of namespace sql
 } //end of namespace oceanbase

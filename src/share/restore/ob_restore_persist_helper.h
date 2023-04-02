@@ -20,6 +20,7 @@
 #include "share/ob_inner_table_operator.h"
 #include "share/restore/ob_ls_restore_status.h"
 #include "share/restore/ob_restore_type.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -82,14 +83,11 @@ struct ObInitiatorRestoreJobPersistKey final : public ObIInnerTableKey
   TO_STRING_KV(K_(initiator_tenant_id), K_(initiator_job_id));
 };
 
-typedef uint64_t RESTORE_SCN_TYPE;
-
 // Define restore progress table row structure.
 struct ObRestoreProgressPersistInfo final : public ObIInnerTableRow
 {
   ObRestoreJobPersistKey key_;
-  // TODO: fix scn type later
-  RESTORE_SCN_TYPE restore_scn_;
+  SCN restore_scn_;
   int64_t ls_count_; // to restore log stream replica number.
   int64_t finish_ls_count_;
   int64_t tablet_count_;
@@ -98,7 +96,7 @@ struct ObRestoreProgressPersistInfo final : public ObIInnerTableRow
   int64_t finish_bytes_;
 
   ObRestoreProgressPersistInfo() {
-    restore_scn_ = 0;
+    restore_scn_ = share::SCN::min_scn();
     ls_count_ = 0;
     finish_ls_count_ = 0;
     tablet_count_ = 0;
@@ -169,9 +167,9 @@ struct ObLSRestoreJobPersistKey final : public ObIInnerTableKey
 struct ObLSHisRestorePersistInfo final : public ObIInnerTableRow
 {
   ObLSRestoreJobPersistKey key_;
-  RESTORE_SCN_TYPE restore_scn_;
-  RESTORE_SCN_TYPE start_replay_scn_;
-  RESTORE_SCN_TYPE last_replay_scn_;
+  SCN restore_scn_;
+  SCN start_replay_scn_;
+  SCN last_replay_scn_;
   int64_t tablet_count_;
   int64_t finish_tablet_count_;
   int64_t total_bytes_;
@@ -181,9 +179,9 @@ struct ObLSHisRestorePersistInfo final : public ObIInnerTableRow
   common::ObSqlString comment_;
 
   ObLSHisRestorePersistInfo() {
-    restore_scn_ = 0;
-    start_replay_scn_ = 0;
-    last_replay_scn_ = 0;
+    restore_scn_ = share::SCN::min_scn();
+    start_replay_scn_ = share::SCN::min_scn();
+    last_replay_scn_ = share::SCN::min_scn();
     tablet_count_ = 0;
     finish_tablet_count_ = 0;
     total_bytes_ = 0;
@@ -223,9 +221,9 @@ struct ObLSRestoreProgressPersistInfo final : public ObIInnerTableRow
 {
   ObLSRestoreJobPersistKey key_;
   ObLSRestoreStatus status_;
-  RESTORE_SCN_TYPE restore_scn_;
-  RESTORE_SCN_TYPE start_replay_scn_;
-  RESTORE_SCN_TYPE last_replay_scn_;
+  SCN restore_scn_;
+  SCN start_replay_scn_;
+  SCN last_replay_scn_;
   int64_t tablet_count_;
   int64_t finish_tablet_count_;
   int64_t total_bytes_;
@@ -235,9 +233,9 @@ struct ObLSRestoreProgressPersistInfo final : public ObIInnerTableRow
   int result_;
 
   ObLSRestoreProgressPersistInfo() {
-    restore_scn_ = 0;
-    start_replay_scn_ = 0;
-    last_replay_scn_ = 0;
+    restore_scn_ = share::SCN::min_scn();
+    start_replay_scn_ = share::SCN::min_scn();
+    last_replay_scn_ = share::SCN::min_scn();
     tablet_count_ = 0;
     finish_tablet_count_ = 0;
     total_bytes_ = 0;
@@ -293,7 +291,7 @@ struct ObHisRestoreJobPersistInfo final : public ObIInnerTableRow
   uint64_t backup_tenant_id_;
   ClusterName backup_cluster_name_;
   LongString backup_dest_;
-  RESTORE_SCN_TYPE restore_scn_;
+  SCN restore_scn_;
   LongString restore_option_;
   LongString table_list_; // white table list
   LongString remap_table_list_; // renamed table list
@@ -326,7 +324,7 @@ struct ObHisRestoreJobPersistInfo final : public ObIInnerTableRow
     restore_tenant_id_ = OB_INVALID_TENANT_ID;
     backup_tenant_id_ = OB_INVALID_TENANT_ID;
     
-    restore_scn_ = 0;
+    restore_scn_ = share::SCN::min_scn();
     backup_cluster_version_ = 0;
 
     ls_count_ = 0;
@@ -454,7 +452,7 @@ public:
   // Update log restore progress will be updated to log stream restore progress table.
   int update_log_restore_progress(
     common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
-    const RESTORE_SCN_TYPE &last_replay_scn) const;
+    const SCN &last_replay_scn) const;
 
   int update_ls_restore_status(
       common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,

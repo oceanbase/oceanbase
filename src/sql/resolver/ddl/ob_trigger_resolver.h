@@ -40,6 +40,14 @@ public:
   virtual ~ObTriggerResolver()
   {}
   virtual int resolve(const ParseNode &parse_tree);
+  static int analyze_trigger(ObSchemaGetterGuard &schema_guard,
+                             ObSQLSessionInfo *session_info,
+                             ObMySQLProxy *sql_proxy,
+                             ObIAllocator &allocator,
+                             const ObTriggerInfo &trigger_info,
+                             const ObString &db_name,
+                             ObIArray<ObDependencyInfo> &dep_infos,
+                             bool is_alter_compile);
 private:
   int resolve_create_trigger_stmt(const ParseNode &parse_node,
                                   obrpc::ObCreateTriggerArg &trigger_arg);
@@ -79,10 +87,15 @@ private:
                           common::ObString &database_name,
                           common::ObString &schema_name);
   int resolve_alter_clause(const ParseNode &alter_clause,
-                           share::schema::ObTriggerInfo &tg_info);
+                           share::schema::ObTriggerInfo &tg_info,
+                           const ObString &db_name,
+                           bool &is_set_status,
+                            bool &is_alter_compile);
   int fill_package_info(share::schema::ObTriggerInfo &trigger_info);
 
   int resolve_base_object(obrpc::ObCreateTriggerArg &trigger_arg, bool search_public_schema);
+  int resolve_order_clause(const ParseNode *parse_node, obrpc::ObCreateTriggerArg &trigger_arg);
+
 private:
   static const common::ObString REF_OLD;
   static const common::ObString REF_NEW;

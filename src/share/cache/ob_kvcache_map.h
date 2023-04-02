@@ -37,7 +37,7 @@ public:
   void destroy();
   int erase_all();
   int erase_all(const int64_t cache_id);
-  int erase_tenant(const uint64_t tenant_id);
+  int erase_tenant(const uint64_t tenant_id, const bool force_erase = false);
   int erase_tenant_cache(const uint64_t tenant_id, const int64_t cache_id);
   int clean_garbage_node(int64_t &start_pos, const int64_t clean_num);
   int replace_fragment_node(int64_t &start_pos, const int64_t replace_num);
@@ -78,6 +78,8 @@ private:
     {}
     virtual ~Node() {};
     virtual void retire() override;  // only free memory of itself
+    INHERIT_TO_STRING_KV("Node", KVCacheHazardNode, KPC_(inst), K_(hash_code), K_(seq_num), KP_(mb_handle), KP_(key),
+                         KP_(value), KP_(next), K_(get_cnt));
   };
   struct Bucket
   {

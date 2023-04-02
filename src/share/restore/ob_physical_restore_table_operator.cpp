@@ -182,6 +182,25 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     }                                                                      \
   }
 
+#define ADD_COLUMN_WITH_UINT_VALUE(JOB_INFO, COLUMN_NAME, COLUMN_VALUE)         \
+  if (OB_SUCC(ret)) {                                                      \
+    if (OB_FAIL(dml.add_pk_column("job_id",                                \
+                                  JOB_INFO.get_restore_key().job_id_))) {  \
+      LOG_WARN("fail to add pk column", K(ret), "job_key",                 \
+               JOB_INFO.get_restore_key());                                \
+    } else if (OB_FAIL(dml.add_pk_column(                                  \
+                   "tenant_id", JOB_INFO.get_restore_key().tenant_id_))) { \
+      LOG_WARN("failed to add pk column", KR(ret), "job_key",              \
+               JOB_INFO.get_restore_key());                                \
+    } else if (OB_FAIL(dml.add_pk_column("name", #COLUMN_NAME))) {         \
+      LOG_WARN("fail to add pk column", K(ret), "name", #COLUMN_NAME);     \
+    } else if (OB_FAIL(dml.add_uint64_column("value", COLUMN_VALUE))) {           \
+      LOG_WARN("fail to add column", K(ret), "value", COLUMN_VALUE);       \
+    } else if (OB_FAIL(dml.finish_row())) {                                \
+      LOG_WARN("fail to finish row", K(ret));                              \
+    }                                                                      \
+  }
+
     char version[common::OB_CLUSTER_VERSION_LENGTH] = {0};
 
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, initiator_job_id);
@@ -189,24 +208,27 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restore_start_ts);
-    ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restore_scn);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, comment);
 
+    // restore_scn
+    if (OB_SUCC(ret)) {
+      ADD_COLUMN_WITH_UINT_VALUE(job_info, restore_scn, (job_info.get_restore_scn().get_val_for_inner_table_field()));
+    }
     //restore_type
     if (OB_SUCC(ret)) {
        ADD_COLUMN_WITH_VALUE(job_info, restore_type, (int64_t)(job_info.get_restore_type()));
     }
-    // post_cluster_version
+    // post_data_version
     if (OB_SUCC(ret)) {
-      uint64_t post_cluster_version = job_info.get_post_cluster_version();
+      uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
-          version, common::OB_CLUSTER_VERSION_LENGTH, post_cluster_version);
+          version, common::OB_CLUSTER_VERSION_LENGTH, post_data_version);
       if (len < 0) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid post_cluster_version", K(ret),
-                 K(post_cluster_version));
+        LOG_WARN("invalid post_data_version", K(ret),
+                 K(post_data_version));
       } else {
-        ADD_COLUMN_WITH_VALUE(job_info, post_cluster_version, ObString(len, version));
+        ADD_COLUMN_WITH_VALUE(job_info, post_data_version, ObString(len, version));
       }
     }
     // status
@@ -237,6 +259,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compat_mode);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compatible);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, concurrency);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -248,6 +271,18 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
          LOG_WARN("invalid source_cluster_version", K(ret), K(source_cluster_version));
        } else {
          ADD_COLUMN_WITH_VALUE(job_info, source_cluster_version, ObString(len, version));
+       }
+     }
+     // source_data_version
+     if (OB_SUCC(ret)) {
+       uint64_t source_data_version = job_info.get_source_data_version();
+       int64_t len = ObClusterVersion::print_version_str(
+                     version, common::OB_CLUSTER_VERSION_LENGTH, source_data_version);
+       if (len < 0) {
+         ret = OB_INVALID_ARGUMENT;
+         LOG_WARN("invalid source_data_version", K(ret), K(source_data_version));
+       } else {
+         ADD_COLUMN_WITH_VALUE(job_info, source_data_version, ObString(len, version));
        }
      }
      // while_list/b_while_list
@@ -435,7 +470,19 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_UINT_VALUE(initiator_tenant_id, job);
     RETRIEVE_UINT_VALUE(backup_tenant_id, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
-    RETRIEVE_INT_VALUE(restore_scn, job);
+    if (OB_SUCC(ret)) {
+      if (name == "restore_scn") {
+        uint64_t current_value = share::OB_INVALID_SCN_VAL;
+        SCN restore_scn;
+        if (OB_FAIL(retrieve_uint_value(result, current_value))) {
+          LOG_WARN("fail to retrive int value", K(ret), "column_name", "restore_scn");
+        } else if (OB_FAIL(restore_scn.convert_for_inner_table_field(current_value))) {
+          LOG_WARN("fail to set restore scn", K(ret));
+        } else {
+          (job).set_restore_scn(restore_scn);
+        }
+      }
+    }
     RETRIEVE_STR_VALUE(restore_option, job);
     RETRIEVE_STR_VALUE(backup_dest, job);
     RETRIEVE_STR_VALUE(description, job);
@@ -449,6 +496,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(passwd_array, job);
     RETRIEVE_INT_VALUE(compatible, job);
     RETRIEVE_STR_VALUE(kms_info, job);
+    RETRIEVE_INT_VALUE(concurrency, job);
 
     if (OB_SUCC(ret)) {
       if (name == "kms_encrypt") {
@@ -496,7 +544,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     }
 
     if (OB_SUCC(ret)) {
-      if (name == "post_cluster_version") {
+      if (name == "post_data_version") {
         ObString version_str;
         uint64_t version = 0;
         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", version_str);
@@ -504,7 +552,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
         } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
           LOG_WARN("fail to parser version", K(ret), K(version_str));
         } else {
-          job.set_post_cluster_version(version);
+          job.set_post_data_version(version);
         }
       }
     }
@@ -518,6 +566,20 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
           LOG_WARN("fail to parser version", K(ret), K(version_str));
         } else {
           job.set_source_cluster_version(version);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (name == "source_data_version") {
+        ObString version_str;
+        uint64_t version = 0;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", version_str);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
+          LOG_WARN("fail to parser version", K(ret), K(version_str));
+        } else {
+          job.set_source_data_version(version);
         }
       }
     }

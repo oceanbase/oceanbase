@@ -15,6 +15,7 @@
 
 #include "lib/allocator/ob_small_allocator.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
+#include "large_buffer_pool.h"
 #include <cstdint>
 
 namespace oceanbase
@@ -46,10 +47,13 @@ public:
   void free_log_fetch_task(ObArchiveLogFetchTask *task);
 
   // allocate ObArchiveSendTask, include SendTask and log buffer
-  ObArchiveSendTask *alloc_send_task(const int64_t buf_len);
+  char *alloc_send_task(const int64_t buf_len);
 
   // free ObArchiveSendTask, include SendTask and log buffer
-  void free_send_task(ObArchiveSendTask *task);
+  void free_send_task(void *buf);
+
+  // week out cached send task buffer
+  void weed_out_send_task();
 
   // alloc log handle buffer
   void *alloc_log_handle_buffer(const int64_t size);
@@ -65,10 +69,11 @@ public:
 
   void print_state();
 private:
+  typedef LargeBufferPool ArchiveSendAllocator;
   bool                                  inited_;
   common::ObSmallAllocator              log_fetch_task_allocator_;
-  common::ObConcurrentFIFOAllocator     send_task_allocator_;
-  common::ObConcurrentFIFOAllocator     log_handle_allocator_;
+  //common::ObConcurrentFIFOAllocator     send_task_allocator_;
+  ArchiveSendAllocator                  send_task_allocator_;
   common::ObSmallAllocator              send_task_status_allocator_;
 };
 } // namespace archive

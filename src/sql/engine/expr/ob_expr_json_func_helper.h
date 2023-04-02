@@ -8,12 +8,14 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for define of func json expr helper
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_
 
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -21,6 +23,7 @@
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
+#include "sql/engine/expr/ob_expr_result_type_util.h"
 
 using namespace oceanbase::common;
 
@@ -43,6 +46,9 @@ class ObJsonExprHelper final
     ObJsonPathCache path_cache_;
   };
 public:
+  static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
+                                  common::ObArenaAllocator &allocator,
+                                  ObString& str, bool& is_null);
   /*
   get json doc to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -56,21 +62,9 @@ public:
   static int get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
                           common::ObArenaAllocator &allocator,
                           uint16_t index, ObIJsonBase*& j_base,
-                          bool &is_null, bool need_to_tree=true);
+                          bool &is_null, bool need_to_tree=true, bool relax = true);
 
-  /*
-  get json doc to JsonBase in old_typing_engine
-  @param[in]  objs       the input arguments
-  @param[in]  allocator  the Allocator in context
-  @param[in]  index      the input arguments index
-  @param[out] j_base     the pointer to JsonBase
-  @param[out] is_null    the flag for null situation
-  @return Returns OB_SUCCESS on success, error code otherwise.
-  */
-  static int get_json_doc(const ObObj *objs, common::ObIAllocator *allocator,
-                          uint16_t index, ObIJsonBase*& j_base,
-                          bool &is_null, bool need_to_tree = true);
-
+  static int cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag = 0);
   /*
   get json value to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -83,7 +77,8 @@ public:
   */
   static int get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
                           common::ObIAllocator *allocator, uint16_t index,
-                          ObIJsonBase*& j_base, bool to_bin = false);
+                          ObIJsonBase*& j_base, bool to_bin = false, bool format_json = false,
+                          uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG);
 
   /*
   get json value to JsonBase in old_typing_engine
@@ -133,6 +128,7 @@ public:
                                         common::ObIAllocator *allocator,
                                         ObScale scale,
                                         const ObTimeZoneInfo *tz_info,
+                                        ObBasicSessionInfo *session,
                                         ObIJsonBase*& j_base,
                                         bool to_bin);
   /*
@@ -153,7 +149,35 @@ public:
                                              ObCollationType cs_type,
                                              ObIJsonBase*& j_base,
                                              bool to_bin,
-                                             bool deep_copy = false);
+                                             bool has_lob_header,
+                                             bool deep_copy = false,
+                                             bool relax_type = true,
+                                             bool format_json = false);
+
+  static int transform_convertible_2String(const ObExpr &expr,
+                                           ObEvalCtx &ctx,
+                                           const ObDatum &datum,
+                                           ObObjType type,
+                                           ObCollationType cs_type,
+                                           ObJsonBuffer &j_buf,
+                                           bool has_lob_header,
+                                           bool format_json,
+                                           bool strict_json,
+                                           int32_t pos);
+
+  static int transform_scalar_2String(ObEvalCtx &ctx,
+                                      const ObDatum &datum,
+                                      ObObjType type,
+                                      ObScale scale,
+                                      const ObTimeZoneInfo *tz_info,
+                                      ObJsonBuffer &j_buf);
+  static bool is_cs_type_bin(ObCollationType &cs_type);
+  static int get_timestamp_str_in_oracle_mode(ObEvalCtx &ctx,
+                                                                const ObDatum &datum,
+                                                                ObObjType type,
+                                                                ObScale scale,
+                                                                const ObTimeZoneInfo *tz_info,
+                                                                ObJsonBuffer &j_buf);
 
   static bool is_convertible_to_json(ObObjType &type);
   static int is_valid_for_json(ObExprResType* types_stack, uint32_t index, const char* func_name);
@@ -162,7 +186,71 @@ public:
   static void set_type_for_value(ObExprResType* types_stack, uint32_t index);
   static int ensure_collation(ObObjType type, ObCollationType cs_type);
   static ObJsonInType get_json_internal_type(ObObjType type);
+  template <typename T>
+  static int pack_json_str_res(const ObExpr &expr,
+                               ObEvalCtx &ctx,
+                               ObDatum &res,
+                               T &str,
+                               common::ObIAllocator *allocator = nullptr)
+  {
+    int ret = OB_SUCCESS;
+    ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+    if (OB_FAIL(text_result.init(str.length(), allocator))) {
+      LOG_WARN("init lob result failed");
+    } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
+      LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
+    } else {
+      text_result.set_result();
+    }
+    return ret;
+  }
+
+  /**
+   * the following 3 functions is used for json_query and json_mergepatch
+   * as the returning type is the same
+   *
+   *  get_cast_type
+   *  set_dest_type
+   *  get_cast_string_len
+   *
+  */
+  static int get_cast_type(const ObExprResType param_type2, ObExprResType &dst_type);
+  // check item function and returning type
+  static int check_item_func_with_return(ObJsonPathNodeType path_type, ObObjType dst_type, common::ObCollationType dst_coll_type, int8_t JSON_EXPR_FLAG);
+  static int set_dest_type(ObExprResType &type1, ObExprResType &type,
+                           ObExprResType &dst_type, ObExprTypeCtx &type_ctx);
+  static int get_expr_option_value(const ObExprResType param_type2, int64_t &dst_type);
+  static int calc_asciistr_in_expr(const ObString &src,
+                                  const ObCollationType src_cs_type,
+                                  const ObCollationType dst_cs_type,
+                                  char* buf, const int64_t buf_len, int32_t &pos);
+  static int get_dest_type(const ObExpr &expr, int64_t pos,
+                          ObEvalCtx& ctx,
+                          ObObjType &dest_type, int32_t &dst_len);
+  static int get_cast_string_len(ObExprResType &type1,
+                                 ObExprResType &type2,
+                                 common::ObExprTypeCtx &type_ctx,
+                                 int32_t &res_len,
+                                 int16_t &length_semantics,
+                                 common::ObCollationType conn);
+  static int eval_and_check_res_type(int64_t value, ObObjType& type, int32_t& dst_len);
+  static int parse_res_type(ObExprResType& type1,
+                            ObExprResType& json_res_type,
+                            ObExprResType& result_type,
+                            ObExprTypeCtx& type_ctx);
+  static int parse_asc_option(ObExprResType& asc,
+                              ObExprResType& type1,
+                              ObExprResType& res_type,
+                              ObExprTypeCtx& type_ctx);
+  static int pre_default_value_check(ObObjType dst_type, ObString time_str, ObObjType val_type);
+
+  static int character2_ascii_string(common::ObIAllocator *allocator,
+                                     const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     ObString& result,
+                                     int32_t reserve_len = 0);
 private:
+  const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
 };
 

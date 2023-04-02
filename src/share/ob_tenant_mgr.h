@@ -83,7 +83,7 @@ private:
   {
     ObDList<ObTenantInfo> info_list_;
     SpinRWLock lock_;
-    ObTenantBucket() : info_list_(), lock_()
+    ObTenantBucket() : info_list_(), lock_(ObLatchIds::DEFAULT_BUCKET_LOCK)
     {
     }
     int get_the_node(const uint64_t tenant_id, ObTenantInfo *&node)

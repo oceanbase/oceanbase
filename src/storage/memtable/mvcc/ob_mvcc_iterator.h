@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObStoreRowLockState;
+}
 namespace memtable
 {
 
@@ -104,7 +108,7 @@ public:
         ctx_(NULL),
         value_(NULL),
         version_iter_(NULL),
-        last_trans_version_(INT64_MAX),
+        last_trans_version_(share::SCN::max_scn()),
         skip_compact_(false)
   {
   }
@@ -126,8 +130,13 @@ public:
     ctx_ = NULL;
     value_ = NULL;
     version_iter_ = NULL;
-    last_trans_version_ = INT64_MAX;
+    last_trans_version_ = share::SCN::max_scn();
   }
+  int check_row_locked(storage::ObStoreRowLockState &lock_state);
+  const transaction::ObTransID get_trans_id() const { return ctx_->get_tx_id(); }
+  share::SCN get_snapshot_version() const { return ctx_->get_snapshot_version(); }
+  ObMvccAccessCtx *get_mvcc_acc_ctx() { return ctx_; }
+  const ObMvccAccessCtx *get_mvcc_acc_ctx() const { return ctx_; }
   const ObMvccRow *get_mvcc_row() const { return value_; }
   const ObMvccTransNode *get_trans_node() const { return version_iter_; }
 private:
@@ -146,7 +155,7 @@ private:
   ObMvccAccessCtx *ctx_;
   ObMvccRow *value_;
   ObMvccTransNode *version_iter_;
-  int64_t last_trans_version_;
+  share::SCN last_trans_version_;
   bool skip_compact_;
 };
 
@@ -170,8 +179,6 @@ public:
   int get_key_val(const ObMemtableKey*& key, ObMvccRow*& row);
   int try_purge(const transaction::ObTxSnapshot &snapshot_info,
                 const ObMemtableKey* key, ObMvccRow* row);
-  int get_end_gap_key(const transaction::ObTxSnapshot &snapshot_info,
-                      const ObStoreRowkey *&key, int64_t& size);
   uint8_t get_iter_flag()
   {
     return query_engine_iter_? query_engine_iter_->get_iter_flag(): 0;

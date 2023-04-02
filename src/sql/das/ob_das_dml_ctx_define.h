@@ -20,12 +20,16 @@
 #include "share/schema/ob_table_dml_param.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "sql/engine/ob_operator.h"
+#include "sql/resolver/dml/ob_hint.h"
 namespace oceanbase
 {
 namespace sql
 {
 typedef common::ObFixedArray<common::ObObjMeta, common::ObIAllocator> ObjMetaFixedArray;
 typedef common::ObFixedArray<common::ObAccuracy, common::ObIAllocator> AccuracyFixedArray;
+static const int64_t SAPTIAL_INDEX_DEFAULT_ROW_COUNT = 32; // 一个wkb生成的cellid数量（设定值）
+typedef common::ObSEArray<common::ObNewRow, SAPTIAL_INDEX_DEFAULT_ROW_COUNT> ObSpatIndexRow;
+
 struct ObDASDMLBaseRtDef;
 //das dml base compile info definition
 struct ObDASDMLBaseCtDef : ObDASBaseCtDef
@@ -150,18 +154,22 @@ public:
   ObDASInsRtDef()
     : ObDASDMLBaseRtDef(DAS_OP_TABLE_INSERT),
       need_fetch_conflict_(false),
-      is_duplicated_(false)
+      is_duplicated_(false),
+      direct_insert_task_id_(0)
   { }
 
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASDMLBaseRtDef,
                        K_(need_fetch_conflict),
-                       K_(is_duplicated));
+                       K_(is_duplicated),
+                       K_(direct_insert_task_id));
 
   // used to check whether need to fetch_duplicate_key, will set in table_replace_op
   bool need_fetch_conflict_;
   // used to check whether duplicate_key error occurred, will be set in das_insert_op
   // not need to serialize
   bool is_duplicated_;
+  // used in direct-insert mode
+  int64_t direct_insert_task_id_;
 };
 typedef DASDMLRtDefArray DASInsRtDefArray;
 
@@ -372,9 +380,11 @@ public:
   {
     return buffer_list_.header_.next_ != nullptr ? buffer_list_.header_.next_->cnt_ : 0;
   }
+  inline uint64_t get_tenant_id() const { return mem_attr_.tenant_id_; }
   int try_add_row(const common::ObIArray<ObExpr*> &exprs,
                   ObEvalCtx *ctx,
                   const int64_t memory_limit,
+                  DmlRow* &stored_row,
                   bool &row_added,
                   bool strip_lob_locator);
   int try_add_row(const DmlShadowRow &sr, const int64_t memory_limit, bool &row_added, DmlRow **stored_row = nullptr);
@@ -430,10 +440,14 @@ public:
       das_ctdef_(das_ctdef),
       row_projector_(nullptr),
       allocator_(alloc),
-      cur_row_(nullptr)
+      cur_row_(nullptr),
+      main_ctdef_(das_ctdef),
+      spat_rows_(nullptr),
+      spatial_row_idx_(0)
   {
     set_ctdef(das_ctdef);
   }
+  virtual ~ObDASDMLIterator();
   virtual int get_next_row(common::ObNewRow *&row) override;
   virtual int get_next_row() override;
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
@@ -441,9 +455,11 @@ public:
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
     cur_row_ = nullptr;
+    spatial_row_idx_ = 0;
     set_ctdef(das_ctdef);
     return common::OB_SUCCESS;
   }
+
 private:
   void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef)
   {
@@ -452,6 +468,10 @@ private:
                      &das_ctdef_->old_row_projector_ :
                      &das_ctdef_->new_row_projector_;
   }
+  // spatial index
+  int get_next_spatial_index_row(ObNewRow *&row);
+  ObSpatIndexRow *get_spatial_index_rows() { return spat_rows_; }
+  int create_spatial_index_store();
 private:
   ObDASWriteBuffer &write_buffer_;
   const ObDASDMLBaseCtDef *das_ctdef_;
@@ -459,6 +479,9 @@ private:
   ObDASWriteBuffer::Iterator write_iter_;
   common::ObIAllocator &allocator_;
   common::ObNewRow *cur_row_;
+  const ObDASDMLBaseCtDef *main_ctdef_;
+  ObSpatIndexRow *spat_rows_;
+  uint32_t spatial_row_idx_;
 };
 }  // namespace sql
 }  // namespace oceanbase

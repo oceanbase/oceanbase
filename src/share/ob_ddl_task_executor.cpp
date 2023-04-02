@@ -25,7 +25,7 @@ namespace oceanbase
 namespace share
 {
 ObDDLTaskQueue::ObDDLTaskQueue()
-  : task_list_(), task_set_(), lock_(), is_inited_(false), allocator_()
+  : task_list_(), task_set_(), lock_(ObLatchIds::DDL_LOCK), is_inited_(false), allocator_()
 {
   allocator_.set_label(common::ObModIds::OB_BUILD_INDEX_SCHEDULER);
 }
@@ -240,7 +240,7 @@ void ObDDLTaskExecutor::run1()
   int64_t executed_task_count = 0;
   ObIDDLTask *task = NULL;
   ObIDDLTask *first_retry_task = NULL;
-  (void)prctl(PR_SET_NAME, "DDLTaskExecutor", 0, 0, 0);
+  lib::set_thread_name("DDLTaskExecutor");
   while (!has_set_stop()) {
     while (!has_set_stop() && executed_task_count < BATCH_EXECUTE_COUNT) {
       if (OB_FAIL(task_queue_.get_next_task(task))) {

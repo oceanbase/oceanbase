@@ -18,6 +18,7 @@
 #include "lib/stat/ob_latch_define.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 namespace oceanbase
 {
 namespace transaction
@@ -32,9 +33,9 @@ ObTenantWeakReadServerVersionMgr::ObTenantWeakReadServerVersionMgr() :
 ObTenantWeakReadServerVersionMgr::~ObTenantWeakReadServerVersionMgr()
 {}
 
-int64_t ObTenantWeakReadServerVersionMgr::get_version() const
+SCN ObTenantWeakReadServerVersionMgr::get_version() const
 {
-  int64_t ret_version = 0;
+  SCN ret_version;
   ServerVersion sv;
 
   get_version(sv);
@@ -43,19 +44,17 @@ int64_t ObTenantWeakReadServerVersionMgr::get_version() const
   return ret_version;
 }
 
-int64_t ObTenantWeakReadServerVersionMgr::get_version(int64_t &total_part_count,
+SCN ObTenantWeakReadServerVersionMgr::get_version(int64_t &total_part_count,
 	int64_t &valid_part_count) const
 {
-  int64_t ret_version = 0;
   ServerVersion sv;
 
   get_version(sv);
 
-  ret_version = sv.version_;
   total_part_count = sv.total_part_count_;
   valid_part_count = sv.valid_inner_part_count_  + sv.valid_user_part_count_;
 
-  return ret_version;
+  return sv.version_;
 }
 
 void ObTenantWeakReadServerVersionMgr::get_version(ServerVersion &sv) const
@@ -71,11 +70,11 @@ int ObTenantWeakReadServerVersionMgr::update_with_part_info(const uint64_t tenan
     const int64_t epoch_tstamp,
     const bool need_skip,
     const bool is_user_part,
-    const int64_t version)
+    const SCN version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(epoch_tstamp <= 0)
-      || OB_UNLIKELY(! need_skip && ! is_valid_read_snapshot_version(version))) {
+      || OB_UNLIKELY(! need_skip && !version.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, epoch or version", K(ret), K(tenant_id),
         K(epoch_tstamp), K(need_skip), K(is_user_part), K(version));
@@ -88,13 +87,13 @@ int ObTenantWeakReadServerVersionMgr::update_with_part_info(const uint64_t tenan
 
 int ObTenantWeakReadServerVersionMgr::generate_new_version(const uint64_t tenant_id,
     const int64_t epoch_tstamp,
-    const int64_t base_version_when_no_valid_partition,
+    const SCN base_version_when_no_valid_partition,
     const bool need_print_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(epoch_tstamp <= 0)
       || OB_UNLIKELY(OB_INVALID_ID == tenant_id)
-      || OB_UNLIKELY(! is_valid_read_snapshot_version(base_version_when_no_valid_partition))) {
+      || OB_UNLIKELY(!base_version_when_no_valid_partition.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(epoch_tstamp), K(tenant_id),
         K(base_version_when_no_valid_partition));
@@ -118,7 +117,7 @@ int ObTenantWeakReadServerVersionMgr::generate_new_version(const uint64_t tenant
     } else {
       if (need_print_status) {
         LOG_INFO("[WRS] update tenant weak read server version", K(tenant_id), K_(server_version),
-            "version_delta", ObTimeUtility::current_time() - server_version_.version_);
+            "version_delta", ObTimeUtility::current_time() - server_version_.version_.convert_to_ts());
       }
     }
   }
@@ -131,7 +130,7 @@ int ObTenantWeakReadServerVersionMgr::generate_new_version(const uint64_t tenant
 void ObTenantWeakReadServerVersionMgr::ServerVersionInner::update_with_part_info(const int64_t epoch_tstamp,
     const bool need_skip,
     const bool is_user_part,
-    const int64_t version)
+    const SCN version)
 {
   if (epoch_tstamp != epoch_tstamp_) {
     // new epoch statistic start
@@ -140,13 +139,15 @@ void ObTenantWeakReadServerVersionMgr::ServerVersionInner::update_with_part_info
   }
 
   if (! need_skip) {
-    int64_t &target_version = version_;
+    SCN &target_version = version_;
     int64_t &target_valid_count = is_user_part ? valid_user_part_count_ : valid_inner_part_count_;
     // update target version
-    if (0 == target_version) {
+    if (!target_version.is_valid()) {
       target_version = version;
     } else {
-      target_version = std::min(target_version, version);
+      if (target_version > version) {
+        target_version = version;
+      }
     }
     // target valid count + 1
     target_valid_count++;
@@ -160,7 +161,7 @@ void ObTenantWeakReadServerVersionMgr::ServerVersionInner::update_with_part_info
 // generate weak read version for tenant without partitions in local server
 int ObTenantWeakReadServerVersionMgr::ServerVersionInner::amend(const uint64_t tenant_id,
     const int64_t new_epoch_tstamp,
-    const int64_t base_version_when_no_valid_partition)
+    const SCN base_version_when_no_valid_partition)
 {
   int ret = OB_SUCCESS;
   static const int64_t PRINT_INTERVAL = 10 * 1000 * 1000;
@@ -190,7 +191,7 @@ int ObTenantWeakReadServerVersionMgr::ServerVersionInner::amend(const uint64_t t
             K(tenant_id), K(epoch_tstamp_), K(total_part_count_), K(valid_inner_part_count_),
             K(valid_user_part_count_), K(version_), K(base_version_when_no_valid_partition));
       }
-    } else if (version_ <= 0) {
+    } else if (!version_.is_valid()) {
       LOG_WARN("version is invalid while valid partition count is not zero, unexpected",
           K(valid_inner_part_count_), K(valid_user_part_count_), K(version_), K(epoch_tstamp_), K(total_part_count_));
       ret = OB_ERR_UNEXPECTED;
@@ -205,7 +206,7 @@ int ObTenantWeakReadServerVersionMgr::ServerVersionInner::update(const ServerVer
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(0 == new_version.epoch_tstamp_)
       || OB_UNLIKELY(epoch_tstamp_ >= new_version.epoch_tstamp_)
-      || OB_UNLIKELY(! is_valid_read_snapshot_version(new_version.version_))) {
+      || OB_UNLIKELY(!new_version.version_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid new server version", KR(ret), K(new_version), KPC(this));
   } else {
@@ -215,7 +216,7 @@ int ObTenantWeakReadServerVersionMgr::ServerVersionInner::update(const ServerVer
     valid_user_part_count_ = new_version.valid_user_part_count_;
 
     // version should incease monotonically
-    version_ = std::max(new_version.version_, version_);
+    version_ = SCN::max(new_version.version_, version_);
   }
   return ret;
 }

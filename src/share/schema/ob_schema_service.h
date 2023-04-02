@@ -112,6 +112,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_TRUNCATE_SUB_PARTITION, = 56)                       \
   ACT(OB_DDL_SET_INTERVAL, = 57)                                 \
   ACT(OB_DDL_INTERVAL_TO_RANGE, = 58)                            \
+  ACT(OB_DDL_TRUNCATE_TABLE, = 59)                               \
   ACT(OB_DDL_TABLE_OPERATION_END, = 100)                         \
   ACT(OB_DDL_TENANT_OPERATION_BEGIN, = 101)                      \
   ACT(OB_DDL_ADD_TENANT,)                                        \
@@ -312,6 +313,21 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_ALTER_MOCK_FK_PARENT_TABLE, = 2023)                 \
   ACT(OB_DDL_DROP_MOCK_FK_PARENT_TABLE, = 2024)                  \
   ACT(OB_DDL_MOCK_FK_PARENT_TABLE_OPERATION_END, =2030)          \
+  ACT(OB_DDL_RLS_POLICY_OPERATION_BEGIN, = 2031)                 \
+  ACT(OB_DDL_CREATE_RLS_POLICY, = 2032)                          \
+  ACT(OB_DDL_DROP_RLS_POLICY, = 2033)                            \
+  ACT(OB_DDL_ALTER_RLS_POLICY, = 2034)                           \
+  ACT(OB_DDL_RLS_POLICY_ADD_ATTRIBUTE, = 2035)                   \
+  ACT(OB_DDL_RLS_POLICY_DROP_ATTRIBUTE, = 2036)                  \
+  ACT(OB_DDL_RLS_POLICY_OPERATION_END, = 2040)                   \
+  ACT(OB_DDL_RLS_GROUP_OPERATION_BEGIN, = 2041)                  \
+  ACT(OB_DDL_CREATE_RLS_GROUP, = 2042)                           \
+  ACT(OB_DDL_DROP_RLS_GROUP, = 2043)                             \
+  ACT(OB_DDL_RLS_GROUP_OPERATION_END, = 2050)                    \
+  ACT(OB_DDL_RLS_CONTEXT_OPERATION_BEGIN, = 2051)                \
+  ACT(OB_DDL_CREATE_RLS_CONTEXT, = 2052)                         \
+  ACT(OB_DDL_DROP_RLS_CONTEXT, = 2053)                           \
+  ACT(OB_DDL_RLS_CONTEXT_OPERATION_END, = 2060)                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -354,6 +370,9 @@ IS_DDL_TYPE(DBLINK, dblink)
 IS_DDL_TYPE(DIRECTORY, directory)
 IS_DDL_TYPE(CONTEXT, context)
 IS_DDL_TYPE(MOCK_FK_PARENT_TABLE, mock_fk_parent_table)
+IS_DDL_TYPE(RLS_POLICY, rls_policy)
+IS_DDL_TYPE(RLS_GROUP, rls_group)
+IS_DDL_TYPE(RLS_CONTEXT, rls_context)
 
 struct ObSchemaOperation
 {
@@ -394,6 +413,9 @@ public:
     uint64_t directory_id_;
     uint64_t context_id_;
     uint64_t mock_fk_parent_table_id_;
+    uint64_t rls_policy_id_;
+    uint64_t rls_group_id_;
+    uint64_t rls_context_id_;
   };
   union {
     common::ObString table_name_;
@@ -639,6 +661,9 @@ class ObDbLinkSchema;
 class ObSimpleLinkTableSchema;
 class ObDirectorySchema;
 class ObSimpleMockFKParentTableSchema;
+class ObRlsPolicySchema;
+class ObRlsGroupSchema;
+class ObRlsContextSchema;
 
 class ObTenantSqlService;
 class ObDatabaseSqlService;
@@ -665,6 +690,7 @@ class ObProfileSqlService;
 class ObErrorSqlService;
 class ObDbLinkSqlService;
 class ObDirectorySqlService;
+class ObRlsSqlService;
 //table schema service interface layer
 class ObServerSchemaService;
 class ObContextSqlService;
@@ -723,6 +749,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(DbLink, dblink);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Directory, directory);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Context, context);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(Rls, rls);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
 
 
@@ -731,12 +758,9 @@ public:
   virtual int inc_sequence_id() = 0;
   virtual uint64_t get_sequence_id() = 0;
 
-  virtual int set_last_operation_info(const uint64_t tenant_id, const int64_t schema_version) = 0;
   virtual int set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info) = 0;
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info) = 0;
 
-  virtual int64_t get_last_operation_schema_version() const = 0;
-  virtual uint64_t get_last_operation_tenant_id() const = 0;
   virtual void set_cluster_schema_status(const ObClusterSchemaStatus &schema_status) = 0;
   virtual ObClusterSchemaStatus get_cluster_schema_status() const = 0;
   //get all core table schema
@@ -854,6 +878,9 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(directory, ObDirectorySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(context, ObContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_policy, ObRlsPolicySchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -917,6 +944,9 @@ public:
   virtual int fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size) = 0;
   virtual int fetch_new_tablet_ids(const ObTableSchema &table_schema, uint64_t &tablet_id, const uint64_t size) = 0;
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id) = 0;
+  virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id) = 0;
+  virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id) = 0;
+  virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -958,6 +988,10 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(directory, ObDirectorySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(context, ObContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_policy, ObRlsPolicySchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
+
 
   //--------------For manaing recyclebin -----//
   virtual int insert_recyclebin_object(
@@ -1019,6 +1053,15 @@ public:
                                                 const uint64_t table_id,
                                                 common::ObISQLClient &sql_client,
                                                 ObTableSchema &table_schema) = 0;
+  virtual int get_db_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                             const uint64_t &database_id,
+                                             ObIArray<ObDatabaseSchema> &database_schema,
+                                             ObISQLClient &sql_client) = 0;
+  virtual int get_full_table_schema_from_inner_table(const ObRefreshSchemaStatus &schema_status,
+                                                     const int64_t &table_id,
+                                                     ObTableSchema &table_schema,
+                                                     ObArenaAllocator &allocator,
+                                                     ObMySQLTransaction &trans) = 0;
   // get mock fk parent table schema of a single mock fk parent table
   virtual int get_mock_fk_parent_table_schema_from_inner_table(
       const ObRefreshSchemaStatus &schema_status,
@@ -1071,12 +1114,14 @@ public:
    * ObMultiVersionSchemaService::get_link_table_schema() need adjust
    * schema_version and link_schema_version, so param table_schema should not be const.
    */
-  virtual int get_link_table_schema(const ObDbLinkSchema &dblink_schema,
+  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
                                     const common::ObString &database_name,
                                     const common::ObString &table_name,
                                     common::ObIAllocator &allocator,
                                     ObTableSchema *&table_schema,
-                                    uint32_t sessid) = 0;
+                                    sql::ObSQLSessionInfo *session_info,
+                                    const common::ObString &dblink_name,
+                                    bool is_reverse_link) = 0;
   // when refresh schema, if new ddl operations are as following:
   // (ALTER USER TABLE, v1), (ALTER SYS TABLE, v2),
   // if we replay new ddl operation one by one, when we execute sql to read sys table

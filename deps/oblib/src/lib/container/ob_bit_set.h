@@ -140,7 +140,7 @@ inline bool ObSegmentBitSet<N, BlockAllocatorT>::has_member(int64_t index) const
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(index < 0)) {
-    LIB_LOG(WARN, "negative bitmapset member not allowed", K(index));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "negative bitmapset member not allowed", K(index));
     //just return false
   } else if (OB_UNLIKELY(index >= bit_count())) {
     //the bit is not set
@@ -271,7 +271,7 @@ inline bool ObFixedBitSet<N>::has_member(int64_t index) const
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(index < 0)) {
-    LIB_LOG(WARN, "negative bitmapset member not allowed", K(index));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "negative bitmapset member not allowed", K(index));
     //just return false
   } else if (OB_UNLIKELY(index >= bit_count())) {
     //the bit is not set
@@ -444,6 +444,8 @@ public:
   ObBitSet(const ObBitSet &other);
   template <int64_t O_N, typename O_ALLOC, bool O_AUTO_FREE>
   ObBitSet &operator=(const ObBitSet<O_N, O_ALLOC, O_AUTO_FREE> &other);
+  template <int64_t O_N, typename O_ALLOC, bool O_AUTO_FREE>
+  int assign(const ObBitSet<O_N, O_ALLOC, O_AUTO_FREE> &other);
   bool operator==(const ObBitSet &other) const;
   bool equal(const ObBitSet &other) const;
 
@@ -745,7 +747,7 @@ inline bool ObBitSet<N, BlockAllocatorT, auto_free>::has_member(int64_t index) c
 {
   bool bool_ret = false;
   if (OB_UNLIKELY(index < 0)) {
-    LIB_LOG(WARN, "negative bitmapset member not allowed", K(index));
+    LIB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "negative bitmapset member not allowed", K(index));
     //just return false
   } else if (OB_UNLIKELY(index >= bit_count())) {
     //the bit is not set
@@ -910,6 +912,16 @@ ObBitSet<N, BlockAllocatorT, auto_free> &ObBitSet<N, BlockAllocatorT, auto_free>
     bitset_word_array_.assign(other.bitset_word_array_);
   }
   return *this;
+}
+
+template <int64_t N, typename BlockAllocatorT, bool auto_free> template <int64_t O_N, typename O_ALLOC, bool O_AUTO_FREE>
+int ObBitSet<N, BlockAllocatorT, auto_free>::assign(const ObBitSet<O_N, O_ALLOC, O_AUTO_FREE> &other)
+{
+  int ret = OB_SUCCESS;
+  if (static_cast<void *>(this) != &other) {
+    ret = bitset_word_array_.assign(other.bitset_word_array_);
+  }
+  return ret;
 }
 
 template <int64_t N, typename BlockAllocatorT, bool auto_free>

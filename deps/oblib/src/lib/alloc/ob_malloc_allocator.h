@@ -22,14 +22,80 @@ namespace oceanbase
 {
 namespace lib
 {
-class ObMemoryCutter;
+using std::nullptr_t;
+class ObTenantCtxAllocatorGuard
+{
+public:
+  [[nodiscard]] ObTenantCtxAllocatorGuard()
+    : ObTenantCtxAllocatorGuard(nullptr) {}
+  [[nodiscard]] ObTenantCtxAllocatorGuard(ObTenantCtxAllocator *allocator, const bool lock=true)
+    : allocator_(allocator), lock_(lock)
+  {
+    if (OB_LIKELY(allocator_ != nullptr && lock)) {
+      allocator_->inc_ref_cnt(1);
+    }
+  }
+  ~ObTenantCtxAllocatorGuard()
+  {
+    revert();
+  }
+  ObTenantCtxAllocatorGuard(ObTenantCtxAllocatorGuard &&other)
+  {
+    *this = std::move(other);
+  }
+  ObTenantCtxAllocatorGuard &operator=(ObTenantCtxAllocatorGuard &&other)
+  {
+    revert();
+    allocator_ = other.allocator_;
+    lock_ = other.lock_;
+    other.allocator_ = nullptr;
+    return *this;
+  }
+  ObTenantCtxAllocator* operator->() const
+  {
+    return allocator_;
+  }
+  ObTenantCtxAllocator* ref_allocator() const
+  {
+    return allocator_;
+  }
+  void revert()
+  {
+    if (OB_LIKELY(allocator_ != nullptr && lock_)) {
+      allocator_->inc_ref_cnt(-1);
+    }
+    allocator_ = nullptr;
+  }
+private:
+  ObTenantCtxAllocator *allocator_;
+  bool lock_;
+};
+
+inline bool operator==(const ObTenantCtxAllocatorGuard &__a, nullptr_t)
+{ return __a.ref_allocator() == nullptr; }
+
+inline bool operator==(nullptr_t, const ObTenantCtxAllocatorGuard &__b)
+{ return nullptr == __b.ref_allocator(); }
+
+inline bool operator!=(const ObTenantCtxAllocatorGuard &__a, nullptr_t)
+{ return __a.ref_allocator() != nullptr; }
+
+inline bool operator!=(nullptr_t, const ObTenantCtxAllocatorGuard &__b)
+{ return nullptr != __b.ref_allocator(); }
+
+inline bool operator==(const ObTenantCtxAllocatorGuard &__a, const ObTenantCtxAllocatorGuard &__b)
+{ return __a.ref_allocator() == __b.ref_allocator(); }
+
+inline bool operator!=(const ObTenantCtxAllocatorGuard &__a, const ObTenantCtxAllocatorGuard &__b)
+{ return __a.ref_allocator() != __b.ref_allocator(); }
+
 // It's the implement of ob_malloc/ob_free/ob_realloc interface.  The
 // class separates allocator for each tenant thus tenant vaolates each
 // other.
 class ObMallocAllocator
     : public common::ObIAllocator
 {
-  friend class ObMemoryCutter;
+private:
   static const uint64_t PRESERVED_TENANT_COUNT = 10000;
 public:
   ObMallocAllocator();
@@ -43,21 +109,23 @@ public:
   void set_root_allocator();
   static ObMallocAllocator *get_instance();
 
-  ObTenantCtxAllocator *get_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id = 0) const;
-
-  int create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id = 0);
-
-  IBlockMgr *get_tenant_ctx_block_mgr(uint64_t tenant_id, uint64_t ctx_id);
+  ObTenantCtxAllocatorGuard get_tenant_ctx_allocator_without_tlcache(uint64_t tenant_id,
+                                                                     uint64_t ctx_id) const;
+  ObTenantCtxAllocatorGuard get_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id) const;
+  int create_and_add_tenant_allocator(uint64_t tenant_id);
+  ObTenantCtxAllocatorGuard get_tenant_ctx_allocator_unrecycled(uint64_t tenant_id,
+                                                               uint64_t ctx_id) const;
+  void get_unrecycled_tenant_ids(uint64_t *ids, int cap, int &cnt) const;
 
   // statistic relating
   void set_urgent(int64_t bytes);
   int64_t get_urgent() const;
   void set_reserved(int64_t bytes);
   int64_t get_reserved() const;
-  static int set_tenant_limit(uint64_t tenant_id, int64_t bytes);
-  static int64_t get_tenant_limit(uint64_t tenant_id);
-  static int64_t get_tenant_hold(uint64_t tenant_id);
-  static int64_t get_tenant_remain(uint64_t tenant_id);
+  int set_tenant_limit(uint64_t tenant_id, int64_t bytes);
+  int64_t get_tenant_limit(uint64_t tenant_id);
+  int64_t get_tenant_hold(uint64_t tenant_id);
+  int64_t get_tenant_remain(uint64_t tenant_id);
   int64_t get_tenant_ctx_hold(const uint64_t tenant_id, const uint64_t ctx_id) const;
   void get_tenant_label_usage(uint64_t tenant_id, ObLabel &label, common::ObLabelItem &item) const;
 
@@ -68,22 +136,122 @@ public:
   int get_chunks(AChunk** chunks, int cap, int& cnt);
   int64_t sync_wash(uint64_t tenant_id, uint64_t from_ctx_id, int64_t wash_size);
   int64_t sync_wash();
-  static uint64_t get_max_used_tenant_id() { return max_used_tenant_id_; }
+  int recycle_tenant_allocator(uint64_t tenant_id);
+  int64_t get_max_used_tenant_id() { return max_used_tenant_id_; }
+  void make_allocator_create_on_demand() { create_on_demand_ = true; }
   static bool is_inited_;
 private:
   using InvokeFunc = std::function<int (ObTenantMemoryMgr*)>;
   static int with_resource_handle_invoke(uint64_t tenant_id, InvokeFunc func);
+  int create_tenant_allocator(uint64_t tenant_id, ObTenantCtxAllocator *&allocator);
+  void destroy_tenant_allocator(ObTenantCtxAllocator *allocator);
+  int create_tenant_allocator(uint64_t tenant_id, void *buf, ObTenantCtxAllocator *&allocator);
+  int add_tenant_allocator(ObTenantCtxAllocator *allocator);
+  ObTenantCtxAllocator *take_off_tenant_allocator(uint64_t tenant_id);
+  void add_tenant_allocator_unrecycled(ObTenantCtxAllocator *allocator);
+  ObTenantCtxAllocator *take_off_tenant_allocator_unrecycled(uint64_t tenant_id);
+#ifdef ENABLE_SANITY
+  int get_chunks(ObTenantCtxAllocator *ta, AChunk **chunks, int cap, int &cnt);
+  void modify_tenant_memory_access_permission(ObTenantCtxAllocator *ta, bool accessible);
+public:
+  bool enable_tenant_leak_memory_protection_ = true;
+#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);
+  class BucketLock
+  {
+  public:
+    static const uint64_t BUCKET_COUNT = 32;
+    int rdlock(const int bucket_idx)
+    {
+      return locks_[bucket_idx].rdlock(ObLatchIds::OB_ALLOCATOR_LOCK);
+    }
+    int wrlock_all()
+    {
+      int ret = OB_SUCCESS;
+      int last_succ_idx = -1;
+      for (int i = 0; OB_SUCC(ret) && i < BUCKET_COUNT; i++) {
+        ret = locks_[i].wrlock(ObLatchIds::OB_ALLOCATOR_LOCK);
+        if (OB_SUCC(ret)) {
+          last_succ_idx = i;
+        }
+      }
+      if (OB_FAIL(ret)) {
+        for (int64_t i = 0; i <= last_succ_idx; ++i) {
+          locks_[i].unlock();
+        }
+      }
+      return ret;
+    }
+    void unlock(const int bucket_idx)
+    {
+      locks_[bucket_idx].unlock();
+    }
+    void unlock_all()
+    {
+      for (int i = 0; i < BUCKET_COUNT; i++) {
+        locks_[i].unlock();
+      }
+    }
+  private:
+    ObLatch locks_[BUCKET_COUNT];
+  };
+  class BucketRLockGuard
+  {
+  public:
+    [[nodiscard]] explicit BucketRLockGuard(BucketLock &lock, const int bucket_idx)
+      : lock_(lock), bucket_idx_(bucket_idx)
+    {
+      lock_.rdlock(bucket_idx_);
+    }
+    ~BucketRLockGuard()
+    {
+      lock_.unlock(bucket_idx_);
+    }
+  private:
+    BucketLock &lock_;
+    const int bucket_idx_;
+  };
+  class BucketWLockGuard
+  {
+  public:
+    [[nodiscard]] explicit BucketWLockGuard(BucketLock &lock)
+      : lock_(lock)
+    {
+      lock_.wrlock_all();
+    }
 
+    ~BucketWLockGuard()
+    {
+      lock_.unlock_all();
+    }
+  private:
+    BucketLock &lock_;
+  };
 private:
-  obsys::ObRWLock locks_[PRESERVED_TENANT_COUNT];
-  ObTenantCtxAllocator *allocators_[PRESERVED_TENANT_COUNT][common::ObCtxIds::MAX_CTX_ID];
+  BucketLock locks_[PRESERVED_TENANT_COUNT];
+  ObTenantCtxAllocator *allocators_[PRESERVED_TENANT_COUNT];
+  ObLatch unrecycled_lock_;
+  ObTenantCtxAllocator *unrecycled_allocators_;
   int64_t reserved_;
   int64_t urgent_;
-  static uint64_t max_used_tenant_id_;
+  uint64_t max_used_tenant_id_;
+  bool create_on_demand_;
 }; // end of class ObMallocAllocator
 
+extern __thread ObTenantCtxAllocator *tl_ta;
+class ObTLTaGuard
+{
+public:
+  [[nodiscard]] ObTLTaGuard();
+  [[nodiscard]] explicit ObTLTaGuard(const int64_t tenant_id);
+  ~ObTLTaGuard();
+  void switch_to(const int64_t tenant_id);
+  void revert();
+  ObTenantCtxAllocator *ta_bak_;
+  ObTenantCtxAllocatorGuard ta_;
+  bool restore_;
+};
 
 } // end of namespace lib
 } // end of namespace oceanbase

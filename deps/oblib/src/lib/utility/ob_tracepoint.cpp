@@ -29,7 +29,7 @@ uint64_t TPSymbolTable::BKDRHash(const char *str)
   uint64_t seed = 131; // 31 131 1313 13131 131313 etc..
   uint64_t hash = 0;
   if (OB_ISNULL(str)) {
-    LIB_LOG(WARN, "Input str should not be NULL");
+    LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "Input str should not be NULL");
   } else {
     while (*str) {
       hash = hash * seed + (*str++);
@@ -42,7 +42,7 @@ bool TPSymbolTable::SymbolEntry::find(const char* name)
 {
   bool has_found = false;
   if (OB_ISNULL(name)) {
-    LIB_LOG(WARN, "Input name should not be NULL");
+    LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "Input name should not be NULL");
   } else {
     while(!has_found) {
       int lock = TP_AL(&lock_);
@@ -66,7 +66,7 @@ void** TPSymbolTable::do_get(const char* name)
 {
   void** found_value = NULL;
   if (OB_ISNULL(name)) {
-    LIB_LOG(WARN, "name should not be NULL");
+    LIB_LOG_RET(WARN, OB_INVALID_ARGUMENT, "name should not be NULL");
   } else {
     for(uint64_t start_idx = BKDRHash(name), idx = 0;
         NULL == found_value && idx < SYMBOL_COUNT_LIMIT;

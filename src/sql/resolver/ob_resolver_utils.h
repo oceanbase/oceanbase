@@ -132,6 +132,11 @@ public:
   static int check_function_table_column_exist(const TableItem &table_item,
                                                ObResolverParams &params,
                                                const ObString &column_name);
+  static int check_json_table_column_exists(const TableItem &table_item,
+                                           ObResolverParams &params,
+                                           const ObString &column_name,
+                                           bool& exists);
+
   static int resolve_extended_type_info(const ParseNode &str_list_node,
                                         ObIArray<ObString>& type_info_array);
   // type_infos is %ori_cs_type, need convert to %cs_type first
@@ -258,7 +263,8 @@ public:
   static int resolve_sp_name(ObSQLSessionInfo &session_info,
                              const ParseNode &sp_name_node,
                              ObString &db_name,
-                             ObString &sp_name);
+                             ObString &sp_name,
+                             bool need_db_name = true);
   static int resolve_synonym_object_recursively(ObSchemaChecker &schema_checker,
                                                 ObSynonymChecker &synonym_checker,
                                                 uint64_t tenant_id,
@@ -275,18 +281,19 @@ public:
                                          ObQualifiedName &q_name,
                                          const ObSQLSessionInfo &session_info);
   static int resolve_external_symbol(common::ObIAllocator &allocator,
-                                                      sql::ObRawExprFactory &expr_factory,
-                                                      sql::ObSQLSessionInfo &session_info,
-                                                      share::schema::ObSchemaGetterGuard &schema_guard,
-                                                      common::ObMySQLProxy *sql_proxy,
-                                                      ExternalParams *extern_param_info,
-                                                      pl::ObPLBlockNS *ns,
-                                                      ObQualifiedName &q_name,
-                                                      ObIArray<ObQualifiedName> &columns,
-                                                      ObIArray<ObRawExpr*> &real_exprs,
-                                                      ObRawExpr *&expr,
-                                                      bool is_check_mode = false,
-                                                      bool is_sql_scope = false);
+                                     sql::ObRawExprFactory &expr_factory,
+                                     sql::ObSQLSessionInfo &session_info,
+                                     share::schema::ObSchemaGetterGuard &schema_guard,
+                                     common::ObMySQLProxy *sql_proxy,
+                                     ExternalParams *extern_param_info,
+                                     pl::ObPLBlockNS *ns,
+                                     ObQualifiedName &q_name,
+                                     ObIArray<ObQualifiedName> &columns,
+                                     ObIArray<ObRawExpr*> &real_exprs,
+                                     ObRawExpr *&expr,
+                                     bool is_prepare_protocol = false,
+                                     bool is_check_mode = false,
+                                     bool is_sql_scope = false);
   static int resolve_external_param_info(ExternalParams &param_info,
                                          ObRawExprFactory &expr_factory,
                                          int64_t &prepare_param_count,
@@ -334,6 +341,7 @@ public:
                                const int is_oracle_mode/*1:Oracle, 0:MySql */,
                                const bool is_for_pl_type,
                                const ObSessionNLSParams &nls_session_param,
+                               uint64_t tenant_id,
                                const bool convert_real_type_to_decimal = false);
 
   static int resolve_str_charset_info(const ParseNode &type_node,
@@ -700,6 +708,15 @@ public:
                                                      const ObExprResType &column_type,
                                                      const ObString &column_name,
                                                      ObObj &part_value);
+  static int get_generated_column_expr_temp(TableItem *table_item,
+                                            ObIArray<ObRawExpr *> &gen_col_depend, ObIArray<ObString> &gen_col_names,
+                                            ObIArray<ObColumnSchemaV2 *> &gen_col_schema,
+                                            ObSqlSchemaGuard *schema_guard,
+                                            common::ObIAllocator &allocator,
+                                            ObRawExprFactory &expr_factory,
+                                            ObSQLSessionInfo &session_info,
+                                            ObDataTypeCastParams &dtc_params);
+
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

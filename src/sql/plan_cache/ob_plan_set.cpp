@@ -26,12 +26,14 @@
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/plan_cache/ob_cache_object.h"
 #include "sql/plan_cache/ob_dist_plans.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "pl/ob_pl.h"
 #include "ob_plan_set.h"
+#include "share/resource_manager/ob_resource_manager.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -127,6 +129,13 @@ int ObPlanSet::match_params_info(const ParamStore *params,
             is_same = (related_user_sess_var_metas_.at(i) == sess_var.meta_);
           }
         }
+      }
+    }
+
+    // privilege
+    if (OB_SUCC(ret) && is_same && all_priv_constraints_.count() > 0) {
+      if (OB_FAIL(match_priv_cons(pc_ctx, is_same))) {
+        LOG_WARN("failed to check privilege constraint", K(ret));
       }
     }
 
@@ -262,7 +271,11 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
     } else if (param_info.flag_.is_boolean_ != param.is_boolean()) { //bool type not match int type
       is_same = false;
     } else {
-      is_same = (param.get_scale() == param_info.scale_);
+      // number params in point and st_point can ignore scale check to share plancache
+      // please refrer to ObSqlParameterization::is_ignore_scale_check
+      is_same = param_info.flag_.ignore_scale_check_
+                ? true
+                : (param.get_scale() == param_info.scale_);
     }
   }
   return ret;
@@ -360,6 +373,42 @@ int ObPlanSet::match_multi_stmt_info(const ParamStore &params,
   }
   return ret;
 }
+int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
+{
+  int ret = OB_SUCCESS;
+  is_matched = true;
+  bool has_priv = false;
+  ObSQLSessionInfo *session_info = pc_ctx.sql_ctx_.session_info_;
+  ObSchemaGetterGuard *schema_guard = pc_ctx.sql_ctx_.schema_guard_;
+  if (OB_ISNULL(session_info) || OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < all_priv_constraints_.count(); ++i) {
+    const ObPCPrivInfo &priv_info = all_priv_constraints_.at(i);
+    bool has_priv = false;
+    if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*schema_guard,
+                                                         session_info->get_effective_tenant_id(),
+                                                         session_info->get_priv_user_id(),
+                                                         session_info->get_database_name(),
+                                                         priv_info.sys_priv_,
+                                                         session_info->get_enable_role_array()))) {
+      if (OB_ERR_NO_PRIVILEGE == ret) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("lack sys privilege", "priv_type", all_priv_constraints_.at(i).sys_priv_);
+      } else {
+        LOG_WARN("failed to check ora user sys priv", K(ret));
+      }
+    } else {
+      has_priv = true;
+    }
+    if (OB_SUCC(ret)) {
+      is_matched = priv_info.has_privilege_ == has_priv;
+    }
+  }
+  return ret;
+}
+
 
 //判断多组参数中同一列参数的是否均为true/false, 并返回第一个参数是true/false
 int ObPlanSet::check_vector_param_same_bool(const ObObjParam &param_obj,
@@ -524,6 +573,7 @@ void ObPlanSet::reset()
   all_plan_const_param_constraints_.reset();
   all_equal_param_constraints_.reset();
   all_pre_calc_constraints_.reset();
+  all_priv_constraints_.reset();
   alloc_.reset();
 }
 
@@ -586,6 +636,10 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     is_ignore_stmt_ = plan.is_ignore();
     //add param info
     params_info_.reset();
+    // set variables for resource map rule
+    // if rule changed, plan cache will be flush.
+    res_map_rule_id_ = pc_ctx.sql_ctx_.res_map_rule_id_;
+    res_map_rule_param_idx_ = pc_ctx.sql_ctx_.res_map_rule_param_idx_;
 
     if (OB_FAIL(init_pre_calc_exprs(plan, pc_alloc_))) {
       LOG_WARN("failed to init pre calc exprs", K(ret));
@@ -645,16 +699,19 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
         all_plan_const_param_constraints_.reset();
         all_equal_param_constraints_.reset();
         all_pre_calc_constraints_.reset();
+        all_priv_constraints_.reset();
     } else if (PST_SQL_CRSR == ps_t) {
       // otherwise it should not be empty
       CK( OB_NOT_NULL(sql_ctx.all_plan_const_param_constraints_),
           OB_NOT_NULL(sql_ctx.all_possible_const_param_constraints_),
           OB_NOT_NULL(sql_ctx.all_equal_param_constraints_),
-          OB_NOT_NULL(sql_ctx.all_pre_calc_constraints_));
+          OB_NOT_NULL(sql_ctx.all_pre_calc_constraints_),
+          OB_NOT_NULL(sql_ctx.all_priv_constraints_));
       OZ( (set_const_param_constraint)(*sql_ctx.all_plan_const_param_constraints_, false) );
       OZ( (set_const_param_constraint)(*sql_ctx.all_possible_const_param_constraints_, true) );
       OZ( (set_equal_param_constraint)(*sql_ctx.all_equal_param_constraints_) );
       OZ( (set_pre_calc_constraint(*sql_ctx.all_pre_calc_constraints_)));
+      OZ( (set_priv_constraint(*sql_ctx.all_priv_constraints_)));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get an unexpected plan set type", K(ps_t), K(plan.get_ns()));
@@ -783,6 +840,30 @@ int ObPlanSet::set_pre_calc_constraint(common::ObDList<ObPreCalcExprConstraint> 
   }
   return ret;
 }
+
+// add priv constraint
+int ObPlanSet::set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constraint)
+{
+  int ret = OB_SUCCESS;
+  all_priv_constraints_.reset();
+  all_priv_constraints_.set_allocator(&alloc_);
+  if (priv_constraint.empty()) {
+    //do nothing
+  } else if (OB_FAIL(all_priv_constraints_.init(priv_constraint.count()))) {
+    LOG_WARN("failed to init privilege constraint array", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < priv_constraint.count(); ++i) {
+    const ObPCPrivInfo &priv_info = priv_constraint.at(i);
+    if (OB_UNLIKELY(!(priv_info.sys_priv_ > PRIV_ID_NONE && priv_info.sys_priv_ < PRIV_ID_MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid priv type", K(priv_info), K(ret));
+    } else if (OB_FAIL(all_priv_constraints_.push_back(priv_info))) {
+      LOG_WARN("failed to push back priv info");
+    }
+  }
+  return ret;
+}
+
 // match actually constraint
 int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
 {
@@ -791,6 +872,7 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
   ObIArray<ObPCConstParamInfo> *possible_param_cons =
                                         pc_ctx.sql_ctx_.all_possible_const_param_constraints_;
   ObIArray<ObPCParamEqualInfo> *equal_cons = pc_ctx.sql_ctx_.all_equal_param_constraints_;
+  ObIArray<ObPCPrivInfo> *priv_cons = pc_ctx.sql_ctx_.all_priv_constraints_;
   is_matched = true;
 
   if (OB_ISNULL(param_cons) ||
@@ -801,7 +883,8 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
     LOG_WARN("invalid arugment", K(param_cons), K(possible_param_cons), K(equal_cons));
   } else if (param_cons->count() != all_plan_const_param_constraints_.count() ||
              possible_param_cons->count() != all_possible_const_param_constraints_.count() ||
-             equal_cons->count() != all_equal_param_constraints_.count()) {
+             equal_cons->count() != all_equal_param_constraints_.count() ||
+             priv_cons->count() != all_priv_constraints_.count()) {
     is_matched = false;
   } else {
     for (int64_t i=0; is_matched && i < all_plan_const_param_constraints_.count(); i++) {
@@ -812,6 +895,9 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
     }
     for (int64_t i=0; is_matched && i < all_equal_param_constraints_.count(); i++) {
       is_matched = (all_equal_param_constraints_.at(i)==equal_cons->at(i));
+    }
+    for (int64_t i=0; is_matched && i < all_priv_constraints_.count(); i++) {
+      is_matched = (all_priv_constraints_.at(i)==priv_cons->at(i));
     }
   }
 
@@ -1033,6 +1119,7 @@ int ObSqlPlanSet::add_cache_obj(ObPlanCacheObject &cache_object,
   } else {
     ret = add_plan(static_cast<ObPhysicalPlan&>(cache_object), pc_ctx, ol_param_idx);
   }
+  cache_object.get_pre_expr_ref_count();
   // ref_cnt++;
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to add plan.", K(ret));
@@ -1223,6 +1310,7 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     enable_inner_part_parallel_exec_ = sql_plan.get_px_dop() > 1;
     contain_index_location = sql_plan.contain_index_location();
     LOG_DEBUG("using px", K(enable_inner_part_parallel_exec_));
+    plan.get_pre_expr_ref_count();
   }
   if (OB_SUCC(ret) && (!contain_index_location || is_multi_stmt_plan())) {
     const ObTablePartitionInfoArray &partition_infos = sql_ctx.partition_infos_;
@@ -1514,15 +1602,6 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
         SQL_PC_LOG(DEBUG, "failed to get plan type", K(ret));
       }
 
-      if (OB_SUCC(ret)
-          && OB_PHY_PLAN_LOCAL != plan_type
-          && session->get_in_transaction()
-          && session->get_is_in_retry()) {
-        // 如果同一个事务中因为有远程计划导致session重试
-        // 记录对应的trans_flag_，该事务后的所有sql都不会走直接获取local计划的优化
-        session->set_has_remote_plan_in_tx(true);
-        LOG_DEBUG("do not get local direct plan from now on", K(session->has_remote_plan_in_tx()));
-      }
       if (OB_SUCC(ret) && !enable_inner_part_parallel_exec_) {
         NG_TRACE(get_plan_type_end);
         SQL_PC_LOG(DEBUG, "get plan type before select plan", K(ret), K(plan_type));
@@ -1703,7 +1782,7 @@ void ObSqlPlanSet::reset()
   if (OB_ISNULL(plan_cache_value_)
       || OB_ISNULL(plan_cache_value_->get_pc_alloc())) {
     //do nothing
-    LOG_WARN("plan_cache_value or pc allocator is NULL");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "plan_cache_value or pc allocator is NULL");
   }
   local_plan_ = NULL;
   array_binding_plan_ = NULL;
@@ -1903,65 +1982,7 @@ void ObSqlPlanSet::remove_all_plan()
   IGNORE_RETURN dist_plans_.remove_all_plan();
 }
 
-int ObPLPlanSet::add_cache_obj(ObPlanCacheObject &cache_object,
-                               ObPlanCacheCtx &pc_ctx,
-                               int64_t ol_param_idx,
-                               int &add_ret)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(pc_ctx);
-  UNUSED(ol_param_idx);
-  if (OB_UNLIKELY(!cache_object.is_prcr() && !cache_object.is_sfc() && !cache_object.is_pkg() && !cache_object.is_anon())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cache object is invalid", K(cache_object));
-  } else if (OB_UNLIKELY(pl_obj_ != NULL)) {
-    ret = OB_SQL_PC_PLAN_DUPLICATE;
-  } else {
-    pl_obj_ = &cache_object;
-    pl_obj_->set_dynamic_ref_handle(PC_REF_PL_HANDLE);
-  }
-  add_ret = ret;
-  return ret;
-}
 
-int ObPLPlanSet::select_plan(ObPlanCacheCtx &pc_ctx, ObPlanCacheObject *&cache_obj)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(pc_ctx);
-  if (pl_obj_ != NULL) {
-    cache_obj = pl_obj_;
-    cache_obj->set_dynamic_ref_handle(pc_ctx.handle_id_);
-  } else {
-    cache_obj = NULL;
-    ret = OB_SQL_PC_NOT_EXIST;
-  }
-  return ret;
-}
-
-void ObPLPlanSet::remove_all_plan()
-{
-
-}
-
-int64_t ObPLPlanSet::get_mem_size()
-{
-  int64_t plan_set_mem = 0;
-  if (pl_obj_ != NULL) {
-    plan_set_mem += pl_obj_->get_mem_size();
-  }
-  return plan_set_mem;
-}
-
-void ObPLPlanSet::reset()
-{
-  pl_obj_ = NULL;
-  ObPlanSet::reset();
-}
-
-bool ObPLPlanSet::is_sql_planset()
-{
-  return false;
-}
 //add plan used
 int ObSqlPlanSet::get_phy_locations(const ObTablePartitionInfoArray &partition_infos,
                                     //ObIArray<ObDASTableLoc> &table_locs,
@@ -2085,7 +2106,7 @@ int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations
     LOG_WARN("failed to calcute physical plan type", K(ret));
   } else {
     // Lookup算子支持压到远程去执行:
-    //   https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/2127600
+    //
     // Select的sql如果包含uncertain算子，不能将类型改为分布式计划
     if (is_contain_uncertain_op && plan_type != OB_PHY_PLAN_LOCAL
         && stmt::T_SELECT != stmt_type_) {
@@ -2122,6 +2143,7 @@ bool ObSqlPlanSet::is_sql_planset()
 {
   return true;
 }
+
 
 }
 }

@@ -112,9 +112,6 @@ int ObMultiTenantOperator::execute(common::ObNewRow *&row)
         int process_ret = OB_SUCCESS;
         if (tenant_ == nullptr) {
           if (OB_FAIL(GCTX.omt_->get_tenant_with_tenant_lock(tenant_id, handle_, tenant_))) {
-            if (OB_IN_STOP_STATE == ret) {
-              ret = OB_TENANT_NOT_IN_SERVER;
-            }
             LOG_WARN("get_tenant_with_tenant_lock", K(ret), K(tenant_id));
           }
         } else {

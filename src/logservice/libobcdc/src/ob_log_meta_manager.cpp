@@ -21,6 +21,7 @@
 #include "rpc/obmysql/ob_mysql_global.h"          // obmysql
 #include "share/schema/ob_table_schema.h"         // ObTableSchema, ObSimpleTableSchemaV2
 #include "share/schema/ob_column_schema.h"        // ObColumnSchemaV2
+#include "logservice/data_dictionary/ob_data_dict_struct.h"
 
 #include "ob_log_schema_getter.h"                 // ObLogSchemaGuard, DBSchemaInfo, TenantSchemaInfo
 #include "ob_log_utils.h"                         // print_mysql_type, ob_cdc_malloc
@@ -28,6 +29,7 @@
 #include "ob_log_adapt_string.h"                  // ObLogAdaptString
 #include "ob_log_config.h"                        // TCONF
 #include "ob_log_instance.h"                      // TCTX
+#include "ob_log_schema_cache_info.h"             // TableSchemaInfo
 
 #define DEFAULT_ENCODING  ""
 
@@ -39,9 +41,51 @@
       meta->setEncoding(ObCharset::charset_name(charset)); \
     } while (0)
 
+#define SET_UK_INFO \
+    ObLogAdaptString tmp_uk_info(ObModIds::OB_LOG_TEMP_MEMORY); \
+    int64_t valid_uk_column_count = 0; \
+    /** Get unique key information from a unique index table */ \
+    if (OB_FAIL(set_unique_keys_from_unique_index_table_( \
+        &table_schema, \
+        index_table_schema, \
+        tb_schema_info, \
+        is_uk_column_array, \
+        tmp_uk_info, \
+        valid_uk_column_count))) { \
+      LOG_ERROR("set_unique_keys_from_unique_index_table_ fail", KR(ret), \
+          "table_name", table_schema.get_table_name(), \
+          "table_id", table_schema.get_table_id(), \
+          "index_table_name", index_table_schema->get_table_name(), \
+          K(is_uk_column_array)); \
+    } \
+    /** Process only when valid unique index column information is obtained */ \
+    else if (valid_uk_column_count > 0) { \
+      const char *tmp_uk_info_str = NULL; \
+      if (OB_FAIL(tmp_uk_info.cstr(tmp_uk_info_str))) { \
+        LOG_ERROR("get tmp_uk_info str fail", KR(ret), K(tmp_uk_info)); \
+      } else if (OB_ISNULL(tmp_uk_info_str)) { \
+        LOG_ERROR("tmp_uk_info_str is invalid", K(tmp_uk_info_str), K(tmp_uk_info), \
+            K(valid_uk_column_count), K(index_table_schema->get_table_name())); \
+        ret = OB_ERR_UNEXPECTED; \
+      } else { \
+        if (valid_uk_table_count > 0) { \
+          ret = uk_info.append(","); \
+        } \
+        if (OB_SUCC(ret)) { \
+          ret = uk_info.append(tmp_uk_info_str); \
+        } \
+        if (OB_FAIL(ret)) { \
+          LOG_ERROR("uk_info append string fail", KR(ret), K(uk_info)); \
+        } else { \
+          valid_uk_table_count++; \
+        } \
+      } \
+    }
+
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 using namespace oceanbase::share::schema;
+using namespace oceanbase::datadict;
 namespace oceanbase
 {
 namespace libobcdc
@@ -118,7 +162,6 @@ int ObLogMetaManager::get_table_meta(
     const uint64_t tenant_id,
     const int64_t global_schema_version,
     const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
-    IObLogSchemaGetter &schema_getter,
     ITableMeta *&table_meta,
     volatile bool &stop_flag)
 {
@@ -129,8 +172,7 @@ int ObLogMetaManager::get_table_meta(
     LOG_ERROR("invalid argument", K(simple_table_schema));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    MetaKey key;
-    key.id_ = simple_table_schema->get_table_id();
+    MetaKey key(simple_table_schema->get_tenant_id(), simple_table_schema->get_table_id());
 
     if (OB_FAIL((get_meta_info_<TableMetaMap, TableMetaInfo>(tb_meta_map_, key, meta_info)))) {
       LOG_ERROR("get table meta info fail", KR(ret), K(key));
@@ -147,17 +189,84 @@ int ObLogMetaManager::get_table_meta(
         const share::schema::ObTableSchema *table_schema = NULL;
         ObLogSchemaGuard schema_mgr;
 
-        RETRY_FUNC(stop_flag, schema_getter, get_schema_guard_and_full_table_schema, tenant_id, table_id, global_schema_version, GET_SCHEMA_TIMEOUT,
-                schema_mgr, table_schema);
+        IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+        if (OB_ISNULL(schema_getter)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expect valid schema_getter", KR(ret));
+        } else {
+          RETRY_FUNC(stop_flag, *schema_getter, get_schema_guard_and_full_table_schema, tenant_id, table_id, global_schema_version, GET_SCHEMA_TIMEOUT,
+                  schema_mgr, table_schema);
 
-        if (OB_FAIL(ret)) {
-          // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
-          if (OB_IN_STOP_STATE != ret) {
-            LOG_ERROR("get_schema_guard_and_full_table_schema fail", KR(ret), K(tenant_id),
+          if (OB_FAIL(ret)) {
+            // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("get_schema_guard_and_full_table_schema fail", KR(ret), K(tenant_id),
+                  K(global_schema_version),
+                  "table_id", simple_table_schema->get_table_id(),
+                  "table_name", simple_table_schema->get_table_name(), KPC(table_schema));
+            }
+          } else if (OB_ISNULL(table_schema)) {
+            // tenant has been dropped
+            LOG_WARN("table_schema is null, tenant may be dropped", K(table_schema),
+                "tenant_id", simple_table_schema->get_tenant_id(),
                 K(global_schema_version),
                 "table_id", simple_table_schema->get_table_id(),
-                "table_name", simple_table_schema->get_table_name(), KPC(table_schema));
+                "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema));
+            ret = OB_TENANT_HAS_BEEN_DROPPED;
+          } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, schema_mgr, table_meta,
+              stop_flag))) {
+            // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
+                  K(global_schema_version), K(meta_info),
+                  "table_name", table_schema->get_table_name(),
+                  "table_id", table_schema->get_table_id());
+            }
           }
+        }
+      } // OB_ENTRY_NOT_EXIST
+    }
+  }
+
+  return ret;
+}
+
+int ObLogMetaManager::get_table_meta(
+    const uint64_t tenant_id,
+    const int64_t global_schema_version,
+    const datadict::ObDictTableMeta *simple_table_schema,
+    ITableMeta *&table_meta,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  TableMetaInfo *meta_info = NULL;
+
+  if (OB_ISNULL(simple_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(simple_table_schema));
+  } else {
+    MetaKey key(tenant_id, simple_table_schema->get_table_id());
+
+    if (OB_FAIL((get_meta_info_<TableMetaMap, TableMetaInfo>(tb_meta_map_, key, meta_info)))) {
+      LOG_ERROR("get table meta info fail", KR(ret), K(key));
+    } else {
+      int64_t version = simple_table_schema->get_schema_version();
+      ret = get_meta_from_meta_info_<TableMetaInfo, ITableMeta>(meta_info, version, table_meta);
+
+      if (OB_SUCCESS != ret && OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("get_meta_from_meta_info_ fail", KR(ret), K(version));
+      } else if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        // refresh ObDictTableMeta when build meta for the first time
+        const int64_t table_id = simple_table_schema->get_table_id();
+        datadict::ObDictTableMeta *table_schema = NULL;
+        ObDictTenantInfoGuard dict_tenant_info_guard;
+        ObDictTenantInfo *tenant_info = nullptr;
+
+        if (OB_FAIL(get_dict_tenant_info_(tenant_id, dict_tenant_info_guard, tenant_info))) {
+          LOG_ERROR("get_dict_tenant_info_ failed", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_schema))) {
+          LOG_ERROR("get_table_meta from tenant_dict_info failed", KR(ret), K(tenant_id), K(table_id));
         } else if (OB_ISNULL(table_schema)) {
           // tenant has been dropped
           LOG_WARN("table_schema is null, tenant may be dropped", K(table_schema),
@@ -166,19 +275,17 @@ int ObLogMetaManager::get_table_meta(
               "table_id", simple_table_schema->get_table_id(),
               "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema));
           ret = OB_TENANT_HAS_BEEN_DROPPED;
-        } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, schema_mgr, table_meta,
+        } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, *tenant_info, table_meta,
             stop_flag))) {
           // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
-                K(global_schema_version),
+                K(global_schema_version), K(meta_info),
                 "table_name", table_schema->get_table_name(),
                 "table_id", table_schema->get_table_id());
           }
-        } else {
-          // succ
         }
-      } else { /* OB_SUCCESS == ret*/ }
+      }
     }
   }
 
@@ -218,11 +325,10 @@ int ObLogMetaManager::get_db_meta(
   uint64_t db_id = db_schema_info.db_id_;
 
   if (OB_UNLIKELY(! db_schema_info.is_valid())) {
-    LOG_ERROR("invalid argument", K(db_schema_info));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(db_schema_info));
   } else {
-    MetaKey key;
-    key.id_ = db_id;
+    MetaKey key(tenant_id, db_id);
 
     if (OB_FAIL((get_meta_info_<DBMetaMap, DBMetaInfo>(db_meta_map_, key, meta_info)))) {
       LOG_ERROR("get database meta info fail", KR(ret), K(key));
@@ -251,6 +357,56 @@ int ObLogMetaManager::get_db_meta(
               K(tenant_schema_info));
         }
       } else { /* OB_SUCCESS == ret*/ }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogMetaManager::get_db_meta(
+    const uint64_t tenant_id,
+    const DBSchemaInfo &db_schema_info,
+    IDBMeta *&db_meta,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  DBMetaInfo *meta_info = NULL;
+  const int64_t db_schema_version = db_schema_info.version_;
+  uint64_t db_id = db_schema_info.db_id_;
+
+  if (OB_UNLIKELY(! db_schema_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(db_schema_info));
+  } else {
+    MetaKey key(tenant_id, db_id);
+
+    if (OB_FAIL((get_meta_info_<DBMetaMap, DBMetaInfo>(db_meta_map_, key, meta_info)))) {
+      LOG_ERROR("get database meta info fail", KR(ret), K(key));
+    } else {
+      ret = get_meta_from_meta_info_<DBMetaInfo, IDBMeta>(meta_info, db_schema_version, db_meta);
+
+      if (OB_SUCCESS != ret && OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("get_meta_from_meta_info_ fail", KR(ret), K(db_schema_version));
+      } else if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        ObDictTenantInfoGuard dict_tenant_info_guard;
+        ObDictTenantInfo *tenant_info = nullptr;
+        // get db name and tenant name when first build db meta
+        TenantSchemaInfo tenant_schema_info;
+
+        if (OB_FAIL(get_dict_tenant_info_(tenant_id, dict_tenant_info_guard, tenant_info))) {
+          LOG_ERROR("get_dict_tenant_info_ failed", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(tenant_info->get_tenant_schema_info(tenant_schema_info))) {
+          LOG_ERROR("get_tenant_schema_info from dict_tenant_meta failed", KR(ret), K(tenant_info));
+        } else if (OB_FAIL(add_and_get_db_meta_(
+            meta_info,
+            db_schema_info,
+            tenant_schema_info,
+            db_meta))) {
+          LOG_ERROR("add_and_get_db_meta_ fail", KR(ret), KP(meta_info), K(db_schema_info),
+              K(tenant_schema_info));
+        }
+      } else { /* get_meta_from_meta_info_ return OB_SUCCESS */ }
     }
   }
 
@@ -289,6 +445,26 @@ int ObLogMetaManager::drop_database(const int64_t database_id)
   return ret;
 }
 
+int ObLogMetaManager::get_dict_tenant_info_(
+    const uint64_t tenant_id,
+    ObDictTenantInfoGuard &dict_tenant_info_guard,
+    ObDictTenantInfo *&tenant_info)
+{
+  int ret = OB_SUCCESS;
+  tenant_info = nullptr;
+
+  if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
+      tenant_id,
+      dict_tenant_info_guard))) {
+    LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_info is nullptr", KR(ret), K(tenant_id));
+  }
+
+  return ret;
+}
+
 template <class MetaMapType, class MetaInfoType>
 int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
     const MetaKey &key,
@@ -322,6 +498,7 @@ int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
 
         if (OB_SUCC(ret)) {
           meta_info = tmp_meta_info;
+          LOG_TRACE("insert meta_info into meta_map succ", K(key), K(meta_info));
         } else {
           tmp_meta_info->~MetaInfoType();
           allocator_.free(static_cast<void*>(tmp_meta_info));
@@ -333,6 +510,8 @@ int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
             } else if (OB_ISNULL(meta_info)) {
               LOG_ERROR("get meta info from meta_map fail", KR(ret), K(meta_info));
               ret = OB_ERR_UNEXPECTED;
+            } else {
+              LOG_TRACE("get meta_info from meta_map succ", K(key), K(meta_info));
             }
           } else {
             LOG_ERROR("insert meta info into map fail", KR(ret), K(key));
@@ -343,6 +522,7 @@ int ObLogMetaManager::get_meta_info_(MetaMapType &meta_map,
       LOG_ERROR("get meta info from map fail", KR(ret), K(key));
     } else {
       // OB_SUCCESS == ret
+      LOG_TRACE("get meta_info from meta_map succ", K(key), K(meta_info));
     }
   }
 
@@ -381,9 +561,11 @@ int ObLogMetaManager::get_meta_from_meta_info_(MetaInfoType *meta_info,
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
-int ObLogMetaManager::add_and_get_table_meta_(TableMetaInfo *meta_info,
-    const share::schema::ObTableSchema *table_schema,
-    ObLogSchemaGuard &schema_mgr,
+template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+int ObLogMetaManager::add_and_get_table_meta_(
+    TableMetaInfo *meta_info,
+    const TABLE_SCHEMA *table_schema,
+    SCHEMA_GUARD &schema_mgr,
     ITableMeta *&table_meta,
     volatile bool &stop_flag)
 {
@@ -410,7 +592,7 @@ int ObLogMetaManager::add_and_get_table_meta_(TableMetaInfo *meta_info,
       if (OB_FAIL(build_table_meta_(table_schema, schema_mgr, table_meta, stop_flag))) {
         // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
         if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("build_table_meta_ fail", KR(ret), KP(table_schema));
+          LOG_ERROR("build_table_meta_ fail", K(version), K(meta_info), KR(ret), KP(table_schema));
         }
       } else if (OB_FAIL(meta_info->set(version, table_meta))) {
         LOG_ERROR("set meta info meta info fail", KR(ret), K(version), KP(table_meta));
@@ -432,7 +614,8 @@ int ObLogMetaManager::add_and_get_table_meta_(TableMetaInfo *meta_info,
   return ret;
 }
 
-int ObLogMetaManager::add_and_get_db_meta_(DBMetaInfo *meta_info,
+int ObLogMetaManager::add_and_get_db_meta_(
+    DBMetaInfo *meta_info,
     const DBSchemaInfo &db_schema_info,
     const TenantSchemaInfo &tenant_schema_info,
     IDBMeta *&db_meta)
@@ -511,8 +694,10 @@ int ObLogMetaManager::dec_meta_ref_(MetaType *meta, int64_t &ref_cnt)
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
-int ObLogMetaManager::build_table_meta_(const share::schema::ObTableSchema *table_schema,
-    ObLogSchemaGuard &schema_mgr,
+template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+int ObLogMetaManager::build_table_meta_(
+    const TABLE_SCHEMA *table_schema,
+    SCHEMA_GUARD &schema_mgr,
     ITableMeta *&table_meta,
     volatile bool &stop_flag)
 {
@@ -556,9 +741,14 @@ int ObLogMetaManager::build_table_meta_(const share::schema::ObTableSchema *tabl
       table_meta = tmp_table_meta;
     } else {
       int tmp_ret = OB_SUCCESS;
-      if (NULL != tb_schema_info) {
-        if (OB_SUCCESS != (tmp_ret = free_table_schema_info_(tb_schema_info))) {
-          LOG_ERROR("free_table_schema_info_ fail", K(tmp_ret), K(tb_schema_info));
+      if (OB_NOT_NULL(tb_schema_info)) {
+        if (OB_TMP_FAIL(try_erase_table_schema_(
+            table_schema->get_tenant_id(),
+            table_schema->get_table_id(),
+            table_schema->get_schema_version()))) {
+          LOG_ERROR("try_erase_table_schema_ failed", KR(tmp_ret), K(tb_schema_info), KPC(table_schema));
+        } else if (OB_TMP_FAIL(free_table_schema_info_(tb_schema_info))) {
+          LOG_ERROR("free_table_schema_info_ fail", KR(tmp_ret), K(tb_schema_info), KPC(table_schema));
         }
       }
     }
@@ -570,15 +760,16 @@ int ObLogMetaManager::build_table_meta_(const share::schema::ObTableSchema *tabl
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
-int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
-    const share::schema::ObTableSchema *table_schema,
+template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+int ObLogMetaManager::build_column_metas_(
+    ITableMeta *table_meta,
+    const TABLE_SCHEMA *table_schema,
     TableSchemaInfo &tb_schema_info,
-    ObLogSchemaGuard &schema_mgr,
+    SCHEMA_GUARD &schema_mgr,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::schema::ObColDesc> column_ids;
-  column_ids.reset();
   const bool ignore_virtual_column = true;
   const uint64_t tenant_id = table_schema->get_tenant_id();
   IObLogTenantMgr *tenant_mgr_ = TCTX.tenant_mgr_;
@@ -611,17 +802,16 @@ int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
     for (int16_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < column_cnt && ! stop_flag; column_stored_idx ++) {
       share::schema::ObColDesc &col_desc = column_ids.at(column_stored_idx);
       uint64_t column_id = col_desc.col_id_;
-
-      const share::schema::ObColumnSchemaV2 *column_table_schema = NULL;
       IColMeta *col_meta = NULL;
       int append_ret = 2;
       bool is_usr_column = false;
       bool is_heap_table_pk_increment_column = false;
+      const auto *column_table_schema = table_schema->get_column_schema(column_id);
 
       if (OB_UNLIKELY(OB_HIDDEN_PK_INCREMENT_COLUMN_ID < column_id && OB_APP_MIN_COLUMN_ID > column_id)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("column id can't handle currently", KR(ret), K(column_id), KPC(table_schema));
-      } else if (OB_ISNULL(column_table_schema = table_schema->get_column_schema(column_id))) {
+      } else if (OB_ISNULL(column_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), K(column_id), KPC(table_schema), KPC(column_table_schema));
       } else if (OB_FAIL(check_column_(*table_schema, *column_table_schema, is_usr_column,
@@ -677,11 +867,18 @@ int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(set_table_schema_(version, table_id, table_schema->get_table_name(), usr_column_idx,
-              tb_schema_info))) {
-        LOG_ERROR("set_table_schema_ fail", KR(ret), K(version), K(table_id),
-           "table_name", table_schema->get_table_name(),
-           "table_column_cnt", column_cnt, K(usr_column_idx), K(tb_schema_info));
+      if (OB_FAIL(set_table_schema_(
+            version,
+            table_schema->get_tenant_id(),
+            table_id,
+            table_schema->get_table_name(),
+            usr_column_idx,
+            tb_schema_info))) {
+        LOG_ERROR("set_table_schema_ fail", KR(ret), K(version),
+            "tenant_id", table_schema->get_tenant_id(),
+            K(table_id),
+            "table_name", table_schema->get_table_name(),
+            "table_column_cnt", column_cnt, K(usr_column_idx), K(tb_schema_info));
       } else {
         // succ
       }
@@ -705,19 +902,20 @@ int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
   return ret;
 }
 
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
 int ObLogMetaManager::check_column_(
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObColumnSchemaV2 &column_table_schema,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_schema,
     bool &is_user_column,
     bool &is_heap_table_pk_increment_column)
 {
   int ret = OB_SUCCESS;
   // won't filter by default
   is_user_column = true;
-  const uint64_t column_id = column_table_schema.get_column_id();
+  const uint64_t column_id = column_schema.get_column_id();
   const bool is_heap_table = table_schema.is_heap_table();
-  const bool is_invisible_column = column_table_schema.is_invisible_column();
-  const bool is_hidden_column = column_table_schema.is_hidden();
+  const bool is_invisible_column = column_schema.is_invisible_column();
+  const bool is_hidden_column = column_schema.is_hidden();
   const bool enable_output_hidden_primary_key = (0 != TCONF.enable_output_hidden_primary_key);
   const bool enable_output_invisible_column = (0 != TCONF.enable_output_invisible_column);
   // is column not user_column in OB.
@@ -728,7 +926,7 @@ int ObLogMetaManager::check_column_(
     is_user_column = is_heap_table_pk_increment_column && enable_output_hidden_primary_key;
   } else if (is_hidden_column) {
     is_user_column = false;
-  } else if (column_table_schema.is_invisible_column() && !enable_output_invisible_column){
+  } else if (column_schema.is_invisible_column() && !enable_output_invisible_column){
     is_user_column = false;
   }
 
@@ -737,20 +935,22 @@ int ObLogMetaManager::check_column_(
       "table_id", table_schema.get_table_id(),
       K(is_heap_table),
       K(column_id),
-      "column_name", column_table_schema.get_column_name(),
+      "column_name", column_schema.get_column_name(),
       K(is_user_column),
       K(is_heap_table_pk_increment_column),
       K(enable_output_hidden_primary_key),
-      "is_invisible_column", column_table_schema.is_invisible_column(),
+      "is_invisible_column", column_schema.is_invisible_column(),
       K(enable_output_invisible_column),
       K(is_hidden_column));
 
   return ret;
 }
 
-int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
-    const share::schema::ObColumnSchemaV2 &column_schema,
-    const share::schema::ObTableSchema &table_schema)
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
+int ObLogMetaManager::set_column_meta_(
+    IColMeta *col_meta,
+    const COLUMN_SCHEMA &column_schema,
+    const TABLE_SCHEMA &table_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -795,11 +995,17 @@ int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
         // the "length" of the BIT type is store in precision
         col_meta->setLength(column_schema.get_data_precision());
       } else {
-        // for types with valid length(string\enumset\rowid\json\raw\lob\geo), 
+        // for types with valid length(string\enumset\rowid\json\raw\lob\geo),
         // get_data_length returns the valid length, returns 0 for other types.
         col_meta->setLength(column_schema.get_data_length());
       }
 
+      if (column_schema.is_tbl_part_key_column()) {
+        col_meta->setPartitioned(true);
+      }
+      if (column_schema.has_generated_column_deps()) {
+        col_meta->setDependent(true);
+      }
       col_meta->setName(column_schema.get_column_name());
       col_meta->setType(static_cast<int>(mysql_type));
       col_meta->setSigned(signed_flag);
@@ -826,7 +1032,9 @@ int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
           "encoding", col_meta->getEncoding(),
           "default", col_meta->getDefault(),
           "isHiddenRowKey", col_meta->isHiddenRowKey(),
-          "isGeneratedColumn", col_meta->isGenerated());
+          "isGeneratedColumn", col_meta->isGenerated(),
+          "isPartitionColumn", col_meta->isPartitioned(),
+          "isGenerateDepColumn", col_meta->isDependent());
 
       // Do not need
       //col_meta->setLength(data_length);
@@ -841,13 +1049,14 @@ int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
   return ret;
 }
 
+template<class TABLE_SCHEMA>
 int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
-    const share::schema::ObTableSchema *schema,
+    const TABLE_SCHEMA *schema,
     const TableSchemaInfo &tb_schema_info)
 {
   int ret = OB_SUCCESS;
   int64_t valid_pk_num = 0;
-  const ObRowkeyInfo &rowkey_info = schema->get_rowkey_info();
+  const int64_t rowkey_column_num = schema->get_rowkey_column_num();
   ObLogAdaptString pks(ObModIds::OB_LOG_TEMP_MEMORY);
   ObLogAdaptString pk_info(ObModIds::OB_LOG_TEMP_MEMORY);
 
@@ -855,9 +1064,8 @@ int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
     LOG_ERROR("invalid argument", K(table_meta), K(schema));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_num; i++) {
       int64_t column_index = -1;
-      const share::schema::ObColumnSchemaV2 *column_table_schema = NULL;
       ColumnSchemaInfo *column_schema_info = NULL;
 
       if (OB_FAIL(tb_schema_info.get_column_schema_info_for_rowkey(i, column_schema_info))) {
@@ -870,49 +1078,52 @@ int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
             "table_name", schema->get_table_name(),
             "table_id", schema->get_table_id(),
             "rowkey_index", i,
-            "rowkey_count", rowkey_info.get_size());
+            K(rowkey_column_num));
       } else if (! column_schema_info->is_rowkey()) { // not rowkey
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("not a heap table and have no-rowkey in TableSchema::rowley_info_", K(ret),
             K(column_schema_info));
-      } else if (OB_ISNULL(column_table_schema = schema->get_column_schema(column_schema_info->get_column_id()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), KPC(column_schema_info), KPC(schema), KPC(column_table_schema));
       } else {
-        column_index = column_schema_info->get_usr_column_idx();
-
-        if (OB_UNLIKELY(column_index < 0 || column_index >= OB_MAX_COLUMN_NUMBER)) {
-          LOG_ERROR("column_index is invalid", K(column_index),
-              "table_id", schema->get_table_id(),
-              "table_name", schema->get_table_name(),
-              "column_id", column_schema_info->get_column_id(),
-              "column_name", column_table_schema->get_column_name());
+        const auto *column_table_schema = schema->get_column_schema(column_schema_info->get_column_id());
+        if (OB_ISNULL(column_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), KPC(column_schema_info), KPC(schema), KPC(column_table_schema));
         } else {
-          ret = pks.append(column_table_schema->get_column_name());
+          column_index = column_schema_info->get_usr_column_idx();
 
-          if (OB_SUCCESS == ret) {
-            if (i < (rowkey_info.get_size() - 1)) {
-              ret = pks.append(",");
-            }
-          }
-
-          if (OB_SUCCESS == ret) {
-            if (0 == valid_pk_num) {
-              ret = pk_info.append("(");
-            } else {
-              ret = pk_info.append(",");
-            }
-          }
-
-          if (OB_SUCCESS == ret) {
-            ret = pk_info.append_int64(column_index);
-          }
-
-          if (OB_SUCCESS == ret) {
-            valid_pk_num++;
+          if (OB_UNLIKELY(column_index < 0 || column_index >= OB_MAX_COLUMN_NUMBER)) {
+            LOG_ERROR("column_index is invalid", K(column_index),
+                "table_id", schema->get_table_id(),
+                "table_name", schema->get_table_name(),
+                "column_id", column_schema_info->get_column_id(),
+                "column_name", column_table_schema->get_column_name());
+            ret = OB_ERR_UNEXPECTED;
           } else {
-            LOG_ERROR("pks or pk_info append fail", KR(ret), K(pks), K(pk_info), K(column_index));
+            ret = pks.append(column_table_schema->get_column_name());
+
+            if (OB_SUCCESS == ret) {
+              if (i < (rowkey_column_num - 1)) {
+                ret = pks.append(",");
+              }
+            }
+
+            if (OB_SUCCESS == ret) {
+              if (0 == valid_pk_num) {
+                ret = pk_info.append("(");
+              } else {
+                ret = pk_info.append(",");
+              }
+            }
+
+            if (OB_SUCCESS == ret) {
+              ret = pk_info.append_int64(column_index);
+            }
+
+            if (OB_SUCCESS == ret) {
+              valid_pk_num++;
+            } else {
+              LOG_ERROR("pks or pk_info append fail", KR(ret), K(pks), K(pk_info), K(column_index));
+            }
           }
         }
       }
@@ -957,8 +1168,8 @@ int ObLogMetaManager::set_primary_keys_(ITableMeta *table_meta,
 
 int ObLogMetaManager::set_unique_keys_from_unique_index_table_(
     const share::schema::ObTableSchema *table_schema,
-    const TableSchemaInfo &tb_schema_info,
     const share::schema::ObTableSchema *index_table_schema,
+    const TableSchemaInfo &tb_schema_info,
     bool *is_uk_column_array,
     ObLogAdaptString &uk_info,
     int64_t &valid_uk_column_count)
@@ -968,108 +1179,30 @@ int ObLogMetaManager::set_unique_keys_from_unique_index_table_(
   if (OB_ISNULL(table_schema)
       || OB_ISNULL(is_uk_column_array)
       || OB_ISNULL(index_table_schema)) {
-    LOG_ERROR("invalid argument", K(table_schema), K(is_uk_column_array), K(index_table_schema));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(table_schema), K(is_uk_column_array), K(index_table_schema));
   } else if (OB_UNLIKELY(! index_table_schema->is_unique_index())) {
-    LOG_ERROR("invalid index table schema which is not unique index",
-        K(index_table_schema->is_unique_index()));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid index table schema which is not unique index", KR(ret),
+        K(index_table_schema->is_unique_index()));
   } else {
     const ObIndexInfo &index_info = index_table_schema->get_index_info();
-    int64_t index_key_count = index_info.get_size();
+    const int64_t index_key_count = index_info.get_size();
     valid_uk_column_count = 0;
 
-    for (int64_t index_info_id = 0;
-        OB_SUCC(ret) && index_info_id < index_key_count;
-        index_info_id++) {
-      const share::schema::ObColumnSchemaV2 *column_schema = NULL;
-      uint64_t index_column_id = OB_INVALID_ID;
-      if (OB_FAIL(index_info.get_column_id(index_info_id, index_column_id))) {
-        LOG_ERROR("get_column_id from index_info fail", KR(ret), K(index_info_id), K(index_info),
-            "index_table_name", index_table_schema->get_table_name(),
-            "index_table_id", index_table_schema->get_table_id());
-      } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(index_column_id))) {
-        if (index_column_id > OB_MIN_SHADOW_COLUMN_ID) {
-          LOG_DEBUG("ignore shadow column", K(index_column_id),
-              "table_name", table_schema->get_table_name(),
-              "table_id", table_schema->get_table_id(),
-              "index_table_name", index_table_schema->get_table_name());
-        } else if (ObColumnSchemaV2::is_hidden_pk_column_id(index_column_id)) {
-          LOG_DEBUG("ignore hidden column", K(index_column_id),
-              "table_name", table_schema->get_table_name(),
-              "table_id", table_schema->get_table_id(),
-              "index_table_name", index_table_schema->get_table_name());
-        } else {
-          LOG_ERROR("get index column schema fail", K(index_column_id),
-              "table_name", table_schema->get_table_name(),
-              "table_id", table_schema->get_table_id(),
-              "index_table_name", index_table_schema->get_table_name());
-          ret = OB_ERR_UNEXPECTED;
-        }
-      } else if (column_schema->is_hidden()) {
-        LOG_WARN("ignore hidden index column", "table_name", table_schema->get_table_name(),
-            "table_id", table_schema->get_table_id(),
-            "column_name", column_schema->get_column_name(), K(index_info));
-      } else if (column_schema->is_shadow_column()) {
-        LOG_WARN("ignore shadow column", "table_name", table_schema->get_table_name(),
-            "table_id", table_schema->get_table_id(),
-            "column_name", column_schema->get_column_name(), K(index_info));
-      } else if (column_schema->is_virtual_generated_column()) {
-        LOG_WARN("ignore virtual generate column", "table_name", table_schema->get_table_name(),
-            "table_id", table_schema->get_table_id(),
-            "column_name", column_schema->get_column_name(), K(index_info));
-      } else {
-        int64_t user_column_index = -1;   // Column index as seen from the user's perspective
-        ColumnSchemaInfo *column_schema_info = NULL;
-
-        if (OB_FAIL(tb_schema_info.get_column_schema_info_of_column_id(index_column_id, column_schema_info))) {
-          LOG_ERROR("get_column_schema_info", KR(ret), "table_id", table_schema->get_table_id(),
-              "table_name", table_schema->get_table_name(),
-              K(index_column_id), K(enable_output_hidden_primary_key_),
-              K(column_schema_info));
-        } else if (! column_schema_info->is_usr_column()) {
-          // Filtering non-user columns
-          META_STAT_INFO("ignore non user-required column",
-              "table_id", table_schema->get_table_id(),
-              "table_name", table_schema->get_table_name(),
-              K(index_column_id), K(index_info_id), K(index_key_count));
-        } else {
-          user_column_index = column_schema_info->get_usr_column_idx();
-
-          if (OB_UNLIKELY(user_column_index < 0 || user_column_index >= OB_MAX_COLUMN_NUMBER)) {
-            LOG_ERROR("user_column_index is invalid", K(user_column_index),
-                "table_id", table_schema->get_table_id(),
-                "table_name", table_schema->get_table_name(),
-                K(index_column_id));
-            ret = OB_ERR_UNEXPECTED;
-          } else {
-            LOG_DEBUG("set_unique_keys_from_unique_index_table",
-                "table_id", table_schema->get_table_id(),
-                "table_name", table_schema->get_table_name(),
-                "index_table_id", index_table_schema->get_table_id(),
-                "index_table_name", index_table_schema->get_table_name(),
-                "schema_version", table_schema->get_schema_version(),
-                K(index_column_id),
-                K(user_column_index));
-
-            if (0 == valid_uk_column_count) {
-              ret = uk_info.append("(");
-            } else {
-              ret = uk_info.append(",");
-            }
-
-            if (OB_SUCC(ret)) {
-              ret = uk_info.append_int64(user_column_index);
-            }
-
-            if (OB_FAIL(ret)) {
-              LOG_ERROR("uk_info append string fail", KR(ret), K(uk_info));
-            } else {
-              is_uk_column_array[user_column_index] = true;
-              valid_uk_column_count++;
-            }
-          }
-        }
+    for (int64_t index_info_idx = 0;
+        OB_SUCC(ret) && index_info_idx < index_key_count;
+        index_info_idx++) {
+      if (OB_FAIL(build_unique_keys_with_index_column_(
+          table_schema,
+          index_table_schema,
+          index_info,
+          index_info_idx,
+          tb_schema_info,
+          is_uk_column_array,
+          uk_info,
+          valid_uk_column_count))) {
+        LOG_ERROR("build_unique_keys_with_index_column_ failed", KR(ret), K(index_info_idx), K(index_info), K(table_schema), K(uk_info));
       }
     } // for
 
@@ -1085,13 +1218,182 @@ int ObLogMetaManager::set_unique_keys_from_unique_index_table_(
   return ret;
 }
 
+int ObLogMetaManager::set_unique_keys_from_unique_index_table_(
+    const datadict::ObDictTableMeta *table_schema,
+    const datadict::ObDictTableMeta *index_table_schema,
+    const TableSchemaInfo &tb_schema_info,
+    bool *is_uk_column_array,
+    ObLogAdaptString &uk_info,
+    int64_t &valid_uk_column_count)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(table_schema)
+      || OB_ISNULL(is_uk_column_array)
+      || OB_ISNULL(index_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(table_schema), K(is_uk_column_array), K(index_table_schema));
+  } else if (OB_UNLIKELY(! index_table_schema->is_unique_index())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid index table schema which is not unique index", KR(ret),
+        K(index_table_schema->is_unique_index()));
+  } else {
+    valid_uk_column_count = 0;
+    ObIndexInfo index_info;
+
+    if (OB_FAIL(index_table_schema->get_index_info(index_info))) {
+      LOG_ERROR("get_index_info failed", KR(ret), KPC(index_table_schema), K(table_schema));
+    } else {
+      const int64_t index_key_count = index_info.get_size();
+
+      for (int64_t index_info_idx = 0;
+          OB_SUCC(ret) && index_info_idx < index_key_count;
+          index_info_idx++) {
+        if (OB_FAIL(build_unique_keys_with_index_column_(
+            table_schema,
+            index_table_schema,
+            index_info,
+            index_info_idx,
+            tb_schema_info,
+            is_uk_column_array,
+            uk_info,
+            valid_uk_column_count))) {
+          LOG_ERROR("build_unique_keys_with_index_column_ failed", KR(ret), K(index_info_idx), K(index_key_count),
+              K(index_info), K(table_schema), K(uk_info));
+        }
+      } // for
+
+      if (OB_SUCC(ret)) {
+        if (valid_uk_column_count > 0) {
+          if (OB_FAIL(uk_info.append(")"))) {
+            LOG_ERROR("uk_info append string fail", KR(ret), K(uk_info), K(valid_uk_column_count));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogMetaManager::build_unique_keys_with_index_column_(
+    const TABLE_SCHEMA *table_schema,
+    const TABLE_SCHEMA *index_table_schema,
+    const common::ObIndexInfo &index_info,
+    const int64_t index_column_idx,
+    const TableSchemaInfo &tb_schema_info,
+    bool *is_uk_column_array,
+    ObLogAdaptString &uk_info,
+    int64_t &valid_uk_column_count)
+{
+  int ret = OB_SUCCESS;
+  uint64_t index_column_id = OB_INVALID_ID;
+
+  if (OB_FAIL(index_info.get_column_id(index_column_idx, index_column_id))) {
+    LOG_ERROR("get_column_id from index_info fail", KR(ret), K(index_column_idx), K(index_info),
+        "index_table_name", index_table_schema->get_table_name(),
+        "index_table_id", index_table_schema->get_table_id());
+  } else {
+    const auto *column_schema = table_schema->get_column_schema(index_column_id);
+
+    if (OB_ISNULL(column_schema)) {
+      if (index_column_id > OB_MIN_SHADOW_COLUMN_ID) {
+        LOG_DEBUG("ignore shadow column", K(index_column_id),
+            "table_name", table_schema->get_table_name(),
+            "table_id", table_schema->get_table_id(),
+            "index_table_name", index_table_schema->get_table_name());
+      } else if (ObColumnSchemaV2::is_hidden_pk_column_id(index_column_id)) {
+        LOG_DEBUG("ignore hidden column", K(index_column_id),
+            "table_name", table_schema->get_table_name(),
+            "table_id", table_schema->get_table_id(),
+            "index_table_name", index_table_schema->get_table_name());
+      } else {
+        LOG_ERROR("get index column schema fail", K(index_column_id),
+            "table_name", table_schema->get_table_name(),
+            "table_id", table_schema->get_table_id(),
+            "index_table_name", index_table_schema->get_table_name());
+        ret = OB_ERR_UNEXPECTED;
+      }
+    } else if (column_schema->is_hidden()) {
+      LOG_WARN("ignore hidden index column", "table_name", table_schema->get_table_name(),
+          "table_id", table_schema->get_table_id(),
+          "column_name", column_schema->get_column_name(), K(index_info));
+    } else if (column_schema->is_shadow_column()) {
+      LOG_WARN("ignore shadow column", "table_name", table_schema->get_table_name(),
+          "table_id", table_schema->get_table_id(),
+          "column_name", column_schema->get_column_name(), K(index_info));
+    } else if (column_schema->is_virtual_generated_column()) {
+      LOG_WARN("ignore virtual generate column", "table_name", table_schema->get_table_name(),
+          "table_id", table_schema->get_table_id(),
+          "column_name", column_schema->get_column_name(), K(index_info));
+    } else {
+      int64_t user_column_index = -1;   // Column index as seen from the user's perspective
+      ColumnSchemaInfo *column_schema_info = NULL;
+
+      if (OB_FAIL(tb_schema_info.get_column_schema_info_of_column_id(index_column_id, column_schema_info))) {
+        LOG_ERROR("get_column_schema_info", KR(ret), "table_id", table_schema->get_table_id(),
+            "table_name", table_schema->get_table_name(),
+            K(index_column_id), K(enable_output_hidden_primary_key_),
+            K(column_schema_info));
+      } else if (! column_schema_info->is_usr_column()) {
+        // Filtering non-user columns
+        META_STAT_INFO("ignore non user-required column",
+            "table_id", table_schema->get_table_id(),
+            "table_name", table_schema->get_table_name(),
+            K(index_column_id),
+            K(index_column_idx));
+      } else {
+        user_column_index = column_schema_info->get_usr_column_idx();
+
+        if (OB_UNLIKELY(user_column_index < 0 || user_column_index >= OB_MAX_COLUMN_NUMBER)) {
+          LOG_ERROR("user_column_index is invalid", K(user_column_index),
+              "table_id", table_schema->get_table_id(),
+              "table_name", table_schema->get_table_name(),
+              K(index_column_id));
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          LOG_DEBUG("set_unique_keys_from_unique_index_table",
+              "table_id", table_schema->get_table_id(),
+              "table_name", table_schema->get_table_name(),
+              "index_table_id", index_table_schema->get_table_id(),
+              "index_table_name", index_table_schema->get_table_name(),
+              "schema_version", table_schema->get_schema_version(),
+              K(index_column_id),
+              K(user_column_index));
+
+          if (0 == valid_uk_column_count) {
+            ret = uk_info.append("(");
+          } else {
+            ret = uk_info.append(",");
+          }
+
+          if (OB_SUCC(ret)) {
+            ret = uk_info.append_int64(user_column_index);
+          }
+
+          if (OB_FAIL(ret)) {
+            LOG_ERROR("uk_info append string fail", KR(ret), K(uk_info));
+          } else {
+            is_uk_column_array[user_column_index] = true;
+            valid_uk_column_count++;
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
+template<class SCHEMA_GUARD, class TABLE_SCHEMA>
 int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
-    const share::schema::ObTableSchema *table_schema,
+    const TABLE_SCHEMA *table_schema,
     const TableSchemaInfo &tb_schema_info,
-    ObLogSchemaGuard &schema_mgr,
+    SCHEMA_GUARD &schema_mgr,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -1128,8 +1430,14 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
           (void)memset(is_uk_column_array, 0, column_count * sizeof(bool));
 
           // Set unique index information from all index tables
-          if (OB_FAIL(set_unique_keys_from_all_index_table_(*table_schema, tb_schema_info,
-                  schema_mgr, stop_flag, is_uk_column_array, uk_info, valid_uk_table_count))) {
+          if (OB_FAIL(set_unique_keys_from_all_index_table_(
+              *table_schema,
+              tb_schema_info,
+              schema_mgr,
+              stop_flag,
+              is_uk_column_array,
+              uk_info,
+              valid_uk_table_count))) {
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("set_unique_keys_from_all_index_table_ fail", KR(ret), K(valid_uk_table_count),
@@ -1142,7 +1450,6 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
             for (int64_t index = 0; OB_SUCC(ret) && index < column_count; index++) {
               if (is_uk_column_array[index]) {
                 ColumnSchemaInfo *column_schema_info = NULL;
-                const ObColumnSchemaV2 *column_schema = NULL;
                 uint64_t column_id = OB_INVALID_ID;
 
                 if (OB_FAIL(tb_schema_info.get_column_schema_info(index, false/*is_column_stored_idx*/, column_schema_info))) {
@@ -1152,28 +1459,32 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
                 } else if (OB_UNLIKELY(OB_INVALID_ID == (column_id = column_schema_info->get_column_id()))) {
                   LOG_ERROR("column_id is not valid", K(column_id));
                   ret = OB_ERR_UNEXPECTED;
-                } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_id))) {
-                  LOG_ERROR("get column schema fail", K(column_id), K(index), K(column_count),
-                      "table_id", table_schema->get_table_id(),
-                      "table_name", table_schema->get_table_name(),
-                      "table_schame_version", table_schema->get_schema_version());
-                  ret = OB_ERR_UNEXPECTED;
                 } else {
-                  if (is_first_uk_column) {
-                    is_first_uk_column = false;
+                  const auto *column_schema = table_schema->get_column_schema(column_id);
+
+                  if (OB_ISNULL(column_schema)) {
+                    LOG_ERROR("get column schema fail", K(column_id), K(index), K(column_count),
+                        "table_id", table_schema->get_table_id(),
+                        "table_name", table_schema->get_table_name(),
+                        "table_schame_version", table_schema->get_schema_version());
+                    ret = OB_ERR_UNEXPECTED;
                   } else {
-                    // If not the first uk column, append comma
-                    ret = uks.append(",");
-                  }
+                    if (is_first_uk_column) {
+                      is_first_uk_column = false;
+                    } else {
+                      // If not the first uk column, append comma
+                      ret = uks.append(",");
+                    }
 
-                  // then append column name
-                  if (OB_SUCC(ret)) {
-                    ret = uks.append(column_schema->get_column_name());
-                  }
+                    // then append column name
+                    if (OB_SUCC(ret)) {
+                      ret = uks.append(column_schema->get_column_name());
+                    }
 
-                  if (OB_FAIL(ret)) {
-                    LOG_ERROR("uks append fail", KR(ret), K(uks), K(column_schema->get_column_name()),
-                        K(table_schema->get_table_name()));
+                    if (OB_FAIL(ret)) {
+                      LOG_ERROR("uks append fail", KR(ret), K(uks), K(column_schema->get_column_name()),
+                          K(table_schema->get_table_name()));
+                    }
                   }
                 }
               }
@@ -1221,16 +1532,18 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
+template<class SCHEMA_GUARD, class TABLE_SCHEMA>
 int ObLogMetaManager::set_unique_keys_from_all_index_table_(
-    const share::schema::ObTableSchema &table_schema,
+    const TABLE_SCHEMA &table_schema,
     const TableSchemaInfo &tb_schema_info,
-    ObLogSchemaGuard &schema_mgr,
+    SCHEMA_GUARD &schema_mgr,
     volatile bool &stop_flag,
     bool *is_uk_column_array,
     ObLogAdaptString &uk_info,
     int64_t &valid_uk_table_count)
 {
   int ret = OB_SUCCESS;
+  const bool is_using_online_schema = true; // TODO use function instead.
   const uint64_t tenant_id = table_schema.get_tenant_id();
   int64_t index_table_count = table_schema.get_index_tid_count();
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -1240,80 +1553,39 @@ int ObLogMetaManager::set_unique_keys_from_all_index_table_(
     ret = OB_INVALID_ARGUMENT;
   } else if (index_table_count <= 0) {
     // no index table
+  }
+  // get array of index table id
+  else if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_ERROR("get_index_tid_array fail", KR(ret), "table_name", table_schema.get_table_name(),
+        "table_id", table_schema.get_table_id());
   } else {
-    // get array of index table id
-    if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
-      LOG_ERROR("get_index_tid_array fail", KR(ret), "table_name", table_schema.get_table_name(),
-          "table_id", table_schema.get_table_id());
-    } else {
-      LOG_DEBUG("set_unique_keys_from_all_index_table_ begin",
-          "table_id", table_schema.get_table_id(),
-          "table_name", table_schema.get_table_name(),
-          K(simple_index_infos));
+    LOG_DEBUG("set_unique_keys_from_all_index_table_ begin",
+        "table_id", table_schema.get_table_id(),
+        "table_name", table_schema.get_table_name(),
+        K(simple_index_infos));
 
-      // Iterate through all index tables to find the unique index table
-      for (int64_t index = 0; OB_SUCC(ret) && index < index_table_count; index++) {
-        const share::schema::ObTableSchema *index_table_schema = NULL;
+    // Iterate through all index tables to find the unique index table
+    for (int64_t index = 0; OB_SUCC(ret) && index < index_table_count; index++) {
+      const TABLE_SCHEMA *index_table_schema = NULL;
 
-        // retry to fetch schma until success of quit
-        // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
-        RETRY_FUNC(stop_flag, schema_mgr, get_table_schema, tenant_id, simple_index_infos.at(index).table_id_,
-            index_table_schema, GET_SCHEMA_TIMEOUT);
+      // retry to fetch schma until success of quit
+      // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
+      RETRY_FUNC(stop_flag, schema_mgr, get_table_schema, tenant_id, simple_index_infos.at(index).table_id_,
+          index_table_schema, GET_SCHEMA_TIMEOUT);
 
-        if (OB_FAIL(ret)) {
-          if (OB_IN_STOP_STATE != ret) {
-            LOG_ERROR("get index table schema fail", KR(ret), K(simple_index_infos.at(index).table_id_));
-          }
-        } else if (OB_ISNULL(index_table_schema)) {
-          LOG_ERROR("get index table schema fail", "table_id", table_schema.get_table_id(),
-              "table_name", table_schema.get_table_name(),
-              "index_table_id", simple_index_infos.at(index).table_id_, K(index_table_count), K(index));
-          ret = OB_ERR_UNEXPECTED;
+      if (OB_FAIL(ret)) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("get index table schema fail", KR(ret), K(simple_index_infos.at(index).table_id_));
         }
-        // Handling uniquely indexed tables
-        else if (index_table_schema->is_unique_index()) {
-          ObLogAdaptString tmp_uk_info(ObModIds::OB_LOG_TEMP_MEMORY);
-          int64_t valid_uk_column_count = 0;
-
-          // Get unique key information from a unique index table
-          if (OB_FAIL(set_unique_keys_from_unique_index_table_(&table_schema,
-              tb_schema_info,
-              index_table_schema,
-              is_uk_column_array,
-              tmp_uk_info,
-              valid_uk_column_count))) {
-            LOG_ERROR("set_unique_keys_from_unique_index_table_ fail", KR(ret),
-                "table_name", table_schema.get_table_name(),
-                "table_id", table_schema.get_table_id(),
-                "index_table_name", index_table_schema->get_table_name(),
-                K(is_uk_column_array));
-          }
-          // Process only when valid unique index column information is obtained
-          else if (valid_uk_column_count > 0) {
-            const char *tmp_uk_info_str = NULL;
-            if (OB_FAIL(tmp_uk_info.cstr(tmp_uk_info_str))) {
-              LOG_ERROR("get tmp_uk_info str fail", KR(ret), K(tmp_uk_info));
-            } else if (OB_ISNULL(tmp_uk_info_str)) {
-              LOG_ERROR("tmp_uk_info_str is invalid", K(tmp_uk_info_str), K(tmp_uk_info),
-                  K(valid_uk_column_count), K(index_table_schema->get_table_name()));
-              ret = OB_ERR_UNEXPECTED;
-            } else {
-              if (valid_uk_table_count > 0) {
-                ret = uk_info.append(",");
-              }
-
-              if (OB_SUCC(ret)) {
-                ret = uk_info.append(tmp_uk_info_str);
-              }
-
-              if (OB_FAIL(ret)) {
-                LOG_ERROR("uk_info append string fail", KR(ret), K(uk_info));
-              } else {
-                valid_uk_table_count++;
-              }
-            }
-          }
-        }
+      } else if (OB_ISNULL(index_table_schema)) {
+        LOG_ERROR("get index table schema fail", "table_id", table_schema.get_table_id(),
+            "table_name", table_schema.get_table_name(),
+            "index_table_id", simple_index_infos.at(index).table_id_, K(index_table_count), K(index));
+        ret = OB_ERR_UNEXPECTED;
+      }
+      // Handling uniquely indexed tables
+      else if (index_table_schema->is_unique_index()) {
+        SET_UK_INFO;
       }
     }
   }
@@ -1438,7 +1710,9 @@ void ObLogMetaManager::destroy_ddl_meta_()
   }
 }
 
-int ObLogMetaManager::get_table_schema_meta(const int64_t version,
+int ObLogMetaManager::get_table_schema_meta(
+    const int64_t version,
+    const uint64_t tenant_id,
     const uint64_t table_id,
     TableSchemaInfo *&tb_schema_info)
 {
@@ -1448,11 +1722,12 @@ int ObLogMetaManager::get_table_schema_meta(const int64_t version,
     LOG_ERROR("meta manager has not inited");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == version)
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_UNLIKELY(OB_INVALID_ID == table_id)) {
-    LOG_ERROR("invalid argument", K(version), K(table_id));
+    LOG_ERROR("invalid argument", K(version), K(tenant_id), K(table_id));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    MulVerTableKey table_key(version, table_id);
+    MulVerTableKey table_key(version, tenant_id, table_id);
 
     if (OB_FAIL(tb_schema_info_map_.get(table_key, tb_schema_info))) {
       LOG_ERROR("tb_schema_info_map_ get fail", KR(ret), K(table_key), K(tb_schema_info));
@@ -1464,7 +1739,9 @@ int ObLogMetaManager::get_table_schema_meta(const int64_t version,
   return ret;
 }
 
-int ObLogMetaManager::set_table_schema_(const int64_t version,
+int ObLogMetaManager::set_table_schema_(
+    const int64_t version,
+    const uint64_t tenant_id,
     const uint64_t table_id,
     const char *table_name,
     const int64_t non_hidden_column_cnt,
@@ -1476,20 +1753,50 @@ int ObLogMetaManager::set_table_schema_(const int64_t version,
     LOG_ERROR("meta manager has not inited");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == version)
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_UNLIKELY(OB_INVALID_ID == table_id)
       || OB_ISNULL(table_name)) {
-    LOG_ERROR("invalid argument", K(version), K(table_id), K(table_name));
+    LOG_ERROR("invalid argument", K(version), K(tenant_id), K(table_id), K(table_name));
     ret = OB_INVALID_ARGUMENT;
   } else {
     tb_schema_info.set_non_hidden_column_count(non_hidden_column_cnt);
 
-    MulVerTableKey table_key(version, table_id);
+    MulVerTableKey table_key(version, tenant_id, table_id);
 
     if (OB_FAIL(tb_schema_info_map_.insert(table_key, &tb_schema_info))) {
       LOG_ERROR("tb_schema_info_map_ insert fail", KR(ret), K(table_key), K(tb_schema_info));
     } else {
-      LOG_INFO("set_table_schema succ", "schema_version", version,
+      LOG_INFO("set_table_schema succ", "schema_version", version, K(tenant_id),
           K(table_id), K(table_name), K(tb_schema_info));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogMetaManager::try_erase_table_schema_(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t version)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("meta manager has not inited", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+      || OB_UNLIKELY(OB_INVALID_ID == table_id)
+      || OB_UNLIKELY(OB_INVALID_VERSION == version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(tenant_id), K(table_id), K(version));
+  } else {
+    MulVerTableKey table_key(version, tenant_id, table_id);
+
+    if (OB_FAIL(tb_schema_info_map_.erase(table_key))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("erase table_key from tb_schema_info_map_ failed, may not affect main process, ignore", KR(ret), K(table_key));
+      }
+      ret = OB_SUCCESS;
     }
   }
 
@@ -1534,9 +1841,10 @@ int ObLogMetaManager::free_table_schema_info_(TableSchemaInfo *&tb_schema_info)
   return ret;
 }
 
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
 int ObLogMetaManager::set_column_schema_info_(
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObColumnSchemaV2 &column_table_schema,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_table_schema,
     const int16_t column_stored_idx,
     const bool is_usr_column,
     const int16_t usr_column_idx,

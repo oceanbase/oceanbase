@@ -14,29 +14,30 @@
 
 #include "ob_ls_life_manager.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTransaction
+#include "share/scn.h"//SCN
 
 using namespace oceanbase;
 using namespace oceanbase::common;
+using namespace oceanbase::palf;
 namespace oceanbase
 {
 namespace share
 {
 
 int ObLSLifeAgentManager::create_new_ls(
-    const ObLSStatusInfo &ls_info, const int64_t &create_ls_ts_ns,
-    const common::ObString &zone_priority)
+    const ObLSStatusInfo &ls_info, const SCN &create_ls_scn,
+    const common::ObString &zone_priority, const share::ObTenantSwitchoverStatus &working_sw_status)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans; 
   const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(ls_info.tenant_id_);
-  if (OB_UNLIKELY(!ls_info.is_valid() || OB_INVALID_TIMESTAMP == create_ls_ts_ns
-        || zone_priority.empty())) {
+  if (OB_UNLIKELY(!ls_info.is_valid() || !create_ls_scn.is_valid() || zone_priority.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_ts_ns), K(zone_priority));
+    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_scn), K(zone_priority));
   } else if (OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_info));
-  } else if (OB_FAIL(create_new_ls_in_trans(ls_info, create_ls_ts_ns, zone_priority, trans))) {
-    LOG_WARN("failed to create new ls", KR(ret), K(ls_info), K(create_ls_ts_ns), K(zone_priority));
+  } else if (OB_FAIL(create_new_ls_in_trans(ls_info, create_ls_scn, zone_priority, working_sw_status, trans))) {
+    LOG_WARN("failed to create new ls", KR(ret), K(ls_info), K(create_ls_scn), K(zone_priority));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -49,7 +50,8 @@ int ObLSLifeAgentManager::create_new_ls(
   return ret;
 }
 int ObLSLifeAgentManager::drop_ls(const uint64_t &tenant_id,
-                                         const share::ObLSID &ls_id)
+                                  const share::ObLSID &ls_id,
+                                  const ObTenantSwitchoverStatus &working_sw_status)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans; 
@@ -59,7 +61,7 @@ int ObLSLifeAgentManager::drop_ls(const uint64_t &tenant_id,
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id));
   } else if (OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
-  } else if (OB_FAIL(drop_ls_in_trans(tenant_id, ls_id, trans))) {
+  } else if (OB_FAIL(drop_ls_in_trans(tenant_id, ls_id, working_sw_status, trans))) {
     LOG_WARN("failed to create new ls", KR(ret), K(tenant_id), K(ls_id));
   }
   if (trans.is_started()) {
@@ -77,21 +79,23 @@ int ObLSLifeAgentManager::drop_ls(const uint64_t &tenant_id,
 int ObLSLifeAgentManager::set_ls_offline(const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
     const ObLSStatus &ls_status,
-    const int64_t &drop_ts_ns)
+    const SCN &drop_scn,
+    const ObTenantSwitchoverStatus &working_sw_status)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans; 
   const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id
-        || OB_INVALID_TIMESTAMP == drop_ts_ns
+        || !drop_scn.is_valid()
         || (!ls_is_dropping_status(ls_status) && !ls_is_tenant_dropping_status(ls_status)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id), K(drop_ts_ns), K(ls_status));
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id), K(drop_scn), K(ls_status));
   } else if (OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
-  } else if (OB_FAIL(set_ls_offline_in_trans(tenant_id, ls_id, ls_status, drop_ts_ns, trans))) {
+  } else if (OB_FAIL(set_ls_offline_in_trans(tenant_id, ls_id, ls_status, drop_scn,
+                                             working_sw_status, trans))) {
     LOG_WARN("failed to create new ls", KR(ret), K(tenant_id), K(ls_id),
-        K(ls_status), K(drop_ts_ns));
+        K(ls_status), K(drop_scn));
   }
 
   if (trans.is_started()) {
@@ -142,21 +146,22 @@ int ObLSLifeAgentManager::update_ls_primary_zone(
 }
 
 int ObLSLifeAgentManager::create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
-                            const int64_t &create_ls_ts_ns,
+                            const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
+                            const share::ObTenantSwitchoverStatus &working_sw_status,
                             ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_info.is_valid() || OB_INVALID_TIMESTAMP == create_ls_ts_ns)) {
+  if (OB_UNLIKELY(!ls_info.is_valid() || !create_ls_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_ts_ns));
+    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(create_ls_scn));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_AGENT_NUM; ++i) {
     if (OB_ISNULL(agents_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agent is null", KR(ret), K(i));
-    } else if (OB_FAIL(agents_[i]->create_new_ls(ls_info, create_ls_ts_ns, zone_priority, trans))) {
-      LOG_WARN("failed to create new ls", KR(ret), K(i), K(ls_info), K(create_ls_ts_ns), K(zone_priority));
+    } else if (OB_FAIL(agents_[i]->create_new_ls(ls_info, create_ls_scn, zone_priority, working_sw_status, trans))) {
+      LOG_WARN("failed to create new ls", KR(ret), K(i), K(ls_info), K(create_ls_scn), K(zone_priority));
     }
   }
   return ret;
@@ -164,6 +169,7 @@ int ObLSLifeAgentManager::create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
 
 int ObLSLifeAgentManager::drop_ls_in_trans(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -175,7 +181,7 @@ int ObLSLifeAgentManager::drop_ls_in_trans(const uint64_t &tenant_id,
     if (OB_ISNULL(agents_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agent is null", KR(ret), K(i));
-    } else if (OB_FAIL(agents_[i]->drop_ls(tenant_id, ls_id, trans))) {
+    } else if (OB_FAIL(agents_[i]->drop_ls(tenant_id, ls_id, working_sw_status, trans))) {
       LOG_WARN("failed to create new ls", KR(ret), K(i), K(tenant_id), K(ls_id));
     }
   }
@@ -185,24 +191,25 @@ int ObLSLifeAgentManager::drop_ls_in_trans(const uint64_t &tenant_id,
 int ObLSLifeAgentManager::set_ls_offline_in_trans(const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
     const ObLSStatus &ls_status,
-    const int64_t &drop_ts_ns,
+    const SCN &drop_scn,
+    const ObTenantSwitchoverStatus &working_sw_status,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id
-        || OB_INVALID_TIMESTAMP == drop_ts_ns
+        || !drop_scn.is_valid()
         || (!ls_is_dropping_status(ls_status) && !ls_is_tenant_dropping_status(ls_status)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id), K(drop_ts_ns), K(ls_status));
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id), K(drop_scn), K(ls_status));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_AGENT_NUM; ++i) {
     if (OB_ISNULL(agents_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agent is null", KR(ret), K(i));
-    } else if (OB_FAIL(agents_[i]->set_ls_offline(tenant_id, ls_id, 
-            ls_status, drop_ts_ns, trans))) {
+    } else if (OB_FAIL(agents_[i]->set_ls_offline(tenant_id, ls_id,
+            ls_status, drop_scn, working_sw_status, trans))) {
       LOG_WARN("failed to create new ls", KR(ret), K(i), K(tenant_id), K(ls_id),
-          K(ls_status), K(drop_ts_ns));
+          K(ls_status), K(drop_scn));
     }
   }
   return ret;

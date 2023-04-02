@@ -345,6 +345,7 @@ int ObBreadthFisrtSearchOp::reuse()
 {
   ObSearchMethodOp::reuse();
   current_parent_node_ = &bst_root_;
+  last_node_level_ = 0;
   bst_root_.child_num_ = 0;
   bst_root_.children_ = nullptr;
   bst_root_.parent_ = nullptr;
@@ -435,6 +436,7 @@ int ObBreadthFisrtSearchOp::update_parent_node(ObTreeNode &node)
 {
   int ret = OB_SUCCESS;
   current_parent_node_ = node.in_bstree_node_;
+  last_node_level_ = node.tree_level_;
   return ret;
 }
 
@@ -459,6 +461,7 @@ int ObBreadthFisrtSearchOp::add_result_rows()
         tmp->parent_ = current_parent_node_;
         current_parent_node_->children_[i] = tmp;
         node.in_bstree_node_ = tmp;
+        node.tree_level_ = last_node_level_ + 1;
         if (OB_FAIL(is_breadth_cycle_node(node))) {
           LOG_WARN("Find cycle failed", K(ret));
         } else if (OB_FAIL(search_results_.push_back(node))) {

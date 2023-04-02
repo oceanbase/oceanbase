@@ -6,75 +6,111 @@ ERROR HY000: unmatched parentheses in regular expression
 select * from t1 where a regexp 'a(b';
 ERROR HY000: unmatched parentheses in regular expression
 select * from t1 where a regexp '*';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 1.' from regexp
 select * from t1 where a regexp '+';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 1.' from regexp
 select * from t1 where a regexp '?';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 1.' from regexp
 select * from t1 where a regexp '(*a)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 2.' from regexp
 select * from t1 where a regexp '(+a)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 2.' from regexp
 select * from t1 where a regexp '(?a)';
-ERROR HY000: invalid embedded option in regular expression
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where a regexp '({1}a)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 2.' from regexp
 select * from t1 where a regexp '(a|*b)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
 select * from t1 where a regexp '(a|+b)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
 select * from t1 where a regexp '(a|?b)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
 select * from t1 where a regexp '(a|{1}b)';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
 select * from t1 where a regexp '^*';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
+hello	0
+test	0
 select * from t1 where a regexp '^+';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
+hello	0
+test	0
 select * from t1 where a regexp '^?';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
+hello	0
+test	0
 select * from t1 where a regexp '^{1}';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
+hello	0
+test	0
 select * from t1 where a regexp '{1';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 1.' from regexp
 select * from t1 where a regexp '{1}';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 1.' from regexp
 select * from t1 where a regexp 'a{1';
-ERROR HY000: braces {} not balanced in in regular expression
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where a regexp 'a{1a';
-ERROR HY000: invalid repetition count(s) in regular expression
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where a regexp 'a{1a}';
-ERROR HY000: invalid repetition count(s) in regular expression
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where a regexp 'a{1,x}';
-ERROR HY000: invalid repetition count(s) in regular expression
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where a regexp 'a{1,x';
-ERROR HY000: invalid repetition count(s) in regular expression
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where a regexp 'a{300}';
-ERROR HY000: invalid repetition count(s) in regular expression
+a	b
 select * from t1 where a regexp 'a{1,0}';
-ERROR HY000: invalid repetition count(s) in regular expression
+ERROR 42000: Got error 'U_REGEX_MAX_LT_MIN' from regexp
 select * from t1 where a regexp 'a++';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
 select * from t1 where a regexp 'a*+';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
+hello	0
+test	0
 select * from t1 where a regexp 'a+*';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where a regexp 'a?*';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where a regexp 'a?+';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
+hello	0
+test	0
 select * from t1 where a regexp 'a{1}{1}';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 5.' from regexp
 select * from t1 where a regexp 'a*{1}';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where a regexp 'a+{1}';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where a regexp 'a?{1}';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where a regexp 'a{1}*';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 5.' from regexp
 select * from t1 where a regexp 'a{1}+';
-ERROR HY000: The regular expression was too complex and current library can't be parsed
+a	b
+a	0
+abc	0
+abcd	0
 drop table t1;
 drop table if exists t1;
 create table t1 (a datetime primary key);
@@ -1367,11 +1403,9 @@ id	name
 524	abcd
 573	ab
 select * from t1 where name regexp 'a{,2}';
-id	name
-299	a{,2}
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where name regexp 'a{,}';
-id	name
-301	a{,}
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
 select * from t1 where name regexp 'ab{0,0}c';
 id	name
 311	abcac
@@ -1732,8 +1766,7 @@ id	name
 567	A1
 573	ab
 select * from t1 where name regexp 'a*{b}';
-id	name
-344	a{b}
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
 select * from t1 where name regexp '[[:alnum:]]+';
 id	name
 1	hello
@@ -6287,3 +6320,57 @@ insert into t values ('');
 select c1 regexp 'ddd' from t;
 c1 regexp 'ddd'
 0
+drop table if exists t1;
+create table t1(c1 blob);
+insert into t1 values('UNPRESS123');
+insert into t1 values('UNPRESS456');
+select * from t1 where c1 regexp '^U';
+c1
+UNPRESS123
+UNPRESS456
+set names gbk;
+select 'a' collate gbk_bin regexp 'A';
+'a' collate gbk_bin regexp 'A'
+0
+select 'a' collate gbk_chinese_ci regexp 'A';
+'a' collate gbk_chinese_ci regexp 'A'
+1
+select 'a' regexp 'A' collate gbk_chinese_ci;
+'a' regexp 'A' collate gbk_chinese_ci
+1
+select 'a' regexp 'A' collate gbk_bin;
+'a' regexp 'A' collate gbk_bin
+0
+select 'a' collate gbk_bin regexp 'A' collate gbk_bin;
+'a' collate gbk_bin regexp 'A' collate gbk_bin
+0
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci;
+'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci
+1
+select 'a' collate gbk_bin regexp 'A' collate gbk_chinese_ci;
+ERROR HY000: Illegal mix of collations
+select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_bin;
+ERROR HY000: Illegal mix of collations
+set names latin1;
+select 'a' collate latin1_bin regexp 'A';
+'a' collate latin1_bin regexp 'A'
+0
+select 'a' collate latin1_swedish_ci regexp 'A';
+'a' collate latin1_swedish_ci regexp 'A'
+1
+select 'a' regexp 'A' collate latin1_swedish_ci;
+'a' regexp 'A' collate latin1_swedish_ci
+1
+select 'a' regexp 'A' collate latin1_bin;
+'a' regexp 'A' collate latin1_bin
+0
+select 'a' collate latin1_bin regexp 'A' collate latin1_bin;
+'a' collate latin1_bin regexp 'A' collate latin1_bin
+0
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
+'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci
+1
+select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
+ERROR HY000: Illegal mix of collations
+select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;
+ERROR HY000: Illegal mix of collations

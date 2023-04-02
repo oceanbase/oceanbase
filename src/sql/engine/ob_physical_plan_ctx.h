@@ -53,6 +53,7 @@ struct ObRemoteSqlInfo
   ObRemoteSqlInfo() :
     use_ps_(false),
     is_batched_stmt_(false),
+    is_original_ps_mode_(false),
     ps_param_cnt_(0),
     remote_sql_(),
     ps_params_(nullptr)
@@ -63,6 +64,7 @@ struct ObRemoteSqlInfo
 
   bool use_ps_;
   bool is_batched_stmt_;
+  bool is_original_ps_mode_;
   int32_t ps_param_cnt_;
   common::ObString remote_sql_;
   ParamStore *ps_params_;
@@ -111,6 +113,19 @@ public:
       }
     }
     return (ts_timeout_us_ > 0 && now > ts_timeout_us_);
+  }
+  inline bool is_exec_timeout(int64_t *remain_us = NULL) const
+  {
+    int64_t now = common::ObClockGenerator::getClock();
+    int64_t ts_timeout_us = spm_ts_timeout_us_ > 0 ? spm_ts_timeout_us_ : ts_timeout_us_;
+    if (remain_us != NULL) {
+      if (OB_LIKELY(ts_timeout_us > 0)) {
+        *remain_us = ts_timeout_us - now;
+      } else {
+        *remain_us = INT64_MAX; // no timeout
+      }
+    }
+    return (ts_timeout_us > 0 && now > ts_timeout_us);
   }
   // snapshot timestamp used for transaction set consistency check
   inline int64_t get_tsc_timestamp() const
@@ -425,6 +440,7 @@ public:
   }
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   common::ObCurTraceId::TraceId &get_last_trace_id() { return last_trace_id_; }
+  void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
 
 private:
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -488,6 +504,7 @@ private:
   int64_t tenant_schema_version_;
   int64_t orig_question_mark_cnt_;
   common::ObCurTraceId::TraceId last_trace_id_;
+  int64_t tenant_srs_version_;
 
 private:
   /**
@@ -557,6 +574,8 @@ private:
   //used for monitor operator information
   int64_t plan_start_time_;
   bool is_ps_rewrite_sql_;
+  // timeout use by spm, don't need to serialize
+  int64_t spm_ts_timeout_us_;
 };
 
 }

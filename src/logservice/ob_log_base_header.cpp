@@ -43,7 +43,7 @@ ObLogBaseHeader::ObLogBaseHeader(const ObLogBaseType log_type,
     break;
   default:
     flag_ = (flag_ | NEED_POST_REPLAY_BARRIER_FLAG) | NEED_PRE_REPLAY_BARRIER_FLAG;
-    CLOG_LOG(ERROR, "invalid replay barrier type", K(log_type), K(replay_barrier_type),
+    CLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid replay barrier type", K(log_type), K(replay_barrier_type),
              K(replay_hint));
     break;
   }
@@ -53,7 +53,7 @@ ObLogBaseHeader::ObLogBaseHeader(const ObLogBaseType log_type,
                                  const enum ObReplayBarrierType replay_barrier_type)
   : ObLogBaseHeader(log_type,
                     replay_barrier_type,
-                    common::ObTimeUtility::current_time_ns())
+                    common::ObTimeUtility::current_time())
 {
 }
 

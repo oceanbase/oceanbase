@@ -62,7 +62,8 @@ public:
   // callback for the correctness. And user need guarantee all callbacks
   // belonged to the memtable must be synced before removing. What's more, it
   // will calculate checksum when removing.
-  int remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove);
+  int remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove,
+                                           const share::SCN max_applied_scn);
 
   // remove_callbacks_for_rollback_to will remove callbacks from back to front
   // until callbacks smaller or equal than the seq_no. It will remove both
@@ -81,12 +82,12 @@ public:
   // when switch to follower forcely.
   int clean_unlog_callbacks(int64_t &removed_cnt);
 
-  // tx_calc_checksum_before_log_ts will calculate checksum during execution. It will
+  // tx_calc_checksum_before_scn will calculate checksum during execution. It will
   // remember the intermediate results for final result.
-  int tx_calc_checksum_before_log_ts(const int64_t log_ts);
+  int tx_calc_checksum_before_scn(const share::SCN scn);
 
   // tx_calc_checksum_all will calculate checksum when tx end. Finally it will set
-  // checksum_log_ts to INT64_MAX and never allow more checksum calculation.
+  // checksum_scn to INT64_MAX and never allow more checksum calculation.
   int tx_calc_checksum_all();
 
   // tx_commit will commit all callbacks. And it will let the data know it has
@@ -107,8 +108,8 @@ public:
   int tx_print_callback();
 
   // replay_fail will rollback all redo in a single log according to
-  // log_timestamp
-  int replay_fail(const int64_t log_timestamp);
+  // scn
+  int replay_fail(const share::SCN scn);
 
 private:
   int callback_(ObITxCallbackFunctor &func);
@@ -116,7 +117,7 @@ private:
                 ObITransCallback *start,
                 ObITransCallback *end);
   int64_t calc_need_remove_count_for_fast_commit_();
-  void ensure_checksum_(const int64_t log_ts);
+  void ensure_checksum_(const share::SCN scn);
 public:
   ObITransCallback *get_guard() { return &head_; }
   ObITransCallback *get_tail() { return head_.get_prev(); }
@@ -124,9 +125,9 @@ public:
   int64_t get_length() const { return length_; }
   int64_t get_checksum() const { return checksum_; }
   int64_t get_tmp_checksum() const { return tmp_checksum_; }
-  int64_t get_checksum_log_ts() const { return checksum_log_ts_; }
-  void get_checksum_and_log_ts(uint64_t &checksum, int64_t &checksum_log_ts);
-  void update_checksum(const uint64_t checksum, const int64_t checksum_log_ts);
+  share::SCN get_checksum_scn() const { return checksum_scn_; }
+  void get_checksum_and_scn(uint64_t &checksum, share::SCN &checksum_scn);
+  void update_checksum(const uint64_t checksum, const share::SCN checksum_scn);
   transaction::ObPartTransCtx *get_trans_ctx() const;
 
   DECLARE_TO_STRING;
@@ -142,18 +143,18 @@ private:
    * 1. When commits a transaction, iterate all the callback and calculate the checksum;
    * 2. When memtable dump occurs, the callbacks before last_replay_log_id would be traversed
    *    to calculate checksum;
-   * 3. When rollback, the callbacks before max_durable_log_ts should be calculated, to ensure
+   * 3. When rollback, the callbacks before max_durable_scn should be calculated, to ensure
    *    the checksum calculated due to memtable dump on leader also exists on follower.
    *
-   * checksum_log_ts_ is the log timestamp that is currently synchronizing, bach_checksum_
+   * checksum_scn_ is the log timestamp that is currently synchronizing, bach_checksum_
    * indicates the data which hasn't been calculated, checksum_ is is the currently
    * calculated checksum(checksum supports increment calculation)
    *
    * Notice, apart from 1, the other two calculation should increment
-   * checksum_log_ts_ by 1 to avoid duplicate calculation.
+   * checksum_scn_ by 1 to avoid duplicate calculation.
    */
   common::ObBatchChecksum batch_checksum_;
-  int64_t checksum_log_ts_;
+  share::SCN checksum_scn_;
   uint64_t checksum_;
   uint64_t tmp_checksum_;
 

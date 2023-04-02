@@ -138,6 +138,10 @@ int ObExprTimeStampAdd::calc(const int64_t unit_value,
     } else {
       ot.parts_[DT_YEAR] = month / 12;
       ot.parts_[DT_MON] = month % 12 + 1;
+      int32_t days = ObTimeConverter::get_days_of_month(ot.parts_[DT_YEAR], ot.parts_[DT_MON]);
+      if (ot.parts_[DT_MDAY] > days) {
+        ot.parts_[DT_MDAY] = days;
+      }
       ot.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ot);
       if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, value))) {
         LOG_WARN("ob time to datetime failed", K(ret));
@@ -218,7 +222,8 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
     int64_t out_len = 0;
     if (OB_FAIL(ob_datum_to_ob_time_with_date(*timestamp_datum,
                 expr.args_[2]->datum_meta_.type_,cvrt_ctx.tz_info_, ot,
-                get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0))) {
+                get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0,
+                expr.args_[2]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(*timestamp_datum));
     } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts))) {
       LOG_WARN("ob time to datetime failed", K(ret));
@@ -237,14 +242,14 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
-    uint64_t cast_mode = 0;
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-            session, cast_mode))) {
-      LOG_WARN("get_default_cast_mode failed", K(ret), K(session->get_stmt_type()));
+    ObCastMode cast_mode = CM_NONE;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode)))) {
+      LOG_WARN("get_default_cast_mode failed", K(tmp_ret), K(session->get_stmt_type()));
     } else if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       ret = OB_SUCCESS;
-      res_datum.set_null();
     }
+    res_datum.set_null();
   }
   return ret;
 }

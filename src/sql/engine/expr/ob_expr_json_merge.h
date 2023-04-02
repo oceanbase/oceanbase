@@ -8,7 +8,9 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for define of func json_merge
  */
+
 
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_MERGE_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_MERGE_H_

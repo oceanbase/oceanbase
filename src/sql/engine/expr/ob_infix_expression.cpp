@@ -23,6 +23,7 @@
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -332,8 +333,9 @@ int ObInfixExpression::calc(common::ObExprCtx &expr_ctx, const common::ObNewRow 
   return ret;
 }
 
-int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx,
-    const common::ObNewRow &row, ObItemType aggr_fun, common::ObNewRow &res_row) const
+int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx, const common::ObNewRow &row,
+                                ObItemType aggr_fun, const ObExprResType &res_type,
+                                common::ObNewRow &res_row) const
 {
   int ret = OB_SUCCESS;
 
@@ -359,11 +361,20 @@ int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx,
           } else if (is_bool) {
             ObJsonBoolean j_bool(tmp->get_bool());
             ObIJsonBase *j_base = &j_bool;
-            ObString raw_bin;
+            ObString raw_bin; //
             if (OB_FAIL(j_base->get_raw_binary(raw_bin, expr_ctx.calc_buf_))) {
               LOG_WARN("get result binary failed", K(ret), K(*j_base));
             } else {
-              tmp->set_string(ObJsonType, raw_bin);
+              // bool type convert to json bool, need to know outside has lob header or not
+              bool has_lob_header = true;
+              ObTextStringObObjResult text_result(ObJsonType, nullptr, tmp, has_lob_header);
+              if (OB_FAIL(text_result.init(raw_bin.length(), expr_ctx.calc_buf_))) {
+                LOG_WARN("init lob result failed");
+              } else if (OB_FAIL(text_result.append(raw_bin.ptr(), raw_bin.length()))) {
+                LOG_WARN("failed to append realdata", K(ret), K(raw_bin), K(text_result));
+              } else {
+                text_result.set_result();
+              }
             }
           }
         }
@@ -391,7 +402,16 @@ int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx,
           if (OB_FAIL(j_base->get_raw_binary(raw_bin, expr_ctx.calc_buf_))) {
             LOG_WARN("get result binary failed", K(ret), K(*j_base));
           } else {
-            stack->set_string(ObJsonType, raw_bin);
+            // bool type convert to json bool, need to know outside has lob header or not
+            bool has_lob_header = true;
+            ObTextStringObObjResult text_result(ObJsonType, nullptr, stack, has_lob_header);
+            if (OB_FAIL(text_result.init(raw_bin.length(), expr_ctx.calc_buf_))) {
+              LOG_WARN("init lob result failed");
+            } else if (OB_FAIL(text_result.append(raw_bin.ptr(), raw_bin.length()))) {
+              LOG_WARN("failed to append realdata", K(ret), K(raw_bin), K(text_result));
+            } else {
+              text_result.set_result();
+            }
           }
         }
       }

@@ -30,8 +30,11 @@ ObAggCell::ObAggCell(
     const share::schema::ObColumnParam *col_param,
     sql::ObExpr *expr,
     common::ObIAllocator &allocator)
-    : col_idx_(col_idx), datum_(), col_param_(col_param), expr_(expr), allocator_(allocator)
+    : col_idx_(col_idx), is_lob_col_(false), datum_(), col_param_(col_param), expr_(expr), allocator_(allocator)
 {
+  if (col_param_ != nullptr) {
+    is_lob_col_ = col_param_->get_meta_type().is_lob_storage();
+  }
 }
 
 ObAggCell::~ObAggCell()
@@ -42,6 +45,7 @@ ObAggCell::~ObAggCell()
 void ObAggCell::reset()
 {
   col_idx_ = -1;
+  is_lob_col_ = false;
   expr_ = nullptr;
 }
 
@@ -62,7 +66,7 @@ int ObAggCell::fill_result(sql::ObEvalCtx &ctx,bool need_padding)
   } else {
     sql::ObEvalInfo &eval_info = expr_->get_eval_info(ctx);
     eval_info.evaluated_ = true;
-    LOG_DEBUG("fill result", K(result));
+    LOG_DEBUG("fill result", K(result), KPC(this));
   }
   return ret;
 }
@@ -119,7 +123,9 @@ int ObFirstRowAggCell::process(blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if (!aggregated_) {
-    if (OB_FAIL(datum_.deep_copy(row.storage_datums_[col_idx_], allocator_))) {
+    if (OB_FAIL(fill_default_if_need(row.storage_datums_[col_idx_]))) {
+      LOG_WARN("Failed to fill default", K(ret), K(*this));
+    } else if (OB_FAIL(datum_.deep_copy(row.storage_datums_[col_idx_], allocator_))) {
       LOG_WARN("Failed to deep copy datum", K(ret), K(row), K(col_idx_));
     } else {
       aggregated_ = true;
@@ -231,7 +237,7 @@ int ObCountAggCell::process(const blocksstable::ObMicroIndexInfo &index_info)
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("before count index info", K(index_info.get_row_count()), K(row_count_));
-  if (!index_info.can_blockscan() || index_info.is_left_border() || index_info.is_right_border()) {
+  if (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Uexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
@@ -265,13 +271,202 @@ int ObCountAggCell::fill_result(sql::ObEvalCtx &ctx, bool need_padding)
     result.set_int(row_count_);
     eval_info.evaluated_ = true;
   }
-  LOG_DEBUG("fill result", K(result));
+  LOG_DEBUG("fill result", K(result), KPC(this));
+  return ret;
+}
+
+ObAggDatumBuf::ObAggDatumBuf(common::ObIAllocator &allocator)
+    : size_(0), datums_(nullptr), buf_(nullptr), allocator_(allocator)
+{
+}
+
+int ObAggDatumBuf::init(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObDatum) * size))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to alloc datum buf", K(ret), K(size));
+  } else if (FALSE_IT(datums_ = new (buf) ObDatum[size])) {
+  } else if (OB_ISNULL(buf = allocator_.alloc(common::OBJ_DATUM_NUMBER_RES_SIZE * size))) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Failed to alloc datum buf", K(ret), K(size));
+  } else {
+    buf_ = static_cast<char*>(buf);
+    size_ = size;
+    reuse();
+  }
+  return ret;
+}
+
+void ObAggDatumBuf::reset()
+{
+  if (OB_NOT_NULL(datums_)) {
+    allocator_.free(datums_);
+    datums_ = nullptr;
+  }
+  if (OB_NOT_NULL(buf_)) {
+    allocator_.free(buf_);
+    buf_ = nullptr;
+  }
+  size_ = 0;
+}
+
+void ObAggDatumBuf::reuse()
+{
+  for(int64_t i = 0; i < size_; ++i) {
+    datums_[i].pack_ = 0;
+    datums_[i].ptr_ = buf_ + i * common::OBJ_DATUM_NUMBER_RES_SIZE;
+  }
+}
+
+ObMinMaxAggCell::ObMinMaxAggCell(
+    bool is_min,
+    const int32_t col_idx,
+    const share::schema::ObColumnParam *col_param,
+    sql::ObExpr *expr,
+    common::ObIAllocator &allocator)
+    : ObAggCell(col_idx, col_param, expr, allocator),
+      is_min_(is_min),
+      cmp_fun_(nullptr),
+      agg_datum_buf_(allocator),
+      cell_data_ptrs_(nullptr),
+      datum_allocator_(ObModIds::OB_TABLE_SCAN_ITER)
+{
+  datum_.set_null();
+}
+
+void ObMinMaxAggCell::reset()
+{
+  agg_datum_buf_.reset();
+  if (nullptr != cell_data_ptrs_) {
+    allocator_.free(cell_data_ptrs_);
+    cell_data_ptrs_ = nullptr;
+  }
+  cmp_fun_ = nullptr;
+  ObAggCell::reset();
+  datum_allocator_.reset();
+}
+
+void ObMinMaxAggCell::reuse()
+{
+  datum_.reuse();
+  datum_.set_null();
+  ObAggCell::reuse();
+  datum_allocator_.reuse();
+}
+
+int ObMinMaxAggCell::init(sql::ObPushdownOperator *op, sql::ObExpr *col_expr, const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  const ObDatumCmpFuncType cmp_fun = expr_->basic_funcs_->null_first_cmp_;
+  if (OB_ISNULL(cmp_fun)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cmp_func is NULL", K(ret), KPC(expr_));
+  } else {
+    void *buf = nullptr;
+    cmp_fun_ = cmp_fun;
+    if (OB_FAIL(agg_datum_buf_.init(batch_size))) {
+      LOG_WARN("Failed to init agg datum buf", K(ret));
+    } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(char*) * batch_size))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc cell data ptrs", K(ret), K(batch_size));
+    } else {
+      cell_data_ptrs_ = static_cast<const char**> (buf);
+    }
+  }
+  return ret;
+}
+
+int ObMinMaxAggCell::process(blocksstable::ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObStorageDatum &storage_datum = row.storage_datums_[col_idx_];
+  if (OB_FAIL(process(storage_datum))) {
+    LOG_WARN("Failed to process datum", K(ret), K(storage_datum), KPC(this));
+  }
+  LOG_DEBUG("after process single row", K(storage_datum), KPC(this));
+  return ret;
+}
+
+int ObMinMaxAggCell::process(
+    blocksstable::ObIMicroBlockReader *reader,
+    int64_t *row_ids,
+    const int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+    blocksstable::ObStorageDatum storage_datum;
+    storage_datum.set_null();
+  if (blocksstable::ObIMicroBlockReader::Reader == reader->get_type()) {
+    blocksstable::ObMicroBlockReader *block_reader = static_cast<blocksstable::ObMicroBlockReader*>(reader);
+    blocksstable::ObMicroBlockAggInfo<blocksstable::ObStorageDatum> agg_info(is_min_, cmp_fun_, storage_datum);
+    if (OB_FAIL(block_reader->get_min_or_max(col_idx_, col_param_, row_ids, row_count, agg_info))) {
+      LOG_WARN("Failed to get min or max", K(ret), K(row_count), KPC(this));
+    }
+  } else {
+    // agg_datum_buf_.reuse();
+    blocksstable::ObMicroBlockDecoder *block_decoder = static_cast<blocksstable::ObMicroBlockDecoder*>(reader);
+    blocksstable::ObMicroBlockAggInfo<common::ObDatum> agg_info(is_min_, cmp_fun_, storage_datum);
+    if (OB_FAIL(block_decoder->get_min_or_max(col_idx_, row_ids, cell_data_ptrs_, row_count, agg_datum_buf_.get_datums(), agg_info))) {
+      LOG_WARN("Failed to get min or max", K(ret), K(row_count), KPC(this));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(process(storage_datum))) {
+      LOG_WARN("Failed to process datum", K(ret), K(storage_datum), KPC(this));
+    }
+  }
+    LOG_DEBUG("after process batch rows", K(storage_datum), KPC(this));
+  return ret;
+}
+
+int ObMinMaxAggCell::process(const blocksstable::ObMicroIndexInfo &index_info)
+{
+  int ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+int ObMinMaxAggCell::process(blocksstable::ObStorageDatum &storage_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(fill_default_if_need(storage_datum))) {
+    LOG_WARN("Failed to fill default", K(ret), K(storage_datum), K(*this));
+  } else if (datum_.is_null() && !storage_datum.is_null()) {
+    if (OB_FAIL(datum_.deep_copy(storage_datum, datum_allocator_))) {
+      LOG_WARN("Failed to deep copy datum", K(ret), K(storage_datum), K(col_idx_));
+    }
+  } else if (!storage_datum.is_null()) {
+    int cmp_ret = cmp_fun_(datum_, storage_datum);
+    if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
+      if (OB_FAIL(deep_copy_datum(storage_datum))) {
+        LOG_WARN("Failed to deep copy datum", K(ret), K(storage_datum), K(datum_), K(col_idx_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMinMaxAggCell::deep_copy_datum(const blocksstable::ObStorageDatum &src)
+{
+  int ret = OB_SUCCESS;
+  if (src.is_null() || src.is_nop()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Uexpected datum", K(ret), K(src));
+  } else {
+    if (!datum_.is_local_buf()) {
+      datum_allocator_.reuse();
+    }
+    if (OB_FAIL(datum_.deep_copy(src, datum_allocator_))) {
+      LOG_WARN("Failed to deep copy", K(ret), K(src), K(datum_));
+    }
+  }
   return ret;
 }
 
 ObAggRow::ObAggRow(common::ObIAllocator &allocator) :
     agg_cells_(allocator),
     need_exclude_null_(false),
+    has_lob_column_out_(false),
     allocator_(allocator)
 {
 }
@@ -284,12 +479,14 @@ ObAggRow::~ObAggRow()
 void ObAggRow::reset()
 {
   for (int64_t i = 0; i < agg_cells_.count(); ++i) {
-    if (agg_cells_.at(i)) {
+    if (OB_NOT_NULL(agg_cells_.at(i))) {
+      agg_cells_.at(i)->reset();
       allocator_.free(agg_cells_.at(i));
     }
   }
   agg_cells_.reset();
   need_exclude_null_ = false;
+  has_lob_column_out_ = false;
 }
 
 void ObAggRow::reuse()
@@ -301,7 +498,7 @@ void ObAggRow::reuse()
   }
 }
 
-int ObAggRow::init(const ObTableAccessParam &param)
+int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<share::schema::ObColumnParam *> *out_cols_param = param.iter_param_.get_col_params();
@@ -327,6 +524,7 @@ int ObAggRow::init(const ObTableAccessParam &param)
       }
     }
     if (OB_SUCC(ret)) {
+      has_lob_column_out_ = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < param.aggregate_exprs_->count(); ++i) {
         int32_t col_idx = param.iter_param_.agg_cols_project_->at(i);
         sql::ObExpr *expr = param.aggregate_exprs_->at(i);
@@ -339,6 +537,9 @@ int ObAggRow::init(const ObTableAccessParam &param)
           } else {
             exclude_null = false;
           }
+          if (nullptr != col_param && !has_lob_column_out_) {
+            has_lob_column_out_ = is_lob_storage(col_param->get_meta_type().get_type());
+          }
           need_exclude_null_ = need_exclude_null_ || exclude_null;
           if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCountAggCell))) ||
               OB_ISNULL(cell = new(buf) ObCountAggCell(col_idx, col_param, expr, allocator_, exclude_null))) {
@@ -347,9 +548,33 @@ int ObAggRow::init(const ObTableAccessParam &param)
           } else if (OB_FAIL(agg_cells_.push_back(cell))) {
             LOG_WARN("Failed to push back agg cell", K(ret), K(i));
           }
+        } else if (T_FUN_MIN == expr->type_ || T_FUN_MAX == expr->type_) {
+          need_exclude_null_ = true;
+          const bool is_min = T_FUN_MIN == expr->type_;
+          const share::schema::ObColumnParam *col_param = out_cols_param->at(col_idx);
+          sql::ObExpr *col_expr = nullptr;
+          for (int64_t i = 0; OB_SUCC(ret) && i < param.output_exprs_->count(); ++i) {
+            if (param.iter_param_.out_cols_project_->at(i) == col_idx) {
+              col_expr = param.output_exprs_->at(i);
+              break;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ref col expr is null", K(ret), K(col_idx), K(i));
+          } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMinMaxAggCell))) ||
+              OB_ISNULL(cell = new(buf) ObMinMaxAggCell(is_min, col_idx, col_param, expr, allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("Failed to alloc memroy for agg cell", K(ret), K(i));
+          } else if (OB_FAIL(static_cast<ObMinMaxAggCell*>(cell)->init(param.op_, col_expr, batch_size))) {
+            LOG_WARN("Failed to init ObMinMaxAggCell", K(ret), KPC(cell));
+          } else if (OB_FAIL(agg_cells_.push_back(cell))) {
+            LOG_WARN("Failed to push back agg cell", K(ret), K(i));
+          }
         } else {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("Agg min/max/sum is not supported", K(ret));
+          LOG_WARN("Agg is not supported", K(ret), K(expr->type_));
         }
       }
     }
@@ -360,7 +585,9 @@ int ObAggRow::init(const ObTableAccessParam &param)
 ObAggregatedStore::ObAggregatedStore(const int64_t batch_size, sql::ObEvalCtx &eval_ctx, ObTableAccessContext &context)
     : ObBlockBatchedRowStore(batch_size, eval_ctx, context),
       is_firstrow_aggregated_(false),
-      agg_row_(*context_.stmt_allocator_)
+      agg_row_(*context_.stmt_allocator_),
+      agg_flat_row_mode_(false),
+      row_buf_()
 {
 }
 
@@ -374,6 +601,8 @@ void ObAggregatedStore::reset()
   ObBlockBatchedRowStore::reset();
   agg_row_.reset();
   is_firstrow_aggregated_ = false;
+  agg_flat_row_mode_ = false;
+  row_buf_.reset();
 }
 
 void ObAggregatedStore::reuse()
@@ -402,11 +631,46 @@ int ObAggregatedStore::init(const ObTableAccessParam &param)
         K(param.aggregate_exprs_->count()), K(param.iter_param_.agg_cols_project_->count()));
   } else if (OB_FAIL(ObBlockBatchedRowStore::init(param))) {
     LOG_WARN("Failed to init ObBlockBatchedRowStore", K(ret));
-  } else if (OB_FAIL(agg_row_.init(param))) {
+  } else if (OB_FAIL(agg_row_.init(param, batch_size_))) {
     LOG_WARN("Failed to init agg cells", K(ret));
+  } else if (OB_FAIL(check_agg_in_row_mode(param.iter_param_))) {
+    LOG_WARN("Failed to check agg in row mode", K(ret));
+  } else if (agg_flat_row_mode_ &&
+             OB_FAIL(row_buf_.init(*context_.stmt_allocator_, param.iter_param_.get_full_out_col_cnt()))) {
+    LOG_WARN("Fail to init datum row buf", K(ret));
   }
   if (OB_FAIL(ret)) {
     reset();
+  }
+  return ret;
+}
+
+int ObAggregatedStore::check_agg_in_row_mode(const ObTableIterParam &iter_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t agg_cnt = 0;
+  ObAggCell *cell = nullptr;
+  const ObTableReadInfo *read_info = nullptr;
+  if (OB_ISNULL(read_info = iter_param.get_read_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null read info", K(ret), K(iter_param));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
+    if (OB_ISNULL(cell = agg_row_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpecte null agg cell", K(ret), K(i));
+    } else if (OB_COUNT_AGG_PD_COLUMN_ID == cell->get_col_idx()) {
+    } else if (cell->get_col_idx() >= read_info->get_request_count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected col idx", K(ret), K(i), KPC(cell), K(read_info->get_request_count()));
+    } else if (ObAggCell::FIRST_ROW != cell->get_type()) {
+      agg_cnt++;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    agg_flat_row_mode_ =
+        agg_cnt > AGG_ROW_MODE_COUNT_THRESHOLD ||
+        (double) agg_cnt/read_info->get_request_count() > AGG_ROW_MODE_RATIO_THRESHOLD;
   }
   return ret;
 }
@@ -468,6 +732,13 @@ int ObAggregatedStore::fill_rows(
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Failed to get row ids", K(ret), K(begin_index), K(end_index));
           }
+        } else if (0 == row_count) {
+        } else if (agg_flat_row_mode_ && blocksstable::ObIMicroBlockReader::Reader == reader->get_type()) {
+          // for flat block, do aggregate in row mode
+           blocksstable::ObMicroBlockReader *block_reader = static_cast<blocksstable::ObMicroBlockReader*>(reader);
+           if (OB_FAIL(block_reader->get_aggregate_result(row_ids_, row_count, row_buf_, agg_row_.get_agg_cells()))) {
+             LOG_WARN("Failed to process aggregates", K(ret));
+           }
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
             ObAggCell *cell = agg_row_.at(i);

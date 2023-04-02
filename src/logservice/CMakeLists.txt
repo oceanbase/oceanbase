@@ -15,6 +15,12 @@ ob_set_subtarget(ob_logservice archiveservice
   archiveservice/ob_ls_mgr.cpp
   archiveservice/ob_ls_task.cpp
   archiveservice/ob_start_archive_helper.cpp
+  archiveservice/dynamic_buffer.cpp
+  archiveservice/large_buffer_pool.cpp
+  archiveservice/ob_archive_scheduler.cpp
+  archiveservice/ob_archive_timer.cpp
+  archiveservice/ob_ls_meta_recorder.cpp
+  archiveservice/ob_ls_meta_record_task.cpp
 )
 
 ob_set_subtarget(ob_logservice cdcservice
@@ -25,6 +31,7 @@ ob_set_subtarget(ob_logservice cdcservice
   cdcservice/ob_cdc_service.cpp
   cdcservice/ob_cdc_service_monitor.cpp
   cdcservice/ob_cdc_start_lsn_locator.cpp
+  cdcservice/ob_cdc_struct.cpp
   cdcservice/ob_cdc_util.cpp
 )
 
@@ -40,12 +47,13 @@ ob_set_subtarget(ob_logservice common
   ob_reporter_adapter.cpp
   ob_switch_leader_adapter.cpp
   ob_server_log_block_mgr.cpp
+  ob_log_flashback_service.cpp
+  ob_net_keepalive_adapter.cpp
 )
 
 ob_set_subtarget(ob_logservice common_mixed
   applyservice/ob_log_apply_service.cpp
   logrpc/ob_log_request_handler.cpp
-  logrpc/ob_log_rpc_processor.cpp
   logrpc/ob_log_rpc_req.cpp
   rcservice/ob_role_change_handler.cpp
   rcservice/ob_role_change_service.cpp
@@ -130,9 +138,10 @@ ob_set_subtarget(ob_logservice palf
   palf/palf_handle_impl.cpp
   palf/palf_handle_impl_guard.cpp
   palf/log_block_pool_interface.cpp
-  palf/scn.cpp
   palf/palf_options.cpp
   palf/log_mode_mgr.cpp
+  palf/log_updater.cpp
+  palf/log_io_utils.cpp
 )
 
 ob_set_subtarget(ob_logservice palf_election
@@ -156,11 +165,25 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_remote_fetch_log.cpp
   restoreservice/ob_remote_fetch_log_worker.cpp
   restoreservice/ob_remote_location_adaptor.cpp
-  restoreservice/ob_remote_log_iterator.cpp
   restoreservice/ob_remote_log_source.cpp
   restoreservice/ob_remote_log_source_allocator.cpp
   restoreservice/ob_log_archive_piece_mgr.cpp
   restoreservice/ob_remote_error_reporter.cpp
+  restoreservice/ob_log_restore_allocator.cpp
+  restoreservice/ob_remote_fetch_context.cpp
+  restoreservice/ob_log_restore_scheduler.cpp
+  restoreservice/ob_log_restore_controller.cpp
+)
+
+
+ob_set_subtarget(ob_logservice data_dictionary
+  data_dictionary/ob_data_dict_utils.cpp
+  data_dictionary/ob_data_dict_struct.cpp
+  data_dictionary/ob_data_dict_service.cpp
+  data_dictionary/ob_data_dict_sql_client.cpp
+  data_dictionary/ob_data_dict_storager.cpp
+  data_dictionary/ob_data_dict_iterator.cpp
+  data_dictionary/ob_data_dict_meta_info.cpp
 )
 
 ob_server_add_target(ob_logservice)

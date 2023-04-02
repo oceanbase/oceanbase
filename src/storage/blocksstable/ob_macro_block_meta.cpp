@@ -39,6 +39,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     is_encrypted_(false),
     is_deleted_(false),
     contain_uncommitted_row_(false),
+    is_last_row_last_flag_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     master_key_id_(0),
     encrypt_id_(0),
@@ -47,11 +48,48 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     snapshot_version_(0),
     logic_id_(),
     macro_id_(),
-    column_checksums_()
+    column_checksums_(sizeof(int64_t), ModulePageAllocator("MacroMetaChksum", MTL_ID())),
+    has_string_out_row_(false),
+    all_lob_in_row_(false)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
 
+ObDataBlockMetaVal::ObDataBlockMetaVal(ObIAllocator &allocator)
+    : version_(DATA_BLOCK_META_VAL_VERSION),
+    length_(0),
+    data_checksum_(0),
+    rowkey_count_(0),
+    column_count_(0),
+    micro_block_count_(0),
+    occupy_size_(0),
+    data_size_(0),
+    data_zsize_(0),
+    original_size_(0),
+    progressive_merge_round_(0),
+    block_offset_(0),
+    block_size_(0),
+    row_count_(0),
+    row_count_delta_(0),
+    max_merged_trans_version_(0),
+    is_encrypted_(false),
+    is_deleted_(false),
+    contain_uncommitted_row_(false),
+    is_last_row_last_flag_(false),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
+    master_key_id_(0),
+    encrypt_id_(0),
+    row_store_type_(ObRowStoreType::MAX_ROW_STORE),
+    schema_version_(0),
+    snapshot_version_(0),
+    logic_id_(),
+    macro_id_(),
+    column_checksums_(sizeof(int64_t), ModulePageAllocator(allocator, "MacroMetaChksum")),
+    has_string_out_row_(false),
+    all_lob_in_row_(false)
+{
+  MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+}
 ObDataBlockMetaVal::~ObDataBlockMetaVal()
 {
   reset();
@@ -77,6 +115,7 @@ void ObDataBlockMetaVal::reset()
   is_encrypted_ = false;
   is_deleted_ = false;
   contain_uncommitted_row_ = false;
+  is_last_row_last_flag_ = false;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   master_key_id_ = 0;
   encrypt_id_ = 0;
@@ -87,6 +126,8 @@ void ObDataBlockMetaVal::reset()
   logic_id_.reset();
   macro_id_.reset();
   column_checksums_.reset();
+  has_string_out_row_ = false;
+  all_lob_in_row_ = false;
 }
 
 bool ObDataBlockMetaVal::is_valid() const
@@ -139,6 +180,7 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     is_encrypted_ = val.is_encrypted_;
     is_deleted_ = val.is_deleted_;
     contain_uncommitted_row_ = val.contain_uncommitted_row_;
+    is_last_row_last_flag_ = val.is_last_row_last_flag_;
     compressor_type_ = val.compressor_type_;
     master_key_id_ = val.master_key_id_;
     encrypt_id_ = val.encrypt_id_;
@@ -148,6 +190,8 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     snapshot_version_ = val.snapshot_version_;
     logic_id_ = val.logic_id_;
     macro_id_ = val.macro_id_;
+    has_string_out_row_ = val.has_string_out_row_;
+    all_lob_in_row_ = val.all_lob_in_row_;
   }
   return ret;
 }
@@ -222,7 +266,10 @@ DEFINE_SERIALIZE(ObDataBlockMetaVal)
                   logic_id_,
                   macro_id_,
                   column_checksums_,
-                  original_size_);
+                  original_size_,
+                  has_string_out_row_,
+                  all_lob_in_row_,
+                  is_last_row_last_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -280,7 +327,10 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
                   logic_id_,
                   macro_id_,
                   column_checksums_,
-                  original_size_);
+                  original_size_,
+                  has_string_out_row_,
+                  all_lob_in_row_,
+                  is_last_row_last_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -330,14 +380,27 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
               logic_id_,
               macro_id_,
               column_checksums_,
-              original_size_);
+              original_size_,
+              has_string_out_row_,
+              all_lob_in_row_,
+              is_last_row_last_flag_);
   return len;
 }
 
 //================================== ObDataMacroBlockMeta ==================================
 ObDataMacroBlockMeta::ObDataMacroBlockMeta()
   : val_(),
-    end_key_()
+    end_key_(),
+    nested_offset_(0),
+    nested_size_(0)
+{
+}
+
+ObDataMacroBlockMeta::ObDataMacroBlockMeta(ObIAllocator &allocator)
+  : val_(allocator),
+    end_key_(),
+    nested_offset_(0),
+    nested_size_(0)
 {
 }
 
@@ -375,7 +438,7 @@ int ObDataMacroBlockMeta::deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &al
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(buf_len));
   } else {
-    ObDataMacroBlockMeta *meta = new (buf) ObDataMacroBlockMeta();
+    ObDataMacroBlockMeta *meta = new (buf) ObDataMacroBlockMeta(allocator);
     ObStorageDatum *endkey = new (buf + sizeof(ObDataMacroBlockMeta)) ObStorageDatum[rowkey_count];
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_count; ++i) {
       if (OB_FAIL(endkey[i].deep_copy(end_key_.datums_[i], allocator))) {

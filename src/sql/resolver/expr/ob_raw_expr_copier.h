@@ -22,6 +22,8 @@ public:
 
   ObIRawExprCopier(ObRawExprFactory &expr_factory) : expr_factory_(expr_factory) {}
 
+  virtual ~ObIRawExprCopier() {}
+
   virtual int check_need_copy(const ObRawExpr *old_expr, ObRawExpr *&new_expr) = 0;
 
   virtual int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) = 0;
@@ -55,31 +57,6 @@ public:
   ObRawExprFactory& get_expr_factory() { return expr_factory_; }
 protected:
   ObRawExprFactory &expr_factory_;
-};
-
-class ObNonFixedExprCopier : public ObIRawExprCopier
-{
-public:
-  ObNonFixedExprCopier(ObRawExprFactory &expr_factory,
-                       bool copy_fixed_expr = false,
-                       bool use_new_allocator = false) :
-    ObIRawExprCopier(expr_factory),
-    copy_fixed_expr_(copy_fixed_expr),
-    use_new_allocator_(use_new_allocator)
-  {}
-
-  int check_need_copy(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
-
-  int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
-
-  bool deep_copy_attributes() const { return use_new_allocator_; }
-
-  static bool is_fixed_expr(const ObRawExpr &expr);
-  static bool is_pseudo_column_like_expr(const ObRawExpr &expr);
-private:
-  bool copy_fixed_expr_;   // control whether deep copy a fixed expr (column, aggr, winfunc ..)
-                           // in default, we would not copy fixed expr.
-  bool use_new_allocator_; // used by pl
 };
 
 class ObPLExprCopier : public ObIRawExprCopier
@@ -135,13 +112,18 @@ public:
 
   /**
    * @brief add_skipped_expr
-   *  skip the target expr when copy a expr tree
-   * @param expr
+   *  skip the target expr tree or expr node during copying/copy_on_replace
+   * @param target
+   * @param include_child
+   *     include_child = true, skip the whole expr tree
+   *     include_child = false, skip the expr node itself only, its children still
+   *                            need to be copied or replaced
    * @return
    */
-  int add_skipped_expr(const ObRawExpr *target);
+  int add_skipped_expr(const ObRawExpr *target, bool include_child = true);
 
-  int add_skipped_expr(const ObIArray<ObRawExpr *> &targets);
+  template <typename T>
+  int add_skipped_expr(const ObIArray<T *> &targets, bool include_child = true);
 
   /**
    * @brief add_replaced_expr
@@ -158,23 +140,22 @@ public:
 
   int copy_on_replace(ObRawExpr *from,
                       ObRawExpr *&to,
-                      ObIRawExprReplacer *replacer = NULL,
-                      ObIArray<ObRawExpr *> *uncopy_list = NULL);
+                      ObIRawExprReplacer *replacer = NULL);
   
   template <typename T>
   int copy_on_replace(const ObIArray<T *> &from_exprs,
                       ObIArray<T *> &to_exprs,
-                      ObIRawExprReplacer *replacer = NULL,
-                      ObIArray<ObRawExpr *> *uncopy_list = NULL);
+                      ObIRawExprReplacer *replacer = NULL);
 
   bool is_existed(const ObRawExpr *from) const;
 
   int do_copy_expr(const ObRawExpr *old_expr, ObRawExpr *&new_expr) override;
 
+  int get_copied_exprs(ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &from_to_exprs);
+
 private:
 
-  int add_expr(const ObRawExpr *from,
-               const ObRawExpr *to);
+  int add_expr(const ObRawExpr *from, const ObRawExpr *to);
 
   int add_expr(const ObIArray<ObRawExpr *> &from_exprs,
                const ObIArray<ObRawExpr *> &to_exprs);
@@ -182,13 +163,17 @@ private:
 private:
   hash::ObHashSet<uint64_t> new_exprs_;
   hash::ObHashMap<uint64_t, uint64_t> copied_exprs_;
+
+  // these exprs can be modified directly,
+  // there is no need to create a copy
+  // and do replacement on its copy.
+  ObArray<const ObRawExpr *> uncopy_expr_nodes_;
 };
 
 template <typename T>
 int ObRawExprCopier::copy_on_replace(const common::ObIArray<T *> &from_exprs,
                                      common::ObIArray<T *> &to_exprs,
-                                     ObIRawExprReplacer *replacer,
-                                     ObIArray<ObRawExpr *> *uncopy_list)
+                                     ObIRawExprReplacer *replacer)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<T *, 4> tmp_arr;
@@ -197,8 +182,7 @@ int ObRawExprCopier::copy_on_replace(const common::ObIArray<T *> &from_exprs,
     ObRawExpr *to_expr = NULL;
     if (OB_FAIL(copy_on_replace(from_exprs.at(i),
                                 to_expr,
-                                replacer,
-                                uncopy_list))) {
+                                replacer))) {
       SQL_RESV_LOG(WARN, "failed to replace expr", K(ret));
     } else if (tmp == to_expr || std::is_same<T, ObRawExpr>::value) {
       // do nothing
@@ -213,6 +197,16 @@ int ObRawExprCopier::copy_on_replace(const common::ObIArray<T *> &from_exprs,
   }
   if (OB_SUCC(ret) && OB_FAIL(to_exprs.assign(tmp_arr))) {
     SQL_RESV_LOG(WARN, "failed to assgin replaced results", K(ret));
+  }
+  return ret;
+}
+
+template <typename T>
+int ObRawExprCopier::add_skipped_expr(const ObIArray<T *> &targets, bool include_child)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < targets.count(); ++i) {
+    ret = add_skipped_expr(targets.at(i), include_child);
   }
   return ret;
 }

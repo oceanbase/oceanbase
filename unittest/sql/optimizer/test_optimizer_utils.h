@@ -50,7 +50,7 @@ namespace test
 
 class MockCacheObjectFactory {
 public:
-  static int alloc(ObPlanCacheObject *&cache_obj, ObLibCacheNameSpace ns,
+  static int alloc(ObILibCacheObject *&cache_obj, ObLibCacheNameSpace ns,
                    uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static int alloc(ObPhysicalPlan *&plan,
                    uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
@@ -58,10 +58,10 @@ public:
                    uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static int alloc(pl::ObPLPackage *&package,
                    uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
-  static void free(ObPlanCacheObject *cache_obj);
+  static void free(ObILibCacheObject *cache_obj);
 
 private:
-  static void inner_free(ObPlanCacheObject *);
+  static void inner_free(ObILibCacheObject *);
 };
 
 class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
@@ -89,6 +89,7 @@ class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
   void formalize_tmp_file(const char *tmp_file);
 
   void init_histogram(
+    common::ObIAllocator &allocator,
     const ObHistType type,
     const double sample_size,
     const double density,

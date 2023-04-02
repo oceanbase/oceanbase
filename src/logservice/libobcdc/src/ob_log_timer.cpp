@@ -72,6 +72,7 @@ int ObLogFixedTimer::init(IObLogErrHandler &err_handler, const int64_t max_task_
 
 void ObLogFixedTimer::destroy()
 {
+  LOG_INFO("destroy oblog timer begin");
   stop();
 
   destroy_all_tasks_();
@@ -117,7 +118,7 @@ void ObLogFixedTimer::stop()
     if (0 != tid_) {
       int pthread_ret = pthread_join(tid_, NULL);
       if (0 != pthread_ret) {
-        LOG_ERROR("pthread_join fail", K(tid_), K(pthread_ret), KERRNOMSG(pthread_ret));
+        LOG_ERROR_RET(OB_ERR_SYS, "pthread_join fail", K(tid_), K(pthread_ret), KERRNOMSG(pthread_ret));
       }
 
       tid_ = 0;

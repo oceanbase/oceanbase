@@ -238,15 +238,14 @@ class ObTransPreCommitLog : public ObTransLog
   OB_UNIS_VERSION(1);
 public:
   ObTransPreCommitLog()
-    : ObTransLog(),
-      publish_version_(-1) {}
+    : ObTransLog() {}
   ~ObTransPreCommitLog() {}
-  int64_t get_publish_version() const { return publish_version_; }
+  share::SCN get_publish_version() const { return publish_version_; }
   bool is_valid() const;
 public:
   TO_STRING_KV(K_(log_type));
 private:
-  int64_t publish_version_;
+  share::SCN publish_version_;
 };
 
 class ObTransAbortLog : public ObTransLog
@@ -350,45 +349,6 @@ public:
   TO_STRING_KV(K_(checkpoint));
 private:
   int64_t checkpoint_;
-};
-
-class ObTransStateLog : public ObTransLog
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTransStateLog() : create_ts_(0), tenant_id_(common::OB_INVALID_TENANT_ID), trans_expired_time_(0),
-      is_readonly_(false), trans_type_(TransType::UNKNOWN_TRANS), session_id_(0), proxy_session_id_(0),
-      commit_task_count_(0), schema_version_(0), can_elr_(false), cluster_version_(0),
-      snapshot_version_(0), cur_query_start_time_(0), stmt_expired_time_(0), trx_api_v2_(true) {}
-  ~ObTransStateLog() {}
-public:
-  bool is_valid() const { return true; }
-  TO_STRING_KV(K_(log_type));
-private:
-  int64_t create_ts_;
-  int64_t tenant_id_;
-  int64_t trans_expired_time_;
-  common::ObAddr scheduler_;
-  ObStartTransParam trans_param_;
-  bool is_readonly_;
-  int trans_type_;
-  int session_id_;
-  int64_t proxy_session_id_;
-  int64_t commit_task_count_;
-  ObTransStmtInfo stmt_info_;
-  common::ObString app_trace_id_str_;
-  int64_t schema_version_;
-  ObElrTransInfoArray prev_trans_arr_;
-  bool can_elr_;
-  common::ObAddr proposal_leader_;
-  uint64_t cluster_version_;
-  int64_t snapshot_version_;
-  int64_t cur_query_start_time_;
-  int64_t stmt_expired_time_;
-  ObXATransID xid_;
-  int64_t last_sql_no_;
-public:
-  bool trx_api_v2_;
 };
 
 class ObTransMutatorLogHelper

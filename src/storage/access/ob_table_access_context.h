@@ -16,9 +16,18 @@
 #include "ob_table_access_param.h"
 #include "storage/lob/ob_lob_locator.h"
 #include "storage/tx/ob_defensive_check_mgr.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
+namespace compaction
+{
+struct ObCachedTransStateMgr;
+}
+namespace common
+{
+class ObIOCallback;
+} // namespace common
 namespace storage
 {
 class ObStoreRowIterPool;
@@ -80,6 +89,9 @@ struct ObTableAccessContext
   inline bool is_limit_end() const {
     return (nullptr != limit_param_ && limit_param_->limit_ >= 0 && (out_cnt_ - limit_param_->offset_ >= limit_param_->limit_));
   }
+  inline common::ObIAllocator *get_range_allocator() {
+    return nullptr == range_allocator_ ? allocator_ : range_allocator_;
+  }
   // used for query
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,
@@ -106,16 +118,22 @@ struct ObTableAccessContext
     KP_(limit_param),
     KP_(stmt_allocator),
     KP_(allocator),
+    KP_(range_allocator),
     KP_(table_scan_stat),
     K_(out_cnt),
     K_(trans_version_range),
-    K_(merge_log_ts),
+    K_(merge_scn),
     K_(lob_locator_helper),
     KP_(iter_pool),
-    KP_(block_row_store));
+    KP_(block_row_store),
+    KP_(io_callback))
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
-  int build_lob_locator_helper(ObTableScanParam &scan_param, const common::ObVersionRange &trans_version_range);
+  int build_lob_locator_helper(ObTableScanParam &scan_param,
+                               const ObStoreCtx &ctx,
+                               const common::ObVersionRange &trans_version_range);
+  int build_lob_locator_helper(const ObStoreCtx &ctx,
+                               const ObVersionRange &trans_version_range); // local scan
   // init need_fill_scale_ and search column which need fill scale
   int init_column_scale_info(ObTableScanParam &scan_param);
 
@@ -134,16 +152,20 @@ public:
   common::ObIAllocator *stmt_allocator_;
   // storage scan/rescan interface level allocator, will be reclaimed in every scan/rescan call
   common::ObIAllocator *allocator_;
+  // scan/rescan level alloctor in storage, will be reclaimed in every reuse/open call
+  common::ObIAllocator *range_allocator_;
   lib::MemoryContext scan_mem_; // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic *table_scan_stat_;
   ObTableStoreStat table_store_stat_;
   int64_t out_cnt_;
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;
-  int64_t merge_log_ts_;
+  share::SCN merge_scn_;
   ObLobLocatorHelper *lob_locator_helper_;
   ObStoreRowIterPool *iter_pool_;
   ObBlockRowStore *block_row_store_;
+  common::ObIOCallback *io_callback_;
+  compaction::ObCachedTransStateMgr *trans_state_mgr_;
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckRecordExtend defensive_check_record_;
 #endif

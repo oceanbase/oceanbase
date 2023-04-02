@@ -38,6 +38,7 @@ class ObMySQLResult;
 }
 namespace share
 {
+class SCN;
 /*
  * description: operation of __all_ls_election_reference_info
  * insert into __all_ls_election_reference_info while create new ls
@@ -53,32 +54,38 @@ public:
   /*
    * description: override of ObLSLifeIAgent
    * @param[in] ls_info: ls info
-   * @param[in] create_ls_ts_ns: ls's create ts
+   * @param[in] create_ls_scn: ls's create scn
+   * @param[in] working_sw_status UNUSED
    * @param[in] trans:*/
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
-                            const int64_t &create_ls_ts_ns,
+                            const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
+                            const share::ObTenantSwitchoverStatus &working_sw_status,
                             ObMySQLTransaction &trans) override final;
   /*
    * description: override of ObLSLifeIAgent
    * @param[in] tenant_id
    * @param[in] ls_id
+   * @param[in] working_sw_status UNUSED
    * @param[in] trans:*/
   virtual int drop_ls(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override final;
   /*
    * description: for primary cluster set ls to wait offline from tenant_dropping or dropping status 
    * @param[in] tenant_id: tenant_id
    * @param[in] ls_id: need delete ls
    * @param[in] ls_status: tenant_dropping or dropping status 
-   * @param[in] drop_ts_ns: there is no user data after drop_ts_ns except offline
+   * @param[in] drop_scn: there is no user data after drop_scn except offline
+   * @param[in] working_sw_status UNUSED
    * @param[in] trans
    * */
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const int64_t &drop_ts_ns,
+                      const SCN &drop_scn,
+                      const ObTenantSwitchoverStatus &working_sw_status,
                       ObMySQLTransaction &trans) override final;
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 

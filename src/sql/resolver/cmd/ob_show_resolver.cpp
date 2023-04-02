@@ -706,17 +706,42 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       }
       case T_SHOW_TRACE: {
         [&] {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show trace");
-          //if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
-          //  ret = OB_ERR_UNEXPECTED;
-          //  LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
-          //} else {
-          //  show_resv_ctx.condition_node_ = parse_tree.children_[0];
-          //  show_resv_ctx.stmt_type_ = stmt::T_SHOW_TRACE;
-          //  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TRACE);
-          //  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TRACE, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_TRACE_LOG_TNAME, OB_ALL_VIRTUAL_TRACE_LOG_ORA_TNAME));
-          //}
+          if (OB_UNLIKELY(parse_tree.num_child_ != 2 || NULL == parse_tree.children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+          } else if (!session_info_->get_control_info().is_valid()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "If full link tracing is not enabled, show trace is");
+          } else {
+            show_resv_ctx.condition_node_ = parse_tree.children_[0];
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_TRACE;
+            bool is_row_traceformat = true;
+            if (NULL != parse_tree.children_[1]) {
+              ObString show_format;
+              show_format.assign_ptr(parse_tree.children_[1]->str_value_,
+                        static_cast<ObString::obstr_size_t>(parse_tree.children_[1]->str_len_));
+              if (show_format.case_compare("JSON")!=0
+                    && show_format.case_compare("ROW")!=0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("show format is wrong", K(ret), K(show_format));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "show format only support json/row, other type is ");
+              } else {
+                is_row_traceformat = (show_format.case_compare("ROW")==0);
+              }
+            }
+
+            if (OB_SUCC(ret)) {
+              session_info_->set_is_row_traceformat(is_row_traceformat);
+              if (is_row_traceformat) {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TRACE);
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TRACE, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_SHOW_TRACE_TNAME, OB_ALL_VIRTUAL_SHOW_TRACE_ORA_TNAME));
+              } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TRACE_JSON);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TRACE_JSON, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_SHOW_TRACE_TNAME, OB_ALL_VIRTUAL_SHOW_TRACE_ORA_TNAME));
+              }
+            }
+
+          }
         }();
         break;
       }
@@ -1302,6 +1327,95 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                           REAL_NAME(OB_ALL_RECYCLEBIN_TNAME, OB_ALL_VIRTUAL_RECYCLEBIN_REAL_AGENT_ORA_TNAME));
           }
         }();
+        break;
+      }
+      case T_SHOW_SEQUENCES: {
+        if (is_oracle_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "show sequence in oracle mode is");
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 2 || NULL == parse_tree.children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_SEQUENCES;
+          show_resv_ctx.condition_node_ = parse_tree.children_[0];
+          ParseNode *condition_node = show_resv_ctx.condition_node_;
+          ObString show_db_name;
+          uint64_t show_db_id = OB_INVALID_ID;
+          if (OB_FAIL(get_database_info(parse_tree.children_[1],
+                                        database_name,
+                                        real_tenant_id,
+                                        show_resv_ctx,
+                                        show_db_id))) {
+            LOG_WARN("fail to get database info", K(ret));
+          } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("database id is invalid", K(ret), K(show_db_id));
+          } else {
+            show_db_name = show_resv_ctx.show_database_name_;
+            if (OB_FAIL(schema_checker_->check_db_access(session_priv, show_db_name))) {
+              if (OB_ERR_NO_DB_PRIVILEGE == ret) {
+                LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                               session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                               show_db_name.length(), show_db_name.ptr());
+              } else {
+                LOG_WARN("fail to check priv", K(ret));
+              }
+            } else {
+              if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
+                if (OB_UNLIKELY(condition_node->num_child_ != 2
+                                || NULL == condition_node->children_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid like parse node",
+                      K(ret),
+                      K(condition_node->num_child_),
+                      K(condition_node->children_));
+                } else if (OB_UNLIKELY(NULL == condition_node->children_[0]
+                                        || NULL == condition_node->children_[1])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid like parse node",
+                      K(ret),
+                      K(condition_node->num_child_),
+                      K(condition_node->children_[0]),
+                      K(condition_node->children_[1]));
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SEQUENCES_LIKE,
+                                  show_resv_ctx.show_database_name_.length(),
+                                  show_resv_ctx.show_database_name_.ptr(),
+                                  static_cast<ObString::obstr_size_t>(condition_node->children_[0]->str_len_),//cast int64_t to obstr_size_t
+                                  condition_node->children_[0]->str_value_);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SEQUENCES_LIKE, OB_SYS_DATABASE_NAME, OB_ALL_SEQUENCE_OBJECT_TNAME, show_db_id);
+                }
+              } else {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SEQUENCES, show_resv_ctx.show_database_name_.length(),
+                                show_resv_ctx.show_database_name_.ptr());
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_SEQUENCES, OB_SYS_DATABASE_NAME, OB_ALL_SEQUENCE_OBJECT_TNAME, show_db_id);
+              }
+            }
+            //change where condition :Tables_in_xxx=>table_name
+            if (OB_SUCCESS == ret && NULL != condition_node && T_WHERE_CLAUSE == condition_node->type_) {
+              char *column_name = NULL;
+              int64_t tmp_pos = 0;
+              if (OB_FAIL(NULL == (column_name = static_cast<char *>(params_.allocator_->alloc(OB_MAX_COLUMN_NAME_BUF_LENGTH))))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_ERROR("failed to alloc column name buf", K(column_name));
+              } else if (OB_FAIL(databuff_printf(column_name,
+                                                 OB_MAX_COLUMN_NAME_BUF_LENGTH,
+                                                 tmp_pos,
+                                                 "sequence_in_%.*s",
+                                                 show_resv_ctx.show_database_name_.length(),
+                                                 show_resv_ctx.show_database_name_.ptr()))) {
+                LOG_WARN("fail to add database name", K(show_resv_ctx.show_database_name_.ptr()));
+                break;
+              } else if (FALSE_IT(show_resv_ctx.column_name_ = ObString::make_string(column_name))){
+                //won't be here
+              } else if(OB_FAIL(replace_where_clause(condition_node->children_[0], show_resv_ctx))) {
+                LOG_WARN("fail to replace where clause", K(condition_node->children_[0]));
+                break;
+              }
+            }
+          }
+        }
         break;
       }
       case T_SHOW_RESTORE_PREVIEW: {
@@ -1950,7 +2064,8 @@ int ObShowResolver::resolve_like_or_where_clause(ObShowResolverContext &ctx)
                  && parse_tree->type_ != T_SHOW_TABLEGROUPS
                  && parse_tree->type_ != T_SHOW_PROCEDURE_STATUS
                  && parse_tree->type_ != T_SHOW_FUNCTION_STATUS
-                 && parse_tree->type_ != T_SHOW_TRIGGERS)) {
+                 && parse_tree->type_ != T_SHOW_TRIGGERS
+                 && parse_tree->type_ != T_SHOW_SEQUENCES)) {
     // do nothing
   } else {
     // Like or Where clause
@@ -2098,6 +2213,7 @@ int ObShowResolver::replace_where_clause(ParseNode* node, const ObShowResolverCo
       case T_UROWID:
       case T_LOB:
       case T_JSON:
+      case T_GEOMETRY:
       case T_IEEE754_NAN:
       case T_IEEE754_INFINITE: {
         break;//do nothing
@@ -2624,9 +2740,15 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_INDEXES,
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE,
                        NULL,
-                       "SELECT title AS `Title`, key_value AS `KeyValue`, time AS `Time` FROM %s.%s ",
-                       R"(SELECT "TITLE" AS "TITLE", "KEY_VALUE" AS "KEYVALUE", "TIME" AS "TIME" FROM %s.%s )",
-                       "Title");
+                       "SELECT span_name as `Operation`, start_ts as `StartTime`, concat(cast(elapse/1000 as number(20, 3)), ' ms')  as `ElapseTime` from %s.%s",
+                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy/mm/dd hh24:mi:ss') as "START_TIME", concat(cast(elapse/1000 as number(20, 3)), ' ms') as "ELAPSE_TIME" FROM %s.%s)",
+                       NULL);
+
+DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE_JSON,
+                       NULL,
+                       "select json_arrayagg(json_object('tenant_id', tenant_id, 'trace_id', trace_id, 'rec_svr_ip', rec_svr_ip, 'rec_svr_port', rec_svr_port, 'parent', parent_span_id, 'span_id', span_id, 'span_name', span_name, 'start_ts', start_ts, 'end_ts', end_ts, 'elapse', elapse, 'tags', cast(case when tags='' then NULL else tags end as json), 'logs', cast(case when logs='' then NULL else logs end as json))) as ShowTraceJSON from %s.%s",
+                       R"(select json_arrayagg(json_object('tenant_id' : tenant_id, 'trace_id' : trace_id, 'rec_svr_ip' : rec_svr_ip, 'rec_svr_port' : rec_svr_port, 'parent' : parent_span_id, 'span_id' : span_id, 'span_name' : span_name, 'start_ts' : cast(start_ts as varchar(100)), 'end_ts' : cast(end_ts as varchar(100)), 'elapse' : elapse, 'tags' : cast(tags as json), 'logs' : cast(logs as json) returning json) returning json)  as SHOW_TRACE_JSON from %s.%s)",
+                       NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_ENGINES,
                        NULL,
@@ -2719,7 +2841,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_COUNT_ERRORS,
 DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS,
                        NULL,
                        "SELECT zone, svr_type, svr_ip, svr_port, name, data_type, value, info, section, scope, source, edit_level from %s.%s where name not like '\\_%%' and (tenant_id = %ld or tenant_id is null)",
-                       R"(SELECT "ZONE", "SVR_TYPE", "SVR_IP", "SVR_PORT", "NAME", "DATA_TYPE", "VALUE", "INFO", "SECTION", "SCOPE", "SOURCE", "EDIT_LEVEL" FROM %s.%s WHERE NAME NOT LIKE '\\_%%' and  (tenant_id = %ld or tenant_id is null))",
+                       R"(SELECT "ZONE", "SVR_TYPE", "SVR_IP", "SVR_PORT", "NAME", "DATA_TYPE", "VALUE", "INFO", "SECTION", "SCOPE", "SOURCE", "EDIT_LEVEL" FROM %s.%s WHERE NAME NOT LIKE '\_%%' ESCAPE '\' and  (tenant_id = %ld or tenant_id is null))",
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_UNSYS,
                        NULL,
@@ -2816,8 +2938,15 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_RESTORE_PREVIEW,
                        "SELECT * FROM %s.%s",
                        NULL,
                        NULL);
-
-
-
+DEFINE_SHOW_CLAUSE_SET(SHOW_SEQUENCES,
+                       "SELECT sequence_name AS `Sequences_in_%.*s` ",
+                       "SELECT sequence_name FROM %s.%s WHERE database_id = %ld ORDER BY sequence_name COLLATE utf8mb4_bin ASC",
+                       NULL,
+                       "sequence_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE,
+                       "SELECT sequence_name AS `Sequences_in_%.*s (%.*s)` ",
+                       "SELECT sequence_name FROM %s.%s WHERE database_id = %ld ORDER BY sequence_name COLLATE utf8mb4_bin ASC",
+                       NULL,
+                       "sequence_name");
 }/* ns sql*/
 }/* ns oceanbase */

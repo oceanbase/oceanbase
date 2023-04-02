@@ -22,6 +22,7 @@
 #include "storage/access/ob_table_read_info.h"
 #include "ob_block_sstable_struct.h"
 #include "ob_datum_range.h"
+#include "ob_micro_block_hash_index.h"
 #include "ob_micro_block_header.h"
 
 namespace oceanbase
@@ -49,6 +50,30 @@ struct ObMicroIndexInfo;
       ptr = nullptr;                                                        \
     }                                                                       \
   } while (0)
+
+template<typename T>
+class ObMicroBlockAggInfo {
+public:
+  ObMicroBlockAggInfo(bool is_min, const ObDatumCmpFuncType cmp_fun, T &result_datum) :
+      is_min_(is_min), cmp_fun_(cmp_fun), result_datum_(result_datum) {}
+  void update_min_or_max(const T& datum)
+  {
+    if (datum.is_null()) {
+    } else if (result_datum_.is_null()) {
+      result_datum_ = datum;
+    } else {
+      int cmp_ret = cmp_fun_(result_datum_, datum);
+      if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
+        result_datum_ = datum;
+      }
+    }
+  }
+  TO_STRING_KV(K_(is_min), K_(cmp_fun), K_(result_datum));
+private:
+  bool is_min_;
+  const ObDatumCmpFuncType cmp_fun_;
+  T &result_datum_;
+};
 
 struct ObRowIndexIterator
 {
@@ -93,6 +118,7 @@ struct ObMicroBlockData
   {
     DATA_BLOCK,
     INDEX_BLOCK,
+    DDL_BLOCK_TREE,
     MAX_TYPE
   };
 public:
@@ -115,6 +141,7 @@ public:
   int64_t &get_extra_size() { return extra_size_; }
 
   int64_t total_size() const { return size_ + extra_size_; }
+  bool is_index_block() const { return INDEX_BLOCK == type_ || DDL_BLOCK_TREE == type_;}
 
   void reset() { *this = ObMicroBlockData(); }
   OB_INLINE const ObMicroBlockHeader *get_micro_header() const
@@ -208,6 +235,19 @@ public:
       const ObTableReadInfo &read_info,
       bool &exist,
       bool &found) = 0;
+protected:
+  OB_INLINE static int init_hash_index(
+      const ObMicroBlockData &block_data,
+      ObMicroBlockHashIndex &hash_index,
+      const ObMicroBlockHeader *header)
+  {
+    int ret = OB_SUCCESS;
+    hash_index.reset();
+    if (header->is_contain_hash_index() && OB_FAIL(hash_index.init(block_data))) {
+      STORAGE_LOG(WARN, "failed to init micro block hash index", K(ret), K(block_data));
+    }
+    return ret;
+  }
 };
 
 class ObIMicroBlockReader : public ObIMicroBlockReaderInfo
@@ -235,9 +275,8 @@ public:
   virtual int get_multi_version_info(
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      ObMultiVersionRowFlag &flag,
-      transaction::ObTransID &trans_id,
-      int64_t &version,
+      const ObRowHeader *&row_header,
+      int64_t &trans_version,
       int64_t &sql_sequence) = 0;
   int locate_range(
       const ObDatumRange &range,

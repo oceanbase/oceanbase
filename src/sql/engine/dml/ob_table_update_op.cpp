@@ -113,6 +113,22 @@ ObTableUpdateOp::ObTableUpdateOp(ObExecContext &exec_ctx, const ObOpSpec &spec,
 {
 }
 
+int ObTableUpdateOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.upd_ctdefs_.count() && !execute_single_row_; ++i) {
+      const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
+      const ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
+      if (has_before_row_trigger(upd_ctdef) || has_after_row_trigger(upd_ctdef)) {
+        execute_single_row_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableUpdateOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -327,6 +343,7 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
       ObUpdRtDef &upd_rtdef = rtdefs.at(j);
       ObDASTabletLoc *old_tablet_loc = nullptr;
       ObDASTabletLoc *new_tablet_loc = nullptr;
+      ObDMLModifyRowNode modify_row(this, &upd_ctdef, &upd_rtdef, ObDmlEventType::DE_UPDATING);
       bool is_skipped = false;
       if (!MY_SPEC.upd_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
         ++upd_rtdef.cur_row_num_;
@@ -339,11 +356,11 @@ OB_INLINE int ObTableUpdateOp::update_row_to_das()
         break;
       } else if (OB_FAIL(calc_tablet_loc(upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc))) {
         LOG_WARN("calc partition key failed", K(ret));
-      } else if (OB_FAIL(TriggerHandle::do_handle_after_row(
-          *this, upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_, ObTriggerEvents::get_update_event()))) {
-        LOG_WARN("failed to handle after trigger", K(ret));
-      } else if (OB_FAIL(ObDMLService::update_row(upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::update_row(upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_,
+                                                 modify_row.old_row_, modify_row.new_row_, modify_row.full_row_))) {
         LOG_WARN("insert row with das failed", K(ret));
+      } else if (need_after_row_process(upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       } else {
         ++upd_rtdef.found_rows_;
       }
@@ -401,7 +418,7 @@ int ObTableUpdateOp::check_update_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_update_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table update affected row is not match with index table",
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table update affected row is not match with index table",
                   K(ret), K(primary_write_rows), K(index_write_rows),
                   KPC(primary_upd_ctdef), K(primary_upd_rtdef),
                   KPC(index_upd_ctdef), K(index_upd_rtdef));
@@ -412,7 +429,7 @@ int ObTableUpdateOp::check_update_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_update_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table update affected row is not match with found rows",
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table update affected row is not match with found rows",
                   K(ret), K(primary_write_rows), K(primary_upd_rtdef.found_rows_),
                   KPC(primary_upd_ctdef), K(primary_upd_rtdef));
       }
@@ -437,7 +454,7 @@ int ObTableUpdateOp::write_rows_post_proc(int last_errno)
         //update rows across partitions, need to add das delete op's affected rows
         changed_rows += upd_rtdef.ddel_rtdef_->affected_rows_;
         //insert new row to das after old row has been deleted in storage
-        //reference to: https://work.aone.alibaba-inc.com/issue/31915604
+        //reference to:
       }
       LOG_DEBUG("update rows post proc", K(ret), K(found_rows), K(changed_rows), K(upd_rtdef));
     }

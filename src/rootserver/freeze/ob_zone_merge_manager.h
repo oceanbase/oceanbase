@@ -15,6 +15,7 @@
 
 #include "share/ob_zone_merge_info.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -48,26 +49,27 @@ public:
   virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
   virtual int finish_zone_merge(const common::ObZone &zone,
                                 const int64_t expected_epoch,
-                                const int64_t new_last_merged_scn,
-                                const int64_t new_all_merged_scn);
+                                const share::SCN &new_last_merged_scn,
+                                const share::SCN &new_all_merged_scn);
   int suspend_merge(const int64_t expected_epoch);
   int resume_merge(const int64_t expected_epoch);
   int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
   
   int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
-  int check_need_broadcast(const int64_t frozen_scn, bool &need_broadcast);
-  int set_global_freeze_info(const int64_t frozen_scn, const int64_t expected_epoch);
+  int check_need_broadcast(const share::SCN &frozen_scn, bool &need_broadcast);
+  int set_global_freeze_info(const share::SCN &frozen_scn, const int64_t expected_epoch);
 
-  int get_global_broadcast_scn(int64_t &global_broadcast_scn) const;
-  int get_global_last_merged_scn(int64_t &global_last_merged_scn) const;
+  int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
+  int get_global_last_merged_scn(share::SCN &global_last_merged_scn) const;
   int get_global_merge_status(share::ObZoneMergeInfo::MergeStatus &global_merge_status) const;
   int get_global_last_merged_time(int64_t &global_last_merged_time) const;
   int get_global_merge_start_time(int64_t &global_merge_start_time) const;
 
-  virtual int generate_next_global_broadcast_scn(const int64_t expected_epoch, int64_t &next_scn);
+  virtual int generate_next_global_broadcast_scn(const int64_t expected_epoch, share::SCN &next_scn);
   virtual int try_update_global_last_merged_scn(const int64_t expected_epoch);
   virtual int update_global_merge_info_after_merge(const int64_t expected_epoch);
   virtual int try_update_zone_merge_info(const int64_t expected_epoch);
+  virtual int adjust_global_merge_info(const int64_t expected_epoch);
 
 private:
   int check_valid(const common::ObZone &zone, int64_t &idx) const;
@@ -88,6 +90,8 @@ private:
                                        const common::ObIArray<share::ObZoneMergeInfo> &ori_merge_infos,
                                        const common::ObIArray<common::ObZone> &zone_list,
                                        common::ObIArray<share::ObZoneMergeInfo> &to_insert_infos);
+  int inner_adjust_global_merge_info(const share::SCN &frozen_scn,
+                                     const int64_t expected_epoch);
 
 protected:
   common::SpinRWLock lock_;
@@ -119,21 +123,22 @@ public:
   virtual int start_zone_merge(const common::ObZone &zone, const int64_t expected_epoch);
   virtual int finish_zone_merge(const common::ObZone &zone,
                                 const int64_t expected_epoch,
-                                const int64_t new_last_merged_scn,
-                                const int64_t new_all_merged_scn);
+                                const share::SCN &last_merged_scn,
+                                const share::SCN &all_merged_scn);
   virtual int suspend_merge(const int64_t expected_epoch);
   virtual int resume_merge(const int64_t expected_epoch);
   virtual int set_merge_error(const int64_t merge_error, const int64_t expected_epoch);
 
   virtual int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
-  virtual int check_need_broadcast(const int64_t frozen_scn,
+  virtual int check_need_broadcast(const share::SCN &frozen_scn,
                                    bool &need_broadcast);
-  virtual int set_global_freeze_info(const int64_t frozen_scn, const int64_t expected_epoch); 
+  virtual int set_global_freeze_info(const share::SCN &frozen_scn, const int64_t expected_epoch);
 
-  virtual int generate_next_global_broadcast_scn(const int64_t expected_epoch, int64_t &next_scn);
+  virtual int generate_next_global_broadcast_scn(const int64_t expected_epoch, share::SCN &next_scn);
   virtual int try_update_global_last_merged_scn(const int64_t expected_epoch);
   virtual int update_global_merge_info_after_merge(const int64_t expected_epoch);
   virtual int try_update_zone_merge_info(const int64_t expected_epoch);
+  virtual int adjust_global_merge_info(const int64_t expected_epoch);
 
 public:
   class ObZoneMergeMgrGuard

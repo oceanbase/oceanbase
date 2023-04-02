@@ -194,8 +194,12 @@ public:
                             const common::ObString &database_name,
                             const common::ObString &table_name,
                             const share::schema::ObTableSchema *&table_schema,
-                            uint32_t sessid);
-
+                            sql::ObSQLSessionInfo *session_info,
+                            const common::ObString &dblink_name,
+                            bool is_reverse_link);
+  int set_link_table_schema(uint64_t dblink_id,
+                            const common::ObString &database_name,
+                            share::schema::ObTableSchema *table_schema);
   int get_simple_table_schema(const uint64_t tenant_id,
                               const uint64_t &db_id,
                               const ObString &table_name,
@@ -220,7 +224,7 @@ public:
   //                      const bool is_index_table,
   //                      bool &is_rowkey_column) const;
   //int check_is_index_table(uint64_t table_id, bool &is_index_table) const;
-  int get_can_read_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool with_mv, bool is_link = false) const;
+  int get_can_read_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool with_mv) const;
   int get_can_write_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool only_global = false) const;
   // tenant
   int get_tenant_id(const common::ObString &tenant_name, uint64_t &teannt_id);
@@ -330,6 +334,7 @@ public:
                    ObString &obj_dbname,
                    ObString &obj_name,
                    uint64_t &synonym_id,
+                   uint64_t &database_id,
                    bool &exists);
   int get_package_id(const uint64_t tenant_id,
                      const uint64_t database_id,
@@ -364,7 +369,8 @@ public:
                          uint64_t &synonym_id,
                          common::ObString &object_table_name,
                          bool &exist,
-                         bool search_public_schema = true) const;
+                         bool search_public_schema = true,
+                         bool *is_public = NULL) const;
   int get_obj_info_recursively_with_synonym(const uint64_t tenant_id,
                                             const uint64_t syn_db_id,
                                             const common::ObString &syn_name,

@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "observer/ob_server_struct.h"
+#include "share/rpc/ob_async_rpc_proxy.h"
 namespace oceanbase
 {
 namespace obrpc
@@ -31,7 +32,9 @@ public:
   RPC_S(@PR5 sync_fetch_das_result, obrpc::OB_DAS_SYNC_FETCH_RESULT, (sql::ObDASDataFetchReq), sql::ObDASDataFetchRes);
   // async rpc to erase das task result
   RPC_AP(@PR5 async_erase_das_result, obrpc::OB_DAS_ASYNC_ERASE_RESULT, (sql::ObDASDataEraseReq));
+  RPC_AP(@PR5 das_async_access, obrpc::OB_DAS_ASYNC_ACCESS, (sql::ObDASTaskArg), sql::ObDASTaskResp);
 };
+
 }  // namespace obrpc
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_RPC_PROXY_H_ */

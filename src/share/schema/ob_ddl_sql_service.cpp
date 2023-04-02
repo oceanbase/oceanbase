@@ -41,6 +41,7 @@ int ObDDLSqlService::log_operation(
   ObSqlString *sql_string = (NULL != public_sql_string ? public_sql_string : &tmp_sql_string);
   sql_string->reuse();
   auto *tsi_value = GET_TSI(TSIDDLVar);
+  auto *tsi_oper = GET_TSI(TSILastOper);
   ObString *ddl_id_str = NULL;
   uint64_t tenant_id = schema_operation.tenant_id_;
   uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
@@ -56,8 +57,9 @@ int ObDDLSqlService::log_operation(
   if (OB_UNLIKELY(!schema_operation.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schema_operation is invalid", K(schema_operation), K(ret));
-  } else if (OB_FAIL(schema_service_.set_last_operation_info(sql_tenant_id, schema_operation.schema_version_))) {
-    LOG_WARN("fail to set last_operation_info", K(ret), K(sql_tenant_id), K(sql_exec_tenant_id), K(schema_operation));
+  } else if (OB_ISNULL(tsi_oper)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Failed to get TSILatOper", KR(ret), K(schema_operation));
   } else if (OB_ISNULL(tsi_value)) {
     int tmp_ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Failed to get TSIDDLVar", K(tmp_ret), K(schema_operation));
@@ -67,6 +69,8 @@ int ObDDLSqlService::log_operation(
     exec_tenant_id = tsi_value->exec_tenant_id_;
     ddl_id_str = tsi_value->ddl_id_str_;
     ddl_str_hex = hex_sql_string.string();
+    tsi_oper->last_operation_tenant_id_ = sql_tenant_id;
+    tsi_oper->last_operation_schema_version_ = schema_operation.schema_version_;
   }
 
   if (OB_SUCC(ret)) {

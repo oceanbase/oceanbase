@@ -28,7 +28,8 @@ class ObTxELRUtil
 public:
   ObTxELRUtil() : last_refresh_ts_(0),
                   can_tenant_elr_(false) {}
-  int check_and_update_tx_elr_info(ObTxDesc &tx, const bool can_elr);
+  int check_and_update_tx_elr_info(ObTxDesc &tx);
+  bool is_can_tenant_elr() const { return can_tenant_elr_; }
   void reset()
   {
     last_refresh_ts_ = 0;

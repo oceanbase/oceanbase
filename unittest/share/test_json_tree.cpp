@@ -2074,6 +2074,163 @@ TEST_F(TestJsonTree, test_clone_node_datetime)
 
 }
 
+TEST_F(TestJsonTree, oracle_sub_type)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+
+  /* contruct type */
+  // int olong
+  ObJsonOInt o_int(123);
+  ObJsonOLong o_long(1234567890);
+  size_t MAX_BUF_SIZE = 256;
+
+  // odecimal
+  char dec_buf[MAX_BUF_SIZE];
+  memset(dec_buf, 0, MAX_BUF_SIZE);
+  number::ObNumber num;
+  size_t length = sprintf(dec_buf, "%lld", LLONG_MIN);
+  ASSERT_EQ(OB_SUCCESS, num.from(dec_buf, allocator));
+  ObJsonDecimal o_dec(num);
+
+  // odouble ofloat
+  ObJsonODouble o_double(0.0);
+  ObJsonOFloat o_float(23.23);
+
+  // interval ds
+  const char* interval_ds = "interval ds 123";
+  char* buf1 = (char*)allocator.alloc(MAX_BUF_SIZE);
+  memset(buf1, 0, MAX_BUF_SIZE);
+  memcpy(buf1, interval_ds, strlen(interval_ds));
+  ObJsonOInterval o_intervalds(buf1, strlen(interval_ds), ObIntervalDSType);
+
+  // interval ym
+  const char* interval_ym = "interval ym 123";
+  char* buf2 = (char*)allocator.alloc(MAX_BUF_SIZE);
+  memset(buf2, 0, MAX_BUF_SIZE);
+  memcpy(buf2, interval_ds, strlen(interval_ds));
+  ObJsonOInterval o_intervalym(buf2, strlen(interval_ds), ObIntervalDSType);
+
+  // binary
+  const char* binary = "binary string";
+  char* buf3 = (char*)allocator.alloc(MAX_BUF_SIZE);
+  memset(buf3, 0, MAX_BUF_SIZE);
+  memcpy(buf3, binary, strlen(binary));
+  ObJsonORawString o_binary(buf3, strlen(binary), ObJsonNodeType::J_OBINARY);
+
+  // odate, oracledate, otimestamp, otimestamptz
+  ObTime ob_time;
+  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::datetime_to_ob_time(1429089727 * USECS_PER_SEC, NULL, ob_time));
+  ObJsonDatetime j_odate(ObJsonNodeType::J_ODATE, ob_time);
+  ObJsonDatetime j_oracledate(ObJsonNodeType::J_ORACLEDATE, ob_time);
+  ObJsonDatetime j_otimestamp(ObJsonNodeType::J_OTIMESTAMP, ob_time);
+  ObJsonDatetime j_otimestamptz(ObJsonNodeType::J_OTIMESTAMPTZ, ob_time);
+
+  /* test print */
+  // print
+  ObJsonBuffer j_buf(&allocator);
+  ObIJsonBase *j_base = nullptr;
+
+  j_base = (ObIJsonBase*)&o_int;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "oint = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&o_long;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "olong = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&o_dec;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "odecimal = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&o_float;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "ofloat = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&o_binary;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "obinary = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&o_intervalds;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "ointervalds = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&o_intervalym;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "ointervalmy = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&j_odate;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "odate = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&j_oracledate;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "oracledate = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&j_otimestamp;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "otimestamp = " << j_buf.ptr() << endl;
+
+  j_buf.reuse();
+  j_base = (ObIJsonBase*)&j_otimestamptz;
+  ASSERT_EQ(OB_SUCCESS, j_base->print(j_buf, false));
+  cout << "otimestamptz = " << j_buf.ptr() << endl;
+
+  /* clone */
+  ObJsonNode *p_oint = o_int.clone(&allocator);
+  ASSERT_NE(nullptr, p_oint);
+
+  ObJsonNode *p_olong = o_long.clone(&allocator);
+  ASSERT_NE(nullptr, p_olong);
+
+  ObJsonNode *p_ofloat = o_float.clone(&allocator);
+  ASSERT_NE(nullptr, p_ofloat);
+
+  ObJsonNode *p_odoube = o_double.clone(&allocator);
+  ASSERT_NE(nullptr, p_odoube);
+
+  ObJsonNode *p_ointervalds = o_intervalds.clone(&allocator);
+  ASSERT_NE(nullptr, p_ointervalds);
+
+  ObJsonNode *p_ointervalym = o_intervalym.clone(&allocator);
+  ASSERT_NE(nullptr, p_ointervalym);
+
+  ObJsonNode *p_obinary = o_binary.clone(&allocator);
+  ASSERT_NE(nullptr, p_obinary);
+
+  ObJsonNode *p_odate = j_odate.clone(&allocator);
+  ASSERT_NE(nullptr, p_odate);
+
+  ObJsonNode *p_oracledate = j_oracledate.clone(&allocator);
+  ASSERT_NE(nullptr, p_oracledate);
+
+  ObJsonNode *p_otimestamp = j_otimestamp.clone(&allocator);
+  ASSERT_NE(nullptr, p_otimestamp);
+
+  ObJsonNode *p_otimestamptz = j_otimestamptz.clone(&allocator);
+  ASSERT_NE(nullptr, p_otimestamptz);
+
+  double d_value;
+  float f_value;
+  uint64_t u_value;
+  int64_t i_value;
+
+  ASSERT_EQ(OB_SUCCESS, o_int.to_double(d_value));
+  ASSERT_EQ(OB_SUCCESS, o_int.to_uint(u_value));
+
+  ASSERT_EQ(OB_SUCCESS, o_float.to_uint(u_value));
+  ASSERT_EQ(OB_SUCCESS, o_float.to_double(d_value));
+  ASSERT_EQ(OB_SUCCESS, o_float.to_int(i_value));
+}
+
 } // namespace common
 } // namespace oceanbase
 

@@ -45,7 +45,7 @@ public:
     : sql_stmt_(),
       stmt_type_(sql::stmt::T_NONE),
       entity_(nullptr),
-      stmt_id_(0),
+      ps_sql_(),
       param_names_(alloc),
       into_names_(alloc),
       bind_params_(alloc),
@@ -59,8 +59,8 @@ public:
 
   inline lib::MemoryContext &get_dbms_entity() { return entity_; }
   inline const lib::MemoryContext get_dbms_entity() const { return entity_; }
-  inline int64_t get_stmt_id() const { return stmt_id_; }
-  inline void set_stmt_id(int64_t id) { stmt_id_ = id; }
+  inline common::ObString &get_ps_sql() { return ps_sql_; }
+  inline void set_ps_sql(ObString sql) { ps_sql_ = sql; }
   common::ObString &get_sql_stmt() { return sql_stmt_; }
   sql::stmt::StmtType get_stmt_type() const { return stmt_type_; }
   inline void set_stmt_type(sql::stmt::StmtType type) { stmt_type_ = type; }
@@ -70,9 +70,13 @@ public:
     ObIAllocator& allocator,
     const common::ColumnsFieldIArray* src_fields,
     common::ColumnsFieldArray &dst_fields);
+  static int deep_copy_field_columns(
+    ObIAllocator& allocator,
+    const common::ColumnsFieldArray src_fields,
+    common::ColumnsFieldArray &dst_fields);
 
   int init_params(int64_t param_count);
-  int get_param_name_count() const { return param_names_.count(); }
+  int64_t get_param_name_count() const { return param_names_.count(); }
   ObIArray<ObString>& get_param_names() { return param_names_; }
 
   int add_param_name(ObString &clone_name);
@@ -152,7 +156,7 @@ protected:
   sql::stmt::StmtType stmt_type_;
 private:
   lib::MemoryContext entity_;
-  int64_t stmt_id_;
+  common::ObString ps_sql_;
   ParamNames  param_names_;
   IntoNames   into_names_;
   BindParams  bind_params_;

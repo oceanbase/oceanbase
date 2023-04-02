@@ -157,6 +157,7 @@ extern const int64_t USECS_PER_MIN;
 #define MYSQL_TIMESTAMP_MIN_VAL -62167046400000000
 #define ORACLE_DATETIME_MIN_VAL -62135596800000000 //start from '0001-1-1 00:00:00'
 #define TIME_MAX_HOUR 838
+#define TIME_MAX_VAL (3020399 * 1000000LL)    // 838:59:59 .
 
 struct ObIntervalLimit {
   static const ObOracleTimeLimiter YEAR;
@@ -292,10 +293,11 @@ struct ObTimeConstStr {
 
 struct ObTimeConvertCtx
 {
-  ObTimeConvertCtx(const ObTimeZoneInfo *tz_info, const bool is_timestamp)
+  ObTimeConvertCtx(const ObTimeZoneInfo *tz_info, const bool is_timestamp, const bool &need_truncate = false)
      :tz_info_(tz_info),
       oracle_nls_format_(),
-      is_timestamp_(is_timestamp) {}
+      is_timestamp_(is_timestamp),
+      need_truncate_(need_truncate) {}
   ObTimeConvertCtx(const ObTimeZoneInfo *tz_info, const ObString &oracle_nls_format, const bool is_timestamp)
      :tz_info_(tz_info),
       oracle_nls_format_(oracle_nls_format),
@@ -303,6 +305,7 @@ struct ObTimeConvertCtx
   const ObTimeZoneInfo *tz_info_;
   ObString oracle_nls_format_;
   bool is_timestamp_; //means mysql timestamp?
+  bool need_truncate_;
 };
 class ObTimeConverter
 {
@@ -405,7 +408,8 @@ public:
 
   static int str_is_date_format(const ObString &str, bool &date_flag);
   static int str_to_date(const ObString &str, int32_t &value, const ObDateSqlMode date_sql_mode = 0);
-  static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL);
+  static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL,
+                         const ObScale &time_scale = 0, const bool &need_truncate = false);
   static int str_to_year(const ObString &str, uint8_t &value);
   static int str_to_interval(const ObString &str, ObDateUnitType unit_type, int64_t &value);
   // int / double / string <- datetime(timestamp) / date / time / year.
@@ -475,10 +479,10 @@ public:
   // int / string -> ObTime / ObInterval <- datetime(timestamp) / date / time / year.
   static int int_to_ob_time_with_date(int64_t int64, ObTime &ob_time, bool is_dayofmonth,
                                       const ObDateSqlMode date_sql_mode);
-  static int int_to_ob_time_without_date(int64_t int64, ObTime &ob_time);
+  static int int_to_ob_time_without_date(int64_t time_second, ObTime &ob_time, int64_t nano_second = 0);
   static int str_to_ob_time_with_date(const ObString &str, ObTime &ob_time, int16_t *scale,
-                                      const bool is_dayofmonth, const ObDateSqlMode date_sql_mode);
-  static int str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale = NULL);
+                                      const bool is_dayofmonth, const ObDateSqlMode date_sql_mode, const bool &need_truncate = false);
+  static int str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale = NULL, const bool &need_truncate = false);
   static int str_to_ob_time_format(const ObString &str, const ObString &fmt, ObTime &ob_time,
                                    int16_t *scale, const bool no_zero_in_date,
                                    const ObDateSqlMode date_sql_mode);
@@ -569,7 +573,7 @@ public:
   static int set_ob_time_part_directly(ObTime &ob_time, int64_t &conflict_bitset, const int64_t part_offset, const int32_t part_value);
   static int set_ob_time_part_may_conflict(ObTime &ob_time, int64_t &conflict_bitset, const int64_t part_offset, const int32_t part_value);
   static int32_t calc_max_name_length(const ObTimeConstStr names[], const int64_t size);
-  static int time_overflow_trunc(int64_t &value);
+  static int time_overflow_trunc(int64_t &value, const ObScale &time_scale = 0);
   static void round_datetime(int16_t scale, int64_t &value);
   static ObOTimestampData round_otimestamp(const int16_t scale, const ObOTimestampData &in_ot_data);
   static int round_interval_ds(const ObScale scale, ObIntervalDSValue &value);
@@ -584,7 +588,7 @@ public:
   static int check_dfm_deterministic(const ObString format,
                                     const ObCollationType format_coll_type,
                                     const bool need_tz, bool &complete);
-
+  static int32_t get_days_of_month(int32_t year, int32_t month);
   struct ObTimeDigits {
     ObTimeDigits()
       : ptr_(NULL), len_(0), value_(0)
@@ -646,7 +650,7 @@ private:
   static int get_datetime_delims(const char *&str, const char *end, ObTimeDelims &delims);
   static int get_datetime_digits_delims(const char *&str, const char *end,
                                         int32_t max_len, ObTimeDigits &digits, ObTimeDelims &delims);
-  static int str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &obtime);
+  static int str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &obtime, const bool &need_truncate = false);
   static int get_time_zone(const ObTimeDelims *delims, ObTime &ob_time, const char *end_ptr);
   static void skip_delims(const char *&str, const char *end);
   static bool is_year4(int64_t first_token_len);
@@ -656,14 +660,14 @@ private:
   static bool is_all_spaces(const ObTimeDelims &delims);
   static bool has_any_space(const ObTimeDelims &delims);
   static bool is_negative(const char *&str, const char *end);
-  static int normalize_usecond_round(ObTimeDigits &digits, const int64_t max_precision,
-                                     const bool use_strict_check = false);
+  static int normalize_usecond(ObTimeDigits &digits, const int64_t max_precision,
+                                     const bool use_strict_check = false, const bool &need_truncate = false);
   static int normalize_usecond_trunc(ObTimeDigits &digits, bool need_trunc);
   static int apply_date_space_rule(const ObTimeDelims *delims);
   static void apply_date_year2_rule(ObTimeDigits &year);
   static void apply_date_year2_rule(int32_t &year);
   static void apply_date_year2_rule(int64_t &year);
-  static int apply_usecond_delim_rule(ObTimeDelims &second, ObTimeDigits &usecond, const int64_t max_precision, const bool use_strict_check);
+  static int apply_usecond_delim_rule(ObTimeDelims &second, ObTimeDigits &usecond, const int64_t max_precision, const bool use_strict_check, const bool &truncate = false);
   static int apply_datetime_for_time_rule(ObTime &ob_time, const ObTimeDigits *digits, const ObTimeDelims *delims);
 //  static int find_time_range(int64_t t, const int64_t *range_boundaries, uint64_t higher_bound, uint64_t& result);
 //  static int find_transition_type(int64_t t, const ObTimeZoneInfo *sp, TRAN_TYPE_INFO *& result);

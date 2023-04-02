@@ -85,10 +85,10 @@ bool ObRestoreProgressPersistInfo::is_valid() const
 int ObRestoreProgressPersistInfo::parse_from(common::sqlclient::ObMySQLResult &result)
 {
   int ret = OB_SUCCESS;
-
+  uint64_t restore_scn = 0;
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, key_.tenant_id_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_JOB_ID, key_.job_id_, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn, uint64_t);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_LS_COUNT, ls_count_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_LS_COUNT, finish_ls_count_, int64_t);
@@ -98,6 +98,10 @@ int ObRestoreProgressPersistInfo::parse_from(common::sqlclient::ObMySQLResult &r
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TOTAL_BYTES, total_bytes_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_BYTES, finish_bytes_, int64_t);
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(restore_scn_.convert_for_inner_table_field(restore_scn))) {
+    LOG_WARN("fail to set restore scn", K(ret), K(restore_scn));
+  }
   return ret;
 }
 
@@ -108,7 +112,7 @@ int ObRestoreProgressPersistInfo::fill_dml(share::ObDMLSqlSplicer &dml) const
 
   if (OB_FAIL(key_.fill_pkey_dml(dml))) {
     LOG_WARN("failed to fill key", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_RESTORE_SCN, restore_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_RESTORE_SCN, restore_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_LS_COUNT, ls_count_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -198,11 +202,11 @@ int ObLSHisRestorePersistInfo::fill_dml(share::ObDMLSqlSplicer &dml) const
   if (OB_FAIL(key_.fill_pkey_dml(dml))) {
     LOG_WARN("failed to fill key", K(ret));
   } else if (OB_FALSE_IT(trace_id_.to_string(trace_id, OB_MAX_TRACE_ID_BUFFER_SIZE))) {
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_RESTORE_SCN, restore_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_RESTORE_SCN, restore_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_REPLAY_SCN, start_replay_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_REPLAY_SCN, start_replay_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LAST_REPLAY_SCN, last_replay_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LAST_REPLAY_SCN, last_replay_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_TABLET_COUNT, tablet_count_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -291,7 +295,9 @@ int ObLSRestoreProgressPersistInfo::parse_from(common::sqlclient::ObMySQLResult 
   char comment[MAX_TABLE_COMMENT_LENGTH] = "";
   int64_t ls_id = 0;
   int64_t real_length = 0;
-
+  uint64_t restore_scn = 0;
+  uint64_t start_replay_scn = 0;
+  uint64_t last_replay_scn = 0;
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, key_.tenant_id_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_JOB_ID, key_.job_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_LS_ID, ls_id, int64_t);
@@ -299,16 +305,16 @@ int ObLSRestoreProgressPersistInfo::parse_from(common::sqlclient::ObMySQLResult 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_SERVER_PORT, port, int32_t);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_STATUS, status, int32_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn, uint64_t);
 
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_REPLAY_SCN, start_replay_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_LAST_REPLAY_SCN, last_replay_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_REPLAY_SCN, start_replay_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_LAST_REPLAY_SCN, last_replay_scn, uint64_t);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TABLET_COUNT, tablet_count_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_TABLET_COUNT, finish_tablet_count_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TOTAL_BYTES, total_bytes_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FINISH_BYTES, finish_bytes_, int64_t);
-  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, result_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, result_, int32_t);
 
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TRACE_ID, trace_id, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_COMMENT, comment, MAX_TABLE_COMMENT_LENGTH, real_length);
@@ -323,6 +329,12 @@ int ObLSRestoreProgressPersistInfo::parse_from(common::sqlclient::ObMySQLResult 
     LOG_WARN("fail to assign comment", K(ret));
   } else if (OB_FAIL(status_.set_status(status))) {
     LOG_WARN("failed to set status", K(ret), K(status));
+  } else if (OB_FAIL(restore_scn_.convert_for_inner_table_field(restore_scn))) {
+    LOG_WARN("failed to set restore scn", K(ret), K(restore_scn));
+  } else if (OB_FAIL(start_replay_scn_.convert_for_inner_table_field(start_replay_scn))) {
+    LOG_WARN("failed to set start_replay scn", K(ret), K(restore_scn));
+  } else if (OB_FAIL(last_replay_scn_.convert_for_inner_table_field(last_replay_scn))) {
+    LOG_WARN("failed to set last_replay scn", K(ret), K(restore_scn));
   } else if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse restore progress failed", K(ret), K(*this));
@@ -341,11 +353,11 @@ int ObLSRestoreProgressPersistInfo::fill_dml(share::ObDMLSqlSplicer &dml) const
   } else if (OB_FALSE_IT(trace_id_.to_string(trace_id, OB_MAX_TRACE_ID_BUFFER_SIZE))) {
   } else if (OB_FAIL(dml.add_column(OB_STR_STATUS, status_.get_status()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_RESTORE_SCN, restore_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_RESTORE_SCN, restore_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_REPLAY_SCN, start_replay_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_REPLAY_SCN, start_replay_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LAST_REPLAY_SCN, last_replay_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LAST_REPLAY_SCN, last_replay_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_TABLET_COUNT, tablet_count_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -383,7 +395,7 @@ const char *ObHisRestoreJobPersistInfo::get_status_str() const
 int ObHisRestoreJobPersistInfo::get_status(const ObString &str_str) const
 {
   int status = -1;
-  for (int64_t i = 0; i < ARRAYSIZEOF(STATUS_STR); ++i) {
+  for (int32_t i = 0; i < ARRAYSIZEOF(STATUS_STR); ++i) {
     if (0 == str_str.case_compare(STATUS_STR[i])) {
       status = i;
       break;
@@ -403,7 +415,7 @@ int ObHisRestoreJobPersistInfo::parse_from(common::sqlclient::ObMySQLResult &res
 {
   int ret = OB_SUCCESS;
   ObString status_str;
-
+  uint64_t restore_scn = 0;
  #define RETRIEVE_STR_VALUE(COLUMN_NAME)                       \
   if (OB_SUCC(ret)) {                                              \
     ObString value;                                              \
@@ -420,7 +432,13 @@ int ObHisRestoreJobPersistInfo::parse_from(common::sqlclient::ObMySQLResult &res
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESTORE_TENANT_ID, restore_tenant_id_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_BACKUP_TENANT_ID, backup_tenant_id_, uint64_t);
 
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_RESTORE_SCN, restore_scn, uint64_t);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(restore_scn_.convert_for_inner_table_field(restore_scn))) {
+      LOG_WARN("failed to set restore scn", K(ret), K(restore_scn));
+    }
+  }
+
   EXTRACT_INT_FIELD_MYSQL(result, "backup_cluster_version", backup_cluster_version_, int64_t);
   //TODO start time and finish time
 
@@ -519,7 +537,11 @@ int ObHisRestoreJobPersistInfo::fill_dml(ObDMLSqlSplicer &dml) const
   ADD_COMMON_COLUMN_DML(restore_tenant_id);
   ADD_COMMON_COLUMN_DML(backup_tenant_id);
   ADD_LONG_STR_COLUMN_DML(backup_dest);
-  ADD_UINT_COLUMN_DML(restore_scn);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dml.add_uint64_column("restore_scn", restore_scn_.get_val_for_inner_table_field()))) {
+      LOG_WARN("failed to add column", K(ret));
+    }
+  }
   ADD_LONG_STR_COLUMN_DML(restore_option);
 
   ADD_LONG_STR_COLUMN_DML(table_list);
@@ -766,7 +788,7 @@ int ObRestorePersistHelper::insert_initial_ls_restore_progress(
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init ls restore progress table", K(ret));
-  } else if (OB_FAIL(ls_restore_progress_table_operator.insert_row(proxy, persist_info, affected_rows))) {
+  } else if (OB_FAIL(ls_restore_progress_table_operator.insert_or_update_row(proxy, persist_info, affected_rows))) {
     LOG_WARN("failed to insert initial ls restore progress", K(ret));
   }
 
@@ -908,7 +930,7 @@ int ObRestorePersistHelper::inc_finished_restored_block_bytes(
 
 int ObRestorePersistHelper::update_log_restore_progress(
   common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
-  const RESTORE_SCN_TYPE &last_replay_scn) const
+  const SCN &last_replay_scn) const
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -919,7 +941,7 @@ int ObRestorePersistHelper::update_log_restore_progress(
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init ls restore progress table", K(ret));
-  } else if (OB_FAIL(ls_restore_progress_table_operator.update_uint_column(proxy, ls_key, OB_STR_LAST_REPLAY_SCN, last_replay_scn, affected_rows))) {
+  } else if (OB_FAIL(ls_restore_progress_table_operator.update_uint_column(proxy, ls_key, OB_STR_LAST_REPLAY_SCN, last_replay_scn.get_val_for_inner_table_field(), affected_rows))) {
     LOG_WARN("failed to update last replay scn in ls restore progress table", K(ret), K(ls_key), K(last_replay_scn));
   } 
 
@@ -957,6 +979,9 @@ int ObRestorePersistHelper::update_ls_restore_status(
   } else if (OB_FAIL(ls_restore_progress_table_operator.update_string_column(proxy, ls_key, OB_STR_COMMENT, 
       comment, affected_rows))) {
     LOG_WARN("fail to update comment", K(ret), K(ls_key), KP(comment));
+  } else if (affected_rows == 0) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("update row not exist", K(ret), K(ls_key));
   }
   return ret;
 }

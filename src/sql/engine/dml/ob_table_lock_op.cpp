@@ -212,10 +212,8 @@ int ObTableLockOp::inner_get_next_row()
     if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
       //DML operator reach iter end,
       //now submit the remaining rows in the DAS Write Buffer to the storage
-      if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
-        LOG_WARN("execute all dml das task failed", K(ret));
-      } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-        LOG_WARN("close all das task failed", K(ret));
+      if (OB_FAIL(submit_all_dml_task())) {
+        LOG_WARN("failed to submit the remaining dml tasks", K(ret));
       }
       //to post process the DML info after writing all data to the storage
       ret = write_rows_post_proc(ret);
@@ -278,8 +276,8 @@ int ObTableLockOp::inner_get_next_batch(const int64_t max_row_cnt)
         err_log_rt_def_.curr_err_log_record_num_++;
         err_log_rt_def_.reset();
         continue;
-      } else if (need_return_row_) {
-        //break to output this batch
+      } else if (!brs_.skip_->is_all_true(brs_.size_)) {
+        //this batch has not been skipped for all rows, need break to output this batch
         break;
       }
     }
@@ -287,10 +285,8 @@ int ObTableLockOp::inner_get_next_batch(const int64_t max_row_cnt)
   if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
     //DML operator reach iter end,
     //now submit the remaining rows in the DAS Write Buffer to the storage
-    if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
-      LOG_WARN("execute all dml das task failed", K(ret));
-    } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-      LOG_WARN("close all das task failed", K(ret));
+    if (OB_FAIL(submit_all_dml_task())) {
+      LOG_WARN("failed to submit the remaining dml tasks", K(ret));
     }
     //to post process the DML info after writing all data to the storage
     ret = write_rows_post_proc(ret);
@@ -313,6 +309,8 @@ OB_INLINE int ObTableLockOp::lock_one_row_post_proc()
       LOG_WARN("submit all dml task failed", K(ret));
     } else if (MY_SPEC.is_skip_locked()) {
       ret = OB_SUCCESS;
+      dml_rtctx_.reuse(); //reuse current context to lock the next row
+      need_return_row_ = false;
     }
   } else {
     need_return_row_ = true;
@@ -425,6 +423,7 @@ int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs)
   operator_evalctx_guard.set_batch_size(child_brs->size_);
   (void) brs_.copy(child_brs);
   for (auto i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
+    need_return_row_ = false;
     if (child_brs->skip_->at(i)) {
       continue;
     }

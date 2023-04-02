@@ -43,6 +43,11 @@ int hex_to_cstr(const void *in_data,
                 const int64_t data_lenth,
                 char *buff,
                 const int64_t buff_size);
+int hex_to_cstr(const void *in_data,
+                const int64_t data_length,
+                char *buff,
+                const int64_t buff_size,
+                int64_t &pos);
 /**
  * convert the input buffer into hex string,  not include '\0'
  *
@@ -142,36 +147,48 @@ public:
 class CStringBufMgr
 {
 public:
-  static const int BUF_SIZE = 12 * 1024;
-  static const int BUF_NUM = 5;
+  static const int BUF_SIZE = 32 * 1024;
+  static const int MIN_SIZE = 12 * 1024;
   struct BufNode
   {
-    char buf_[BUF_SIZE];
+    char buf_[MIN_SIZE];
     int64_t level_;
     struct BufNode *next_;
-  };
-  struct BufArray
-  {
-    BufNode node_[BUF_NUM];
   };
   struct BufList
   {
     BufList() : head_(nullptr) {}
     BufNode *head_;
   };
-  CStringBufMgr() : list_(), level_(-1), idx_(0) {}
+  CStringBufMgr() : list_(), level_(-1), pos_(0) {}
   ~CStringBufMgr() {}
+  static CStringBufMgr &get_thread_local_instance()
+  {
+    thread_local CStringBufMgr mgr;
+    return mgr;
+  }
   void inc_level() { level_++; }
   void dec_level() { level_--; }
-  BufNode *acquire()
+  void update_position(int64_t pos)
   {
-    BufNode *node = nullptr;
     if (0 == level_) {
-      BufArray *array = GET_TSI(__typeof__(*array));
-      if (NULL != array) {
-        node = &array->node_[(idx_++ % BUF_NUM)];
+      pos_ += pos;
+      if (MIN_SIZE > BUF_SIZE - pos_) {
+        pos_ = 0;
       }
+    }
+  }
+  int64_t get_buffer_len()
+  {
+    return 0 == level_ ? (BUF_SIZE - pos_) : MIN_SIZE;
+  }
+  char *acquire()
+  {
+    char *buffer = NULL;
+    if (0 == level_) {
+      buffer = local_buf_ + pos_;
     } else {
+      BufNode *node = NULL;
       node = list_.head_;
       while (NULL != node) {
         if (node->level_ > level_) {
@@ -186,8 +203,11 @@ public:
         node->next_ = list_.head_;
         list_.head_ = node;
       }
+      if (NULL != node) {
+        buffer = node->buf_;
+      }
     }
-    return node;
+    return buffer;
   }
   void try_clear_list()
   {
@@ -200,36 +220,34 @@ public:
     }
   }
 private:
+  char local_buf_[BUF_SIZE];
   BufList list_;
   int64_t level_;
-  uint64_t idx_;
+  int64_t pos_;
 };
 
 template <typename T>
 const char *to_cstring(const T &obj, const bool verbose)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
-    LIB_LOG(ERROR, "buffer is NULL");
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    if (NULL == &obj) {
-      snprintf(buffer, CStringBufMgr::BUF_SIZE -1, "NULL");
+    const int64_t buf_len = mgr.get_buffer_len();
+    str_len = obj.to_string(buffer, buf_len -1, verbose);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
-      pos = obj.to_string(buffer, CStringBufMgr::BUF_SIZE -1, verbose);
-      if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-        buffer[pos] = '\0';
-      } else {
-        buffer[0] = '\0';
-      }
+      buffer[0] = '\0';
     }
+    mgr.update_position(str_len + 1);
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 
@@ -237,23 +255,24 @@ template <typename T>
 const char *to_cstring(const T &obj, FalseType)
 {
   char *buffer = NULL;
-  int64_t pos = 0;
-  CStringBufMgr *mgr = GET_TSI(CStringBufMgr);
-  mgr->inc_level();
-  CStringBufMgr::BufNode *node = mgr->acquire();
-  if (OB_ISNULL(node)) {
-    LIB_LOG(ERROR, "buffer is NULL");
+  int64_t str_len = 0;
+  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
+  mgr.inc_level();
+  buffer = mgr.acquire();
+  if (OB_ISNULL(buffer)) {
+    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
   } else {
-    buffer = node->buf_;
-    pos = to_string(obj, buffer, CStringBufMgr::BUF_SIZE -1);
-    if (pos >= 0 && pos < CStringBufMgr::BUF_SIZE) {
-      buffer[pos] = '\0';
+    const int64_t buf_len = mgr.get_buffer_len();
+    str_len = to_string(obj, buffer, buf_len -1);
+    if (str_len >= 0 && str_len < buf_len) {
+      buffer[str_len] = '\0';
     } else {
       buffer[0] = '\0';
     }
+    mgr.update_position(str_len + 1);
   }
-  mgr->try_clear_list();
-  mgr->dec_level();
+  mgr.try_clear_list();
+  mgr.dec_level();
   return buffer;
 }
 

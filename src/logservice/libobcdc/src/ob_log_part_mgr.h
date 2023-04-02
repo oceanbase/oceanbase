@@ -17,7 +17,7 @@
 
 #include "lib/lock/ob_thread_cond.h"            // ObThreadCond
 #include "share/schema/ob_schema_struct.h"      // PartitionStatus
-
+#include "logservice/data_dictionary/ob_data_dict_struct.h"  // ObDictTableMeta
 #include "ob_log_table_id_cache.h"              // GIndexCache, TableIDCache
 #include "ob_cdc_tablet_to_table_info.h"        // TabletToTableInfo
 #include "ob_log_utils.h"                       // _SEC_
@@ -55,8 +55,16 @@ public:
   /// add all user tablet(with tenant_id_ and cur_schema_version) into tablet_to_table_info
   /// @param timeout                schema operation timeout
   /// @retval OB_SUCCESS            op success
-
   virtual int add_all_user_tablets_info(const int64_t timeout) = 0;
+
+  /// Init TabletToTableInfo by Data Dictionary:
+  /// add all user tablet(with tenant_id_ and cur_schema_version) into tablet_to_table_info
+  /// @param timeout                operation timeout
+  /// @retval OB_SUCCESS            op success
+  virtual int add_all_user_tablets_info(
+      const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
+      const int64_t timeout) = 0;
+
   /// Add a table
   /// @note must be called by a single thread in order according to the Schema version, should not concurrently add table in a random order
   ///
@@ -252,6 +260,9 @@ public:
 
 public:
   virtual int add_all_user_tablets_info(const int64_t timeout);
+  virtual int add_all_user_tablets_info(
+      const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
+      const int64_t timeout);
   virtual int add_table(const uint64_t table_id,
       const int64_t start_schema_version,
       const int64_t start_serve_tstamp,
@@ -313,6 +324,11 @@ public:
   virtual int apply_delete_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info);
 
 private:
+  template<class TableMeta>
+  int insert_tablet_table_info_(
+      TableMeta &table_meta,
+      const common::ObIArray<common::ObTabletID> &tablet_ids);
+
   // operation:
   // 1. global normal index cache
   // 2. TableIDCache
@@ -469,6 +485,7 @@ private:
 
   // Default whitelist match insensitive
   bool              enable_oracle_mode_match_case_sensitive_;
+  bool              enable_check_schema_version_;
 
   // Conditional
   common::ObThreadCond   schema_cond_;

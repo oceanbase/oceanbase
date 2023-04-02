@@ -180,6 +180,7 @@ int ObModifyAutoincTask::init(const uint64_t tenant_id,
     task_version_ = OB_MODIFY_AUTOINC_TASK_VERSION;
     task_id_ = task_id;
     is_inited_ = true;
+    ddl_tracing_.open();
   }
   return ret;
 }
@@ -197,7 +198,7 @@ int ObModifyAutoincTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_UNLIKELY(!task_record.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
-  } else if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
+  } else if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
@@ -212,6 +213,9 @@ int ObModifyAutoincTask::init(const ObDDLTaskRecord &task_record)
     task_id_ = task_record.task_id_;
     ret_code_ = task_record.ret_code_;
     is_inited_ = true;
+
+    // set up span during recover task
+    ddl_tracing_.open_for_recovery();
   }
   return ret;
 }
@@ -225,6 +229,7 @@ int ObModifyAutoincTask::process()
   } else if (OB_FAIL(check_health())) {
     LOG_WARN("check health failed", K(ret));
   } else {
+    ddl_tracing_.restore_span_hierarchy();
     switch(task_status_) {
       case ObDDLTaskStatus::WAIT_TRANS_END: {
         if (OB_FAIL(wait_trans_end())) {
@@ -262,6 +267,7 @@ int ObModifyAutoincTask::process()
         break;
       }
     }
+    ddl_tracing_.release_span_hierarchy();
   }
   return ret;
 }
@@ -286,7 +292,7 @@ int ObModifyAutoincTask::lock_table()
   DEBUG_SYNC(DDL_REDEFINITION_LOCK_TABLE);
   if (ObDDLUtil::is_table_lock_retry_ret_code(ret)) {
     ret = OB_SUCCESS;
-  } else if (OB_FAIL(switch_status(ObDDLTaskStatus::MODIFY_AUTOINC, ret))) {
+  } else if (OB_FAIL(switch_status(ObDDLTaskStatus::MODIFY_AUTOINC, true, ret))) {
     LOG_WARN("fail to switch status", K(ret));
   }
   return ret;
@@ -378,7 +384,7 @@ int ObModifyAutoincTask::modify_autoinc()
     }
   }
   if (OB_FAIL(ret) || is_update_autoinc_end) {
-    if (OB_FAIL(switch_status(ObDDLTaskStatus::WAIT_TRANS_END, ret))) {
+    if (OB_FAIL(switch_status(ObDDLTaskStatus::WAIT_TRANS_END, true, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
   }
@@ -437,7 +443,7 @@ int ObModifyAutoincTask::wait_trans_end()
   }
 
   if (new_status != ObDDLTaskStatus::WAIT_TRANS_END || OB_FAIL(ret)) {
-    if (OB_FAIL(switch_status(new_status, ret))) {
+    if (OB_FAIL(switch_status(new_status, true, ret))) {
       LOG_WARN("fail to switch task status", K(ret));
     }
   }
@@ -447,6 +453,8 @@ int ObModifyAutoincTask::wait_trans_end()
 int ObModifyAutoincTask::set_schema_available()
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_count = 0;
+  int64_t rpc_timeout = 0;
   ObRootService *root_service = GCTX.root_service_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -457,7 +465,11 @@ int ObModifyAutoincTask::set_schema_available()
   } else {
     ObSArray<uint64_t> unused_ids;
     alter_table_arg_.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;
-    if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).execute_ddl_task(alter_table_arg_, unused_ids))) {
+    alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+      LOG_WARN("get rpc timeout failed", K(ret));
+    } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+        execute_ddl_task(alter_table_arg_, unused_ids))) {
       LOG_WARN("alter table failed", K(ret));
     }
   }
@@ -492,7 +504,7 @@ int ObModifyAutoincTask::success()
   return ret;
 }
 
-int ObModifyAutoincTask::cleanup()
+int ObModifyAutoincTask::cleanup_impl()
 {
   int ret = OB_SUCCESS;
   ObString unused_str;
@@ -544,6 +556,8 @@ int ObModifyAutoincTask::check_health()
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
+  } else if (OB_FAIL(refresh_schema_version())) {
+    LOG_WARN("refresh schema version failed", K(ret));
   } else {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObSchemaGetterGuard schema_guard;
@@ -560,7 +574,7 @@ int ObModifyAutoincTask::check_health()
     if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
-      switch_status(new_status, ret);
+      switch_status(new_status, false, ret);
       LOG_WARN("switch status to build_failed", K(ret), K(old_status), K(new_status));
     }
   }
@@ -577,25 +591,27 @@ int ObModifyAutoincTask::serialize_params_to_message(char *buf, const int64_t bu
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, task_version_))) {
-    LOG_WARN("fail to serialize task version", K(ret), K(task_version_));
+  } else if (OB_FAIL(ObDDLTask::serialize_params_to_message(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize ObDDLTask", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("serialize table arg failed", K(ret));
   }
   return ret;
 }
 
-int ObModifyAutoincTask::deserlize_params_from_message(const char *buf, const int64_t data_len, int64_t &pos)
+int ObModifyAutoincTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   obrpc::ObAlterTableArg tmp_arg;
-  if (OB_UNLIKELY(nullptr == buf || data_len <= 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &task_version_))) {
-    LOG_WARN("fail to deserialize task version", K(ret));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
+    LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+    LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
   }
@@ -604,5 +620,41 @@ int ObModifyAutoincTask::deserlize_params_from_message(const char *buf, const in
 
 int64_t ObModifyAutoincTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + serialization::encoded_length_i64(task_version_);
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
+}
+
+void ObModifyAutoincTask::flt_set_task_span_tag() const
+{
+  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
+              ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
+              ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
+}
+
+void ObModifyAutoincTask::flt_set_status_span_tag() const
+{
+  switch (task_status_) {
+  case ObDDLTaskStatus::WAIT_TRANS_END: {
+    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::LOCK_TABLE: {
+    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::MODIFY_AUTOINC: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::FAIL: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SUCCESS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 }

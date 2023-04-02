@@ -950,7 +950,7 @@ int ObRARowStore::write_file(BlockIndex &bi, void *buf, int64_t size)
         LOG_INFO("open file success", K_(fd), K_(dir_id));
       }
     }
-    ret = E(EventTable::EN_8) ret;
+    ret = OB_E(EventTable::EN_8) ret;
   }
   if (OB_SUCC(ret) && size > 0) {
     blocksstable::ObTmpFileIOInfo io;
@@ -958,9 +958,6 @@ int ObRARowStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
-    common::ObIOCategory io_category =  GCONF._large_query_io_percentage.get_value() > 0 ?
-      common::ObIOCategory::LARGE_QUERY_IO : common::ObIOCategory::USER_IO;
-    io.io_desc_.set_category(io_category);
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io, timeout_ms))) {
       LOG_WARN("write to file failed", K(ret), K(io), K(timeout_ms));
@@ -995,9 +992,6 @@ int ObRARowStore::read_file(void *buf, const int64_t size, const int64_t offset)
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
-    common::ObIOCategory io_category =  GCONF._large_query_io_percentage.get_value() > 0 ?
-      common::ObIOCategory::LARGE_QUERY_IO : common::ObIOCategory::USER_IO;
-    io.io_desc_.set_category(io_category);
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     blocksstable::ObTmpFileIOHandle handle;
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io, offset, timeout_ms, handle))) {
@@ -1058,7 +1052,7 @@ bool ObRARowStore::need_dump()
   } else {
     const int64_t mem_ctx_pct_trigger = 80;
     lib::ObMallocAllocator *instance = lib::ObMallocAllocator::get_instance();
-    lib::ObTenantCtxAllocator *allocator = NULL;
+    lib::ObTenantCtxAllocatorGuard allocator = NULL;
     if (NULL == instance) {
       ret = common::OB_ERR_SYS;
       LOG_ERROR("NULL allocator", K(ret));

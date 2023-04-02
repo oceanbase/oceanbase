@@ -13,8 +13,8 @@
 #ifndef __OCEANBASE_KEYBTREE_DEPS_H_
 #define __OCEANBASE_KEYBTREE_DEPS_H_
 
+#include "lib/ob_abort.h"
 #include "lib/allocator/ob_retire_station.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 
 #define BTREE_ASSERT(x) if (OB_UNLIKELY(!(x))) { ob_abort(); }
 
@@ -22,16 +22,25 @@ namespace oceanbase
 {
 namespace keybtree
 {
+
+template<typename BtreeKey, typename BtreeVal>
+struct BtreeKV;
+template<typename BtreeKey, typename BtreeVal>
+class ScanHandle;
+template<typename BtreeKey, typename BtreeVal>
+class ObKeyBtree;
+
+
 using RawType = uint64_t;
 enum
 {
-  NODE_SIZE = 280,
   MAX_CPU_NUM = 64,
   RETIRE_LIMIT = 1024,
   NODE_KEY_COUNT = 15,
   NODE_COUNT_PER_ALLOC = 128
 };
 
+template<typename BtreeKey, typename BtreeVal>
 struct CompHelper
 {
   OB_INLINE int compare(const BtreeKey search_key, const BtreeKey idx_key, int &cmp) const
@@ -46,9 +55,34 @@ public:
   RWLock(): lock_(0) {}
   ~RWLock() {}
   void set_spin() { UNUSED(ATOMIC_AAF(&read_ref_, 1)); }
-  bool try_rdlock();
+  bool try_rdlock() {
+    bool lock_succ = true;
+    uint32_t lock = ATOMIC_LOAD(&lock_);
+    if (0 != (lock >> 16)) {
+      lock_succ = false;
+    } else {
+      lock_succ = ATOMIC_BCAS(&lock_, lock, (lock + 2));
+    }
+    return lock_succ;
+  }
   bool is_hold_wrlock(const uint16_t uid) const { return ATOMIC_LOAD(&writer_id_) == uid; }
-  bool try_wrlock(const uint16_t uid);
+  bool try_wrlock(const uint16_t uid) {
+    bool lock_succ = true;
+    while (!ATOMIC_BCAS(&writer_id_, 0, uid)) {
+      if (1 == (ATOMIC_LOAD(&read_ref_) & 0x1)) {
+        //sched_yield();
+      } else {
+        lock_succ = false;
+        break;
+      }
+    }
+    if (lock_succ) {
+      while (ATOMIC_LOAD(&read_ref_) > 1) {
+        sched_yield();
+      }
+    }
+    return lock_succ;
+  }
   void rdunlock() { UNUSED(ATOMIC_FAA(&read_ref_, -2)); }
   void wrunlock() { ATOMIC_STORE(&lock_, 0); }
 private:
@@ -118,7 +152,12 @@ class WeightEstimate
 {
 public:
   enum { MAX_LEVEL = 64 };
-  WeightEstimate(int64_t node_cnt);
+  WeightEstimate(int64_t node_cnt) {
+    for(int64_t i = 0, k = 1; i < MAX_LEVEL; i++) {
+      weight_[i] = k;
+      k *= node_cnt/2;
+    }
+  }
   int64_t get_weight(int64_t level) { return weight_[level]; }
 private:
   int64_t weight_[MAX_LEVEL];
@@ -130,9 +169,14 @@ static int64_t estimate_level_weight(int64_t level)
   return weight_estimate.get_weight(level);
 }
 
+template<typename BtreeKey, typename BtreeVal>
 class BtreeNode: public common::ObLink
 {
-  friend class ScanHandle;
+private:
+  friend class ScanHandle<BtreeKey, BtreeVal>;
+  typedef BtreeKV<BtreeKey, BtreeVal> BtreeKV;
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
+  typedef CompHelper<BtreeKey, BtreeVal> CompHelper;
 private:
   enum {
     MAGIC_NUM = 0xb7ee //47086
@@ -280,8 +324,11 @@ private:
   BtreeKV kvs_[NODE_KEY_COUNT]; // 16 * 15 = 240byte
 };
 
+template<typename BtreeKey, typename BtreeVal>
 class Path
 {
+private:
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
   enum { MAX_DEPTH = 16 };
   struct Item
   {
@@ -335,8 +382,11 @@ private:
   bool is_found_;
 };
 
+template<typename BtreeKey, typename BtreeVal>
 class BaseHandle
 {
+private:
+  typedef CompHelper<BtreeKey, BtreeVal> CompHelper;
 public:
   BaseHandle(QClock& qclock): index_(), qclock_(qclock), qc_slot_(UINT64_MAX), comp_() {}
   ~BaseHandle() { release_ref(); }
@@ -356,16 +406,27 @@ private:
   CompHelper comp_;
 };
 
-class GetHandle: public BaseHandle
+template<typename BtreeKey, typename BtreeVal>
+class GetHandle: public BaseHandle<BtreeKey, BtreeVal>
 {
+private:
+  typedef BaseHandle<BtreeKey, BtreeVal> BaseHandle;
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
 public:
   GetHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()) { UNUSED(tree); }
   ~GetHandle() {}
   int get(BtreeNode *root, BtreeKey key, BtreeVal &val);
 };
 
-class ScanHandle: public BaseHandle
+template<typename BtreeKey, typename BtreeVal>
+class ScanHandle: public BaseHandle<BtreeKey, BtreeVal>
 {
+private:
+  typedef BaseHandle<BtreeKey, BtreeVal> BaseHandle;
+  typedef Path<BtreeKey, BtreeVal> Path;
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
 private:
   Path path_;
   int64_t version_;
@@ -386,16 +447,20 @@ public:
       BtreeKey*& last_key, int64_t &gap_size);
   int pop_level_node(const int64_t level);
   int find_path(BtreeNode *root, BtreeKey key, int64_t version);
-  int skip_gap(BtreeKey& end, bool reverse, int64_t& size);
-  bool maybe_big_gap(bool is_backward);
   int scan_forward(const int64_t level);
   int scan_backward(const int64_t level);
   int scan_forward(bool skip_inactive=false, int64_t* skip_cnt=NULL);
   int scan_backward(bool skip_inactive=false, int64_t* skip_cnt=NULL);
 };
 
-class WriteHandle: public BaseHandle
+template<typename BtreeKey, typename BtreeVal>
+class WriteHandle: public BaseHandle<BtreeKey, BtreeVal>
 {
+private:
+  typedef BaseHandle<BtreeKey, BtreeVal> BaseHandle;
+  typedef Path<BtreeKey, BtreeVal> Path;
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
 private:
   ObKeyBtree &base_;
   Path path_;
@@ -484,8 +549,13 @@ private:
 };
 
 // when modify this, pls modify buf_size in ob_keybtree.h.
+template<typename BtreeKey, typename BtreeVal>
 class Iterator
 {
+private:
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
+  typedef CompHelper<BtreeKey, BtreeVal> CompHelper;
+  typedef ScanHandle<BtreeKey, BtreeVal> ScanHandle;
 public:
   explicit Iterator(ObKeyBtree &btree): btree_(btree), scan_handle_(btree), jump_key_(nullptr),
                                         cmp_result_(0), comp_(scan_handle_.get_comp()),

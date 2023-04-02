@@ -37,7 +37,7 @@ public:
   {
     tallocator_.set_tenant_memory_mgr();
     tallocator_.set_limit(1000L << 20);
-    cs_.set_tenant_ctx_allocator(tallocator_, attr);
+    cs_.set_tenant_ctx_allocator(tallocator_);
   }
 
   virtual void TearDown()

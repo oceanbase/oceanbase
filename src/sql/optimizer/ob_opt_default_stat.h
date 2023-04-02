@@ -60,6 +60,11 @@ const double DEFAULT_EQ_SEL = 0.005;
 const double DEFAULT_INEQ_SEL = 1.0 / 3.0;
 
 /**
+ *@brief　空间表达式的默认选择率: 1 / OB_GEO_S2REGION_OPTION_MAX_CELL
+ */
+const double DEFAULT_SPATIAL_SEL = 0.25;
+
+/**
  *@brief　猜都没办法猜的默认选择率：一半一半
  */
 const double DEFAULT_SEL = 0.5;

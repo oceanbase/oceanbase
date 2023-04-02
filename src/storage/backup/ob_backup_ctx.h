@@ -27,6 +27,7 @@
 #include "storage/backup/ob_backup_tmp_file.h"
 #include "storage/backup/ob_backup_utils.h"
 #include "storage/blocksstable/ob_data_buffer.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
 namespace backup {
@@ -54,7 +55,7 @@ public:
       const uint64_t tenant_id, const share::ObLSID &ls_id);
   int mark_begin(const share::ObBackupDataType &backup_data_type);
   int mark_end(const share::ObBackupDataType &backup_data_type);
-  int add_macro_block(const share::ObBackupDataType &backup_data_type, const common::ObLogicMacroBlockId &logic_id);
+  int add_macro_block(const share::ObBackupDataType &backup_data_type, const blocksstable::ObLogicMacroBlockId &logic_id);
   int add_sstable_meta(const share::ObBackupDataType &backup_data_type, const storage::ObITable::TableKey &table_key);
   int add_tablet_meta(const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id);
   int add_bytes(const share::ObBackupDataType &backup_data_type, const int64_t bytes);
@@ -68,7 +69,7 @@ private:
   int inner_do_compare_(const char *backup_data_event, const ObSimpleBackupStat &lhs, const ObSimpleBackupStat &rhs);
   int add_missing_event_(const char *backup_data_event, const common::ObIArray<common::ObTabletID> &missing_tablets,
       const common::ObIArray<storage::ObITable::TableKey> &missing_table_keys,
-      const common::ObIArray<common::ObLogicMacroBlockId> &missing_logic_ids);
+      const common::ObIArray<blocksstable::ObLogicMacroBlockId> &missing_logic_ids);
   template <class T>
   int get_missing_items_(const common::ObIArray<T> &lhs, const common::ObIArray<T> &rhs, common::ObIArray<T> &missing);
   template <class T>
@@ -169,9 +170,13 @@ public:
       common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int write_backup_file_header(const ObBackupFileHeader &file_header);
   int write_macro_block_data(const blocksstable::ObBufferReader &macro_data,
-      const common::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
+  int64_t get_file_size() const
+  {
+    return file_write_ctx_.get_file_size();
+  }
   int close();
 
 private:
@@ -183,11 +188,11 @@ private:
   int prepare_file_write_ctx_(
       const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id);
   int get_macro_block_backup_path_(const int64_t file_id, share::ObBackupPath &backup_path);
-  int write_macro_block_data_(const blocksstable::ObBufferReader &buffer, const common::ObLogicMacroBlockId &logic_id,
+  int write_macro_block_data_(const blocksstable::ObBufferReader &buffer, const blocksstable::ObLogicMacroBlockId &logic_id,
       ObBackupMacroBlockIndex &macro_index);
   int write_meta_data_(const blocksstable::ObBufferReader &buffer, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
-  int build_macro_block_index_(const common::ObLogicMacroBlockId &logic_id, const int64_t offset, const int64_t length,
+  int build_macro_block_index_(const blocksstable::ObLogicMacroBlockId &logic_id, const int64_t offset, const int64_t length,
       ObBackupMacroBlockIndex &macro_index);
   int build_meta_index_(const common::ObTabletID &tablet_id, const ObBackupMetaType &meta_type, const int64_t offset,
       const int64_t length, ObBackupMetaIndex &meta_index);
@@ -246,7 +251,7 @@ struct ObBackupRecoverRetryCtx {
   bool has_need_skip_tablet_id_;
   bool has_need_skip_logic_id_;
   common::ObTabletID need_skip_tablet_id_;
-  common::ObLogicMacroBlockId need_skip_logic_id_;
+  blocksstable::ObLogicMacroBlockId need_skip_logic_id_;
   common::ObArray<ObBackupMacroBlockIDPair> reused_pair_list_;
 };
 

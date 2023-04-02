@@ -101,31 +101,8 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (-1 == (all_part_num = table_schema.get_all_part_num())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get tablet num", K(table_schema), KR(ret));
-    } else if (OB_FAIL(ls_ids.reserve(all_part_num))) {
-      LOG_WARN("fail to reserve array", KR(ret), K(all_part_num));
-    } else if (is_sys_tenant(table_schema.get_tenant_id())) {
-      for (int64_t i = 0; i < all_part_num && OB_SUCC(ret); i++) {
-        if (OB_FAIL(ls_ids.push_back(share::SYS_LS))) {
-          LOG_WARN("failed to push_back", KR(ret));
-        }
-      }
-    } else {
-      ObArray<ObTabletID> tablet_ids;
-      if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
-        LOG_WARN("fail to get tablet ids", KR(ret), K(table_schema));
-      } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_get_ls(trans_, tenant_id_, tablet_ids, ls_ids))) {
-        LOG_WARN("fail to batch_get_ls", KR(ret), K_(tenant_id), K(table_schema));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (ls_ids.count() != all_part_num) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the ls of tablet is not equal partition num",
-               KR(ret), K(ls_ids.count()), K(all_part_num));
+    } else if (OB_FAIL(get_ls_from_table(table_schema, ls_ids))) {
+      LOG_WARN("fail to get ls from table", KR(ret));
     } else {
       int64_t ls_idx = 0;
       ObPartitionLevel part_level = table_schema.get_part_level();
@@ -176,6 +153,40 @@ int ObTabletDrop::add_drop_tablets_of_table_arg(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTabletDrop::get_ls_from_table(const share::schema::ObTableSchema &table_schema,
+                                    common::ObIArray<share::ObLSID> &assign_ls_id_array)
+{
+  int ret = OB_SUCCESS;
+  int64_t all_part_num = 0;
+  if (-1 == (all_part_num = table_schema.get_all_part_num())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tablet num", K(table_schema), KR(ret));
+  } else if (OB_FAIL(assign_ls_id_array.reserve(all_part_num))) {
+    LOG_WARN("fail to reserve array", KR(ret), K(all_part_num));
+  } else if (is_sys_tenant(table_schema.get_tenant_id())) {
+    for (int64_t i = 0; i < all_part_num && OB_SUCC(ret); i++) {
+      if (OB_FAIL(assign_ls_id_array.push_back(share::SYS_LS))) {
+        LOG_WARN("failed to push_back", KR(ret));
+      }
+    }
+  } else {
+    ObArray<ObTabletID> tablet_ids;
+    if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
+      LOG_WARN("fail to get tablet ids", KR(ret), K(table_schema));
+    } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_get_ls(trans_, tenant_id_, tablet_ids, assign_ls_id_array))) {
+      LOG_WARN("fail to batch_get_ls", KR(ret), K(tenant_id_), K(table_schema));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (assign_ls_id_array.count() != all_part_num) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the ls of tablet is not equal partition num",
+              KR(ret), K(assign_ls_id_array.count()), K(all_part_num));
   }
   return ret;
 }

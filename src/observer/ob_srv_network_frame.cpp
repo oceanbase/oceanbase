@@ -15,12 +15,15 @@
 #include "observer/ob_srv_network_frame.h"
 #include "rpc/obmysql/ob_sql_nio_server.h"
 #include "observer/mysql/obsm_conn_callback.h"
+#include "rpc/obrpc/ob_poc_rpc_server.h"
+#include "src/share/rc/ob_tenant_base.h"
 
 #include "share/config/ob_server_config.h"
 #include "share/ob_rpc_share.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_rpc_intrusion_detect.h"
 #include "storage/ob_locality_manager.h"
+#include "lib/ssl/ob_ssl_config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "storage/ob_locality_manager.h"
@@ -29,6 +32,7 @@ using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::share;
+using namespace oceanbase::obmysql;
 
 ObSrvNetworkFrame::ObSrvNetworkFrame(ObGlobalContext &gctx)
     : gctx_(gctx),
@@ -63,17 +67,30 @@ static int get_default_net_thread_count()
   int cpu_num = get_cpu_num();
 
   if (cpu_num <= 4) {
-    cnt = 2;
+    cnt = 1;
   } else if (cpu_num <= 8) {
-    cnt = 3;
+    cnt = 2;
   } else if (cpu_num <= 16) {
-    cnt = 5;
+    cnt = 4;
   } else if (cpu_num <= 32) {
     cnt = 7;
   } else {
     cnt = max(8, get_cpu_num() / 6);
   }
   return cnt;
+}
+
+static int update_tcp_keepalive_parameters_for_sql_nio_server(int tcp_keepalive_enabled, int64_t tcp_keepidle, int64_t tcp_keepintvl, int64_t tcp_keepcnt)
+{
+  int ret = OB_SUCCESS;
+  if (enable_new_sql_nio()) {
+    if (NULL != global_sql_nio_server) {
+      tcp_keepidle = max(tcp_keepidle/1000000, 1);
+      tcp_keepintvl = max(tcp_keepintvl/1000000, 1);
+      global_sql_nio_server->update_tcp_keepalive_params(tcp_keepalive_enabled, tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+    }
+  }
+  return ret;
 }
 
 int ObSrvNetworkFrame::init()
@@ -95,6 +112,7 @@ int ObSrvNetworkFrame::init()
   opts.mysql_io_cnt_ = io_cnt;
   opts.batch_rpc_io_cnt_ = io_cnt;
   opts.use_ipv6_ = GCONF.use_ipv6;
+  //TODO(tony.wzh): fix opts.tcp_keepidle  negative
   opts.tcp_user_timeout_ = static_cast<int>(GCONF.dead_socket_detection_timeout);
   opts.tcp_keepidle_     = static_cast<int>(GCONF.tcp_keepidle);
   opts.tcp_keepintvl_    = static_cast<int>(GCONF.tcp_keepintvl);
@@ -105,13 +123,8 @@ int ObSrvNetworkFrame::init()
   } else {
     opts.enable_tcp_keepalive_ = 0;
   }
-  if (IS_CLUSTER_VERSION_BEFORE_4_0_0_0) {
-      LOG_INFO("io thread connection negotiation not enabled!");
-      negotiation_enable = 0;
-  } else {
-      LOG_INFO("io thread connection negotiation enabled!");
-      negotiation_enable = 1;
-  }
+  LOG_INFO("io thread connection negotiation enabled!");
+  negotiation_enable = 1;
 
   deliver_.set_host(gctx_.self_addr());
 
@@ -149,7 +162,12 @@ int ObSrvNetworkFrame::init()
   } else if (hp_io_cnt > 0 && OB_FAIL(net_.high_prio_rpc_net_register(rpc_handler_, high_prio_rpc_transport_))) {
     LOG_ERROR("high prio rpc net register fail", K(ret));
   } 
-    else {
+  else {
+    if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
+      LOG_ERROR("poc rpc server start fail", K(ret));
+    } else {
+      LOG_INFO("poc rpc server start successfully");
+    }
     share::set_obrpc_transport(rpc_transport_);
     batch_rpc_transport_->set_bucket_count(opts.batch_rpc_io_cnt_);
     LOG_INFO("init rpc network frame successfully",
@@ -171,16 +189,23 @@ int ObSrvNetworkFrame::start()
   int ret = net_.start();
   if (OB_SUCC(ret)) {
     if (enable_new_sql_nio()) {
-      obmysql::global_sql_nio_server = OB_NEW(obmysql::ObSqlNioServer, "SqlNio", obmysql::global_sm_conn_callback, mysql_handler_);
+      obmysql::global_sql_nio_server =
+          OB_NEW(obmysql::ObSqlNioServer, "SqlNio",
+                 obmysql::global_sm_conn_callback, mysql_handler_);
       if (NULL == obmysql::global_sql_nio_server) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("allocate memory for global_sql_nio_server failed", K(ret));
       } else {
-        int net_thread_count = atoi(getenv("sql_nio_thread_count")?:"0")?: (int)(GCONF.net_thread_count);
-        if (0 == net_thread_count) {
-          net_thread_count = get_default_net_thread_count();
+        int sql_net_thread_count = (int)GCONF.sql_net_thread_count;
+        if (sql_net_thread_count == 0) {
+          if (GCONF.net_thread_count == 0) {
+            sql_net_thread_count = get_default_net_thread_count();
+          } else {
+            sql_net_thread_count = GCONF.net_thread_count;
+          }
         }
-        if(OB_FAIL(obmysql::global_sql_nio_server->start(GCONF.mysql_port, &deliver_, net_thread_count))) {
+        if (OB_FAIL(obmysql::global_sql_nio_server->start(
+                GCONF.mysql_port, &deliver_, sql_net_thread_count))) {
           LOG_ERROR("sql nio server start failed", K(ret));
         }
       }
@@ -188,6 +213,7 @@ int ObSrvNetworkFrame::start()
   }
   return ret;
 }
+
 
 int ObSrvNetworkFrame::reload_config()
 {
@@ -217,10 +243,16 @@ int ObSrvNetworkFrame::reload_config()
     LOG_WARN("Failed to set easy keepalive.");
   } else if (OB_FAIL(net_.update_rpc_tcp_keepalive_params(user_timeout))) {
     LOG_WARN("Failed to set rpc tcp keepalive parameters.");
+  } else if (OB_FAIL(obrpc::global_poc_server.update_tcp_keepalive_params(user_timeout))) {
+    LOG_WARN("Failed to set pkt-nio rpc tcp keepalive parameters.");
   } else if (OB_FAIL(net_.update_sql_tcp_keepalive_params(user_timeout, enable_tcp_keepalive,
                                                           tcp_keepidle, tcp_keepintvl,
                                                           tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters.");
+  } else if (OB_FAIL(update_tcp_keepalive_parameters_for_sql_nio_server(enable_tcp_keepalive,
+                                                                        tcp_keepidle, tcp_keepintvl,
+                                                                        tcp_keepcnt))) {
+    LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
   }
 
   return ret;
@@ -371,6 +403,16 @@ int ObSrvNetworkFrame::reload_ssl_config()
           last_ssl_info_hash_ = new_hash_value;
           LOG_INFO("finish reload_ssl_config", K(use_bkmi), K(use_bkmi), K(use_sm),
                    "ssl_key_expired_time", GCTX.ssl_key_expired_time_, K(new_hash_value));
+          if (OB_SUCC(ret)) {
+            if (enable_new_sql_nio()) {
+              common::ObSSLConfig ssl_config(!use_bkmi, use_sm, ca_cert, public_cert, private_key, NULL, NULL);
+              if (OB_FAIL(ob_ssl_load_config(OB_SSL_CTX_ID_SQL_NIO, ssl_config))) {
+                LOG_WARN("create ssl ctx failed!", K(ret));
+              } else {
+                LOG_INFO("create ssl ctx success!", K(use_bkmi), K(use_sm));
+              }
+            }
+          }
         }
       }
     }
@@ -428,9 +470,6 @@ int ObSrvNetworkFrame::stop()
   if (OB_FAIL(net_.stop())) {
     LOG_WARN("stop easy net fail", K(ret));
   } 
-  if (NULL != obmysql::global_sql_nio_server) {
-    obmysql::global_sql_nio_server->stop();
-  }
   return ret;
 }
 
@@ -463,4 +502,11 @@ void ObSrvNetworkFrame::set_ratelimit_enable(int ratelimit_enabled)
 {
   rpc_transport_->set_ratelimit_enable(ratelimit_enabled);
   batch_rpc_transport_->set_ratelimit_enable(ratelimit_enabled);
+}
+
+void ObSrvNetworkFrame::sql_nio_stop()
+{
+  if (NULL != obmysql::global_sql_nio_server) {
+    obmysql::global_sql_nio_server->stop();
+  }
 }

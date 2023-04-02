@@ -26,7 +26,6 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObPlanCacheManager;
 class ObPlanCacheValue;
 class ObPlanCacheRlockAndRef;
 class ObPlanCache;
@@ -48,13 +47,11 @@ class ObAllPlanCacheBase : public common::ObVirtualTableIterator
 public:
   ObAllPlanCacheBase();
   virtual ~ObAllPlanCacheBase();
-  inline void set_plan_cache_manager(sql::ObPlanCacheManager *pcm) { pcm_ = pcm; }
   int inner_get_next_row(common::ObNewRow *&row);
   void reset();
   // deriative class specific
   virtual int inner_get_next_row() = 0;
 protected:
-  sql::ObPlanCacheManager *pcm_;
   common::ObSEArray<uint64_t, 16> tenant_id_array_;
   int64_t tenant_id_array_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObAllPlanCacheBase);

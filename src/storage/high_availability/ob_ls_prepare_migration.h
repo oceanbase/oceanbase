@@ -42,7 +42,7 @@ public:
 
   int64_t start_ts_;
   int64_t finish_ts_;
-  int64_t log_sync_scn_;
+  share::SCN log_sync_scn_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -170,7 +170,7 @@ public:
 private:
   int deal_with_local_ls_();
   int wait_log_replay_sync_();
-  int wait_ls_checkpoint_ts_push_();
+  int wait_ls_checkpoint_scn_push_();
   int generate_prepare_migration_dags_();
   int remove_local_incomplete_tablets_();
 

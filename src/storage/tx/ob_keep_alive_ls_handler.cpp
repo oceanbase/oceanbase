@@ -27,7 +27,8 @@ OB_SERIALIZE_MEMBER(ObKeepAliveLogBody, compat_bit_, min_start_scn_, min_start_s
 
 int64_t ObKeepAliveLogBody::get_max_serialize_size()
 {
-  ObKeepAliveLogBody max_log_body(INT64_MAX, INT64_MAX, MinStartScnStatus::MAX);
+  SCN scn = SCN::max_scn();
+  ObKeepAliveLogBody max_log_body(INT64_MAX, scn, MinStartScnStatus::MAX);
   return max_log_body.get_serialize_size();
 }
 
@@ -84,18 +85,18 @@ void ObKeepAliveLSHandler::reset()
   is_busy_ = false;
   is_master_ = false;
   is_stopped_ = false;
-  last_gts_ = 0;
+  last_gts_.set_min();
   ls_id_.reset();
   tmp_keep_alive_info_.reset();
   durable_keep_alive_info_.reset();
   stat_info_.reset();
 }
 
-int ObKeepAliveLSHandler::try_submit_log(int64_t min_start_scn, MinStartScnStatus min_start_status)
+int ObKeepAliveLSHandler::try_submit_log(const SCN &min_start_scn, MinStartScnStatus min_start_status)
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
-  int64_t ts_ns = 0;
+  SCN scn = SCN::min_scn();
 
   SpinWLockGuard guard(lock_);
 
@@ -120,13 +121,13 @@ int ObKeepAliveLSHandler::try_submit_log(int64_t min_start_scn, MinStartScnStatu
       ATOMIC_STORE(&is_busy_, false);
       TRANS_LOG(WARN, "[Keep Alive] serialize keep alive log failed", K(ret), K(ls_id_));
     } else if (OB_FAIL(log_handler_ptr_->append(submit_buf_, submit_buf_pos_, last_gts_, true, this,
-                                                lsn, ts_ns))) {
+                                                lsn, scn))) {
       stat_info_.other_error_cnt += 1;
       ATOMIC_STORE(&is_busy_, false);
       TRANS_LOG(WARN, "[Keep Alive] submit keep alive log failed", K(ret), K(ls_id_));
     } else {
       stat_info_.submit_succ_cnt += 1;
-      tmp_keep_alive_info_.log_ts_ = ts_ns;
+      tmp_keep_alive_info_.scn_ = scn;
       tmp_keep_alive_info_.lsn_ = lsn;
       tmp_keep_alive_info_.min_start_status_ = min_start_status;
       tmp_keep_alive_info_.min_start_scn_ = min_start_scn;
@@ -164,7 +165,7 @@ int ObKeepAliveLSHandler::on_failure()
 int ObKeepAliveLSHandler::replay(const void *buffer,
                                  const int64_t nbytes,
                                  const palf::LSN &lsn,
-                                 const int64_t ts_ns)
+                                 const SCN &scn)
 {
   int ret = OB_SUCCESS;
 
@@ -178,7 +179,7 @@ int ObKeepAliveLSHandler::replay(const void *buffer,
     TRANS_LOG(WARN, "[Keep Alive] deserialize log body error", K(ret), K(nbytes), K(pos));
   } else {
     SpinWLockGuard guard(lock_);
-    tmp_keep_alive_info_.log_ts_ = ts_ns;
+    tmp_keep_alive_info_.scn_ = scn;
     tmp_keep_alive_info_.lsn_ = lsn;
     tmp_keep_alive_info_.min_start_scn_ = log_body.get_min_start_scn();
     tmp_keep_alive_info_.min_start_status_ = log_body.get_min_start_status();
@@ -203,30 +204,30 @@ void ObKeepAliveLSHandler::print_stat_info()
                                                           "Near_To_GTS_Cnt",    stat_info_.near_to_gts_cnt,
                                                           "Other_Error_Cnt",    stat_info_.other_error_cnt,
                                                           "Submit_Succ_Cnt",    stat_info_.submit_succ_cnt,
-                                                          "last_log_ts",        stat_info_.stat_keepalive_info_.log_ts_,
+                                                          "last_scn",           to_cstring(stat_info_.stat_keepalive_info_.scn_),
                                                           "last_lsn",           stat_info_.stat_keepalive_info_.lsn_,
                                                           "last_gts",           last_gts_,
-                                                          "min_start_scn",      stat_info_.stat_keepalive_info_.min_start_scn_,
+                                                          "min_start_scn",      to_cstring(stat_info_.stat_keepalive_info_.min_start_scn_),
                                                           "min_start_status",   stat_info_.stat_keepalive_info_.min_start_status_);
   stat_info_.clear_cnt();
 }
 
-void ObKeepAliveLSHandler::get_min_start_scn(int64_t &min_start_scn,
-                                             int64_t &keep_alive_scn,
+void ObKeepAliveLSHandler::get_min_start_scn(SCN &min_start_scn,
+                                             SCN &keep_alive_scn,
                                              MinStartScnStatus &status)
 {
   SpinRLockGuard guard(lock_);
 
   min_start_scn = durable_keep_alive_info_.min_start_scn_;
-  keep_alive_scn = durable_keep_alive_info_.log_ts_;
+  keep_alive_scn = durable_keep_alive_info_.scn_;
   status = durable_keep_alive_info_.min_start_status_;
 }
 
 bool ObKeepAliveLSHandler::check_gts_()
 {
   bool need_submit = true;
-  int64_t gts = 0;
-  int64_t max_ts_ns = 0;
+  SCN gts;
+  SCN max_scn;
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(log_handler_ptr_)) {
@@ -234,11 +235,11 @@ bool ObKeepAliveLSHandler::check_gts_()
     TRANS_LOG(WARN, "invalid arguments", K(ret), KP(log_handler_ptr_));
   } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), nullptr, gts))) {
     TRANS_LOG(WARN, "get gts error", K(ret));
-  } else if (OB_FAIL(log_handler_ptr_->get_max_ts_ns(max_ts_ns))) {
+  } else if (OB_FAIL(log_handler_ptr_->get_max_scn(max_scn))) {
     TRANS_LOG(WARN, "get max log_ts failed", K(ret));
-  } else if (0 == last_gts_ || last_gts_ == gts) {
+  } else if (!last_gts_.is_valid_and_not_min() || last_gts_ == gts) {
     need_submit = true;
-  } else if (gts < max_ts_ns + KEEP_ALIVE_GTS_INTERVAL_NS) {
+  } else if (gts.convert_to_ts() < max_scn.convert_to_ts() + KEEP_ALIVE_GTS_INTERVAL) {
     need_submit = false;
   }
 
@@ -249,7 +250,7 @@ bool ObKeepAliveLSHandler::check_gts_()
   return need_submit;
 }
 
-int ObKeepAliveLSHandler::serialize_keep_alive_log_(int64_t min_start_scn, MinStartScnStatus status)
+int ObKeepAliveLSHandler::serialize_keep_alive_log_(const SCN &min_start_scn, MinStartScnStatus status)
 {
   int ret = OB_SUCCESS;
 

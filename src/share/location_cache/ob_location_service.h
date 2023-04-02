@@ -183,7 +183,8 @@ public:
       common::ObMySQLProxy &sql_proxy,
       ObIAliveServerTracer &server_tracer,
       ObRsMgr &rs_mgr,
-      obrpc::ObCommonRpcProxy &rpc_proxy);
+      obrpc::ObCommonRpcProxy &rpc_proxy,
+      obrpc::ObSrvRpcProxy &srv_rpc_proxy);
   int start();
   void stop();
   void wait();

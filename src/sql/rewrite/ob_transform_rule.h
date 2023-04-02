@@ -15,6 +15,7 @@
 #include "lib/container/ob_se_array.h"
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/ob_optimizer_trace_impl.h"
 namespace oceanbase
 {
 namespace common
@@ -53,6 +54,7 @@ struct ObTransformerCtx
     expr_constraints_(),
     plan_const_param_constraints_(),
     equal_param_constraints_(),
+    is_set_stmt_oversize_(false),
     happened_cost_based_trans_(0),
     equal_sets_(),
     ignore_semi_infos_(),
@@ -108,6 +110,7 @@ struct ObTransformerCtx
   ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
   ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> plan_const_param_constraints_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
+  bool is_set_stmt_oversize_;
   // record cost based transformers
   uint64_t happened_cost_based_trans_;
   EqualSets equal_sets_;
@@ -132,6 +135,7 @@ enum TransMethod
 {
   POST_ORDER = 0,
   PRE_ORDER = 1,
+  ROOT_ONLY = 2,
   MAX_TRANSFORMATION_METHOD
 };
 
@@ -169,6 +173,7 @@ enum TRANSFORM_TYPE {
   LEFT_JOIN_TO_ANTI             ,  // left join + is null -> anti-join
   COUNT_TO_EXISTS               ,
   SELECT_EXPR_PULLUP            ,
+  PROCESS_DBLINK                ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -188,9 +193,9 @@ struct ObParentDMLStmt
 // use to keep view name/stmt id/qb name stable after copy stmt and try transform
 struct ObTryTransHelper
 {
-  ObTryTransHelper() : available_tb_id_(0), subquery_count_(0), temp_table_count_(0) 
+  ObTryTransHelper() : available_tb_id_(0), subquery_count_(0), temp_table_count_(0)
   {}
-  
+
   int fill_helper(const ObQueryCtx *query_ctx);
   int recover(ObQueryCtx *query_ctx);
   int is_filled() const { return !qb_name_counts_.empty(); }
@@ -380,11 +385,19 @@ private:
   int transform_post_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                            const int64_t current_level,
                            ObDMLStmt *&stmt);
+  // root-only transformation
+  int transform_root_only(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                          const int64_t current_level,
+                          ObDMLStmt *&stmt);
 
   // transform non_set children statements
   int transform_children(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                          const int64_t current_level,
                          ObDMLStmt *&stmt);
+  // transform temp table for root stmt
+  int transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stmts,
+                            const int64_t current_level,
+                            ObDMLStmt *&stmt);
   int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                               ObDMLStmt *stmt,
                               ObDMLStmt *&orgin_stmt,
@@ -412,11 +425,6 @@ private:
                                void *check_ctx,
                                bool& is_valid);
 
-  bool is_view_stmt(const ObIArray<ObParentDMLStmt> &parents,
-                    const ObDMLStmt &stmt);
-
-  bool is_large_stmt(const ObDMLStmt &stmt);
-
   bool skip_move_trans_loc() const
   {
     return TEMP_TABLE_OPTIMIZATION == transformer_type_ // move trans loc in transform rule
@@ -430,7 +438,6 @@ private:
            || PROJECTION_PRUNING == transformer_type_
            || PREDICATE_MOVE_AROUND == transformer_type_;
   }
-
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformRule);
 

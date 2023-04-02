@@ -40,7 +40,7 @@ int ObResourceInnerSQLConnectionPool::init(ObMultiVersionSchemaService *schema_s
                                            const bool is_ddl)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -79,17 +79,20 @@ int ObResourceInnerSQLConnectionPool::fetch_max_conn_id(uint64_t &max_conn_id)
 
 int ObResourceInnerSQLConnectionPool::acquire(
     const uint64_t conn_id, const bool is_oracle_mode, const bool kill_using_conn,
-    common::sqlclient::ObISQLConnection *&conn)
+    common::sqlclient::ObISQLConnection *&conn, sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
   ObInnerSQLConnection *inner_conn = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObResourceInnerSQLConnectionPool has not been inited", K(ret));
   } else if (OB_INVALID_ID == conn_id) {
-    if (OB_FAIL(inner_sql_conn_pool_.acquire(NULL, conn, is_oracle_mode))) {
+    if (NULL != session_info) {
+      session_info->set_compatibility_mode(is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE);
+    }
+    if (OB_FAIL(inner_sql_conn_pool_.acquire(session_info, conn, is_oracle_mode))) {
       LOG_WARN("failed to acquire inner connection", K(ret));
     } else if (FALSE_IT(inner_conn = static_cast<ObInnerSQLConnection *>(conn))) {
     } else if (OB_ISNULL(inner_conn)) {
@@ -120,7 +123,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
       LOG_WARN("conn is null", K(ret), K(conn_id));
     } else if (!inner_conn->is_idle()) {
       if (kill_using_conn) {
-        /* related issue : https://work.aone.alibaba-inc.com/issue/43912619
+        /* related issue :
          * Why we need to set need_trans_rollback flag to inner_conn ?
          * Consider this situation:
          * Local obs inner sql rpc is timeout or gets some errors, and then will transmit a rollback inner sql to remote obs.
@@ -197,7 +200,7 @@ int ObResourceInnerSQLConnectionPool::release(
     common::sqlclient::ObISQLConnection *&conn)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
 
   if (OB_ISNULL(conn)) {
     if (reuse_conn) {

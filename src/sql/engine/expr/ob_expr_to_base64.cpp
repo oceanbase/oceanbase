@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprToBase64::ObExprToBase64(ObIAllocator &alloc)
-    :ObFuncExprOperator(alloc, T_FUN_SYS_TO_BASE64, N_TO_BASE64, 1, NOT_ROW_DIMENSION)
+    :ObStringExprOperator(alloc, T_FUN_SYS_TO_BASE64, N_TO_BASE64, 1)
 {
 }
 
@@ -172,8 +172,10 @@ int ObExprToBase64::eval_to_base64_batch(const ObExpr &expr,
       ObLength in_raw_len = in_raw.length();
       const char *buf = in_raw.ptr();
       char *output_buf = nullptr;
-      int64_t buf_len = base64_needed_encoded_length(in_raw_len);
-      if (OB_UNLIKELY(buf_len == 0)) {
+      int64_t buf_len = 0;
+      if (arg->is_null()) {
+        res[j].set_null();
+      } else if (OB_UNLIKELY((buf_len = base64_needed_encoded_length(in_raw_len)) == 0)) {
         res[j].set_string(nullptr, 0);
       } else {
         int64_t pos = 0;

@@ -18,6 +18,7 @@
 #include "lib/ob_define.h"
 #include "storage/memtable/ob_multi_source_data.h"
 #include "storage/tx/ob_trans_define.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -56,7 +57,6 @@ public:
 
   ObTabletBindingInfo();
   virtual ~ObTabletBindingInfo() {}
-  int set_allocator(ObIAllocator &allocator);
   int assign(const ObTabletBindingInfo &arg);
 
   virtual int deep_copy(const memtable::ObIMultiSourceDataUnit *src, ObIAllocator *allocator = nullptr) override;
@@ -127,7 +127,7 @@ public:
       ObLS &ls,
       const transaction::ObMulSourceDataNotifyArg &prepare_trans_flags,
       const ObTabletBindingPrepareCtx &ctx);
-  static int set_log_ts_for_create(const obrpc::ObBatchCreateTabletArg &arg, ObLS &ls, const transaction::ObMulSourceDataNotifyArg &trans_flags);
+  static int set_scn_for_create(const obrpc::ObBatchCreateTabletArg &arg, ObLS &ls, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int unlock_tablet_binding_for_create(const obrpc::ObBatchCreateTabletArg &arg, ObLS &ls, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int modify_tablet_binding_for_create(const obrpc::ObBatchCreateTabletArg &arg, ObLS &ls, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int add_tablet_binding(
@@ -140,7 +140,7 @@ public:
 
   // unbind tablet
   static int lock_tablet_binding_for_unbind(const ObBatchUnbindTabletArg &arg, const transaction::ObMulSourceDataNotifyArg &trans_flags);
-  static int set_log_ts_for_unbind(const ObBatchUnbindTabletArg &arg, const transaction::ObMulSourceDataNotifyArg &trans_flags);
+  static int set_scn_for_unbind(const ObBatchUnbindTabletArg &arg, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int unlock_tablet_binding_for_unbind(const ObBatchUnbindTabletArg &arg, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int fix_binding_info_for_modify_tablet_binding(const ObBatchUnbindTabletArg &arg, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int modify_tablet_binding_for_unbind(const ObBatchUnbindTabletArg &arg, const transaction::ObMulSourceDataNotifyArg &trans_flags);
@@ -158,7 +158,7 @@ public:
   static int check_need_dec_cnt_for_abort(const ObTabletTxMultiSourceDataUnit &tx_data, bool &need_dec);
   static int lock_and_set_tx_data(ObTabletHandle &handle, ObTabletTxMultiSourceDataUnit &tx_data, const bool for_replay);
   static int lock_tablet_binding(ObTabletHandle &handle, const transaction::ObMulSourceDataNotifyArg &trans_flags);
-  static int set_log_ts(ObTabletHandle &handle, const transaction::ObMulSourceDataNotifyArg &trans_flags);
+  static int set_scn(ObTabletHandle &handle, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int unlock_tablet_binding(ObTabletHandle &handle, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   static int check_is_locked(ObTabletHandle &handle, const transaction::ObTransID &tx_id, bool &is_locked);
   static int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
@@ -169,8 +169,8 @@ public:
 private:
   int lock_tablet_binding(const ObTabletID &tablet_id) const;
   int lock_tablet_binding(const common::ObIArray<ObTabletID> &tablet_ids) const;
-  int set_log_ts(const ObTabletID &tablet_id) const;
-  int set_log_ts(const common::ObIArray<ObTabletID> &tablet_ids) const;
+  int set_scn(const ObTabletID &tablet_id) const;
+  int set_scn(const common::ObIArray<ObTabletID> &tablet_ids) const;
   int unlock_tablet_binding(const ObTabletID &tablet_id) const;
   int unlock_tablet_binding(const common::ObIArray<ObTabletID> &tablet_ids) const;
   static int prepare_data_for_tablet(const ObTabletID &tablet_id, const ObLS &ls, const transaction::ObMulSourceDataNotifyArg &trans_flags);

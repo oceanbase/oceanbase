@@ -21,6 +21,7 @@ namespace oceanbase
 using namespace common;
 using namespace transaction;
 using namespace clog;
+using namespace share;
 
 namespace storage
 {
@@ -43,7 +44,7 @@ int ObLSWRSHandler::init()
 void ObLSWRSHandler::reset()
 {
   is_inited_ = false;
-  ls_weak_read_ts_ = 0;
+  ls_weak_read_ts_.set_min();
   is_enabled_ = false;
 }
 
@@ -52,7 +53,7 @@ int ObLSWRSHandler::offline()
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
   is_enabled_ = false;
-  ls_weak_read_ts_ = 0;
+  ls_weak_read_ts_.set_min();
   STORAGE_LOG(INFO, "weak read handler disabled", K(this));
   return ret;
 }
@@ -75,11 +76,11 @@ int ObLSWRSHandler::online()
 int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
                                                            bool &need_skip,
                                                            bool &is_user_ls,
-                                                           int64_t &wrs_version,
+                                                           SCN &wrs_version,
                                                            const int64_t max_stale_time)
 {
   int ret = OB_SUCCESS;
-  int64_t timestamp = INT64_MAX;
+  SCN timestamp;
   const ObLSID &ls_id = ls.get_ls_id();
   need_skip = false;
   ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
@@ -101,7 +102,7 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   } else if (OB_FAIL(ls.get_migration_status(status))
                   || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status ) {
     // check the weak read timestamp of the migrated ls
-    if (timestamp > ObTimeUtility::current_time() - 500 * 1000) {
+    if (timestamp.get_val_for_logservice() > ObTimeUtility::current_time() - 500 * 1000) {
       STORAGE_LOG(TRACE, "ls received the latest log", K(timestamp));
       // clog chases within 500ms, then clear the mark
       need_skip = false;
@@ -110,7 +111,7 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
     }
   } else {
     int64_t snapshot_version_barrier = ObTimeUtility::current_time() - max_stale_time;
-    if (timestamp <= snapshot_version_barrier) {
+    if (timestamp.get_val_for_logservice() <= snapshot_version_barrier) {
       // rule out these ls to avoid too old weak read timestamp
       need_skip = true;
     } else {
@@ -130,21 +131,20 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   // update weak read timestamp
   if (OB_SUCC(ret) && ! need_skip) {
     wrs_version = timestamp;
-    inc_update(&ls_weak_read_ts_, timestamp);
+    ls_weak_read_ts_.inc_update(timestamp);
   }
 
   return ret;
 }
 
-int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_stale_time, int64_t &timestamp)
+int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_stale_time, SCN &timestamp)
 {
   int ret = OB_SUCCESS;
-  int64_t min_log_service_ts = OB_INVALID_TIMESTAMP;
-  int64_t min_tx_service_ts = OB_INVALID_TIMESTAMP;
+  SCN min_log_service_scn, min_tx_service_ts;
   const ObLSID &ls_id = ls.get_ls_id();
 
   //the order of apply service、trx should not be changed
-  if (OB_FAIL(ls.get_max_decided_log_ts_ns(min_log_service_ts))) {
+  if (OB_FAIL(ls.get_max_decided_scn(min_log_service_scn))) {
     if (OB_STATE_NOT_MATCH == ret) {
       // print one log per minute
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
@@ -165,12 +165,12 @@ int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_st
       STORAGE_LOG(WARN, "get_min_uncommit_prepare_version error", K(ret), K(ls_id));
     }
   } else {
-    timestamp = std::min(min_log_service_ts, min_tx_service_ts);
+    timestamp = SCN::min(min_log_service_scn, min_tx_service_ts);
     const int64_t current_us = ObClockGenerator::getClock();
-    if (current_us * 1000 - timestamp > 3000 * 1000 * 1000L /*3s*/
+    if (current_us - timestamp.convert_to_ts() > 3000 * 1000L /*3s*/
         || REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
       TRANS_LOG(INFO, "get wrs ts", K(ls_id),
-                                    "delta_ns", current_us - timestamp,
+                                    "delta", current_us - timestamp.convert_to_ts(),
                                     K(timestamp),
                                     K(min_tx_service_ts));
       // print keep alive info

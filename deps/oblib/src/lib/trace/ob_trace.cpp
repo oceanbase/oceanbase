@@ -28,10 +28,8 @@ ObFLTSpanMgr* __attribute__((weak)) get_flt_span_manager()
 {
   return nullptr;
 }
-int __attribute__((weak)) handle_span_record(char* buf, const int64_t buf_len, ObFLTSpanMgr* flt_span_manager)
+int __attribute__((weak))handle_span_record(ObFLTSpanMgr *flt_span_manager, char* tag_buf, int64_t tag_len, ::oceanbase::trace::ObSpanCtx* span)
 {
-  UNUSED(buf);
-  UNUSED(buf_len);
   UNUSED(flt_span_manager);
   return 0;
 }
@@ -49,17 +47,6 @@ if (OB_NOT_NULL(span) && 0 == span->span_id_.high_) { \
   span->span_id_.low_ = UUID::gen_rand(); \
   span->span_id_.high_ = span->start_ts_; \
 }
-static const char* __span_type_mapper[] = {
-#define FLT_DEF_SPAN(name, comment) #name,
-#define __HIGH_LEVEL_SPAN
-#define __MIDDLE_LEVEL_SPAN
-#define __LOW_LEVEL_SPAN
-#include "lib/trace/ob_trace_def.h"
-#undef __LOW_LEVEL_SPAN
-#undef __MIDDLE_LEVEL_SPAN
-#undef __HIGH_LEVEL_SPAN
-#undef FLT_DEF_SPAN
-};
 thread_local ObTrace* ObTrace::save_buffer = nullptr;
 
 void flush_trace()
@@ -67,71 +54,64 @@ void flush_trace()
   auto& trace = *OBTRACE;
   auto& current_span = trace.current_span_;
   if (trace.is_inited() && !current_span.is_empty()) {
-    auto* span = current_span.get_first();
-    ::oceanbase::trace::ObSpanCtx* next = nullptr;
-    bool need_cancle_trace_mode = false;
-    if (!IS_OB_LOG_TRACE_MODE()) {
-      need_cancle_trace_mode = true;
-    }
-    SET_OB_LOG_TRACE_MODE();
-    PRINT_OB_LOG_TRACE_BUF(COMMON, INFO);
-    while (current_span.get_header() != span) {
-      auto* next = span->get_next();
-      if (nullptr != span->tags_ || 0 != span->end_ts_) {
-        int64_t pos = 0;
-        thread_local char buf[MAX_TRACE_LOG_SIZE];
-        int ret = OB_SUCCESS;
-        auto* tag = span->tags_;
-        bool first = true;
-        INIT_SPAN(span);
-        while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
-          if (pos + 10 >= MAX_TRACE_LOG_SIZE) {
-            ret = OB_BUF_NOT_ENOUGH;
-          } else {
-            buf[pos++] = ',';
-            if (first) {
-              strcpy(buf + pos, "\"tags\":[");
-              pos += 8;
-              first = false;
+    auto func = [&] {
+      auto* span = current_span.get_first();
+      ::oceanbase::trace::ObSpanCtx* next = nullptr;
+      while (current_span.get_header() != span) {
+        auto* next = span->get_next();
+        if (nullptr != span->tags_ || 0 != span->end_ts_) {
+          int64_t pos = 0;
+          thread_local char buf[MAX_TRACE_LOG_SIZE];
+          int ret = OB_SUCCESS;
+          auto* tag = span->tags_;
+          bool first = true;
+          INIT_SPAN(span);
+          while (OB_SUCC(ret) && OB_NOT_NULL(tag)) {
+            if (pos + 10 >= MAX_TRACE_LOG_SIZE) {
+              ret = OB_BUF_NOT_ENOUGH;
+            } else {
+              buf[pos++] = ',';
+              if (first) {
+                strcpy(buf + pos, "\"tags\":[");
+                pos += 8;
+                first = false;
+              }
+              ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
+              tag = tag->next_;
             }
-            ret = tag->tostring(buf, MAX_TRACE_LOG_SIZE, pos);
-            tag = tag->next_;
           }
-        }
-        if (0 != pos) {
-          if (pos + 1 < MAX_TRACE_LOG_SIZE) {
-            buf[pos++] = ']';
-            buf[pos++] = 0;
-          } else {
-            buf[MAX_TRACE_LOG_SIZE - 2] = ']';
-            buf[MAX_TRACE_LOG_SIZE - 1] = 0;
+          if (0 != pos) {
+            if (pos + 1 < MAX_TRACE_LOG_SIZE) {
+              buf[pos++] = ']';
+              buf[pos++] = 0;
+            } else {
+              buf[MAX_TRACE_LOG_SIZE - 2] = ']';
+              buf[MAX_TRACE_LOG_SIZE - 1] = 0;
+            }
           }
+          INIT_SPAN(span->source_span_);
+          _FLT_LOG(INFO,
+                        TRACE_PATTERN "%s}",
+                        UUID_TOSTRING(trace.get_trace_id()),
+                        __span_type_mapper[span->span_type_],
+                        UUID_TOSTRING(span->span_id_),
+                        span->start_ts_,
+                        span->end_ts_,
+                        UUID_TOSTRING(OB_ISNULL(span->source_span_) ? OBTRACE->get_root_span_id() : span->source_span_->span_id_),
+                        span->is_follow_ ? "true" : "false",
+                        buf);
+          buf[0] = '\0';
+          IGNORE_RETURN sql::handle_span_record(sql::get_flt_span_manager(), buf, pos, span);
+          if (0 != span->end_ts_) {
+            current_span.remove(span);
+            trace.freed_span_.add_first(span);
+          }
+          span->tags_ = nullptr;
         }
-        INIT_SPAN(span->source_span_);
-        _OBTRACE_LOG(INFO,
-                     TRACE_PATTERN "%s}",
-                     UUID_TOSTRING(trace.get_trace_id()),
-                     __span_type_mapper[span->span_type_],
-                     UUID_TOSTRING(span->span_id_),
-                     span->start_ts_,
-                     span->end_ts_,
-                     UUID_TOSTRING(OB_ISNULL(span->source_span_) ? OBTRACE->get_root_span_id() : span->source_span_->span_id_),
-                     span->is_follow_ ? "true" : "false",
-                     buf);
-        buf[0] = '\0';
-        IGNORE_RETURN sql::handle_span_record(buf, MAX_TRACE_LOG_SIZE, sql::get_flt_span_manager());
-        if (0 != span->end_ts_) {
-          current_span.remove(span);
-          trace.freed_span_.add_first(span);
-        }
-        span->tags_ = nullptr;
+        span = next;
       }
-      span = next;
-    }
-    PRINT_OB_LOG_TRACE_BUF(OBTRACE, INFO);
-    if (need_cancle_trace_mode) {
-      CANCLE_OB_LOG_TRACE_MODE();
-    }
+    };
+    PRINT_WITH_TRACE_MODE(FLT, INFO, func());
     trace.offset_ = trace.buffer_size_ / 2;
   }
 }
@@ -345,14 +325,16 @@ ObTrace* ObTrace::get_instance()
     thread_local char default_tls_buffer[MIN_BUFFER_SIZE];
     struct Guard {
       Guard(char* buffer, int64_t size) {
-        IGNORE_RETURN new(buffer) ObTrace(size);
+        if (OB_NOT_NULL(buffer)) {
+          IGNORE_RETURN new(buffer) ObTrace(size);
+        }
       }
     };
     thread_local Guard guard1(default_tsi_buffer, DEFAULT_BUFFER_SIZE);
     thread_local Guard guard2(default_tls_buffer, MIN_BUFFER_SIZE);
     if (OB_ISNULL(default_tsi_buffer)) {
       save_buffer = (ObTrace*)default_tls_buffer;
-      LIB_LOG(WARN, "tsi was nullptr");
+      LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tsi was nullptr");
     } else {
       save_buffer = (ObTrace*)default_tsi_buffer;
     }
@@ -431,7 +413,9 @@ ObSpanCtx* ObTrace::begin_span(uint32_t span_type, uint8_t level, bool is_follow
       new_span = freed_span_.remove_last();
       current_span_.add_first(new_span);
       new_span->span_type_ = span_type;
+      new_span->span_id_.high_ = 0;
       new_span->span_id_.low_ = ++seq_;
+      new_span->span_id_.high_ = 0;
       new_span->source_span_ = last_active_span_;
       new_span->is_follow_ = is_follow;
       new_span->start_ts_ = ObTimeUtility::fast_current_time();
@@ -441,6 +425,18 @@ ObSpanCtx* ObTrace::begin_span(uint32_t span_type, uint8_t level, bool is_follow
     }
   }
   return new_span;
+}
+
+// used in ddl task tracing
+ObSpanCtx* ObTrace::begin_span_by_id(const uint32_t span_type, const uint8_t level,
+                                     const bool is_follow, const UUID span_id, const int64_t start_ts)
+{
+  ObSpanCtx *span = begin_span(span_type, level, is_follow);
+  if (OB_NOT_NULL(span)) {
+    span->span_id_ = span_id;
+    span->start_ts_ = start_ts;
+  }
+  return span;
 }
 
 void ObTrace::end_span(ObSpanCtx* span)
@@ -453,11 +449,24 @@ void ObTrace::end_span(ObSpanCtx* span)
   }
 }
 
+// used in ddl task tracing
+void ObTrace::release_span(ObSpanCtx *&span)
+{
+  if (!trace_id_.is_inited() || OB_ISNULL(span) || !span->span_id_.is_inited()) {
+    // do nothing
+  } else {
+    end_span(span);
+    current_span_.remove(span);
+    freed_span_.add_first(span);
+    span = nullptr;
+  }
+}
+
 void ObTrace::reset_span()
 {
   #ifndef NDEBUG
   if (!check_magic()) {
-    LIB_LOG(ERROR, "trace buffer was not inited");
+    LIB_LOG_RET(ERROR, OB_NOT_INIT, "trace buffer was not inited");
   }
   #endif
   // remove all end span
@@ -514,7 +523,7 @@ void ObTrace::check_leak_span()
   ObSpanCtx* span = current_span_.get_first();
   while (current_span_.get_header() != span) {
     if (0 == span->end_ts_) {
-      _LIB_LOG(WARN, "there were leak span %s", lbt());
+      _LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "there were leak span %s", lbt());
       dump_span();
       break;
     }
@@ -526,7 +535,7 @@ void ObTrace::reset()
 {
   #ifndef NDEBUG
   if (!check_magic()) {
-    LIB_LOG(ERROR, "trace buffer was not inited");
+    LIB_LOG_RET(ERROR, OB_NOT_INIT, "trace buffer was not inited");
   }
   #endif
   offset_ = buffer_size_ / 2;
@@ -554,6 +563,11 @@ void ObTrace::dump_span()
   }
   _LIB_LOG(WARN, "%s backtrace: %s", buf, lbt());
 }
+
+OB_SERIALIZE_MEMBER(FltTransCtx,
+                    trace_id_,
+                    span_id_,
+                    policy_);
 
 }
 }

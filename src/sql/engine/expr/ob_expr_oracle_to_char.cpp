@@ -692,10 +692,10 @@ int ObExprToCharCommon::process_number_sci_value(ObExprCtx &expr_ctx,
     LOG_WARN("allocate memory for number string failed", K(ret));
   } else {
     if (obj.is_double()) {
-      str_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, alloc_size,
+      str_len = ob_gcvt_opt(obj.get_double(), OB_GCVT_ARG_DOUBLE, static_cast<int32_t>(alloc_size),
                             buf, NULL, lib::is_oracle_mode(), TRUE);
     } else if (obj.is_float()) {
-      str_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, alloc_size,
+      str_len = ob_gcvt_opt(obj.get_float(), OB_GCVT_ARG_FLOAT, static_cast<int32_t>(alloc_size),
                             buf, NULL, lib::is_oracle_mode(), TRUE);
     } else {
       EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
@@ -1355,10 +1355,10 @@ int ObExprToCharCommon::process_number_sci_value(
   } else {
     if (is_double) {
       str_len = ob_gcvt_opt(input.get_double(), OB_GCVT_ARG_DOUBLE,
-                            alloc_size, buf, NULL, lib::is_oracle_mode(), TRUE);
+          static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
     } else if (is_float) {
       str_len = ob_gcvt_opt(input.get_float(), OB_GCVT_ARG_FLOAT,
-                            alloc_size, buf, NULL, lib::is_oracle_mode(), TRUE);
+          static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
     } else {
       number::ObNumber number_value;
       if (expr.args_[0]->obj_meta_.is_integer_type()) {

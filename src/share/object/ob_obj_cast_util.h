@@ -203,6 +203,15 @@ int check_convert_str_err(const char *str,
                           const int32_t len,
                           const int err,
                           const ObCollationType &in_cs_type);
+
+// decimal(aka NumberType) cast to double/float precision increment. If it is an unsigned decimal,
+// don’t need to increment precision, otherwise increment 1 to cover sign bit. If scale is
+// equal to 0, don’t need to increment precision, otherwise increment 1 to cover dot bit.
+inline int16_t decimal_to_double_precision_inc(const ObObjType type, const ObScale s)
+{
+  return ((type == ObUNumberType) ? 0 : 1) + ((s > 0) ? 1 : 0);
+}
+
 } // end namespace common
 } // end namespace oceanbase
 

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/utility/ob_print_utils.h"
+#include "lib/alloc/memory_dump.h"
 #include "observer/omt/ob_multi_tenant.h"                  // ObMultiTenant
 #include "share/ob_tenant_mgr.h"                           // get_virtual_memory_used
 #include "share/allocator/ob_memstore_allocator_mgr.h"     // ObMemstoreAllocatorMgr
@@ -24,12 +25,11 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
-
 void ObPrintTenantMemoryUsage::runTimerTask()
 {
   LOG_INFO("=== Run print tenant memory usage task ===");
   ObTenantMemoryPrinter &printer = ObTenantMemoryPrinter::get_instance();
-  printer.print_tenant_usage();
+  PRINT_WITH_TRACE_MODE(LIB, INFO, printer.print_tenant_usage());
   ObObjFreeListList::get_freelists().dump();
 }
 
@@ -89,6 +89,15 @@ int ObTenantMemoryPrinter::print_tenant_usage()
                                                          pos))) {
           LOG_WARN("print mtl tenant usage failed", K(tmp_ret), K(tenant_id));
         }
+      }
+      int tenant_cnt = 0;
+      static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
+      lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
+      mallocator->get_unrecycled_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_cnt; ++i) {
+        uint64_t id = all_tenant_ids[i];
+        mallocator->print_tenant_memory_usage(id);
+        mallocator->print_tenant_ctx_memory_usage(id);
       }
     }
 

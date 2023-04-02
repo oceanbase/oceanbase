@@ -39,6 +39,27 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::rpc::frame;
 
+easy_addr_t oceanbase::rpc::frame::to_ez_addr(const ObAddr &addr)
+{
+  easy_addr_t ez;
+  if (addr.is_valid()) {
+    memset(&ez, 0, sizeof (ez));
+    ez.port   = (htons)(static_cast<uint16_t>(addr.get_port()));
+    ez.cidx   = 0;
+    if (addr.using_ipv4()) {
+      ez.family = AF_INET;
+      ez.u.addr = htonl(addr.get_ipv4());
+    } else if (addr.using_unix()) {
+      ez.family = AF_UNIX;
+      snprintf(ez.u.unix_path, UNIX_PATH_MAX, "%s", addr.get_unix_path());
+    } else {
+      ez.family = AF_INET6;
+      (void) addr.get_ipv6(&ez.u.addr6, sizeof(ez.u.addr6));
+    }
+  }
+  return ez;
+}
+
 // file private function, called when using asynchronous rpc call.
 int async_cb(easy_request_t *r)
 {
@@ -128,7 +149,7 @@ int async_cb(easy_request_t *r)
   const int64_t process_time = after_process_time - after_decode_time;
   const int64_t session_destroy_time = cur_time - after_process_time;
   if (total_time > OB_EASY_HANDLER_COST_TIME) {
-    LOG_WARN("async_cb handler cost too much time", K(total_time), K(decode_time),
+    LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "async_cb handler cost too much time", K(total_time), K(decode_time),
         K(process_time), K(session_destroy_time), K(pcode));
   }
 
@@ -457,27 +478,6 @@ int ObReqTransport::post_session(easy_session_t *s) const
     }
   }
   return ret;
-}
-
-easy_addr_t ObReqTransport::to_ez_addr(const ObAddr &addr) const
-{
-  easy_addr_t ez;
-  memset(&ez, 0, sizeof (ez));
-  if (addr.is_valid()) {
-    ez.port   = (htons)(static_cast<uint16_t>(addr.get_port()));
-    ez.cidx   = 0;
-    if (addr.using_ipv4()) {
-      ez.family = AF_INET;
-      ez.u.addr = htonl(addr.get_ipv4());
-    } else if (addr.using_unix()) {
-      ez.family = AF_UNIX;
-      snprintf(ez.u.unix_path, UNIX_PATH_MAX, "%s", addr.get_unix_path());
-    } else {
-      ez.family = AF_INET6;
-      (void) addr.get_ipv6(&ez.u.addr6, sizeof(ez.u.addr6));
-    }
-  }
-  return ez;
 }
 
 int ObReqTransport::send(const Request &req, Result &r) const

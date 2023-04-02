@@ -23,7 +23,6 @@
 #include "lib/alloc/alloc_struct.h"
 #include "lib/alloc/alloc_failed_reason.h"
 #include "lib/alloc/memory_sanity.h"
-#include "lib/stat/ob_diagnose_info.h"
 
 using namespace oceanbase::lib;
 
@@ -68,8 +67,6 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
   int orig_errno = errno;
-  EVENT_INC(MMAP_COUNT);
-  EVENT_ADD(MMAP_SIZE, size);
 
   void *ptr = nullptr;
   ptr = low_alloc(size, can_use_huge_page, huge_page_used, alloc_shadow);
@@ -101,7 +98,7 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
       ATOMIC_FAA(&large_maps_, 1);
     }
   } else {
-    LOG_ERROR("low alloc fail", K(size), K(orig_errno), K(errno));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "low alloc fail", K(size), K(orig_errno), K(errno));
     auto &afc = g_alloc_failed_ctx();
     afc.reason_ = PHYSICAL_MEMORY_EXHAUST;
     afc.alloc_size_ = size;
@@ -114,8 +111,7 @@ void *AChunkMgr::direct_alloc(const uint64_t size, const bool can_use_huge_page,
 void AChunkMgr::direct_free(const void *ptr, const uint64_t size)
 {
   common::ObTimeGuard time_guard(__func__, 1000 * 1000);
-  EVENT_INC(MUNMAP_COUNT);
-  EVENT_ADD(MUNMAP_SIZE, size);
+
   ATOMIC_FAA(&unmaps_, 1);
   if (size > INTACT_ACHUNK_SIZE) {
     ATOMIC_FAA(&large_unmaps_, 1);
@@ -143,7 +139,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
   if (SANITY_BOOL_EXPR(alloc_shadow)) {
     int64_t new_addr = ATOMIC_FAA(&global_canonical_addr, size);
     if (!SANITY_ADDR_IN_RANGE((void*)new_addr)) {
-      LOG_WARN("sanity address exhausted", K(errno), KP(new_addr));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "sanity address exhausted", K(errno), KP(new_addr));
       ATOMIC_FAA(&global_canonical_addr, -size);
       ptr = NULL; // let it goon, it means no shadow, same as out of checker!
       // in aarch64, mmap will return EPERM error when NULL address and MAP_FIXED are privided at the same time
@@ -173,7 +169,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
     void *shad_ptr  = SANITY_TO_SHADOW(ptr);
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
     if (MAP_FAILED == ::mmap(shad_ptr, shad_size, prot, flags, fd, offset)) {
-      LOG_ERROR("sanity alloc shadow failed", K(errno), KP(shad_ptr));
+      LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "sanity alloc shadow failed", K(errno), KP(shad_ptr));
       abort();
     } else {
       IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, shad_size);
@@ -253,8 +249,8 @@ AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)
     }
     SANITY_UNPOISON(chunk, all_size); // maybe no need?
   } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    _OB_LOG(WARN, "oops, over total memory limit, hold=%ld limit=%ld",
-            get_hold(), get_limit());
+    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "msg", "oops, over total memory limit" ,
+                "hold", get_hold(), "limit", get_limit());
   }
 
   return chunk;
@@ -321,8 +317,8 @@ AChunk *AChunkMgr::alloc_co_chunk(const uint64_t size)
     }
     //SANITY_UNPOISON(chunk, all_size); // maybe no need?
   } else if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-    _OB_LOG(WARN, "oops, over total memory limit, hold=%ld limit=%ld",
-            get_hold(), get_limit());
+    LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "msg", "oops, over total memory limit" ,
+                "hold", get_hold(), "limit", get_limit());
   }
 
   return chunk;

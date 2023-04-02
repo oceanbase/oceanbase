@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_macro_define.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -5735,6 +5736,44 @@ int ObInnerTableSchema::all_tenant_info_schema(ObTableSchema &table_schema)
       -1, //column_scale
       false, //is_nullable
       false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj recovery_until_scn_default;
+    recovery_until_scn_default.set_uint64(OB_MAX_SCN_TS_NS);
+    ADD_COLUMN_SCHEMA_T("recovery_until_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      recovery_until_scn_default,
+      recovery_until_scn_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj log_mode_default;
+    log_mode_default.set_varchar(ObString::make_string("NOARCHIVELOG"));
+    ADD_COLUMN_SCHEMA_T("log_mode", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      100, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      log_mode_default,
+      log_mode_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

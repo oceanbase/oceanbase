@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "share/resource_manager/ob_resource_plan_manager.h"
 #include "share/resource_manager/ob_resource_mapping_rule_manager.h"
+#include "share/resource_manager/ob_resource_col_mapping_rule_manager.h"
 
 namespace oceanbase
 {
@@ -33,6 +34,7 @@ public:
   int init();
   ObResourcePlanManager &get_plan_mgr() { return res_plan_mgr_; }
   ObResourceMappingRuleManager &get_mapping_rule_mgr() { return res_mapping_rule_mgr_; }
+  ObResourceColMappingRuleManager &get_col_mapping_rule_mgr() { return res_col_mapping_rule_mgr_; }
 private:
   ObResourceManager() = default;
   virtual ~ObResourceManager() = default;
@@ -40,6 +42,7 @@ private:
   /* variables */
   ObResourcePlanManager res_plan_mgr_;
   ObResourceMappingRuleManager res_mapping_rule_mgr_;
+  ObResourceColMappingRuleManager res_col_mapping_rule_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObResourceManager);
 };
 

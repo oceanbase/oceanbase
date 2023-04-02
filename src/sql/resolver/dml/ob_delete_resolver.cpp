@@ -73,6 +73,8 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
     stmt_ = delete_stmt;
     if (OB_FAIL(resolve_outline_data_hints())) {
       LOG_WARN("resolve outline data hints failed", K(ret));
+    } else if (is_mysql_mode() && OB_FAIL(resolve_with_clause(parse_tree.children_[WITH_MYSQL]))) {
+      LOG_WARN("resolve with clause failed", K(ret));
     } else if (OB_FAIL(resolve_table_list(*parse_tree.children_[TABLE], is_multi_table_delete))) {
       LOG_WARN("resolve table failed", K(ret));
     } else {
@@ -235,7 +237,7 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObDMLResolver::resolve_table(*table_node, table_item))) {
         LOG_WARN("failed to resolve table", K(ret));
-      } else if (table_item->is_function_table()) {//兼容oracle行为
+      } else if (table_item->is_function_table() || table_item->is_json_table()) {//兼容oracle行为
         ret = OB_WRONG_TABLE_NAME;
         LOG_WARN("invalid table name", K(ret));
       } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
@@ -294,13 +296,23 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
 
   if (OB_SUCC(ret)) {
     FOREACH_CNT_X(table_item, delete_tables_, OB_SUCC(ret)) {
-      if (NULL != *table_item && ((*table_item)->is_generated_table() || (*table_item)->is_temp_table())) {
-        if (!delete_stmt->has_instead_of_trigger()
-            && OB_FAIL(set_base_table_for_view(**table_item))) {
-          LOG_WARN("set base table for delete view failed", K(ret));
-        } else if (OB_FAIL(add_all_column_to_updatable_view(*delete_stmt, **table_item,
-                           delete_stmt->has_instead_of_trigger()))) {
-          LOG_WARN("add all column to updatable view failed", K(ret));
+      if (NULL != *table_item) {
+        if ((*table_item)->cte_type_ != TableItem::NOT_CTE) {
+          ret = OB_ERR_NON_UPDATABLE_TABLE;
+          const ObString &table_name = (*table_item)->alias_name_.empty() ? (*table_item)->table_name_ : (*table_item)->alias_name_;
+          ObString scope_name = "DELETE";
+          LOG_USER_ERROR(OB_ERR_NON_UPDATABLE_TABLE,
+                          table_name.length(), table_name.ptr(),
+                          scope_name.length(), scope_name.ptr());
+          LOG_WARN("table is not updatable", K(ret));
+        } else if ((*table_item)->is_generated_table() || (*table_item)->is_temp_table()) {
+          if (!delete_stmt->has_instead_of_trigger()
+              && OB_FAIL(set_base_table_for_view(**table_item))) {
+            LOG_WARN("set base table for delete view failed", K(ret));
+          } else if (OB_FAIL(add_all_column_to_updatable_view(*delete_stmt, **table_item,
+                            delete_stmt->has_instead_of_trigger()))) {
+            LOG_WARN("add all column to updatable view failed", K(ret));
+          }
         }
       }
     }
@@ -413,6 +425,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
         table_info->loc_table_id_ = base_table_item.table_id_;
         table_info->ref_table_id_ = base_table_item.ref_id_;
         table_info->table_name_ = table_schema->get_table_name_str();
+        table_info->is_link_table_ = base_table_item.is_link_table();
       }
     } else {
       uint64_t view_id = OB_INVALID_ID;

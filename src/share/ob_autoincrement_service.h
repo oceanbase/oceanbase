@@ -107,12 +107,15 @@ struct CacheHandle
 struct TableNode: public common::LinkHashValue<AutoincKey>
 {
   TableNode()
-    : table_id_(0),
+    : sync_mutex_(common::ObLatchIds::AUTO_INCREMENT_SYNC_LOCK),
+      alloc_mutex_(common::ObLatchIds::AUTO_INCREMENT_ALLOC_LOCK),
+      table_id_(0),
       next_value_(0),
       local_sync_(0),
       last_refresh_ts_(common::ObTimeUtility::current_time()),
       prefetching_(false),
-      curr_node_state_is_pending_(false)
+      curr_node_state_is_pending_(false),
+      autoinc_version_(0)
   {}
   virtual ~TableNode()
   {
@@ -126,7 +129,8 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
                K_(last_refresh_ts),
                K_(curr_node),
                K_(prefetch_node),
-               K_(prefetching));
+               K_(prefetching),
+               K_(autoinc_version));
 
   int alloc_handle(common::ObSmallAllocator &allocator,
                    const uint64_t offset,
@@ -163,8 +167,9 @@ struct TableNode: public common::LinkHashValue<AutoincKey>
   // we are not sure if curr_node is avaliable.
   // it will become avaliable again after fetch a new node
   // and combine them together.
-  // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/eqnlv0
+  // ref:
   bool curr_node_state_is_pending_;
+  int64_t  autoinc_version_;
 };
 
 // atomic update if greater than origin value
@@ -208,9 +213,9 @@ public:
                          uint64_t &start_inclusive,
                          uint64_t &end_inclusive,
                          uint64_t &sync_value);
-  
+
   int get_autoinc_value(const AutoincKey &key, uint64_t &seq_value, uint64_t &sync_value);
-  
+
   int get_autoinc_value_in_batch(const uint64_t tenant_id,
                                  const common::ObIArray<AutoincKey> &keys,
                                  common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values);
@@ -290,7 +295,7 @@ public:
       uint64_t &sync_value,
       uint64_t &start_inclusive,
       uint64_t &end_inclusive) override;
-  
+
   virtual int get_sequence_value(const AutoincKey &key, uint64_t &sequence_value) override;
 
   virtual int get_auto_increment_values(
@@ -358,7 +363,8 @@ public:
   int clear_autoinc_cache_all(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const uint64_t column_id,
-                              const bool autoinc_mode_is_order);
+                              const bool autoinc_mode_is_order,
+                              const common::ObArray<ObAddr>* alive_server_list = nullptr);
   int clear_autoinc_cache(const obrpc::ObAutoincSyncArg &arg);
 
   static int calc_next_value(const uint64_t last_next_value,
@@ -379,6 +385,18 @@ public:
                           const common::ObIArray<AutoincKey> &order_autokeys,
                           const common::ObIArray<AutoincKey> &noorder_autokeys,
                           common::hash::ObHashMap<AutoincKey, uint64_t> &seq_values);
+  int reinit_autoinc_row(const uint64_t &tenant_id,
+                         const uint64_t &table_id,
+                         const uint64_t &column_id,
+                         common::ObMySQLTransaction &trans);
+  int lock_autoinc_row(const uint64_t &tenant_id,
+                       const uint64_t &table_id,
+                       const uint64_t &column_id,
+                       common::ObMySQLTransaction &trans);
+  int reset_autoinc_row(const uint64_t &tenant_id,
+                        const uint64_t &table_id,
+                        const uint64_t &column_id,
+                        common::ObMySQLTransaction &trans);
 
 private:
   uint64_t get_max_value(const common::ObObjType type);
@@ -439,6 +457,8 @@ private:
     }
     return service;
   }
+
+  int alloc_autoinc_try_lock(lib::ObMutex &alloc_mutex);
 
 private:
   common::ObSmallAllocator node_allocator_;

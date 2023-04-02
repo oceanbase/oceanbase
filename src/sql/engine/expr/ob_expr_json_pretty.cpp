@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_pretty
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -52,11 +53,12 @@ int ObExprJsonPretty::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-template <typename T>
-int ObExprJsonPretty::calc(const T &data, ObObjType type, ObCollationType cs_type,
+int ObExprJsonPretty::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
                            ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null)
 {
   INIT_SUCC(ret);
+  ObObjType type = meta.type_;
+  ObCollationType cs_type = meta.cs_type_;
   ObIJsonBase *j_base = NULL;
   ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
   common::ObString j_str = data.get_string(); // json text or json binary
@@ -71,13 +73,15 @@ int ObExprJsonPretty::calc(const T &data, ObObjType type, ObCollationType cs_typ
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 1, "json_pretty");
   } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
+    LOG_WARN("fail to get real data.", K(ret), K(j_str));
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
       j_in_type, j_base))) {
     if (ret == OB_ERR_INVALID_JSON_TEXT) {
       ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
     }
     LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
-  } else if (OB_FAIL(j_base->print(j_buf, true, true))) {
+  } else if (OB_FAIL(j_base->print(j_buf, true, true, 0))) {
     LOG_WARN("fail to print json", K(ret), K(type), K(j_str), K(j_in_type));
   }
 
@@ -92,27 +96,18 @@ int ObExprJsonPretty::eval_json_pretty(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObExpr *arg = expr.args_[0];
   ObDatum *j_datum = NULL;
-  ObObjType type = arg->datum_meta_.type_;
-  ObCollationType cs_type = arg->datum_meta_.cs_type_;
   ObJsonBuffer j_buf(&tmp_allocator);
   bool is_null = false;
 
   if (OB_FAIL(arg->eval(ctx, j_datum))) {
     ret = OB_ERR_INVALID_DATATYPE;
     LOG_WARN("error, eval json args datum failed", K(ret));
-  } else if (OB_FAIL(calc(*j_datum, type, cs_type, &tmp_allocator, j_buf, is_null))) {
-    LOG_WARN("fail to calc json pretty result", K(ret), K(j_datum), K(type), K(cs_type));
+  } else if (OB_FAIL(calc(ctx, *j_datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, j_buf, is_null))) {
+    LOG_WARN("fail to calc json pretty result", K(ret), K(j_datum), K(arg->datum_meta_));
   } else if (is_null) {
     res.set_null();
-  } else {
-    char *buf = expr.get_str_res_mem(ctx, j_buf.length());
-    if (buf) {
-      MEMMOVE(buf, j_buf.ptr(), j_buf.length());
-      res.set_string(buf, j_buf.length());        
-    } else {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory for json pretty result", K(ret), K(j_buf));
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, j_buf))) {
+    LOG_WARN("fail to pack json result", K(ret));
   }
 
   return ret;

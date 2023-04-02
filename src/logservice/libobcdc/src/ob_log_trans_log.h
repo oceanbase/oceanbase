@@ -278,6 +278,43 @@ public:
   TO_STRING_KV("RedoLog", static_cast<const RedoLogMetaNode &>(*this));
 };
 
+class RedoSortedProgress
+{
+public:
+  RedoSortedProgress() { reset(); }
+  ~RedoSortedProgress() { reset(); }
+public:
+  void reset()
+  {
+    ATOMIC_SET(&dispatched_redo_count_, 0);
+    ATOMIC_SET(&sorted_redo_count_, 0);
+    ATOMIC_SET(&sorted_row_seq_no_, 0);
+  }
+  void reset_for_sys_ls_dml_trans(const int64_t redo_node_count)
+  {
+    ATOMIC_SET(&dispatched_redo_count_, redo_node_count);
+    ATOMIC_SET(&sorted_redo_count_, redo_node_count);
+    ATOMIC_SET(&sorted_row_seq_no_, 0);
+  }
+  OB_INLINE int64_t get_dispatched_redo_count() const { return ATOMIC_LOAD(&dispatched_redo_count_); }
+  OB_INLINE void inc_dispatched_redo_count() { ATOMIC_INC(&dispatched_redo_count_); }
+  OB_INLINE int64_t get_sorted_redo_count() const { return ATOMIC_LOAD(&sorted_redo_count_); }
+  OB_INLINE void inc_sorted_redo_count() { ATOMIC_INC(&sorted_redo_count_); }
+  OB_INLINE int64_t get_sorted_row_seq_no() const { return ATOMIC_LOAD(&sorted_row_seq_no_); }
+  void set_sorted_row_seq_no(const int64_t row_seq_no);
+  OB_INLINE int64_t get_dispatched_not_sort_redo_count() const
+  { return ATOMIC_LOAD(&dispatched_redo_count_) - ATOMIC_LOAD(&sorted_redo_count_); }
+public:
+  TO_STRING_KV(
+      K_(dispatched_redo_count),
+      K_(sorted_redo_count),
+      K_(sorted_row_seq_no));
+private:
+  int64_t dispatched_redo_count_;
+  int64_t sorted_redo_count_;
+  int64_t sorted_row_seq_no_;
+};
+
 class IStmtTask;
 class DmlStmtTask;
 // Ordered Redo log list
@@ -288,7 +325,6 @@ struct SortedRedoLogList
   // Otherwise, we can increase ready_node_num directly
   int32_t     ready_node_num_;
   int32_t     log_num_;
-  int64_t     dispatched_redo_count_;
   bool        is_dml_stmt_iter_end_;
 
   RedoLogMetaNode *head_;
@@ -297,9 +333,20 @@ struct SortedRedoLogList
   RedoLogMetaNode *cur_dispatch_redo_;
   RedoLogMetaNode *cur_sort_redo_;
   ObLink          *cur_sort_stmt_;
+  RedoSortedProgress sorted_progress_;
 
-  SortedRedoLogList() : node_num_(0), ready_node_num_(0), log_num_(0), dispatched_redo_count_(0), is_dml_stmt_iter_end_(false),
-      head_(NULL), tail_(NULL), last_push_node_(NULL), cur_dispatch_redo_(NULL), cur_sort_redo_(NULL), cur_sort_stmt_(NULL)
+  SortedRedoLogList() :
+      node_num_(0),
+      ready_node_num_(0),
+      log_num_(0),
+      is_dml_stmt_iter_end_(false),
+      head_(NULL),
+      tail_(NULL),
+      last_push_node_(NULL),
+      cur_dispatch_redo_(NULL),
+      cur_sort_redo_(NULL),
+      cur_sort_stmt_(NULL),
+      sorted_progress_()
   {}
 
   ~SortedRedoLogList() { reset(); }
@@ -314,7 +361,6 @@ struct SortedRedoLogList
     node_num_ = 0;
     ready_node_num_ = 0;
     log_num_ = 0;
-    dispatched_redo_count_ = 0;
     is_dml_stmt_iter_end_ = false;
     head_ = NULL;
     tail_ = NULL;
@@ -322,15 +368,24 @@ struct SortedRedoLogList
     cur_dispatch_redo_ = NULL;
     cur_sort_redo_ = NULL;
     cur_sort_stmt_ = NULL;
+    sorted_progress_.reset();
   }
 
   bool is_valid() const
   {
-    return node_num_ > 0 && log_num_ > 0 && NULL != head_ && NULL != tail_
+    return node_num_ > 0
+        && log_num_ > 0
+        && NULL != head_
+        && NULL != tail_
         && NULL != last_push_node_;
   }
 
-  bool is_dispatch_finish() const { return node_num_ == ATOMIC_LOAD(&dispatched_redo_count_); }
+  OB_INLINE bool is_dispatch_finish() const { return node_num_ == sorted_progress_.get_dispatched_redo_count(); }
+
+  OB_INLINE bool has_dispatched_but_unsorted_redo() const
+  { return sorted_progress_.get_dispatched_not_sort_redo_count() > 0; }
+
+  OB_INLINE void set_sorted_row_seq_no(const int64_t row_seq_no) { sorted_progress_.set_sorted_row_seq_no(row_seq_no); }
 
   bool is_dml_stmt_iter_end() const { return is_dml_stmt_iter_end_; }
 
@@ -373,11 +428,28 @@ struct SortedRedoLogList
   /// @retval Other error codes   Fail
   int next_dml_stmt(ObLink *&dml_stmt_task);
 
-  TO_STRING_KV(K_(node_num), K_(log_num), K_(ready_node_num),
-    KP_(head), KP_(tail), KP_(last_push_node),
-    K_(dispatched_redo_count), KP_(cur_dispatch_redo), KP_(cur_sort_redo),
-    "cur_sort_redo", static_cast<DmlRedoLogNode*>(cur_sort_redo_),
-    KP_(cur_sort_stmt), K_(is_dml_stmt_iter_end));
+  TO_STRING_KV(
+      K_(node_num),
+      K_(log_num),
+      K_(ready_node_num),
+      KP_(head),
+      KP_(tail),
+      KP_(last_push_node),
+      "redo_sorted_progress", sorted_progress_,
+      KP_(cur_dispatch_redo),
+      KP_(cur_sort_redo),
+      "cur_sort_redo", static_cast<DmlRedoLogNode*>(cur_sort_redo_),
+      KP_(cur_sort_stmt),
+      K_(is_dml_stmt_iter_end));
+
+  void mark_sys_ls_dml_trans_dispatched()
+  {
+    cur_dispatch_redo_ = NULL;
+    cur_sort_redo_ = NULL;
+    cur_sort_stmt_ = NULL;
+    sorted_progress_.reset_for_sys_ls_dml_trans(node_num_);
+  }
+
 };
 } // namespace libobcdc
 } // namespace oceanbase

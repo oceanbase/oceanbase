@@ -17,6 +17,7 @@
 #include "lib/utility/ob_print_utils.h" // Print*
 #include "common/ob_learner_list.h"     // common::GlobalLearnerList
 #include "common/ob_member_list.h"      // ObMemberList
+#include "share/scn.h"                        // SCN
 #include "lsn.h"                        // LSN
 #include "palf_base_info.h"             // LogInfo
 #include "palf_options.h"               // AccessMode
@@ -119,8 +120,17 @@ public:
                const int64_t replica_num,
                const common::GlobalLearnerList &learnerlist,
                const LogConfigVersion &config_version);
-  int convert_to_complete_config(common::ObMemberList &all_paxos_memberlist,
-                                 int64_t &all_paxos_replica_num,
+  // @brief get the expected paxos member list without arbitraion member,
+  // including degraded paxos members.
+  // @param[in/out] ObMemberList, the output member list
+  // @param[in/out] int64_t, the output replica_num
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  int get_expected_paxos_memberlist(common::ObMemberList &paxos_memberlist,
+                                    int64_t &paxos_replica_num) const;
+  int convert_to_complete_config(common::ObMemberList &alive_paxos_memberlist,
+                                 int64_t &alive_paxos_replica_num,
                                  GlobalLearnerList &all_learners) const;
   // For unittest
   bool operator==(const LogConfigInfo &config_info) const;
@@ -152,20 +162,33 @@ public:
   ~LogConfigMeta();
 
 public:
+  int generate_for_default(const int64_t proposal_id,
+                           const LogConfigInfo &prev_config_info,
+                           const LogConfigInfo &curr_config_info);
   int generate(const int64_t proposal_id,
                const LogConfigInfo &prev_config_info,
-               const LogConfigInfo &curr_config_info);
+               const LogConfigInfo &curr_config_info,
+               const int64_t prev_log_proposal_id,
+               const LSN &prev_lsn,
+               const int64_t prev_mode_pid);
   bool is_valid() const;
   void reset();
   void operator=(const LogConfigMeta &log_config_meta);
-  TO_STRING_KV(K_(version), K_(proposal_id), K_(prev), K_(curr));
+  TO_STRING_KV(K_(version), K_(proposal_id), K_(prev), K_(curr), K_(prev_log_proposal_id),
+      K_(prev_lsn), K_(prev_mode_pid));
   NEED_SERIALIZE_AND_DESERIALIZE;
   int64_t version_;
+  // ====== members in VERSION 1 ========
   int64_t proposal_id_;
   LogConfigInfo prev_;
   LogConfigInfo curr_;
+  // ====== added members in VERSION 2 ========
+  int64_t prev_log_proposal_id_;
+  LSN prev_lsn_;
+  int64_t prev_mode_pid_;
 
   static constexpr int64_t LOG_CONFIG_META_VERSION = 1;
+  static constexpr int64_t LOG_CONFIG_META_VERSION_INC = 2;
 };
 
 struct LogModeMeta {
@@ -176,11 +199,11 @@ public:
       const int64_t proposal_id,
       const int64_t mode_version,
       const AccessMode &access_mode,
-      const int64_t ref_ts_ns);
+      const share::SCN &ref_scn);
   bool is_valid() const;
   void reset();
   void operator=(const LogModeMeta &mode_meta);
-  TO_STRING_KV(K_(version), K_(proposal_id), K_(mode_version), K_(access_mode), K_(ref_ts_ns));
+  TO_STRING_KV(K_(version), K_(proposal_id), K_(mode_version), K_(access_mode), K_(ref_scn));
   NEED_SERIALIZE_AND_DESERIALIZE;
 public:
   int64_t version_;
@@ -189,9 +212,9 @@ public:
   // proposal_id of last access_mode_, only changed by change_access_mode
   int64_t mode_version_;
   AccessMode access_mode_;
-  // log_ts lower bound
-  // after switching over, log_ts of all submitted log should be bigger than ref_ts_ns_
-  int64_t ref_ts_ns_;
+  // scn lower bound
+  // after switching over, scn of all submitted log should be bigger than ref_scn_
+  share::SCN ref_scn_;
 
   static constexpr int64_t LOG_MODE_META_VERSION = 1;
 };

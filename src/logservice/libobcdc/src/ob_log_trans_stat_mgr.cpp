@@ -413,7 +413,7 @@ bool ObLogTransStatMgr::TenantRpsBeforeFilterUpdater::operator()(const TenantID 
 {
   if (tid.tenant_id_ == tenant_id_) {
     if (OB_ISNULL(ts_info)) {
-      LOG_ERROR("tenant stat info is null", K(tid), KPC(ts_info));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant stat info is null", K(tid), KPC(ts_info));
     } else {
       ts_info->tps_stat_info_.do_tps_stat();
       ts_info->rps_stat_info_before_filter_.do_rps_stat(record_count_);
@@ -427,7 +427,7 @@ bool ObLogTransStatMgr::TenantRpsAfterFilterUpdater::operator()(const TenantID &
 {
   if (tid.tenant_id_ == tenant_id_) {
     if (OB_ISNULL(ts_info)) {
-      LOG_ERROR("tenant stat info is null", K(tid), KPC(ts_info));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant stat info is null", K(tid), KPC(ts_info));
     } else {
       ts_info->rps_stat_info_after_filter_.do_rps_stat(record_count_);
     }

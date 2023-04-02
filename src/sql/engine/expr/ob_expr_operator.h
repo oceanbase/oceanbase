@@ -69,7 +69,7 @@ public:
                   calc_meta_(calc_meta), max_length_(max_length), flag_(flag)
   {
     if (OB_UNLIKELY(calc_meta.get_type() >= common::ObMaxType)) {
-      SQL_LOG(ERROR, "the wrong type");
+      SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "the wrong type");
     }
   }
   virtual ~ObFuncInputType() {}
@@ -460,7 +460,7 @@ public:
     const ObExprResType *types,
     int64_t param_num,
     const common::ObCollationType conn_coll_type);
-  //skip_null for expr COALESCE https://work.aone.alibaba-inc.com/issue/31824340
+  //skip_null for expr COALESCE
   static int aggregate_result_type_for_merge(
     ObExprResType &type,
     const ObExprResType *types,
@@ -712,7 +712,7 @@ inline int ObExprOperator::calc_result_type0(ObExprResType &type,
   UNUSED(type);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -725,7 +725,7 @@ inline int ObExprOperator::calc_result_type1(ObExprResType &type,
   UNUSED(type1);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -740,7 +740,7 @@ inline int ObExprOperator::calc_result_type2(ObExprResType &type,
   UNUSED(type2);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -757,7 +757,7 @@ inline int ObExprOperator::calc_result_type3(ObExprResType &type,
   UNUSED(type3);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -772,7 +772,7 @@ inline int ObExprOperator::calc_result_typeN(ObExprResType &type,
   UNUSED(param_num);
   UNUSED(type_ctx);
   UNUSED(arg_arrs);
-  SQL_LOG(ERROR, "not implement", K(type_), K(get_type_name(type_)));
+  SQL_LOG_RET(ERROR, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -781,7 +781,7 @@ inline int ObExprOperator::calc_result_type0(ObExprResType &type,
 {
   UNUSED(type);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -792,7 +792,7 @@ inline int ObExprOperator::calc_result_type1(ObExprResType &type,
   UNUSED(type);
   UNUSED(type1);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -805,7 +805,7 @@ inline int ObExprOperator::calc_result_type2(ObExprResType &type,
   UNUSED(type1);
   UNUSED(type2);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -820,7 +820,7 @@ inline int ObExprOperator::calc_result_type3(ObExprResType &type,
   UNUSED(type2);
   UNUSED(type3);
   UNUSED(type_ctx);
-  SQL_LOG(WARN, "not implement");
+  SQL_LOG_RET(WARN, common::OB_NOT_IMPLEMENT, "not implement");
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -833,7 +833,7 @@ inline int ObExprOperator::calc_result_typeN(ObExprResType &type,
   UNUSED(types);
   UNUSED(param_num);
   UNUSED(type_ctx);
-  SQL_LOG(ERROR, "not implement", K(type_), K(get_type_name(type_)));
+  SQL_LOG_RET(ERROR, common::OB_NOT_IMPLEMENT, "not implement", K(type_), K(get_type_name(type_)));
   return common::OB_NOT_IMPLEMENT;
 }
 
@@ -945,7 +945,7 @@ inline void ObExprOperator::calc_result_flagN(ObExprResType &type,
 
   bool not_null = true;
   if (OB_ISNULL(types) || OB_UNLIKELY(param_num < 0)) {
-    SQL_LOG(ERROR, "null types or the wrong param_num");
+    SQL_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "null types or the wrong param_num");
   } else {
     for (int64_t i = 0; i < param_num; ++i) {
       if (!types[i].has_result_flag(NOT_NULL_FLAG)) {
@@ -1198,18 +1198,19 @@ public:
       common::ObCmpOp cmp_op)
   {
     bool need_no_cast = false;
+    bool has_lob_header = type1.has_lob_header() || type2.has_lob_header();
     //特殊处理显示调用compare(例如：c1 > c2)，此时enum/set均应该转换成string处理
     //内部比较（order by）,enum/set不需要转换。
     if (common::ObDatumFuncs::is_string_type(type1.get_type()) &&
         common::ObDatumFuncs::is_string_type(type2.get_type())) {
-      need_no_cast =
-          common::ObCharset::charset_type_by_coll(
-              type1.get_collation_type()) ==
-          common::ObCharset::charset_type_by_coll(type2.get_collation_type());
+      // if locator v2 enabled, cannot compare string/text directly remove this comment
+      // since cannot known whether a datum has locator in compare funcs
+      need_no_cast = common::ObCharset::charset_type_by_coll(type1.get_collation_type())
+                     == common::ObCharset::charset_type_by_coll(type2.get_collation_type());
     } else {
       auto func_ptr = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(
-          type1.get_type(), type2.get_type(), cmp_op,
-          lib::is_oracle_mode(), common::CS_TYPE_MAX);
+          type1.get_type(), type2.get_type(), type1.get_scale(), type2.get_scale(), cmp_op,
+          lib::is_oracle_mode(), common::CS_TYPE_MAX, has_lob_header);
       need_no_cast = (func_ptr != nullptr);
     }
     return need_no_cast;
@@ -1217,10 +1218,6 @@ public:
 
   static int eval_pl_udt_compare(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
-protected:
-  static bool is_int_cmp_const_str(const ObExprResType *type1,
-                                   const ObExprResType *type2,
-                                   common::ObObjType &cmp_type);
   OB_INLINE static common::ObCmpOp get_cmp_op(const ObExprOperatorType type) {
     /*
      * maybe we can use associative array(table lookup) to get a better
@@ -1277,6 +1274,10 @@ protected:
     return cmp_op;
   }
 
+protected:
+  static bool is_int_cmp_const_str(const ObExprResType *type1,
+                                   const ObExprResType *type2,
+                                   common::ObObjType &cmp_type);
   OB_INLINE static bool is_expected_cmp_ret(const common::ObCmpOp cmp_op,
                                             const int cmp_ret)
   {
@@ -2161,14 +2162,14 @@ private:
     if (lib::is_oracle_mode()) {                                           \
       if (common::OB_SUCCESS != (expr_ctx).my_session_->                   \
           get_collation_server(cast_coll_type)) {                          \
-        SQL_LOG(ERROR, "fail to get server collation");                    \
+        SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to get server collation");                    \
         cast_coll_type = ObCharset::get_default_collation(                 \
             ObCharset::get_default_charset());                             \
       }                                                                    \
     } else if (lib::is_mysql_mode()) {                                     \
       if (common::OB_SUCCESS != (expr_ctx).my_session_->                   \
           get_collation_connection(cast_coll_type)) {                      \
-        SQL_LOG(ERROR, "fail to get collation_connection, "                \
+        SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to get collation_connection, "                \
                 "set it to default collation");                            \
         cast_coll_type = ObCharset::get_default_collation(                 \
             ObCharset::get_default_charset());                             \
@@ -2176,10 +2177,10 @@ private:
     }                                                                      \
     if (common::OB_SUCCESS != ObSQLUtils::set_compatible_cast_mode(        \
                                 (expr_ctx).my_session_, cp_cast_mode_)) {  \
-      SQL_LOG(ERROR, "fail to get compatible mode for cast_mode");         \
+      SQL_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "fail to get compatible mode for cast_mode");         \
     }                                                                      \
   } else {                                                                 \
-    SQL_LOG(WARN, "session is null");                                      \
+    SQL_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "session is null");                                      \
     cast_coll_type = ObCharset::get_system_collation();                    \
   }                                                                        \
   const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params((expr_ctx).my_session_);\

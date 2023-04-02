@@ -50,6 +50,10 @@ const char* const EXTERNAL_KMS_INFO = "external_kms_info";
 const char* const SSL_EXTERNAL_KMS_INFO = "ssl_external_kms_info";
 const char* const CLUSTER_ID = "cluster_id";
 const char* const CLUSTER_NAME = "cluster";
+const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
+const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
+const char* const COMPATIBLE = "compatible";
+const char* const WEAK_READ_VERSION_REFRESH_INTERVAL = "weak_read_version_refresh_interval";
 class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig
@@ -87,13 +91,13 @@ public:
   bool enable_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
-    return v > 0 && lib::is_diagnose_info_enabled();
+    return v > 0;
   }
 
   bool enable_strict_defensive_check() const
   {
     int64_t v = _enable_defensive_check;
-    return v == 2 && lib::is_diagnose_info_enabled();
+    return v == 2;
   }
 
   // false for 1.4.2 -> 1.4.3
@@ -104,6 +108,8 @@ public:
   bool in_major_version_upgrade_mode() const { return in_upgrade_mode() && is_major_version_upgrade(); }
   bool enable_new_major() const {  return true; }
   bool in_upgrade_mode() const;
+  bool in_dbupgrade_stage() const;
+  bool is_valid() const { return  system_config_!= NULL; };
   int64_t get_current_version() { return system_config_->get_version(); }
 
   // 兼容性需求，兼容老的SPFILE格式

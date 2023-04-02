@@ -67,7 +67,8 @@ public:
       bfs_pump_(stored_row_buf_, left_output, sort_collations, cycle_by_col_lists),
       eval_ctx_(eval_ctx),
       ctx_(exec_ctx),
-      output_union_exprs_(output_union_exprs)
+      output_union_exprs_(output_union_exprs),
+      max_recursion_depth_(0)
   {
   }
   ~ObRecursiveInnerDataOp() = default;
@@ -121,6 +122,7 @@ private:
       return &dfs_pump_;
     }
   }
+  int check_recursive_depth();
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveInnerDataOp);
 private:
@@ -162,6 +164,7 @@ private:
   ObExecContext &ctx_;
   const common::ObIArray<ObExpr *> &output_union_exprs_;
   int64_t batch_size_ = 1;
+  uint64_t max_recursion_depth_;
 };
 } // end namespace sql
 } // end namespace oceanbase

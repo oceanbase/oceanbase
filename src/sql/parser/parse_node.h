@@ -48,8 +48,8 @@ enum SelectParserOffset
   PARSE_SELECT_DYNAMIC_CBY_SW, // connect by node or start with node
   PARSE_SELECT_DYNAMIC_GROUP,
   PARSE_SELECT_DYNAMIC_HAVING,
+  PARSE_SELECT_NAMED_WINDOWS,
   PARSE_SELECT_SET,
-  PARSE_SELECT_ALL,
   PARSE_SELECT_FORMER,
   PARSE_SELECT_LATER,
   PARSE_SELECT_ORDER,
@@ -57,7 +57,6 @@ enum SelectParserOffset
   PARSE_SELECT_FOR_UPD,
   PARSE_SELECT_HINTS,
   PARSE_SELECT_WHEN,
-  PARSE_SELECT_NAMED_WINDOWS,
   PARSE_SELECT_FETCH,
   PARSE_SELECT_FETCH_TEMP, //use to temporary store fetch clause in parser
   PARSE_SELECT_WITH_CHECK_OPTION,
@@ -91,6 +90,7 @@ enum ParseMode
   TRIGGER_MODE, /* treat ':xxx' as identifier */
   DYNAMIC_SQL_MODE, /*解析动态sql过程中，:idx和:identifier要根据语句类型确定是否检查placeholder的名字*/
   DBMS_SQL_MODE,
+  UDR_SQL_MODE,
   INS_MULTI_VALUES,
 };
 
@@ -126,21 +126,25 @@ typedef struct _ParseNode
   int32_t num_child_;   /* attributes for non-terninal node, which has children */
   int16_t param_num_; //记录该node对应的原始text中常量的个数, 暂时仅T_CAST_ARGUMENT使用
   union {
-    uint16_t flag_;
+    uint32_t flag_;
     struct {
-      uint16_t is_neg_ : 1;// 记录常量节点的父节点是否为T_OP_NEG节点, 1表示是, 0 表示不是
-      uint16_t is_hidden_const_ : 1; //1 表示某常量正常parse能识别但fast parse不能识别, 0 表示都能识别。
-      uint16_t is_tree_not_param_ :1; //1 表示该节点及其子节点常量均不能参数化, 0表示没该限制
-      uint16_t length_semantics_  :2; //2 for oralce [char|varbinary] (n b [bytes|char])
-      uint16_t is_val_paramed_item_idx_ :1; // T_PROJECT_STRING的vlaues是否是select_item_param_infos数组的下标
-      uint16_t is_copy_raw_text_ : 1; // 是否回填常量节点的raw_text_，用于select item常量参数化
-      uint16_t is_column_varchar_ : 1; // 投影列是否是一个常量字符串，用于select item常量参数化
-      uint16_t is_trans_from_minus_: 1; // 负数常量节点是否是从减号操作转换而来，比如1 - 2，词法阶段会生成一个-2
-      uint16_t is_assigned_from_child_: 1; // 常量节点是否由子节点赋值得到，用于处理int64_min
-      uint16_t is_num_must_be_pos_: 1; //
-      uint16_t is_date_unit_ : 1; //1 表示是date unit常量，在反拼的时候需要反拼为字符串
-      uint16_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
-      uint16_t reserved_ : 2;
+      uint32_t is_neg_ : 1;// 记录常量节点的父节点是否为T_OP_NEG节点, 1表示是, 0 表示不是
+      uint32_t is_hidden_const_ : 1; //1 表示某常量正常parse能识别但fast parse不能识别, 0 表示都能识别。
+      uint32_t is_tree_not_param_ :1; //1 表示该节点及其子节点常量均不能参数化, 0表示没该限制
+      uint32_t length_semantics_  :2; //2 for oralce [char|varbinary] (n b [bytes|char])
+      uint32_t is_val_paramed_item_idx_ :1; // T_PROJECT_STRING的vlaues是否是select_item_param_infos数组的下标
+      uint32_t is_copy_raw_text_ : 1; // 是否回填常量节点的raw_text_，用于select item常量参数化
+      uint32_t is_column_varchar_ : 1; // 投影列是否是一个常量字符串，用于select item常量参数化
+      uint32_t is_trans_from_minus_: 1; // 负数常量节点是否是从减号操作转换而来，比如1 - 2，词法阶段会生成一个-2
+      uint32_t is_assigned_from_child_: 1; // 常量节点是否由子节点赋值得到，用于处理int64_min
+      uint32_t is_num_must_be_pos_: 1; //
+      uint32_t is_date_unit_ : 1; //1 表示是date unit常量，在反拼的时候需要反拼为字符串
+      uint32_t is_literal_bool_ : 1; // indicate node is a literal TRUE/FALSE
+      uint32_t is_empty_ : 1; // 表示是否缺省该节点，1表示缺省，0表示没有缺省, opt_asc_desc节点中使用到
+      uint32_t is_multiset_ : 1; // for cast(multiset(...) as ...)
+      uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
+      uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
+      uint32_t reserved_;
     };
   };
   /* attributes for terminal node, it is real value */
@@ -208,6 +212,7 @@ typedef struct _PLParseInfo
 {
   bool is_pl_parse_;//用于标识当前parser逻辑是否为PLParse调用
   bool is_pl_parse_expr_; //用于标识当前parser逻辑是否在解析PLParser的expr
+  bool is_forbid_pl_fp_;
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
   int plsql_line_;
   /*for mysql pl*/
@@ -226,6 +231,7 @@ typedef struct _ObQuestionMarkCtx
   int capacity_;
   bool by_ordinal_;
   bool by_name_;
+  bool by_defined_name_;
 } ObQuestionMarkCtx;
 
 
@@ -266,6 +272,7 @@ typedef struct _InsMultiValuesResult
   ParenthesesOffset *tail_parentheses_;
   int values_col_;
   int values_count_;
+  int on_duplicate_pos_; // the start position of on duplicate key in insert ... on duplicate key update statement
   int ret_code_;
 } InsMultiValuesResult;
 
@@ -300,7 +307,7 @@ typedef struct
     uint32_t is_include_old_new_in_trigger_    : 1;
     uint32_t is_normal_ps_prepare_             : 1;
     uint32_t is_multi_values_parser_           : 1;
-    uint32_t reserved_                         : 1;
+    uint32_t is_for_udr_                       : 1;
   };
 
   ParseNode *result_tree_;
@@ -369,6 +376,8 @@ extern ParseNode *new_node(void *malloc_pool, ObItemType type, int num);
 extern ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num, ...);
 extern ParseNode *new_terminal_node(void *malloc_pool, ObItemType type);
 
+extern int obpl_parser_check_stack_overflow();
+
 int get_deep_copy_size(const ParseNode *node, int64_t *size);
 int deep_copy_parse_node(void *malloc_pool, const ParseNode *src, ParseNode *dst);
 
@@ -391,6 +400,7 @@ extern uint64_t parsenode_hash(const ParseNode *node, int *ret);
 extern bool parsenode_equal(const ParseNode *node1, const ParseNode *node2, int *ret);
 
 extern int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char *name);
+extern int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const char *name);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode
@@ -404,6 +414,7 @@ extern bool nodename_equal(const ParseNode *node, const char *pattern, int64_t p
 #define OB_NODE_CAST_N_SCALE_IDX 3
 #define OB_NODE_CAST_NUMBER_TYPE_IDX 1
 #define OB_NODE_CAST_C_LEN_IDX 1
+#define OB_NODE_CAST_GEO_TYPE_IDX 1
 
 typedef enum ObNumberParseType
 {

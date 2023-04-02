@@ -25,12 +25,14 @@ enum ObRowMergerType
 {
   SIMPLE_MERGER,
   LOSER_TREE,
+  MAJOR_ROWS_MERGE
 };
 
 template <typename T, typename Comparator>
 class ObRowsMerger
 {
 public:
+  virtual ~ObRowsMerger() = default;
   virtual ObRowMergerType type() = 0;
   virtual int init(const int64_t table_cnt, common::ObIAllocator &allocator) = 0;
   virtual bool is_inited() const = 0;
@@ -364,8 +366,8 @@ int ObLoserTree<T, CompareFunctor, MAX_PLAYER_CNT>::duel(
     T &offender, T &defender, const int64_t match_idx, bool &is_offender_win)
 {
   int ret = OB_SUCCESS;
-  int64_t cmp_ret = cmp_(offender, defender);
-  if (OB_FAIL(cmp_.get_error_code())) {
+  int64_t cmp_ret = 0;
+  if (OB_FAIL(cmp_.cmp(offender, defender, cmp_ret))) {
     LIB_LOG(WARN, "compare fail", K(ret), K(match_idx), K(is_offender_win));
   } else {
     matches_[match_idx].is_draw_ = (0 == cmp_ret);

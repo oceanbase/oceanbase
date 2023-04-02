@@ -71,7 +71,7 @@ struct ObMacroEndkeyComparor
     } else if (OB_ISNULL(left.rowkey_) || OB_ISNULL(right.rowkey_)
         || OB_UNLIKELY(!left.rowkey_->is_valid() || !right.rowkey_->is_valid())) {
       ret_ = OB_INVALID_ARGUMENT;
-      STORAGE_LOG(WARN, "Invalid argument to compare macro endkey", K_(ret), K(left), K(right));
+      STORAGE_LOG_RET(WARN, ret_, "Invalid argument to compare macro endkey", K_(ret), K(left), K(right));
     } else {
       ret_ = left.rowkey_->compare(*right.rowkey_, cmp);
     }

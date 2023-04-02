@@ -860,7 +860,7 @@ int ObUserTenantBackupDeleteMgr::deal_non_reentrant_job(const int error)
            || ObBackupCleanStatus::Status::DOING == task_attr.status_.status_
            || ObBackupCleanStatus::Status::CANCELING == task_attr.status_.status_) {
 #ifdef ERRSIM
-  ret = E(EventTable::EN_BACKUP_DELETE_EXCEPTION_HANDLING) OB_SUCCESS;
+  ret = OB_E(EventTable::EN_BACKUP_DELETE_EXCEPTION_HANDLING) OB_SUCCESS;
 #endif
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(task_mgr.init(job_attr_->tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_,

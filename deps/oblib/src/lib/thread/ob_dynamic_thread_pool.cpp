@@ -50,7 +50,7 @@ ObDynamicThreadPool::ObDynamicThreadPool()
 ObDynamicThreadPool::~ObDynamicThreadPool()
 {
   if (!is_stop_) {
-    COMMON_LOG(ERROR, "ObDynamicThreadPool is destruction before stop");
+    COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ObDynamicThreadPool is destruction before stop");
     is_stop_ = true;
   }
   destroy();
@@ -134,7 +134,7 @@ void ObDynamicThreadPool::task_thread_idle()
   ObThreadCondGuard guard(task_thread_cond_);
   if (OB_SUCCESS != (tmp_ret = task_thread_cond_.wait(DEFAULT_CHECK_TIME_MS))) {
     if (OB_TIMEOUT != tmp_ret) {
-      STORAGE_LOG(WARN, "failed to idle", K(tmp_ret));
+      STORAGE_LOG_RET(WARN, tmp_ret, "failed to idle", K(tmp_ret));
     }
   }
 }
@@ -148,20 +148,20 @@ void ObDynamicThreadPool::run1()
   }
   while (!is_stop_) {
     if (OB_SUCCESS != (tmp_ret = check_thread_status())) {
-      COMMON_LOG(WARN, "failed to check_thread_status", K(tmp_ret));
+      COMMON_LOG_RET(WARN, tmp_ret, "failed to check_thread_status", K(tmp_ret));
     }
     ObThreadCondGuard guard(cond_);
     if (need_idle_) {
       if (OB_SUCCESS != (tmp_ret = cond_.wait(DEFAULT_CHECK_TIME_MS))) {
         if (OB_TIMEOUT != tmp_ret) {
-          STORAGE_LOG(WARN, "failed to idle", K(tmp_ret));
+          STORAGE_LOG_RET(WARN, tmp_ret, "failed to idle", K(tmp_ret));
         }
       }
     }
     need_idle_ = true;
   }
   if (OB_SUCCESS != (tmp_ret = stop_all_threads())) {
-    COMMON_LOG(WARN, "failed to stop all threads", K(tmp_ret));
+    COMMON_LOG_RET(WARN, tmp_ret, "failed to stop all threads", K(tmp_ret));
   }
 }
 
@@ -323,7 +323,7 @@ void *ObDynamicThreadPool::task_thread_func(void *data)
 
   if (NULL == data) {
     tmp_ret = OB_ERR_SYS;
-    COMMON_LOG(ERROR, "data must not null", K(tmp_ret), K(data));
+    COMMON_LOG_RET(ERROR, tmp_ret, "data must not null", K(tmp_ret), K(data));
   } else {
     ObDynamicThreadInfo *thread_info = reinterpret_cast<ObDynamicThreadInfo *>(data);
     ObDynamicThreadTask *task = NULL;
@@ -337,10 +337,10 @@ void *ObDynamicThreadPool::task_thread_func(void *data)
           } else if (OB_IN_STOP_STATE == tmp_ret) {
             break;
           } else {
-            COMMON_LOG(WARN, "failed to pop task", K(tmp_ret));
+            COMMON_LOG_RET(WARN, tmp_ret, "failed to pop task", K(tmp_ret));
           }
         } else if (OB_SUCCESS != (tmp_ret = task->process(thread_info->is_stop_))) {
-          COMMON_LOG(WARN, "failed to process task", K(tmp_ret), K(*thread_info));
+          COMMON_LOG_RET(WARN, tmp_ret, "failed to process task", K(tmp_ret), K(*thread_info));
         }
       }
     }

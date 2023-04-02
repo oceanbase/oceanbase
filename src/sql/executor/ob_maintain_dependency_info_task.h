@@ -16,6 +16,9 @@
 #include "lib/container/ob_fixed_array.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "share/schema/ob_dependency_info.h"
+#include "lib/hash/ob_hashset.h"
+#include "share/schema/ob_multi_version_schema_service.h"
+#include "share/schema/ob_schema_struct.h"
 namespace oceanbase
 {
 
@@ -49,7 +52,7 @@ public:
   DepObjKeyItemList& get_update_dep_objs() { return update_dep_objs_; }
   DepObjKeyItemList& get_delete_dep_objs() { return delete_dep_objs_; }
   bool is_empty_task() const
-  { return insert_dep_objs_.empty() && update_dep_objs_.empty() && delete_dep_objs_.empty(); }
+  { return !reset_view_column_infos_ && (insert_dep_objs_.empty() && update_dep_objs_.empty() && delete_dep_objs_.empty() && !view_schema_.is_valid()); }
   // int check_and_refresh_schema(uint64_t effective_tenant_id);
   int check_cur_maintain_task_is_valid(
       const share::schema::ObReferenceObjTable::ObDependencyObjKey &dep_obj_key,
@@ -65,6 +68,10 @@ public:
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(ObMaintainObjDepInfoTask); }
   ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
+  int assign_view_schema(const share::schema::ObTableSchema &view_schema);
+  share::schema::ObTableSchema &get_view_schema() { return view_schema_; }
+  void set_reset_view_column_infos(bool flag) { reset_view_column_infos_ = flag; }
+  bool reset_view_column_infos() const { return reset_view_column_infos_; }
 
 private:
   uint64_t tenant_id_;
@@ -73,21 +80,31 @@ private:
   DepObjKeyItemList insert_dep_objs_;
   DepObjKeyItemList update_dep_objs_;
   DepObjKeyItemList delete_dep_objs_;
+  ObArenaAllocator alloc_;
+  share::schema::ObTableSchema view_schema_;
+  bool reset_view_column_infos_;
   DISALLOW_COPY_AND_ASSIGN(ObMaintainObjDepInfoTask);
 };
 
 class ObMaintainDepInfoTaskQueue: public share::ObAsyncTaskQueue
 {
 public:
+  static const int64_t INIT_BKT_SIZE = 512;
   ObMaintainDepInfoTaskQueue() : last_execute_time_(0) {}
-  virtual ~ObMaintainDepInfoTaskQueue() {}
+  virtual ~ObMaintainDepInfoTaskQueue()
+  {
+    view_info_set_.destroy();
+  }
+  int init(const int64_t thread_cnt, const int64_t queue_size);
   virtual void run2() override;
   inline int64_t get_last_execute_time() const { return last_execute_time_; }
   inline void set_last_execute_time(const int64_t execute_time)
   { last_execute_time_ = execute_time; }
-
+  int add_view_id_to_set(const uint64_t view_id) { return view_info_set_.set_refactored(view_id); }
+  int erase_view_id_from_set(const uint64_t view_id) { return view_info_set_.erase_refactored(view_id); }
 private:
   int64_t last_execute_time_;
+  common::hash::ObHashSet<uint64_t, common::hash::ReadWriteDefendMode> view_info_set_;
 };
 
 }  // namespace sql

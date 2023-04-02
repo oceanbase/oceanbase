@@ -44,6 +44,7 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
     task_id_ = param.task_id_;
     execution_id_ = param.execution_id_;
     parallelism_ = param.parallelism_;
+    data_format_version_ = param.data_format_version_;
 
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
     common::ObIArray<ObTabletID> &tablet_ids = source_tablet_ids_;
@@ -89,7 +90,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
     ObArray<int64_t> idxs;
     const int64_t current_time = ObTimeUtility::current_time();
-    const int64_t rpc_timeout = max(GCONF.rpc_timeout, 3 * 1000L * 1000L);
+    int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
     const bool force_renew = true;
     bool is_cache_hit = false;
     const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
@@ -117,6 +118,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
           arg.task_id_ = task_id_;
           arg.parallelism_ = parallelism_;
           arg.execution_id_ = execution_id_;
+          arg.data_format_version_ = data_format_version_;
           arg.tablet_task_id_ = tablet_task_ids_.at(i);
           if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
                   expire_renew_time, is_cache_hit, ls_id))) {
@@ -125,7 +127,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
             LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(ls_id));
           } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
           } else if (OB_FAIL(proxy.call(leader_addr, rpc_timeout, tenant_id_, arg))) {
-            LOG_WARN("fail to send rpc", K(ret));
+            LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
           } else if (OB_FAIL(idxs.push_back(i))) {
             LOG_WARN("fail to push back idx", K(ret));
           } else {
@@ -139,7 +141,8 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       LOG_WARN("rpc_proxy wait failed", K(ret), K(tmp_ret));
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     } else if (OB_SUCC(ret)) {
-      if (ret_array.count() != idxs.count()) {
+      const ObIArray<const obrpc::ObDDLBuildSingleReplicaRequestResult *> &result_array = proxy.get_results();
+      if (ret_array.count() != idxs.count() || result_array.count() != idxs.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, ret array count is not equal to request count", K(ret));
       }
@@ -151,14 +154,20 @@ int ObDDLSingleReplicaExecutor::schedule_task()
         } else if (OB_SUCCESS == ret_array.at(i)) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_REQUESTED;
           build_infos.at(idx).heart_beat_time_ = ObTimeUtility::current_time();
+          build_infos.at(idx).row_inserted_ = MAX(build_infos.at(idx).row_inserted_, result_array.at(i)->row_inserted_);
+          build_infos.at(idx).row_scanned_ = MAX(build_infos.at(idx).row_scanned_, result_array.at(i)->row_scanned_);
           LOG_INFO("rpc send successfully", K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         } else if (ObIDDLTask::in_ddl_retry_white_list(ret_array.at(i))) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_RETRY;
+          build_infos.at(idx).row_inserted_ = 0;
+          build_infos.at(idx).row_scanned_ = 0;
           LOG_INFO("task need retry", K(ret_array.at(i)), K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         } else {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_FAILED;
           build_infos.at(idx).ret_code_ = ret_array.at(i);
           build_infos.at(idx).heart_beat_time_ = ObTimeUtility::current_time();
+          build_infos.at(idx).row_inserted_ = 0;
+          build_infos.at(idx).row_scanned_ = 0;
           LOG_INFO("task is failed", K(build_infos.at(idx)), K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         }
       }
@@ -191,8 +200,13 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
         need_schedule |= build_infos.at(i).need_schedule();
       }
       if (OB_SUCC(ret) && build_infos.count() == succ_cnt) {
+        if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(
+              tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+          LOG_WARN("fail to check sstable checksum_report_finish",
+            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+        }
         is_end = true;
-        ret_code = OB_SUCCESS;
+        ret_code = ret;
       }
     }
   }
@@ -206,7 +220,10 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
   return ret;
 }
 
-int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTabletID &tablet_id, const int ret_code)
+int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTabletID &tablet_id,
+                                                          const int ret_code,
+                                                          const int64_t row_scanned,
+                                                          const int64_t row_inserted)
 {
   int ret = OB_SUCCESS;
   common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
@@ -221,15 +238,34 @@ int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTablet
         if (OB_SUCCESS == ret_code) {
           build_infos.at(i).ret_code_ = OB_SUCCESS;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_SUCCEED;
-        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code) || OB_REPLICA_NOT_READABLE == ret_code || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code) {
+          build_infos.at(i).row_inserted_ = row_inserted;
+          build_infos.at(i).row_scanned_ = row_scanned;
+        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code)) {
           build_infos.at(i).ret_code_ = OB_SUCCESS;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_RETRY;
+          build_infos.at(i).row_inserted_ = 0;
+          build_infos.at(i).row_scanned_ = 0;
         } else {
           build_infos.at(i).ret_code_ = ret_code;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_FAILED;
+          build_infos.at(i).row_inserted_ = 0;
+          build_infos.at(i).row_scanned_ = 0;
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLSingleReplicaExecutor::get_progress(int64_t &row_scanned, int64_t &row_inserted)
+{
+  int ret = OB_SUCCESS;
+  row_scanned = 0;
+  row_inserted = 0;
+  common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); ++i) {
+    row_scanned += build_infos.at(i).row_scanned_;
+    row_inserted += build_infos.at(i).row_inserted_;
   }
   return ret;
 }

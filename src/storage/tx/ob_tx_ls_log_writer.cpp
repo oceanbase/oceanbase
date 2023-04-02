@@ -59,7 +59,7 @@ void ObTxLSLogLimit::decide_log_buf_size()
   LOG_BUF_SIZE = 0;
   ObLogBaseHeader base_header;
   ObTxLogHeader tx_header;
-  ObTxLogBlockHeader block_header(UINT64_MAX, INT64_MAX, INT64_MAX);
+  ObTxLogBlockHeader block_header(UINT64_MAX, INT64_MAX, INT64_MAX, common::ObAddr());
   ObTxStartWorkingLog sw_log(INT_MAX64);
 
   // block_header.before_serialize();
@@ -236,7 +236,7 @@ void ObTxLSLogWriter::destroy()
   destroy_cbs_(free_cbs_);
 }
 
-int ObTxLSLogWriter::submit_start_working_log(const int64_t &leader_epoch, int64_t &log_ts)
+int ObTxLSLogWriter::submit_start_working_log(const int64_t &leader_epoch, SCN &log_ts)
 {
   int ret = OB_SUCCESS;
 

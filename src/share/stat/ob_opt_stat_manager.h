@@ -23,10 +23,6 @@
 #include "share/stat/ob_stat_define.h"
 
 namespace oceanbase {
-namespace sql
-{
-class ObPlanCacheManager;
-}
 namespace common {
 class ObOptColumnStatHandle;
 
@@ -36,20 +32,21 @@ public:
   ObOptStatManager();
   virtual ~ObOptStatManager() {}
   virtual int init(ObMySQLProxy *proxy,
-                   ObServerConfig *config,
-                   sql::ObPlanCacheManager *pc_mgr);
+                   ObServerConfig *config);
 
   static int64_t get_default_data_size();
 
   static int64_t get_default_avg_row_size();
 
-  int check_has_opt_stat(const uint64_t tenant_id,
+  int check_has_opt_stat(share::schema::ObSchemaGetterGuard &schema_guard,
+                         const uint64_t tenant_id,
                          const uint64_t table_ref_id,
                          const ObIArray<int64_t> &part_ids,
                          const int64_t part_cnt,
                          bool &has_opt_stat);
 
-  int check_stat_version(const uint64_t tenant_id,
+  int check_stat_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                         const uint64_t tenant_id,
                          const uint64_t tab_ref_id,
                          const int64_t part_id,
                          int64_t &last_analyzed);
@@ -104,7 +101,8 @@ public:
                      int64_t *avg_len = NULL,
                      int64_t *avg_part_size = NULL,
                      int64_t *macro_block_count = NULL,
-                     int64_t *micro_block_count = NULL);
+                     int64_t *micro_block_count = NULL,
+                     int64_t *last_analyzed = NULL);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t tab_ref_id,
@@ -113,7 +111,8 @@ public:
                      int64_t *row_count = NULL,
                      int64_t *avg_len = NULL,
                      int64_t *avg_part_size = NULL,
-                     int64_t *micro_block_count = NULL);
+                     int64_t *micro_block_count = NULL,
+                     int64_t *last_analyzed = NULL);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t table_id,
@@ -136,9 +135,14 @@ public:
   virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                  const uint64_t tenant_id,
                                  const common::ObIArray<ObOptColumnStat *> &column_stats,
-                                 bool only_update_col_stat = false);
+                                 bool only_update_col_stat = false,
+                                 const ObObjPrintParams &print_params = ObObjPrintParams());
 
   int delete_table_stat(const uint64_t tenant_id,
+                        const uint64_t ref_id,
+                        int64_t &affected_rows);
+
+  int delete_table_stat(uint64_t tenant_id,
                         const uint64_t ref_id,
                         const ObIArray<int64_t> &part_ids,
                         const bool cascade_column,
@@ -167,7 +171,8 @@ public:
                   ObIArray<ObOptColumnStat *> &column_stats,
                   const int64_t current_time,
                   const bool is_index_stat,
-                  const bool is_history_stat);
+                  const bool is_history_stat,
+                  const ObObjPrintParams &print_params);
 
   /**  @brief  外部获取行统计信息的接口 */
   virtual int get_table_stat(const uint64_t tenant_id,
@@ -178,18 +183,27 @@ public:
   int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id);
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
+
+  int get_table_rowcnt(const uint64_t tenant_id,
+                       const uint64_t table_id,
+                       const ObIArray<ObTabletID> &all_tablet_ids,
+                       const ObIArray<share::ObLSID> &all_ls_ids,
+                       int64_t &table_rowcnt);
+
   static ObOptStatManager &get_instance()
   {
     static ObOptStatManager instance_;
     return instance_;
   }
   bool is_inited() const { return inited_; }
+  int check_stat_tables_ready(share::schema::ObSchemaGetterGuard &schema_guard,
+                              const uint64_t tenant_id,
+                              bool &are_stat_tables_ready);
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;
   common::ObDedupQueue refresh_stat_task_queue_;
   ObOptStatService stat_service_;
-  sql::ObPlanCacheManager *pc_mgr_;
   int64_t last_schema_version_;
 };
 

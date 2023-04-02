@@ -92,9 +92,15 @@ public:
                                  const IndexDMLInfo &index_dml_info,
                                  ObIArray<ObRawExpr*> &part_key_exprs);
 
+  int table_unique_key_for_conflict_checker(ObLogDelUpd &op,
+                                            const IndexDMLInfo &index_dml_info,
+                                            ObIArray<ObRawExpr*> &rowkey_exprs);
+
   int get_heap_table_part_exprs(const ObLogicalOperator &op,
                                 const IndexDMLInfo &index_dml_info,
                                 ObIArray<ObRawExpr*> &part_key_exprs);
+
+  int adjust_unique_key_exprs(ObIArray<ObRawExpr*> &unique_key_exprs);
   int get_table_rowkey_exprs(const IndexDMLInfo &index_dml_info,
                              ObIArray<ObRawExpr*> &rowkey_exprs);
 
@@ -120,6 +126,13 @@ private:
                              const common::ObIArray<NewExprType*> &new_row,
                              const common::ObIArray<ObRawExpr*> &full_row,
                              ObDASDMLBaseCtDef &das_ctdef);
+  template<typename ExprType>
+  int add_geo_col_projector(const ObIArray<ExprType*> &cur_row,
+                            const ObIArray<ObRawExpr*> &full_row,
+                            const ObIArray<uint64_t> &dml_column_ids,
+                            uint32_t proj_idx,
+                            ObDASDMLBaseCtDef &das_ctdef,
+                            IntFixedArray &row_projector);
   int get_column_ref_base_cid(const ObLogicalOperator &op, const ObColumnRefRawExpr *col, uint64_t &base_cid);
   int get_table_schema_version(const ObLogicalOperator &op, uint64_t table_id, int64_t &schema_version);
   int generate_das_dml_ctdef(ObLogDelUpd &op,
@@ -234,6 +247,8 @@ private:
                                  const IndexDMLInfo &index_dml_info,
                                  const common::ObIArray<ObRawExpr*> &new_row,
                                  DASInsCtDefArray &ins_ctdefs);
+  int generate_access_exprs(const common::ObIArray<ObColumnRefRawExpr*> &columns,
+                               common::ObIArray<ObRawExpr*> &access_exprs);
 private:
   int need_fire_update_event(const ObTableSchema &table_schema,
                             const ObString &update_events,

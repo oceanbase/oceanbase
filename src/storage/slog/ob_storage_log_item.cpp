@@ -148,7 +148,7 @@ int ObStorageLogItem::wait_flush_log(const uint64_t max_wait_time)
       }
     }
 #ifdef ERRSIM
-    ret = E(EventTable::EN_SLOG_WAIT_FLUSH_LOG) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_SLOG_WAIT_FLUSH_LOG) OB_SUCCESS;
 #endif
     if (OB_LIKELY(OB_SUCC(ret))) {
       ret = flush_ret_;
@@ -165,7 +165,7 @@ void ObStorageLogItem::finish_flush(const int flush_ret)
 {
   if (IS_NOT_INIT) {
     flush_ret_ = OB_NOT_INIT;
-    STORAGE_REDO_LOG(WARN, "Not init", K_(flush_ret));
+    STORAGE_REDO_LOG_RET(WARN, flush_ret_, "Not init", K_(flush_ret));
   } else {
     ObThreadCondGuard guard(flush_cond_);
     flush_ret_ = flush_ret;

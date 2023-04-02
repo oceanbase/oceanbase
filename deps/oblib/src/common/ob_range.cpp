@@ -283,21 +283,5 @@ int64_t ObNewVersionRange::hash() const
   return hash_value;
 }
 
-ObLogTsRange::ObLogTsRange()
-  : start_log_ts_(MIN_TS),
-    end_log_ts_(MIN_TS)
-{
-}
-
-OB_SERIALIZE_MEMBER(ObLogTsRange, start_log_ts_, end_log_ts_);
-
-int64_t ObLogTsRange::hash() const
-{
-  int64_t hash_value = 0;
-  hash_value = common::murmurhash(&start_log_ts_, sizeof(start_log_ts_), hash_value);
-  hash_value = common::murmurhash(&end_log_ts_, sizeof(end_log_ts_), hash_value);
-  return hash_value;
-}
-
 }
 }

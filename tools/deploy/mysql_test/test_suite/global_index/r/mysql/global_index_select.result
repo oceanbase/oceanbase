@@ -750,7 +750,7 @@ select /*+index(t1 gkey2)*/ count(*) from t1;
 +----------+
 drop table if exists t1;
 
-###bug https://aone.alibaba-inc.com/issue/17548879?spm=a2o8d.corp_prod_MY_DESKTOP.0.0.549d41e3kz5z83
+###bug
 drop table if exists t1;
 create table t1(a int, b int, c int, d int, primary key(a,b)) partition by hash(a) partitions 3;
 create unique index idx on t1(c) partition by hash(c) partitions 5;
@@ -758,7 +758,7 @@ insert into t1 values (1,1,1,1),(2,2,2,2),(3,3,3,3);
 update t1 set d=d+1 where (a,b)>=(1,1) and c=1;
 drop table if exists t1;
 
-####bug https://aone.alibaba-inc.com/issue/17661378?spm=a2o8d.corp_prod_MY_DESKTOP.0.0.549d41e3yIxDVL
+####bug
 drop table if exists obright_part;
 create table obright_part(grp_id bigint, row_id bigint, row_hex varchar(2048), trx_grp bigint,
 v1 varchar(65536), v1_check bigint, v2 varchar(65536), v2_check bigint, r1 int, r2 int, glike varchar(4096),

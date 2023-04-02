@@ -40,7 +40,7 @@ public:
     item.is_active_ = mt.is_active_memtable();
     item.ls_id_ = (OB_SUCCESS == mt.get_ls_id(ls_id)) ? ls_id.id() : ObLSID::INVALID_LS_ID;
     item.tablet_id_ = mt.get_key().tablet_id_.id();
-    item.log_ts_range_ = mt.get_log_ts_range();
+    item.scn_range_ = mt.get_scn_range();
     return array_.push_back(item);
   }
   ItemArray& array_;
@@ -191,11 +191,11 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow *&row)
             }
             case START_TS: {
               //TODO:SCN
-              cells[i].set_uint64(info.log_ts_range_.start_log_ts_ < 0 ? 0 : info.log_ts_range_.start_log_ts_);
+              cells[i].set_uint64(info.scn_range_.start_scn_.get_val_for_inner_table_field());
               break;
             }
             case END_TS: {
-              cells[i].set_uint64(info.log_ts_range_.end_log_ts_ < 0 ? 0 : info.log_ts_range_.end_log_ts_);
+              cells[i].set_uint64(info.scn_range_.end_scn_.get_val_for_inner_table_field());
               break;
             }
             case IS_ACTIVE: {

@@ -21,6 +21,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 
 namespace oceanbase
@@ -100,11 +101,16 @@ int ObFunctionTableOp::get_current_result(ObObj &result)
     LOG_WARN("fail to get current result in table function",
               K(node_idx_), K(row_count_), K(col_count_));
   }
-  CK (node_idx_ >= 0 && node_idx_ < row_count_ * col_count_);
-  CK (OB_NOT_NULL(value_table_));
-  OX (data = value_table_->get_data());
-  CK (OB_NOT_NULL(data));
-  OX (result = (static_cast<ObObj*>(data))[node_idx_++]);
+  do {
+    CK (node_idx_ >= 0);
+    if (OB_SUCC(ret) && node_idx_ >= row_count_) {
+      ret = OB_ITER_END;
+    }
+    CK (OB_NOT_NULL(value_table_));
+    OX (data = value_table_->get_data());
+    CK (OB_NOT_NULL(data));
+    OX (result = (static_cast<ObObj*>(data))[node_idx_++]);
+  } while (OB_SUCC(ret) && result.get_meta().get_type() == ObMaxType);
   return ret;
 }
 
@@ -180,9 +186,14 @@ int ObFunctionTableOp::inner_get_next_row()
           MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_).set_null();
         } else {
           const ObObjDatumMapType &datum_map = MY_SPEC.column_exprs_.at(i)->obj_datum_map_;
-          if (OB_FAIL(MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_)
-                                             .from_obj(obj_stack[i], datum_map))) {
+          ObExpr * const &expr = MY_SPEC.column_exprs_.at(i);
+          ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+          if (OB_FAIL(datum.from_obj(obj_stack[i], datum_map))) {
             LOG_WARN("failed to convert datum", K(ret));
+          } else if (is_lob_storage(obj_stack[i].get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(obj_stack[i], expr->obj_meta_, datum_map,
+                                                 get_exec_ctx().get_allocator(), datum))) {
+            LOG_WARN("adjust lob datum failed", K(ret), K(obj_stack[i].get_meta()), K(expr->obj_meta_));
           }
         }
         if (OB_SUCC(ret)) {

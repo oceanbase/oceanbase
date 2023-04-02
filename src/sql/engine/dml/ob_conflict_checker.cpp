@@ -133,18 +133,24 @@ int ObConflictRowMapCtx::destroy()
   return ret;
 }
 
-int ObConflictRowMapCtx::init_conflict_map(int64_t replace_row_cnt, int64_t rowkey_cnt)
+int ObConflictRowMapCtx::init_conflict_map(int64_t replace_row_cnt, int64_t rowkey_cnt, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (!conflict_map_.created()) {
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Allocator used to init conflict map is null", K(ret));
+  } else {
+    allocator_ = allocator;
+  }
+  if (OB_SUCC(ret) && !conflict_map_.created()) {
     ObObj *objs = NULL;
     int64_t bucket_num = 0;
     bucket_num = replace_row_cnt < MAX_ROW_BATCH_SIZE ? replace_row_cnt : MAX_ROW_BATCH_SIZE;
     // map 没创建的场景下才需要创建, 这里可能被重复调用
-    if (NULL == (rowkey_ = static_cast<ObRowkey*>(allocator_.alloc(sizeof(ObRowkey))))) {
+    if (NULL == (rowkey_ = static_cast<ObRowkey*>(allocator_->alloc(sizeof(ObRowkey))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret));
-    } else if (NULL == (objs = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj)* rowkey_cnt)))){
+    } else if (NULL == (objs = static_cast<ObObj*>(allocator_->alloc(sizeof(ObObj)* rowkey_cnt)))){
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret));
     } else if (OB_FAIL(conflict_map_.create(bucket_num, ObModIds::OB_HASH_BUCKET))) {
@@ -178,7 +184,7 @@ int ObConflictChecker::create_conflict_map(int64_t replace_row_cnt)
     ObRowkeyCstCtdef *rowkey_cst_ctdef = checker_ctdef_.cst_ctdefs_.at(i);
     int64_t rowkey_cnt = rowkey_cst_ctdef->rowkey_expr_.count();
     // 在init_conflict_map 函数内保证了map不会被重复created
-    if (OB_FAIL(conflict_map_array_.at(i).init_conflict_map(replace_row_cnt, rowkey_cnt))) {
+    if (OB_FAIL(conflict_map_array_.at(i).init_conflict_map(replace_row_cnt, rowkey_cnt, &allocator_))) {
       LOG_WARN("fail to init conflict_map", K(ret), K(rowkey_cnt));
     }
   }
@@ -760,8 +766,7 @@ int ObConflictChecker::get_next_row_from_data_table(DASOpResultIter &result_iter
 {
   int ret = OB_SUCCESS;
   bool got_row = false;
-  const ExprFixedArray &storage_output = checker_ctdef_.das_scan_ctdef_.pd_expr_spec_.access_exprs_;
-
+  const ExprFixedArray &storage_output = checker_ctdef_.table_column_exprs_;
   while (OB_SUCC(ret) && !got_row) {
     das_scan_rtdef_.p_pd_expr_op_->clear_datum_eval_flag();
     if (OB_FAIL(result_iter.get_next_row())) {

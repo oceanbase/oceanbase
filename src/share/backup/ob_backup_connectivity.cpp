@@ -179,7 +179,7 @@ int ObBackupConnectivityCheckManager::set_connectivity_check_path_(
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_check_file_name(
       *sql_proxy_, tenant_id_, backup_dest, check_file_name))) {
     LOG_WARN("failed to get check file name", K(ret), K_(tenant_id));
-  } else if (OB_FAIL(path.join(check_file_name))) {
+  } else if (OB_FAIL(path.join(check_file_name, ObBackupFileSuffix::NONE))) { // check_file_name already include suffix
     LOG_WARN("failed to join check file name", K(ret), K_(tenant_id));
   }
   return ret;
@@ -257,7 +257,7 @@ int ObBackupCheckFile::get_check_file_path(
     LOG_WARN("backup dest is valid", K(ret), K_(tenant_id)); 
   } else if (OB_FAIL(path.init(backup_dest.get_root_path()))) {
     LOG_WARN("failed to init path", K(ret));
-  } else if (OB_FAIL(path.join(OB_STR_BACKUP_CHECK_FILE))) {
+  } else if (OB_FAIL(path.join(OB_STR_BACKUP_CHECK_FILE, ObBackupFileSuffix::NONE))) {
     LOG_WARN("failed to join check_file", K(ret));
   }
   return ret;
@@ -266,11 +266,16 @@ int ObBackupCheckFile::get_check_file_path(
 int ObBackupCheckFile::set_connectivity_check_name_()
 {
   int ret = OB_SUCCESS;
+  int64_t check_time_s = ObTimeUtility::current_time() / 1000 / 1000;
+  char buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  int64_t pos = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
+  } else if (OB_FAIL(backup_time_to_strftime(check_time_s, buff, sizeof(buff), pos, 'T'/* concat */))) {
+    LOG_WARN("failed to convert time", K(ret));
   } else if (OB_FAIL(databuff_printf(connectivity_file_name_, sizeof(connectivity_file_name_),
-      "%lu_%s_%s_%ld", tenant_id_, "connect", "file", ObTimeUtility::current_time()))) {
+      "%lu_%s_%s_%s%s", tenant_id_, "connect", "file", buff, OB_BACKUP_SUFFIX))) {
     LOG_WARN("failed to set connectivity file name", K(ret));
   }
   return ret;
@@ -316,7 +321,7 @@ int ObBackupCheckFile::compare_check_file_name_(
     LOG_WARN("failed to get check file prefix", K(ret), K_(tenant_id));
   } else {
     ObDirPrefixEntryNameFilter prefix_op(d_entrys);
-    if (OB_FAIL(prefix_op.init(check_file_prefix, strlen(check_file_prefix)))) {
+    if (OB_FAIL(prefix_op.init(check_file_prefix, static_cast<int32_t>(strlen(check_file_prefix))))) {
       LOG_WARN("failed to init dir prefix", K(ret), K(check_file_prefix), K_(tenant_id));
     } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
       LOG_WARN("failed to list files", K(ret), K_(tenant_id));
@@ -406,7 +411,7 @@ int ObBackupCheckFile::create_connectivity_check_file(
   } else if (false == is_match) {
     if (OB_FAIL(set_connectivity_check_name_())) {
       LOG_WARN("failed to set check file name", K(ret), K_(tenant_id));
-    } else if (OB_FAIL(path.join(connectivity_file_name_))) {
+    } else if (OB_FAIL(path.join(connectivity_file_name_, ObBackupFileSuffix::NONE))) { // connectivity_file_name_ already include suffix
       LOG_WARN("failed to join connectivity file name", K(ret), K_(tenant_id));
     } else if (OB_FAIL(generate_format_desc_(backup_dest, check_desc))) {
       LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
@@ -445,7 +450,7 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
     LOG_WARN("failed to get check file path", K(ret), K(backup_dest));
   } else {
     ObDirPrefixEntryNameFilter prefix_op(d_entrys);
-    if (OB_FAIL(prefix_op.init(check_file_prefix, strlen(check_file_prefix)))) {
+    if (OB_FAIL(prefix_op.init(check_file_prefix, static_cast<int32_t>(strlen(check_file_prefix))))) {
       LOG_WARN("failed to init dir prefix", K(ret), K(check_file_prefix), K_(tenant_id));
     } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
       LOG_WARN("failed to list files", K(ret), K_(tenant_id));
@@ -474,18 +479,25 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
 
 int ObBackupCheckFile::get_permission_check_file_path_(
     const ObBackupDest &backup_dest,
+    bool is_appender,
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
+  int64_t check_time_s = ObTimeUtility::current_time() / 1000/ 1000;
+  char buff[OB_BACKUP_MAX_TIME_STR_LEN] = { 0 };
+  const char *prefix = is_appender ? "append" : "put";
+  int64_t pos = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
   } else if (OB_FAIL(get_check_file_path(backup_dest, path))) {
-    LOG_WARN("failed to get check file path", K(ret), K(backup_dest)); 
+    LOG_WARN("failed to get check file path", K(ret), K(backup_dest));
+  } else if (OB_FAIL(backup_time_to_strftime(check_time_s, buff, sizeof(buff), pos, 'T'/* concat */))) {
+    LOG_WARN("failed to convert time", K(ret), K(backup_dest));
   } else if (OB_FAIL(databuff_printf(permission_file_name_, sizeof(permission_file_name_),
-      "%lu_%s_%s_%ld", tenant_id_, "permission", "file", ObTimeUtility::current_time()))) {
-    LOG_WARN("failed to set permission file name", K(ret));
-  }  else if (OB_FAIL(path.join(permission_file_name_))) {
+      "%lu_%s_%s_%s_%s%s", tenant_id_, prefix, "permission", "file", buff, OB_BACKUP_SUFFIX))) {
+    LOG_WARN("failed to set permission file name", K(ret), K(buff));
+  }  else if (OB_FAIL(path.join(permission_file_name_, ObBackupFileSuffix::NONE))) { // permission_file_name_ already include suffix
     LOG_WARN("failed to join permission file name", K(ret), K_(permission_file_name)); 
   }
   return ret;
@@ -513,9 +525,9 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));
-  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, path))) {
+  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, true/*is_appender*/, path))) {
       LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id), K(backup_dest)); 
-  } else if (OB_FAIL(util.set_access_type(&iod_opts, true, DEFAULT_OPT_ARG_NUM))) {
+  } else if (OB_FAIL(util.set_access_type(&iod_opts, true/*is_appender*/, DEFAULT_OPT_ARG_NUM))) {
     LOG_WARN("fail to set access type");
   } else if (OB_FAIL(util.set_append_strategy(&iod_opts, is_data_file, epoch, DEFAULT_OPT_ARG_NUM))) {
     LOG_WARN("fail to set append strategy");
@@ -571,7 +583,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
   } else if (!backup_dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup dest is valid", K(ret), K_(tenant_id)); 
-  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, path))) {
+  } else if (OB_FAIL(get_permission_check_file_path_(backup_dest, false/*is_appender*/, path))) {
       LOG_WARN("failed to get permission check file path", K(ret), K_(tenant_id));
   } else if (OB_FAIL(generate_format_desc_(backup_dest, check_desc))) {
     LOG_WARN("failed to set buffer", K(ret), K_(tenant_id));
@@ -602,15 +614,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
       ret = OB_BACKUP_PERMISSION_DENIED;
     }
     LOG_WARN("failed to read single file", K(ret));
-  } else if (OB_FAIL(check_appender_permission_(backup_dest))){
-    if (is_permission_error_(ret)) {
-      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
-          "tenant_id", tenant_id_, "error_code", ret, "comment", "appender write");
-      ret = OB_BACKUP_PERMISSION_DENIED;
-    }
-    LOG_WARN("failed to appender permission", K(ret));
   }
-
   if (write_ok && (OB_SUCCESS != (tmp_ret = util.del_file(path.get_obstr(), backup_dest.get_storage_info())))) {
     if (is_permission_error_(tmp_ret)) {
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
@@ -619,6 +623,15 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     }
     ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     LOG_WARN("failed to del file", K(tmp_ret), K(ret), K(path), K(backup_dest));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_appender_permission_(backup_dest))){
+    if (is_permission_error_(ret)) {
+      ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check",
+          "tenant_id", tenant_id_, "error_code", ret, "comment", "appender write");
+      ret = OB_BACKUP_PERMISSION_DENIED;
+    }
+    LOG_WARN("failed to appender permission", K(ret));
   }
 
   return ret;

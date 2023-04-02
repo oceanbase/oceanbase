@@ -20,6 +20,7 @@
 #include "observer/mysql/obmp_query.h"
 #include "rpc/obmysql/packet/ompk_row.h"
 #include "rpc/obmysql/packet/ompk_eof.h"
+#include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
 {
@@ -48,6 +49,18 @@ int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
 {
   int ret = OB_SUCCESS;
   OMPKEOF eofp;
+
+  if (OB_FAIL(seal_eof_packet(has_more_result, eofp))) {
+    LOG_WARN("failed to seal eof packet", K(ret), K(has_more_result));
+  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+    LOG_WARN("response packet fail", K(ret), K(has_more_result));
+  }
+  return ret;
+}
+
+int ObSyncCmdDriver::seal_eof_packet(bool has_more_result, OMPKEOF& eofp)
+{
+  int ret = OB_SUCCESS;
   const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
   uint16_t warning_count = 0;
   if (OB_ISNULL(warnings_buf)) {
@@ -75,12 +88,6 @@ int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
         && OB_FAIL(sender_.update_last_pkt_pos())) {
     LOG_WARN("failed to update last packet pos", K(ret));
   }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
-    LOG_WARN("response packet fail", K(ret), K(has_more_result));
-  }
   return ret;
 }
 
@@ -100,6 +107,8 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL
+  OMPKEOF eofp;
+  bool need_send_eof = false;
   if (OB_FAIL(result.open())) {
     // 只有open失败的时候才可能重试，因open的时候会开启事务/语句等，并且没有给用户返回任何信息
     int cret = OB_SUCCESS;
@@ -133,8 +142,10 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
         LOG_WARN("close result set fail", K(cret));
       }
     } else {
-      if (OB_FAIL(send_eof_packet(result.has_more_result()))) {
+      if (OB_FAIL(seal_eof_packet(result.has_more_result(), eofp))) {
         LOG_WARN("failed to send eof package", K(ret), K(result.has_more_result()));
+      } else {
+        need_send_eof = true;
       }
     }
   } else { /*do nothing*/ }
@@ -164,10 +175,20 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
       ok_param.has_more_result_ = result.has_more_result();
       ok_param.has_pl_out_ = is_prexecute_ && result.is_with_rows() ? true : false;
-      if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
-        LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+      if (need_send_eof) {
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param, &eofp))) {
+          LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+        }
+      } else {
+        if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
+          LOG_WARN("send ok packet fail", K(ok_param), K(ret));
+        }
       }
-    } else { /*do nothing*/ }
+    } else {
+      if (need_send_eof && OB_FAIL(sender_.response_packet(eofp, &session_))) {
+        LOG_WARN("response packet fail", K(ret));
+      }
+    }
   }
 
   if (!OB_SUCC(ret) && !process_ok && !retry_ctrl_.need_retry()) {
@@ -275,15 +296,18 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
     ObNewRow *tmp_row = const_cast<ObNewRow*>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
       ObObj& value = tmp_row->get_cell(i);
-      if (ob_is_string_type(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
+      if (ob_is_string_tc(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
         OZ(convert_string_value_charset(value, result));
       } else if (value.is_clob_locator()
                 && OB_FAIL(convert_lob_value_charset(value, result))) {
         LOG_WARN("convert lob value charset failed", K(ret));
+      } else if (ob_is_text_tc(value.get_type())
+                && OB_FAIL(convert_text_value_charset(value, result))) {
+        LOG_WARN("convert text value charset failed", K(ret));
       }
-      if (OB_SUCC(ret) && lib::is_oracle_mode()
-                       && (value.is_lob() || value.is_lob_locator())
-                       && OB_FAIL(convert_lob_locator_to_longtext(value, result))) {
+      if (OB_SUCC(ret)
+          && (value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+          && OB_FAIL(process_lob_locator_results(value, result))) {
         LOG_WARN("convert lob locator to longtext failed", K(ret));
       }
     }

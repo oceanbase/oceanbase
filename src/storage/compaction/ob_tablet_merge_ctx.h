@@ -15,12 +15,15 @@
 
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_se_array.h"
 #include "ob_partition_parallel_merge_ctx.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/compaction/ob_partition_merge_progress.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -57,7 +60,7 @@ public:
   blocksstable::ObSSTableIndexBuilder *get_index_builder() const { return index_builder_; }
   void destroy();
   int get_data_macro_block_count(int64_t &macro_block_count);
-  TO_STRING_KV(K_(is_inited), K_(sstable_merge_info));
+  TO_STRING_KV(K_(is_inited), K_(sstable_merge_info), KP_(index_builder));
 
 private:
   static int build_create_sstable_param(const ObTabletMergeCtx &ctx,
@@ -94,19 +97,15 @@ struct ObSchemaMergeCtx
       storage_schema_ = nullptr;
     }
   }
+  int deep_copy(const ObSchemaMergeCtx &input_ctx);
 
   common::ObIAllocator &allocator_;
   int64_t base_schema_version_;
   int64_t schema_version_;
-  const share::schema::ObTableSchema *table_schema_; // schema for major merge, get from schema_service
-  share::schema::ObSchemaGetterGuard schema_guard_;
   bool allocated_storage_schema_;
-  const ObStorageSchema *storage_schema_; // schema for mini merge, persist on meta
-  // in mini merge, merge_schema = storage_schema
-  // in major merge, merge_schema = table_schema
-  const ObMergeSchema *merge_schema_;
+  const ObStorageSchema *storage_schema_; // schema for all merge
 
-  TO_STRING_KV(K_(base_schema_version), K_(schema_version), KPC_(merge_schema));
+  TO_STRING_KV(K_(base_schema_version), K_(schema_version), KPC_(storage_schema));
 };
 
 class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
@@ -114,10 +113,10 @@ class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
 public:
   enum ObTabletCompactionEvent{
     DAG_WAIT_TO_SCHEDULE = 0,
-    GET_MULTI_VERSION_START,
     COMPACTION_POLICY,
     GET_TABLE_SCHEMA,
     CALC_PROGRESSIVE_PARAM,
+    PRE_PROCESS_TX_TABLE,
     GET_PARALLEL_RANGE,
     EXECUTE,
     CREATE_SSTABLE,
@@ -159,7 +158,6 @@ struct ObTabletMergeCtx
   virtual ~ObTabletMergeCtx();
   void destroy();
   virtual bool is_valid() const;
-  bool is_schema_valid() const;
   bool need_full_checksum() const { return is_full_merge_; }
   bool need_rewrite_macro_block(const blocksstable::ObMacroBlockDesc &macro_desc) const;
   int64_t get_storage_format_work_version() const { return param_.merge_version_; }
@@ -167,21 +165,27 @@ struct ObTabletMergeCtx
   int init_merge_progress(bool is_major);
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
 
-  int inner_init_for_major();
-  int inner_init_for_minor(bool &skip_rest_operation);
+  int inner_init_for_mini(bool &skip_rest_operation);
+  int inner_init_for_medium();
+  int init_get_medium_compaction_info(const int64_t medium_snapshot, ObGetMergeTablesResult &result);
+  int get_specified_medium_compaction_info_from_memtable(
+    ObIAllocator &allocator,
+    const int64_t medium_snapshot,
+    ObMediumCompactionInfo &info);
+  int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
+  int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle, const bool get_schema_on_memtable = true);
-  int get_table_schema_to_merge();
 
-  static int get_table_id(
-      const ObTabletID &tablet_id,
-      const int64_t schema_version,
-      uint64_t &table_id);
+  int try_swap_tablet_handle(const ObTablesHandleArray &tables_handle);
+public:
+  int get_medium_compaction_info_to_store();
 
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
   int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result);
   int init_merge_info();
-  int cal_progressive_merge_param(const bool is_schema_changed);
+  int prepare_index_tree();
+  int prepare_merge_progress();
   int generate_participant_table_info(char *buf, const int64_t buf_len) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len) const;
   void collect_running_info();
@@ -191,21 +195,24 @@ struct ObTabletMergeCtx
   OB_INLINE int64_t get_concurrent_cnt() const { return parallel_merge_ctx_.get_concurrent_cnt(); }
   ObITable::TableType get_merged_table_type() const;
   ObTabletMergeInfo& get_merge_info() { return merge_info_; }
-  const ObMergeSchema *get_merge_schema() { return schema_ctx_.merge_schema_; }
+  const ObStorageSchema *get_schema() const { return schema_ctx_.storage_schema_; }
   int64_t get_compaction_scn() const {
     return
-        is_multi_version_minor_merge(param_.merge_type_) ?
-            log_ts_range_.end_log_ts_ : sstable_version_range_.snapshot_version_;
+        is_multi_version_merge(param_.merge_type_) ?
+            scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
 
+  typedef common::ObSEArray<ObGetMergeTablesResult, ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
+  static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
+  static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
   // 1. init in dag
   ObTabletMergeDagParam &param_;
   common::ObIAllocator &allocator_;
 
   // 2. filled in ObPartitionStore::get_merge_tables
   ObVersionRange sstable_version_range_;// version range for new sstable
-  common::ObLogTsRange log_ts_range_;
-  int64_t merge_log_ts_;
+  share::ObScnRange scn_range_;
+  share::SCN merge_scn_;
   int64_t create_snapshot_version_;
 
   storage::ObTablesHandleArray tables_handle_;
@@ -216,6 +223,7 @@ struct ObTabletMergeCtx
 
   // 4. filled in ObTabletMergePrepareTask::cal_minior_merge_param
   bool is_full_merge_;               // full merge or increment merge
+  bool is_tenant_major_merge_;
   storage::ObMergeLevel merge_level_;
   ObTabletMergeInfo merge_info_;
 
@@ -223,6 +231,8 @@ struct ObTabletMergeCtx
 
   ObLSHandle ls_handle_;
   ObTabletHandle tablet_handle_;
+
+  int16_t sstable_logic_seq_;
 
   int64_t progressive_merge_num_;
   int64_t progressive_merge_round_;
@@ -232,7 +242,7 @@ struct ObTabletMergeCtx
   // we would push up last_replay_log_ts if the corresponding memtable has been merged,
   // but this memtable may not be released due to the warming-up table_store
   // if a new index is created, the schedule will also trigger a mini merge for it with the old frozen memtable
-  // now we get a table store with old end_log_ts within the pg which has a larger last_replay_log_ts
+  // now we get a table store with old end_scn within the pg which has a larger last_replay_log_ts
   // so we need use last_replay_log_ts to prevent such useless mini merge happening
   int64_t read_base_version_; // use for major merge
   ObBasicTabletMergeDag *merge_dag_;
@@ -240,6 +250,8 @@ struct ObTabletMergeCtx
   compaction::ObICompactionFilter *compaction_filter_;
   ObCompactionTimeGuard time_guard_;
   int64_t rebuild_seq_;
+  uint64_t data_version_;
+  ObMediumCompactionInfoList merge_list_;
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
                K_(is_full_merge), K_(merge_level),
@@ -249,10 +261,10 @@ struct ObTabletMergeCtx
                K_(progressive_merge_round),
                K_(progressive_merge_step),
                K_(tables_handle), K_(schedule_major),
-               K_(log_ts_range), K_(merge_log_ts), K_(read_base_version),
+               K_(scn_range), K_(merge_scn), K_(read_base_version),
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
-               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq));
+               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version), K_(merge_list));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeCtx);
 };

@@ -18,6 +18,7 @@
 #include "sql/code_generator/ob_column_index_provider.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -261,33 +262,18 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       if (ObExtendType != rt_expr->obj_meta_.get_type()) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.scale_);
       }
+      if (is_lob_storage(rt_expr->obj_meta_.get_type())) {
+        if (cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
+          rt_expr->obj_meta_.set_has_lob_header();
+        }
+      }
       // init max_length_
       rt_expr->max_length_ = raw_expr->get_result_type().get_length();
       // init obj_datum_map_
       rt_expr->obj_datum_map_ = ObDatum::get_obj_datum_map_type(result_meta.get_type());
     }
     if (T_REF_COLUMN == raw_expr->get_expr_type()) {
-      const ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(raw_expr);
-      // generated column's arg_cnt = 1, used to store dependant expr's rt_expr
-      if (need_flatten_gen_col_// temp expr not need flatten gen col
-          && col_expr->is_generated_column()) {
-        rt_expr->arg_cnt_ = 1;
-        ObExpr **buf = static_cast<ObExpr **>(allocator_.alloc(sizeof(ObExpr *)));
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory", K(ret));
-        } else {
-          memset(buf, 0, sizeof(ObExpr *));
-          rt_expr->args_ = buf;
-          if (OB_ISNULL(get_rt_expr(*col_expr->get_dependant_expr()))) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("expr is null", K(ret));
-          } else {
-            rt_expr->args_[0] = get_rt_expr(*col_expr->get_dependant_expr());
-            rt_expr->eval_func_ = ObExprUtil::eval_generated_column;
-          }
-        }
-      }
+      // do nothing.
     } else {
       // init arg_cnt_
       rt_expr->arg_cnt_ = raw_expr->get_param_count();
@@ -663,7 +649,7 @@ int ObStaticEngineExprCG::cg_dynamic_frame_layout(const ObIArray<ObRawExpr *> &e
                                                   int64_t &frame_index_pos,
                                                   ObIArray<ObFrameInfo>& frame_info_arr)
 {
-  const bool reserve_empty_string = true;
+  const bool reserve_empty_string = false;
   //需要保证continuous_datum = true， 因为在expr_frame_info中将所有datum预先置为null
   const bool continuous_datum = true;
   return cg_frame_layout(exprs,
@@ -1079,6 +1065,12 @@ int ObStaticEngineExprCG::alloc_const_frame(const ObIArray<ObRawExpr *> &exprs,
         datum->from_obj(tmp_obj);
         if (0 == datum->len_) {
           datum->ptr_ = NULL;
+        } else {
+          if (is_lob_storage(tmp_obj.get_type())) {
+            if (OB_FAIL(ob_adjust_lob_datum(tmp_obj, rt_expr->obj_meta_, allocator_, datum))) {
+              LOG_WARN("fail to adjust lob datum", K(ret), K(tmp_obj), K(rt_expr->obj_meta_), K(datum));
+            }
+          }
         }
       }
     }
@@ -1100,7 +1092,10 @@ int ObStaticEngineExprCG::cg_expr_basic_funcs(const ObIArray<ObRawExpr *> &raw_e
       LOG_WARN("rt expr is null", K(ret), K(*raw_exprs.at(i)));
     } else {
       rt_expr->basic_funcs_ = ObDatumFuncs::get_basic_func(rt_expr->datum_meta_.type_,
-                                                        rt_expr->datum_meta_.cs_type_);
+                                                        rt_expr->datum_meta_.cs_type_,
+                                                        rt_expr->datum_meta_.scale_,
+                                                        lib::is_oracle_mode(),
+                                                        rt_expr->obj_meta_.has_lob_header());
       CK(NULL != rt_expr->basic_funcs_);
     }
   }
@@ -1260,28 +1255,6 @@ int ObStaticEngineExprCG::alloc_so_check_exprs(const ObIArray<ObRawExpr *> &raw_
     if (OB_SUCC(ret) && stack_check_expr_cnt > 0) {
       LOG_TRACE("stack check expr needed",
                 K(exprs.count()), K(stack_check_expr_cnt), K(max_call_depth));
-      ObExpr *ori_base = exprs.get_data();
-      OZ(exprs.reserve(exprs.count() + stack_check_expr_cnt));
-      ObExpr *base = exprs.get_data();
-      // relocate expr ptr
-      if (OB_SUCC(ret) && ori_base != base) {
-        const int64_t offset = reinterpret_cast<char *>(base) - reinterpret_cast<char *>(ori_base);
-        FOREACH_CNT(e, raw_exprs) {
-          (*e)->set_rt_expr(reinterpret_cast<ObExpr *>(
-                  reinterpret_cast<char *>(get_rt_expr(**e)) + offset));
-        }
-        FOREACH_CNT(e, exprs_call_depth) {
-          *reinterpret_cast<char **>(&e->expr_) += offset;
-        }
-        FOREACH_CNT(e, exprs) {
-          for (int64_t i = 0; i < e->parent_cnt_; i++) {
-            *reinterpret_cast<char **>(&e->parents_[i]) += offset;
-          }
-          for (int64_t i = 0; i < e->arg_cnt_; i++) {
-            *reinterpret_cast<char **>(&e->args_[i]) += offset;
-          }
-        }
-      }
 
       FOREACH_CNT_X(ecd, exprs_call_depth, OB_SUCC(ret)) {
         if (ecd->need_stack_check_) {
@@ -1295,56 +1268,10 @@ int ObStaticEngineExprCG::alloc_so_check_exprs(const ObIArray<ObRawExpr *> &raw_
             }
           }
           if (OB_SUCC(ret) && e->parent_cnt_ > 0) {
-            OZ(add_so_check_expr_above(exprs, e));
+            e->need_stack_check_ = true;
           }
         }
       } // END FOREACH_CNT_X
-    }
-  }
-  return ret;
-}
-
-int ObStaticEngineExprCG::add_so_check_expr_above(ObIArray<ObExpr> &exprs, ObExpr *e)
-{
-  int ret = OB_SUCCESS;
-  ObExpr *base = exprs.get_data();
-  CK(NULL != e);
-  CK(e->parent_cnt_ > 0 && e->arg_cnt_ > 0);
-  OZ(exprs.push_back(*e));
-  CK(base == exprs.get_data());
-  if (OB_SUCC(ret)) {
-    // stack overflow check expr point to the same ObDatum of child.
-    ObExpr *so = &exprs.at(exprs.count() - 1);
-    so->type_ = T_OP_STACK_OVERFLOW_CHECK;
-    so->extra_ = 0;
-    so->inner_functions_ = 0;
-    so->inner_func_cnt_ = 0;
-    ObExpr **parents = static_cast<ObExpr **>(allocator_.alloc(sizeof(ObExpr *) * 2));
-    if (NULL == parents) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
-    } else {
-      ObExpr **args = parents + 1;
-
-      parents[0] = so;
-      args[0] = e;
-
-      e->parents_ = parents;
-      e->parent_cnt_ = 1;
-      so->args_ = args;
-      so->arg_cnt_ = 1;
-
-      for (int64_t i = 0; i < so->parent_cnt_; i++) {
-        ObExpr *p = so->parents_[i];
-        for (int64_t j = 0; j < p->arg_cnt_; j++) {
-          if (p->args_[j] == e) {
-            p->args_[j] = so;
-          }
-        }
-      }
-
-      so->eval_func_ = ObExprUtil::eval_stack_overflow_check;
-      so->eval_batch_func_ = ObExprUtil::eval_batch_stack_overflow_check;
     }
   }
   return ret;
@@ -1544,12 +1471,16 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
                                                  const RowDesc &row_desc,
                                                  ObIAllocator &allocator,
                                                  ObSQLSessionInfo *session,
+                                                 ObSchemaGetterGuard *schema_guard,
                                                  ObTempExpr *&temp_expr)
 {
   int ret = OB_SUCCESS;
   temp_expr = NULL;
   ObRawExprUniqueSet flattened_raw_exprs(true);
   char *buf = static_cast<char *>(allocator.alloc(sizeof(ObTempExpr)));
+  if (NULL == schema_guard) {
+    schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
+  }
   CK(OB_NOT_NULL(buf));
   CK(OB_NOT_NULL(expr));
   if (OB_SUCC(ret)) {
@@ -1557,9 +1488,10 @@ int ObStaticEngineExprCG::gen_expr_with_row_desc(const ObRawExpr *expr,
     temp_expr = new(buf)ObTempExpr(allocator);
     ObStaticEngineExprCG expr_cg(allocator,
                                  session,
-                                 &session->get_cached_schema_guard_info().get_schema_guard(),
+                                 schema_guard,
                                  0,
-                                 0);
+                                 0,
+                                 GET_MIN_CLUSTER_VERSION()); // ?
     expr_cg.set_rt_question_mark_eval(true);
     expr_cg.set_need_flatten_gen_col(false);
     OZ(expr_cg.generate(const_cast<ObRawExpr *>(expr), flattened_raw_exprs, *temp_expr));

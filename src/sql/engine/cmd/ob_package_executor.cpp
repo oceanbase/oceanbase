@@ -78,11 +78,9 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   } else if (OB_ISNULL(common_rpc_proxy)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("common rpc proxy should not be null", K(ret));
-  } /*
-    TODO: 暂无需要发到RootService端的需求, 暂时注掉
-    else if (OB_FAIL(common_rpc_proxy->alter_package(arg))) {
+  } else if (OB_FAIL(common_rpc_proxy->alter_package(arg))) {
     LOG_WARN("rpc proxy drop procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
-  } */
+  }
   return ret;
 }
 

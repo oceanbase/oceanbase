@@ -40,14 +40,14 @@ public:
   void init()
   {
     for (int i=0; i<count_; i++) {
-      id_meta_[i].latest_log_ts_ = ObTimeUtility::current_time_ns();
+      id_meta_[i].latest_log_ts_ = share::SCN::base_scn();
       id_meta_[i].limited_id_ = i + count_;
     }
   }
   bool is_invalid(const int64_t service_type)
   {
     return (id_meta_[service_type].limited_id_ == transaction::ObIDService::MIN_LAST_ID &&
-            id_meta_[service_type].latest_log_ts_ == OB_INVALID_TIMESTAMP);
+            !id_meta_[service_type].latest_log_ts_.is_valid());
   }
   OB_UNIS_VERSION(1);
 public: 
@@ -61,14 +61,14 @@ public:
   void init()
   {
     for (int i=0; i<count_; i++) {
-      id_meta_[i].latest_log_ts_ = ObTimeUtility::current_time_ns();
+      id_meta_[i].latest_log_ts_ = share::SCN::base_scn();
       id_meta_[i].limited_id_ = i + TestObAllIDMeta::type_count;
     }
   }
   bool is_invalid(const int64_t service_type)
   {
     return (id_meta_[service_type].limited_id_ == transaction::ObIDService::MIN_LAST_ID &&
-            id_meta_[service_type].latest_log_ts_ == OB_INVALID_TIMESTAMP);
+            !id_meta_[service_type].latest_log_ts_.is_valid());
   }
 };
 

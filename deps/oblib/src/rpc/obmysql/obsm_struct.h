@@ -17,6 +17,8 @@
 #include "rpc/obmysql/ob_mysql_request_utils.h"
 #include "rpc/ob_packet.h"
 #include "lib/lock/ob_latch.h"
+#include "rpc/obmysql/ob_packet_record.h"
+#include "rpc/obmysql/ob_2_0_protocol_struct.h"
 
 namespace oceanbase
 {
@@ -65,6 +67,8 @@ public:
     proxy_version_ = 0;
     group_id_ = 0;
     client_cs_type_ = 0;
+    sql_req_level_ = 0;
+    pkt_rec_wrapper_.init();
   }
 
   obmysql::ObCompressType get_compress_type() {
@@ -180,6 +184,8 @@ public:
   uint64_t proxy_version_;
   int32_t group_id_;
   int32_t client_cs_type_;
+  int64_t sql_req_level_;
+  obmysql::ObPacketRecordWrapper pkt_rec_wrapper_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

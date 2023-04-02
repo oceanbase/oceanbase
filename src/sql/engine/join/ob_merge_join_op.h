@@ -15,6 +15,8 @@
 
 #include "ob_join_op.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/basic/ob_ra_datum_store.h"
+#include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "share/datum/ob_datum_funcs.h"
 
 namespace oceanbase
@@ -89,39 +91,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinSpec);
 };
 
-typedef common::ObFixedArray<ObDatum *, common::ObIAllocator> DatumPtrFixedArray;
-
 class ObMergeJoinOp: public ObJoinOp
 {
 private:
-  struct ObStoredJoinRow : public ObChunkDatumStore::StoredRow
-  {
-    bool &get_extra_info()
-    {
-      static_assert(sizeof(ObStoredJoinRow) == sizeof(ObChunkDatumStore::StoredRow),
-          "sizeof StoredJoinRow must be the save with StoredRow");
-      return *reinterpret_cast<bool *>(get_extra_payload());
-    }
-
-    const bool &is_match() const
-    { return *reinterpret_cast<const bool *>(get_extra_payload()); }
-
-    void set_is_match(bool is_match) { get_extra_info() = is_match; }
-  };
-
   struct JoinRowList
   {
-    JoinRowList() : start_(0), end_(0) {}
-    JoinRowList(int64_t start) : start_(start), end_(start) {}
+    JoinRowList() : start_(0), end_(0), cur_(0) {}
+    JoinRowList(int64_t start) : start_(start), end_(start), cur_(start) {}
+    bool empty() const { return end_ <= start_; }
     int64_t count() const { return end_ - start_; }
+    bool has_next() const { return cur_ < end_; }
+    void rescan() { cur_ = start_; }
+    void set_end() { cur_ = end_; }
     int64_t start_;
     int64_t end_;
-    TO_STRING_KV(K(start_), K(end_));
+    int64_t cur_; // current index used in match_group_rows
+    TO_STRING_KV(K(start_), K(end_), K(cur_));
   };
   // a list is a group with same value of equal_conds_param
   typedef std::pair<JoinRowList, JoinRowList> RowsListPair;
-  typedef std::pair<ObStoredJoinRow *, ObStoredJoinRow *> RowsPair;
-
+  // a pair is row index in datum store which can be output, -1 means NULL
+  typedef std::pair<int64_t, int64_t> RowsPair;
 
   struct ChildRowFetcher
   {
@@ -216,17 +206,16 @@ private:
     ObOperator *child_;
   };
 
-  struct ChildBatchFecther
+  struct ChildBatchFetcher
   {
-    ChildBatchFecther(ObIArray<RowsListPair> &match_groups,
+    ChildBatchFetcher(ObIArray<RowsListPair> &match_groups,
         ObMergeJoinOp &merge_join_op,
         common::ObIAllocator &allocator) :
         cur_idx_(0), brs_(), batch_size_(0), child_(NULL),
         match_groups_(match_groups), merge_join_op_(merge_join_op),
         all_exprs_(NULL), datum_store_(), backup_datums_(),
         backup_rows_cnt_(0), brs_holder_(),
-        equal_param_idx_(allocator),
-        row_list_buffer_(NULL), row_list_buffer_size_(0), row_list_buffer_cnt_(0)
+        equal_param_idx_(allocator)
     {}
     int init(const uint64_t tenant_id, bool is_left, ObOperator *child,
              const ObIArray<ObMergeJoinSpec::EqualConditionInfo> &equal_cond_infos,
@@ -235,14 +224,14 @@ private:
     int get_next_small_group(int64_t &cmp_res);
     template<bool is_left>
     int get_next_equal_group(JoinRowList &row_list,
-                             const ObChunkDatumStore::StoredRow *stored_row,
-                             const bool is_unique);
+                             const ObRADatumStore::StoredRow *stored_row,
+                             const bool is_unique,
+                             ObRADatumStore::StoredRow *&new_stored_row);
     int get_next_batch(const int64_t max_row_cnt);
     int backup_remain_rows();
     int get_next_nonskip_row(bool &got_next_batch);
     bool iter_end() { return brs_.end_ && 0 == brs_.size_; }
-    int push_back_list_row(ObStoredJoinRow *stored_row, JoinRowList &list);
-    int get_list_row(int64_t idx, ObStoredJoinRow *&stored_row);
+    int get_list_row(int64_t idx, ObRADatumStore::StoredRow *&stored_row);
     // for operator rescan
     void reuse()
     {
@@ -250,10 +239,9 @@ private:
       brs_.skip_ = NULL;
       brs_.size_ = 0;
       brs_.end_ = false;
-      datum_store_.reset();
+      datum_store_.reuse();
       backup_datums_.reuse();
       backup_rows_cnt_ = 0;
-      row_list_buffer_cnt_ = 0;
       brs_holder_.reset();
     }
     // for destroy
@@ -266,7 +254,6 @@ private:
       datum_store_.reset();
       backup_datums_.reset();
       backup_rows_cnt_ = 0;
-      row_list_buffer_cnt_ = 0;
       brs_holder_.reset();
     }
     int64_t cur_idx_;
@@ -276,7 +263,7 @@ private:
     ObIArray<RowsListPair> &match_groups_;
     ObMergeJoinOp &merge_join_op_;
     const ExprFixedArray *all_exprs_;
-    ObChunkDatumStore datum_store_;
+    ObRADatumStore datum_store_;
     // When the other fetcher is end, we start to iterator this fetcher and outptu until end.
     // At the beginning, there are some rows in the current batch that not output yet.
     // We need store these rows and output first, then get batch from child and output directly.
@@ -285,10 +272,6 @@ private:
     ObBatchResultHolder brs_holder_;
 
     common::ObFixedArray<int64_t, common::ObIAllocator> equal_param_idx_;
-
-    ObStoredJoinRow **row_list_buffer_;
-    int64_t row_list_buffer_size_;
-    int64_t row_list_buffer_cnt_;
   };
 
   enum ObJoinState {
@@ -333,18 +316,24 @@ public:
   virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
-  virtual int inner_close() override { return OB_SUCCESS; }
+  virtual int inner_close() override
+  {
+    int ret = OB_SUCCESS;
+    sql_mem_processor_.unregister_profile();
+    return ret;
+  }
 
   void reset()
   {
     if (MY_SPEC.is_vectorized()) {
       cmp_res_ = 0;
       match_groups_.reset();
-      output_idx_ = 0;
       output_cache_.reset();
       batch_join_state_ = BJS_JOIN_BEGIN;
       left_brs_fetcher_.reuse();
       right_brs_fetcher_.reuse();
+      is_last_right_join_output_ = false;
+      group_idx_ = 0;
     } else {
       state_ = JS_JOIN_BEGIN;
       stored_row_ = NULL;
@@ -352,13 +341,19 @@ public:
       right_cache_iter_.reset();
       empty_cache_iter_side_ = ITER_BOTH;
       equal_cmp_ = 0;
-      left_row_matched_ = false;
       left_fetcher_.reuse();
       right_fetcher_.reuse();
+      stored_row_idx_ = -1;
     }
+    if (nullptr != rj_match_vec_) {
+      rj_match_vec_->reset(rj_match_vec_size_);
+    }
+    sql_mem_processor_.reset();
+    left_row_matched_ = false;
   }
   virtual void destroy() override
   {
+    sql_mem_processor_.unregister_profile_if_necessary();
     match_groups_.reset();
     output_cache_.reset();
     left_brs_fetcher_.reset();
@@ -367,6 +362,7 @@ public:
     right_cache_iter_.reset();
     left_fetcher_.reset();
     right_fetcher_.reset();
+    destroy_mem_context();
     ObJoinOp::destroy();
   }
 private:
@@ -436,27 +432,35 @@ private:
     }
     return ret;
   }
-  static int create_join_rows_list(JoinRowList *&row_list, ObIAllocator &allocator);
+
+  int init_mem_context();
+  void destroy_mem_context()
+  {
+    if (nullptr != mem_context_) {
+      DESTROY_CONTEXT(mem_context_);
+      mem_context_ = nullptr;
+    }
+  }
   int calc_equal_conds_with_batch_idx(int64_t &cmp_res);
   template<bool is_left_table_stored_row>
-  int calc_equal_conds_with_stored_row(const ObChunkDatumStore::StoredRow *stored_row,
+  int calc_equal_conds_with_stored_row(const ObRADatumStore::StoredRow *stored_row,
                                        int64_t batch_idx, int64_t &cmp_res);
-  int store_group_first_row(ChildBatchFecther &child_fetcher,
+  int store_group_first_row(ChildBatchFetcher &child_fetcher,
                             JoinRowList &row_list,
-                            ObChunkDatumStore::StoredRow *&stored_row,
+                            ObRADatumStore::StoredRow *&stored_row,
                             ObEvalCtx::BatchInfoScopeGuard &guard);
   int iterate_both_chidren(ObEvalCtx::BatchInfoScopeGuard &guard);
   int batch_join_begin();
   int batch_join_both();
+  int match_group_rows(const int64_t max_row_cnt);
   template<bool left_empty_allowed, bool right_empty_allowed, ObJoinType join_type>
-  int match_group_rows();
-  int output_cache_rows(const int64_t max_row_cnt);
+  int match_group_rows(const int64_t max_row_cnt);
+  int output_cache_rows();
   template <bool need_blank_left, bool need_blank_right>
-  int output_cache_rows(const int64_t max_row_cnt);
-  int output_side_rows(ChildBatchFecther &batch_fetcher, const ExprFixedArray *blank_exprs,
-                      const int64_t max_row_cnt);
+  int output_cache_rows();
+  int output_side_rows(ChildBatchFetcher &batch_fetcher, const ExprFixedArray *blank_exprs,
+                       const int64_t max_row_cnt);
   bool has_enough_datums();
-  int64_t get_output_cache_remain_rows_cnt() const { return output_cache_.count() - output_idx_; }
   bool output_equal_rows_directly() { return MY_SPEC.join_type_ <= FULL_OUTER_JOIN; }
   bool need_store_left_unmatch_rows()
   {
@@ -464,6 +468,26 @@ private:
     return (LEFT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type
             || LEFT_ANTI_JOIN == join_type);
   }
+  void set_output_it_age(ObRADatumStore::IterationAge *age)
+  {
+    if (NULL != age) {
+      age->inc();
+    }
+    left_brs_fetcher_.datum_store_.set_iteration_age(age);
+    right_brs_fetcher_.datum_store_.set_iteration_age(age);
+  }
+
+  int next_match_group(bool &has_next);
+  void switch_state_if_reach_end(const bool need_save_datum);
+  int left_row_to_other_conds();
+  int64_t get_total_rows_in_datum_store()
+  { return left_brs_fetcher_.datum_store_.get_row_cnt() +
+             right_brs_fetcher_.datum_store_.get_row_cnt(); }
+  int expand_match_flags_if_necessary(const int64_t size, const bool copy_flags);
+  int set_is_match(const int64_t idx, const bool is_match);
+  inline bool is_match(const int64_t idx) { return rj_match_vec_->at(idx); }
+  // this function only used for non-vectorized code patch
+  int process_dump();
   typedef int (ObMergeJoinOp::*state_operation_func_type)();
   typedef int (ObMergeJoinOp::*state_function_func_type)();
 private:
@@ -475,7 +499,8 @@ private:
   lib::MemoryContext mem_context_;
   ObChunkDatumStore right_cache_;
   ObChunkDatumStore::Iterator right_cache_iter_;
-  ObStoredJoinRow *stored_row_;
+  ObChunkDatumStore::StoredRow *stored_row_;
+  int64_t stored_row_idx_;
   ChildRowFetcher left_fetcher_;
   ChildRowFetcher right_fetcher_;
   ObMJIterateSide empty_cache_iter_side_;
@@ -491,6 +516,7 @@ private:
     BJS_JOIN_END = 0,
     BJS_JOIN_BEGIN,
     BJS_JOIN_BOTH,
+    BJS_MATCH_GROUP,
     BJS_OUTPUT_STORE, // when one child is end, output rows in store, then go to OUTPUT_LEFT/RIGHT
     BJS_OUTPUT_LEFT,
     BJS_OUTPUT_RIGHT,
@@ -499,15 +525,20 @@ private:
 
   int64_t cmp_res_;
   ObSEArray<RowsListPair, 256, common::ModulePageAllocator, true> match_groups_;
-  int64_t output_idx_;
+  bool is_last_right_join_output_;
   ObSEArray<RowsPair, 256, common::ModulePageAllocator, true> output_cache_;
+  ObBitVector *rj_match_vec_; // bitmap to check whether it is matched during right join
+  int64_t rj_match_vec_size_; // size of `rj_match_vec_`
+  ObRADatumStore::IterationAge output_rows_it_age_;
+  int64_t group_idx_;
+  JoinRowList left_group_;
+  JoinRowList right_group_;
   BatchJoinState batch_join_state_;
-
-  ObBatchResultHolder left_first_row_holder_;
-  ObBatchResultHolder right_first_row_holder_;
-
-  ChildBatchFecther left_brs_fetcher_;
-  ChildBatchFecther right_brs_fetcher_;
+  ChildBatchFetcher left_brs_fetcher_;
+  ChildBatchFetcher right_brs_fetcher_;
+  ObSqlWorkAreaProfile profile_;
+  ObSqlMemMgrProcessor sql_mem_processor_;
+  double left_mem_bound_ratio_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeJoinOp);

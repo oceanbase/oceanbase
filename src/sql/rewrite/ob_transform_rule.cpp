@@ -27,7 +27,7 @@
 #include "observer/ob_server_struct.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-
+#include "sql/ob_select_stmt_printer.h"
 namespace oceanbase
 {
 namespace sql
@@ -132,6 +132,7 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(SIMPLIFY_ORDERBY)
     TRANS_TYPE_TO_STR(SIMPLIFY_WINFUNC)
     TRANS_TYPE_TO_STR(SELECT_EXPR_PULLUP)
+    TRANS_TYPE_TO_STR(PROCESS_DBLINK)
     default:  return NULL;
   }
 }
@@ -165,7 +166,8 @@ int ObTransformRule::transform_stmt_recursively(common::ObIArray<ObParentDMLStmt
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  if (OB_ISNULL(stmt)) {
+  int64_t size = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
@@ -173,7 +175,10 @@ int ObTransformRule::transform_stmt_recursively(common::ObIArray<ObParentDMLStmt
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(current_level), K(is_stack_overflow), K(ret));
-  } else if (is_large_stmt(*stmt) &&
+  } else if (stmt->is_select_stmt() &&
+        OB_FAIL(static_cast<const ObSelectStmt *>(stmt)->get_set_stmt_size(size))) {
+    LOG_WARN("failed to get set stm size", K(ret));
+  } else if (size > common::OB_MAX_SET_STMT_SIZE &&
             !(transformer_type_ == PRE_PROCESS ||
             transformer_type_ == POST_PROCESS)) {
     // skip transformation for large stmt
@@ -185,6 +190,10 @@ int ObTransformRule::transform_stmt_recursively(common::ObIArray<ObParentDMLStmt
   } else if (TransMethod::PRE_ORDER == transform_method_) {
     if (OB_FAIL(transform_pre_order(parent_stmts, current_level, stmt))) {
       LOG_WARN("failed to do top down transformation", K(*stmt), K(current_level), K(ret));
+    } else { /*do nothing*/ }
+  } else if (TransMethod::ROOT_ONLY == transform_method_) {
+    if (OB_FAIL(transform_root_only(parent_stmts, current_level, stmt))) {
+      LOG_WARN("failed to do root only transformation", K(*stmt), K(current_level), K(ret));
     } else { /*do nothing*/ }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -239,6 +248,29 @@ int ObTransformRule::transform_post_order(ObIArray<ObParentDMLStmt> &parent_stmt
   return ret;
 }
 
+// root-only transformation
+int ObTransformRule::transform_root_only(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                         const int64_t current_level,
+                                         ObDMLStmt *&stmt)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("stmt is NULL", K(stmt), K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(current_level), K(is_stack_overflow), K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(current_level), K(is_stack_overflow), K(ret));
+  } else if (OB_FAIL(transform_self(parent_stmts, current_level, stmt))) {
+    LOG_WARN("failed to transform self statement", K(ret));
+  } else if (OB_FAIL(transform_temp_tables(parent_stmts, current_level, stmt))) {
+    LOG_WARN("failed to transform children stmt", K(ret));
+  }
+  return ret;
+}
+
 /**
  * @brief ObCostBasedRewriteRule::accept_transform
  * @param stmts: origin stmt
@@ -265,11 +297,14 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   ObDMLStmt *tmp1 = NULL;
   ObDMLStmt *tmp2 = NULL;
   cost_based_trans_tried_ = true;
+  STOP_OPT_TRACE;
   if (OB_ISNULL(ctx_) || OB_ISNULL(stmt) || OB_ISNULL(trans_stmt) || OB_ISNULL(top_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt), K(trans_stmt), K(top_stmt));
   } else if (force_accept) {
     trans_happened = true;
+  } else if (ctx_->is_set_stmt_oversize_) {
+    LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
   } else if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true,
                                    trans_stmt_cost, is_expected, check_ctx))) {
     LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
@@ -281,17 +316,26 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   } else {
     trans_happened = trans_stmt_cost < stmt_cost_;
   }
+  RESUME_OPT_TRACE;
 
   if (OB_FAIL(ret)) {
   } else if (!trans_happened) {
+    OPT_TRACE("reject transform because the cost is increased or the query plan is unexpected.");
+    OPT_TRACE("before transform cost:", stmt_cost_);
+    OPT_TRACE("after transform cost:", trans_stmt_cost);
+    OPT_TRACE("is expected plan:", is_expected);
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
-                                      K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
+                     K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
     LOG_TRACE("succeed force accept transform because hint/rule");
     stmt = trans_stmt;
+    OPT_TRACE("hint or rule force cost based transform apply.");
   } else {
+    OPT_TRACE("accept transform because the cost is decreased.");
+    OPT_TRACE("before transform cost:", stmt_cost_);
+    OPT_TRACE("after transform cost:", trans_stmt_cost);
     LOG_TRACE("accept transform because the cost is decreased",
               K_(stmt_cost), K(trans_stmt_cost));
     stmt = trans_stmt;
@@ -563,7 +607,7 @@ int ObTransformRule::adjust_transformed_stmt(ObIArray<ObParentDMLStmt> &parent_s
 
 bool ObTransformRule::is_normal_disabled_transform(const ObDMLStmt &stmt)
 {
-  return stmt.is_hierarchical_query() ||
+  return (stmt.is_hierarchical_query() && transform_method_ != TransMethod::ROOT_ONLY) ||
          stmt.is_insert_all_stmt();
 }
 
@@ -578,6 +622,7 @@ int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &par
   need_trans = false;
   if (is_normal_disabled_transform(stmt)) {
     need_trans = false;
+    OPT_TRACE("hierarchical query or insert query can not transform");
   } else if (OB_FAIL(check_hint_status(stmt, need_trans))) {
     LOG_WARN("failed to check hint status", K(ret));
   }
@@ -617,6 +662,11 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     LOG_WARN("null point error", K(ret), K(stmt), K(ctx_), K(query_hint));
   } else if (OB_FAIL(stmt->get_qb_name(ctx_->src_qb_name_))) {
     LOG_WARN("failed to get qb name", K(ret));
+  } else {
+    OPT_TRACE("transform query block:", ctx_->src_qb_name_);
+    OPT_TRACE_TRANSFORM_SQL(stmt);
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(need_transform(parent_stmts, current_level, *stmt, need_trans))) {
     LOG_WARN("failed to check need rewrite", K(ret));
   } else if (!need_trans) {
@@ -650,6 +700,10 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     LOG_WARN("failed to update base tid and cid", K(ret));
   }
   trans_happened_ = (trans_happened_ || trans_happened);
+  OPT_TRACE("transform happened:", trans_happened);
+  if (trans_happened) {
+    OPT_TRACE(stmt);
+  }
   // the following code print too much logs. Adjust the log level as debug
   LOG_DEBUG("succeed to transfrom self stmt",
             "trans_type", ctx_->get_trans_type_string(get_transformer_type()),
@@ -673,10 +727,55 @@ int ObTransformRule::transform_children(ObIArray<ObParentDMLStmt> &parent_stmts,
   } else { /*do nothing*/ }
   //transform temp table for root stmt
   //disable temp table transform for temp table
-  if (OB_SUCC(ret) && 0 == current_level) {
-    ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(transform_temp_tables(parent_stmts, current_level, stmt))) {
+      LOG_WARN("failed to transform temp tables", K(ret));
+    }
+  }
+  if (!child_stmts.empty()) {
+    OPT_TRACE_BEGIN_SECTION;
+  }
+  //transform child stmt
+  for(int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    ObDMLStmt *child_stmt = child_stmts.at(i);
+    parent_stmt.pos_ = i;
+    parent_stmt.stmt_ = stmt;
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null child stmt", K(ret));
+    } else if (OB_FAIL(parent_stmts.push_back(parent_stmt))) {
+      LOG_WARN("failed to push back parent stmt", K(ret));
+    } else if (OB_FAIL(SMART_CALL(transform_stmt_recursively(parent_stmts,
+                                                             current_level + 1,
+                                                             child_stmt)))) {
+      LOG_WARN("failed to transform stmt recursively", K(ret));
+    } else if (OB_FAIL(stmt->set_child_stmt(i, static_cast<ObSelectStmt*>(child_stmt)))) {
+      LOG_WARN("failed to set child stmt", K(ret));
+    } else {
+      parent_stmts.pop_back();
+    }
+  }
+  if (!child_stmts.empty()) {
+    OPT_TRACE_END_SECTION;
+  }
+  return ret;
+}
+
+int ObTransformRule::transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                           const int64_t current_level,
+                                           ObDMLStmt *&stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (0 == current_level) {
     if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
       LOG_WARN("failed to collect temp table infos", K(ret));
+    }
+    if (!temp_table_infos.empty()) {
+      OPT_TRACE("start transform temp table stmt");
     }
     for(int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
       ObDMLStmt *child_stmt = temp_table_infos.at(i).temp_table_query_;
@@ -699,58 +798,13 @@ int ObTransformRule::transform_children(ObIArray<ObParentDMLStmt> &parent_stmts,
         }
       }
     }
-  }
-  //transform child stmt
-  for(int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-    ObDMLStmt *child_stmt = child_stmts.at(i);
-    parent_stmt.pos_ = i;
-    parent_stmt.stmt_ = stmt;
-    if (OB_ISNULL(child_stmt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null child stmt", K(ret));
-    } else if (OB_FAIL(parent_stmts.push_back(parent_stmt))) {
-      LOG_WARN("failed to push back parent stmt", K(ret));
-    } else if (OB_FAIL(SMART_CALL(transform_stmt_recursively(parent_stmts,
-                                                             current_level + 1,
-                                                             child_stmt)))) {
-      LOG_WARN("failed to transform stmt recursively", K(ret));
-    } else if (OB_FAIL(stmt->set_child_stmt(i, static_cast<ObSelectStmt*>(child_stmt)))) {
-      LOG_WARN("failed to set child stmt", K(ret));
-    } else {
-      parent_stmts.pop_back();
+    if (!temp_table_infos.empty()) {
+      OPT_TRACE("end transform temp table stmt");
     }
   }
   return ret;
 }
 
-bool ObTransformRule::is_view_stmt(const ObIArray<ObParentDMLStmt> &parents, const ObDMLStmt &stmt)
-{
-  bool bret = false;
-  if (parents.empty()) {
-    // do nothing
-  } else if (OB_ISNULL(parents.at(parents.count() - 1).stmt_)) {
-    // do nothing
-  } else {
-    bret = stmt.get_current_level() ==
-           parents.at(parents.count() - 1).stmt_->get_current_level();
-  }
-  return bret;
-}
-
-bool ObTransformRule::is_large_stmt(const ObDMLStmt &stmt)
-{
-  bool bret = false;
-  int ret = OB_SUCCESS;
-  int64_t size = 0;
-  if (stmt.is_select_stmt()) {
-    if (OB_FAIL(static_cast<const ObSelectStmt&>(stmt).get_set_stmt_size(size))) {
-      LOG_WARN("failed to get set stm size", K(ret));
-    } else if (size > common::OB_MAX_SET_STMT_SIZE) {
-      bret = true;
-    }
-  }
-  return bret;
-}
 
 int ObTryTransHelper::fill_helper(const ObQueryCtx *query_ctx)
 {
@@ -912,6 +966,7 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
       } else if (is_disable && OB_FAIL(ctx_->add_used_trans_hint(myhint))) {
         LOG_WARN("failed to add used transform hint", K(ret));
       }
+      OPT_TRACE("hint reject current transform");
     } else if ((ALL_COST_BASED_RULES & (1L << get_transformer_type())) &&
                query_hint->global_hint_.disable_cost_based_transform()) {
       /* disable transform by NO_COST_BASED_QUERY_TRANSFORMATION hint */
@@ -920,6 +975,8 @@ int ObTransformRule::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
     }
   } else if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint)) {
     need_trans = true;
+  } else {
+    OPT_TRACE("outline reject current transform");
   }
   return ret;
 }

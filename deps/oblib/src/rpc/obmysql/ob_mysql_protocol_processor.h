@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/ob_virtual_cs_protocol_processor.h"
+#include "rpc/obmysql/ob_packet_record.h"
 
 namespace oceanbase
 {
@@ -57,9 +58,12 @@ private:
                 void *&ipacket, bool &need_decode_more, int64_t &pos);
 
   int process_mysql_packet(ObMysqlPktContext &context,
+                           obmysql::ObPacketRecordWrapper *pkt_rec_wrapper,
                            ObICSMemPool& pool,
                            void *&ipacket, bool &need_decode_more);
-  int process_one_mysql_packet(ObMysqlPktContext &context, ObICSMemPool& pool,
+  int process_one_mysql_packet(ObMysqlPktContext &context,
+                               obmysql::ObPacketRecordWrapper *pkt_rec_wrapper,
+                               ObICSMemPool& pool,
                                const int64_t actual_data_len, void *&ipacket,
                                bool &need_decode_more);
 protected:

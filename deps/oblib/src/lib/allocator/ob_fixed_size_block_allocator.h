@@ -124,7 +124,7 @@ typedef ObFixedSizeBlockMemoryContext<OB_DEFAULT_MACRO_BLOCK_SIZE> ObMacroBlockS
 template<int64_t SIZE>
 ObFixedSizeBlockAllocator<SIZE>::ObFixedSizeBlockAllocator() :
     is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::FIXED_SIZE_ALLOCATOR_LOCK),
     total_block_num_(0),
     max_block_num_(0),
     allocator_(ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR),
@@ -406,7 +406,7 @@ template<int64_t SIZE>
 void ObFixedSizeBlockMemoryContext<SIZE>::destroy()
 {
   if (0 != used_block_num_) {
-    COMMON_LOG(ERROR, "not all block be freed, potential memory leak!", K(used_block_num_));
+    COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "not all block be freed, potential memory leak!", K(used_block_num_));
   }
   used_block_num_ = 0;
   is_inited_ = false;

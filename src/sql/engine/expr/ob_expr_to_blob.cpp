@@ -16,6 +16,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -68,8 +69,61 @@ int ObExprToBlob::eval_to_blob(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     LOG_WARN("eval param failed", K(ret));
   } else if (arg->is_null()) {
     res.set_null();
+  } else if (ob_is_blob(expr.args_[0]->datum_meta_.get_type(), expr.args_[0]->datum_meta_.cs_type_)) {
+    res = *arg; // blob to blob
   } else {
-    res.set_datum(*arg);
+    ObString raw_string = arg->get_string();
+    int64_t res_len = raw_string.length();
+    if (!ob_is_text_tc(expr.args_[0]->datum_meta_.get_type())) { // non-lob to blob
+      ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+      if (OB_FAIL(str_result.init(res_len))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(str_result.append(raw_string.ptr(), raw_string.length()))) {
+        LOG_WARN("append lob result failed");
+      } else {
+        str_result.set_result();
+      }
+    } else { // clob to blob
+      ObLobLocatorV2 lob(raw_string, expr.args_[0]->obj_meta_.has_lob_header());
+      if (OB_FAIL(lob.get_lob_data_byte_len(res_len))) {
+        LOG_WARN("get lob data byte length failed", K(ret), K(lob));
+      } else {
+        ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+        if (OB_FAIL(str_result.init(res_len))) {
+          LOG_WARN("init lob result failed");
+        } else {
+          int64_t off = 0;
+          ObString v_str;
+          ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+          ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+          ObDatumMeta input_meta = expr.args_[0]->datum_meta_;
+          bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+          ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_, arg->get_string(), has_lob_header);
+          ObTextStringIterState state;
+          ObString src_block_data;
+          if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+            LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
+          }
+          while (OB_SUCC(ret)
+                  && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+            if (OB_FAIL(str_result.append(src_block_data))) {
+              LOG_WARN("str_result append failed", K(ret), K(src_block_data));
+            } else {
+              off += src_block_data.length();
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+            ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                  input_iter.get_inner_ret() : OB_INVALID_DATA;
+            LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+          } else {
+            str_result.set_result();
+            OB_ASSERT(off == res_len);
+          }
+        }
+      }
+    }
   }
   return ret;
 }

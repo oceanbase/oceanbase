@@ -65,8 +65,6 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
     LOG_WARN("failed to get io info", K(ret), K(buf), K(size));
   } else if (OB_FAIL(ObTmpFileManager::get_instance().write(io_info, timeout_ms))) {
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().sync(file_fd_, timeout_ms))) {
-    LOG_WARN("failed to sync tmp file", K(ret), K(file_fd_));
   } else {
     file_size_ += size;
     LOG_INFO("backup tmp file write", K(buf), K(size));
@@ -95,7 +93,6 @@ int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, ObTmpFile
   io_info.reset();
   io_info.fd_ = file_fd_;
   io_info.tenant_id_ = tenant_id_;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = const_cast<char *>(buf);
   io_info.size_ = size;
@@ -154,7 +151,7 @@ void ObBackupIndexBufferNode::reset()
   if (!tmp_file_.is_opened()) {
     // do nothing
   } else if (OB_TMP_FAIL(tmp_file_.close())) {
-    LOG_ERROR("failed to close tmp file", K(tmp_ret));
+    LOG_ERROR_RET(tmp_ret, "failed to close tmp file", K(tmp_ret));
   }
 }
 

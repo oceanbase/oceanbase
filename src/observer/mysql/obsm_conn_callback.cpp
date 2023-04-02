@@ -20,6 +20,7 @@
 #include "observer/ob_server_struct.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/omt/ob_tenant.h"
+#include "observer/ob_srv_task.h"
 
 namespace oceanbase
 {
@@ -64,7 +65,7 @@ static int send_handshake(ObSqlSockSession& sess, const OMPKHandshake &hsp)
   } else if (OB_UNLIKELY(pkt_count <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid pkt count", K(pkt_count), K(ret));
-  } else if (OB_FAIL(sess.write_data(buf, pos))) {
+  } else if (OB_FAIL(sess.write_hanshake_packet(buf, pos))) {
     LOG_WARN("write handshake packet data fail", K(ret));
   }
 
@@ -92,14 +93,15 @@ static int sm_conn_build_handshake(ObSMConnection& conn, obmysql::OMPKHandshake&
   int ret = OB_SUCCESS;
   RLOCAL(common::ObMysqlRandom, thread_scramble_rand);
   hsp.set_thread_id(conn.sessid_);
-  hsp.set_ssl_cap(false);
+  const bool support_ssl = GCONF.ssl_client_authentication;
+  hsp.set_ssl_cap(support_ssl);
   const int64_t BUF_LEN = sizeof(conn.scramble_buf_);
   if (OB_FAIL(create_scramble_string(conn.scramble_buf_, BUF_LEN, thread_scramble_rand))) {
     LOG_WARN("create scramble string failed", K(ret));
   } else if (OB_FAIL(hsp.set_scramble(conn.scramble_buf_, BUF_LEN))) {
     LOG_WARN("set scramble failed", K(ret));
   } else {
-    LOG_INFO("new mysql sessid created", K(conn.sessid_));
+    LOG_INFO("new mysql sessid created", K(conn.sessid_), K(support_ssl));
   }
   return ret;
 }
@@ -113,9 +115,9 @@ int ObSMConnectionCallback::init(ObSqlSockSession& sess, ObSMConnection& conn)
   } else if (OB_FAIL(sm_conn_build_handshake(conn, hsp))) {
     LOG_WARN("conn send handshake fail", K(ret));
   } else if (OB_FAIL(send_handshake(sess, hsp))) {
-    LOG_WARN("send handshake fail", K(ret));
+    LOG_WARN("send handshake fail", K(ret), K(sess.client_addr_));
   } else {
-    LOG_INFO("sm conn init succ", K(conn.sessid_));
+    LOG_INFO("sm conn init succ", K(conn.sessid_), K(sess.client_addr_));
   }
   if (OB_SUCCESS != ret && OB_SUCCESS == conn.ret_) {
     int tmp_ret = OB_SUCCESS;
@@ -129,35 +131,6 @@ int ObSMConnectionCallback::init(ObSqlSockSession& sess, ObSMConnection& conn)
     conn.is_need_clear_sessid_ = true;
   }
   return ret;
-}
-
-static void kill_session(uint32_t sessid)
-{
-  int ret = OB_SUCCESS;
-  if (ObSMConnection::INITIAL_SESSID != sessid) {
-    sql::ObSQLSessionInfo *sess_info = NULL;
-    if (OB_UNLIKELY(OB_FAIL(GCTX.session_mgr_->get_session(sessid, sess_info)))) {
-      LOG_WARN("fail to  get session", K(ret), K(sessid));
-    } else if (OB_ISNULL(sess_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session info is NULL", K(ret), K(sessid));
-    } else {
-      sess_info->set_session_state(sql::SESSION_KILLED);
-      sess_info->set_shadow(true);
-      (void)GCTX.session_mgr_->revert_session(sess_info);
-    }
-  }
-}
-
-static void free_session(ObSMConnection& conn)
-{
-  sql::ObFreeSessionCtx ctx;
-  ctx.tenant_id_ = conn.tenant_id_;
-  ctx.sessid_ = conn.sessid_;
-  ctx.proxy_sessid_ = conn.proxy_sessid_;
-  ctx.has_inc_active_num_ = conn.has_inc_active_num_;
-
-  GCTX.session_mgr_->free_session(ctx);
 }
 
 static void sm_conn_unlock_tenant(ObSMConnection& conn)
@@ -191,9 +164,38 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
   int ret = OB_SUCCESS;
   bool is_need_clear = false;
   if (conn.is_sess_alloc_ && !conn.is_sess_free_) {
-    kill_session(conn.sessid_);
-    free_session(conn);
+    sql::ObFreeSessionCtx ctx;
+    ctx.tenant_id_ = conn.tenant_id_;
+    ctx.sessid_ = conn.sessid_;
+    ctx.proxy_sessid_ = conn.proxy_sessid_;
+    ctx.has_inc_active_num_ = conn.has_inc_active_num_;
+
+    //free session in task
+    ObSrvTask *task = OB_NEW(ObDisconnectTask,
+                              ObModIds::OB_RPC,
+                              ctx);
+    if (OB_UNLIKELY(NULL == task)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_UNLIKELY(NULL == conn.tenant_)) {
+      ret = OB_TENANT_NOT_EXIST;
+    } else if (OB_FAIL(conn.tenant_->recv_request(*task))) {
+      LOG_WARN("push disconnect task fail", K(conn.sessid_),
+                "proxy_sessid", conn.proxy_sessid_, K(ret));
+      ob_delete(task);
+    }
+    // free session locally
+    if (OB_FAIL(ret)) {
+      ObMPDisconnect disconnect_processor(ctx);
+      rpc::frame::ObReqProcessor *processor = static_cast<rpc::frame::ObReqProcessor *>(&disconnect_processor);
+      if (OB_FAIL(processor->run())) {
+        LOG_WARN("free session fail", K(ctx));
+      } else {
+        LOG_INFO("free session successfully", K(conn.sessid_),
+                  "proxy_sessid", conn.proxy_sessid_, K(ctx));
+      }
+    }
   }
+
   if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(&conn, is_need_clear)))) {
     LOG_ERROR("fail to jugde need clear", K(ret));
   } else if (is_need_clear) {
@@ -201,6 +203,7 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
   }
   sm_conn_unlock_tenant(conn);
   sm_conn_log_close(conn, ret);
+  conn.~ObSMConnection();
 }
 
 int ObSMConnectionCallback::on_disconnect(observer::ObSMConnection& conn)

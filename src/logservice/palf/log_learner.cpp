@@ -23,15 +23,15 @@ namespace palf
 LogLearner::LogLearner()
     : server_(),
       region_(DEFAULT_REGION_NAME),
-      register_ts_ns_(OB_INVALID_TIMESTAMP),
+      register_time_us_(OB_INVALID_TIMESTAMP),
       keepalive_ts_(OB_INVALID_TIMESTAMP)
 {
 }
 
-LogLearner::LogLearner(const common::ObAddr &server, const int64_t register_ts_ns)
+LogLearner::LogLearner(const common::ObAddr &server, const int64_t register_time_us)
     : server_(server),
       region_(DEFAULT_REGION_NAME),
-      register_ts_ns_(register_ts_ns),
+      register_time_us_(register_time_us),
       keepalive_ts_(OB_INVALID_TIMESTAMP)
 {
 }
@@ -39,17 +39,17 @@ LogLearner::LogLearner(const common::ObAddr &server, const int64_t register_ts_n
 LogLearner::LogLearner(const LogLearner &child)
   : server_(child.server_),
     region_(child.region_),
-    register_ts_ns_(child.register_ts_ns_),
+    register_time_us_(child.register_time_us_),
     keepalive_ts_(child.keepalive_ts_)
 {
 }
 
 LogLearner::LogLearner(const common::ObAddr &server,
                        const common::ObRegion &region,
-                       const int64_t register_ts_ns)
+                       const int64_t register_time_us)
     : server_(server),
       region_(region),
-      register_ts_ns_(register_ts_ns),
+      register_time_us_(register_time_us),
       keepalive_ts_(OB_INVALID_TIMESTAMP)
 {
 }
@@ -61,22 +61,22 @@ LogLearner::~LogLearner()
 
 bool LogLearner::is_valid() const
 {
-  return server_.is_valid() && !region_.is_empty() && register_ts_ns_ >= 0;
+  return server_.is_valid() && !region_.is_empty() && register_time_us_ >= 0;
 }
 
 void LogLearner::reset()
 {
   server_.reset();
   region_ = DEFAULT_REGION_NAME;
-  register_ts_ns_ = OB_INVALID_TIMESTAMP;
+  register_time_us_ = OB_INVALID_TIMESTAMP;
   keepalive_ts_ = OB_INVALID_TIMESTAMP;
 }
 
-bool LogLearner::is_timeout(const int64_t timeout_ns) const
+bool LogLearner::is_timeout(const int64_t timeout_us) const
 {
   bool bool_ret = false;
-  const int64_t now_ns = ObTimeUtility::current_time_ns();
-  if (now_ns - keepalive_ts_ > timeout_ns) {
+  const int64_t now_us = ObTimeUtility::current_time();
+  if (now_us - keepalive_ts_ > timeout_us) {
     bool_ret = true;
   } else {
   }
@@ -91,8 +91,8 @@ const common::ObAddr &LogLearner::get_server() const
 
 void LogLearner::update_keepalive_ts()
 {
-  const int64_t curr_ts_ns = ObTimeUtility::current_time_ns();
-  keepalive_ts_ = (curr_ts_ns > keepalive_ts_)? curr_ts_ns: keepalive_ts_;
+  const int64_t curr_time_us = ObTimeUtility::current_time();
+  keepalive_ts_ = (curr_time_us > keepalive_ts_)? curr_time_us: keepalive_ts_;
 }
 
 bool LogLearner::operator<(const LogLearner &val) const
@@ -114,11 +114,11 @@ LogLearner &LogLearner::operator=(const LogLearner &val)
 {
   server_ = val.server_;
   region_ = val.region_;
-  register_ts_ns_ = val.register_ts_ns_;
+  register_time_us_ = val.register_time_us_;
   keepalive_ts_ = val.keepalive_ts_;
   return *this;
 }
 
-OB_SERIALIZE_MEMBER(LogLearner, server_, region_, register_ts_ns_);
+OB_SERIALIZE_MEMBER(LogLearner, server_, region_, register_time_us_);
 } // namespace palf end
 } // namespace oceanbase end

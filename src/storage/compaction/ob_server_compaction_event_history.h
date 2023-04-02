@@ -25,7 +25,7 @@ struct ObServerCompactionEvent
 public:
   enum ObCompactionEvent
   {
-    GET_COMPACTION_INFO = 0,
+    RECEIVE_BROADCAST_SCN = 0,
     GET_FREEZE_INFO,
     WEAK_READ_TS_READY,
     SCHEDULER_LOOP,

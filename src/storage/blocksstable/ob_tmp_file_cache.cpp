@@ -69,7 +69,7 @@ int64_t ObTmpPageCacheKey::size() const
 int ObTmpPageCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", K(ret));
   } else if (OB_UNLIKELY(!is_valid())) {
@@ -103,7 +103,7 @@ int64_t ObTmpPageCacheValue::size() const
 int ObTmpPageCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == buf || buf_len < size())) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(buf_len),
                       "request_size", size());
@@ -241,7 +241,7 @@ int ObTmpPageCache::ObITmpPageIOCallback::alloc_io_buf(
   aligned_offset = 0;
   common::align_offset_size(offset_, buf_size_, aligned_offset, io_buf_size);
   io_buf_size_ = io_buf_size + DIO_READ_ALIGN_SIZE;
-  if (OB_UNLIKELY(NULL == allocator_)) {
+  if (OB_ISNULL(allocator_)) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "Invalid data, the allocator is NULL, ", K(ret));
   } else if (OB_UNLIKELY(NULL == (io_buf_ = (char*) (allocator_->alloc(io_buf_size_))))) {
@@ -280,7 +280,7 @@ ObTmpPageCache::ObTmpPageIOCallback::~ObTmpPageIOCallback()
 int ObTmpPageCache::ObTmpPageIOCallback::inner_process(const bool is_success)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == cache_)) {
+  if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callback, ", KP_(cache), K(ret));
   } else if (is_success) {
@@ -306,10 +306,10 @@ int ObTmpPageCache::ObTmpPageIOCallback::inner_deep_copy(char *buf,
     const int64_t buf_len, ObIOCallback *&callback) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", KP(buf), K(buf_len), K(ret));
-  } else if (OB_UNLIKELY(NULL == cache_) || OB_UNLIKELY(NULL == allocator_)) {
+  } else if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "The tmp page io callback is not valid, ", KP_(cache), KP_(allocator), K(ret));
   } else {
@@ -340,7 +340,7 @@ ObTmpPageCache::ObTmpMultiPageIOCallback::~ObTmpMultiPageIOCallback()
 int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_process(const bool is_success)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == cache_)) {
+  if (OB_ISNULL(cache_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Invalid tmp page cache callback, ", KP_(cache), K(ret));
   } else if (is_success) {
@@ -373,10 +373,10 @@ int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_deep_copy(char *buf,
     const int64_t buf_len, ObIOCallback *&callback) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", KP(buf), K(buf_len), K(ret));
-  } else if (OB_UNLIKELY(NULL == cache_) || OB_UNLIKELY(NULL == allocator_)) {
+  } else if (OB_ISNULL(cache_) || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "The tmp page io callback is not valid, ", KP_(cache), KP_(allocator), K(ret));
   } else {
@@ -509,7 +509,7 @@ int64_t ObTmpBlockCacheKey::size() const
 int ObTmpBlockCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", K(ret));
   } else if (OB_UNLIKELY(!is_valid())) {
@@ -522,7 +522,7 @@ int ObTmpBlockCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKe
 }
 
 ObTmpBlockCacheValue::ObTmpBlockCacheValue(char *buf)
-      : buf_(buf), size_(OB_TMP_FILE_STORE.get_block_size())
+      : buf_(buf), size_(ObTmpMacroBlock::get_block_size())
 {
 }
 
@@ -534,7 +534,7 @@ int64_t ObTmpBlockCacheValue::size() const
 int ObTmpBlockCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == buf || buf_len < size())) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(ret), KP(buf), K(buf_len),
         "request_size", size());
@@ -559,7 +559,7 @@ ObTmpBlockCache &ObTmpBlockCache::get_instance()
 int ObTmpBlockCache::init(const char *cache_name, const int64_t priority)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == cache_name) || OB_UNLIKELY(priority <= 0)) {
+  if (OB_ISNULL(cache_name) || OB_UNLIKELY(priority <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(cache_name), K(priority));
   } else if (OB_FAIL((common::ObKVCache<ObTmpBlockCacheKey,
@@ -598,7 +598,7 @@ int ObTmpBlockCache::alloc_buf(const ObTmpBlockCacheKey &key, ObTmpBlockValueHan
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(alloc(key.get_tenant_id(), key.size(),
-      sizeof(ObTmpBlockCacheValue) + OB_TMP_FILE_STORE.get_block_size(),
+      sizeof(ObTmpBlockCacheValue) + ObTmpMacroBlock::get_block_size(),
       handle.kvpair_, handle.handle_, handle.inst_handle_))) {
     STORAGE_LOG(WARN, "failed to alloc kvcache buf", K(ret));
   } else if (OB_FAIL(key.deep_copy(reinterpret_cast<char *>(handle.kvpair_->key_),
@@ -632,18 +632,19 @@ void ObTmpBlockCache::destory()
 }
 
 ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager()
-  : write_handles_(),
-    t_mblk_map_(),
-    dir_to_blk_map_(),
-    free_page_nums_(0),
-    blk_nums_threshold_(0),
-    block_cache_(NULL),
-    allocator_(NULL),
-    tenant_id_(0),
-    block_write_ctx_(),
+  : is_inited_(false),
     last_access_tenant_config_ts_(0),
     last_tenant_mem_block_num_(1),
-    is_inited_(false)
+    free_page_nums_(0),
+    tenant_id_(0),
+    blk_nums_threshold_(0),
+    compare_(),
+    block_cache_(NULL),
+    allocator_(NULL),
+    write_handles_(),
+    t_mblk_map_(),
+    dir_to_blk_map_(),
+    block_write_ctx_()
 {
 }
 
@@ -656,7 +657,7 @@ int ObTmpTenantMemBlockManager::init(const uint64_t tenant_id,
                                      double blk_nums_threshold)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpBlockCache has been inited", K(ret));
   } else if (OB_UNLIKELY(blk_nums_threshold <= 0) || OB_UNLIKELY(blk_nums_threshold > 1)) {
@@ -727,37 +728,115 @@ int ObTmpTenantMemBlockManager::alloc_buf(const ObTmpBlockCacheKey &key,
   return block_cache_->alloc_buf(key, handle);
 }
 
-int ObTmpTenantMemBlockManager::try_wash(const uint64_t tenant_id,
-    common::ObIArray<ObTmpMacroBlock *> &free_blocks)
+int ObTmpTenantMemBlockManager::try_sync(const int64_t block_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t count = t_mblk_map_.size();
-  if (OB_UNLIKELY(!is_inited_)) {
+  ObTmpMacroBlock *t_mblk = NULL;
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
-  } else if (get_tenant_mem_block_num() <= count) {
-    int64_t wash_nums = 1;
-    if (OB_FAIL(wash(tenant_id, std::max(wash_nums, count - get_tenant_mem_block_num() + 1),
-        free_blocks))) {
-      STORAGE_LOG(WARN, "cannot wash a tmp macro block", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(block_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
+  } else if (OB_FAIL(t_mblk_map_.get_refactored(block_id, t_mblk))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "t_mblk_map get block failed", K(ret), K(block_id));
+    } else {
+      STORAGE_LOG(DEBUG, "the tmp macro block has been washed", K(ret), K(block_id));
     }
+  } else if (t_mblk->is_washing()) {
+    STORAGE_LOG(WARN, "the tmp macro block is washing", K(ret), K(block_id));
+  } else if (t_mblk->is_disked()) {
+    STORAGE_LOG(WARN, "the tmp macro block has been disked", K(ret), K(block_id));
+  } else if (0 == t_mblk->get_used_page_nums()) {
+    STORAGE_LOG(WARN, "the tmp macro block has not been written", K(ret), K(block_id));
+  } else {
+    t_mblk->set_washing_status(true);
+    common::ObIArray<ObTmpFileExtent* > &extents = t_mblk->get_extents();
+    for (int64_t i=0; OB_SUCC(ret) && i< extents.count(); i++){
+      if (!extents.at(i)->is_closed()) {
+        ret = OB_STATE_NOT_MATCH;
+        STORAGE_LOG(WARN, "the tmp macro block's extents is not all closed", K(ret), K(block_id));
+      }
+    }
+    bool is_empty = false;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(wash_block(t_mblk, is_empty))) {
+        STORAGE_LOG(WARN, "fail to wash", K(ret), K(tenant_id_), K(*t_mblk));
+      } else if (is_empty) {
+        STORAGE_LOG(ERROR, "block to sync is empty", K(ret), K(tenant_id_), K(block_id));
+      } else if (OB_FAIL(wait_write_io_finish())) {
+        STORAGE_LOG(WARN, "wait sync finish failed", K(ret), K(tenant_id_), K(block_id));
+      }
+    }
+    t_mblk->set_washing_status(false);
   }
   return ret;
+}
+
+int ObTmpTenantMemBlockManager::try_wash(common::ObIArray<ObTmpMacroBlock *> &free_blocks)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpTenantMemBlockManager has not been inited", K(ret));
+  } else {
+    const int64_t count = t_mblk_map_.size();
+    const int64_t wash_threshold = get_tenant_mem_block_num();
+    const int64_t oversize = count - wash_threshold + 1;
+    const int64_t clean_nums = oversize > 1 ? oversize : 1;
+    if (OB_FAIL(wash(clean_nums, free_blocks))) {
+      STORAGE_LOG(WARN, "Wash tmp macro blocks failed ", K(ret), K(clean_nums));
+    }
+  }
+
+  return ret;
+
 }
 
 int ObTmpTenantMemBlockManager::free_macro_block(const int64_t block_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+  ObTmpMacroBlock *t_mblk = NULL;
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
-  } else if (block_id <= 0) {
+  } else if (OB_UNLIKELY(block_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
+  } else if (OB_FAIL(t_mblk_map_.get_refactored(block_id, t_mblk))) {
+    STORAGE_LOG(WARN, "the tmp macro block has been washed", K(ret), K(block_id));
   } else if (OB_FAIL(t_mblk_map_.erase_refactored(block_id))) {
     STORAGE_LOG(WARN, "fail to erase tmp macro block", K(ret));
+  } else if (OB_FAIL(erase_block_from_dir_map(block_id))) {
+    STORAGE_LOG(WARN, "fail to erase block from dir map", K(ret));
   } else {
-    free_page_nums_ -= ObTmpFilePageBuddy::MAX_PAGE_NUMS;
+    free_page_nums_ -= t_mblk->get_free_page_nums();
+  }
+  return ret;
+}
+
+int ObTmpTenantMemBlockManager::erase_block_from_dir_map(const int64_t block_id)
+{
+  int ret = OB_SUCCESS;
+  Map::iterator iter;
+  int64_t dir_id = -1;
+  for (iter = dir_to_blk_map_.begin(); iter != dir_to_blk_map_.end(); ++iter) {
+    const int64_t to_erase_blk_id = iter->second;
+    if (to_erase_blk_id == block_id) {
+      dir_id = iter->first;
+      break;
+    }
+  }
+
+  if (OB_UNLIKELY(-1 ==  dir_id)) {
+    // do nothing
+  } else if (OB_FAIL(dir_to_blk_map_.erase_refactored(dir_id))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      STORAGE_LOG(WARN, "erase block from dir map failed", K(ret), K(dir_id));
+    }
   }
   return ret;
 }
@@ -767,9 +846,9 @@ int ObTmpTenantMemBlockManager::alloc_extent(const int64_t dir_id, const uint64_
 {
   int ret = OB_SUCCESS;
   int64_t block_id = -1;
-  int64_t page_nums = std::ceil(size * 1.0 / ObTmpMacroBlock::get_default_page_size());
+  const int64_t page_nums = std::ceil(size * 1.0 / ObTmpMacroBlock::get_default_page_size());
   ObTmpMacroBlock *t_mblk = NULL;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
   } else if (OB_FAIL(dir_to_blk_map_.get_refactored(dir_id, block_id))) {
@@ -790,7 +869,7 @@ int ObTmpTenantMemBlockManager::alloc_extent(const int64_t dir_id, const uint64_
       STORAGE_LOG(WARN, "fail to set dir_to_blk_map", K(ret));
     }
   } else if (t_mblk->get_max_cont_page_nums() < page_nums
-      || t_mblk->get_tenant_id() != tenant_id) {
+      || t_mblk->get_tenant_id() != tenant_id_) {
     if (OB_FAIL(get_macro_block(dir_id, tenant_id, page_nums, t_mblk, free_blocks))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to get macro block", K(ret));
@@ -812,14 +891,30 @@ int ObTmpTenantMemBlockManager::alloc_extent(const int64_t dir_id, const uint64_
   return ret;
 }
 
+int ObTmpTenantMemBlockManager::alloc_block_all_pages(ObTmpMacroBlock *t_mblk, ObTmpFileExtent &extent)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(t_mblk)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected error, t_mblk is nullptr", K(ret), KP(t_mblk));
+  } else if (OB_FAIL(t_mblk->alloc_all_pages(extent))){
+    STORAGE_LOG(WARN, "fail to alloc tmp extent", K(ret));
+  } else {
+    free_page_nums_ -= extent.get_page_nums();
+  }
+
+  return ret;
+}
+
 int ObTmpTenantMemBlockManager::free_extent(const int64_t free_page_nums,
     const ObTmpMacroBlock *t_mblk)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
-  } else if (free_page_nums < 0 || free_page_nums > ObTmpFilePageBuddy::MAX_PAGE_NUMS || NULL == t_mblk) {
+  } else if (OB_UNLIKELY(free_page_nums < 0 || free_page_nums > ObTmpFilePageBuddy::MAX_PAGE_NUMS)
+             || OB_ISNULL(t_mblk)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(free_page_nums), KPC(t_mblk));
   } else if (OB_FAIL(refresh_dir_to_blk_map(t_mblk->get_dir_id(), t_mblk))) {
@@ -837,7 +932,7 @@ int ObTmpTenantMemBlockManager::get_macro_block(const int64_t dir_id,
                                                 common::ObIArray<ObTmpMacroBlock *> &free_blocks)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
   } else {
@@ -857,14 +952,16 @@ int ObTmpTenantMemBlockManager::get_macro_block(const int64_t dir_id,
     }
     if (!is_found) {
       const int64_t count = t_mblk_map_.size();
+      const int64_t wash_threshold = get_tenant_mem_block_num();
       if (OB_UNLIKELY(t_mblk_map_.size() == 0)) {
         // nothing to do.
+      } else if (OB_UNLIKELY(free_page_nums_ < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "free page nums can not be negative", K(ret), K(free_page_nums_));
       } else if ( get_tenant_mem_block_num() <= count ||
           blk_nums_threshold_ > (free_page_nums_ * 1.0) / (t_mblk_map_.size() * ObTmpFilePageBuddy::MAX_PAGE_NUMS)) {
         int64_t wash_nums = 1;
-        if (OB_FAIL(wash(tenant_id,
-                         std::max(wash_nums, count - get_tenant_mem_block_num() + 1),
-                         free_blocks))) {
+        if (OB_FAIL(wash(std::max(wash_nums, count - wash_threshold + 1), free_blocks))) {
           STORAGE_LOG(WARN, "cannot wash a tmp macro block", K(ret), K(dir_id), K(tenant_id));
         }
       }
@@ -876,60 +973,84 @@ int ObTmpTenantMemBlockManager::get_macro_block(const int64_t dir_id,
   return ret;
 }
 
-int ObTmpTenantMemBlockManager::wash(const uint64_t tenant_id, int64_t block_nums,
+ObTmpTenantMemBlockManager::BlockWashScoreCompare::BlockWashScoreCompare()
+{
+}
+
+bool ObTmpTenantMemBlockManager::BlockWashScoreCompare::operator() (
+    const ObTmpTenantMemBlockManager::BlockInfo &left,
+    const ObTmpTenantMemBlockManager::BlockInfo &right)
+{
+  return left.wash_score_ < right.wash_score_;
+}
+
+int ObTmpTenantMemBlockManager::wash(const int64_t block_nums,
     common::ObIArray<ObTmpMacroBlock *> &free_blocks)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+  TmpMacroBlockMap::iterator iter;
+  common::ObArray<ObTmpMacroBlock*> blks;
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
+    STORAGE_LOG(WARN, "ObTmpTenantMemBlockManager has not been inited", K(ret));
   } else if (OB_FAIL(wait_write_io_finish())) {
     STORAGE_LOG(WARN, "fail to wait previous write io", K(ret));
   } else {
-    while (OB_SUCC(ret) && block_nums--) {
-      int64_t count = t_mblk_map_.size();
-      if (OB_SUCC(ret)) {
-        if (OB_UNLIKELY(count < get_tenant_mem_block_num())) {
-          STORAGE_LOG(WARN, "Tenant memory has not been used up, not need to wash ", K(ret),
-              K(count));
+    Heap heap(compare_, allocator_);
+    int64_t cur_time = ObTimeUtility::fast_current_time();
+    for (iter = t_mblk_map_.begin(); OB_SUCC(ret) && iter != t_mblk_map_.end(); ++iter) {
+      ObTmpMacroBlock *m_blk = iter->second;
+      if (OB_UNLIKELY(NULL != m_blk) && OB_UNLIKELY(m_blk->is_inited()) && OB_UNLIKELY(!m_blk->is_disked()) &&
+          OB_UNLIKELY(0 != m_blk->get_used_page_nums())) {
+        BlockInfo info;
+        info.block_id_ = m_blk->get_block_id();
+        info.wash_score_ = m_blk->get_wash_score(cur_time);
+        if(OB_FAIL(heap.push(info))) {
+          STORAGE_LOG(WARN, "insert block to array failed", K(ret));
+        }
+      }
+    }
+    for (int64_t wash_count = 0; OB_SUCC(ret) && wash_count < block_nums && heap.count() > 0;) {
+      const BlockInfo info = heap.top();
+      ObTmpMacroBlock *m_blk = NULL;
+      if (OB_FAIL(t_mblk_map_.get_refactored(info.block_id_, m_blk))) {
+        STORAGE_LOG(WARN, "get block failed", K(ret));
+      } else if(OB_UNLIKELY(NULL == m_blk)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "block is NULL ", K(ret), K(*m_blk));
+      } else if (m_blk->is_washing()) {
+        // do nothing
+      } else {
+        m_blk->set_washing_status(true);
+        bool is_empty = false;
+        if (m_blk->is_empty()) {
+          if (OB_FAIL(refresh_dir_to_blk_map(m_blk->get_dir_id(), m_blk))) {
+            STORAGE_LOG(WARN, "fail to refresh dir_to_blk_map", K(ret), K(*m_blk));
+          }
+        } else if (OB_FAIL(wash_block(m_blk, is_empty))) {
+          STORAGE_LOG(WARN, "fail to wash", K(ret), K_(tenant_id), K(*m_blk));
+        } else if (OB_FAIL(free_blocks.push_back(m_blk))) {
+          STORAGE_LOG(WARN, "fail to push back to free_blocks", K(ret), K_(tenant_id));
         } else {
-          TmpMacroBlockMap::iterator iter;
-          ObTmpMacroBlock *wash_block = NULL;
-          for (iter = t_mblk_map_.begin(); count > 0 && iter != t_mblk_map_.end(); ++iter) {
-            if (iter->second->get_tenant_id() == tenant_id) {
-              if (!iter->second->is_washing()) {
-                if (NULL == wash_block
-                    || wash_block->get_free_page_nums() > iter->second->get_free_page_nums()) {
-                  if (NULL != wash_block) {
-                    wash_block->set_washing_status(false);
-                  }
-                  wash_block = iter->second;
-                  wash_block->set_washing_status(true);
-                }
-              }
-              count--;
-            }
-          }
-          if (NULL != wash_block && wash_block->is_inited() && !wash_block->is_disked()) {
-            bool is_empty = false;
-            if (OB_FAIL(wash_with_no_wait(tenant_id, wash_block, is_empty))) {
-              STORAGE_LOG(WARN, "fail to wash", K(ret), K(tenant_id), K(*wash_block));
-            } else if (is_empty && OB_FAIL(free_blocks.push_back(wash_block))) {
-              STORAGE_LOG(WARN, "fail to push back to free_blocks", K(ret), K(tenant_id));
-            }
-          }
+          wash_count++;
+        }
+        m_blk->set_washing_status(false);
+      }
+      if(OB_SUCC(ret)) {
+        if (OB_FAIL(heap.pop())) {
+          STORAGE_LOG(WARN, "pop info from heap failed", K(ret), K_(tenant_id));
         }
       }
     }
   }
+
   return ret;
 }
 
-int ObTmpTenantMemBlockManager::add_macro_block(const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk)
+int ObTmpTenantMemBlockManager::add_macro_block(ObTmpMacroBlock *&t_mblk)
 {
   int ret = OB_SUCCESS;
-  UNUSED(tenant_id);
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
   } else if (OB_FAIL(t_mblk_map_.set_refactored(t_mblk->get_block_id(), t_mblk))) {
@@ -945,7 +1066,7 @@ int ObTmpTenantMemBlockManager::refresh_dir_to_blk_map(const int64_t dir_id,
 {
   int ret = OB_SUCCESS;
   int64_t block_id = 0;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
   } else if (OB_FAIL(dir_to_blk_map_.get_refactored(dir_id, block_id))) {
@@ -970,26 +1091,7 @@ int ObTmpTenantMemBlockManager::refresh_dir_to_blk_map(const int64_t dir_id,
   return ret;
 }
 
-
-int ObTmpTenantMemBlockManager::wash(const uint64_t tenant_id, ObTmpMacroBlock *wash_block,
-    bool &is_empty)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
-  } else if (OB_FAIL(wait_write_io_finish())) {
-    STORAGE_LOG(WARN, "fail to wait previous write io", K(ret));
-  } else if (wash_block->is_disked()) {
-    // nothing to do
-  } else if (OB_FAIL(wash_with_no_wait(tenant_id, wash_block, is_empty))) {
-    STORAGE_LOG(WARN, "fail to wash", K(ret), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id,
-    ObTmpMacroBlock *wash_block, bool &is_empty)
+int ObTmpTenantMemBlockManager::wash_block(ObTmpMacroBlock *wash_block, bool &is_empty)
 {
   int ret = OB_SUCCESS;
   // close all of extents in this block.
@@ -1000,8 +1102,10 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id,
     STORAGE_LOG(WARN, "The washing block is null", K(ret));
   } else {
     bool is_all_close = false;
-    if (OB_FAIL(wash_block->close(is_all_close))) {
+    uint8_t free_page_nums = 0;
+    if (OB_FAIL(wash_block->close(is_all_close, free_page_nums)) ) {
       STORAGE_LOG(WARN, "fail to close the wash block", K(ret));
+    } else if (FALSE_IT(free_page_nums_ = free_page_nums_ + free_page_nums)){
     } else if (is_all_close) {
       if (wash_block->is_empty()) {
         // this block don't need to wash.
@@ -1014,27 +1118,27 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id,
         ObTmpBlockIOInfo info;
         ObMacroBlockHandle &mb_handle = wash_block->get_macro_block_handle();
         if (OB_FAIL(wash_block->get_wash_io_info(info))) {
-          STORAGE_LOG(WARN, "fail to get wash io info", K(ret), K(tenant_id));
-        } else if (OB_FAIL(write_io(info, wash_block->get_tmp_block_header(), mb_handle))) {
-          STORAGE_LOG(WARN, "fail to write tmp block", K(ret), K(tenant_id));
+          STORAGE_LOG(WARN, "fail to get wash io info", K(ret), K_(tenant_id));
+        } else if (OB_FAIL(write_io(info, mb_handle))) {
+          STORAGE_LOG(WARN, "fail to write tmp block", K(ret), K_(tenant_id));
         } else if (OB_FAIL(write_handles_.push_back(&mb_handle))) {
           STORAGE_LOG(WARN, "fail to push back into write_handles", K(ret));
         } else if (wash_block->is_disked()) {
           // nothing to do
         } else if (OB_FAIL(wash_block->give_back_buf_into_cache(true/*is_wash*/))) {
-          STORAGE_LOG(WARN, "fail to put tmp block cache", K(ret), K(tenant_id));
+          STORAGE_LOG(WARN, "fail to put tmp block cache", K(ret), K_(tenant_id));
         } else {
-          OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id, 1);
+          OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1);
           free_page_nums_ -= wash_block->get_free_page_nums();
           if (OB_FAIL(t_mblk_map_.erase_refactored(wash_block->get_block_id(), &wash_block))) {
             STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret));
+          } else if(OB_FAIL(erase_block_from_dir_map(wash_block->get_block_id()))){
+            STORAGE_LOG(WARN, "fail to erase block from dir map", K(ret));
           } else {
             ObTaskController::get().allow_next_syslog();
             STORAGE_LOG(INFO, "succeed to wash a block", K(*wash_block));
           }
         }
-      } else {
-        STORAGE_LOG(WARN, "this block has been destoryed", K(*wash_block));
       }
     } else {
       STORAGE_LOG(INFO, "this block has some the unclosed extent", K(*wash_block));
@@ -1044,11 +1148,29 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id,
   return ret;
 }
 
+int ObTmpTenantMemBlockManager::free_empty_blocks(common::ObIArray<ObTmpMacroBlock *> &free_blocks)
+{
+  int ret = OB_SUCCESS;
+  if (free_blocks.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < free_blocks.count(); ++i) {
+      ObTmpMacroBlock* blk = free_blocks.at(i);
+      if (blk->is_empty()) {
+        if (OB_FAIL(free_macro_block(blk->get_block_id()))) {
+          STORAGE_LOG(WARN, "fail to free tmp macro block", K(ret));
+        }
+      }
+      free_blocks.at(i) = NULL;
+    }
+    free_blocks.reset();
+  }
+  return ret;
+}
+
 int ObTmpTenantMemBlockManager::wait_write_io_finish()
 {
   int ret = OB_SUCCESS;
   const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));
   } else if (write_handles_.count() > 0) {
@@ -1068,14 +1190,13 @@ int ObTmpTenantMemBlockManager::wait_write_io_finish()
 
 int ObTmpTenantMemBlockManager::write_io(
     const ObTmpBlockIOInfo &io_info,
-    const ObTmpFileMacroBlockHeader &tmp_block_header,
     ObMacroBlockHandle &handle)
 {
   int ret = OB_SUCCESS;
   const int64_t buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
   const int64_t page_size = ObTmpMacroBlock::get_default_page_size();
   int64_t pos = 0;
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));
   } else if (OB_FAIL(THE_IO_DEVICE->check_space_full(OB_SERVER_BLOCK_MGR.get_macro_block_size()))) {
@@ -1090,6 +1211,9 @@ int ObTmpTenantMemBlockManager::write_io(
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(write_info), K(handle));
     } else if (OB_FAIL(block_write_ctx_.add_macro_block_id(handle.get_macro_id()))) {
       STORAGE_LOG(WARN, "fail to add macro id", K(ret), "macro id", handle.get_macro_id());
+    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(handle.get_macro_id(),
+        true/*update_to_max_time*/))) { //just to skip bad block inspect
+      STORAGE_LOG(WARN, "fail to update macro id write time", K(ret), "macro id", handle.get_macro_id());
     }
   }
   return ret;
@@ -1111,8 +1235,8 @@ int64_t ObTmpTenantMemBlockManager::get_tenant_mem_block_num()
     } else {
       const int64_t bytes = common::upper_align(
         lib::get_tenant_memory_limit(tenant_id_) * tenant_config->_temporary_file_io_area_size / 100,
-        OB_TMP_FILE_STORE.get_block_size());
-      tenant_mem_block_num = bytes / OB_TMP_FILE_STORE.get_block_size();
+        ObTmpMacroBlock::get_block_size());
+      tenant_mem_block_num = bytes / ObTmpMacroBlock::get_block_size();
     }
     ATOMIC_STORE(&last_tenant_mem_block_num_, tenant_mem_block_num);
     ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());

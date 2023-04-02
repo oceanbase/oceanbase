@@ -18,6 +18,7 @@
 #include "common/sql_mode/ob_sql_mode.h"
 #include "lib/container/ob_array_array.h"
 #include "lib/container/ob_se_array.h"
+#include "lib/geo/ob_s2adapter.h"
 #include "share/ob_i_sql_expression.h"
 #include "share/ob_ls_id.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -174,11 +175,13 @@ struct ObTableScanStatistic
 
 static const int64_t OB_DEFAULT_FILTER_EXPR_COUNT = 4;
 static const int64_t OB_DEFAULT_RANGE_COUNT = 4;
+static const int64_t OB_DEFAULT_MBR_FILTER_COUNT = 1;
 typedef ObSEArray<ObISqlExpression*, OB_DEFAULT_FILTER_EXPR_COUNT, ModulePageAllocator> ObFilterArray;
 typedef ObSEArray<const ObIColumnExpression*, 4, ModulePageAllocator> ObColumnExprArray;
 typedef ObSEArray<ObNewRange, OB_DEFAULT_RANGE_COUNT, ModulePageAllocator> ObRangeArray;
 typedef ObSEArray<int64_t, OB_DEFAULT_RANGE_COUNT, ModulePageAllocator> ObPosArray;
 typedef ObSEArray<uint64_t, OB_PREALLOCATED_COL_ID_NUM, ModulePageAllocator> ObColumnIdArray;
+typedef common::ObSEArray<common::ObSpatialMBR, OB_DEFAULT_MBR_FILTER_COUNT> ObMbrFilterArray;
 
 /**
  *  This is the common interface for storage service.
@@ -204,9 +207,10 @@ ObVTableScanParam() :
       for_update_wait_timeout_(-1),
       frozen_version_(-1),
       scan_allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
-      fb_snapshot_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
+      fb_snapshot_(),
       is_get_(false),
       force_refresh_lc_(false),
+      is_for_foreign_check_(false),
       output_exprs_(NULL),
       aggregate_exprs_(NULL),
       op_(NULL),
@@ -246,6 +250,7 @@ ObVTableScanParam() :
   uint64_t index_id_;           // index to be used
   //ranges of all range array, no index key range means full partition scan
   ObRangeArray key_ranges_;
+  ObMbrFilterArray mbr_filters_;
   // remember the end position of each range array, array size of (0 or 1) represents there is only one range array(for most cases except blocked nested loop join)
   ObPosArray range_array_pos_;
   int64_t timeout_;             // process timeout
@@ -266,9 +271,10 @@ ObVTableScanParam() :
   ObIAllocator *scan_allocator_;
   ObTableScanStatistic main_table_scan_stat_;
   ObTableScanStatistic idx_table_scan_stat_;
-  int64_t fb_snapshot_;
+  share::SCN fb_snapshot_;
   bool is_get_;
   bool force_refresh_lc_;
+  bool is_for_foreign_check_;
 
   //
   // for static typing engine, set to NULL if the old engine is used

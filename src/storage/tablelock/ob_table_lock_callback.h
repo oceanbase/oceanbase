@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_TABLELOCK_OB_TABLE_LOCK_CALLBACK_
 #define OCEANBASE_STORAGE_TABLELOCK_OB_TABLE_LOCK_CALLBACK_
 
+#include "share/scn.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/memtable/ob_memtable_mutator.h"
@@ -62,9 +63,9 @@ public:
   virtual int del() override;
   int64_t get_seq_no() const override;
   bool is_table_lock_callback() const override { return true; }
-  bool log_synced() const override { return INT64_MAX != log_ts_; }
+  bool log_synced() const override { return share::SCN::max_scn() != scn_; }
   bool must_log() const;
-  int log_sync(const int64_t log_ts) override;
+  int log_sync(const share::SCN scn) override;
   int64_t get_data_size() override { return 0; } // size of trans node.
   memtable::MutatorType get_mutator_type() const override
   { return memtable::MutatorType::MUTATOR_TABLE_LOCK; }

@@ -39,6 +39,7 @@ enum class FailureModule
   TENANT = 1,
   LOG = 2,
   TRANSACTION = 3,
+  STORAGE = 4,
 };
 
 enum class FailureLevel
@@ -83,6 +84,9 @@ inline const char *obj_to_cstring(FailureModule module)
       break;
     case FailureModule::TRANSACTION:
       ret = "TRANSACTION";
+      break;
+    case FailureModule::STORAGE:
+      ret = "STORAGE";
       break;
     default:
       break;
@@ -135,20 +139,7 @@ public:
   bool operator==(const FailureEvent &rhs) {
     bool ret = false;
     if (type_ == rhs.type_ && module_ == rhs.module_ && level_ == rhs.level_) {
-      const char * p1 = info_.get_ob_string().ptr();
-      const char * p2 = rhs.info_.get_ob_string().ptr();
-      if (p1 == p2) {// 包含p1 == p2 == nullptr
-        ret = true;
-      } else if (p1 == nullptr || p2 == nullptr) {
-        ret = false;
-      } else {// p1和p2均不为空
-        while (*p1 != '\0' && *p2 != '\0' && (*(p1++) == *(p2++)));
-        if (*p1 == '\0' || *p2 == '\0') {
-          ret = true;
-        } else {
-          ret = false;
-        }
-      }
+      ret = (0 == info_.get_ob_string().case_compare(rhs.info_.get_ob_string()));
     }
     return ret;
   }

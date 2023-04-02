@@ -248,7 +248,7 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_LS_INIT_PARAM_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_LS_INIT_PARAM_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       LOG_WARN("init ls restore dag param failed", K(ret));
     }
@@ -325,7 +325,7 @@ bool ObLSRestoreDagNet::operator == (const ObIDagNet &other) const
     const ObLSRestoreDagNet &other_ls_restore_dag = static_cast<const ObLSRestoreDagNet &>(other);
     if (OB_ISNULL(other_ls_restore_dag.ctx_) || OB_ISNULL(ctx_)) {
       is_same = false;
-      LOG_ERROR("ls restore ctx is NULL", KPC(ctx_), KPC(other_ls_restore_dag.ctx_));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_), KPC(other_ls_restore_dag.ctx_));
     } else if (ctx_->arg_.ls_id_ != other_ls_restore_dag.ctx_->arg_.ls_id_) {
       is_same = false;
     }
@@ -337,7 +337,7 @@ int64_t ObLSRestoreDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
-    LOG_ERROR("ls restore ctx is NULL", KPC(ctx_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx is NULL", KPC(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_->arg_.ls_id_, sizeof(ctx_->arg_.ls_id_), hash_value);
   }
@@ -464,7 +464,7 @@ bool ObLSRestoreDag::operator == (const ObIDag &other) const
       is_same = false;
     } else if (OB_ISNULL(ctx) || OB_ISNULL(other_dag.get_ctx())) {
       is_same = false;
-      LOG_ERROR("ls restore ctx should not be NULL", KP(ctx), KP(other_dag.get_ctx()));
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx should not be NULL", KP(ctx), KP(other_dag.get_ctx()));
     } else if (NULL != ctx && NULL != other_dag.get_ctx()) {
       if (ctx->arg_.ls_id_ != other_dag.get_ctx()->arg_.ls_id_) {
         is_same = false;
@@ -480,7 +480,7 @@ int64_t ObLSRestoreDag::hash() const
   ObLSRestoreCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("ls restore ctx should not be NULL", KP(ctx));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "ls restore ctx should not be NULL", KP(ctx));
   } else {
     hash_value = common::murmurhash(
         &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
@@ -986,6 +986,8 @@ int ObStartLSRestoreTask::choose_leader_src_()
 {
   int ret = OB_SUCCESS;
   ObArray<common::ObTabletID> tablet_id_array;
+  ObArray<common::ObTabletID> deleted_tablet_id_array;
+  ObArray<common::ObTabletID> need_schedule_tablet_id_array;
   ObMigrationStatus migration_status;
   ObLSRestoreStatus restore_status;
   share::ObBackupDataStore store;
@@ -1016,13 +1018,21 @@ int ObStartLSRestoreTask::choose_leader_src_()
           ctx_->arg_.ls_id_,
           tablet_id_array))) {
         LOG_WARN("failed to read tablet to ls info", K(ret), KPC(ctx_));
+      } else if (OB_FAIL(store.read_deleted_tablet_info(
+          ctx_->arg_.ls_id_,
+          deleted_tablet_id_array))) {
+        LOG_WARN("failed to read deleted tablet info", K(ret), KPC(ctx_));
+      } else if (OB_FAIL(get_difference(tablet_id_array, deleted_tablet_id_array, need_schedule_tablet_id_array))) {
+        LOG_WARN("failed to get difference", K(ret), K(tablet_id_array), K(deleted_tablet_id_array));
       } else {
         FLOG_INFO("succeed get backup ls meta info and tablet id array", K(ls_meta_package), K(tablet_id_array));
         ctx_->src_ls_meta_package_ = ls_meta_package;
         ctx_->need_check_seq_ = false;
         ctx_->ls_rebuild_seq_ = -1;
-        if (OB_FAIL(generate_tablet_id_array_(tablet_id_array))) {
-          LOG_WARN("failed to generate tablet id array", K(ret), K(ls_meta_package), K(tablet_id_array));
+        if (OB_FAIL(generate_tablet_id_array_(need_schedule_tablet_id_array))) {
+          LOG_WARN("failed to generate tablet id array", K(ret), K(ls_meta_package), K(need_schedule_tablet_id_array));
+        } else {
+          LOG_INFO("get deleted tablet ids", KPC(ctx_), K(deleted_tablet_id_array));
         }
       }
     }
@@ -1431,7 +1441,11 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
 
       if (OB_FAIL(ret)) {
         if (OB_NOT_NULL(tablet_restore_dag)) {
-          scheduler->free_dag(*tablet_restore_dag, sys_tablets_restore_dag);
+          if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_restore_dag, sys_tablets_restore_dag))) {
+            LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(tablet_restore_dag));
+            scheduler->free_dag(*tablet_restore_dag, sys_tablets_restore_dag);
+            tmp_ret = OB_SUCCESS;
+          }
           tablet_restore_dag = nullptr;
         }
       }
@@ -2041,6 +2055,7 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
   const bool is_transfer = false;
   const ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::PENDING;
   const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2048,14 +2063,18 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
   } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create or update tablet get invalid argument", K(ret), K(tablet_id));
+  } else if (OB_FAIL(share::ObCompatModeGetter::get_tablet_compat_mode(ctx_->arg_.tenant_id_, tablet_id, compat_mode))) {
+    LOG_WARN("failed to get tenant mode", KR(ret),"tenant_id", ctx_->arg_.tenant_id_, K(tablet_id));
   } else {
+    lib::CompatModeGuard g(compat_mode);
     ObMigrationTabletParam param;
     param.ls_id_ = ctx_->arg_.ls_id_;
     param.tablet_id_ = tablet_id;
     param.data_tablet_id_ = tablet_id;
     param.create_scn_ = ObTabletMeta::INIT_CREATE_SCN;
-    param.clog_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
-    param.compat_mode_ = lib::Worker::get_compatibility_mode();
+    param.clog_checkpoint_scn_.reset();
+    // Compat mode of sys tables is MYSQL no matter what if the tenant is ORACLE mode.
+    param.compat_mode_ = compat_mode;
     param.multi_version_start_ = 0;
     param.snapshot_version_ = 0;
     param.tx_data_.tablet_status_ = ObTabletStatus::NORMAL;
@@ -2064,7 +2083,10 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
     } else if (OB_FAIL(param.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), K(data_status));
-    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema(param.allocator_, param.storage_schema_))) {
+    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
+        param.allocator_,
+        param.storage_schema_,
+        param.medium_info_list_))) {
       LOG_WARN("failed to construct placeholder storage schema");
     } else if (!param.is_valid()) {
       ret = OB_INVALID_ARGUMENT;

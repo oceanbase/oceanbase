@@ -126,11 +126,11 @@ int ObRADatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*> &exprs,
     ObEvalCtx &ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(cnt_ != exprs.count())) {
+  if (OB_UNLIKELY(cnt_ < exprs.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("datum count mismatch", K(ret), K(cnt_), K(exprs.count()));
   } else {
-    for (uint32_t i = 0; i < cnt_; ++i) {
+    for (uint32_t i = 0; i < exprs.count(); ++i) {
       if (exprs.at(i)->is_const_expr()) {
         continue;
       } else {
@@ -349,7 +349,7 @@ int ObRADatumStore::Block::to_copyable()
 ObRADatumStore::ObRADatumStore(common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), tenant_id_(0), label_(nullptr), ctx_id_(0), mem_limit_(0),
     idx_blk_(NULL), save_row_cnt_(0), row_cnt_(0), fd_(-1), dir_id_(-1), file_size_(0),
-    inner_reader_(*this), mem_hold_(0), allocator_(NULL == alloc ? inner_allocator_ : *alloc),
+    inner_reader_(*this), mem_hold_(0), allocator_(NULL == alloc ? &inner_allocator_ : alloc),
     row_extend_size_(0), mem_stat_(NULL), io_observer_(NULL)
 {
 }
@@ -357,7 +357,8 @@ ObRADatumStore::ObRADatumStore(common::ObIAllocator *alloc /* = NULL */)
 int ObRADatumStore::init(int64_t mem_limit,
     uint64_t tenant_id /* = common::OB_SERVER_TENANT_ID */,
     int64_t mem_ctx_id /* = common::ObCtxIds::DEFAULT_CTX_ID */,
-    const char *label /* = common::ObModIds::OB_SQL_ROW_STORE) */)
+    const char *label /* = common::ObModIds::OB_SQL_ROW_STORE) */,
+    uint32_t row_extend_size /* = 0 */)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -368,6 +369,7 @@ int ObRADatumStore::init(int64_t mem_limit,
     ctx_id_ = mem_ctx_id;
     label_ = label;
     mem_limit_ = mem_limit;
+    row_extend_size_ = row_extend_size;
     inited_ = true;
   }
   return ret;
@@ -420,7 +422,7 @@ void ObRADatumStore::reset()
     LinkNode *node = blk_mem_list_.remove_first();
     if (NULL != node) {
       node->~LinkNode();
-      allocator_.free(node);
+      allocator_->free(node);
     }
   }
   blocks_.reset();
@@ -434,7 +436,7 @@ void ObRADatumStore::reuse()
   int ret = OB_SUCCESS;
   save_row_cnt_ = 0;
   row_cnt_ = 0;
-  inner_reader_.reuse();
+  inner_reader_.reset();
   if (is_file_open()) {
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(fd_))) {
       LOG_WARN("remove file failed", K(ret), K_(fd));
@@ -450,7 +452,7 @@ void ObRADatumStore::reuse()
     if (&(*node) + 1 != static_cast<LinkNode *>(static_cast<void *>(blkbuf_.buf_.data()))) {
       node->unlink();
       node->~LinkNode();
-      allocator_.free(node);
+      allocator_->free(node);
     }
   }
   if (NULL != blkbuf_.buf_.data()) {
@@ -492,7 +494,7 @@ void *ObRADatumStore::alloc_blk_mem(const int64_t size)
     LOG_WARN("invalid argument", K(size));
   } else {
     ObMemAttr attr(tenant_id_, label_, ctx_id_);
-    void *mem = allocator_.alloc(size + sizeof(LinkNode), attr);
+    void *mem = allocator_->alloc(size + sizeof(LinkNode), attr);
     if (OB_UNLIKELY(NULL == mem)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret), KP(mem));
@@ -502,7 +504,7 @@ void *ObRADatumStore::alloc_blk_mem(const int64_t size)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("add node to list failed", K(ret));
         node->~LinkNode();
-        allocator_.free(mem);
+        allocator_->free(mem);
       } else {
         blk = static_cast<char *>(mem) + sizeof(LinkNode);
         inc_mem_hold(size + sizeof(LinkNode));
@@ -520,7 +522,7 @@ void ObRADatumStore::free_blk_mem(void *mem, const int64_t size /* = 0 */)
       node->unlink();
     }
     node->~LinkNode();
-    allocator_.free(node);
+    allocator_->free(node);
     inc_mem_hold(-(size + sizeof(LinkNode)));
   }
 }
@@ -1047,11 +1049,7 @@ void ObRADatumStore::Reader::reset()
   reset_cursor(file_size);
   store_.free_blk_mem(buf_.data(), buf_.capacity());
   buf_.reset();
-  while (NULL != try_free_list_) {
-    auto next = try_free_list_->next_;
-    store_.free_blk_mem(try_free_list_, try_free_list_->size_);
-    try_free_list_ = next;
-  }
+  free_all_blks();
   store_.free_blk_mem(idx_buf_.data(), idx_buf_.capacity());
   idx_buf_.reset();
 }
@@ -1059,6 +1057,7 @@ void ObRADatumStore::Reader::reset()
 void ObRADatumStore::Reader::reuse()
 {
   reset_cursor(0);
+  free_all_blks();
   buf_.reset();
   idx_buf_.reset();
 }
@@ -1069,6 +1068,15 @@ void ObRADatumStore::Reader::reset_cursor(const int64_t file_size)
   idx_blk_ = NULL;
   ib_pos_ = 0;
   blk_ = NULL;
+}
+
+void ObRADatumStore::Reader::free_all_blks()
+{
+  while (NULL != try_free_list_) {
+    auto next = try_free_list_->next_;
+    store_.free_blk_mem(try_free_list_, try_free_list_->size_);
+    try_free_list_ = next;
+  }
 }
 
 int ObRADatumStore::Reader::get_row(const int64_t row_id, const StoredRow *&sr)
@@ -1122,7 +1130,7 @@ int ObRADatumStore::write_file(BlockIndex &bi, void *buf, int64_t size)
         LOG_INFO("open file success", K_(fd), K_(dir_id));
       }
     }
-    ret = E(EventTable::EN_8) ret;
+    ret = OB_E(EventTable::EN_8) ret;
   }
   if (OB_SUCC(ret) && size > 0) {
     if (NULL != mem_stat_) {
@@ -1133,7 +1141,6 @@ int ObRADatumStore::write_file(BlockIndex &bi, void *buf, int64_t size)
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
-    io.io_desc_.set_category(ObIOCategory::USER_IO);
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
     const uint64_t start = rdtsc();
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io, timeout_ms))) {
@@ -1174,7 +1181,6 @@ int ObRADatumStore::read_file(void *buf, const int64_t size, const int64_t offse
     io.buf_ = static_cast<char *>(buf);
     io.size_ = size;
     io.tenant_id_ = tenant_id_;
-    io.io_desc_.set_category(ObIOCategory::USER_IO);
     io.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     const uint64_t start = rdtsc();
     blocksstable::ObTmpFileIOHandle handle;
@@ -1266,7 +1272,7 @@ bool ObRADatumStore::need_dump()
   } else {
     const int64_t mem_ctx_pct_trigger = 80;
     lib::ObMallocAllocator *instance = lib::ObMallocAllocator::get_instance();
-    lib::ObTenantCtxAllocator *allocator = NULL;
+    lib::ObTenantCtxAllocatorGuard allocator = NULL;
     if (NULL == instance) {
       ret = common::OB_ERR_SYS;
       LOG_ERROR("NULL allocator", K(ret));

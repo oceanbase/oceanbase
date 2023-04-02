@@ -132,3 +132,47 @@ void __attribute__((constructor)) easy_log_start_()
 
     if (p) easy_log_level = (easy_log_level_t)atoi(p);
 }
+
+void __tg_cleanup(void *s)
+{
+  int64_t cost = get_us() - ((struct easy_time_guard_t *)s)->start;
+  if (cost > ev_loop_warn_threshold) {
+    easy_warn_log("easy cost too much time: %ldus, procedure: %s", cost, ((struct easy_time_guard_t *)s)->procedure);
+  }
+}
+
+void __tg_stat_cleanup(void *s)
+{
+  int64_t cost = get_us() - ((struct easy_stat_time_guard_t *)s)->start;
+  int64_t *cnt = ((struct easy_stat_time_guard_t *)s)->cnt;
+  *cnt += 1;
+  int64_t *time = ((struct easy_stat_time_guard_t *)s)->time;
+  *time += cost;
+  if (cost > ev_loop_warn_threshold) {
+    easy_warn_log("easy cost too much time: %ldus, procedure: %s", cost, ((struct easy_stat_time_guard_t *)s)->procedure);
+  }
+}
+
+void __tg_io_cleanup(void *s)
+{
+  int ret = 0;
+  int64_t cost = get_us() - ((struct easy_stat_time_guard_t *)s)->start;
+  double loadavg[3];
+  int64_t *cnt = ((struct easy_stat_time_guard_t *)s)->cnt;
+  *cnt += 1;
+  int64_t *time = ((struct easy_stat_time_guard_t *)s)->time;
+  *time += cost;
+  if (cost > ev_loop_warn_threshold) {
+    ret = getloadavg(loadavg, 3);
+    if (ret == 3) {
+      easy_warn_log("easy cost too much time(%ldus). loadavg(%lf, %lf, %lf), procedure: %s",
+                    cost,
+                    loadavg[0],
+                    loadavg[1],
+                    loadavg[2],
+                    ((struct easy_stat_time_guard_t *)s)->procedure);
+    } else {
+      easy_warn_log("easy cost too much time(%ldus), procedure: %s", cost, ((struct easy_stat_time_guard_t *)s)->procedure);
+    }
+  }
+}

@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/net/ob_addr.h"
 #include "rootserver/freeze/ob_freeze_reentrant_thread.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -59,13 +60,15 @@ private:
   static const int64_t LAUNCHER_INTERVAL_US = 5 * 1000 * 1000; // 5s
   static const int64_t MAJOR_FREEZE_RETRY_INTERVAL_US = 1000 * 1000; // 1s
   static const int64_t MODIFY_GC_INTERVAL = 24 * 60 * 60 * 1000 * 1000L; // 1 day
+  static const int64_t TABLET_CKM_CHECK_INTERVAL_US = 30 * 60 * 1000 * 1000L; // 30 min
 
   bool is_inited_;
   bool already_launch_;
   common::ObServerConfig *config_;
   int64_t gc_freeze_info_last_timestamp_;
-  int64_t gc_tablet_ckm_last_timestamp_;
   ObFreezeInfoManager *freeze_info_mgr_;
+  int64_t last_check_tablet_ckm_us_;
+  share::SCN tablet_ckm_gc_compaction_scn_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDailyMajorFreezeLauncher);
 };

@@ -21,9 +21,7 @@ delete from aa;
 insert into aa(a2, a3) values (10, 15), (10, 14), (10, 12),           (11, 13), (12, 12),           (12, 10);
 delete from bb;
 insert into bb(b2, b3) values           (10, 14),           (11, 14), (11, 13),           (12, 11), (12, 10);
---source mysql_test/include/minorfreeze.inc
---real_sleep 10
---source mysql_test/include/wait_minor_merge.inc
+--source mysql_test/include/minor_merge_tenant.inc
 --disable_query_log
 call dbms_stats.gather_table_stats('test','aa', method_opt=>'FOR ALL COLUMNS SIZE AUTO');
 call dbms_stats.gather_table_stats('test','bb', method_opt=>'FOR ALL COLUMNS SIZE AUTO');
@@ -185,7 +183,7 @@ select /*+use_merge(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 inner join t_r4_01_20
 drop table if exists t_r4_01_20;
 --enable_warnings
 
-## bug:https://aone.alibaba-inc.com/issue/9211556?spm=a2o8d.corp_prod_issue_list.0.0.25893050Y8aynZ&stat=1.5.38&toPage=1&versionId=1043693
+## bug:
 --disable_warnings
 drop table if exists t2, t7;
 --enable_warnings

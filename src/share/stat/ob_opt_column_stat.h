@@ -72,7 +72,7 @@ class ObHistogram
 public:
   friend class ObOptColumnStat;
 
-  typedef ObArray<ObHistBucket> Buckets;
+  typedef ObArrayWrap<ObHistBucket> Buckets;
   enum class BoundType {
     LOWER,
     UPPER,
@@ -94,6 +94,7 @@ public:
   void reset();
 
   int deep_copy(const ObHistogram &src, char *buf, const int64_t buf_len, int64_t &pos);
+  int assign(const ObHistogram &other);
   int64_t deep_copy_size() const;
 
   bool is_valid() const
@@ -127,6 +128,10 @@ public:
   int64_t get_pop_count() const { return pop_count_; }
   void set_pop_count(int64_t pop_count) { pop_count_ = pop_count; }
 
+  int prepare_allocate_buckets(ObIAllocator &allocator, const int64_t bucket_size);
+  int add_bucket(const ObHistBucket &bucket);
+  int assign_buckets(const ObIArray<ObHistBucket> &buckets);
+
   void calc_density(ObHistType hist_type,
                     const int64_t row_count,
                     const int64_t pop_row_count,
@@ -149,6 +154,7 @@ protected:
 
 class ObOptColumnStat : public common::ObIKVCacheValue
 {
+  OB_UNIS_VERSION_V(1);
 public:
   static const int64_t MAX_OBJECT_SERIALIZE_SIZE = 512;
 
@@ -217,9 +223,13 @@ public:
   };
   ObOptColumnStat();
 
+  int merge_column_stat(const ObOptColumnStat &other);
+
   explicit ObOptColumnStat(common::ObIAllocator &allocator);
 
-  ~ObOptColumnStat() { histogram_.reset(); }
+  ~ObOptColumnStat() { reset(); }
+
+  void reset();
 
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(uint64_t tid) { table_id_ = tid; }
@@ -246,20 +256,20 @@ public:
   int64_t get_num_not_null() const { return num_not_null_; }
 
   void set_avg_len(int64_t avg_len) { avg_length_ = avg_len; }
-  int64_t get_avg_len() const { return avg_length_; }
+  int64_t get_avg_len() const { return (int64_t)avg_length_; }
+  void  get_avg_len(double &avg_len) const { avg_len = avg_length_; }
 
   int64_t get_stat_level() const { return object_type_; }
   void set_stat_level(int64_t object_type) { object_type_ = object_type; }
 
   const ObHistogram &get_histogram() const { return histogram_; }
   ObHistogram &get_histogram() { return histogram_; }
-
-  int add_bucket(int64_t repeat_count, const ObObj &value, int64_t num_elements);
   int64_t get_bucket_num() const { return histogram_.get_bucket_cnt(); }
 
   virtual int64_t size() const override;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
   int deep_copy(const ObOptColumnStat &src, char *buf, const int64_t size, int64_t &pos);
+  virtual int deep_copy(char *buf, const int64_t buf_len, ObOptColumnStat *&value) const;
 
   int64_t get_last_analyzed() const { return last_analyzed_; }
   void set_last_analyzed(int64_t last) { last_analyzed_ = last; }
@@ -283,6 +293,54 @@ public:
         && num_distinct_ >= 0
         && num_null_ >= 0;
   }
+
+  void add_num_null(int64_t num_null) { num_null += num_null; }
+
+  void add_num_not_null(int64_t num_not_null) { num_not_null_ += num_not_null; }
+
+  // deep copy
+  //int merge_min_val(const common::ObObj &min_val, common::ObIAllocator &alloc);
+
+  //int merge_max_val(const common::ObObj &max_val, common::ObIAllocator &alloc);
+
+  int merge_obj(common::ObObj &obj,
+                ObIAllocator &max_alloc,
+                ObIAllocator &min_alloc);
+  int merge_obj(const ObObj &obj);
+  // normal copy
+  //shallow copy
+  void merge_max_val(const common::ObObj &max_val) {
+    if (max_value_.is_null() || max_val > max_value_) {
+      max_value_ = max_val;
+    }
+  }
+
+  //shallow copy
+  void merge_min_val(const common::ObObj &min_val) {
+    if (min_value_.is_null() || min_val > min_value_) {
+      min_value_ = min_val;
+    }
+  }
+
+  void merge_avg_len(int64_t avg_len) {
+    merge_avg_len(avg_len, 1);
+  }
+
+  void merge_avg_len(int64_t avg_len, int64_t num_rows) {
+    SQL_LOG(DEBUG, "MERGE avg len", K(column_id_), K(partition_id_), K(avg_len), K(avg_length_), K(num_not_null_), K(num_null_), K(num_rows));
+    if (num_not_null_ + num_null_ + num_rows != 0) {
+      avg_length_ = (avg_length_ * (num_not_null_ + num_null_) + avg_len * num_rows) / (num_not_null_ + num_null_+ num_rows);
+    }
+  }
+
+  void merge_avg_len(double avg_len, int64_t num_rows) {
+    SQL_LOG(DEBUG, "MERGE avg len", K(column_id_), K(partition_id_), K(avg_len), K(avg_length_), K(num_not_null_), K(num_null_), K(num_rows));
+    if (num_not_null_ + num_null_ + num_rows != 0) {
+      avg_length_ = (avg_length_ * (num_not_null_ + num_null_) + avg_len * num_rows) / (num_not_null_ + num_null_+ num_rows);
+    }
+  }
+
+  int deep_copy_max_min_obj();
 
   common::ObCollationType get_collation_type() const { return cs_type_; }
   void set_collation_type(common::ObCollationType cs_type) { cs_type_ = cs_type; }
@@ -313,7 +371,7 @@ protected:
   int64_t num_null_;
   int64_t num_not_null_;
   int64_t num_distinct_;
-  int64_t avg_length_;
+  double avg_length_;
   common::ObObj min_value_;
   common::ObObj max_value_;
   int64_t llc_bitmap_size_;
@@ -323,6 +381,9 @@ protected:
   /** last analyzed time */
   int64_t last_analyzed_;
   common::ObCollationType cs_type_;
+
+  ObArenaAllocator inner_max_allocator_;
+  ObArenaAllocator inner_min_allocator_;
 };
 
 }

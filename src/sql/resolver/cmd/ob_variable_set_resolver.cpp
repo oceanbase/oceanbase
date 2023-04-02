@@ -170,8 +170,13 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
             }
             session_info_->set_stmt_type(session_ori_stmt_type);
           }
-          if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
-            LOG_WARN("Add set entry failed", K(ret));
+          if (OB_SUCC(ret)) {
+            if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {
+              ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+              LOG_WARN("invalid scope for agg function", K(ret));
+            } else if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+              LOG_WARN("Add set entry failed", K(ret));
+            }
           }
         }
       }
@@ -221,6 +226,16 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
     } else if (udf_info.count() > 0 &&
                OB_FAIL(ObRawExprUtils::init_udfs_info(params_, udf_info))) {
       LOG_WARN("failed to init udf infos", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
+      LOG_WARN("resolve columns for const expr failed", K(ret));
+    } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
+      ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
+      if (OB_ISNULL(call_expr->get_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(call_expr->get_expr()->formalize(params_.session_info_))) {
+        LOG_WARN("failed to formalize call expr", K(ret));
+      }
     } else if (value_expr->has_flag(CNT_SUB_QUERY)) {
       if (is_oracle_mode()) {
         ret = OB_NOT_SUPPORTED;
@@ -229,28 +244,14 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
       } else if (is_mysql_mode()) {
         if (OB_FAIL(resolve_subquery_info(sub_query_info, value_expr))) {
           LOG_WARN("failed to resolve subquery info", K(ret));
-        } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
-          LOG_WARN("failed to formalize value expr", K(ret));
         }
       }
       LOG_TRACE("set user variable with subquery", K(sub_query_info.count()), K(is_mysql_mode()));
-    } else {
-      if (OB_FAIL(ObResolverUtils::resolve_columns_for_const_expr(value_expr, columns, params_))) {
-        LOG_WARN("resolve columnts for const expr failed", K(ret));
-      } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
-        ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
-        if (OB_ISNULL(call_expr->get_expr())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(call_expr->get_expr()->formalize(params_.session_info_))) {
-          LOG_WARN("failed to formalize call expr", K(ret));
-        }
-      } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
-        LOG_WARN("failed to formalize value expr", K(ret));
-      }
     }
-    
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
+      LOG_WARN("failed to formalize value expr", K(ret));
+    } else {
       params_.prepare_param_count_ += ctx.prepare_param_count_; //prepare param count
     }
   }
@@ -274,8 +275,6 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
     } else if (OB_UNLIKELY(T_SELECT != info.sub_query_->type_)) {
       ret = OB_ERR_ILLEGAL_TYPE;
       LOG_WARN("Unknown statement type in subquery", "stmt_type", info.sub_query_->type_);
-    } else {
-      info.ref_expr_->set_expr_level(current_level);
     }
 
     if (OB_FAIL(ret)) {
@@ -288,7 +287,6 @@ int ObVariableSetResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> 
       // for set stmt, the parent stmt of subquery is subquery itself
       // we do this only to make sure that the sub_stmt is not a root stmt
       ObDMLStmt *dml_stmt = subquery_resolver.get_select_stmt();
-      sub_stmt->set_parent_namespace_stmt(dml_stmt);
       info.ref_expr_->set_ref_stmt(sub_stmt);
       info.ref_expr_->set_output_column(sub_stmt->get_select_item_size());
       // the column type of ref_expr stores the target type of subquery

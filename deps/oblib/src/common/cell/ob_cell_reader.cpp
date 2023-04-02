@@ -186,6 +186,7 @@ int ObCellReader::read_urowid()
         object.set_collation_type(static_cast<ObCollationType>(*collation_type)); \
       } \
     } \
+    bool has_header = false; \
     if (OB_SUCC(ret) && !meta->is_varchar_text()) {\
       const uint8_t *scale = NULL;\
       const uint8_t *version = NULL;\
@@ -196,9 +197,12 @@ int ObCellReader::read_urowid()
       } else { \
         object.set_scale(static_cast<ObScale>(*scale));\
         ObLobScale lob_scale(*scale);\
-        if (!lob_scale.is_in_row()) { \
+        if (!lob_scale.is_in_row() || !lob_scale.has_lob_header()) { \
           COMMON_LOG(WARN, "Unexpected lob scale", K(*version), K(*scale), K(ret)); \
         }\
+        if (lob_scale.has_lob_header()) { \
+          has_header = true; \
+        } \
         if (TEXT_CELL_META_VERSION != *version) { \
           COMMON_LOG(WARN, "Unexpected lob version", K(*version), K(*scale), K(ret)); \
         } \
@@ -212,6 +216,9 @@ int ObCellReader::read_urowid()
         COMMON_LOG(WARN, "buffer not enough, ", K(ret), K_(pos), K_(buf_size), "length", *len); \
       } else { \
         object.set_lob_value(obj_type, (char*)(buf_ + pos_), *len);\
+        if (has_header) { \
+          object.set_has_lob_header(); \
+        } \
         pos_ += *len; \
       } \
     } \
@@ -501,6 +508,7 @@ int ObCellReader::parse(uint64_t *column_id)
       case ObMediumTextType:
       case ObLongTextType:
       case ObJsonType:
+      case ObGeometryType:
         READ_TEXT(static_cast<ObObjType>(meta->type_), obj_);
         break;
       case ObBitType:
@@ -701,6 +709,7 @@ int ObCellReader::read_cell(common::ObObj &obj)
       case ObMediumTextType:
       case ObLongTextType:
       case ObJsonType:
+      case ObGeometryType:
         READ_TEXT(static_cast<ObObjType>(meta->type_), obj);
         break;
       case ObBitType:

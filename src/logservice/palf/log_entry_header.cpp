@@ -17,6 +17,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 
@@ -26,7 +27,7 @@ LogEntryHeader::LogEntryHeader()
   : magic_(0),
     version_(0),
     log_size_(0),
-    ts_(OB_INVALID_TIMESTAMP),
+    scn_(),
     data_checksum_(0),
     flag_(0)
 {}
@@ -41,7 +42,7 @@ LogEntryHeader& LogEntryHeader::operator=(const LogEntryHeader &header)
   magic_ = header.magic_;
   version_ = header.version_;
   log_size_ = header.log_size_;
-  ts_ = header.ts_;
+  scn_ = header.scn_;
   data_checksum_ = header.data_checksum_;
   flag_ = header.flag_;
   return *this;
@@ -53,13 +54,13 @@ void LogEntryHeader::reset()
   version_ = 0;
   data_checksum_ = 0;
   log_size_ = -1;
-  ts_ = OB_INVALID_TIMESTAMP;
+  scn_.reset();
   flag_ = 0;
 }
 
 bool LogEntryHeader::is_valid() const
 {
-  return (magic_ == LogEntryHeader::MAGIC && log_size_ > 0 && OB_INVALID_TIMESTAMP != ts_);
+  return (magic_ == LogEntryHeader::MAGIC && log_size_ > 0 && scn_.is_valid());
 }
 
 bool LogEntryHeader::get_header_parity_check_res_() const
@@ -67,7 +68,7 @@ bool LogEntryHeader::get_header_parity_check_res_() const
   bool bool_ret = parity_check(reinterpret_cast<const uint16_t &>(magic_));
   bool_ret ^= parity_check(reinterpret_cast<const uint16_t &>(version_));
   bool_ret ^= parity_check(reinterpret_cast<const uint32_t &>(log_size_));
-  bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(ts_));
+  bool_ret ^= parity_check((scn_.get_val_for_logservice()));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(data_checksum_));
   int64_t tmp_flag = (flag_ & ~(0x1));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(tmp_flag));
@@ -84,16 +85,16 @@ void LogEntryHeader::update_header_checksum_()
 
 int LogEntryHeader::generate_header(const char *log_data,
                                     const int64_t data_len,
-                                    const int64_t log_ts)
+                                    const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (NULL == log_data || data_len <= 0 || OB_INVALID_TIMESTAMP == log_ts) {
+  if (NULL == log_data || data_len <= 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     magic_ = LogEntryHeader::MAGIC;
     version_ = LOG_ENTRY_HEADER_VERSION;
     log_size_ = data_len;
-    ts_ = log_ts;
+    scn_ = scn;
     data_checksum_ = common::ob_crc64(log_data, data_len);
     // update header checksum after all member vars assigned
     (void) update_header_checksum_();
@@ -118,19 +119,19 @@ bool LogEntryHeader::check_integrity(const char *buf, const int64_t data_len) co
 {
   bool bool_ret = false;
   if (NULL == buf || data_len <= 0) {
-    PALF_LOG(WARN, "invalid arguments", KP(buf), K(data_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", KP(buf), K(data_len));
   } else if (LogEntryHeader::MAGIC != magic_) {
     bool_ret = false;
-    PALF_LOG(WARN, "magic is different", K_(magic));
+    PALF_LOG_RET(WARN, OB_ERROR, "magic is different", K_(magic));
   } else if (false == check_header_checksum_()) {
-    PALF_LOG(WARN, "check header checsum failed", K(*this));
+    PALF_LOG_RET(WARN, OB_ERROR, "check header checsum failed", K(*this));
   } else {
     const int64_t tmp_data_checksum = common::ob_crc64(buf, data_len);
     if (data_checksum_ == tmp_data_checksum) {
       bool_ret = true;
     } else {
       bool_ret = false;
-      PALF_LOG(WARN, "data checksum mismatch", K_(data_checksum), K(tmp_data_checksum), K(data_len), KPC(this));
+      PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "data checksum mismatch", K_(data_checksum), K(tmp_data_checksum), K(data_len), KPC(this));
     }
   }
   return bool_ret;
@@ -145,7 +146,7 @@ DEFINE_SERIALIZE(LogEntryHeader)
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, magic_))
              || OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, version_))
              || OB_FAIL(serialization::encode_i32(buf, buf_len, new_pos, log_size_))
-             || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, ts_))
+             || OB_FAIL(scn_.fixed_serialize(buf, buf_len, new_pos))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, data_checksum_))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, flag_))) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -164,7 +165,7 @@ DEFINE_DESERIALIZE(LogEntryHeader)
   } else if ((OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &magic_)))
               || OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &version_))
               || OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &log_size_))
-              || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &ts_))
+              || OB_FAIL(scn_.fixed_deserialize(buf, data_len, new_pos))
               || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &data_checksum_))
               || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &flag_))) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -182,7 +183,7 @@ DEFINE_GET_SERIALIZE_SIZE(LogEntryHeader)
   size += serialization::encoded_length_i16(magic_);
   size += serialization::encoded_length_i16(version_);
   size += serialization::encoded_length_i32(log_size_);
-  size += serialization::encoded_length_i64(ts_);
+  size += scn_.get_fixed_serialize_size();
   size += serialization::encoded_length_i64(data_checksum_);
   size += serialization::encoded_length_i64(flag_);
   return size;

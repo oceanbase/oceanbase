@@ -12,6 +12,7 @@
  * Tenant Manager for OBCDC(ObLogTenantMgr)
  */
 
+
 #define USING_LOG_PREFIX OBLOG
 
 #include <algorithm>                  // std::min
@@ -24,6 +25,7 @@
 #include "ob_log_config.h"            // TCONF
 #include "ob_log_store_service.h"
 #include "ob_cdc_tenant_sql_server_provider.h"
+#include "lib/utility/ob_macro_utils.h"
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [TenantMgr] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [TenantMgr] " fmt, ##args)
@@ -38,6 +40,7 @@ namespace libobcdc
 {
 ObLogTenantMgr::ObLogTenantMgr() :
     inited_(false),
+    refresh_mode_(RefreshMode::UNKNOWN_REFRSH_MODE),
     tenant_hash_map_(),
     add_tenant_start_ddl_info_map_(),
     ls_info_map_(),
@@ -56,7 +59,9 @@ ObLogTenantMgr::~ObLogTenantMgr()
   destroy();
 }
 
-int ObLogTenantMgr::init(const bool enable_oracle_mode_match_case_sensitive)
+int ObLogTenantMgr::init(
+    const bool enable_oracle_mode_match_case_sensitive,
+    const RefreshMode &refresh_mode)
 {
   int ret = OB_SUCCESS;
 
@@ -79,9 +84,11 @@ int ObLogTenantMgr::init(const bool enable_oracle_mode_match_case_sensitive)
     LOG_ERROR("table id cache init fail", KR(ret));
   } else {
     inited_ = true;
+    refresh_mode_ = refresh_mode;
     enable_oracle_mode_match_case_sensitive_ = enable_oracle_mode_match_case_sensitive;
 
-    LOG_INFO("ObLogTenantMgr init succ", K(enable_oracle_mode_match_case_sensitive_));
+    LOG_INFO("ObLogTenantMgr init succ", K(enable_oracle_mode_match_case_sensitive_),
+        "refresh_mode", print_refresh_mode(refresh_mode_));
   }
 
   if (OB_FAIL(ret)) {
@@ -92,20 +99,23 @@ int ObLogTenantMgr::init(const bool enable_oracle_mode_match_case_sensitive)
 
 void ObLogTenantMgr::destroy()
 {
-  inited_ = false;
+  if (inited_) {
+    inited_ = false;
 
-  tenant_hash_map_.destroy();
-  add_tenant_start_ddl_info_map_.destroy();
-  ls_info_map_.destroy();
-  gindex_cache_.destroy();
-  table_id_cache_.destroy();
-  ls_add_cb_array_.destroy();
-  ls_rc_cb_array_.destroy();
-  tenant_id_set_.destroy();
-  ls_getter_.destroy();
-  enable_oracle_mode_match_case_sensitive_ = false;
+    refresh_mode_ = RefreshMode::UNKNOWN_REFRSH_MODE;
+    tenant_hash_map_.destroy();
+    add_tenant_start_ddl_info_map_.destroy();
+    ls_info_map_.destroy();
+    gindex_cache_.destroy();
+    table_id_cache_.destroy();
+    ls_add_cb_array_.destroy();
+    ls_rc_cb_array_.destroy();
+    tenant_id_set_.destroy();
+    ls_getter_.destroy();
+    enable_oracle_mode_match_case_sensitive_ = false;
 
-  LOG_INFO("ObLogTenantMgr destroy succ");
+    LOG_INFO("ObLogTenantMgr destroy succ");
+  }
 }
 
 int ObLogTenantMgr::filter_tenant(const char *tenant_name, bool &chosen)
@@ -181,6 +191,7 @@ int ObLogTenantMgr::get_tenant_start_schema_version_(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+
   if (OB_ISNULL(schema_getter)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_SYS_TENANT_ID == tenant_id) {
@@ -277,19 +288,32 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
   bool use_add_tenant_start_ddl_commit_version = false;
 
   if (OB_ISNULL(store_service)) {
-    LOG_ERROR("store_service is NULL");
     ret = OB_ERR_UNEXPECTED;
-  }
-  // Get the starting schema version of the tenant
-  else if (OB_FAIL(get_tenant_start_schema_version_(tenant_id, is_new_created_tenant, is_new_tenant_by_restore,
-      start_tstamp_usec, sys_schema_version, tenant_start_schema_version, timeout))) {
-    if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-      LOG_WARN("get_tenant_start_schema_version_ fail cause tenant has been dropped", KR(ret), K(tenant_id), K(tenant_name),
-          K(is_new_created_tenant), K(is_new_tenant_by_restore), K(start_tstamp_usec), K(sys_schema_version));
-    } else if (OB_TIMEOUT != ret) {
-      LOG_ERROR("get_tenant_start_schema_version_ fail", KR(ret), K(tenant_id), K(tenant_name),
-          K(is_new_created_tenant), K(is_new_tenant_by_restore), K(start_tstamp_usec), K(sys_schema_version));
+    LOG_ERROR("store_service is NULL", KR(ret));
+  } else {
+    if (is_online_refresh_mode(refresh_mode_)) {
+      // Get the starting schema version of the tenant
+      if (OB_FAIL(get_tenant_start_schema_version_(tenant_id, is_new_created_tenant, is_new_tenant_by_restore,
+              start_tstamp_usec, sys_schema_version, tenant_start_schema_version, timeout))) {
+        if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+          LOG_WARN("get_tenant_start_schema_version_ fail cause tenant has been dropped", KR(ret), K(tenant_id), K(tenant_name),
+              K(is_new_created_tenant), K(is_new_tenant_by_restore), K(start_tstamp_usec), K(sys_schema_version));
+        } else if (OB_TIMEOUT != ret) {
+          LOG_ERROR("get_tenant_start_schema_version_ fail", KR(ret), K(tenant_id), K(tenant_name),
+              K(is_new_created_tenant), K(is_new_tenant_by_restore), K(start_tstamp_usec), K(sys_schema_version));
+        }
+      }
+    } else if (is_data_dict_refresh_mode(refresh_mode_)) {
+      // TODO tenant_start_schema_version
+      tenant_start_schema_version = start_tstamp_usec;
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("not support refresh mode", KR(ret), K(refresh_mode_),
+          "refresh_mode", print_refresh_mode(refresh_mode_));
     }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_tenant_start_serve_timestamp_(
       tenant_id, is_new_created_tenant, tenant_start_serve_ts_ns, use_add_tenant_start_ddl_commit_version))) {
     LOG_ERROR("get_tenant_start_serve_timestamp_ failed", KR(ret),
@@ -306,10 +330,12 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
     } else if (OB_ISNULL(tenant)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant is NULL", KR(ret), K(tenant_id), K(tenant));
-    }
-    else if (OB_FAIL(store_service->create_column_family(std::to_string(tenant_id) + ":" + std::string(tenant_name),
-            column_family_handle))) {
-      LOG_ERROR("create_column_family fail", KR(ret), K(tenant_id), K(tenant_name), K(column_family_handle));
+    } else if (OB_FAIL(store_service->create_column_family(
+        std::to_string(tenant_id) + ":" + std::string(tenant_name),
+        column_family_handle))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("create_column_family fail", KR(ret), K(tenant_id), K(tenant_name), K(column_family_handle));
+      }
     }
     // init tenant
     else if (OB_FAIL(tenant->init(tenant_id, tenant_name, tenant_start_serve_ts_ns, start_seq,
@@ -327,6 +353,15 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
       tenant = NULL;
     }
 
+    if (OB_SUCC(ret)) {
+      // start tenant service
+      if (OB_FAIL(start_tenant_service_(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, tenant_start_serve_ts_ns,
+              tenant_start_schema_version, timeout))) {
+        LOG_ERROR("start tenant service fail", KR(ret), K(tenant_id), K(is_new_created_tenant),
+            K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(use_add_tenant_start_ddl_commit_version), K(tenant_start_schema_version));
+      }
+    }
+
     if (OB_FAIL(ret)) {
       if (NULL != tenant) {
         (void)tenant_hash_map_.del(tid);
@@ -334,15 +369,9 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
         tenant = NULL;
       }
     }
-    // start tenant service
-    else if (OB_FAIL(start_tenant_service_(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, tenant_start_serve_ts_ns,
-            tenant_start_schema_version, timeout))) {
-      LOG_ERROR("start tenant service fail", KR(ret), K(tenant_id), K(is_new_created_tenant),
-          K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(use_add_tenant_start_ddl_commit_version), K(tenant_start_schema_version));
-    }
   }
 
-  if (OB_SUCCESS == ret && is_tenant_served) {
+  if (OB_SUCC(ret) && is_tenant_served) {
     if (OB_FAIL(add_served_tenant_for_stat_(tenant_name, tenant_id))) {
       LOG_ERROR("trans stat mgr add serverd tenant fail", KR(ret), K(tenant_id), K(tenant_name));
     } else if (OB_FAIL(add_served_tenant_into_set_(tenant_name, tenant_id))) {
@@ -352,7 +381,7 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
     }
   }
 
-  if (OB_SUCCESS == ret) {
+  if (OB_SUCC(ret)) {
     ISTAT("[ADD_TENANT]", K(tenant_id), K(tenant_name), K(is_new_created_tenant), K(is_new_tenant_by_restore),
         K(is_tenant_served), K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(sys_schema_version),
         "with add_tenant_start_ddl", use_add_tenant_start_ddl_commit_version,
@@ -362,7 +391,8 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
   return ret;
 }
 
-int ObLogTenantMgr::start_tenant_service_(const uint64_t tenant_id,
+int ObLogTenantMgr::start_tenant_service_(
+    const uint64_t tenant_id,
     const bool is_new_created_tenant,
     const bool is_new_tenant_by_restore,
     const int64_t start_tstamp_ns,
@@ -380,10 +410,59 @@ int ObLogTenantMgr::start_tenant_service_(const uint64_t tenant_id,
   if (OB_FAIL(get_tenant_guard(tenant_id, guard))) {
     LOG_ERROR("get tenant fail", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant = guard.get_tenant())) {
-    LOG_ERROR("invalid tenant", K(tenant));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(tenant->add_all_user_tablets_info(timeout))) {
-    LOG_ERROR("add_all_user_tablets_info failed", KR(ret), KPC(tenant), K(timeout));
+    LOG_ERROR("invalid tenant", KR(ret), K(tenant));
+  } else {
+    // Note: The sys tenant does not have data dictionary data
+    if (is_online_refresh_mode(refresh_mode_) || OB_SYS_TENANT_ID == tenant_id) {
+      if (OB_FAIL(tenant->add_all_user_tablets_info(timeout))) {
+        LOG_ERROR("add_all_user_tablets_info failed", KR(ret), KPC(tenant), K(timeout));
+      }
+
+      // get ls ids when is not normal new created tenant
+      if (OB_FAIL(ret)) {
+      } else if (OB_SYS_TENANT_ID == tenant_id) {
+        // sys tenant, do nothing
+      } else if (! is_normal_new_created_tenant) {
+        if (OB_FAIL(ls_getter_.get_ls_ids(tenant_id, ls_id_array))) {
+          LOG_ERROR("ls_getter_ get_ls_ids failed", KR(ret), K(tenant_id), K(ls_id_array));
+        }
+      }
+    } else if (is_data_dict_refresh_mode(refresh_mode_)) {
+      ObDictTenantInfoGuard dict_tenant_info_guard;
+      ObDictTenantInfo *tenant_info = nullptr;
+      ObArray<const datadict::ObDictTableMeta *> table_metas;
+
+      if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
+        LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tenant_info is nullptr", K(tenant_id));
+      } else if (OB_FAIL(tenant_info->get_table_metas_in_tenant(table_metas))) {
+        LOG_ERROR("tenant_info get_table_metas_in_tenant failed", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant->add_all_user_tablets_info(table_metas, timeout))) {
+        LOG_ERROR("add_all_user_tablets_info failed", KR(ret), K(tenant_id), K(table_metas));
+      }
+
+      // get ls ids when is not normal new created tenant
+      if (OB_FAIL(ret)) {
+      } else if (! is_normal_new_created_tenant) {
+        const share::ObLSArray &ls_array = tenant_info->get_dict_tenant_meta().get_ls_array();
+
+        ARRAY_FOREACH_N(ls_array, idx, count) {
+          if (OB_FAIL(ls_id_array.push_back(ls_array.at(idx)))) {
+            LOG_ERROR("ls_id_array push_back failed", KR(ret), K(tenant_id), K(idx), K(ls_id_array));
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("not support refresh mode", KR(ret), K(refresh_mode_),
+          "refresh_mode", print_refresh_mode(refresh_mode_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(add_sys_ls_if_needed_(tenant_id, *tenant, start_tstamp_ns,
         tenant_start_schema_version, is_normal_new_created_tenant))) {
     LOG_ERROR("add_sys_ls_if_needed_ fail", KR(ret), K(tenant_id), K(start_tstamp_ns),
@@ -396,8 +475,6 @@ int ObLogTenantMgr::start_tenant_service_(const uint64_t tenant_id,
   else if (! is_normal_new_created_tenant) {
     if (OB_SYS_TENANT_ID  == tenant_id) {
       // sys tenant only fetch SYS_LS
-    } else if (OB_FAIL(ls_getter_.get_ls_ids(tenant_id, ls_id_array))) {
-      LOG_ERROR("ls_getter_ get_ls_ids failed", KR(ret), K(tenant_id), K(ls_id_array));
     }
     else if (OB_FAIL(tenant->add_all_ls(ls_id_array,
             start_tstamp_ns,
@@ -420,13 +497,40 @@ int ObLogTenantMgr::start_tenant_service_(const uint64_t tenant_id,
   return ret;
 }
 
-// add tenant for oblog
+int ObLogTenantMgr::add_tenant(
+    const int64_t start_tstamp_ns,
+    const int64_t sys_schema_version,
+    const char *&tenant_name,
+    const int64_t timeout,
+    bool &add_tenant_succ)
+{
+  int ret = OB_SUCCESS;
+  bool is_new_created_tenant = false;
+  bool is_new_tenant_by_restore = false;
+  ObLogSchemaGuard schema_guard;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+
+  if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_id_in_archive(start_tstamp_ns, tenant_id))) {
+    LOG_ERROR("GLOGMETADATASERVICE get_tenant_id_in_archive failed", KR(ret), K(tenant_id), K(start_tstamp_ns),
+        K(sys_schema_version));
+  } else if (OB_FAIL(add_tenant(tenant_id, is_new_created_tenant, is_new_tenant_by_restore, start_tstamp_ns,
+          sys_schema_version, schema_guard, tenant_name, timeout, add_tenant_succ))) {
+    LOG_ERROR("add tenant fail", KR(ret), K(tenant_id), K(start_tstamp_ns), K(sys_schema_version));
+  } else if (OB_UNLIKELY(! add_tenant_succ)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add tenant failed", K(tenant_id), K(tenant_name));
+  }
+
+  return ret;
+}
+
+// add tenant for obcdc
 //
 // @retval OB_SUCCESS                   success
 // @retval OB_TIMEOUT                   timeout
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant/database/... not exist, caller should ignore
 // @retval other error code             error
-int ObLogTenantMgr::add_tenant(const uint64_t tenant_id,
+int ObLogTenantMgr::add_tenant(
+    const uint64_t tenant_id,
     const bool is_new_created_tenant,
     const bool is_new_tenant_by_restore,
     const int64_t start_tstamp_ns,
@@ -438,8 +542,8 @@ int ObLogTenantMgr::add_tenant(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   add_tenant_succ = false;
-  TenantSchemaInfo tenant_schema_info;
-  IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+  bool is_restore = false;
+
   LOG_INFO("[ADD_TENANT] BEGIN", K(tenant_id), K(is_new_created_tenant), K(is_new_tenant_by_restore),
       K(start_tstamp_ns), K(sys_schema_version));
   if (is_new_created_tenant || is_new_tenant_by_restore) {
@@ -447,43 +551,90 @@ int ObLogTenantMgr::add_tenant(const uint64_t tenant_id,
   }
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogTenantMgr has not been initialized");
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(sys_schema_version <= 0) || OB_ISNULL(schema_getter)) {
-    LOG_ERROR("invalid arguments", K(tenant_id), K(sys_schema_version), K(schema_getter));
+    LOG_ERROR("ObLogTenantMgr has not been initialized", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(sys_schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), K(tenant_id), K(sys_schema_version));
+  } else if (is_meta_tenant(tenant_id)) {
+    LOG_INFO("won't add meta tenant", K(tenant_id), K(sys_schema_version));
+  } else if (OB_FAIL(ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(tenant_id))) {
+    LOG_ERROR("create and add tenant allocator failed", K(ret), K(tenant_id));
+  } else {
+    if (is_online_refresh_mode(refresh_mode_)) {
+      TenantSchemaInfo tenant_schema_info;
+      IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+
+      if (OB_ISNULL(schema_getter)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid arguments", KR(ret), K(schema_getter));
+      }
+      // Use system tenant identity to get schema of normal tenant
+      // by lazy mode
+      else if (OB_FAIL(schema_getter->get_lazy_schema_guard(OB_SYS_TENANT_ID, sys_schema_version,
+              timeout, schema_guard))) {
+        if (OB_TIMEOUT != ret) {
+          LOG_ERROR("get_lazy_schema_guard of SYS tenant fail", KR(ret), K(sys_schema_version));
+        }
+      } else if (OB_FAIL(schema_guard.get_tenant_schema_info(tenant_id, tenant_schema_info, timeout))) {
+        if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+          // Note: Because the above gets the Guard of the SYS tenant, using the exact schema version of the SYS tenant.
+          // Therefore, it is expected that the schema for that tenant must be visible, and if it is not, there is a bug.
+          LOG_ERROR("get_tenant_schema_info fail: tenant has been dropped when add tenant, should not happen",
+              KR(ret), K(tenant_id), K(sys_schema_version), K(is_new_created_tenant));
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_TIMEOUT != ret) {
+          LOG_ERROR("get tenant schema fail", KR(ret), K(tenant_id), K(sys_schema_version));
+        }
+      } else {
+        tenant_name = tenant_schema_info.name_;
+        is_restore = tenant_schema_info.is_restore_;
+      }
+    } else if (is_data_dict_refresh_mode(refresh_mode_)) {
+      if (OB_SYS_TENANT_ID == tenant_id) {
+        // do nothing
+      } else if (OB_FAIL(GLOGMETADATASERVICE.refresh_baseline_meta_data(tenant_id, start_tstamp_ns, timeout))) {
+        LOG_ERROR("log_meta_data_service refresh_baseline_meta_data failed", KR(ret), K(tenant_id));
+      } else {
+        LOG_INFO("log_meta_data_service refresh_baseline_meta_data success", K(tenant_id), K(start_tstamp_ns));
+      }
+
+      if (OB_SYS_TENANT_ID != tenant_id) {
+        ObDictTenantInfoGuard dict_tenant_info_guard;
+        ObDictTenantInfo *tenant_info = nullptr;
+
+        if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
+          LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("tenant_info is nullptr", K(tenant_id));
+        } else {
+          LOG_INFO("get_tenant_info_guard success", K(tenant_id), KPC(tenant_info));
+          tenant_name = tenant_info->get_dict_tenant_meta().get_tenant_name();
+          is_restore = tenant_info->get_dict_tenant_meta().is_restore();
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("not support refresh mode", KR(ret), K(refresh_mode_),
+          "refresh_mode", print_refresh_mode(refresh_mode_));
+    }
   }
-  // Use system tenant identity to get schema of normal tenant
-  // by lazy mode
-  else if (OB_FAIL(schema_getter->get_lazy_schema_guard(OB_SYS_TENANT_ID, sys_schema_version,
-      timeout, schema_guard))) {
-    if (OB_TIMEOUT != ret) {
-      LOG_ERROR("get_lazy_schema_guard of SYS tenant fail", KR(ret), K(sys_schema_version));
-    }
-  } else if (OB_FAIL(schema_guard.get_tenant_schema_info(tenant_id, tenant_schema_info, timeout))) {
-    if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-      // Note: Because the above gets the Guard of the SYS tenant, using the exact schema version of the SYS tenant.
-      // Therefore, it is expected that the schema for that tenant must be visible, and if it is not, there is a bug.
-      LOG_ERROR("get_tenant_schema_info fail: tenant has been dropped when add tenant, should not happen",
-          KR(ret), K(tenant_id), K(sys_schema_version), K(is_new_created_tenant));
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_TIMEOUT != ret) {
-      LOG_ERROR("get tenant schema fail", KR(ret), K(tenant_id), K(sys_schema_version));
-    }
-  } else if (tenant_schema_info.is_restore_) {
+
+  if (OB_FAIL(ret)) {
+  } else if (is_meta_tenant(tenant_id)) {
+    LOG_INFO("won't add meta tenant", K(tenant_id), K(sys_schema_version));
+  } else if (is_restore) {
     // 1. won't add tenant in restore status
     // 2. for new tenant found by ADD_TENENT_END DDL:
     // 2.1. normal new created tenant, start log id will set to 1 to simplify the ADD_PARTITION process, and won't add user tables
     // 2.2. if tenant new created by restore, should query server for start_serve_log_id, and should add user tables.
-    LOG_INFO("won't add restore-state tenant", K(tenant_id), K(tenant_schema_info), K(sys_schema_version));
-  } else if (is_meta_tenant(tenant_id)) {
-    LOG_INFO("won't add meta tenant", K(tenant_id), K(tenant_schema_info), K(sys_schema_version));
+    LOG_INFO("won't add restore-state tenant", K(tenant_id), K(tenant_name), K(sys_schema_version));
   } else {
     bool is_tenant_served = false;
     // whether the tenant should be added or not, if the tenant is in service, it must be added.
     // Tenants that are not in service(mean not config in oblog config file) may also need to be added, e.g. SYS tenant
     bool need_add_tenant = false;
-    tenant_name = tenant_schema_info.name_;
 
     // Filtering tenants based on whitelists
     if (OB_FAIL(filter_tenant(tenant_name, is_tenant_served))) {
@@ -523,11 +674,20 @@ int ObLogTenantMgr::add_tenant(const uint64_t tenant_id,
     }
   }
 
-  // NOTE: currently add_tenant is NOT serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is NOT safe.
-  // (meta_tenant add_tenant_start -> user_tenant add_tenant_start -> meta_tenant add_tenant_end -> user_tenant add_tenant_end.)
-  // reset tenant_start_ddl_info for specified tenant_id regardless of ret(in case of tenant already dropped or not serve
-  // and other unexpected case, otherwise global_heartbeat will be stucked.)
-  try_del_tenant_start_ddl_info_(tenant_id);
+  // 1. NOTE: currently add_tenant is NOT serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is NOT safe.
+  // Consider the following sequence:
+  // (meta_tenant add_tenant_start -> user_tenant add_tenant_start -> meta_tenant add_tenant_end -> user_tenant add_tenant_end).
+  // reset tenant_start_ddl_info for specified tenant_id regardless of ret exclude OB_TIMEOUT(The add_tenant interface will be externally retried)
+  //
+  // 2. The tenant start ddl info need be removed in case of tenant already dropped or not serve and other unexpected case,
+  // otherwise global_heartbeat will be stucked.
+  if (OB_TIMEOUT != ret) {
+    try_del_tenant_start_ddl_info_(tenant_id);
+  }
+
+  if (! add_tenant_succ) {
+    ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
+  }
 
   return ret;
 }
@@ -545,7 +705,7 @@ int ObLogTenantMgr::get_first_schema_version_of_tenant_(const uint64_t tenant_id
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  bool is_schema_split_mode = TCTX.is_schema_split_mode_;
+  const bool is_schema_split_mode = TCTX.is_schema_split_mode_;
   first_schema_version = OB_INVALID_VERSION;
 
   if (! is_schema_split_mode) {
@@ -834,7 +994,9 @@ int ObLogTenantMgr::remove_tenant_(const uint64_t tenant_id, ObLogTenant *tenant
     ret= OB_ERR_UNEXPECTED;
     LOG_ERROR("cf is NULL", KR(ret), K(tid), KPC(tenant));
   } else if (OB_FAIL(store_service->drop_column_family(cf))) {
-    LOG_ERROR("store_service drop_column_family fail", KR(ret), K(tid), KPC(tenant));
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("store_service drop_column_family fail", KR(ret), K(tid), KPC(tenant));
+    }
   } else if (OB_FAIL(tenant_hash_map_.del(tid))) {
     LOG_ERROR("tenant_hash_map_ del failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_server_provider->del_tenant(tenant_id))) {
@@ -928,7 +1090,7 @@ int ObLogTenantMgr::get_tenant_guard(const uint64_t tenant_id, ObLogTenantGuard 
 void ObLogTenantMgr::revert_tenant_(ObLogTenant *tenant)
 {
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogTenantMgr has not inited");
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLogTenantMgr has not inited");
   } else if (NULL != tenant) {
     tenant_hash_map_.revert(tenant);
   }
@@ -1063,30 +1225,15 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp_ns,
 {
   int ret = OB_SUCCESS;
   common::ObArray<uint64_t> tenant_ids;
-  ObLogSchemaGuard sys_schema_guard;
-  IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("ObLogTenantMgr has not inited");
+    LOG_ERROR("ObLogTenantMgr has not inited", KR(ret));
   } else if (OB_UNLIKELY(start_tstamp_ns <= 0) || OB_UNLIKELY(sys_schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arguments", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
-  } else if (OB_ISNULL(schema_getter)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("schema_getter is invalid", K(schema_getter), KR(ret));
-  }
-  // Get the schema guard for the SYS tenant
-  // Since get_available_tenant_ids() cannot use lazy mode
-  else if (OB_FAIL(schema_getter->get_fallback_schema_guard(OB_SYS_TENANT_ID, sys_schema_version,
-      timeout, sys_schema_guard))) {
-    LOG_ERROR("get_fallback_schema_guard of SYS tenant fail", KR(ret), K(sys_schema_version), K(timeout));
-  }
-  // get available tenant id list
-  else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_ids, timeout))) {
-    LOG_ERROR("get_available_tenant_ids fail", KR(ret), K(tenant_ids), K(timeout));
-  } else if (OB_FAIL(ls_getter_.init(tenant_ids))) {
-    LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_ids));
+  } else if (OB_FAIL(get_tenant_ids_(start_tstamp_ns, sys_schema_version, timeout, tenant_ids))) {
+    LOG_ERROR("get_tenant_ids_ failed", KR(ret), K(start_tstamp_ns), K(sys_schema_version), K(tenant_ids));
   } else {
     int64_t chosen_tenant_count = 0;
     bool is_new_created_tenant = false;
@@ -1101,7 +1248,7 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp_ns,
       const uint64_t tenant_id = tenant_ids.at(index);
       bool add_tenant_succ = false;
       ObLogSchemaGuard schema_guard;
-      const char *tenant_name = NULL;
+      const char *tenant_name = (OB_SYS_TENANT_ID == tenant_id) ? "sys" : nullptr;
 
       if (OB_SYS_TENANT_ID == tenant_id && enable_filter_sys_tenant) {
         ISTAT("[FILTE] sys tenant is filtered", K(tenant_id), K(enable_filter_sys_tenant));
@@ -1127,10 +1274,103 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp_ns,
         ISTAT("[ADD_ALL_TENANTS] ", K(index), K(tenant_id), K(tenant_name), K(add_tenant_succ),
             K(chosen_tenant_count), K(total_tenant_count));
       }
+    } // for
+      //
+    if (OB_SUCC(ret)) {
+      if (is_data_dict_refresh_mode(refresh_mode_)) {
+        if (OB_FAIL(GLOGMETADATASERVICE.finish_when_all_tennats_are_refreshed())) {
+          LOG_ERROR("log_meta_data_service finish_when_all_tennats_are_refreshed failed", KR(ret));
+        } else {
+          LOG_INFO("log_meta_data_service finish_when_all_tennats_are_refreshed success");
+        }
+      }
     }
 
     ISTAT("[ADD_ALL_TENANTS] DONE", KR(ret), K(chosen_tenant_count), K(total_tenant_count),
         K(sys_schema_version), K(start_tstamp_ns), "start_tstamp_ns", NTS_TO_STR(start_tstamp_ns), K(tenant_ids));
+  }
+
+  return ret;
+}
+
+int ObLogTenantMgr::get_tenant_ids_(
+    const int64_t start_tstamp_ns,
+    const int64_t sys_schema_version,
+    const int64_t timeout,
+    common::ObIArray<uint64_t> &tenant_id_list)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogTenantMgr has not inited", KR(ret));
+  } else if (is_online_refresh_mode(refresh_mode_)) {
+    ObLogSchemaGuard sys_schema_guard;
+    IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+
+    if (OB_ISNULL(schema_getter)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("schema_getter is invalid", KR(ret), K(schema_getter));
+    }
+    // Get the schema guard for the SYS tenant
+    // Since get_available_tenant_ids() cannot use lazy mode
+    else if (OB_FAIL(schema_getter->get_fallback_schema_guard(OB_SYS_TENANT_ID, sys_schema_version,
+            timeout, sys_schema_guard))) {
+      LOG_ERROR("get_fallback_schema_guard of SYS tenant fail", KR(ret), K(sys_schema_version), K(timeout));
+    }
+    // get available tenant id list
+    else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_id_list, timeout))) {
+      LOG_ERROR("get_available_tenant_ids fail", KR(ret), K(tenant_id_list), K(timeout));
+    } else if (OB_FAIL(ls_getter_.init(tenant_id_list))) {
+      LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_id_list));
+    }
+  } else if (is_data_dict_refresh_mode(refresh_mode_)) {
+    IObLogSysTableHelper *systable_helper = TCTX.systable_helper_;
+    ObSEArray<IObLogSysTableHelper::TenantInfo, 16> tenant_info_list;
+    bool done = false;
+    tenant_id_list.reset();
+
+    if (OB_ISNULL(systable_helper)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("systable_helper is NULL", KR(ret));
+    } else {
+      while (! done && OB_SUCCESS == ret) {
+        if (OB_FAIL(systable_helper->query_tenant_info_list(tenant_info_list))) {
+          LOG_WARN("systable_helper query_tenant_ls_info fail", KR(ret), K(tenant_id_list));
+        } else {
+          const int64_t tenant_info_list_cnt = tenant_info_list.count();
+          ARRAY_FOREACH_N(tenant_info_list, idx, tenant_info_list_cnt) {
+            const IObLogSysTableHelper::TenantInfo &tenant_info = tenant_info_list.at(idx);
+            bool chosen = true;
+            if (OB_FAIL(filter_tenant(tenant_info.tenant_name.ptr(), chosen))) {
+              LOG_ERROR("filter_tenant failed", K(tenant_info), K(chosen), K(start_tstamp_ns),
+                  K(sys_schema_version));
+            } else if (! chosen && OB_SYS_TENANT_ID != tenant_info.tenant_id) {
+              // tenant have been filtered
+              LOG_INFO("tenant has been filtered in advance", K(chosen), K(tenant_info), K(tenant_id_list));
+            } else if (OB_FAIL(tenant_id_list.push_back(tenant_info.tenant_id))) {
+              LOG_ERROR("push back tenant_id_list failed", K(tenant_info), K(tenant_id_list),
+                  K(tenant_info_list), K(chosen));
+            } else {
+              LOG_INFO("tenant hasn't been filtered in advance", K(chosen), K(tenant_info), K(tenant_id_list));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            done = true;
+          }
+        }
+
+        if (OB_NEED_RETRY == ret) {
+          ret = OB_SUCCESS;
+          ob_usleep(100L * 1000L);
+        }
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("refresh_mode not support", KR(ret), K(refresh_mode_),
+        "refresh_mode", print_refresh_mode(refresh_mode_));
   }
 
   return ret;
@@ -1178,7 +1418,7 @@ int ObLogTenantMgr::get_tenant_tz_wrap(const uint64_t tenant_id, ObTimeZoneInfoW
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;
-  const uint64_t tz_tenant_id = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 ? tenant_id : OB_SYS_TENANT_ID;
+  const uint64_t tz_tenant_id = tenant_id;
 
   if (OB_SYS_TENANT_ID == tz_tenant_id) {
     tz_info_wrap = &TCTX.tz_info_wrap_;
@@ -1208,7 +1448,7 @@ int ObLogTenantMgr::get_tenant_tz_map(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;
-  //const uint64_t tz_tenant_id = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 ? tenant_id : OB_SYS_TENANT_ID;
+  //TODO:(madoll.tw) should use tenant_id as tz_tenant_id
   const uint64_t tz_tenant_id = OB_SYS_TENANT_ID;
 
   if (OB_SYS_TENANT_ID == tz_tenant_id) {
@@ -1497,6 +1737,7 @@ void ObLogTenantMgr::try_del_tenant_start_ddl_info_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   TenantID tid(tenant_id);
+
   if (OB_FAIL(add_tenant_start_ddl_info_map_.del(tid))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("try_del_tenant_start_ddl_info_ failed, ignore", KR(ret), K(tenant_id));
@@ -1504,6 +1745,8 @@ void ObLogTenantMgr::try_del_tenant_start_ddl_info_(const uint64_t tenant_id)
       LOG_INFO("add_tenant_start_ddl_info is not found, ignore", KR(ret), K(tenant_id));
     }
     // no need return error code.
+  } else {
+    LOG_INFO("try_del_tenant_start_ddl_info_ succ", K(tenant_id));
   }
 }
 

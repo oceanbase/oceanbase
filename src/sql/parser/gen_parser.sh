@@ -17,15 +17,24 @@ if [ "$BISON_VERSION" != "$NEED_VERSION" ]; then
   exit 1
 fi
 
+bison_parser() {
+BISON_OUTPUT="$(bison -v -Werror -d $1 -o $2 2>&1)"
+BISON_RETURN="$?"
+echo $BISON_OUTPUT
+if [ $BISON_RETURN -ne 0 ]
+  then
+  >&2 echo "Compile error: $BISON_OUTPUT, abort."
+  exit 1
+fi
+if [[ $BISON_OUTPUT == *"conflict"* ]]
+then
+  >&2 echo "Compile conflict: $BISON_OUTPUT, abort."
+  exit 1
+fi
+}
 
 # generate mysql sql_parser
-bison -v -Werror -d ../../../src/sql/parser/sql_parser_mysql_mode.y -o ../../../src/sql/parser/sql_parser_mysql_mode_tab.c
-BISON_RETURN="$?"
-if [ $BISON_RETURN -ne 0 ]
-then
-  echo Compile error[$BISON_RETURN], abort.
-  exit 1
- fi
+bison_parser ../../../src/sql/parser/sql_parser_mysql_mode.y ../../../src/sql/parser/sql_parser_mysql_mode_tab.c
 flex -Cfa -B -8 -o ../../../src/sql/parser/sql_parser_mysql_mode_lex.c ../../../src/sql/parser/sql_parser_mysql_mode.l ../../../src/sql/parser/sql_parser_mysql_mode_tab.h
 
 sed "/Setup the input buffer state to scan the given bytes/,/}/{/int i/d}" -i ../../../src/sql/parser/sql_parser_mysql_mode_lex.c

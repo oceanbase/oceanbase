@@ -39,6 +39,7 @@ private:
   int resolve_oracle_password_strength(common::ObString &user_name, 
                                        common::ObString &hostname,
                                        common::ObString &password);
+  int check_role_as_user(ParseNode *user_hostname_node, bool &is_valid);
 private:
   const static uint64_t MAX_CONNECTIONS = 4294967295;
   // disallow copy

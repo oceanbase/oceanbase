@@ -13,6 +13,7 @@
 #include "observer/virtual_table/ob_all_virtual_tx_data_table.h"
 #include "observer/ob_server.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
@@ -112,16 +113,12 @@ int ObAllVirtualTxDataTable::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case START_SCN_COL: {
-          uint64_t v = tx_data_table->get_key().log_ts_range_.start_log_ts_ < 0
-                           ? 0
-                           : tx_data_table->get_key().log_ts_range_.start_log_ts_;
+          uint64_t v = tx_data_table->get_key().scn_range_.start_scn_.get_val_for_inner_table_field();
           cur_row_.cells_[i].set_uint64(v);
           break;
         }
         case END_SCN_COL: {
-          uint64_t v = tx_data_table->get_key().log_ts_range_.end_log_ts_ < 0
-                           ? 0
-                           : tx_data_table->get_key().log_ts_range_.end_log_ts_;
+          uint64_t v = tx_data_table->get_key().scn_range_.end_scn_.get_val_for_inner_table_field();
           cur_row_.cells_[i].set_uint64(v);
           break;
         }
@@ -129,10 +126,10 @@ int ObAllVirtualTxDataTable::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(row_data.tx_data_count_);
           break;
         case MIN_TX_SCN_COL:
-          cur_row_.cells_[i].set_uint64(row_data.min_tx_scn_ < 0 ? 0 : row_data.min_tx_scn_);
+          cur_row_.cells_[i].set_uint64(row_data.min_tx_scn_.get_val_for_inner_table_field());
           break;
         case MAX_TX_SCN_COL:
-          cur_row_.cells_[i].set_uint64(row_data.max_tx_scn_ < 0 ? 0 : row_data.max_tx_scn_);
+          cur_row_.cells_[i].set_uint64(row_data.max_tx_scn_.get_val_for_inner_table_field());
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -208,16 +205,16 @@ void ObAllVirtualTxDataTable::prepare_row_data_(ObITable *tx_data_table, RowData
     ObTxDataMemtable *tx_data_memtable = static_cast<ObTxDataMemtable *>(tx_data_table);
     row_data.state_ = tx_data_memtable->get_state_string();
     row_data.tx_data_count_ = tx_data_memtable->size();
-    row_data.min_tx_scn_ = tx_data_memtable->get_min_tx_log_ts();
-    row_data.max_tx_scn_ = tx_data_memtable->get_max_tx_log_ts();
+    row_data.min_tx_scn_ = tx_data_memtable->get_min_tx_scn();
+    row_data.max_tx_scn_ = tx_data_memtable->get_max_tx_scn();
   } else if (tx_data_table->is_multi_version_minor_sstable()) {
     ObSSTable *tx_data_sstable = static_cast<ObSSTable *>(tx_data_table);
     row_data.state_ = ObITable::get_table_type_name(tx_data_table->get_key().table_type_);
     row_data.tx_data_count_ = tx_data_sstable->get_meta().get_row_count();
     row_data.min_tx_scn_ = tx_data_sstable->get_filled_tx_scn();
-    row_data.max_tx_scn_ = tx_data_sstable->get_key().log_ts_range_.end_log_ts_;
+    row_data.max_tx_scn_ = tx_data_sstable->get_key().scn_range_.end_scn_;
   } else {
-    STORAGE_LOG(WARN, "Iterate an invalid table while select virtual tx data table.");
+    STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "Iterate an invalid table while select virtual tx data table.");
   }
 }
 

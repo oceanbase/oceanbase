@@ -19,6 +19,7 @@
 #include "ob_ls_restore.h"
 #include "share/backup/ob_backup_data_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -113,7 +114,7 @@ ObTabletRestoreCtx::ObTabletRestoreCtx()
     ha_table_info_mgr_(nullptr),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    lock_(),
+    lock_(common::ObLatchIds::RESTORE_LOCK),
     status_(ObCopyTabletStatus::MAX_STATUS)
 {
 }
@@ -328,7 +329,7 @@ int ObTabletGroupRestoreDagNet::init_by_param(const ObIDagInitParam *param)
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_TABLET_INIT_PARAM_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_TABLET_INIT_PARAM_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       LOG_WARN("init tablet restore dag param failed", K(ret));
     }
@@ -400,7 +401,7 @@ int64_t ObTabletGroupRestoreDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
-    LOG_ERROR("restore ctx is NULL", KPC(ctx_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "restore ctx is NULL", KPC(ctx_));
   } else {
     hash_value = common::murmurhash(&ctx_->arg_.ls_id_, sizeof(ctx_->arg_.ls_id_), hash_value);
     for (int64_t i = 0; i < ctx_->arg_.tablet_id_array_.count(); ++i) {
@@ -548,7 +549,7 @@ int64_t ObTabletGroupRestoreDag::hash() const
   ObTabletGroupRestoreCtx *ctx = get_ctx();
 
   if (OB_ISNULL(ctx)) {
-    LOG_ERROR("tablet group restore ctx should not be NULL", KP(ctx));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "tablet group restore ctx should not be NULL", KP(ctx));
   } else {
     hash_value = common::murmurhash(
         &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
@@ -796,8 +797,6 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
   ObTabletRestoreStatus::STATUS action_restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObTabletRestoreStatus::STATUS tablet_restore_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
-  bool dag_net_is_in_retry = false;
-  bool dag_is_in_retry = false;
   ObInitialTabletGroupRestoreDag *dag = nullptr;
 
   if (!is_inited_) {
@@ -806,13 +805,9 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
-  } else if (OB_FAIL(ctx_->check_is_in_retry(dag_net_is_in_retry))) {
-    LOG_WARN("failed to get retry count", K(ret), KP(ls));
   } else if (OB_ISNULL(dag = static_cast<ObInitialTabletGroupRestoreDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("start tablet group restore dag should not be NULL", K(ret), KP(dag));
-  } else if (OB_FAIL(dag->check_is_in_retry(dag_is_in_retry))) {
-    LOG_WARN("failed to get retry count", K(ret), KPC_(dag));
   } else if (OB_FAIL(ObTabletRestoreAction::trans_restore_action_to_restore_status(
       ctx_->arg_.action_, action_restore_status))) {
     LOG_WARN("failed to trans restore action to restore status", K(ret), KPC(ctx_));
@@ -841,12 +836,10 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet restore status is unexpected", K(ret), K(tablet_id), K(action_restore_status),
             K(tablet_restore_status), K(ctx_->arg_));
-      } else if (action_restore_status == tablet_restore_status && !dag_net_is_in_retry && !dag_is_in_retry) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet restore status is unexpected", K(ret), K(tablet_id), K(action_restore_status),
-            K(tablet_restore_status), K(ctx_->arg_), K(dag_net_is_in_retry), K(dag_is_in_retry));
-      } else if (action_restore_status != tablet_restore_status
-          && OB_FAIL(ctx_->tablet_id_array_.push_back(tablet_id))) {
+      } else if (action_restore_status == tablet_restore_status) {
+        LOG_INFO("tablet restore status is equal to restore action, skip restore it", K(tablet_id),
+            K(action_restore_status), K(tablet_restore_status), K(ctx_->arg_));
+      } else if (OB_FAIL(ctx_->tablet_id_array_.push_back(tablet_id))) {
         LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id), KPC(ctx_));
       }
     }
@@ -1557,7 +1550,7 @@ int ObFinishTabletGroupRestoreTask::process()
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_FINISH_TABLET_GROUP_RESTORE_FAILED) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_FINISH_TABLET_GROUP_RESTORE_FAILED) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(ERROR, "fake EN_FINISH_TABLET_GROUP_RESTORE_FAILED", K(ret));
       int32_t retry_count = 0;
@@ -1733,7 +1726,7 @@ ObTabletRestoreDag::~ObTabletRestoreDag()
   if (OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
     if (OB_SUCCESS != (tmp_ret = tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(
         tablet_restore_ctx_.tablet_id_))) {
-      LOG_WARN("failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
+      LOG_WARN_RET(tmp_ret, "failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
     }
   }
 }
@@ -1903,12 +1896,20 @@ int ObTabletRestoreDag::create_first_task()
 int ObTabletRestoreDag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int32_t result = OB_SUCCESS;
   ObLS *ls = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore dag do not init", K(ret));
+  } else if (ha_dag_net_ctx_->is_failed()) {
+    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->get_result(ret))) {
+      LOG_WARN("failed to get result", K(tmp_ret), KPC(ha_dag_net_ctx_));
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("set inner reset status for retry failed", K(ret), KPC(ha_dag_net_ctx_));
+    }
   } else if (OB_FAIL(result_mgr_.get_result(result))) {
     LOG_WARN("failed to get result", K(ret));
   } else {
@@ -2226,7 +2227,7 @@ int ObTabletRestoreTask::generate_ddl_restore_tasks_(
   } else if (!ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)) {
     LOG_INFO("tablet not restore minor, skip ddl restore tasks",
         K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(generate_restore_task_(ObITable::is_ddl_sstable, tablet_copy_finish_task, parent_task))) {
+  } else if (OB_FAIL(generate_restore_task_(ObITable::is_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate ddl restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
   return ret;
@@ -2635,8 +2636,10 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
         }
       } else if (ObTabletRestoreAction::is_restore_major(tablet_restore_ctx_->action_)) {
         if (!is_major_sstable_exist && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-          ret = OB_SSTABLE_NOT_EXIST;
-          LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+          if (tablet->get_table_store().get_major_sstables().empty()) {
+            ret = OB_SSTABLE_NOT_EXIST;
+            LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+          }
         }
       }
     }
@@ -2711,6 +2714,8 @@ int ObTabletFinishRestoreTask::process()
     LOG_WARN("failed to update data status", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(update_restore_status_())) {
     LOG_WARN("failed to update restore status", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(check_tablet_valid_())) {
+    LOG_WARN("failed to check tablet valid", K(ret), KPC(tablet_restore_ctx_));
   }
 
   if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
@@ -2789,6 +2794,26 @@ int ObTabletFinishRestoreTask::update_restore_status_()
         K(tablet_restore_ctx_->action_), K(tablet_restore_status));
   }
 
+  return ret;
+}
+
+int ObTabletFinishRestoreTask::check_tablet_valid_()
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet finish restore task do not init", K(ret));
+  } else if (OB_FAIL(ls_->get_tablet(tablet_restore_ctx_->tablet_id_, tablet_handle, timeout_us))) {
+    LOG_WARN("failed to get tablet", K(ret), KPC(tablet_restore_ctx_), K(timeout_us));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(tablet->check_valid())) {
+    LOG_WARN("failed to check valid", K(ret), KPC(tablet));
+  }
   return ret;
 }
 

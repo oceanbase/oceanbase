@@ -13,6 +13,7 @@
 #ifndef OB_DEFENSIVE_CHECK_MGR_H_
 #define OB_DEFENSIVE_CHECK_MGR_H_
 #include "storage/blocksstable/ob_fuse_row_cache.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -25,7 +26,7 @@ struct ObDefensiveCheckRecordExtend
   ~ObDefensiveCheckRecordExtend() { reset(); }
   void reset()
   {
-    fist_access_table_start_log_ts_ = 0;
+    fist_access_table_start_scn_.set_min();
     total_table_handle_cnt_ = 0;
     start_access_table_idx_ = INT64_MAX;
     end_access_table_idx_ = INT64_MAX;
@@ -33,7 +34,7 @@ struct ObDefensiveCheckRecordExtend
     is_all_data_from_memtable_ = false;
     query_flag_.reset();
   }
-  TO_STRING_KV(K_(fist_access_table_start_log_ts),
+  TO_STRING_KV(K_(fist_access_table_start_scn),
                K_(total_table_handle_cnt),
                K_(start_access_table_idx),
                K_(end_access_table_idx),
@@ -41,7 +42,7 @@ struct ObDefensiveCheckRecordExtend
                K_(is_all_data_from_memtable),
                K_(query_flag));
 public:
-  int64_t fist_access_table_start_log_ts_;
+  share::SCN fist_access_table_start_scn_;
   int64_t total_table_handle_cnt_;
   int64_t start_access_table_idx_;
   int64_t end_access_table_idx_;

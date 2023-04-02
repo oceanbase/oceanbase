@@ -15,6 +15,7 @@
 #include "sql/engine/px/ob_px_coord_msg_proc.h"
 #include "sql/engine/px/datahub/ob_dh_msg_provider.h"
 #include "sql/engine/px/datahub/ob_dh_msg.h"
+#include "sql/dtl/ob_dtl_msg_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -27,11 +28,11 @@ class ObDhWholeeMsgProc
 public:
   ObDhWholeeMsgProc() = default;
   ~ObDhWholeeMsgProc() = default;
-  int on_whole_msg(ObSqcCtx &sqc_ctx, const WholeMsg &pkt) const
+  int on_whole_msg(ObSqcCtx &sqc_ctx, dtl::ObDtlMsgType msg_type, const WholeMsg &pkt) const
   {
     int ret = OB_SUCCESS;
     ObPxDatahubDataProvider *p = nullptr;
-    if (OB_FAIL(sqc_ctx.get_whole_msg_provider(pkt.op_id_, p))) {
+    if (OB_FAIL(sqc_ctx.get_whole_msg_provider(pkt.op_id_, msg_type, p))) {
       LOG_WARN("fail get whole msg provider", K(ret));
     } else {
       typename WholeMsg::WholeMsgProvider *provider =
@@ -96,32 +97,53 @@ int ObPxSubCoordMsgProc::on_whole_msg(
     const ObBarrierWholeMsg &pkt) const
 {
   ObDhWholeeMsgProc<ObBarrierWholeMsg> proc;
-  return proc.on_whole_msg(sqc_ctx_, pkt);
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_BARRIER_WHOLE_MSG, pkt);
 }
 int ObPxSubCoordMsgProc::on_whole_msg(
     const ObWinbufWholeMsg &pkt) const
 {
   ObDhWholeeMsgProc<ObWinbufWholeMsg> proc;
-  return proc.on_whole_msg(sqc_ctx_, pkt);
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_WINBUF_WHOLE_MSG, pkt);
 }
 
 int ObPxSubCoordMsgProc::on_whole_msg(
     const ObDynamicSampleWholeMsg &pkt) const
 {
   ObDhWholeeMsgProc<ObDynamicSampleWholeMsg> proc;
-  return proc.on_whole_msg(sqc_ctx_, pkt);
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_DYNAMIC_SAMPLE_WHOLE_MSG, pkt);
 }
 
 int ObPxSubCoordMsgProc::on_whole_msg(
     const ObRollupKeyWholeMsg &pkt) const
 {
   ObDhWholeeMsgProc<ObRollupKeyWholeMsg> proc;
-  return proc.on_whole_msg(sqc_ctx_, pkt);
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_ROLLUP_KEY_WHOLE_MSG, pkt);
 }
 
 int ObPxSubCoordMsgProc::on_whole_msg(
     const ObRDWFWholeMsg &pkt) const
 {
   ObDhWholeeMsgProc<ObRDWFWholeMsg> proc;
-  return proc.on_whole_msg(sqc_ctx_, pkt);
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_RANGE_DIST_WF_PIECE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(
+    const ObInitChannelWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<ObInitChannelWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_INIT_CHANNEL_WHOLE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(
+    const ObReportingWFWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<ObReportingWFWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_SECOND_STAGE_REPORTING_WF_WHOLE_MSG, pkt);
+}
+
+int ObPxSubCoordMsgProc::on_whole_msg(
+    const ObOptStatsGatherWholeMsg &pkt) const
+{
+  ObDhWholeeMsgProc<ObOptStatsGatherWholeMsg> proc;
+  return proc.on_whole_msg(sqc_ctx_, dtl::DH_OPT_STATS_GATHER_WHOLE_MSG, pkt);
 }

@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace common
 {
-void ObLightyQueue::ObLightyCond::signal()
+void ObLightyCond::signal()
 {
   (void)ATOMIC_FAA(&futex_.uval(), 1);
   if (ATOMIC_LOAD(&n_waiters_) > 0) {
@@ -30,7 +30,7 @@ void ObLightyQueue::ObLightyCond::signal()
   }
 }
 
-void ObLightyQueue::ObLightyCond::wait(const uint32_t cmp, const int64_t timeout)
+void ObLightyCond::wait(const uint32_t cmp, const int64_t timeout)
 {
   if (timeout > 0) {
     (void)ATOMIC_FAA(&n_waiters_, 1);
@@ -186,6 +186,97 @@ void ObLightyQueue::store(uint64_t seq, void* p)
   while(!ATOMIC_BCAS(addr, NULL, p)) {
     PAUSE();
   }
+}
+
+static int64_t get_us() { return ::oceanbase::common::ObTimeUtility::current_time(); }
+
+int LightyQueue::init(const uint64_t capacity, const lib::ObLabel &label, const uint64_t tenant_id)
+{
+  ObMemAttr attr(tenant_id, label);
+  return queue_.init(capacity, global_default_allocator, attr);
+}
+
+int LightyQueue::push(void *data, const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t abs_timeout = (timeout > 0 ? (get_us() + timeout) : 0);
+  int64_t wait_timeout = 0;
+  while (true) { // WHITESCAN: OB_CUSTOM_ERROR_COVERED
+    uint32_t seq = cond_.get_seq();
+    if (OB_SUCCESS == (ret = queue_.push(data))) {
+      break;
+    } else if (timeout <= 0 || (wait_timeout = abs_timeout - get_us()) <= 0) {
+      ret = OB_TIMEOUT;
+      break;
+    } else {
+      cond_.wait(seq, wait_timeout);
+    }
+  }
+  if (OB_SUCCESS == ret) {
+    cond_.signal();
+  }
+  return ret;
+}
+
+int LightyQueue::pop(void *&data, const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t abs_timeout = (timeout > 0 ? (get_us() + timeout) : 0);
+  int64_t wait_timeout = 0;
+  while (true) { // WHITESCAN: OB_CUSTOM_ERROR_COVERED
+    uint32_t seq = cond_.get_seq();
+    if (OB_SUCCESS == (ret = queue_.pop(data))) {
+      break;
+    } else if (timeout <= 0 || (wait_timeout = abs_timeout - get_us()) <= 0) {
+      break;
+    } else {
+      cond_.wait(seq, wait_timeout);
+    }
+  }
+  if (OB_SUCCESS == ret) {
+    cond_.signal();
+  }
+  return ret;
+}
+
+int LightyQueue::multi_pop(void **data, const int64_t data_count, int64_t &avail_count,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  avail_count = 0;
+  if (data_count > 0) {
+    void *curr_data = NULL;
+    int64_t abs_timeout = (timeout > 0 ? (get_us() + timeout) : 0);
+    int64_t wait_timeout = 0;
+    while (true) { // WHITESCAN: OB_CUSTOM_ERROR_COVERED
+      uint32_t seq = cond_.get_seq();
+      if (OB_SUCCESS == (ret = queue_.pop(curr_data))) {
+        data[avail_count++] = curr_data;
+        curr_data = NULL;
+        cond_.signal();
+        if (avail_count >= data_count) {
+          //finish then break
+          break;
+        }
+      } else if (avail_count > 0) {
+        //not finish, but has already got one, break
+        ret = OB_SUCCESS;
+        break;
+      } else if (timeout <= 0 || (wait_timeout = abs_timeout - get_us()) <= 0) {
+        break;
+      } else {
+        cond_.wait(seq, wait_timeout);
+      }
+    }
+  }
+  return ret;
+}
+
+void LightyQueue::reset()
+{
+  void *p = NULL;
+  while (0 == pop(p, 0))
+    ;
 }
 
 }; // end namespace common

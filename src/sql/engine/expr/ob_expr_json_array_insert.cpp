@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implement of func json_array_array_insert
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -48,7 +49,6 @@ int ObExprJsonArrayInsert::calc_result_typeN(ObExprResType& type, ObExprResType*
   } else {
     type.set_json();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-
     if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, 0, N_JSON_ARRAY_INSERT))) {
       LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[0].get_type()));
     } else {
@@ -110,7 +110,10 @@ int ObExprJsonArrayInsert::eval_json_array_insert(const ObExpr &expr, ObEvalCtx 
     } else {
       ObString j_path_text = json_datum->get_string();
       ObJsonPath *j_path;
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, i, false))) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *json_datum,
+                  arg->datum_meta_, arg->obj_meta_.has_lob_header(), j_path_text))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, i, false))) {
         LOG_WARN("parse text to path failed", K(j_path_text), K(ret));
       } else if (j_path->path_node_cnt() == 0
           || j_path->last_path_node()->get_node_type() != JPN_ARRAY_CELL) {
@@ -147,16 +150,8 @@ int ObExprJsonArrayInsert::eval_json_array_insert(const ObExpr &expr, ObEvalCtx 
       res.set_null();
     } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
-    } else {
-      uint64_t length = raw_bin.length();
-      char *buf = expr.get_str_res_mem(ctx, length);
-      if (buf) {
-        MEMCPY(buf, raw_bin.ptr(), length);
-        res.set_string(buf, raw_bin.length());
-      } else {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed: allocate res string buffer.", K(ret), K(length));
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 

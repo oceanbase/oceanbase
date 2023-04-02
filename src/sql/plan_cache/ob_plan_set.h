@@ -50,6 +50,7 @@ typedef ObFixedArray<common::ObObjMeta, common::ObIAllocator> UserSessionVarMeta
 typedef ObFixedArray<ObPCConstParamInfo, common::ObIAllocator> ConstParamConstraint;
 typedef ObFixedArray<ObPCParamEqualInfo, common::ObIAllocator> EqualParamConstraint;
 typedef ObDList<ObPreCalcExprConstraint> PreCalcExprConstraint;
+typedef ObFixedArray<ObPCPrivInfo, common::ObIAllocator> PrivConstraint;
 
 enum ObPlanSetType
 {
@@ -108,8 +109,11 @@ public:
         all_possible_const_param_constraints_(alloc_),
         all_plan_const_param_constraints_(alloc_),
         all_pre_calc_constraints_(),
+        all_priv_constraints_(),
         multi_stmt_rowkey_pos_(alloc_),
-        pre_cal_expr_handler_(NULL)
+        pre_cal_expr_handler_(NULL),
+        res_map_rule_id_(common::OB_INVALID_ID),
+        res_map_rule_param_idx_(common::OB_INVALID_INDEX)
   {}
   virtual ~ObPlanSet();
 
@@ -180,6 +184,8 @@ private:
 
   int set_pre_calc_constraint(common::ObDList<ObPreCalcExprConstraint> &pre_calc_cons);
 
+  int set_priv_constraint(common::ObIArray<ObPCPrivInfo> &priv_constraint);
+
   int match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   /**
    * @brief Match const param constraint.
@@ -196,6 +202,7 @@ private:
 
   int pre_calc_exprs(ObExecContext &exec_ctx);
 
+  int match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched);
   static int check_vector_param_same_bool(const ObObjParam &param_obj,
                                          bool &first_val,
                                          bool &is_same);
@@ -220,10 +227,16 @@ protected:
   ConstParamConstraint all_plan_const_param_constraints_;
   EqualParamConstraint all_equal_param_constraints_;
   PreCalcExprConstraint all_pre_calc_constraints_;
+  PrivConstraint all_priv_constraints_;
   // maintain the rowkey position for multi_stmt
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   // pre calculable expression list handler.
   PreCalcExprHandler* pre_cal_expr_handler_;
+
+public:
+  //variables for resource map rule
+  uint64_t res_map_rule_id_;
+  int64_t res_map_rule_param_idx_;
 };
 
 class ObSqlPlanSet : public ObPlanSet
@@ -357,29 +370,6 @@ private:
   bool is_contain_virtual_table_;
   // px并行度是否大于1
   bool enable_inner_part_parallel_exec_;
-};
-
-class ObPLPlanSet : public ObPlanSet
-{
-public:
-  ObPLPlanSet()
-    : ObPlanSet(PST_PRCD),
-      pl_obj_(NULL)
-  {}
-  virtual ~ObPLPlanSet() {}
-public:
-  virtual int add_cache_obj(ObPlanCacheObject &cache_object,
-                            ObPlanCacheCtx &pc_ctx,
-                            int64_t ol_param_idx,
-                            int &add_ret) override;
-  virtual int select_plan(ObPlanCacheCtx &pc_ctx,
-                          ObPlanCacheObject *&cache_obj) override;
-  virtual void remove_all_plan() override;
-  virtual int64_t get_mem_size() override;
-  virtual void reset() override;
-  virtual bool is_sql_planset() override;
-private:
-  sql::ObPlanCacheObject *pl_obj_;
 };
 
 inline ObPlanSetType ObPlanSet::get_plan_set_type_by_cache_obj_type(ObLibCacheNameSpace ns)

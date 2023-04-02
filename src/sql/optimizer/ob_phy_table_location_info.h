@@ -58,7 +58,7 @@ public:
 
   inline common::ObTabletID get_tablet_id() const { return tablet_id_; }
 
-  inline share::ObLSID get_ls_id() const { return ls_id_; }
+  inline const share::ObLSID &get_ls_id() const { return ls_id_; }
 
   inline int64_t get_renew_time() const { return renew_time_; }
 
@@ -80,7 +80,7 @@ class ObCandiTabletLoc
 {
 public:
   ObCandiTabletLoc();
-  virtual ~ObCandiTabletLoc();
+  ~ObCandiTabletLoc();
 
   void reset();
   int assign(const ObCandiTabletLoc &other);
@@ -90,7 +90,7 @@ public:
   int add_priority_replica_idx(int64_t priority_replica_idx);
   int64_t get_selected_replica_idx() const { return selected_replica_idx_; }
   bool has_selected_replica() const { return common::OB_INVALID_INDEX != selected_replica_idx_; }
-
+  const share::ObLSID &get_ls_id() const { return opt_tablet_loc_.get_ls_id(); }
   int get_selected_replica(share::ObLSReplicaLocation &replica_loc) const;
   int get_selected_replica(ObRoutePolicy::CandidateReplica &replica_loc) const;
   int get_priority_replica(int64_t idx, share::ObLSReplicaLocation &replica_loc) const;
@@ -151,7 +151,7 @@ public:
                                          common::ObAddr &same_server,
                                          const common::ObAddr &local_server);
   int all_select_fixed_server(const common::ObAddr &fixed_server);
-
+  int get_all_servers(common::ObIArray<common::ObAddr> &servers) const;
   bool is_duplicate_table() const { return ObDuplicateType::NOT_DUPLICATE != duplicate_type_; }
   bool is_duplicate_table_not_in_dml() const { return ObDuplicateType::DUPLICATE == duplicate_type_; }
   void set_duplicate_type(ObDuplicateType v) { duplicate_type_ = v; }

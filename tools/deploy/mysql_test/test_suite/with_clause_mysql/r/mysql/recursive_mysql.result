@@ -158,9 +158,9 @@ with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from 
 +------+------+
 
 with RECURSIVE cte(a,b,c) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 with RECURSIVE cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 ##   PART 2.2.2 不使用定义列使用原来的列
 with RECURSIVE cte(a,b,c) as
@@ -981,7 +981,7 @@ ERROR HY000: recursive WITH clause must use a UNION ALL operation
 
 set @@ob_query_timeout=1000000;
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
-ERROR HY000: unsupported operation in recursive branch of recursive WITH clause
+ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
 
 set @@ob_query_timeout=10000000;
 
@@ -993,17 +993,17 @@ with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union a
 ERROR HY000: cycle detected while executing recursive WITH query
 
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 ## 不能出现在right join的左边，left join的右边，full join的两边
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 set @@ob_query_timeout=10000000;
 
 ##   PART 4.2 左支不停的变化
@@ -1815,46 +1815,56 @@ Query Plan
 |20|    EXPRESSION            |    |
 |21|    TABLE SCAN            |cte1|
 ====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output([cte1.a], [cte1.b]), filter(nil), rowset=256, 
-      conds([cte1.a < cte3.c]), nl_params_(nil)
-  1 - output([cte3.c]), filter(nil), rowset=256, 
+  0 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
+      conds([cte1.a < cte3.c]), nl_params_(nil), batch_join=false
+  1 - output([cte3.c]), filter(nil), rowset=256
       access([cte3.c])
   2 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   3 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   4 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   5 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  6 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256, 
-      access([cte1.a], [cte1.b], [cte1.c]), partitions is NULL, 
-  7 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256, 
-      access([cte2.a], [cte2.b], [cte2.c]), partitions is NULL, 
-  8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), rowset=256, 
-      conds([cte3.a < cte2.b]), nl_params_(nil)
-  9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256, 
-      access([cte3.a], [cte3.b], [cte3.c]), partitions is NULL, 
-  10 - output([cte2.b]), filter(nil), rowset=256
-  11 - output([cte2.b]), filter([cte2.a < 3]), rowset=256, 
+  6 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
+      access([cte1.a], [cte1.b], [cte1.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key(nil), range(MIN ; MAX)
+  7 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256
+      access([cte2.a], [cte2.b], [cte2.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key(nil), range(MIN ; MAX)
+  8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), rowset=256
+      conds([cte3.a < cte2.b]), nl_params_(nil), batch_join=false
+  9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256
+      access([cte3.a], [cte3.b], [cte3.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key(nil), range(MIN ; MAX)
+ 10 - output([cte2.b]), filter(nil), rowset=256
+ 11 - output([cte2.b]), filter([cte2.a < 3]), rowset=256
       access([cte2.a], [cte2.b])
-  12 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  14 - output([1], [1], [1]), filter(nil)
+ 12 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
+ 13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
+ 14 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  15 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256, 
-      access([cte1.a], [cte1.b], [cte1.c]), partitions is NULL, 
-  16 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256, 
-      access([cte2.a], [cte2.b], [cte2.c]), partitions is NULL, 
-  17 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
-  18 - output([cte1.a], [cte1.b]), filter(nil), rowset=256, 
+ 15 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
+      access([cte1.a], [cte1.b], [cte1.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key(nil), range(MIN ; MAX)
+ 16 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256
+      access([cte2.a], [cte2.b], [cte2.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key(nil), range(MIN ; MAX)
+ 17 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
+ 18 - output([cte1.a], [cte1.b]), filter(nil), rowset=256
       access([cte1.a], [cte1.b])
-  19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
-  20 - output([1], [1], [1]), filter(nil)
+ 19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
+ 20 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  21 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256, 
-      access([cte1.a], [cte1.b], [cte1.c]), partitions is NULL, 
-
+ 21 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
+      access([cte1.a], [cte1.b], [cte1.c])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key(nil), range(MIN ; MAX)
 
 set ob_query_timeout = 100000000;
 with RECURSIVE cte1(a,b,c) as

@@ -14,13 +14,14 @@
 #include "ob_storage_restore_struct.h"
 #include "storage/restore/ob_ls_restore_args.h"
 #include "share/backup/ob_backup_data_store.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 namespace oceanbase
 {
 namespace storage
 {
 /******************ObRestoreBaseInfo*********************/
 ObRestoreBaseInfo::ObRestoreBaseInfo()
-  : restore_scn_(0),
+  : restore_scn_(),
     backup_cluster_version_(0),
     backup_dest_(),
     backup_set_list_()
@@ -29,7 +30,7 @@ ObRestoreBaseInfo::ObRestoreBaseInfo()
 
 void ObRestoreBaseInfo::reset()
 {
-  restore_scn_ = 0;
+  restore_scn_.reset();
   backup_cluster_version_ = 0;
   backup_dest_.reset();
   backup_set_list_.reset();
@@ -37,7 +38,7 @@ void ObRestoreBaseInfo::reset()
 
 bool ObRestoreBaseInfo::is_valid() const
 {
-  return restore_scn_ > 0
+  return restore_scn_.is_valid()
       && backup_cluster_version_ > 0
       && backup_dest_.is_valid()
       && !backup_set_list_.empty();
@@ -85,7 +86,7 @@ int ObRestoreBaseInfo::copy_from(const ObTenantRestoreCtx &restore_arg)
   return ret;
 }
 
-int ObRestoreBaseInfo::get_restore_backup_set_dest(const int64_t backup_set_id, 
+int ObRestoreBaseInfo::get_restore_backup_set_dest(const int64_t backup_set_id,
     share::ObRestoreBackupSetBriefInfo &backup_set_dest) const
 {
   int ret = OB_SUCCESS;
@@ -122,7 +123,7 @@ const char *ObTabletRestoreAction::get_action_str(const ACTION &action)
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(action_strs), "action count mismatch");
   if (action < 0 || action >= MAX) {
-    LOG_ERROR("invalid action", K(action));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid action", K(action));
   } else {
     str = action_strs[action];
   }
@@ -139,7 +140,7 @@ bool ObTabletRestoreAction::is_restore_minor(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_MINOR != action) {
     bool_ret = false;
   } else {
@@ -153,7 +154,7 @@ bool ObTabletRestoreAction::is_restore_major(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_MAJOR != action) {
     bool_ret = false;
   } else {
@@ -167,7 +168,7 @@ bool ObTabletRestoreAction::is_restore_none(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_NONE != action) {
     bool_ret = false;
   } else {
@@ -181,7 +182,7 @@ bool ObTabletRestoreAction::is_restore_all(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_ALL != action) {
     bool_ret = false;
   } else {
@@ -195,7 +196,7 @@ bool ObTabletRestoreAction::is_restore_tablet_meta(const ACTION &action)
   bool bool_ret = false;
   if (!is_valid(action)) {
     bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_TABLET_META != action) {
     bool_ret = false;
   } else {
@@ -243,7 +244,7 @@ int ObRestoreUtils::get_backup_data_type(
     data_type.set_minor_data_backup();
   } else if (table_key.is_major_sstable()) {
     data_type.set_major_data_backup();
-  } else if (table_key.is_ddl_sstable()) {
+  } else if (table_key.is_ddl_dump_sstable()) {
     data_type.set_minor_data_backup();
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -502,7 +503,7 @@ int ObRestoreMacroBlockIdMgr::inner_init_(
 
 int ObRestoreMacroBlockIdMgr::get_macro_block_id(
     const int64_t block_id_index,
-    ObLogicMacroBlockId &logic_block_id,
+    blocksstable::ObLogicMacroBlockId &logic_block_id,
     backup::ObBackupPhysicalID &physic_block_id)
 {
   int ret = OB_SUCCESS;
@@ -523,7 +524,7 @@ int ObRestoreMacroBlockIdMgr::get_macro_block_id(
 }
 
 int ObRestoreMacroBlockIdMgr::get_block_id_index(
-    const ObLogicMacroBlockId &logic_block_id,
+    const blocksstable::ObLogicMacroBlockId &logic_block_id,
     int64_t &block_id_index)
 {
   int ret = OB_SUCCESS;

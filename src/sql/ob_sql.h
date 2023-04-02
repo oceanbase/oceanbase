@@ -20,12 +20,13 @@
 #include "sql/resolver/prepare/ob_execute_stmt.h"
 #include "sql/resolver/prepare/ob_deallocate_stmt.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/optimizer/ob_optimizer.h"
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
+#include "sql/ob_spi.h"
+#include "sql/udr/ob_udr_item_mgr.h"
 
 namespace test
 {
@@ -54,9 +55,29 @@ class ObOptStatManager;
 namespace sql
 {
 struct ObStmtPrepareResult;
+class ObSPIService;
 class ObIVirtualTableIteratorFactory;
 struct ObSqlCtx;
 class ObResultSet;
+class ObLogPlan;
+
+class ObPlanBaseKeyGuard
+{
+public:
+  [[nodiscard]] explicit ObPlanBaseKeyGuard(ObBaselineKey &bl_key)
+  : bl_key_(bl_key),
+    ori_bl_key_(bl_key) {}
+  ~ObPlanBaseKeyGuard()
+  {
+    bl_key_ = ori_bl_key_;
+  }
+private:
+  // disallow copy
+  ObPlanBaseKeyGuard(const ObPlanBaseKeyGuard &other);
+private:
+  ObBaselineKey &bl_key_;
+  ObBaselineKey ori_bl_key_;
+};
 
 // this class is the main interface for sql module
 class ObSql
@@ -135,14 +156,10 @@ public:
   //
   // @param tenant_id [in]
   //
-  // @return Return ObPlanCache if get/create success, else return NULL
-  ObPlanCache* get_plan_cache(uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf);
   ObPsCache* get_ps_cache(const uint64_t tenant_id, const ObPCMemPctConf &pc_mem_conf);
   int get_plan_retry(ObPlanCache &plan_cache, ObPlanCacheCtx &pc_ctx, ObCacheObjGuard &guard);
 
   int revert_plan_cache(uint64_t tenant_id);
-
-  ObPlanCacheManager* get_plan_cache_manager() {return &plan_cache_manager_;}
 
   int64_t get_execution_id() { return ATOMIC_AAF(&execution_id_, 1); }
   int64_t get_px_sequence_id() { return ATOMIC_AAF(&px_sequence_id_, 1); }
@@ -189,6 +206,26 @@ public:
 
   int init_result_set(ObSqlCtx &context, ObResultSet &result_set);
 
+  int handle_sql_execute(const ObString &sql,
+                         ObSqlCtx &context,
+                         ObResultSet &result,
+                         ParamStore &params,
+                         PlanCacheMode mode);
+
+  int handle_pl_prepare(const ObString &sql,
+                        ObSPIService::PLPrepareCtx &pl_prepare_ctx,
+                        ObSPIService::PLPrepareResult &pl_prepare_result);
+
+  int handle_pl_execute(const ObString &sql,
+                        ObSQLSessionInfo &session_info,
+                        ParamStore &params,
+                        ObResultSet &result,
+                        ObSqlCtx &context,
+                        bool is_prepare_protocol,
+                        bool is_dynamic_sql);
+  static int construct_parameterized_params(const ParamStore &params,
+                                            ObPlanCacheCtx &phy_ctx);
+
 public:
   //for sql test only
   friend bool compare_stmt(const char *schema_file,  const char *str1, const char *str2);
@@ -205,63 +242,59 @@ public:
     rs_mgr_(NULL),
     execution_id_(0),
     px_sequence_id_(0)
-  {}
+  {
+    px_sequence_id_ = ObTimeUtility::current_time();
+  }
 
   virtual ~ObSql() { destroy(); }
-  static int construct_ps_param(const ParamStore &params,
-                                ObPlanCacheCtx &phy_ctx);
+  ObMaintainDepInfoTaskQueue &get_dep_info_queue() { return queue_; }
 
 private:
   // disallow copy
   ObSql(const ObSql &other);
   ObSql &operator=(const ObSql &other);
 
+  class TimeoutGuard
+  {
+  public:
+    TimeoutGuard(ObSQLSessionInfo &session);
+    ~TimeoutGuard();
+  private:
+    ObSQLSessionInfo &session_;
+    int64_t worker_timeout_;
+    int64_t query_timeout_;
+    int64_t trx_timeout_;
+  };
+
 private:
-  int add_param_to_param_store(const ObObjParam &param,
-                               ParamStore &param_store);
+  int set_timeout_for_pl(ObSQLSessionInfo &session_info, int64_t &abs_timeout_us);
+
   int construct_param_store(const ParamStore &params,
                             ParamStore &param_store);
   int construct_ps_param_store(const ParamStore &params,
                                const ParamStore &fixed_params,
                                const ObIArray<int64_t> &fixed_param_idx,
                                ParamStore &param_store);
-  int construct_param_store_from_ps_param(const ObPlanCacheCtx &phy_ctx,
-                                          ParamStore &param_store);
+  int construct_param_store_from_parameterized_params(const ObPlanCacheCtx &phy_ctx,
+                                                      ParamStore &param_store);
   bool is_exist_in_fixed_param_idx(const int64_t idx,
                                    const ObIArray<int64_t> &fixed_param_idx);
   int do_real_prepare(const ObString &stmt,
                       ObSqlCtx &context,
                       ObResultSet &result,
                       bool is_inner_sql);
-  /**
-   * @brief  把prepare的信息加入ps cache
-   * @param [in] sql      - prepare的语句
-   * @param [in] stmt_type  - stmt类型
-   * @param [inout] result      - prepare的结果
-   * @param [out] ps_stmt_info  - 加入ps cache的结构
-   * @retval OB_SUCCESS execute success
-   * @retval OB_SOME_ERROR special errno need to handle
-   *
-   * 两个add_to_ps_cache接口输入参数不同，一个使用parser的结果，供mysql模式使用；
-   * 一个使用resolver的结果，供oracle模式使用
-   * 其主要内容是获取prepare语句的id和type，并构造出ObPsStmtInfo，加入ps cache
-   */
-   int do_add_ps_cache(const ObString &sql,
-                       const ObString &no_param_sql,
-                       const ObIArray<ObPCParam*> &raw_params,
-                       const common::ObIArray<int64_t> &fixed_param_idx,
-                       int64_t param_cnt,
-                       share::schema::ObSchemaGetterGuard &schema_guard,
-                       stmt::StmtType stmt_type,
-                       ObResultSet &result,
-                       bool is_inner_sql,
-                       bool is_sensitive_sql,
-                       int32_t returning_into_parm_num);
-
-  int fill_result_set(ObResultSet &result, ObSqlCtx *context, const bool is_ps_mode, ObStmt &stmt);
-  int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const bool is_ps_mode,
+  int do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
+                      share::schema::ObSchemaGetterGuard &schema_guard,
+                      ObResultSet &result);
+  int fill_result_set(ObResultSet &result, ObSqlCtx *context, const PlanCacheMode mode, ObStmt &stmt);
+  int fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, const PlanCacheMode mode,
                              ObCollationType collation_type, const ObString &type_name,
                              ObStmt &basic_stmt, ObField &field);
+  int pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
+                      ObPlanCacheCtx &pc_ctx,
+                      ObResultSet &result,
+                      ObOutlineState &outline_state,
+                      bool& plan_added);
   int handle_ps_prepare(const common::ObString &stmt,
                         ObSqlCtx &context,
                         ObResultSet &result,
@@ -278,6 +311,12 @@ private:
                                  const ParamStore &params_store,
                                  ParamStore *&params);
 
+  int reconstruct_pl_params_store(ObIAllocator &allocator,
+                                  ObSqlCtx &context,
+                                  const ParamStore &origin_params,
+                                  ParamStore &pl_params,
+                                  ParamStore *&pl_ab_params);
+
   int reconstruct_ps_params_store(ObIAllocator &allocator,
                                   ObSqlCtx &context,
                                   const ParamStore &params,
@@ -293,8 +332,7 @@ private:
                            ObSqlCtx &context,
                            ObResultSet &result,
                            ObPlanCacheCtx &pc_ctx,
-                           const int get_plan_err,
-                           bool is_psmode = false);
+                           const int get_plan_err);
   // @brief  Generate 'stmt' from syntax tree
   // @param parse_result[in]     syntax tree
   // @param select_item_param_infos           select_item_param_infos from fast parser
@@ -326,8 +364,17 @@ private:
                              ObSqlCtx &context,
                              ObResultSet &result,
                              const bool is_begin_commit_stmt,
-                             const bool is_ps_mode = false,
+                             const PlanCacheMode mode,
                              ParseResult *outline_parse_result = NULL);
+
+  int generate_plan(ParseResult &parse_result,
+                    ObPlanCacheCtx *pc_ctx,
+                    ObSqlCtx &sql_ctx,
+                    ObResultSet &result,
+                    const PlanCacheMode mode,
+                    ObStmt *basic_stmt,
+                    ObStmtNeedPrivs &stmt_need_privs,
+                    ObStmtOraNeedPrivs &stmt_ora_need_privs);
 
   //generate physical_plan
   static int code_generate(ObSqlCtx &sql_ctx,
@@ -338,6 +385,9 @@ private:
                            common::ObIArray<ObAuditUnit> &audit_units,
                            ObLogPlan *logical_plan,
                            ObPhysicalPlan *&phy_plan);
+
+  int prepare_outline_for_phy_plan(ObLogPlan *logical_plan,
+                                   ObPhysicalPlan *phy_plan);
 
   int sanity_check(ObSqlCtx &context);
 
@@ -415,7 +465,8 @@ private:
                      ObSQLSessionInfo &session,
                      ObPhysicalPlan *plan,
                      bool from_plan_cache,
-                     const ParamStore *ps_params);
+                     const ParamStore *ps_params,
+                     uint64_t min_cluster_version);
   int need_add_plan(const ObPlanCacheCtx &ctx,
                     ObResultSet &result,
                     bool is_enable_pc,
@@ -432,8 +483,10 @@ private:
                              ParamStore &fixed_param_store);
 
   int handle_text_execute(const ObStmt *basic_stmt, ObSqlCtx &sql_ctx, ObResultSet &result);
-  int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *plan, bool &need_reroute);
+  int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObPhysicalPlan *plan, bool &need_reroute);
   int get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObString& sql);
+  static int add_param_to_param_store(const ObObjParam &param,
+                                      ParamStore &param_store);
 
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
@@ -445,7 +498,6 @@ private:
   common::ObITabletScan *vt_partition_service_;
   // END 全局单例依赖接口
 
-  ObPlanCacheManager plan_cache_manager_;
   common::ObAddr self_addr_;
   share::ObRsMgr *rs_mgr_;
   volatile int64_t execution_id_ CACHE_ALIGNED;

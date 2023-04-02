@@ -20,6 +20,7 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "share/ob_get_compat_mode.h"
+#include "sql/resolver/ddl/ob_create_view_resolver.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -96,7 +97,7 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
             LOG_WARN("select_stmt is NULL", K(ret));
           } else if (OB_ISNULL(real_stmt = select_stmt->get_real_stmt())) {
             // case : view definition is set_op
-            // Bug : http://k3.alibaba-inc.com/issue/6455327?stat=1.5.3&toPage=1&versionId=1043693
+            // Bug :
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("real stmt is NULL", K(ret));
           } else {
@@ -177,17 +178,26 @@ int ObTableColumns::calc_show_table_id(uint64_t &show_table_id)
 }
 
 int ObTableColumns::get_type_str(
-    const ObObjMeta &obj_meta,
-    const ObAccuracy &accuracy,
-    const common::ObIArray<ObString> &type_info,
+    const share::schema::ObColumnSchemaV2 &column_schema,
     const int16_t default_length_semantics,
     ObString &type_val)
 {
   int ret = OB_SUCCESS;
+  const ObObjMeta &obj_meta = column_schema.get_meta_type();
+  ObAccuracy acc = column_schema.get_accuracy();
+  if (lib::is_oracle_mode()
+      && column_schema.get_meta_type().is_number()
+      && acc.get_precision() == PRECISION_UNKNOWN_YET
+      && acc.get_scale() >= OB_MIN_NUMBER_SCALE) {
+      //compatible with oracle, just show differently
+    acc.set_precision(38);
+  }
+  const common::ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
+  const common::ObGeoType &geo_type = column_schema.get_geo_type();
   int64_t pos = 0;
 
-  if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos))) {
+  if (OB_FAIL(ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
+                              column_type_str_, column_type_str_len_, pos, geo_type))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       if (OB_UNLIKELY(NULL == (column_type_str_ = static_cast<char *>(allocator_->alloc(
                                OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
@@ -196,8 +206,8 @@ int ObTableColumns::get_type_str(
       } else {
         pos = 0;
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
-        ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos);
+        ret = ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
+                              column_type_str_, column_type_str_len_, pos, geo_type);
       }
     }
   }
@@ -288,19 +298,9 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         break;
       }
     case TYPE: {
-      ObAccuracy acc = column_schema.get_accuracy();
-      if (is_oracle_mode
-          && column_schema.get_meta_type().is_number()
-          && acc.get_precision() == PRECISION_UNKNOWN_YET
-          && acc.get_scale() >= OB_MIN_NUMBER_SCALE) {
-         //compatible with oracle, just show differently
-        acc.set_precision(38);
-      }
       ObString type_val;
       const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
-      if (OB_FAIL(get_type_str(column_schema.get_meta_type(),
-                               acc,
-                               column_schema.get_extended_type_info(),
+      if (OB_FAIL(get_type_str(column_schema,
                                default_length_semantics,
                                type_val))) {
           LOG_WARN("fail to get data type str",K(ret), K(column_schema.get_data_type()));
@@ -675,7 +675,7 @@ int ObTableColumns::deduce_column_attributes(
   ObRawExpr *&item_expr = const_cast<SelectItem &>(select_item).expr_;
   // In static engine the scale not idempotent in type deducing,
   // because the implicit cast is added, see:
-  // https://aone.alibaba-inc.com/project/81079/task/35977618
+  //
   //
   // We erase the added implicit cast and do formalize again for workaround.
   OZ(ObRawExprUtils::erase_operand_implicit_cast(item_expr, item_expr));
@@ -697,8 +697,9 @@ int ObTableColumns::deduce_column_attributes(
                                                              nullable, has_default))) {
         LOG_WARN("fail to get null and default for binary expr", K(ret));
       }
-    } else if (expr->is_json_expr() ||
-               (T_FUN_SYS_CAST == expr->get_expr_type() && ob_is_json(expr->get_result_type().get_type()))) {
+    } else if (expr->is_json_expr()
+               || (T_FUN_SYS_CAST == expr->get_expr_type() && ob_is_json(expr->get_result_type().get_type()))
+               || expr->is_mysql_geo_expr()) {
       nullable = true;
       has_default = false;
     } else {
@@ -731,6 +732,7 @@ int ObTableColumns::deduce_column_attributes(
     ObLength char_len = result_type.get_length();
     const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
+    ObGeoType geo_type = ObGeoType::GEOTYPEMAX;
     if (is_oracle_mode
         && ((result_type.is_varchar_or_char()
              && precision_or_length_semantics == default_length_semantics)
@@ -739,6 +741,22 @@ int ObTableColumns::deduce_column_attributes(
     } else if (result_type.is_oracle_integer()) {
       //compat with oracle, show column INT precision as 38
       precision_or_length_semantics = OB_MAX_NUMBER_PRECISION;
+    }
+    if (ob_is_geometry(result_type.get_type())) {
+      if (select_item.expr_->is_column_ref_expr()) {
+        const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(select_item.expr_);
+        geo_type = col_expr->get_geo_type();
+      } else {
+        geo_type = select_item.expr_->get_geo_expr_result_type();
+        if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+          nullable = true;
+          has_default = false;
+        }
+        if (ObGeoType::GEOTYPEMAX == geo_type) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected sub geo type in expr", K(ret), K(expr->get_expr_type()));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       int64_t pos = 0;
@@ -749,7 +767,8 @@ int ObTableColumns::deduce_column_attributes(
                                   char_len,
                                   precision_or_length_semantics,
                                   result_type.get_scale(),
-                                  result_type.get_collation_type()))) {
+                                  result_type.get_collation_type(),
+                                  geo_type))) {
         LOG_WARN("fail to get data type str", K(ret));
       } else {
         LOG_DEBUG("succ to ob_sql_type_str", K(ret), K(result_type), K(select_stmt), KPC(select_item.expr_), K(precision_or_length_semantics));
@@ -801,6 +820,8 @@ int ObTableColumns::set_null_and_default_according_binary_expr(
     if (OB_UNLIKELY(NULL == (tbl_item = select_stmt->get_table_item_by_id(bexpr->get_table_id())))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is NULL", K(ret), K(tbl_item));
+    } else if (OB_INVALID_ID == tbl_item->ref_id_) {
+      // do nothing
     } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, tbl_item->ref_id_, table_schema))
         || NULL == table_schema) {
       // reset return code to success: view_2.test
@@ -906,7 +927,11 @@ int ObTableColumns::resolve_view_definition(
                        K(select_stmt_node->type_));
             } else if (OB_FAIL(select_resolver.resolve(*select_stmt_node))) {
               LOG_WARN("resolve view definition failed", K(ret));
-              ret = OB_ERR_VIEW_INVALID;
+              if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+                ret = OB_ERR_VIEW_INVALID;
+              } else {
+                LOG_WARN("failed to resolve view", K(ret));
+              }
               if (throw_error) {
                 LOG_USER_ERROR(OB_ERR_VIEW_INVALID, db_name.length(), db_name.ptr(),
                               table_name.length(), table_name.ptr());
@@ -932,6 +957,21 @@ int ObTableColumns::resolve_view_definition(
                 LOG_WARN("select_stmt should not NULL", K(ret));
               } else { /*do-nothing*/ }
             }
+          }
+          int tmp_ret = OB_SUCCESS;
+          bool reset_column_infos = (OB_SUCCESS == ret) ? false : (lib::is_oracle_mode() ? true : false);
+          if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ERR_VIEW_INVALID != ret)) {
+            LOG_WARN("failed to resolve view", K(ret));
+          } else if (OB_UNLIKELY(OB_ERR_VIEW_INVALID == ret && lib::is_mysql_mode())) {
+            // do nothing
+          } else if (OB_SUCCESS != (tmp_ret = ObSQLUtils::async_recompile_view(table_schema, select_stmt, reset_column_infos, *allocator, *session))) {
+            LOG_WARN("failed to add recompile view task", K(tmp_ret));
+            if (OB_ERR_TOO_LONG_COLUMN_LENGTH == tmp_ret) {
+              tmp_ret = OB_SUCCESS; //ignore
+            }
+          }
+          if (OB_SUCCESS == ret) {
+            ret = tmp_ret;
           }
         }
       }
@@ -1011,9 +1051,10 @@ int ObTableColumns::is_multiple_key(const ObTableSchema &table_schema,
                      simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", K(ret));
   } else {
-    // 两种情况会使一列显示为MUL
+    // 3种情况会使一列显示为MUL
     // 1.non-unique index的第一个column
     // 2.unique index存在多列时，第一个column
+    // 3.spatial_index
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
       const ObTableSchema *index_schema =  NULL;
       if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
@@ -1023,7 +1064,7 @@ int ObTableColumns::is_multiple_key(const ObTableSchema &table_schema,
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
       } else if ((index_schema->is_unique_index() && 1 < index_schema->get_index_column_num()) ||
-                 index_schema->is_normal_index()) {
+            index_schema->is_normal_index()) {
         const ObIndexInfo &index_info = index_schema->get_index_info();
         uint64_t column_id = OB_INVALID_ID;
         if (OB_FAIL(index_info.get_column_id(0, column_id))) {
@@ -1031,6 +1072,8 @@ int ObTableColumns::is_multiple_key(const ObTableSchema &table_schema,
         } else if (column_schema.get_column_id() == column_id) {
           tmp_mul = true;
         } else {/*do nothing*/}
+      } else if (index_schema->is_spatial_index()) {
+        tmp_mul = true;
       } else {/*do nothing*/}
     } // for
   }

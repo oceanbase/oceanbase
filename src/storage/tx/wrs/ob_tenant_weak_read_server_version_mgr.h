@@ -15,6 +15,7 @@
 
 #include "lib/lock/ob_spin_rwlock.h"        // SpinRWLock
 #include "lib/utility/ob_print_utils.h"     // TO_STRING_KV
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -27,8 +28,8 @@ public:
   ObTenantWeakReadServerVersionMgr();
   ~ObTenantWeakReadServerVersionMgr();
 
-  int64_t get_version() const;
-  int64_t get_version(int64_t &total_part_count, int64_t &valid_part_count) const;
+  share::SCN get_version() const;
+  share::SCN get_version(int64_t &total_part_count, int64_t &valid_part_count) const;
 
   class ServerVersion;
   void get_version(ServerVersion &sv) const;
@@ -40,12 +41,12 @@ public:
       const int64_t epoch_tstamp,
       const bool need_skip,
       const bool is_user_part,
-      const int64_t version);
+      const share::SCN version);
 
   // generate new SERVER level weak read version after scan all partitions
   int generate_new_version(const uint64_t tenant_id,
       const int64_t epoch_tstamp,
-      const int64_t base_version_when_no_valid_partition,
+      const share::SCN base_version_when_no_valid_partition,
       const bool need_print_status);
 
 public:
@@ -54,7 +55,7 @@ public:
 public:
   struct ServerVersion
   {
-    int64_t version_;                 // server version, including inner and user partitions
+    share::SCN version_;                 // server version, including inner and user partitions
     int64_t total_part_count_;        // total partition count
     int64_t valid_inner_part_count_;  // valid inner partition count
     int64_t valid_user_part_count_;   // valid user partition count
@@ -62,12 +63,12 @@ public:
     ServerVersion() { reset(); }
     void reset()
     {
-      version_ = 0;
+      version_.reset();
       total_part_count_ = 0;
       valid_inner_part_count_ = 0;
       valid_user_part_count_ = 0;
     }
-    void reset(const int64_t version,
+    void reset(const share::SCN version,
         const int64_t total_part_count,
         const int64_t valid_inner_part_count,
         const int64_t valid_user_part_count)
@@ -103,14 +104,14 @@ private:
     void update_with_part_info(const int64_t epoch_tstamp,
         const bool need_skip,
         const bool is_user_part,
-        const int64_t version);
+        const share::SCN version);
 
     // update based on all partition statistic result
     int update(const ServerVersionInner &new_version);
 
     // amend weak read version based on epoch timestamp
     int amend(const uint64_t tenant_id, const int64_t new_epoch_tstamp,
-        const int64_t base_version_when_no_valid_partition);
+        const share::SCN base_version_when_no_valid_partition);
 
     TO_STRING_KV(K_(version),
         K_(total_part_count),

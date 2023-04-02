@@ -27,7 +27,7 @@ bool ObPhyTableLocation::compare_phy_part_loc_info_asc(const ObCandiTabletLoc *&
 {
   bool is_less_than = false;
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
-    LOG_ERROR("phy part loc info ptr is NULL", K(left), K(right));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "phy part loc info ptr is NULL", K(left), K(right));
   } else {
     is_less_than = left->get_partition_location().get_partition_id()
         < right->get_partition_location().get_partition_id();
@@ -40,7 +40,7 @@ bool ObPhyTableLocation::compare_phy_part_loc_info_desc(const ObCandiTabletLoc *
 {
   bool is_larger_than = false;
   if (OB_ISNULL(left) || OB_ISNULL(right)) {
-    LOG_ERROR("phy part loc info ptr is NULL", K(left), K(right));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "phy part loc info ptr is NULL", K(left), K(right));
   } else {
     is_larger_than = left->get_partition_location().get_partition_id()
         > right->get_partition_location().get_partition_id();
@@ -323,10 +323,8 @@ int ObPhyTableLocation::try_build_location_idx_map()
       ARRAY_FOREACH(partition_location_list_, idx) {
         // ObPartitionReplicaLocation
         auto &item = partition_location_list_.at(idx);
-        if (item.get_replica_location().server_ == GCTX.self_addr()) {
-          if (OB_FAIL(location_idx_map_.set_refactored(item.get_partition_id(), idx))) {
-            LOG_WARN("fail set value to map", K(ret), K(item));
-          }
+        if (OB_FAIL(location_idx_map_.set_refactored(item.get_partition_id(), idx))) {
+          LOG_WARN("fail set value to map", K(ret), K(item));
         }
       }
     }
@@ -354,18 +352,32 @@ int ObPhyTableLocation::get_location_idx_by_part_id(int64_t part_id, int64_t &lo
   return ret;
 }
 
+// The reason for not using the remove interface is that
+// the remove interface will not free the memory of the removed node.
+// If the interface is called multiple times for anti-corruption,
+// the problem of memory bloat will occur.
 int ObPhyTableLocation::erase_partition_location(int64_t partition_id)
 {
   int ret = OB_SUCCESS;
+  ObPartitionReplicaLocationSEArray tmp_location_list;
   int64_t N = partition_location_list_.count();
   for (int64_t idx = N - 1; OB_SUCC(ret) && idx >= 0; --idx) {
-    if (partition_location_list_.at(idx).get_partition_id() == partition_id) {
-      if (OB_FAIL(partition_location_list_.remove(idx))) {
-        LOG_WARN("remote partition location from list failed", K(ret), K(idx));
+    if (partition_location_list_.at(idx).get_partition_id() != partition_id) {
+      if (OB_FAIL(tmp_location_list.push_back(partition_location_list_.at(idx)))) {
+        LOG_WARN("add partition location from list failed", K(ret), K(idx));
       }
-      break;
+    } else {
+      LOG_DEBUG("remove partition succ", K(idx), K(partition_id));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    partition_location_list_.reset();
+    if (OB_FAIL(partition_location_list_.assign(tmp_location_list))) {
+      LOG_WARN("fail to assign partition location list", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret) && location_idx_map_.size() > 0) {
     location_idx_map_.clear();
   }

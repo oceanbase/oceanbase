@@ -215,14 +215,14 @@ public:
   PartTransTask *get_participant_objs() { return ready_participant_objs_; }
   int64_t get_ready_participant_count() const { return ready_participant_count_; }
 
-  int64_t get_total_br_count() const { return total_br_count_; }
+  int64_t get_total_br_count() const { return ATOMIC_LOAD(&total_br_count_); }
   void inc_total_br_count_() { ATOMIC_INC(&total_br_count_); }
-  void set_total_br_count(const int64_t total_br_count) { total_br_count_ = total_br_count; }
+  void set_total_br_count(const int64_t total_br_count) { ATOMIC_SET(&total_br_count_, total_br_count); }
   bool is_all_br_committed() const { return is_trans_sorted() && (ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_)); }
   void inc_committed_br_count() { ATOMIC_INC(&committed_br_count_); }
   int get_committed_br_count() const { return ATOMIC_LOAD(&committed_br_count_); }
-  int64_t get_valid_part_trans_task_count() const { return valid_part_trans_task_count_; }
-  void set_valid_part_trans_task_count(const int64_t valid_part_trans_task_count) { valid_part_trans_task_count_ = valid_part_trans_task_count; }
+  int64_t get_valid_part_trans_task_count() const { return ATOMIC_LOAD(&valid_part_trans_task_count_); }
+  void set_valid_part_trans_task_count(const int64_t valid_part_trans_task_count) { ATOMIC_SET(&valid_part_trans_task_count_, valid_part_trans_task_count); }
 
   int lock();
   int unlock();
@@ -239,8 +239,9 @@ public:
   int64_t get_revertable_participant_count() const;
   int set_ready_participant_objs(PartTransTask *part_trans_task);
   int append_sorted_br(ObLogBR *br);
-  bool is_trans_sorted() const { return is_trans_sorted_; }
-  void set_trans_sorted() { is_trans_sorted_ = true; }
+  void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
+  bool is_trans_sorted() const { return ATOMIC_LOAD(&is_trans_sorted_); }
+  void set_trans_sorted() { ATOMIC_SET(&is_trans_sorted_, true); }
   /// check if trans has valid br
   /// note: call this function before any br output
   /// @retval OB_SUCCESS      trans has valid br to output
@@ -298,6 +299,7 @@ public:
       K_(total_br_count),
       K_(committed_br_count),
       K_(revertable_participant_count),
+      K_(is_trans_redo_dispatched),
       K_(is_trans_sorted));
 
 private:
@@ -326,6 +328,8 @@ private:
   int init_trans_id_str_();
   // only init major version str for observer version less than 2_0_0
   int init_major_version_str_(const common::ObVersion &freeze_version);
+  // wait until trans redo dispatched.
+  void wait_trans_redo_dispatched_();
 
 private:
   IObLogTransCtxMgr         *host_;
@@ -352,7 +356,8 @@ private:
 
   // status info
   int64_t                   revertable_participant_count_;  // Number of participants able to be released
-  bool                      is_trans_sorted_;
+  bool                      is_trans_redo_dispatched_ CACHE_ALIGNED;
+  bool                      is_trans_sorted_ CACHE_ALIGNED;
   common::ObSpLinkQueue     br_out_queue_;
 
   // allocator

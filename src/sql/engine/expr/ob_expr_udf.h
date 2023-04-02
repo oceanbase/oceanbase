@@ -87,7 +87,7 @@ class ObExprUDF : public ObFuncExprOperator
     }
 
     ParamStore* get_param_store() { return params_; }
-    int get_param_count() { return OB_ISNULL(params_) ? 0 : params_->count(); }
+    int64_t get_param_count() { return OB_ISNULL(params_) ? 0 : params_->count(); }
 
     private:
     void* param_store_buf_;
@@ -122,7 +122,7 @@ public:
   {
     return subprogram_path_.assign(path);
   }
-  inline void set_result_type(ObExprResType result_type) { result_type_ = result_type; }
+  inline void set_result_type(const ObExprResType &result_type) { result_type_ = result_type; }
   inline int set_params_type(common::ObIArray<ObExprResType> &params_type)
   {
     return params_type_.assign(params_type);

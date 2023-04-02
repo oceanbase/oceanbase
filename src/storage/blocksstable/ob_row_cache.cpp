@@ -137,7 +137,10 @@ int ObRowCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&k
 bool ObRowCacheKey::is_valid() const
 {
   return OB_LIKELY(0 != tenant_id_ && tablet_id_.is_valid() && rowkey_size_ > 0
-      && data_version_ > -1 && (ObITable::is_minor_sstable(table_type_) || ObITable::is_major_sstable(table_type_))
+      && data_version_ > -1 && (ObITable::is_minor_sstable(table_type_)
+                                || ObITable::is_major_sstable(table_type_)
+                                || ObITable::is_ddl_sstable(table_type_)
+                                || ObITable::is_meta_major_sstable(table_type_))
       && rowkey_.is_valid());
 }
 
@@ -163,13 +166,18 @@ int ObRowCacheValue::init(const int64_t start_log_ts,
                           const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  datums_ = row.storage_datums_;
-  column_cnt_ = row.get_column_count();
-  start_log_ts_ = start_log_ts;
-  flag_ = row.row_flag_;
-  size_ = sizeof(ObStorageDatum) * column_cnt_;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i ++) {
-    size_ += datums_[i].get_deep_copy_size();
+  if (OB_UNLIKELY(!row.row_flag_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected row", K(ret), K(row));
+  } else {
+    datums_ = row.storage_datums_;
+    column_cnt_ = row.get_column_count();
+    start_log_ts_ = start_log_ts;
+    flag_ = row.row_flag_;
+    size_ = sizeof(ObStorageDatum) * column_cnt_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i ++) {
+      size_ += datums_[i].get_deep_copy_size();
+    }
   }
   return ret;
 }

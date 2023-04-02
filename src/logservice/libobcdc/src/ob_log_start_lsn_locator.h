@@ -21,6 +21,7 @@
 #include "lib/allocator/ob_safe_arena.h"  // ObSafeArena
 #include "lib/profile/ob_trace_id.h"      // ObCurTraceId
 #include "logservice/cdcservice/ob_cdc_req.h"
+#include "ob_log_fetching_mode.h"
 #include "ob_log_ls_define.h"
 
 #include "ob_map_queue_thread.h"          // ObMapQueueThread
@@ -71,6 +72,8 @@ public:
   int init(
       const int64_t worker_cnt,
       const int64_t locate_count,
+      const ClientFetchingMode fetching_mode,
+      const share::ObBackupPathString &archive_dest_str,
       IObLogRpc &rpc,
       IObLogErrHandler &err_handle);
   void destroy();
@@ -105,6 +108,8 @@ private:
   void free_svr_req_(SvrReq *req);
   void free_all_svr_req_(WorkerData &data);
   int do_request_(WorkerData &data);
+  int do_integrated_request_(WorkerData &data);
+  int do_direct_request_(WorkerData &data);
   int build_request_params_(RpcReq &req,
       const SvrReq &svr_req,
       const int64_t req_cnt);
@@ -191,14 +196,16 @@ private:
 
   typedef common::ObArray<SvrReq *> SvrReqList;
   typedef common::ObLinearHashMap<TenantSvr, SvrReq*> SvrReqMap;
+  typedef common::ObArray<StartLSNLocateReq*> DirectReqList;
 
   // Data local to each Worker
   struct WorkerData
   {
     SvrReqList svr_req_list_;
     SvrReqMap  svr_req_map_;
+    DirectReqList archive_req_list_;
 
-    WorkerData() : svr_req_list_(), svr_req_map_()
+    WorkerData() : svr_req_list_(), svr_req_map_(), archive_req_list_()
     {}
 
     ~WorkerData() { destroy(); }
@@ -209,12 +216,14 @@ private:
     {
       svr_req_list_.reset();
       svr_req_map_.reset();
+      archive_req_list_.reset();
     }
   };
 
 // member variables
 private:
   bool              is_inited_;
+  share::ObBackupDest archive_dest_;
   int64_t           worker_cnt_;
   int64_t           locate_count_;
   IObLogRpc         *rpc_;
@@ -241,6 +250,21 @@ typedef common::ObCurTraceId::TraceId TraceIdType;
 struct StartLSNLocateReq
 {
   enum State { IDLE = 0, REQ, DONE };
+  struct DirectLocateResult
+  {
+    palf::LSN         start_lsn_;
+    int               loc_err_;
+    TO_STRING_KV(K_(start_lsn), K_(loc_err));
+    void reset() {
+      start_lsn_.reset();
+      loc_err_ = OB_SUCCESS;
+    }
+
+    void reset(const palf::LSN &start_lsn, const int err) {
+      start_lsn_ = start_lsn;
+      loc_err_ = err;
+    }
+  };
   struct SvrItem
   {
     common::ObAddr    svr_;
@@ -294,6 +318,8 @@ struct StartLSNLocateReq
   int64_t                 cur_max_start_log_tstamp_;
   // Record the number of start_lsn that have been successfully located at the server
   int64_t                 succ_locate_count_;
+  ClientFetchingMode      fetching_mode_;
+  DirectLocateResult      archive_locate_rs_;
 
   TO_STRING_KV(
       K_(state),
@@ -305,10 +331,14 @@ struct StartLSNLocateReq
       K_(cur_max_start_lsn),
       K_(cur_max_start_log_tstamp),
       K_(succ_locate_count),
-      K_(svr_list));
+      K_(svr_list),
+      "fetching_mode", print_fetching_mode(fetching_mode_),
+      K_(archive_locate_rs));
 
   void reset();
-  void reset(const TenantLSID &tls_id, const int64_t start_tstamp);
+  void reset(
+      const TenantLSID &tls_id,
+      const int64_t start_tstamp_ns);
   void set_state(const State state) { ATOMIC_STORE(&state_, state); }
   State get_state() const { return (ATOMIC_LOAD(&state_)); }
 
@@ -319,11 +349,15 @@ struct StartLSNLocateReq
   bool is_state_req() const { return (ATOMIC_LOAD(&state_)) == REQ; }
   bool is_state_done() const { return (ATOMIC_LOAD(&state_)) == DONE; }
 
+  void set_fetching_mode(const ClientFetchingMode mode) { fetching_mode_ = mode; }
+  ClientFetchingMode get_fetching_mode() const { return fetching_mode_; }
+
   int next_svr_item(SvrItem *&svr_item);
   int cur_svr_item(SvrItem *&svr_item);
 
   bool is_request_ended(const int64_t locate_count) const;
   bool get_result(palf::LSN &start_lsn, common::ObAddr &svr);
+  void get_direct_result(palf::LSN &start_lsn, int &err);
 
   int set_result(const common::ObAddr &svr,
       const int rpc_err,

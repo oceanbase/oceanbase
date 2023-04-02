@@ -23,6 +23,9 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/ob_sql_utils.h"
+#include "sql/resolver/dml/ob_select_resolver.h"
+#include "share/schema/ob_dependency_info.h"
+#include "share/ob_tenant_id_schema_version.h"
 
 
 
@@ -174,7 +177,8 @@ int ObCreateSynonymResolver::resolve(const ParseNode &parse_tree)
       // because we may create the dblink with link_name after
       // the synonym is created. check it in runtime.
       ParseNode *dblink_name_node = create_synonym_node->children_[6];
-      if (dblink_name_node != NULL) {
+      if (NULL != dblink_name_node && NULL != dblink_name_node->children_ && NULL != dblink_name_node->children_[0]) {
+        dblink_name_node = dblink_name_node->children_[0];
         ObSqlString obj_with_dblink;
         const ObString &tmp_obj_name = create_synonym_stmt->get_object_name();
         // user write something like 'create synonym syn for remote_db.tbl_name@dblink'
@@ -203,10 +207,39 @@ int ObCreateSynonymResolver::resolve(const ParseNode &parse_tree)
       }
     }
     //well done.
+
+    //add def obj info if exists
+    bool ref_exists = false;
+    ObObjectType ref_type = ObObjectType::INVALID;
+    uint64_t ref_obj_id = OB_INVALID_ID;
+    uint64_t ref_schema_version = share::OB_INVALID_SCHEMA_VERSION;
+    uint64_t data_version = 0;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_valid(create_synonym_stmt))) {
       LOG_WARN("fail to check synonym stmt", K(ret));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (data_version >= DATA_VERSION_4_1_0_0
+               && OB_FAIL(ObSQLUtils::find_synonym_ref_obj(create_synonym_stmt->get_object_database_name(),
+                                                        create_synonym_stmt->get_object_name(),
+                                                        session_info_->get_effective_tenant_id(),
+                                                        ref_exists,
+                                                        ref_obj_id,
+                                                        ref_type,
+                                                        ref_schema_version))) {
+      LOG_WARN("failed to find synonym ref obj", K(ret));
     } else {
+      if (ref_exists) {
+        ObDependencyInfo dep;
+        dep.set_dep_obj_id(OB_INVALID_ID);
+        dep.set_dep_obj_type(ObObjectType::SYNONYM);
+        dep.set_ref_obj_id(ref_obj_id);
+        dep.set_ref_obj_type(ref_type);
+        dep.set_dep_timestamp(-1);
+        dep.set_ref_timestamp(ref_schema_version);
+        dep.set_tenant_id(session_info_->get_effective_tenant_id());
+        create_synonym_stmt->set_dependency_info(dep);
+      }
       stmt_ = create_synonym_stmt;
     }
   }

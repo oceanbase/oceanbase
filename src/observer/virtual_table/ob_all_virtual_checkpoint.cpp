@@ -202,7 +202,7 @@ int ObAllVirtualCheckpointInfo::process_curr_tenant(ObNewRow *&row)
         }
         case OB_APP_MIN_COLUMN_ID + 5: {
           //TODO:SCN
-          cur_row_.cells_[i].set_uint64(checkpoint.rec_log_ts < 0 ? 0 : checkpoint.rec_log_ts);
+          cur_row_.cells_[i].set_uint64(checkpoint.rec_scn.is_valid() ? checkpoint.rec_scn.get_val_for_inner_table_field() : 0);
           break;
         }
         default:

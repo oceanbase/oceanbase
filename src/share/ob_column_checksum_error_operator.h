@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "common/ob_tablet_id.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -25,13 +26,13 @@ struct ObColumnChecksumErrorInfo
 {
 public:
   ObColumnChecksumErrorInfo() 
-    : tenant_id_(OB_INVALID_TENANT_ID), frozen_scn_(0), is_global_index_(false), 
+    : tenant_id_(OB_INVALID_TENANT_ID), frozen_scn_(), is_global_index_(false),
       data_table_id_(OB_INVALID_ID), index_table_id_(OB_INVALID_ID), data_tablet_id_(),
       index_tablet_id_(), column_id_(OB_INVALID_ID), data_column_checksum_(-1),
       index_column_checksum_(-1) {}
   virtual ~ObColumnChecksumErrorInfo() = default;
 
-  ObColumnChecksumErrorInfo(const uint64_t tenant_id, const uint64_t frozen_scn, const bool is_global_index,
+  ObColumnChecksumErrorInfo(const uint64_t tenant_id, const SCN &frozen_scn, const bool is_global_index,
     const int64_t data_table_id, const int64_t index_table_id, const common::ObTabletID &data_tablet_id,
     const common::ObTabletID &index_tablet_id)
     : tenant_id_(tenant_id), frozen_scn_(frozen_scn), is_global_index_(is_global_index), 
@@ -46,7 +47,7 @@ public:
     K_(data_tablet_id), K_(index_tablet_id), K_(column_id), K_(data_column_checksum), K_(index_column_checksum));
   
   uint64_t tenant_id_;
-  uint64_t frozen_scn_;
+  SCN frozen_scn_;
   bool is_global_index_;
   int64_t data_table_id_;
   int64_t index_table_id_;
@@ -69,7 +70,7 @@ public:
   static int delete_column_checksum_err_info(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      const uint64_t min_frozen_scn);
+      const SCN &min_frozen_scn);
 
 private:
   static int insert_column_checksum_err_info_(

@@ -646,7 +646,7 @@ int ObTenantSqlMemoryManager::try_fill_workarea_stat(
 {
   int ret = OB_SUCCESS;
   need_insert = false;
-  ObLatchRGuard guard(lock_, ObLatchIds::CONFIG_LOCK);
+  ObLatchRGuard guard(lock_, ObLatchIds::SQL_WA_STAT_MAP_LOCK);
   ObSqlWorkAreaStat *wa_stat = nullptr;
   if (OB_FAIL(wa_ht_.get_refactored(workarea_key, wa_stat))) {
     if (OB_HASH_NOT_EXIST == ret) {
@@ -684,7 +684,7 @@ int ObTenantSqlMemoryManager::new_and_fill_workarea_stat(
 {
   int ret = OB_SUCCESS;
   ObSqlWorkAreaStat *wa_stat = nullptr;
-  ObLatchWGuard guard(lock_, ObLatchIds::CONFIG_LOCK);
+  ObLatchWGuard guard(lock_, ObLatchIds::SQL_WA_STAT_MAP_LOCK);
   if (OB_FAIL(wa_ht_.get_refactored(workarea_key, wa_stat))) {
   }
   if (OB_HASH_NOT_EXIST == ret) {
@@ -884,7 +884,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
             ret = OB_SUCCESS;
           } else {
             // TODO: kvcache大概可以淘汰多少内存，目前没有数据，后续寒晖他们会提供接口
-            // bug34818894 https://work.aone.alibaba-inc.com/issue/34818894
+            // bug34818894
             // 这里暂时写一个默认比例
             max_tenant_memory_size += resource_handle.get_memory_mgr()->get_cache_hold() * pctg / 100;
             washable_size = -1;
@@ -1095,7 +1095,7 @@ bool ObTenantSqlMemoryManager::enable_auto_sql_memory_manager()
     LOG_TRACE("get work area policy config", K(tenant_id_), K(auto_memory_mgr), K(tmp_str),
       K(tenant_config->workarea_size_policy.str()));
   } else {
-    LOG_WARN("failed to init tenant config", K(tenant_id_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to init tenant config", K(tenant_id_));
   }
   return auto_memory_mgr;
 }
@@ -1254,7 +1254,7 @@ int ObTenantSqlMemoryManager::calculate_global_bound_size(ObIAllocator *allocato
 int ObTenantSqlMemoryManager::get_workarea_stat(ObIArray<ObSqlWorkAreaStat> &wa_stats)
 {
   int ret = OB_SUCCESS;
-  ObLatchRGuard guard(lock_, ObLatchIds::CONFIG_LOCK);
+  ObLatchRGuard guard(lock_, ObLatchIds::SQL_WA_STAT_MAP_LOCK);
   for (int64_t i = wa_start_; i < wa_start_ + wa_cnt_ && OB_SUCC(ret); ++i) {
     int64_t nth = i % MAX_WORKAREA_STAT_CNT;
     if (OB_FAIL(wa_stats.push_back(workarea_stats_.at(nth)))) {

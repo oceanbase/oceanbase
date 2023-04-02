@@ -505,17 +505,24 @@ void ob_parse_binary(const char *src, int64_t len, char *dest)
   if (OB_UNLIKELY(NULL == src || len <= 0 || NULL == dest)) {
     //do nothing
   } else {
+    bool is_odd = false;
     if (len > 0 && len % 2 != 0)
     {
       *dest = char_int(src[0]);
       ++src;
       ++dest;
+      is_odd = true;
     }
-    const char *end = src + len -1;
-    for (; src <= end; src += 2)
-    {
-      *dest = (char)(16*char_int(src[0]) + char_int(src[1]));
-      ++dest;
+    if (len == 1) {
+      //do nothing.
+    } else {
+      //for odd number, we have copy the first char,  so we should minus 2;
+      const char *end = src + len - (is_odd ? 2 : 1);
+      for (; src <= end; src += 2)
+      {
+        *dest = (char)(16*char_int(src[0]) + char_int(src[1]));
+        ++dest;
+      }
     }
   }
 }
@@ -747,6 +754,26 @@ int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char 
     } else {
       (void)fprintf(stderr, "ERROR question mark name buffer is null\n");
     }
+  }
+  return idx;
+}
+
+int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const char *name)
+{
+  int64_t idx = -1;
+  if (OB_UNLIKELY(NULL == ctx || NULL == name)) {
+    (void)fprintf(stderr, "ERROR question mark ctx or name is NULL\n");
+  } else if (ctx->name_ != NULL) {
+    for (int64_t i = 0; -1 == idx && i < ctx->count_; ++i) {
+      if (NULL == ctx->name_[i]) {
+        (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
+      } else if (0 == STRCASECMP(ctx->name_[i], name)) {
+        idx = i;
+        break;
+      }
+    }
+  } else {
+    (void)fprintf(stderr, "ERROR name_ in question mark ctx is null\n");
   }
   return idx;
 }

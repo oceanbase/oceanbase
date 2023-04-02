@@ -46,9 +46,9 @@ public:
   void wait();
 public:
   /// get SERVER level weak read version
-  int get_server_version(const uint64_t tenant_id, int64_t &version) const;
+  int get_server_version(const uint64_t tenant_id, share::SCN &version) const;
   /// get CLUSTER level weak read version
-  int get_cluster_version(const uint64_t tenant_id, int64_t &version);
+  int get_cluster_version(const uint64_t tenant_id, share::SCN &version);
 
   void check_server_can_start_service(bool &can_start_service, int64_t &min_wrs) const;
 

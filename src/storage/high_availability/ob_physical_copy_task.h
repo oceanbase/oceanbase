@@ -223,15 +223,15 @@ public:
       const ObITable::TableKey &table_key,
       ObTableHandleV2 &table_handle);
 private:
-  int create_new_table_store_();
-  int create_new_table_store_restore_major_();
+  int create_new_table_store_with_major_();
+  int create_new_table_store_with_ddl_();
+  int create_new_table_store_with_minor_();
+  int trim_tablet_();
+
   int update_tablet_data_status_();
-  int check_need_merge_tablet_meta_(
-      ObTablet *tablet,
-      bool &need_merge);
-  int check_remote_logical_sstable_exist_(
-      ObTablet *tablet,
-      bool &is_exist);
+  int get_tables_handle_ptr_(
+      const ObITable::TableKey &table_key,
+      ObTablesHandleArray *&table_handle_ptr);
 
 private:
   bool is_inited_;
@@ -240,7 +240,9 @@ private:
   ObLS *ls_;
   observer::ObIMetaReport *reporter_;
   ObStorageHADag *ha_dag_;
-  ObTablesHandleArray tables_handle_;
+  ObTablesHandleArray minor_tables_handle_;
+  ObTablesHandleArray ddl_tables_handle_;
+  ObTablesHandleArray major_tables_handle_;
   ObTabletRestoreAction::ACTION restore_action_;
   const ObMigrationTabletParam *src_tablet_meta_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);

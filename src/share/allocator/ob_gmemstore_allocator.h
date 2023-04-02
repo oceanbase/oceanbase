@@ -103,7 +103,11 @@ public:
   };
 
 public:
-  ObGMemstoreAllocator(): hlist_(), arena_(), last_freeze_timestamp_(0) {}
+  ObGMemstoreAllocator():
+      lock_(common::ObLatchIds::MEMSTORE_ALLOCATOR_LOCK),
+      hlist_(),
+      arena_(),
+      last_freeze_timestamp_(0) {}
   ~ObGMemstoreAllocator() {}
 public:
   int init(uint64_t tenant_id)
@@ -141,6 +145,14 @@ public:
 public:
   int set_memstore_threshold(uint64_t tenant_id);
   bool need_do_writing_throttle() const {return arena_.need_do_writing_throttle();}
+  bool check_clock_over_seq(int64_t seq)
+  {
+    return arena_.check_clock_over_seq(seq);
+  }
+  int64_t expected_wait_time(int64_t seq) const
+  {
+    return arena_.expected_wait_time(seq);
+  }
   int64_t get_retire_clock() const { return arena_.retired(); }
   bool exist_active_memtable_below_clock(const int64_t clock) const {
     return hlist_.hazard() < clock;

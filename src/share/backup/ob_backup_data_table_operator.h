@@ -47,8 +47,9 @@ class ObBackupSkippedTabletOperator : public ObBackupBaseTableOperator
 {
 public:
   static int get_skip_tablet(common::ObISQLClient &proxy, const bool need_lock, const uint64_t tenant_id, 
-      const int64_t task_id, ObIArray<ObBackupSkipTabletAttr> &tablet_attrs);
-  static int move_skip_tablet_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id);
+      const int64_t task_id, const share::ObBackupSkippedType &skipped_type, ObIArray<ObBackupSkipTabletAttr> &tablet_attrs);
+  static int move_skip_tablet_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t task_id,
+      const share::ObBackupSkippedType &skipped_type);
 private:  
   static int fill_select_skip_tablet_sql_(ObSqlString &sql);
   static int parse_skip_tablet_result_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupSkipTabletAttr> &tablet_attrs);
@@ -127,14 +128,14 @@ public:
   static int get_backup_task(common::ObISQLClient &proxy, const int64_t job_id, const uint64_t tenant_id, 
       ObBackupSetTaskAttr &set_task_attr);
   static int advance_task_status(common::ObISQLClient &proxy, const ObBackupSetTaskAttr &set_task_attr,
-      const ObBackupStatus &next_status, const int result, const ObBackupSCN &end_scn, const int64_t end_ts);
+      const ObBackupStatus &next_status, const int result, const SCN &end_scn, const int64_t end_ts);
   static int move_task_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id);
   static int update_stats(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const ObBackupStats &stats);
   static int update_meta_turn_id(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const int64_t turn_id);
   static int update_user_ls_start_scn(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
-      const share::ObBackupSCN &scn);
+      const SCN &scn);
 private:
   static int fill_dml_with_backup_task_(const ObBackupSetTaskAttr &backup_set_task, ObDMLSqlSplicer &dml);
 };
@@ -198,10 +199,15 @@ public:
   static int get_next_task_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &task_id);
   static int get_next_backup_set_id(common::ObISQLClient &trans, const uint64_t &tenant_id, int64_t &backup_set_id);
   static int get_next_dest_id(common::ObISQLClient &trans, const uint64_t &tenant_id, int64_t &dest_id);
+  static int set_backup_version(common::ObISQLClient &trans, const uint64_t tenant_id, const uint64_t data_version);
+  static int get_backup_version(common::ObISQLClient &trans, const uint64_t tenant_id, uint64_t &data_version);
+  static int set_cluster_version(common::ObISQLClient &trans, const uint64_t tenant_id, const uint64_t cluster_version);
+  static int get_cluster_version(common::ObISQLClient &trans, const uint64_t tenant_id, uint64_t &cluster_version);
 private:
   static int get_item(common::ObISQLClient &proxy, const uint64_t tenant_id, InfoItem &item, const bool need_lock);
   static int insert_item_with_update(common::ObISQLClient &proxy, const uint64_t tenant_id, InfoItem &item);
   static int set_item_value(Value &dst_value, int64_t src_value);
+  static int set_item_value(Value &dst_value, uint64_t src_value);
   static int set_item_value(Value &dst_value, const char *src_buf);
 };
 

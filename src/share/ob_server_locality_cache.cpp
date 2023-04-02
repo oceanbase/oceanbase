@@ -118,7 +118,7 @@ int ObServerLocality::set_server_status(const char *svr_status)
 }
 
 ObServerLocalityCache::ObServerLocalityCache()
-  : rwlock_(),
+  : rwlock_(common::ObLatchIds::SERVER_LOCALITY_CACHE_LOCK),
     server_locality_array_(ObModIds::OB_SERVER_LOCALITY_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE),
     server_cid_map_(),
     server_region_map_(),

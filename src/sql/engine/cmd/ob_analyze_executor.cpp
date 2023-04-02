@@ -41,8 +41,8 @@ namespace sql
 int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  obrpc::ObCommonRpcProxy *proxy = NULL;
   ObTableStatParam param;
+  param.allocator_ = &ctx.get_allocator();
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
   bool in_restore = false;
@@ -59,13 +59,11 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
   } else if (OB_FAIL(stmt.fill_table_stat_param(ctx, param))) {
     LOG_WARN("failed to fill table stat param", K(ret));
   } else if (!stmt.is_delete_histogram()) {
-    if (OB_FAIL(ctx.get_task_executor_ctx()->get_common_rpc(proxy))) {
-      LOG_WARN("failed to get common rpc", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
+    if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
       LOG_WARN("failed check stat locked", K(ret));
     } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, param))) {
       LOG_WARN("failed to gather table stats", K(ret));
-    } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(proxy, param))) {
+    } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {
       LOG_WARN("failed to update stat cache", K(ret));
     } else {
       LOG_TRACE("succeed to gather table stats", K(param));

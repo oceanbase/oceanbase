@@ -7,15 +7,18 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
-#include "common/ob_role.h"
-#include "lib/list/ob_dlist.h"
-#include "logservice/palf/election/interface/election_msg_handler.h"
-#include <algorithm>
-#include <chrono>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #define private public
 #define protected public
+#include "logservice/leader_coordinator/ob_failure_detector.h"
+#include "common/ob_role.h"
+#include "lib/list/ob_dlist.h"
+#include "logservice/leader_coordinator/failure_event.h"
+#include "logservice/palf/election/interface/election_msg_handler.h"
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include "logservice/palf/election/interface/election.h"
 #include "logservice/palf/log_meta_info.h"
 #define UNITTEST
@@ -73,6 +76,7 @@ std::atomic_int lease_expired_to_be_follower_count(0);
 std::atomic_int change_leader_to_be_leader_count(0);
 std::atomic_int change_leader_to_be_follower_count(0);
 std::atomic_int stop_to_be_follower_count(0);
+std::atomic_bool change_leader_from_prepare_change_leader_cb(false);
 MockNetService GlobalNetService;
 ObOccamThreadPool thread_pool;
 ObOccamTimer timer;
@@ -94,6 +98,7 @@ public:
   ~TestElectionWithPriority() {}
   virtual void SetUp() {
     MAX_TST = 100_ms;
+    change_leader_from_prepare_change_leader_cb = false;
     oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_0_0_0;
     share::ObTenantSwitchGuard guard;
     guard.switch_to(OB_SYS_TENANT_ID);
@@ -141,12 +146,14 @@ vector<ElectionImpl *> create_election_group(vector<ElectionPriorityImpl> &v_pri
       &timer,
       &GlobalNetService,
       ObAddr(ObAddr::VER::IPV4, "127.0.0.1", port + index),
+      true,
       1,
       [election](int64_t, const ObAddr &dest_addr) {
+        change_leader_from_prepare_change_leader_cb = true;
         THREAD_POOL.commit_task_ignore_ret([election, dest_addr]() { election->change_leader_to(dest_addr); });
         return OB_SUCCESS;
       },
-      [op](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
+      [op, ret](Election *election, ObRole before, ObRole after, RoleChangeReason reason) {
         if (before == ObRole::FOLLOWER && after == ObRole::LEADER) {
           ELECT_LOG(INFO, "i become LEADER", K(obj_to_string(reason)), KPC(election));
           op();
@@ -195,7 +202,7 @@ void init_pri(ElectionPriorityImpl &pri)
 {
   pri.priority_tuple_.element<1>().is_valid_ = true;
   pri.priority_tuple_.element<1>().is_primary_region_ = true;
-  pri.priority_tuple_.element<1>().log_ts_ = 1;
+  pri.priority_tuple_.element<1>().scn_.set_base();
   pri.priority_tuple_.element<1>().zone_priority_ = 0;
 }
 
@@ -240,6 +247,7 @@ TEST_F(TestElectionWithPriority, elect_leader_because_primary_region_and_change_
   ASSERT_EQ(change_leader_to_be_leader_count, 1);
   ASSERT_EQ(change_leader_to_be_follower_count, 1);
   ASSERT_EQ(stop_to_be_follower_count, 1);
+  ASSERT_EQ(change_leader_from_prepare_change_leader_cb, true);
 }
 
 TEST_F(TestElectionWithPriority, not_change_leader_because_follower_memership_version_not_update_enough_and_change_leader_later_when_follwer_membership_version_update_endough) {
@@ -271,7 +279,7 @@ TEST_F(TestElectionWithPriority, not_change_leader_because_follower_memership_ve
   ASSERT_EQ(stop_to_be_follower_count, 0);
   // 1的membership version再加1，同时让2的log_ts超过比较阈值
   election_group[1]->proposer_.memberlist_with_states_.p_impl_->member_list_.membership_version_.config_seq_ += 1;
-  v_pri[2].priority_tuple_.element<1>().log_ts_ = 100 * 1000 * 1000 * 1000L;// 此时并不会触发切主
+  v_pri[2].priority_tuple_.element<1>().scn_.convert_for_logservice(100 * 1000 * 1000 * 1000L);// 此时并不会触发切主
   this_thread::sleep_for(chrono::seconds(1));// 等待切主
   ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::LEADER);
   ASSERT_EQ(leader_takeover_times, 1);
@@ -306,6 +314,48 @@ TEST_F(TestElectionWithPriority, not_change_leader_because_follower_memership_ve
   ASSERT_EQ(change_leader_to_be_leader_count, 1);
   ASSERT_EQ(change_leader_to_be_follower_count, 1);
   ASSERT_EQ(stop_to_be_follower_count, 1);
+  ASSERT_EQ(change_leader_from_prepare_change_leader_cb, true);
+}
+
+TEST_F(TestElectionWithPriority, meet_fatal_failure)
+{
+  vector<ElectionPriorityImpl> v_pri(3);
+  for (auto &pri : v_pri)
+    init_pri(pri);
+  v_pri[0].priority_tuple_.element<1>().zone_priority_ = 0;
+  v_pri[1].priority_tuple_.element<1>().zone_priority_ = 1;
+  v_pri[2].priority_tuple_.element<1>().zone_priority_ = 2;
+  auto election_group = create_election_group(v_pri, [](){});
+  this_thread::sleep_for(chrono::seconds(5));// 等待选出第一任Leader
+  ASSERT_EQ(election_group[0]->proposer_.role_, ObRole::LEADER);
+  ASSERT_EQ(leader_takeover_times, 1);
+  ASSERT_EQ(leader_revoke_times, 0);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 0);
+  ASSERT_EQ(change_leader_to_be_follower_count, 0);
+  ASSERT_EQ(stop_to_be_follower_count, 0);
+
+  FailureEvent event(FailureType::PROCESS_HANG, FailureModule::LOG, FailureLevel::FATAL);
+  event.set_info("test");
+  ASSERT_EQ(OB_SUCCESS, v_pri[0].priority_tuple_.element<1>().fatal_failures_.push_back(event));
+  ELECT_LOG(INFO, "add fatal failure");
+  this_thread::sleep_for(chrono::seconds(5));// 等待切主
+  ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::LEADER);
+  ASSERT_EQ(leader_takeover_times, 2);
+  ASSERT_EQ(leader_revoke_times, 1);
+  ASSERT_EQ(devote_to_be_leader_count, 1);
+  ASSERT_EQ(lease_expired_to_be_follower_count, 0);
+  ASSERT_EQ(change_leader_to_be_leader_count, 1);
+  ASSERT_EQ(change_leader_to_be_follower_count, 1);
+  ASSERT_EQ(stop_to_be_follower_count, 0);
+
+  for (auto &election : election_group)
+    election->stop();
+  this_thread::sleep_for(chrono::seconds(1));
+  for (auto &election : election_group)
+    delete election;
+  ASSERT_EQ(change_leader_from_prepare_change_leader_cb, false);
 }
 
 }

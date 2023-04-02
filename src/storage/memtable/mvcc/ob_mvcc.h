@@ -32,13 +32,13 @@ public:
   ObITransCallback()
     : need_fill_redo_(true),
     need_submit_log_(true),
-    log_ts_(INT64_MAX),
+    scn_(share::SCN::max_scn()),
     prev_(NULL),
     next_(NULL) {}
   ObITransCallback(const bool need_fill_redo, const bool need_submit_log)
     : need_fill_redo_(need_fill_redo),
     need_submit_log_(need_submit_log),
-    log_ts_(INT64_MAX),
+    scn_(share::SCN::max_scn()),
     prev_(NULL),
     next_(NULL) {}
   virtual ~ObITransCallback() {}
@@ -53,8 +53,8 @@ public:
   virtual int del() { return remove(); }
   virtual bool is_need_free() const { return true; }
   virtual bool log_synced() const { return false; }
-  void set_log_ts(const int64_t log_ts);
-  int64_t get_log_ts() const;
+  void set_scn(const share::SCN scn);
+  share::SCN get_scn() const;
   int before_append_cb(const bool is_replay);
   int after_append_cb(const bool is_replay, const int ret_code);
   // interface for redo log generator
@@ -63,15 +63,15 @@ public:
   virtual bool is_logging_blocked() const { return false; }
   int log_submitted_cb();
   int undo_log_submitted_cb();
-  int log_sync_cb(const int64_t log_ts);
+  int log_sync_cb(const share::SCN scn);
   int log_sync_fail_cb();
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
   virtual int after_append(const bool is_replay, const int ret_code) { return common::OB_SUCCESS; }
   virtual int log_submitted() { return common::OB_SUCCESS; }
   virtual int undo_log_submitted() { return common::OB_SUCCESS; }
-  virtual int log_sync(const int64_t log_ts)
-  { UNUSED(log_ts); return common::OB_SUCCESS; }
+  virtual int log_sync(const share::SCN scn)
+  { UNUSED(scn); return common::OB_SUCCESS; }
   virtual int log_sync_fail()
   { return common::OB_SUCCESS; }
   virtual int64_t get_data_size() { return 0; }
@@ -100,13 +100,13 @@ public:
   virtual int trans_abort() { return OB_SUCCESS; }
 
   // calc_checksum is used for checksum verification. If you want to adapt to
-  // the checksum system, you need be care of checksum_log_ts, you should only
-  // execution the checksum if checksum_log_ts is smaller or equal than your
-  // log_ts.
-  virtual int calc_checksum(const int64_t checksum_log_ts,
+  // the checksum system, you need be care of checksum_scn, you should only
+  // execution the checksum if checksum_scn is smaller or equal than your
+  // scn.
+  virtual int calc_checksum(const share::SCN checksum_scn,
                             ObBatchChecksum *checksumer)
   {
-    UNUSED(checksum_log_ts);
+    UNUSED(checksum_scn);
     UNUSED(checksumer);
     return OB_SUCCESS;
   }
@@ -155,7 +155,7 @@ protected:
     bool need_fill_redo_  : 1; // Identifies whether log is needed
     bool need_submit_log_ : 1; // Identifies whether log has been submitted
   };
-  int64_t log_ts_;
+  share::SCN scn_;
 private:
   ObITransCallback *prev_;
   ObITransCallback *next_;

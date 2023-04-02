@@ -35,22 +35,6 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
 
   static int eval_regexp_like(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-
-private:
-  static int regexp_like(bool &match, const common::ObString &text,
-           const common::ObString &pattern, int64_t position, int64_t occurrence,
-           const common::ObCollationType calc_cs_type,
-           const common::ObString &match_param, bool has_null_argument, bool reusable,
-           ObExprRegexContext *regexp_ptr,
-           common::ObExprStringBuf &string_buf,
-           common::ObIAllocator &exec_ctx_alloc);
-
-  int calc(common::ObObj &result, const common::ObString &text,
-           const common::ObString &pattern, int64_t position, int64_t occurrence,
-           const common::ObString &match_param, bool has_null_argument,
-           ObExprRegexContext *regexp_ptr,
-           common::ObExprStringBuf &string_buf,
-           common::ObIAllocator &exec_ctx_alloc) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpLike);
 };

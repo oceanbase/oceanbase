@@ -32,7 +32,8 @@ public:
   partition_count_(0),
   hash_part_(false),
   bf_info_(),
-  tablet_id_expr_(NULL)
+  tablet_id_expr_(NULL),
+  repartition_ref_table_id_(OB_INVALID_ID)
   { }
   virtual ~ObLogGranuleIterator()
   { }
@@ -41,7 +42,6 @@ public:
 
   virtual int est_cost() override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type) override;
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; };
   int64_t get_tablet_size() { return tablet_size_; }
   uint64_t get_flag() {
@@ -75,6 +75,10 @@ public:
 
   void set_tablet_id_expr(ObOpPseudoColumnRawExpr *tablet_id_expr) { tablet_id_expr_ = tablet_id_expr; }
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() { return tablet_id_expr_; }
+  void set_repartition_ref_table_id(int64_t table_id) { repartition_ref_table_id_ = table_id; }
+  int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGranuleIterator);
   int64_t tablet_size_;
@@ -83,6 +87,7 @@ private:
   bool hash_part_;
   ObPxBFStaticInfo bf_info_; // for join partition filter
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
+  int64_t repartition_ref_table_id_;
 };
 
 }

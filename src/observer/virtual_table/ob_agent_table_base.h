@@ -90,7 +90,17 @@ protected:
   virtual int setup_inital_rowkey_condition(
       common::ObSqlString &cols, common::ObSqlString &vals);
 
-  int construct_sql(common::ObSqlString &sql);
+  int construct_sql(const uint64_t exec_tenant_id, common::ObSqlString &sql);
+  int construct_columns(
+      const uint64_t exec_tenant_id,
+      common::ObSqlString &sql);
+  int cast_as_default_value(
+      const bool first_column,
+      char *buf,
+      const int64_t buf_len,
+      const common::ObString &name,
+      const common::ObString &col_name,
+      common::ObSqlString &sql);
   // convert scan_param_->key_ranges_ to sql conditions
   int append_sql_condition(common::ObSqlString &sql);
   int rowkey2condition(common::ObSqlString &cols,  common::ObSqlString &vals,

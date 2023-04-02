@@ -97,7 +97,6 @@ class ObWindowFunctionSpec;
 class WinFuncInfo;
 template <int TYPE>
     struct GenSpecHelper;
-class ObTableLookupSpec;
 class ObTableRowStoreSpec;
 //class ObMultiTableReplaceSpec;
 class ObRowSampleScanSpec;
@@ -114,7 +113,7 @@ class ObTempTableTransformationOpSpec;
 class ObErrLogSpec;
 class ObSelectIntoSpec;
 class ObFunctionTableSpec;
-class ObLinkScanSpec;
+class ObLinkDmlSpec;
 class ObInsertAllTableInfo;
 class ObTableInsertAllSpec;
 class ObConflictCheckerCtdef;
@@ -127,6 +126,29 @@ struct InsertAllTableInfo;
 typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
+
+enum JsonAraayaggCGOffset
+{
+  CG_JSON_ARRAYAGG_EXPR,
+  CG_JSON_ARRAYAGG_FORMAT,
+  CG_JSON_ARRAYAGG_ON_NULL,
+  CG_JSON_ARRAYAGG_RETURNING,
+  CG_JSON_ARRAYAGG_STRICT,
+  CG_JSON_ARRAYAGG_MAX_IDX
+};
+
+enum JsonObjectaggCGOffset
+{
+  CG_JSON_OBJECTAGG_KEY,
+  CG_JSON_OBJECTAGG_VALUE,
+  CG_JSON_OBJECTAGG_FORMAT,
+  CG_JSON_OBJECTAGG_ON_NULL,
+  CG_JSON_OBJECTAGG_RETURNING,
+  CG_JSON_OBJECTAGG_STRICT,
+  CG_JSON_OBJECTAGG_UNIQUE_KEYS,
+  CG_JSON_OBJECTAGG_MAX_IDX
+};
+
 //
 // code generator for static typing engine.
 //
@@ -138,11 +160,12 @@ public:
   template <int TYPE>
   friend struct GenSpecHelper;
 
-  ObStaticEngineCG()
+  ObStaticEngineCG(const uint64_t cur_cluster_version)
     : phy_plan_(NULL),
       opt_ctx_(nullptr),
       dml_cg_service_(*this),
-      tsc_cg_service_(*this)
+      tsc_cg_service_(*this),
+      cur_cluster_version_(cur_cluster_version)
   {
   }
   // generate physical plan
@@ -165,7 +188,9 @@ public:
   // detect physical operator type from logic operator.
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
                              const bool in_root_job);
-
+  //set is json constraint type is strict or relax
+  const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
+  const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
 private:
 
   int classify_anti_monotone_filter_exprs(const common::ObIArray<ObRawExpr*> &input_filters,
@@ -331,6 +356,8 @@ private:
   // px code gen
   int generate_spec(ObLogStatCollector &op, ObStatCollectorSpec &spec, const bool in_root_job);
   int generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorSpec &spec, const bool in_root_job);
+  int generate_dml_tsc_ids(const ObOpSpec &spec, const ObLogicalOperator &op,
+                           ObIArray<int64_t> &dml_tsc_op_ids, ObIArray<int64_t> &dml_tsc_ref_ids);
   int generate_spec(ObLogExchange &op, ObPxFifoReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxMSReceiveSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObPxDistTransmitSpec &spec, const bool in_root_job);
@@ -344,8 +371,6 @@ private:
   // for remote execute
   int generate_spec(ObLogExchange &op, ObDirectTransmitSpec &spec, const bool in_root_job);
   int generate_spec(ObLogExchange &op, ObDirectReceiveSpec &spec, const bool in_root_job);
-
-  int generate_spec(ObLogTableLookup &op, ObTableLookupSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpec &spec, const bool in_root_job);
 
@@ -361,8 +386,13 @@ private:
   int generate_spec(ObLogInsert &op, ObPxMultiPartSSTableInsertSpec &spec, const bool in_root_job);
   int generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec, const bool in_root_job);
   int generate_spec(ObLogFunctionTable &op, ObFunctionTableSpec &spec, const bool in_root_job);
-  int generate_spec(ObLogLink &op, ObLinkScanSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogLinkDml &op, ObLinkDmlSpec &spec, const bool in_root_job);
   int generate_spec(ObLogInsertAll &op, ObTableInsertAllSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec, const bool in_root_job);
+
+  // online optimizer stats gathering
+  int generate_spec(ObLogOptimizerStatsGathering &op, ObOptimizerStatsGatheringSpec &spec, const bool in_root_job);
 private:
   int add_update_set(ObSubPlanFilterSpec &spec);
   int generate_basic_transmit_spec(
@@ -406,11 +436,14 @@ private:
   int convert_index_values(uint64_t table_id,
                            ObIArray<ObExpr*> &output_exprs,
                            ObOpSpec *&trs_spec);
-
+  int generate_popular_values_hash(
+      const common::ObHashFunc &hash_func,
+      const ObIArray<common::ObObj> &popular_values_expr,
+      common::ObFixedArray<uint64_t, common::ObIAllocator> &popular_values_hash);
   int generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpec &spec);
 
   int fill_wf_info(ObIArray<ObExpr *> &all_expr, ObWinFunRawExpr &win_expr,
-                   WinFuncInfo &wf_info);
+                   WinFuncInfo &wf_info, const bool can_push_down);
   int fil_sort_info(const ObIArray<OrderItem> &sort_keys,
                     ObIArray<ObExpr *> &all_exprs,
                     ObIArray<ObExpr *> *sort_exprs,
@@ -458,15 +491,45 @@ private:
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
   int check_only_one_unique_key(const ObLogPlan &log_plan, const ObTableSchema* table_schema, bool& only_one_unique_key);
+
   bool is_simple_aggr_expr(const ObItemType &expr_type) { return T_FUN_COUNT == expr_type
                                                                  || T_FUN_SUM == expr_type
                                                                  || T_FUN_MAX == expr_type
                                                                  || T_FUN_MIN == expr_type; }
+  uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
   int check_fk_nested_dup_del(const uint64_t table_id,
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
                               bool &is_dup);
   bool has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id);
+
+  void set_murmur_hash_func(ObHashFunc &hash_func, const ObExprBasicFuncs *basic_funcs_);
+
+  int set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                           const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters);
+private:
+  struct BatchExecParamCache {
+    BatchExecParamCache(ObExecParamRawExpr* expr, ObOpSpec* spec, bool is_left)
+      : expr_(expr), spec_(spec), is_left_param_(is_left) {}
+
+    BatchExecParamCache()
+      : expr_(NULL), spec_(NULL), is_left_param_(true) {}
+
+    BatchExecParamCache(const BatchExecParamCache& other)
+    {
+      expr_ = other.expr_;
+      spec_ = other.spec_;
+      is_left_param_ = other.is_left_param_;
+    }
+
+    TO_STRING_KV(K_(expr),
+                 K_(is_left_param));
+
+    ObExecParamRawExpr* expr_;
+    ObOpSpec* spec_;
+    bool is_left_param_;
+  };
+
 private:
   ObPhysicalPlan *phy_plan_;
   ObOptimizerContext *opt_ctx_;
@@ -478,6 +541,9 @@ private:
   common::ObSEArray<uint64_t, 10> fake_cte_tables_;
   ObDmlCgService dml_cg_service_;
   ObTscCgService tsc_cg_service_;
+  uint64_t cur_cluster_version_;
+  common::ObSEArray<BatchExecParamCache, 8> batch_exec_param_caches_;
+
 };
 
 } // end namespace sql

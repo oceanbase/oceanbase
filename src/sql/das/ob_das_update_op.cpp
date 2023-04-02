@@ -17,6 +17,7 @@
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
 {
 namespace common
@@ -52,9 +53,12 @@ public:
       old_row_(nullptr),
       new_row_(nullptr),
       got_old_row_(false),
+      spat_rows_(nullptr),
+      spatial_row_idx_(0),
       allocator_(alloc)
   {
   }
+  virtual ~ObDASUpdIterator();
   virtual int get_next_row(ObNewRow *&row) override;
   virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
@@ -64,9 +68,14 @@ public:
     old_row_ = nullptr;
     new_row_ = nullptr;
     got_old_row_ = false;
+    spatial_row_idx_ = 0;
     das_ctdef_ = static_cast<const ObDASUpdCtDef*>(das_ctdef);
     return OB_SUCCESS;
   }
+private:
+  ObSpatIndexRow *get_spatial_index_rows() { return spat_rows_; }
+  int create_spatial_index_store();
+  int get_next_spatial_index_row(ObNewRow *&row);
 private:
   const ObDASUpdCtDef *das_ctdef_;
   ObDASWriteBuffer &write_buffer_;
@@ -74,6 +83,8 @@ private:
   ObNewRow *new_row_;
   ObDASWriteBuffer::Iterator result_iter_;
   bool got_old_row_;
+  ObSpatIndexRow *spat_rows_;
+  uint32_t spatial_row_idx_;
   common::ObIAllocator &allocator_;
 };
 
@@ -81,7 +92,14 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = NULL;
-  if (!got_old_row_) {
+
+  if (OB_UNLIKELY(das_ctdef_->table_param_.get_data_table().is_spatial_index())) {
+    if (OB_FAIL(get_next_spatial_index_row(row))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next spatial index row failed", K(ret));
+      }
+    }
+  } else if (!got_old_row_) {
     got_old_row_ = true;
     if (OB_ISNULL(old_row_)) {
       if (OB_FAIL(ob_create_row(allocator_, das_ctdef_->old_row_projector_.count(), old_row_))) {
@@ -139,6 +157,92 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
   return ret;
 }
 
+ObDASUpdIterator::~ObDASUpdIterator()
+{
+  if (spat_rows_ != nullptr) {
+    spat_rows_->~ObSEArray();
+    spat_rows_ = nullptr;
+  }
+}
+
+int ObDASUpdIterator::create_spatial_index_store()
+{
+  int ret = OB_SUCCESS;
+  void *buf = allocator_.alloc(sizeof(ObSpatIndexRow));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate spatial row store failed", K(ret));
+  } else {
+    spat_rows_ = new(buf) ObSpatIndexRow();
+  }
+  return ret;
+}
+
+int ObDASUpdIterator::get_next_spatial_index_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  const ObChunkDatumStore::StoredRow *sr = NULL;
+  uint64_t rowkey_num = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
+  uint64_t old_proj = das_ctdef_->old_row_projector_.count();
+  uint64_t new_proj = das_ctdef_->new_row_projector_.count();
+  if (rowkey_num + 1 != old_proj || rowkey_num + 1 != new_proj) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid project count", K(ret), K(rowkey_num), K(new_proj), K(old_proj));
+  } else if (OB_ISNULL(old_row_)) {
+    if (OB_FAIL(write_buffer_.begin(result_iter_))) {
+      LOG_WARN("begin write iterator failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObDASWriteBuffer &write_buffer = get_write_buffer();
+    ObSpatIndexRow *spatial_rows = get_spatial_index_rows();
+    if (OB_ISNULL(spatial_rows) || spatial_row_idx_ >= spatial_rows->count()) {
+      const ObChunkDatumStore::StoredRow *sr = nullptr;
+      spatial_row_idx_ = 0;
+      if (OB_FAIL(result_iter_.get_next_row(sr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row from result iterator failed", K(ret));
+        } else if (!got_old_row_) {
+          // ret == OB_ITER_END, old row is finished, get next new row
+          old_row_ = NULL;
+          got_old_row_ = true;
+        }
+      } else if (OB_ISNULL(spatial_rows)) {
+        if (OB_FAIL(create_spatial_index_store())) {
+          LOG_WARN("create spatila index rows store failed", K(ret));
+        } else {
+          spatial_rows = get_spatial_index_rows();
+        }
+      }
+      if (OB_NOT_NULL(spatial_rows)) {
+        spatial_rows->reuse();
+      }
+
+      if(OB_SUCC(ret)) {
+        // get full row successfully
+        const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
+        int64_t geo_idx = cur_proj.at(rowkey_num);
+        ObString geo_wkb = sr->cells()[geo_idx].get_string();
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, ObGeometryType,
+                    CS_TYPE_UTF8MB4_BIN, true, geo_wkb))) {
+          LOG_WARN("fail to get real string data", K(ret), K(geo_wkb));
+        } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
+                                                            cur_proj, *sr, *spatial_rows))) {
+          LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_idx), K(geo_wkb), K(rowkey_num));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      row = &(*spatial_rows)[spatial_row_idx_];
+      old_row_ = row;
+      spatial_row_idx_++;
+    }
+  }
+  return ret;
+}
+
 template <>
 int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(const ObLSID &ls_id,
                                                                             const ObTabletID &tablet_id,
@@ -149,17 +253,32 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
-  if (OB_FAIL(as->update_rows(ls_id,
-                              tablet_id,
-                              *tx_desc_,
-                              dml_param_,
-                              ctdef.column_ids_,
-                              ctdef.updated_column_ids_,
-                              &iter,
-                              affected_rows))) {
+  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_spatial_index())) {
+    if (OB_FAIL(as->delete_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
+                                ctdef.column_ids_, &iter, affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("delete rows to access service failed", K(ret));
+      }
+    } else if (OB_FAIL(as->insert_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
+                                       ctdef.column_ids_, &iter, affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("insert rows to access service failed", K(ret));
+      }
+    }
+  } else if (OB_FAIL(as->update_rows(ls_id,
+                                     tablet_id,
+                                     *tx_desc_,
+                                     dml_param_,
+                                     ctdef.column_ids_,
+                                     ctdef.updated_column_ids_,
+                                     &iter,
+                                     affected_rows))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("update row to partition storage failed", K(ret));
     }
+  } else if (!ctdef.is_ignore_ && 0 == affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows after do update", K(affected_rows), K(ret));
   }
   return ret;
 }
@@ -167,7 +286,9 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
 ObDASUpdateOp::ObDASUpdateOp(ObIAllocator &op_alloc)
   : ObIDASTaskOp(op_alloc),
     upd_ctdef_(nullptr),
-    upd_rtdef_(nullptr)
+    upd_rtdef_(nullptr),
+    write_buffer_(),
+    affected_rows_(0)
 {
 }
 
@@ -193,6 +314,7 @@ int ObDASUpdateOp::open_op()
     }
   } else {
     upd_rtdef_->affected_rows_ += affected_rows;
+    affected_rows_ = affected_rows;
   }
   return ret;
 }
@@ -217,15 +339,16 @@ int ObDASUpdateOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASUpdateOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASUpdateOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  UNUSED(memory_limit);
 #if !defined(NDEBUG)
   CK(typeid(task_result) == typeid(ObDASUpdateResult));
 #endif
   if (OB_SUCC(ret)) {
     ObDASUpdateResult &del_result = static_cast<ObDASUpdateResult&>(task_result);
-    del_result.set_affected_rows(upd_rtdef_->affected_rows_);
+    del_result.set_affected_rows(affected_rows_);
     has_more = false;
   }
   return ret;
@@ -252,12 +375,12 @@ int ObDASUpdateOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
   return ret;
 }
 
-int ObDASUpdateOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, bool &buffer_full)
+int ObDASUpdateOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full)
 {
   int ret = OB_SUCCESS;
   bool added = false;
   buffer_full = false;
-  if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, added, true))) {
+  if (OB_FAIL(write_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
     LOG_WARN("try add row to datum store failed", K(ret), K(row), K(write_buffer_));
   } else if (!added) {
     buffer_full = true;
@@ -280,10 +403,18 @@ ObDASUpdateResult::~ObDASUpdateResult()
 {
 }
 
-int ObDASUpdateResult::init(const ObIDASTaskOp &op)
+int ObDASUpdateResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
   UNUSED(op);
+  UNUSED(alloc);
   return OB_SUCCESS;
+}
+
+int ObDASUpdateResult::reuse()
+{
+  int ret = OB_SUCCESS;
+  affected_rows_ = 0;
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER((ObDASUpdateResult, ObIDASTaskResult),

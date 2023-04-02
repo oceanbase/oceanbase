@@ -20,6 +20,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace rpc
 {
 class ObBatchCreateTabletArg;
@@ -32,11 +36,11 @@ class ObTableCreator
 public:
   ObTableCreator(
       const uint64_t tenant_id,
-      const int64_t frozen_timestamp,
+      const share::SCN &frozen_scn,
       share::ObLSTableOperator &lst_operator,
       ObMySQLTransaction &trans)
                 : tenant_id_(tenant_id),
-                  tablet_creator_(tenant_id, frozen_timestamp, lst_operator, trans),
+                  tablet_creator_(tenant_id, frozen_scn, lst_operator, trans),
                   trans_(trans),
                   ls_id_array_(),
                   inited_(false) {}

@@ -93,7 +93,7 @@ void ObAsyncCB<PC, AsyncRpcProxy>::on_invalid()
   int tmp_ret = common::OB_SUCCESS;
   AsyncCB::rcode_.rcode_ = common::OB_RPC_PACKET_INVALID;
   if (common::OB_SUCCESS != (tmp_ret = proxy_.receive_response())) {
-    RPC_LOG(WARN, "proxy_ receive_response failed", K(tmp_ret));
+    RPC_LOG_RET(WARN, tmp_ret, "proxy_ receive_response failed", K(tmp_ret));
   }
 }
 
@@ -125,6 +125,12 @@ public:
            const int64_t cluster_id,
            const uint64_t tenant_id,
            const RpcArg &arg);
+  int call(const common::ObAddr &server,
+           const int64_t timeout,
+           const int64_t cluster_id,
+           const uint64_t tenant_id,
+           const uint64_t group_id,
+           const RpcArg &arg);
 
   // wait all asynchronous rpc finish, return fail if any rpc fail.
   int wait();
@@ -137,6 +143,9 @@ public:
 private:
   int call_rpc(const common::ObAddr &server, const int64_t timeout, const int64_t cluster_id,
                const uint64_t tenant_id, const RpcArg &arg, ObAsyncCB<PC, ObAsyncRpcProxy> *cb);
+  int call_rpc(const common::ObAddr &server, const int64_t timeout, const int64_t cluster_id,
+               const uint64_t tenant_id, const uint64_t group_id, const RpcArg &arg,
+               ObAsyncCB<PC, ObAsyncRpcProxy> *cb);
   int call_rpc(const common::ObAddr &server, const int64_t timeout, const uint64_t tenant_id,
                const EmptyType &empty_obj, ObAsyncCB<PC, ObAsyncRpcProxy> *cb);
   int wait(common::ObIArray<int> *return_code_array, const bool return_rpc_error);
@@ -218,7 +227,7 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call(
     const int64_t timeout,
     const RpcArg &arg)
 {
-  return call(server, timeout, common::OB_INVALID_CLUSTER_ID, OB_SYS_TENANT_ID, arg);
+  return call(server, timeout, common::OB_INVALID_CLUSTER_ID, OB_SYS_TENANT_ID, 0, arg);
 }
 
 template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func>
@@ -228,7 +237,7 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call(
     const uint64_t tenant_id,
     const RpcArg &arg)
 {
-  return call(server, timeout, common::OB_INVALID_CLUSTER_ID, tenant_id, arg);
+  return call(server, timeout, common::OB_INVALID_CLUSTER_ID, tenant_id, 0, arg);
 }
 
 template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func>
@@ -237,6 +246,18 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call(
     const int64_t timeout,
     const int64_t cluster_id,
     const uint64_t tenant_id,
+    const RpcArg &arg)
+{
+  return call(server, timeout, cluster_id, tenant_id, 0, arg);
+}
+
+template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func>
+int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call(
+    const common::ObAddr &server,
+    const int64_t timeout,
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    const uint64_t group_id,
     const RpcArg &arg)
 {
   int ret = common::OB_SUCCESS;
@@ -258,18 +279,17 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call(
         RPC_LOG(WARN, "push_back failed", K(arg), KR(ret));
       } else if (OB_FAIL(dests_.push_back(server))) {
         RPC_LOG(WARN, "push_back failed", K(server), KR(ret));
-      } else if (OB_FAIL(call_rpc(server, timeout, cluster_id, tenant_id, arg, cb))) {
+      } else if (0 == group_id && OB_FAIL(call_rpc(server, timeout, cluster_id, tenant_id, arg, cb))) {
         RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout),
-               K(cluster_id), K(tenant_id), K(arg), KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        cb_list_.remove_last();
+               K(cluster_id), K(tenant_id), K(arg), K(group_id), KR(ret));
+      } else if (0 != group_id && OB_FAIL(call_rpc(server, timeout, cluster_id, tenant_id, group_id, arg, cb))) {
+        RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout),
+               K(cluster_id), K(tenant_id), K(arg), K(group_id), KR(ret));
       }
     }
     if (OB_FAIL(ret)) {
-      // free memory
-      cb->~ObAsyncCB();
-      allocator_.free(mem);
+      // if send rpc failed, just call on_timeout to fill the result and add response count
+      cb->on_timeout();
     }
   }
 
@@ -295,16 +315,43 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call_rpc(
     ret = common::OB_INVALID_ARGUMENT;
     RPC_LOG(WARN, "invalid argument", K(server), K(timeout), K(arg), KP(cb), KR(ret));
   } else if (common::OB_INVALID_CLUSTER_ID == cluster_id) {
-     if (OB_FAIL((rpc_proxy_.to(server).by(tenant_id).timeout(timeout).*func_)(
-         arg, cb, ObRpcOpts()))) {
-       RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout), K(arg), K(tenant_id), KR(ret));
-     }
+    if (OB_FAIL((rpc_proxy_.to(server).by(tenant_id).timeout(timeout).*func_)(
+        arg, cb, ObRpcOpts()))) {
+      RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout), K(arg), K(tenant_id), KR(ret));
+    }
   } else {
-     if (OB_FAIL((rpc_proxy_.to(server).dst_cluster_id(cluster_id)
-                 .by(tenant_id).timeout(timeout).*func_)(arg, cb, ObRpcOpts()))) {
-       RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout), K(arg),
+    if (OB_FAIL((rpc_proxy_.to(server).dst_cluster_id(cluster_id)
+                .by(tenant_id).timeout(timeout).*func_)(arg, cb, ObRpcOpts()))) {
+      RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout), K(arg),
               K(cluster_id), K(tenant_id), KR(ret));
-     }
+    }
+  }
+  return ret;
+}
+
+template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func>
+int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::call_rpc(
+    const common::ObAddr &server, const int64_t timeout,
+    const int64_t cluster_id, const uint64_t tenant_id,
+    const uint64_t group_id, const RpcArg &arg,
+    ObAsyncCB<PC, ObAsyncRpcProxy> *cb)
+{
+  int ret = common::OB_SUCCESS;
+  if (!server.is_valid() || timeout <= 0 || !arg.is_valid() || NULL == cb) {
+    ret = common::OB_INVALID_ARGUMENT;
+    RPC_LOG(WARN, "invalid argument", K(server), K(timeout), K(arg), KP(cb), KR(ret));
+  } else if (common::OB_INVALID_CLUSTER_ID == cluster_id) {
+    if (OB_FAIL((rpc_proxy_.to(server).by(tenant_id).timeout(timeout).group_id(group_id).*func_)(
+        arg, cb, ObRpcOpts()))) {
+      RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout), K(arg),
+              K(tenant_id), K(group_id), KR(ret));
+    }
+  } else {
+    if (OB_FAIL((rpc_proxy_.to(server).dst_cluster_id(cluster_id)
+                .by(tenant_id).timeout(timeout).group_id(group_id).*func_)(arg, cb, ObRpcOpts()))) {
+      RPC_LOG(WARN, "call rpc func failed", K(server), K(timeout), K(arg),
+              K(cluster_id), K(tenant_id), K(group_id), KR(ret));
+    }
   }
   return ret;
 }
@@ -367,8 +414,13 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func>::wait(
         } else {
           const int rc = cb->get_ret_code();
           if (common::OB_SUCCESS != rc) {
-            RPC_LOG(WARN, "execute rpc failed", K(rc), "server", cb->get_dst(), "timeout", cb->get_timeout(),
-                "packet code", PC, "arg", args_.at(index));
+            if (index <= (args_.count() -1)) {
+              RPC_LOG(WARN, "execute rpc failed", K(rc), "server", cb->get_dst(), "timeout", cb->get_timeout(),
+                  "packet code", PC, "arg", args_.at(index));
+            } else {
+              RPC_LOG(WARN, "execute rpc failed and args_ count is not correct", K(rc), "server", cb->get_dst(), "timeout", cb->get_timeout(),
+                  "packet code", PC, K(args_.count()), K(index));
+            }
           }
           if (NULL != return_code_array) {
             if (OB_FAIL(return_code_array->push_back(rc))) {

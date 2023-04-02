@@ -21,6 +21,8 @@
 #include "ob_sstable_meta.h"
 #include "share/ob_encryption_util.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
+#include "storage/compaction/ob_compaction_util.h"
+#include "share/scn.h"
 
 namespace oceanbase {
 namespace storage {
@@ -36,6 +38,7 @@ class ObMacroBlockHandle;
 struct ObDataStoreDesc
 {
   static const int64_t DEFAULT_RESERVE_PERCENT = 90;
+  static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   static const int64_t MIN_RESERVED_SIZE = 1024; //1KB;
   static const int64_t MIN_SSTABLE_SNAPSHOT_VERSION = 1; // ref to ORIGIN_FOZEN_VERSION
   static const int64_t MIN_SSTABLE_END_LOG_TS = 1; // ref to ORIGIN_FOZEN_VERSION
@@ -53,6 +56,7 @@ struct ObDataStoreDesc
   int64_t row_column_count_;
   int64_t rowkey_column_count_;
   ObRowStoreType row_store_type_;
+  bool need_build_hash_index_for_micro_block_;
   int64_t schema_version_;
   int64_t schema_rowkey_col_cnt_;
   ObMicroBlockEncoderOpt encoder_opt_;
@@ -62,7 +66,7 @@ struct ObDataStoreDesc
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObCompressorType compressor_type_;
   int64_t snapshot_version_;
-  int64_t end_log_ts_;
+  share::SCN end_scn_;
   int64_t progressive_merge_round_;
   int64_t encrypt_id_;
   bool need_prebuild_bloomfilter_;
@@ -74,6 +78,7 @@ struct ObDataStoreDesc
   // which still use freezeinfo without cluster version
   int64_t major_working_cluster_version_;
   bool is_ddl_;
+  bool need_pre_warm_;
   common::ObArenaAllocator allocator_;
   common::ObFixedArray<share::schema::ObColDesc, common::ObIAllocator> col_desc_array_;
   blocksstable::ObStorageDatumUtils datum_utils_;
@@ -90,10 +95,12 @@ struct ObDataStoreDesc
   void reset();
   int assign(const ObDataStoreDesc &desc);
   bool encoding_enabled() const { return ObStoreFormat::is_row_store_type_with_encoding(row_store_type_); }
-  OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
+  OB_INLINE bool is_major_merge() const { return storage::is_major_merge_type(merge_type_); }
+  OB_INLINE bool is_meta_major_merge() const { return storage::is_meta_major_merge(merge_type_); }
+  OB_INLINE bool is_use_pct_free() const { return macro_block_size_ != macro_store_size_; }
   int64_t get_logical_version() const
   {
-    return is_major_merge() ? snapshot_version_ : end_log_ts_;
+    return (is_major_merge() || is_meta_major_merge()) ? snapshot_version_ : end_scn_.get_val_for_tx();
   }
   TO_STRING_KV(
       K_(ls_id),
@@ -109,7 +116,7 @@ struct ObDataStoreDesc
       KP_(merge_info),
       K_(merge_type),
       K_(snapshot_version),
-      K_(end_log_ts),
+      K_(end_scn),
       K_(need_prebuild_bloomfilter),
       K_(bloomfilter_rowkey_prefix),
       K_(encrypt_id),
@@ -122,10 +129,10 @@ struct ObDataStoreDesc
 
 private:
   int cal_row_store_type(
-      const share::schema::ObMergeSchema &table_schema,
+      const share::schema::ObMergeSchema &schema,
       const storage::ObMergeType merge_type);
-  int set_major_working_cluster_version();
   int get_emergency_row_store_type();
+  void fresh_col_meta();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);
 };

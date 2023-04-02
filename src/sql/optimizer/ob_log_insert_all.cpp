@@ -35,31 +35,33 @@ const char* ObLogInsertAll::get_name() const
   return ret;
 }
 
-int ObLogInsertAll::print_my_plan_annotation(char *buf,
-                                             int64_t &buf_len,
-                                             int64_t &pos,
-                                             ExplainType type)
+int ObLogInsertAll::get_plan_item_info(PlanText &plan_text,
+                                       ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if(OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
-                                       buf, buf_len, pos, type))) {
-    LOG_WARN("failed to print table infos", K(ret));
-  } else if (is_multi_conditions_insert()) {
-    if (is_multi_insert_first() &&
-        OB_FAIL(BUF_PRINTF(", multi_table_first(%s),\n      ", "true"))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (!is_multi_insert_first() && OB_FAIL(BUF_PRINTF(",\n      "))) {
-      LOG_WARN("BUG_PRINTF fails", K(ret));
-    } else if (get_insert_all_table_info() != NULL) {
-      if (OB_ISNULL(get_stmt()) ||
-          OB_UNLIKELY(get_table_list().count() != get_insert_all_table_info()->count())) {
+  if (OB_FAIL(ObLogDelUpd::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(print_table_infos(ObString::make_string("columns"),
+                                  buf,
+                                  buf_len,
+                                  pos,
+                                  type))) {
+      LOG_WARN("failed to print table infos", K(ret));
+    } else if (is_multi_conditions_insert()) {
+      if (is_multi_insert_first() &&
+          OB_FAIL(BUF_PRINTF(", multi_table_first(%s),\n      ", "true"))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (!is_multi_insert_first() && OB_FAIL(BUF_PRINTF(",\n      "))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (get_insert_all_table_info() == NULL) {
+        //do nothing
+      } else if (OB_ISNULL(get_stmt()) ||
+                 OB_UNLIKELY(get_table_list().count() != get_insert_all_table_info()->count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(get_insert_all_table_info()->count()), K(get_stmt()),
-                                        K(ret));
+                                          K(ret));
       } else {
         int64_t pre_idx = -1;
         for (int64_t i = 0; OB_SUCC(ret) && i < get_insert_all_table_info()->count(); ++i) {
@@ -107,27 +109,29 @@ int ObLogInsertAll::print_my_plan_annotation(char *buf,
           }
         }
       }
-    }
-  } else if (OB_FAIL(BUF_PRINTF(",\n      "))) {
-    LOG_WARN("BUG_PRINTF fails", K(ret));
-  } else {
-    int64_t cnt = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_index_dml_infos().count(); ++i) {
-      const IndexDMLInfo *dml_info = get_index_dml_infos().at(i);
-      if (OB_ISNULL(dml_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("dml info is null", K(ret), K(dml_info));
-      } else if (!dml_info->is_primary_index_) {
-        continue;
-      } else {
-        const ObIArray<ObRawExpr *> &conv_exprs = dml_info->column_convert_exprs_;
-        EXPLAIN_PRINT_EXPRS(conv_exprs, type);
-        if (cnt < get_table_list().count() - 1) {
-          BUF_PRINTF(",\n      ");
+    } else if (OB_FAIL(BUF_PRINTF(",\n      "))) {
+      LOG_WARN("BUG_PRINTF fails", K(ret));
+    } else {
+      int64_t cnt = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_index_dml_infos().count(); ++i) {
+        const IndexDMLInfo *dml_info = get_index_dml_infos().at(i);
+        if (OB_ISNULL(dml_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dml info is null", K(ret), K(dml_info));
+        } else if (!dml_info->is_primary_index_) {
+          continue;
+        } else {
+          const ObIArray<ObRawExpr *> &conv_exprs = dml_info->column_convert_exprs_;
+          EXPLAIN_PRINT_EXPRS(conv_exprs, type);
+          if (cnt < get_table_list().count() - 1) {
+            BUF_PRINTF(",\n      ");
+          }
+          ++ cnt;
         }
-        ++ cnt;
       }
     }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -195,3 +199,25 @@ int ObLogInsertAll::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 //   }
 //   return ret;
 // }
+
+int ObLogInsertAll::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(insert_all_table_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret));
+  } else if (OB_FAIL(ObLogInsert::inner_replace_op_exprs(to_replace_exprs))) {
+    LOG_WARN("failed to replace op exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < insert_all_table_info_->count(); ++i) {
+    if (OB_ISNULL(insert_all_table_info_->at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret), K(i));
+    } else if (OB_FAIL(replace_exprs_action(to_replace_exprs,
+                                            insert_all_table_info_->at(i)->when_cond_exprs_))) {
+      LOG_WARN("failed to replace expr", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}

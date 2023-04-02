@@ -69,6 +69,13 @@ typedef struct _ObParseCtx
   int64_t last_escape_check_pos_;  //解析quoted string时的一个临时变量，处理连接gbk字符集时遇到的转义字符问题
   int connection_collation_;
   bool mysql_compatible_comment_; //whether the parser is parsing "/*! xxxx */"
+  int copied_pos_;
+  char *no_param_sql_;
+  int no_param_sql_len_;
+  int no_param_sql_buf_len_;
+  int param_node_num_;
+  ParamList *param_nodes_;
+  ParamList *tail_param_node_;
   struct
   {
     uint32_t is_inner_parse_:1;   //is inner parser, not from the user's call
@@ -77,7 +84,9 @@ typedef struct _ObParseCtx
     uint32_t is_for_preprocess_:1;
     uint32_t is_include_old_new_in_trigger_:1; // indicates whether include :old/:new/:parent in trigger body
     uint32_t in_q_quote_:1;
-    uint32_t reserved_:26;
+    uint32_t is_pl_fp_  :1;
+    uint32_t is_forbid_anony_parameter_ : 1; // 1 表示禁止匿名块参数化
+    uint32_t reserved_:24;
   };
 } ObParseCtx;
 

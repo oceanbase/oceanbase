@@ -42,7 +42,7 @@ public:
   int compare(const ObPageManager *node) const
   {
     int ret = 0;
-    ret = (attr_.tenant_id_ > node->attr_.tenant_id_) - (attr_.tenant_id_ < node->attr_.tenant_id_);
+    ret = (tenant_id_ > node->tenant_id_) - (tenant_id_ < node->tenant_id_);
     if (ret == 0) {
       ret = (id_ > node->id_) - (id_ < node->id_);
     }
@@ -57,12 +57,12 @@ public:
   static ObPageManager *thread_local_instance() { return tl_instance_; }
   bool less_than(const ObPageManager &other) const
   {
-    return less_than(other.attr_.tenant_id_, other.id_);
+    return less_than(other.tenant_id_, other.id_);
   }
   bool less_than(int64_t tenant_id, int64_t id) const
   {
-    return attr_.tenant_id_ < tenant_id ||
-      (attr_.tenant_id_ == tenant_id && id_ < id);
+    return tenant_id_ < tenant_id ||
+      (tenant_id_ == tenant_id && id_ < id);
   }
   int set_tenant_ctx(const uint64_t tenant_id, const uint64_t ctx_id);
   void set_max_chunk_cache_cnt(const int cnt)
@@ -70,12 +70,16 @@ public:
   void reset();
   int64_t get_hold() const;
   int64_t get_tid() const { return tid_; }
-  int64_t get_tenant_id() const { return attr_.tenant_id_; }
-  int64_t get_ctx_id() const { return attr_.ctx_id_; }
+  int64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_ctx_id() const { return ctx_id_; }
   // IBlockMgr interface
-  ABlock *alloc_block(uint64_t size, const ObMemAttr &attr=default_memattr) override;
-  void free_block(ABlock *block) override;
-  ObTenantCtxAllocator &get_tenant_ctx_allocator() override;
+  virtual ABlock *alloc_block(uint64_t size, const ObMemAttr &attr=default_memattr) override;
+  virtual void free_block(ABlock *block) override;
+  virtual int64_t sync_wash(int64_t wash_size) override
+  {
+    UNUSED(wash_size);
+    return 0;
+  }
   int64_t get_used() const { return used_; }
   static void set_thread_local_instance(ObPageManager &instance) { tl_instance_ = &instance; }
 private:
@@ -84,7 +88,7 @@ private:
   static int64_t global_id_;
 private:
   int64_t id_;
-  lib::ObMemAttr attr_;
+  lib::ObTenantCtxAllocatorGuard ta_;
   lib::BlockSet bs_;
   int64_t used_;
   const int64_t tid_;
@@ -135,11 +139,12 @@ inline int ObPageManager::set_tenant_ctx(const uint64_t tenant_id, const uint64_
 {
   int ret = OB_SUCCESS;
   auto &pmc = ObPageManagerCenter::get_instance();
-  if (tenant_id != attr_.tenant_id_ || ctx_id != attr_.ctx_id_) {
+  if (tenant_id != tenant_id_ || ctx_id != ctx_id_) {
     if (pmc.has_register(*this)) {
       pmc.unregister_pm(*this);
     }
-    attr_ = ObMemAttr(tenant_id, ObModIds::OB_MOD_DO_NOT_USE_ME, ctx_id);
+    tenant_id_ = tenant_id;
+    ctx_id_ = ctx_id;
     is_inited_ = false;
     if (OB_FAIL(init())) {
     } else {
@@ -153,18 +158,17 @@ inline int ObPageManager::init()
 {
   int ret = OB_SUCCESS;
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  lib::ObTenantCtxAllocator *ta = nullptr;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     OB_LOG(ERROR, "init twice", K(ret));
   } else if (OB_ISNULL(ma)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(ERROR, "null ptr", K(ret));
-  } else if (OB_ISNULL(ta = ma->get_tenant_ctx_allocator(attr_.tenant_id_, attr_.ctx_id_))) {
+  } else if (OB_ISNULL(ta_ = ma->get_tenant_ctx_allocator(tenant_id_, ctx_id_))) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(ERROR, "null ptr", K(ret));
   } else {
-    bs_.set_tenant_ctx_allocator(*ta, attr_);
+    bs_.set_tenant_ctx_allocator(*ta_.ref_allocator());
     is_inited_ = true;
   }
   return ret;
@@ -185,15 +189,15 @@ inline ABlock *ObPageManager::alloc_block(uint64_t size, const ObMemAttr &attr)
     ret = init();
   }
   if (OB_SUCC(ret)) {
-    ObMemAttr inner_attr = attr_;
+    ObMemAttr inner_attr(tenant_id_, nullptr, ctx_id_);
     inner_attr.label_ = attr.label_;
     block = bs_.alloc_block(size, inner_attr);
     if (OB_UNLIKELY(nullptr == block)) {
       _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld ctx_id=%ld hold=%ld limit=%ld",
-              attr_.tenant_id_,
-              attr_.ctx_id_,
-              bs_.get_tenant_ctx_allocator().get_hold(),
-              bs_.get_tenant_ctx_allocator().get_limit());
+              tenant_id_,
+              ctx_id_,
+              ta_->get_hold(),
+              ta_->get_limit());
     } else {
       used_ += size;
     }
@@ -204,7 +208,7 @@ inline ABlock *ObPageManager::alloc_block(uint64_t size, const ObMemAttr &attr)
 inline void ObPageManager::free_block(ABlock *block)
 {
   if (OB_UNLIKELY(get_itid() != itid_)) {
-    _OB_LOG(ERROR, "cross thread not supported, pm_tid: %ld, cur_tid: %ld", itid_, get_itid());
+    _OB_LOG_RET(ERROR, OB_ERROR, "cross thread not supported, pm_tid: %ld, cur_tid: %ld", itid_, get_itid());
   } else if (OB_LIKELY(block != nullptr)) {
     abort_unless(block);
     abort_unless(block->is_valid());
@@ -215,11 +219,6 @@ inline void ObPageManager::free_block(ABlock *block)
     used_ -= block->alloc_bytes_;
     bs_.free_block(block);
   }
-}
-
-inline ObTenantCtxAllocator &ObPageManager::get_tenant_ctx_allocator()
-{
-  return bs_.get_tenant_ctx_allocator();
 }
 
 } // end of namespace common

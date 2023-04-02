@@ -456,6 +456,53 @@ int ObServerTableOperator::update_with_partition(const common::ObAddr &server,
   return ret;
 }
 
+int ObServerTableOperator::get_start_service_time(
+    const common::ObAddr &server,
+    int64_t &start_service_time) const
+{
+  int ret = OB_SUCCESS;
+  char svr_ip[OB_IP_STR_BUFF] = "";
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(server));
+  } else if (false == server.ip_to_string(svr_ip, sizeof(svr_ip))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("convert server ip to string failed", K(ret), K(server));
+  } else {
+    ObSqlString sql;
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(sql.assign_fmt("SELECT start_service_time FROM %s WHERE svr_ip = '%s' AND"
+               " svr_port = %d", OB_ALL_SERVER_TNAME, svr_ip, server.get_port()))) {
+      LOG_WARN("fail to append sql", K(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        int tmp_ret = OB_SUCCESS;
+        ObMySQLResult *result = NULL;
+        if (OB_FAIL(proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+          LOG_WARN("fail to execute sql", K(sql), K(ret));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get sql result", K(sql), K(ret));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("fail to get next", KR(ret), K(sql));;
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "start_service_time", start_service_time, int64_t);
+        }
+        if (OB_SUCC(ret) && (OB_ITER_END != (tmp_ret = result->next()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get more row than one", KR(ret), KR(tmp_ret), K(sql));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }//end namespace rootserver
 }//end namespace oceanbase
 

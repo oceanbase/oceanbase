@@ -36,7 +36,7 @@ int ObPersistentLobApator::prepare_table_param(
   int ret = OB_SUCCESS;
   void *buf = NULL;
   ObTableParam *table_param = NULL;
-  HEAP_VAR(ObTableSchema, table_schema) {
+  HEAP_VAR(ObTableSchema, table_schema, param.allocator_) {
     // FIXME: use convert with ObStorageSchema intead of hard-code schema
     if (OB_UNLIKELY(scan_param.table_param_ != NULL)) {
       //do nothing
@@ -113,7 +113,7 @@ int ObPersistentLobApator::scan_lob_meta(
         range.end_key_ = max_row_key;
         range.border_flag_.set_inclusive_start();
         range.border_flag_.set_inclusive_end();
-
+        scan_param.key_ranges_.reset();
         if (OB_FAIL(scan_param.key_ranges_.push_back(range))) {
           LOG_WARN("failed to push key range.", K(ret), K(scan_param), K(range));
         } else {
@@ -250,10 +250,56 @@ int ObPersistentLobApator::fetch_lob_id(const ObLobAccessParam& param, uint64_t 
   return ret;
 }
 
+int ObPersistentLobApator::prepare_lob_meta_dml(
+    ObLobAccessParam& param,
+    const uint64_t tenant_id,
+    const ObTabletHandle& data_tablet,
+    const ObTabletHandle& lob_meta_tablet)
+{
+  int ret = OB_SUCCESS;
+  if (param.dml_base_param_ == nullptr) {
+    share::schema::ObTableDMLParam* table_dml_param = nullptr;
+    void *buf = param.allocator_->alloc(sizeof(ObDMLBaseParam));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc dml base param", K(ret));
+    } else {
+      param.dml_base_param_ = new(buf)ObDMLBaseParam();
+      buf = param.allocator_->alloc(sizeof(share::schema::ObTableDMLParam));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc table dml param", K(ret));
+      } else {
+        table_dml_param = new(buf)share::schema::ObTableDMLParam(*param.allocator_);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_lob_meta_table_dml(param, tenant_id, table_dml_param,
+                                                *param.dml_base_param_, param.column_ids_, data_tablet, lob_meta_tablet))) {
+      LOG_WARN("failed to build meta schema", K(ret), K(data_tablet), K(lob_meta_tablet));
+    }
+  } else {
+    if (param.seq_no_st_ != -1) {
+      if (param.used_seq_cnt_ < param.total_seq_cnt_) {
+        param.dml_base_param_->spec_seq_no_ = param.seq_no_st_ + param.used_seq_cnt_;
+        param.used_seq_cnt_++;
+        LOG_DEBUG("dml lob meta with seq no", K(param.dml_base_param_->spec_seq_no_));
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("failed to get seq no from param.", K(ret), K(param));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid seq no from param.", K(ret), K(param));
+    }
+  }
+  return ret;
+}
+
 int ObPersistentLobApator::build_lob_meta_table_dml(
     ObLobAccessParam& param,
     const uint64_t tenant_id,
-    ObTableDMLParam& dml_param,
+    ObTableDMLParam* dml_param,
     ObDMLBaseParam& dml_base_param,
     ObSEArray<uint64_t, 6>& column_ids,
     const ObTabletHandle& data_tablet,
@@ -281,7 +327,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
     LOG_WARN("invalid seq no from param.", K(ret), K(param));
   }
 
-  HEAP_VAR(ObTableSchema, tbl_schema) {
+  HEAP_VAR(ObTableSchema, tbl_schema, param.allocator_) {
     ObTableSchema* table_schema = param.meta_table_schema_;
 
     for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
@@ -307,16 +353,16 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(dml_param.convert(table_schema, dml_base_param.tenant_schema_version_, column_ids))) {
+    } else if (OB_FAIL(dml_param->convert(table_schema, dml_base_param.tenant_schema_version_, column_ids))) {
       LOG_WARN("failed to convert dml param.", K(ret));
     } else {
-      dml_base_param.table_param_ = &dml_param;
+      dml_base_param.table_param_ = dml_param;
     }
   }
   return ret;
 }
 
-int ObPersistentLobApator::erase_lob_meta_tablet(ObLobAccessParam &param, ObLobMetaInfo& in_row)
+int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
 
@@ -341,14 +387,8 @@ int ObPersistentLobApator::erase_lob_meta_tablet(ObLobAccessParam &param, ObLobM
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
     uint64_t tenant_id = MTL_ID();
-
-    ObDMLBaseParam dml_base_param;
-    share::schema::ObTableDMLParam table_dml_param(*param.allocator_);
-    ObSEArray<uint64_t, 6> column_ids;
-
-    if (OB_FAIL(build_lob_meta_table_dml(param, tenant_id, table_dml_param, dml_base_param,
-                                         column_ids, data_tablet, lob_meta_tablet))) {
-      LOG_WARN("failed to build meta schema", K(ret), K(data_tablet), K(lob_meta_tablet));
+    if (OB_FAIL(prepare_lob_meta_dml(param, tenant_id, data_tablet, lob_meta_tablet))) {
+      LOG_WARN("failed to prepare lob meta dml", K(ret));
     } else {
       // get tx desc
       transaction::ObTxDesc* tx_desc = param.tx_desc_;
@@ -362,8 +402,8 @@ int ObPersistentLobApator::erase_lob_meta_tablet(ObLobAccessParam &param, ObLobM
       if (OB_FAIL(oas->delete_rows(param.ls_id_,
                                     lob_meta_tablet.get_obj()->get_tablet_meta().tablet_id_,
                                     *tx_desc,
-                                    dml_base_param,
-                                    column_ids,
+                                    *param.dml_base_param_,
+                                    param.column_ids_,
                                     &single_iter,
                                     affected_rows))) {
         LOG_WARN("failed to insert row.", K(ret));
@@ -437,7 +477,7 @@ int ObPersistentLobApator::erase_lob_piece_tablet(ObLobAccessParam& param, ObLob
   return ret;
 }
 
-int ObPersistentLobApator::write_lob_meta_tablet(ObLobAccessParam& param, ObLobMetaInfo& in_row)
+int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
   int ret = OB_SUCCESS;
 
@@ -462,14 +502,8 @@ int ObPersistentLobApator::write_lob_meta_tablet(ObLobAccessParam& param, ObLobM
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
     uint64_t tenant_id = MTL_ID();
-
-    ObDMLBaseParam dml_base_param;
-    share::schema::ObTableDMLParam table_dml_param(*param.allocator_);
-    ObSEArray<uint64_t, 6> column_ids;
-
-    if (OB_FAIL(build_lob_meta_table_dml(param, tenant_id, table_dml_param, dml_base_param,
-                                         column_ids, data_tablet, lob_meta_tablet))) {
-      LOG_WARN("failed to build meta schema", K(ret), K(data_tablet), K(lob_meta_tablet));
+    if (OB_FAIL(prepare_lob_meta_dml(param, tenant_id, data_tablet, lob_meta_tablet))) {
+      LOG_WARN("failed to prepare lob meta dml.", K(ret));
     } else {
       // get tx desc
       transaction::ObTxDesc* tx_desc = param.tx_desc_;;
@@ -483,8 +517,8 @@ int ObPersistentLobApator::write_lob_meta_tablet(ObLobAccessParam& param, ObLobM
       if (OB_FAIL(oas->insert_rows(param.ls_id_,
                                     lob_meta_tablet.get_obj()->get_tablet_meta().tablet_id_,
                                     *tx_desc,
-                                    dml_base_param,
-                                    column_ids,
+                                    *param.dml_base_param_,
+                                    param.column_ids_,
                                     &single_iter,
                                     affected_rows))) {
         LOG_WARN("failed to insert row.", K(ret));
@@ -494,7 +528,7 @@ int ObPersistentLobApator::write_lob_meta_tablet(ObLobAccessParam& param, ObLobM
   return ret;
 }
 
-int ObPersistentLobApator::update_lob_meta_tablet(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row)
+int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row)
 {
   int ret = OB_SUCCESS;
 
@@ -520,10 +554,7 @@ int ObPersistentLobApator::update_lob_meta_tablet(ObLobAccessParam& param, ObLob
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
     uint64_t tenant_id = MTL_ID();
-
-    ObDMLBaseParam dml_base_param;
-    share::schema::ObTableDMLParam table_dml_param(*param.allocator_);
-    ObSEArray<uint64_t, 6> column_ids, update_column_ids;
+    ObSEArray<uint64_t, 6> update_column_ids;
 
     for (int i = 2; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
       if (OB_FAIL(update_column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
@@ -532,9 +563,8 @@ int ObPersistentLobApator::update_lob_meta_tablet(ObLobAccessParam& param, ObLob
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(build_lob_meta_table_dml(param, tenant_id, table_dml_param, dml_base_param,
-                                            column_ids, data_tablet, lob_meta_tablet))) {
-      LOG_WARN("failed to build meta schema", K(ret), K(data_tablet), K(lob_meta_tablet));
+    } else if (OB_FAIL(prepare_lob_meta_dml(param, tenant_id, data_tablet, lob_meta_tablet))) {
+      LOG_WARN("failed to prepare lob meta dml", K(ret));
     } else {
       // get tx desc
       transaction::ObTxDesc* tx_desc = param.tx_desc_;
@@ -550,8 +580,8 @@ int ObPersistentLobApator::update_lob_meta_tablet(ObLobAccessParam& param, ObLob
       if (OB_FAIL(oas->update_rows(param.ls_id_,
                                     lob_meta_tablet.get_obj()->get_tablet_meta().tablet_id_,
                                     *tx_desc,
-                                    dml_base_param,
-                                    column_ids,
+                                    *param.dml_base_param_,
+                                    param.column_ids_,
                                     update_column_ids,
                                     &upd_iter,
                                     affected_rows))) {
@@ -581,7 +611,7 @@ int ObPersistentLobApator::build_lob_piece_table_dml(
   dml_base_param.sql_mode_ = SMO_DEFAULT;
   dml_base_param.encrypt_meta_ = &dml_base_param.encrypt_meta_legacy_;
 
-  HEAP_VAR(ObTableSchema, tbl_schema) {
+  HEAP_VAR(ObTableSchema, tbl_schema, param.allocator_) {
     ObTableSchema* table_schema = param.piece_table_schema_;
 
     for (int i = 0; OB_SUCC(ret) && i < ObLobPieceUtil::LOB_PIECE_COLUMN_CNT; ++i) {

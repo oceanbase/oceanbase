@@ -21,7 +21,7 @@
 #include "lib/ob_define.h"                  // OB_MAX_FILE_NAME_LENGTH
 #include "lib/lock/ob_tc_rwlock.h"          // ObTCRWLock
 #include "lib/lock/ob_spin_lock.h"          // ObSpinLock
-#include "share/ob_thread_pool.h"           // ObThreadPool
+#include "lib/function/ob_function.h"       // ObFunction
 #include "palf/log_define.h"                // block_id_t
 #include "palf/log_block_pool_interface.h"  // ObIServerLogBlockPool
 
@@ -30,7 +30,7 @@ namespace oceanbase
 namespace logservice
 {
 
-class ObServerLogBlockMgr : public palf::ILogBlockPool, public share::ObThreadPool
+class ObServerLogBlockMgr : public palf::ILogBlockPool
 {
 public:
   static int check_clog_directory_is_empty(const char *clog_dir, bool &result);
@@ -136,25 +136,21 @@ public:
   //   OB_SUCCESS
   //   OB_IO_ERROR
   int init(const char *log_disk_base_path);
+  int start(const int64_t log_disk_size);
   void destroy();
   bool is_reserved() const;
-  void run1();
 
-  // The wrapper of resize, can be deleted.
-  int reserve(const int64_t new_size_byte);
 
   // @brief adjust the total disk space contains by ObServerLogBlockMgr.
-  // @param[in] the new disk size of ObServerLogBlockMgr.
   //
-  // If 'new_size_byte' is greater than 'curr_total_size_', do expand,
-  // otherwise, do shrink.
+  // get 'log_disk_size' from GCONF.
   //
   // This is an atomic operation.
   // @retval
   //   OB_SUCCESS
-  //   OB_NOT_SUPPORTED, 'new_size_byte' is smaller than 1GB
+  //   OB_NOT_SUPPORTED, 'log_disk_size' is smaller than 1GB
   //   OB_ALLOCATE_DISK_SPACE_FAILED, no space left on device
-  int resize(const int64_t new_size_byte);
+  int try_resize();
 
   // @brief get current disk usage.
   // @param[out] current available diskspace.
@@ -175,11 +171,54 @@ public:
   // @param[in] the name of this block.
   int remove_block_at(const palf::FileDesc &src_dir_fd,
                       const char *src_block_path) override final;
+
+  // @brief before 'create_tenant' in ObMultiTenant, need allocate log disk size firstly.
+  // @param[in] the log disk size need by tenant.
+  // @return
+  //   OB_SUCCESS
+  //   OB_MACHINE_RESOURCE_NOT_ENOUGH
+  // NB: accurately, when tenant has existed in 'omt_', we can create it in ObServerLogBlockMgr
+  int create_tenant(const int64_t log_disk_size);
+
+  // @brief after 'create_tenant' failed in ObMultiTenant, need deallocate log disk size.
+  // @param[in] the log disk size used by tenant.
+  void abort_create_tenant(const int64_t log_disk_size);
+
+  // @brief before 'update_tenant_log_disk_size' in ObMultiTenant, need update it.
+  // @param[in] the log disk size used by tenant.
+  // @param[in] the log disk size need by tenant.
+  //   OB_SUCCESS
+  //   OB_MACHINE_RESOURCE_NOT_ENOUGH
+  int update_tenant(const int64_t old_log_disk_size, const int64_t new_log_disk_size);
+
+  // @brief after 'update_tenant_log_disk_size' in ObMultiTenant failed, need rollbakc it.
+  // @param[in] the log disk size need by tenant.
+  // @param[in] the log disk size used by tenant.
+  void abort_update_tenant(const int64_t old_log_disk_size, const int64_t new_log_disk_size);
+
+  // @brief after 'del_tenant' in ObMultiTenant success, need remove it from ObServerLogBlockMgr
+  // NB: accurately, when tenant not exist in 'omt_', we can remove it from ObServerLogBlockMgr
+  int remove_tenant(const int64_t log_disk_size);
+
   TO_STRING_KV("dir:",
                log_pool_path_, K_(dir_fd), K_(meta_fd), K_(log_pool_meta),
-               K_(min_block_id), K_(max_block_id), K_(is_inited));
+               K_(min_block_id), K_(max_block_id), K(min_log_disk_size_for_all_tenants_),
+               K_(is_inited));
 
 private:
+  // @brief adjust the total disk space contains by ObServerLogBlockMgr.
+  // @param[in] the new disk size of ObServerLogBlockMgr.
+  //
+  // If 'new_size_byte' is greater than 'curr_total_size_', do expand,
+  // otherwise, do shrink.
+  //
+  // This is an atomic operation.
+  // @retval
+  //   OB_SUCCESS
+  //   OB_NOT_SUPPORTED, 'new_size_byte' is smaller than 1GB
+  //   OB_ALLOCATE_DISK_SPACE_FAILED, no space left on device
+  int resize_(const int64_t new_size_byte);
+
   int do_init_(const char *log_pool_base_path);
   int prepare_dir_and_create_meta_(const char *log_pool_path,
                                    const char *log_pool_tmp_path);
@@ -192,8 +231,8 @@ private:
   int load_meta_();
   bool check_log_pool_whehter_is_integrity_(const int64_t has_allocated_block_size);
 
-  void run_loop_();
   bool check_space_is_enough_(const int64_t log_disk_size) const;
+  int get_all_tenants_log_disk_size_(int64_t &log_disk_size) const;
 private:
   int update_log_pool_meta_guarded_by_lock_(const LogPoolMeta &meta);
   const LogPoolMeta &get_log_pool_meta_guarded_by_lock_() const;
@@ -249,6 +288,7 @@ private:
   int read_unitl_success_(const palf::FileDesc &src_fd, char *dest_buf,
                           const int64_t dest_buf_len, const int64_t offset);
 private:
+  typedef common::ObFunction<int(int64_t&)> GetTenantsLogDiskSize;
   mutable ObSpinLock log_pool_meta_lock_;
   mutable ObSpinLock resize_lock_;
   mutable RWLock block_id_range_lock_;
@@ -260,6 +300,29 @@ private:
   // [min_block_id_, max_block_id_)
   palf::block_id_t min_block_id_;
   palf::block_id_t max_block_id_;
+  // minimum log disk size to hold all tenants on this server, just a memory value.
+  //
+  // In start(), need update it with 'get_all_tenants_log_disk_size_'
+  // In create_tenant, need update it:
+  //  1. inc it with new tenant log disk size.
+  // In abort_create_tenant, need update it:
+  //  1. dec it with new tenant log disk size.
+  // In update_tenant, need update it:
+  //  1. dec old log disk size of tenant;
+  //  2, inc new log disk size of tenant.
+  // In abort_update_tenant, need update it
+  //  1. dec new log disk size of tenant;
+  //  2, inc old log disk size of tenant.
+  // In remove_tenant, need update it with 'get_all_tenants_log_disk_size_'.
+  //
+  // After restart, all tenants which need exist in 'omt_' has been loaded,
+  // and then, we cal init 'min_log_disk_size_for_all_tenants_' via
+  // get_all_tenants_log_disk_size_(int64_t) in start().
+  //
+  // NB: before start(), can not execute resize, and the initial value of
+  // 'min_log_disk_size_for_all_tenants_' is 0.
+  int64_t min_log_disk_size_for_all_tenants_;
+  GetTenantsLogDiskSize get_tenants_log_disk_size_func_;
   bool is_inited_;
 
 private:

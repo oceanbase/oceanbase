@@ -229,7 +229,7 @@ int ObLobDataOutRowCtxList::get_lob_column_value(
   if (! is_found) {
     ret = OB_ENTRY_NOT_EXIST;
   } else {
-    LOG_INFO("tianwei get_lob_column_value", K(column_id),
+    LOG_DEBUG("get_lob_column_value", K(column_id),
         "md5", calc_md5_cstr(col_str->ptr(), col_str->length()),
         "buf_len", col_str->length());
   }

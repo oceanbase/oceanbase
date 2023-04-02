@@ -12,6 +12,7 @@
 
 #include "ob_archive_sequencer.h"
 #include "lib/ob_define.h"
+#include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "ob_ls_mgr.h"                    // ObArchiveLSMgr
 #include "logservice/ob_log_service.h"    // ObLogService
@@ -39,7 +40,7 @@ ObArchiveSequencer::ObArchiveSequencer() :
   archive_fetcher_(NULL),
   ls_mgr_(NULL),
   round_mgr_(NULL),
-  min_log_ts_(OB_INVALID_TIMESTAMP),
+  min_scn_(),
   seq_cond_()
 {}
 
@@ -83,7 +84,7 @@ void ObArchiveSequencer::destroy()
   round_ = OB_INVALID_ARCHIVE_ROUND_ID;
   archive_fetcher_ = NULL;
   ls_mgr_ = NULL;
-  min_log_ts_ = OB_INVALID_TIMESTAMP;
+  min_scn_.reset();
 }
 
 int ObArchiveSequencer::start()
@@ -134,7 +135,7 @@ void ObArchiveSequencer::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "ObArchiveSequencer not init");
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "ObArchiveSequencer not init");
   } else {
     while (! has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
@@ -189,16 +190,27 @@ bool GenFetchTaskFunctor::operator()(const ObLSID &id, ObLSArchiveTask *ls_archi
   LSN end_lsn;
 
   LSN fetch_lsn;
-  int64_t fetch_log_ts = OB_INVALID_TIMESTAMP;
+  SCN fetch_scn;
 
+  LogFileTuple archive_tuple;
+  int64_t unused_file_id = 0;
+  int64_t unused_file_offset = 0;
   if (OB_ISNULL(ls_archive_task)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "ls_archive_task is NULL", K(ret), K(id), K(ls_archive_task));
   } else if (OB_FAIL(ls_archive_task->get_sequencer_progress(key_, station, seq_lsn))) {
     ARCHIVE_LOG(WARN, "get sequence progress failed", K(ret), K(id), KPC(ls_archive_task));
+  } else if (OB_FAIL(ls_archive_task->get_archive_progress(station, unused_file_id, unused_file_offset, archive_tuple))) {
+    ARCHIVE_LOG(WARN, "get archive progress failed", K(ret), K(id), KPC(ls_archive_task));
+  } else if (OB_UNLIKELY(seq_lsn < archive_tuple.get_lsn())) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "seq_lsn smaller than archive progress lsn", K(id), K(seq_lsn), K(archive_tuple));
+  } else if (seq_lsn - archive_tuple.get_lsn() >= MAX_LS_ARCHIVE_MEMORY_LIMIT) {
+    // just skip
+    ARCHIVE_LOG(TRACE, "cache sequenced log size reach limit, just wait", K(id), K(seq_lsn), K(archive_tuple));
   } else if (OB_FAIL(get_commit_index_(id, commit_lsn))) {
     ARCHIVE_LOG(WARN, "get commit index failed", K(ret), K(id));
-  } else if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, fetch_lsn, fetch_log_ts))) {
+  } else if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, fetch_lsn, fetch_scn))) {
     ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(ls_archive_task));
   } else {
     LSN lsn = seq_lsn;
@@ -292,106 +304,14 @@ int GenFetchTaskFunctor::generate_log_fetch_task_(const ObLSID &id,
   return ret;
 }
 
-// =========================== 暂时废弃 ============================ //
-/*
-// 以最落后日志流为基准
-int ObArchiveSequencer::decide_sequence_log_range_(int64_t &log_ts, bool &has_task)
-{
-  int ret = OB_SUCCESS;
-  ObLSID id;
-  LogFileTuple log_info;
-  QueryMinLogTsFunctor functor(incarnation_, round_);
-  log_ts = OB_INVALID_TIMESTAMP;
-  has_task = true;
-
-  if (OB_FAIL(ls_mgr_->foreach_ls(functor))) {
-    ARCHIVE_LOG(WARN, "query min log ts", K(ret));
-  } else if (!functor.has_valid_value()) {
-    // has no ls to archive, skip it
-    has_task = false;
-    ARCHIVE_LOG(INFO, "not need do archive as no valid ls archive task", K(functor));
-  } else {
-    functor.get_min_log_info(id, log_info);
-    // 获取最大commit info
-    logservice::LSN offset;
-    int64_t commit_log_ts = OB_INVALID_TIMESTAMP;
-    ObLogServiceGuard guard;
-    ObILogService *log_service = NULL;
-    if (OB_FAIL(ObLogMgr::get_instance().get_log_service(id, guard))) {
-      ARCHIVE_LOG(WARN, "get log service failed", K(ret), K(id));
-    } else if (OB_ISNULL(log_service = guard.get_log_service())) {
-      ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(ERROR, "log service is NULL", K(ret), K(id));
-    } else if (OB_FAIL(log_service->get_ls_commit_index(offset, commit_log_ts))) {
-      ARCHIVE_LOG(WARN, "get commit index failed", K(ret), K(id));
-    } else if (OB_UNLIKELY(! offset.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(WARN, "invalid log offset", K(ret), K(id), K(offset));
-    } else {
-      LogFileTuple tuple;
-      ArchiveWorkStation station;
-      GET_LS_TASK_CTX(ls_mgr_, id) {
-        if (OB_FAIL(ls_archive_task->get_sequencer_tuple(incarnation_, round_, station, tuple))) {
-          ARCHIVE_LOG(WARN, "get sequencer tuple failed", K(ret),
-              K(incarnation_), K(round_), K(ls_archive_task));
-        } else {
-          int64_t min_log_ts = OB_INVALID_TIMESTAMP;
-          int64_t max_log_ts = OB_INVALID_TIMESTAMP;
-          const file_id_t max_file_id = tuple.get_file_id() + MAX_TASK_COUNT_SINGLE_CYCLE;
-          if (offset.file_id_ <= max_file_id) {
-            log_ts = commit_log_ts;
-          } else if (OB_FAIL(log_service->get_log_range(max_file_id, min_log_ts, max_log_ts))) {
-             ARCHIVE_LOG(WARN, "get log range failed", K(ret), K(id), K(max_file_id));
-          } else {
-            log_ts = max_log_ts;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-*/
-
 // ==================== start of QueryMinLogTsFunctor ========================
 
 bool QueryMinLogTsFunctor::operator()(const ObLSID &id, ObLSArchiveTask *ls_archive_task)
 {
   UNUSED(id);
   UNUSED(ls_archive_task);
-  /*
-  int ret = OB_SUCCESS;
-  LogFileTuple tuple;
-  if (OB_ISNULL(ls_archive_task)) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "ls_archive_task is NULL", K(ret), K(id), K(ls_archive_task));
-  } else if (!ls_archive_task->in_archive_service(incarnation_, round_)) {
-    // not in archive service, skip it
-  } else if (OB_FAIL(ls_archive_task->get_sequencer_tuple(incarnation_, round_, tuple))) {
-    ARCHIVE_LOG(WARN, "get sequencer log ts failed", K(ret),
-        K(incarnation_), K(round_), KPC(ls_archive_task));
-  } else if (OB_INVALID_TIMESTAMP == min_log_ts_ || min_log_ts_ > tuple.log_ts_) {
-    min_log_ts_ = tuple.log_ts_;
-    id_ = id;
-    min_log_info_ = tuple;
-    succ_count_++;
-  }
-  total_count_++;
-  return true;
-  */
   return true;
 }
 
-/*
-void QueryMinLogTsFunctor::get_min_log_info(ObLSID &id, MaxLogFileInfo &info)
-{
-  id = id_;
-  info = min_log_info_;
-}
-bool QueryMinLogTsFunctor::has_valid_value()
-{
-  return min_log_info_.is_valid() && id_.is_valid();
-}
-*/
 } // namespace archive
 } // namespace oceanbase

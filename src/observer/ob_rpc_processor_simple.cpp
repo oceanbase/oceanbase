@@ -28,7 +28,6 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "rootserver/ob_root_service.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/ob_sql.h"
 #include "observer/ob_service.h"
 #include "observer/ob_server_struct.h"
@@ -43,17 +42,21 @@
 #include "share/ob_ls_id.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_log_handler.h"
+#include "share/scn.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "sql/udr/ob_udr_mgr.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {
@@ -83,7 +86,7 @@ namespace observer
 int ObErrorP::process()
 {
   if (ret_ == OB_SUCCESS) {
-    LOG_ERROR("should not return success in error packet", K(ret_));
+    LOG_ERROR_RET(ret_, "should not return success in error packet", K(ret_));
   }
   return ret_;
 }
@@ -373,6 +376,7 @@ int ObRpcLSCheckDRTaskExistP::process()
   return ret;
 }
 
+
 int ObRpcSetConfigP::process()
 {
   LOG_INFO("process set config", K(arg_));
@@ -415,7 +419,7 @@ int ObCheckFrozenVersionP::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
-    ret = gctx_.ob_service_->check_frozen_version(arg_);
+    ret = gctx_.ob_service_->check_frozen_scn(arg_);
   }
   return ret;
 }
@@ -428,6 +432,30 @@ int ObGetMinSSTableSchemaVersionP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->get_min_sstable_schema_version(arg_, result_);
+  }
+  return ret;
+}
+
+int ObInitTenantConfigP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->init_tenant_config(arg_, result_);
+  }
+  return ret;
+}
+
+int ObGetLeaderLocationsP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->get_leader_locations(arg_, result_);
   }
   return ret;
 }
@@ -451,7 +479,7 @@ int ObRpcBuildDDLSingleReplicaRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
-    ret = gctx_.ob_service_->build_ddl_single_replica_request(arg_);
+    ret = gctx_.ob_service_->build_ddl_single_replica_request(arg_, result_);
   }
   return ret;
 }
@@ -609,6 +637,18 @@ int ObRpcCheckCtxCreateTimestampElapsedP::process()
     LOG_ERROR("invalid argument", K(ret), K(gctx_.ob_service_));
   } else {
     ret = gctx_.ob_service_->check_modify_time_elapsed(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcDDLCheckTabletMergeStatusP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->check_ddl_tablet_merge_status(arg_, result_);
   }
   return ret;
 }
@@ -954,50 +994,92 @@ int ObFlushCacheP::process()
   int ret = OB_SUCCESS;
   switch (arg_.cache_type_) {
     case CACHE_TYPE_LIB_CACHE: {
-      ObPlanCacheManager *pcm = NULL;
-      if (OB_ISNULL(gctx_.sql_engine_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
-      } else if (NULL == (pcm = gctx_.sql_engine_->get_plan_cache_manager())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("invalid argument", K(pcm), K(ret));
-      } else if (arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
+      if (arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
         ObLibCacheNameSpace ns = arg_.ns_type_;
         if (arg_.is_all_tenant_) { //flush all tenant cache
-          ret = pcm->flush_all_lib_cache_by_ns(ns);
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_lib_cache_by_ns(ns);
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {  // flush appointed tenant cache
-          ret = pcm->flush_lib_cache_by_ns(arg_.tenant_id_, ns);
+          MTL_SWITCH(arg_.tenant_id_) {
+            ObPlanCache* plan_cache = MTL(ObPlanCache*);
+            ret = plan_cache->flush_lib_cache_by_ns(ns);
+          }
         }
       } else {
         if (arg_.is_all_tenant_) { //flush all tenant cache
-          ret = pcm->flush_all_lib_cache();
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_lib_cache();
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
         } else {  // flush appointed tenant cache
-          ret = pcm->flush_lib_cache(arg_.tenant_id_);
+          MTL_SWITCH(arg_.tenant_id_) {
+            ObPlanCache* plan_cache = MTL(ObPlanCache*);
+            ret = plan_cache->flush_lib_cache();
+          }
         }
       }
       break;
     }
     case CACHE_TYPE_PLAN: {
-      ObPlanCacheManager *pcm = NULL;
-      if (OB_ISNULL(gctx_.sql_engine_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
-      } else if (NULL == (pcm = gctx_.sql_engine_->get_plan_cache_manager())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("invalid argument", K(pcm), K(ret));
-      } else if (arg_.is_fine_grained_) { // fine-grained plan cache evict
-        if (arg_.db_ids_.count() == 0) {
-          uint64_t db_id = OB_INVALID_ID;
-          ret = pcm->flush_plan_cache_by_sql_id(arg_.tenant_id_, db_id, arg_.sql_id_);
-        } else {
-          for (uint64_t i=0; OB_SUCC(ret) && i<arg_.db_ids_.count(); i++) {
-            ret = pcm->flush_plan_cache_by_sql_id(arg_.tenant_id_, arg_.db_ids_.at(i), arg_.sql_id_);
+      if (arg_.is_fine_grained_) { // fine-grained plan cache evict
+        MTL_SWITCH(arg_.tenant_id_) {
+          ObPlanCache* plan_cache = MTL(ObPlanCache*);
+          if (arg_.db_ids_.count() == 0) {
+            ret = plan_cache->flush_plan_cache_by_sql_id(OB_INVALID_ID, arg_.sql_id_);
+          } else {
+            for (uint64_t i=0; i<arg_.db_ids_.count(); i++) {
+              ret = plan_cache->flush_plan_cache_by_sql_id(arg_.db_ids_.at(i), arg_.sql_id_);
+            }
           }
         }
       } else if (arg_.is_all_tenant_) { //flush all tenant cache
-        ret = pcm->flush_all_plan_cache();
+        common::ObArray<uint64_t> tenant_ids;
+        if (OB_ISNULL(GCTX.omt_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+        } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+          LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+        } else {
+          for (int64_t i = 0; i < tenant_ids.size(); i++) {
+            MTL_SWITCH(tenant_ids.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_plan_cache();
+            }
+            // ignore errors at switching tenant
+            ret = OB_SUCCESS;
+          }
+        }
       } else {  // flush appointed tenant cache
-        ret = pcm->flush_plan_cache(arg_.tenant_id_);
+        MTL_SWITCH(arg_.tenant_id_) {
+          ObPlanCache* plan_cache = MTL(ObPlanCache*);
+          ret = plan_cache->flush_plan_cache();
+        }
       }
       break;
     }
@@ -1022,10 +1104,10 @@ int ObFlushCacheP::process()
                 req_mgr->clear_queue();
               }
             }
-            tmp_ret = ret;
+            // ignore errors at switching tenant
+            ret = OB_SUCCESS;
           }
         }
-        ret = tmp_ret;
       } else { // flush specified tenant sql audit
         MTL_SWITCH(arg_.tenant_id_) {
           ObMySQLRequestManager *req_mgr = MTL(ObMySQLRequestManager*);
@@ -1040,28 +1122,58 @@ int ObFlushCacheP::process()
       break;
     }
     case CACHE_TYPE_PL_OBJ: {
-      ObPlanCacheManager *pcm = NULL;
-      if (OB_ISNULL(gctx_.sql_engine_)
-          || OB_ISNULL(pcm = gctx_.sql_engine_->get_plan_cache_manager())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("invalid aargument", K(ret));
-      } else if (arg_.is_all_tenant_) {
-        ret = pcm->flush_all_pl_cache();
+      if (arg_.is_all_tenant_) {
+        common::ObArray<uint64_t> tenant_ids;
+        if (OB_ISNULL(GCTX.omt_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+        } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+          LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+        } else {
+          for (int64_t i = 0; i < tenant_ids.size(); i++) {
+            MTL_SWITCH(tenant_ids.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_pl_cache();
+            }
+            // ignore errors at switching tenant
+            ret = OB_SUCCESS;
+          }
+        }
       } else {
-        ret = pcm->flush_pl_cache(arg_.tenant_id_);
+        MTL_SWITCH(arg_.tenant_id_) {
+          ObPlanCache* plan_cache = MTL(ObPlanCache*);
+          ret = plan_cache->flush_pl_cache();
+        }
       }
       break;
     }
     case CACHE_TYPE_PS_OBJ: {
-      ObPlanCacheManager *pcm = NULL;
-      if (OB_ISNULL(gctx_.sql_engine_)
-          || OB_ISNULL(pcm = gctx_.sql_engine_->get_plan_cache_manager())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_ERROR("invalid aargument", K(ret));
-      } else if (arg_.is_all_tenant_) {
-        ret = pcm->flush_all_ps_cache();
+      if (arg_.is_all_tenant_) {
+        common::ObArray<uint64_t> tenant_ids;
+        if (OB_ISNULL(GCTX.omt_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+        } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+          LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+        } else {
+          for (int64_t i = 0; i < tenant_ids.size(); i++) {
+            MTL_SWITCH(tenant_ids.at(i)) {
+              ObPsCache* ps_cache = MTL(ObPsCache*);
+              if (ps_cache->is_inited()) {
+                ret = ps_cache->cache_evict_all_ps();
+              }
+            }
+            // ignore errors at switching tenant
+            ret = OB_SUCCESS;
+          }
+        }
       } else {
-        ret = pcm->flush_ps_cache(arg_.tenant_id_);
+        MTL_SWITCH(arg_.tenant_id_) {
+          ObPsCache* ps_cache = MTL(ObPsCache*);
+          if (ps_cache->is_inited()) {
+            ret = ps_cache->cache_evict_all_ps();
+          }
+        }
       }
       break;
     }
@@ -1182,9 +1294,10 @@ int ObRpcCreateLSP::process()
       COMMON_LOG(WARN, "failed create log stream", KR(ret), K(arg_));
     }
   }
-  result_.set_result(ret);
+  (void)result_.init(ret, GCTX.self_addr());
   return ret;
 }
+
 
 int ObRpcCheckLSCanOfflineP::process()
 {
@@ -1212,7 +1325,7 @@ int ObRpcCheckLSCanOfflineP::process()
     } else if (OB_ISNULL(gc_handler = ls->get_gc_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gc_handler is null", K(ls_id));
-    } else if (OB_FAIL(gc_handler->check_ls_can_offline())) {
+    } else if (OB_FAIL(gc_handler->check_ls_can_offline(arg_.get_ls_status()))) {
       LOG_WARN("check_ls_can_offline failed", K(ls_id), K(ret));
     } else {
       LOG_INFO("check_ls_can_offline success", K(ls_id));
@@ -1276,10 +1389,10 @@ int ObRpcGetLSAccessModeP::process()
       palf::AccessMode mode;
       int64_t mode_version = palf::INVALID_PROPOSAL_ID;
       int64_t second_proposal_id = 0;
-      const int64_t ref_ts = 0;
+      const SCN ref_scn = SCN::min_scn();
       if (OB_FAIL(log_handler->get_access_mode(mode_version, mode))) {
         LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
-      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_ts))) {
+      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn))) {
         LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(mode_version), K(mode));
       } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_proposal_id))) {
         COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
@@ -1323,7 +1436,7 @@ int ObRpcChangeLSAccessModeP::process()
       const int64_t timeout = THIS_WORKER.get_timeout_remain();
       if (OB_FAIL(log_handler->change_access_mode(arg_.get_mode_version(),
                                       arg_.get_access_mode(),
-                                      arg_.get_ref_ts()))) {
+                                      arg_.get_ref_scn()))) {
         LOG_WARN("failed to change access mode", KR(ret), K(arg_), K(timeout));
       }
       int tmp_ret = OB_SUCCESS;
@@ -1379,13 +1492,16 @@ int ObRpcSetMemberListP::process()
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "ls should not be null", K(ret));
-  } else if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
-                                                 arg_.get_paxos_replica_num()))) {
-    COMMON_LOG(WARN, "failed to set member list", KR(ret), K(arg_));
+  } else {
+    if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
+                                            arg_.get_paxos_replica_num()))) {
+      COMMON_LOG(WARN, "failed to set member list", KR(ret), K(arg_));
+    }
   }
   result_.set_result(ret);
   return ret;
 }
+
 int ObRpcDetectMasterRsLSP::process()
 {
   int ret = OB_SUCCESS;
@@ -1797,18 +1913,6 @@ int ObHandlePartTransCtxP::process()
   return ret;
 }
 
-int ObWriteDDLSSTableCommitLogP::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(gctx_.ob_service_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
-  } else {
-    ret = gctx_.ob_service_->write_ddl_sstable_commit_log(arg_);
-  }
-  return ret;
-}
-
 int ObFlushLocalOptStatMonitoringInfoP::process()
 {
   int ret = OB_SUCCESS;
@@ -1875,69 +1979,33 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       MacroBlockId macro_block_id;
       ObMacroBlockHandle macro_handle;
       ObMacroBlockWriteInfo write_info;
+      ObLSService *ls_service = MTL(ObLSService*);
+      ObLSHandle ls_handle;
+      ObTabletHandle tablet_handle;
+      ObDDLKvMgrHandle ddl_kv_mgr_handle;
 
       // restruct write_info
       write_info.buffer_ = arg_.redo_info_.data_buffer_.ptr();
       write_info.size_= arg_.redo_info_.data_buffer_.length();
-      write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
-      if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
+      if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg_));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(arg_.redo_info_.table_key_.tablet_id_, tablet_handle))) {
+        LOG_WARN("get tablet failed", K(ret));
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+        LOG_WARN("get ddl kv manager failed", K(ret));
+      } else if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
         LOG_WARN("fail to async write block", K(ret), K(write_info), K(macro_handle));
       } else if (OB_FAIL(macro_handle.wait(io_timeout_ms))) {
         LOG_WARN("fail to wait macro block io finish", K(ret));
       } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.redo_info_.table_key_.tablet_id_))) {
         LOG_WARN("init sstable redo writer", K(ret), K_(arg));
-      } else if (OB_FAIL(sstable_redo_writer.write_redo_log(arg_.redo_info_, macro_handle.get_macro_id()))) {
+      } else if (OB_FAIL(sstable_redo_writer.write_redo_log(arg_.redo_info_, macro_handle.get_macro_id(), false, arg_.task_id_, tablet_handle, ddl_kv_mgr_handle))) {
         LOG_WARN("fail to write macro redo", K(ret), K_(arg));
       } else if (OB_FAIL(sstable_redo_writer.wait_redo_log_finish(arg_.redo_info_,
                                                                   macro_handle.get_macro_id()))) {
         LOG_WARN("fail to wait macro redo finish", K(ret), K_(arg));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObRpcRemoteWriteDDLPrepareLogP::process()
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = arg_.tenant_id_;
-
-  MTL_SWITCH(tenant_id) {
-    const ObITable::TableKey &table_key = arg_.table_key_;
-    ObDDLSSTableRedoWriter sstable_redo_writer;
-    ObLSService *ls_service = MTL(ObLSService*);
-    ObLSHandle ls_handle;
-    ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
-    if (OB_UNLIKELY(!arg_.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(ret), K_(arg));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-      LOG_WARN("get ls failed", K(ret), K(arg_));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
-      LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret));
-    } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
-      LOG_WARN("init sstable redo writer", K(ret), K(table_key));
-    } else if (FALSE_IT(sstable_redo_writer.set_start_log_ts(arg_.start_log_ts_))) {
-    } else {
-      int64_t prepare_log_ts = 0;
-      if (OB_FAIL(sstable_redo_writer.write_prepare_log(table_key,
-                                                        arg_.table_id_,
-                                                        arg_.execution_id_,
-                                                        arg_.ddl_task_id_,
-                                                        prepare_log_ts))) {
-        LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(arg_.start_log_ts_,
-                                                                  prepare_log_ts,
-                                                                  arg_.table_id_,
-                                                                  arg_.ddl_task_id_))) {
-        LOG_WARN("failed to do ddl kv prepare", K(ret), K(arg_));
-      } else {
-        result_ = prepare_log_ts;
       }
     }
   }
@@ -1964,16 +2032,31 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+      } else {
+        LOG_WARN("get ddl kv manager failed", K(ret));
+      }
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
-    } else if (FALSE_IT(sstable_redo_writer.set_start_log_ts(arg_.start_log_ts_))) {
+    } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
-      // wait in rpc framework may cause rpc timeout, need sync commit via rs @xiajin
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(arg_.start_log_ts_, arg_.prepare_log_ts_))) {
-        LOG_WARN("failed to wait ddl kv commit", K(ret), K(arg_));
-      } else if (OB_FAIL(sstable_redo_writer.write_commit_log(table_key, arg_.prepare_log_ts_))) {
+      SCN commit_scn;
+      if (OB_FAIL(sstable_redo_writer.write_commit_log(tablet_handle,
+                                                       ddl_kv_mgr_handle,
+                                                       table_key,
+                                                       arg_.table_id_,
+                                                       arg_.execution_id_,
+                                                       arg_.ddl_task_id_,
+                                                       commit_scn))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(arg_.start_scn_,
+                                                                 commit_scn,
+                                                                 arg_.table_id_,
+                                                                 arg_.ddl_task_id_))) {
+        LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
+      } else {
+        result_ = commit_scn.get_val_for_tx();
       }
     }
   }
@@ -2107,6 +2190,66 @@ int ObEstimateTabletBlockCountP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->estimate_tablet_block_count(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcGetLSSyncScnP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->get_ls_sync_scn(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to get_ls_sync_scn", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObForceSetLSAsSingleReplicaP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->force_set_ls_as_single_replica(arg_))) {
+    COMMON_LOG(WARN, "force_set_ls_as_single_replica failed", KR(ret), K(arg_));
+  } else {}
+  return ret;
+}
+
+int ObRefreshTenantInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->refresh_tenant_info(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to refresh_tenant_info", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObSyncRewriteRulesP::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg_.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  sql::ObUDRMgr *rule_mgr = nullptr;
+
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("start do sync rewrite rules from inner table", K(arg_));
+
+    rule_mgr = MTL(sql::ObUDRMgr*);
+    if (OB_ISNULL(rule_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObUDRMgr should not be null", K(ret));
+    } else if (OB_FAIL(rule_mgr->sync_rule_from_inner_table())) {
+      LOG_WARN("failed to sync rewrite rules from inner table", K(ret));
+    }
   }
   return ret;
 }

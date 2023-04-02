@@ -146,7 +146,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     aggregation_optimization_settings_(0),
     query_ctx_(query_ctx),
     nested_sql_flags_(0),
-    has_for_update_(false)
+    has_for_update_(false),
+    has_var_assign_(false),
+    is_var_assign_only_in_root_stmt_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -155,6 +157,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   {
     expected_worker_map_.destroy();
     minimal_worker_map_.destroy();
+    log_plan_factory_.destroy();
   }
   inline const ObSQLSessionInfo *get_session_info() const { return session_info_; }
   inline ObSQLSessionInfo *get_session_info() { return session_info_; }
@@ -223,7 +226,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     return px_parallel_rule_ == MANUAL_HINT ||
         px_parallel_rule_ == MANUAL_TABLE_HINT ||
         px_parallel_rule_ == SESSION_FORCE_PARALLEL ||
-        px_parallel_rule_ == MANUAL_TABLE_DOP;
+        px_parallel_rule_ == MANUAL_TABLE_DOP ||
+        px_parallel_rule_ == PL_UDF_DAS_FORCE_SERIALIZE;
   }
   inline bool use_intra_parallel() const
   {
@@ -457,11 +461,19 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   bool has_trigger() const { return has_trigger_; }
   void set_has_pl_udf(bool v) { has_pl_udf_ = v; }
   bool has_pl_udf() const { return has_pl_udf_; }
+  void set_has_dblink(bool v) { has_dblink_ = v; }
+  bool has_dblink() const { return has_dblink_; }
+  void set_has_subquery_in_function_table(bool v) { has_subquery_in_function_table_ = v; }
+  bool has_subquery_in_function_table() const { return has_subquery_in_function_table_; }
   bool contain_nested_sql() const { return nested_sql_flags_ > 0; }
   //use nested sql can't in online DDL session
   bool contain_user_nested_sql() const { return nested_sql_flags_ > 0 && !is_online_ddl_; }
   void set_for_update() { has_for_update_ = true; }
   bool has_for_update() { return has_for_update_;};
+  inline bool has_var_assign() { return has_var_assign_; }
+  inline void set_has_var_assign(bool v) { has_var_assign_ = v; }
+  inline bool is_var_assign_only_in_root_stmt() { return is_var_assign_only_in_root_stmt_; }
+  inline void set_is_var_assign_only_in_root_stmt(bool v) { is_var_assign_only_in_root_stmt_ = v; }
 
 private:
   ObSQLSessionInfo *session_info_;
@@ -526,9 +538,13 @@ private:
       int8_t has_fk_                           : 1; //this sql has foreign key object
       int8_t has_trigger_                      : 1; //this sql has trigger object
       int8_t has_pl_udf_                       : 1; //this sql has pl user defined function
+      int8_t has_subquery_in_function_table_   : 1; //this stmt has function table
+      int8_t has_dblink_                       : 1; //this stmt has dblink table
     };
   };
   bool has_for_update_;
+  bool has_var_assign_;
+  bool is_var_assign_only_in_root_stmt_;
 };
 }
 }

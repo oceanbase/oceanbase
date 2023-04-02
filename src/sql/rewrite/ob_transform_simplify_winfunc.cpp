@@ -37,6 +37,8 @@ int ObTransformSimplifyWinfunc::transform_one_stmt(common::ObIArray<ObParentDMLS
     LOG_WARN("failed to simplify win exprs", K(ret));
   } else {
     trans_happened = is_removed || is_simplified;
+    OPT_TRACE("remove stmt win func:", is_removed);
+    OPT_TRACE("simplify win exprs:", is_simplified);
   }
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
@@ -141,7 +143,10 @@ int ObTransformSimplifyWinfunc::check_aggr_win_can_be_removed(const ObDMLStmt *s
     case T_WIN_FUN_ROW_NUMBER: // return 1
     case T_WIN_FUN_RANK: // return 1
     case T_WIN_FUN_DENSE_RANK: // return 1
-    case T_WIN_FUN_PERCENT_RANK: { // return 0
+    case T_WIN_FUN_PERCENT_RANK: // return 0
+    case T_FUN_SYS_BIT_AND: // return expr or UINT64MAX
+    case T_FUN_SYS_BIT_OR: // return expr or 0
+    case T_FUN_SYS_BIT_XOR: { // return expr or 0
       can_remove = true;
       break;
     }
@@ -436,6 +441,14 @@ int ObTransformSimplifyWinfunc::transform_aggr_win_to_common_expr(ObSelectStmt *
       }
       break;
     }
+    case T_FUN_SYS_BIT_AND:
+    case T_FUN_SYS_BIT_OR:
+    case T_FUN_SYS_BIT_XOR: {
+      if (OB_FAIL(ObTransformUtils::transform_bit_aggr_to_common_expr(*select_stmt, aggr, ctx_, param_expr))) {
+        LOG_WARN("transform bit aggr to common expr failed", KR(ret), K(aggr), K(func_type), K(*select_stmt));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected func", K(ret), K(*expr));
@@ -616,7 +629,7 @@ int ObTransformSimplifyWinfunc::do_remove_stmt_win(ObSelectStmt *select_stmt,
         LOG_WARN("failed to remove window func expr", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(select_stmt->replace_inner_stmt_expr(exprs, new_exprs))) {
+    if (OB_SUCC(ret) && OB_FAIL(select_stmt->replace_relation_exprs(exprs, new_exprs))) {
       LOG_WARN("select_stmt replace inner stmt expr failed", K(ret), K(select_stmt));
     }
   }
@@ -660,25 +673,25 @@ int ObTransformSimplifyWinfunc::simplify_win_expr(ObWinFunRawExpr &win_expr,
   ObSEArray<ObRawExpr *, 4> added_expr;
   trans_happened = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_exprs.count(); ++i) {
-      ObRawExpr *part_expr = partition_exprs.at(i);
-      if (part_expr->is_const_expr()) {
-      } else if (ObRawExprUtils::find_expr(added_expr, part_expr)) {
-      } else if (OB_FAIL(new_partition_exprs.push_back(part_expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(added_expr.push_back(part_expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      }
+    ObRawExpr *part_expr = partition_exprs.at(i);
+    if (part_expr->is_const_expr()) {
+    } else if (ObRawExprUtils::find_expr(added_expr, part_expr)) {
+    } else if (OB_FAIL(new_partition_exprs.push_back(part_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(added_expr.push_back(part_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
-      ObRawExpr *order_expr = order_items.at(i).expr_;
-      if (order_expr->is_const_expr()) {
-      } else if (ObRawExprUtils::find_expr(added_expr, order_expr)) {
-      } else if (OB_FAIL(new_order_items.push_back(order_items.at(i)))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(added_expr.push_back(order_expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
+    ObRawExpr *order_expr = order_items.at(i).expr_;
+    if (order_expr->is_const_expr()) {
+    } else if (ObRawExprUtils::find_expr(added_expr, order_expr)) {
+    } else if (OB_FAIL(new_order_items.push_back(order_items.at(i)))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(added_expr.push_back(order_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
     }
+  }
   if (OB_SUCC(ret)
       && new_order_items.count() == 0 && order_items.count() > 0) {
     // for computing range frame

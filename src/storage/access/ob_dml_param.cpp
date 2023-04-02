@@ -246,7 +246,8 @@ DEF_TO_STRING(ObDMLBaseParam)
        K_(is_ignore),
        K_(prelock),
        KPC_(encrypt_meta),
-       K_(is_batch_stmt));
+       K_(is_batch_stmt),
+       K_(write_flag));
   J_OBJ_END();
   return pos;
 }
@@ -269,6 +270,7 @@ DEF_TO_STRING(ObTableScanParam)
        N_COLUMN_IDS, column_ids_,
        N_INDEX_ID, index_id_,
        N_KEY_RANGES, key_ranges_,
+       K_(ss_key_ranges),
        K_(range_array_pos),
        N_TIMEOUT, timeout_,
        N_SCAN_FLAG, scan_flag_,
@@ -287,7 +289,8 @@ DEF_TO_STRING(ObTableScanParam)
        K_(snapshot),
        KPC_(table_param),
        K_(sample_info),
-       K_(need_scn));
+       K_(need_scn),
+       K_(need_switch_param));
   J_OBJ_END();
   return pos;
 }

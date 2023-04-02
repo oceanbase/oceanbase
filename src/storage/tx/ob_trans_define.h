@@ -31,6 +31,7 @@
 #include "storage/tx/ob_trans_result.h"
 #include "storage/tx/ob_xa_define.h"
 #include "ob_multi_data_source.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -228,8 +229,8 @@ class ObTransID
   OB_UNIS_VERSION(1);
 public:
   ObTransID() : tx_id_(0) {}
+  ObTransID(const int64_t tx_id) : tx_id_(tx_id) {}
   ~ObTransID() { tx_id_ = 0; }
-  ObTransID(const int64_t v) :tx_id_(v) {}
   ObTransID &operator=(const ObTransID &r) {
     if (this != &r) {
       tx_id_ = r.tx_id_;
@@ -464,6 +465,13 @@ private:
   ~ObTransType() {}
 };
 
+enum class ObGlobalTxType : uint8_t
+{
+  PLAIN = 0,
+  XA_TRANS = 1,
+  DBLINK_TRANS = 2,
+};
+
 /*
  *  +--------------------- +-------------------------------------+---------------------------------+
  *  |                      |            CURRENT_READ             |    BOUNDED_STALENESS_READ       |
@@ -565,7 +573,7 @@ public:
 };
 
 // transaction parameter
-class ObStartTransParam
+class ObStartTransParam  // unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -685,7 +693,7 @@ public:
   void destroy() {}
 };
 
-class ObStmtInfo
+class ObStmtInfo  // unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -706,7 +714,7 @@ private:
   int64_t end_stmt_cnt_;
 };
 
-class ObTaskInfo
+class ObTaskInfo // unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -729,123 +737,6 @@ public:
   int64_t seq_no_;
 };
 
-class ObTransTaskInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  int start_stmt(const int32_t sql_no);
-  int start_stmt_v2(const int64_t seq_no);
-  int start_task(const int32_t sql_no, const int64_t snapshot_version);
-  int start_task_v2(const int32_t sql_no, const int64_t seq_no, const int64_t snapshot_version);
-  void end_task();
-  bool is_task_match(const int32_t sql_no) const;
-  bool is_task_match_v2(const int64_t seq_no) const;
-  void remove_task_after(const int32_t sql_no);
-  void remove_task_after_v2(const int64_t seq_no);
-  bool is_stmt_ended() const { return tasks_.empty(); }
-  int64_t get_top_snapshot_version() const;
-  void reset() { tasks_.reset(); }
-  TO_STRING_KV(K(tasks_));
-private:
-  common::ObSEArray<ObTaskInfo, 1> tasks_;
-};
-
-class ObTransStmtInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTransStmtInfo() { reset(); }
-  ~ObTransStmtInfo() {}
-  void reset();
-  int start_stmt(const int64_t sql_no)
-  {
-    return task_info_.start_stmt(sql_no);
-  }
-  int start_stmt_v2(const int64_t seq_no)
-  {
-    return task_info_.start_stmt_v2(seq_no);
-  }
-  void end_stmt(const int64_t sql_no)
-  {
-    update_sql_no(sql_no);
-    need_rollback_ = true;
-    task_info_.remove_task_after(0);
-  }
-  void end_stmt_v2()
-  {
-    need_rollback_ = true;
-    task_info_.remove_task_after_v2(0);
-  }
-  void rollback_to(const int64_t from, const int64_t to)
-  {
-    update_sql_no(from);
-    need_rollback_ = true;
-    task_info_.remove_task_after(to);
-  }
-  void rollback_to_v2(const int64_t to)
-  {
-    // [to, from)
-    need_rollback_ = true;
-    task_info_.remove_task_after_v2(to);
-  }
-  int start_task(const int64_t sql_no, const int64_t snapshot_version)
-  {
-    update_sql_no(sql_no);
-    return task_info_.start_task(sql_no, snapshot_version);
-  }
-  int start_task_v2(const int64_t sql_no, const int64_t seq_no, const int64_t snapshot_version)
-  {
-    update_sql_no(sql_no);
-    // update_seq_no(seq_no);
-    return task_info_.start_task_v2(sql_no, seq_no, snapshot_version);
-  }
-  void end_task() { return task_info_.end_task(); }
-
-  int64_t get_top_snapshot_version() const { return task_info_.get_top_snapshot_version(); }
-  bool is_stmt_ended() const { return task_info_.is_stmt_ended(); }
-  bool is_task_match(const int64_t sql_no = 0) const { return task_info_.is_task_match(sql_no); }
-  bool is_task_match_v2(const int64_t seq_no = 0) const { return task_info_.is_task_match_v2(seq_no); }
-  bool stmt_expired(const int64_t sql_no, const bool is_rollback = false) const
-  {
-    return sql_no < sql_no_ || (!is_rollback && (need_rollback_ && sql_no == sql_no_));
-  }
-  bool stmt_expired_v2(const int64_t msg_seq, const bool is_rollback = false) const
-  {
-    return msg_seq < msg_seq_ || (!is_rollback && (need_rollback_ && msg_seq == msg_seq_));
-  }
-  bool stmt_matched(const int64_t sql_no) const { return sql_no == sql_no_ && !need_rollback_; }
-  bool stmt_matched_v2(const int64_t msg_seq) const { return msg_seq == msg_seq_ && !need_rollback_; }
-
-  bool main_stmt_change(const int64_t sql_no) const { return (sql_no >> 32) > main_sql_no_; }
-  bool main_stmt_change_compat(const int64_t sql_no) const { return sql_no > sql_no_; }
-  int64_t get_sql_no() const { return sql_no_; }
-  // int64_t get_seq_no() const { return seq_no_; }
-  void update_msg_seq(const int64_t msg_seq)
-  {
-    if (msg_seq > msg_seq_) { msg_seq_ = msg_seq; need_rollback_ = false; }
-  }
-
-  TO_STRING_KV(K_(sql_no), K_(msg_seq), K_(start_task_cnt), K_(end_task_cnt), K_(need_rollback), K_(task_info));
-private:
-  void update_sql_no(const int64_t sql_no)
-  {
-    if (sql_no > sql_no_) { sql_no_ = sql_no; need_rollback_ = false; }
-  }
-
-  union {
-    struct {
-      int32_t sub_sql_no_;
-      int32_t main_sql_no_;
-    };
-    int64_t sql_no_;
-  };
-  int64_t start_task_cnt_; // compat only
-  int64_t end_task_cnt_;   // compat only
-  bool need_rollback_;
-  ObTransTaskInfo task_info_;
-  int64_t msg_seq_;
-};
-
 class ObTransVersion
 {
 public:
@@ -858,27 +749,7 @@ private:
   ~ObTransVersion() {}
 };
 
-typedef struct MonotonicTs
-{
-  OB_UNIS_VERSION(1);
-public:
-  explicit MonotonicTs(int64_t mts) : mts_(mts) {}
-  MonotonicTs() { reset(); }
-  ~MonotonicTs() { reset(); }
-  void reset() { mts_ = 0; }
-  bool is_valid() const { return mts_ > 0; }
-  bool operator!=(const struct MonotonicTs other) const { return  mts_ != other.mts_; }
-  bool operator==(const struct MonotonicTs other) const { return  mts_ == other.mts_; }
-  bool operator>(const struct MonotonicTs other) const { return  mts_ > other.mts_; }
-  bool operator>=(const struct MonotonicTs other) const { return  mts_ >= other.mts_; }
-  bool operator<(const struct MonotonicTs other) const { return  mts_ < other.mts_; }
-  bool operator<=(const struct MonotonicTs other) const { return  mts_ <= other.mts_; }
-  struct MonotonicTs operator+(const struct MonotonicTs other) const { return MonotonicTs(mts_ + other.mts_); }
-  struct MonotonicTs operator-(const struct MonotonicTs other) const { return MonotonicTs(mts_ - other.mts_); }
-  static struct MonotonicTs current_time() { return MonotonicTs(common::ObTimeUtility::current_time()); }
-  TO_STRING_KV(K_(mts));
-  int64_t mts_;
-} MonotonicTs;
+typedef ObMonotonicTs MonotonicTs;
 
 class ObTransNeedWaitWrap
 {
@@ -897,13 +768,13 @@ public:
   MonotonicTs get_receive_gts_ts() const { return receive_gts_ts_; }
   int64_t get_need_wait_interval_us() const { return need_wait_interval_us_; }
   bool need_wait() const { return get_remaining_wait_interval_us() > 0; }
-  TO_STRING_KV(K_(receive_gts_ts), K_(need_wait_interval_us));
+  TO_STRING_KV(K(receive_gts_ts_), K_(need_wait_interval_us));
 private:
   MonotonicTs receive_gts_ts_;
   int64_t need_wait_interval_us_;
 };
 
-class ObTransSnapInfo
+class ObTransSnapInfo //unused , to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -946,7 +817,7 @@ private:
   bool is_cursor_or_nested_;
 };
 
-class ObStmtPair
+class ObStmtPair //unused , to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -963,7 +834,7 @@ private:
   int64_t to_;
 };
 
-class ObStmtRollbackInfo
+class ObStmtRollbackInfo //unused , to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -1258,10 +1129,10 @@ class ObElrTransInfo final
 public:
   ObElrTransInfo() { reset(); }
   void reset();
-  int init(const ObTransID &trans_id, uint32_t ctx_id, const int64_t commit_version);
+  int init(const ObTransID &trans_id, uint32_t ctx_id, const share::SCN commit_version);
   const ObTransID &get_trans_id() const { return trans_id_; }
   uint32_t get_ctx_id() const { return ctx_id_; }
-  int64_t get_commit_version() const { return commit_version_; }
+  share::SCN get_commit_version() const { return commit_version_; }
   int set_result(const int result) { result_ = result; return common::OB_SUCCESS; }
   uint64_t hash() const { return trans_id_.hash(); }
   int get_result() const { return ATOMIC_LOAD(&result_); }
@@ -1269,7 +1140,7 @@ public:
   TO_STRING_KV(K_(trans_id), K_(commit_version), K_(result), K_(ctx_id));
 private:
   ObTransID trans_id_;
-  int64_t commit_version_;
+  share::SCN commit_version_;
   int result_;
   uint32_t ctx_id_;
 };
@@ -1573,10 +1444,44 @@ private:
   palf::LSN offset_;
 };
 
+class ObStateInfo
+{
+public:
+  ObStateInfo() : state_(ObTxState::UNKNOWN), version_(), snapshot_version_() {}
+  ObStateInfo(const share::ObLSID &ls_id,
+              const ObTxState &state,
+              const share::SCN &version,
+              const share::SCN &snapshot_version) :
+              ls_id_(ls_id), state_(state)
+  {
+    version_ = version;
+    snapshot_version_ = snapshot_version;
+  }
+  ~ObStateInfo() {}
+  bool is_valid() const
+  {
+    return ls_id_.is_valid() && version_.is_valid() && snapshot_version_.is_valid();  }
+  void operator=(const ObStateInfo &state_info)
+  {
+    ls_id_ = state_info.ls_id_;
+    state_ = state_info.state_;
+    version_ = state_info.version_;
+    snapshot_version_ = state_info.snapshot_version_;
+  }
+  TO_STRING_KV(K_(ls_id), K_(state), K_(version), K_(snapshot_version))
+  OB_UNIS_VERSION(1);
+public:
+  share::ObLSID ls_id_;
+  ObTxState state_;
+  share::SCN version_;
+  share::SCN snapshot_version_;
+};
+
 typedef common::ObSEArray<ObElrTransInfo, 1, TransModulePageAllocator> ObElrTransInfoArray;
 typedef common::ObSEArray<int64_t, 10, TransModulePageAllocator> ObRedoLogIdArray;
 typedef common::ObSEArray<palf::LSN, 10, ModulePageAllocator> ObRedoLSNArray;
 typedef common::ObSEArray<ObLSLogInfo, 10, ModulePageAllocator> ObLSLogInfoArray;
+typedef common::ObSEArray<ObStateInfo, 1, ModulePageAllocator> ObStateInfoArray;
 
 struct CtxInfo final
 {
@@ -1681,7 +1586,7 @@ public:
   int range_submitted(ObTxMDSCache &cache);
   void range_sync_failed();
 
-  int count() const { return count_; };
+  int64_t count() const { return count_; };
 
   TO_STRING_KV(K(count_));
 
@@ -1724,14 +1629,15 @@ public:
                K_(max_applying_part_log_no),
                K_(max_submitted_seq_no),
                K_(checksum),
-               K_(checksum_log_ts),
+               K_(checksum_scn),
                K_(max_durable_lsn),
                K_(data_complete),
                K_(is_dup_tx),
                //K_(touched_pkeys),
                K_(prepare_log_info_arr),
                K_(xid),
-               K_(need_checksum));
+               K_(need_checksum),
+               K_(is_sub2pc));
   ObTxState state_;
   share::ObLSID upstream_;
   share::ObLSArray participants_;
@@ -1741,15 +1647,15 @@ public:
   ObTxBufferNodeArray multi_data_source_;
   // check
   common::ObAddr scheduler_;
-  int64_t prepare_version_;
+  share::SCN prepare_version_;
   int64_t trans_type_;
   int64_t next_log_entry_no_;
-  int64_t max_applied_log_ts_;
-  int64_t max_applying_log_ts_;
+  share::SCN max_applied_log_ts_;
+  share::SCN max_applying_log_ts_;
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
   int64_t max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
   uint64_t checksum_;
-  int64_t checksum_log_ts_;
+  share::SCN checksum_scn_;
   palf::LSN max_durable_lsn_;
   bool data_complete_;
   bool is_dup_tx_;
@@ -1759,6 +1665,7 @@ public:
   // for xa
   ObXATransID xid_;
   bool need_checksum_;
+  bool is_sub2pc_;
 };
 
 static const int64_t GET_GTS_AHEAD_INTERVAL = 300;
@@ -1767,22 +1674,40 @@ static const int64_t USEC_PER_SEC = 1000 * 1000;
 struct ObMulSourceDataNotifyArg
 {
   ObTransID tx_id_;
-  int64_t log_ts_; // the log ts of current notify type
+  share::SCN scn_; // the log ts of current notify type
   // in case of abort transaction, trans_version_ is invalid
-  int64_t trans_version_;
+  share::SCN trans_version_;
   bool for_replay_;
   NotifyType notify_type_;
 
   bool redo_submitted_;
   bool redo_synced_;
 
+  // force kill trans without abort scn
+  bool is_force_kill_;
+
+  ObMulSourceDataNotifyArg() { reset(); }
+
+  void reset()
+  {
+    tx_id_.reset();
+    scn_.reset();
+    trans_version_.reset();
+    for_replay_ = false;
+    notify_type_ = NotifyType::ON_ABORT;
+    redo_submitted_ = false;
+    redo_synced_ = false;
+    is_force_kill_ = false;
+  }
+
   TO_STRING_KV(K_(tx_id),
-               K_(log_ts),
+               K_(scn),
                K_(trans_version),
                K_(for_replay),
                K_(notify_type),
                K_(redo_submitted),
-               K_(redo_synced));
+               K_(redo_synced),
+               K_(is_force_kill));
 
   // The redo log of current buf_node has been submitted;
   bool is_redo_submitted() const;
@@ -1797,6 +1722,7 @@ enum class TxEndAction : int8_t
 {
   COMMIT_TX,
   ABORT_TX,
+  DELAY_ABORT_TX,
   KILL_TX_FORCEDLY
 };
 

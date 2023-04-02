@@ -33,12 +33,12 @@ public:
 public:
   uint64_t tenant_id_;
   //server level weak read info stat
-  int64_t server_version_;              // server level weak read version
+  share::SCN server_version_;              // server level weak read version
   int64_t total_part_count_;            // total partition count
   int64_t valid_inner_part_count_;            // valid inner partition count
   int64_t valid_user_part_count_;
   int64_t server_version_delta_;
-  int64_t local_cluster_version_;
+  share::SCN local_cluster_version_;
   int64_t local_cluster_version_delta_;
   common::ObAddr self_;
 
@@ -60,10 +60,10 @@ public:
   int64_t cluster_servers_count_;                     // server count
   int64_t cluster_skipped_servers_count_;             // skipped server count
   int64_t cluster_version_gen_tstamp_;		      // last cluster version generation timestamp
-  int64_t cluster_version_;            		      // cluster level weak read version
+  share::SCN cluster_version_;            		      // cluster level weak read version
   int64_t cluster_version_delta_;
-  int64_t min_cluster_version_;
-  int64_t max_cluster_version_;
+  share::SCN min_cluster_version_;
+  share::SCN max_cluster_version_;
 };
 
 }// transaction

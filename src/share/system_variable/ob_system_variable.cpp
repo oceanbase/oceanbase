@@ -138,7 +138,7 @@ const char *ObSqlModeVar::SQL_MODE_NAMES[] = {
   "STRICT_ALL_TABLES", "NO_ZERO_IN_DATE", "NO_ZERO_DATE",
   "ALLOW_INVALID_DATES", "ERROR_FOR_DIVISION_BY_ZERO", "TRADITIONAL",
   "NO_AUTO_CREATE_USER", "HIGH_NOT_PRECEDENCE", "NO_ENGINE_SUBSTITUTION",
-  "PAD_CHAR_TO_FULL_LENGTH", "ERROR_ON_RESOLVE_CAST", 0};
+  "PAD_CHAR_TO_FULL_LENGTH", "ERROR_ON_RESOLVE_CAST", "TIME_TRUNCATE_FRACTIONAL", 0};
 
 const char * ObBasicSysVar::EMPTY_STRING = "";
 
@@ -393,7 +393,7 @@ int ObBasicSysVar::session_update(ObExecContext &ctx,
     }
   } else if (set_var.var_name_ == OB_SV__ENABLE_PARALLEL_QUERY) {
       should_update_extra_var = true;
-    // https://yuque.antfin-inc.com/xiaochu.yh/doc/exgk9g/
+    //
     // 实现 Oracle 兼容行为方式如下：有变量 enable 和 parallel
     //  alter session enable parallel query 时 enable = true, parallel = 1   => 走 manual table dop 规则
     //  alter session disable parallel query 时 enable = false, parallel = 1  => 走 no parallel 规则
@@ -1941,6 +1941,8 @@ int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
       // maybe NULL, do nothing
     } else if (OB_FAIL(val.get_string(plan))) {
       LOG_WARN("fail to get sql mode str", K(ret), K(val), K(sys_var));
+    } else if (0 == plan.length()) {
+      // do nothing.
     } else {
       // check if plan exists
       ObResourceManagerProxy proxy;
@@ -1963,6 +1965,27 @@ int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
     LOG_INFO("update resource manager plan", K(val), K(ret), K(set_var), K(sys_var));
   }
   out_val = val;
+  return ret;
+}
+
+int ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid(sql::ObExecContext &ctx,
+                                                                 const ObSetVar &set_var,
+                                                                 const ObBasicSysVar &sys_var,
+                                                                 const common::ObObj &in_val,
+                                                                 common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  ObString val = in_val.get_string();
+  if (!val.empty()) {
+    if (val.case_compare("partial_lob") != 0) {
+      ret = OB_ERR_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
+    } else {
+      out_val = in_val;
+    }
+  } else {
+    out_val = in_val;
+  }
   return ret;
 }
 
@@ -2003,11 +2026,10 @@ bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
      *     because SET_SCOPE_SESSION and SET_SCOPE_NEXT_TRANS have same behavior in this
      *     function.
      * see:
-     * https://yuque.antfin-inc.com/ob/sql2/zo3rzg
-     * https://yuque.antfin-inc.com/ob/transaction/qtdtfz
+     *
+     *
      */
-    ret = !session.is_in_transaction();
-    //|| (!session.has_set_trans_var() && !session.has_hold_row_lock());
+    ret = !session.is_in_transaction() || session.is_txn_free_route_temp();
   } else if (lib::is_mysql_mode()) {
     /*
      * mysql mode is much simpler than oracle mode, only 'SET TRANSACTION xxx' is forbidden
@@ -2358,7 +2380,6 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
         LOG_WARN("auto start trans fail when set txn charactor", K(ret),
                  KPC(session->get_tx_desc()), KPC(session));
       }
-      session->set_has_set_trans_var(true);
     } else {
       /*
        * 'ALTER SESSION SET isolation_level' just release snapshot since 4.0
@@ -2367,7 +2388,8 @@ int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
       if (ObTxIsolationLevel::SERIAL == isolation ||
           ObTxIsolationLevel::RR == isolation) {
         // release snapshot, following stmt will acquire snapshot again
-        if (OB_NOT_NULL(session->get_tx_desc()) &&
+        if (!session->is_txn_free_route_temp() &&
+            OB_NOT_NULL(session->get_tx_desc()) &&
             OB_FAIL(MTL(transaction::ObTransService*)
                     ->release_snapshot(*session->get_tx_desc()))) {
           TRANS_LOG(WARN, "try to release snapshot for current session fail",
@@ -2400,7 +2422,7 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
     } else if (lib::is_oracle_mode()) {
       // READ ONLY will use SERIALIZABLE implicitly,
       // READ WRITE need use default value in session, so set UNKNOWN.
-      // https://yuque.antfin-inc.com/ob/sql2/zo3rzg
+      //
       ObTxIsolationLevel isolation = read_only ?
         ObTxIsolationLevel::SERIAL : ObTxIsolationLevel::INVALID;
       session->set_tx_isolation(isolation);
@@ -2410,7 +2432,6 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
                  KPC(session->get_tx_desc()), KPC(session));
       }
     }
-    session->set_has_set_trans_var(true);
     LOG_DEBUG("update tx_read only, while scope=none", K(ret), K(val.get_bool()));
   }
   return ret;

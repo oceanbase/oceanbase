@@ -59,20 +59,20 @@ public:
   virtual void inc_ref() = 0;
   virtual void dec_ref() = 0;
   virtual int trans_begin() = 0;
-  virtual int trans_end(const bool commit, const int64_t trans_version, const int64_t final_log_ts) = 0;
+  virtual int trans_end(const bool commit, const share::SCN trans_version, const share::SCN final_scn) = 0;
   virtual int trans_clear() = 0;
   virtual int elr_trans_preparing() = 0;
   virtual int trans_kill() = 0;
   virtual int trans_publish() = 0;
   virtual int trans_replay_begin() = 0;
   virtual int trans_replay_end(const bool commit,
-                               const int64_t trans_version,
-                               const int64_t final_log_ts,
+                               const share::SCN trans_version,
+                               const share::SCN final_scn,
                                const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0) = 0;
   virtual void print_callbacks() = 0;
   //method called when leader takeover
-  virtual int replay_to_commit() = 0;
+  virtual int replay_to_commit(const bool is_resume) = 0;
   //method called when leader revoke
   virtual int commit_to_replay() = 0;
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx) = 0;
@@ -146,7 +146,7 @@ struct ObMergePriorityInfo
 class ObIMemtable: public storage::ObITable
 {
 public:
-  ObIMemtable() : snapshot_version_(ObVersionRange::MAX_VERSION)
+  ObIMemtable() : snapshot_version_(share::SCN::max_scn())
   {}
   virtual ~ObIMemtable() {}
 
@@ -203,17 +203,13 @@ public:
                   const uint64_t table_id,
                   const storage::ObTableReadInfo &read_info,
                   const blocksstable::ObDatumRowkey &rowkey) = 0;
-  virtual int64_t get_frozen_trans_version() { return 0; }
-  virtual int major_freeze(const common::ObVersion &version)
-  { UNUSED(version); return common::OB_SUCCESS; }
-  virtual int minor_freeze(const common::ObVersion &version)
-  { UNUSED(version); return common::OB_SUCCESS; }
   virtual void inc_pending_lob_count() {}
   virtual void dec_pending_lob_count() {}
   virtual int on_memtable_flushed() { return common::OB_SUCCESS; }
   virtual bool can_be_minor_merged() { return false; }
-  void set_snapshot_version(const int64_t snapshot_version) { snapshot_version_  = snapshot_version; }
-  virtual int64_t get_snapshot_version() const override { return snapshot_version_; }
+  void set_snapshot_version(const share::SCN snapshot_version) { snapshot_version_  = snapshot_version; }
+  virtual int64_t get_snapshot_version() const override { return snapshot_version_.get_val_for_tx(); }
+  virtual share::SCN get_snapshot_version_scn() const { return snapshot_version_; }
   virtual int64_t get_upper_trans_version() const override
   { return OB_NOT_SUPPORTED; }
   virtual int64_t get_max_merged_trans_version() const override
@@ -265,7 +261,7 @@ public:
     int ret = OB_NOT_SUPPORTED;
     return ret;
   }
-  virtual bool is_empty()
+  virtual bool is_empty() const override
   {
     return false;
   }
@@ -274,57 +270,10 @@ public:
     return false;
   }
 protected:
-  int64_t snapshot_version_;
+  share::SCN snapshot_version_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-class ObIMemtableCtxFactory
-{
-public:
-  ObIMemtableCtxFactory() {}
-  virtual ~ObIMemtableCtxFactory() {}
-public:
-  virtual ObIMemtableCtx *alloc(const uint64_t tenant_id = OB_SERVER_TENANT_ID) = 0;
-  virtual void free(ObIMemtableCtx *ctx) = 0;
-};
-
-class ObMemtableCtxFactory : public ObIMemtableCtxFactory
-{
-public:
-  enum
-  {
-    CTX_ALLOC_FIX = 1,
-    CTX_ALLOC_VAR = 2,
-  };
-  typedef common::ObFixedQueue<ObIMemtableCtx> FreeList;
-  typedef common::ObIDMap<ObIMemtableCtx, uint32_t> IDMap;
-  typedef common::ObLfFIFOAllocator DynamicAllocator;
-  static const int64_t OBJ_ALLOCATOR_PAGE = 1L<<22; //4MB
-  static const int64_t DYNAMIC_ALLOCATOR_PAGE = common::OB_MALLOC_NORMAL_BLOCK_SIZE * 8 - 1024; // 64k
-  static const int64_t DYNAMIC_ALLOCATOR_PAGE_NUM = common::OB_MAX_CPU_NUM;
-  static const int64_t MAX_CTX_HOLD_COUNT = 10000;
-  static const int64_t MAX_CTX_COUNT = 3000000;
-public:
-  ObMemtableCtxFactory();
-  ~ObMemtableCtxFactory();
-public:
-  ObIMemtableCtx *alloc(const uint64_t tenant_id = OB_SERVER_TENANT_ID);
-  void free(ObIMemtableCtx *ctx);
-  DynamicAllocator &get_allocator() { return ctx_dynamic_allocator_; }
-  common::ObIAllocator &get_malloc_allocator() { return malloc_allocator_; }
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableCtxFactory);
-private:
-  bool is_inited_;
-  common::ModulePageAllocator mod_;
-  common::ModuleArena ctx_obj_allocator_;
-  DynamicAllocator ctx_dynamic_allocator_;
-  common::ObMalloc malloc_allocator_;
-  FreeList free_list_;
-  int64_t alloc_count_;
-  int64_t free_count_;
-};
 
 class ObMemtableFactory
 {

@@ -37,9 +37,11 @@ public:
 
   int enable_archive(const int64_t dest_no, ObTenantArchiveRoundAttr &round);
   int disable_archive(const int64_t dest_no, ObTenantArchiveRoundAttr &round);
+  int defer_archive(const int64_t dest_no, ObTenantArchiveRoundAttr &round);
   
   bool can_start_archive(const ObTenantArchiveRoundAttr &round) const;
   bool can_stop_archive(const ObTenantArchiveRoundAttr &round) const;
+  bool can_suspend_archive(const ObTenantArchiveRoundAttr &round) const;
   int can_enable_archive(const int64_t dest_no, bool &can);
 
   int start_archive(const ObTenantArchiveRoundAttr &round, ObTenantArchiveRoundAttr &new_round);
@@ -64,7 +66,7 @@ private:
   int start_trans_(common::ObMySQLTransaction &trans);
   int prepare_new_dest_round_(const int64_t dest_no, ObMySQLTransaction &trans, ObTenantArchiveRoundAttr &round);
   int prepare_beginning_dest_round_(const ObTenantArchiveRoundAttr &round, ObTenantArchiveRoundAttr &new_round);
-  int decide_start_scn_(ARCHIVE_SCN_TYPE &start_ts);
+  int decide_start_scn_(share::SCN &start_ts);
 
   bool is_inited_;
   uint64_t tenant_id_; // user tenant id

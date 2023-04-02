@@ -69,6 +69,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // urowid
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // lob, todo
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // json
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // geometry
 };
 
 
@@ -122,6 +123,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(),              // urowid
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
   },
   {
     ObAccuracy(),         // null.
@@ -171,6 +173,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(1),             // nchar
     ObAccuracy(),              // urowid
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   }
 };
 
@@ -223,6 +226,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // urowid
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
@@ -275,6 +279,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(),              // urowid
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
   },
   { /* Oracle */
     ObAccuracy(),         // null.
@@ -324,6 +329,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(1),             // nchar
     ObAccuracy(),              // urowid
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   }
 };
 
@@ -376,6 +382,7 @@ const ObAccuracy ObAccuracy::DML_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(),              // urowid
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, only scale will be use
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
 };
 
 const ObAccuracy ObAccuracy::MAX_ACCURACY_OLD[ObMaxType] = {

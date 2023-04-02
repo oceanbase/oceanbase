@@ -104,11 +104,9 @@ public:
     int64_t total_size = req_size;
     common::ObCurTraceId::TraceId *trace_id = common::ObCurTraceId::get_trace_id();
     uint32_t flag = 0;
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
-      // with trace id
-      flag = 1;
-      total_size = total_size + trace_id->get_serialize_size();
-    }
+    // with trace id
+    flag = 1;
+    total_size = total_size + trace_id->get_serialize_size();
     if (total_size <= buf_size_ - RESERVED_SIZE) {
       while(NULL == header) {
         CriticalGuard(get_qs());
@@ -144,11 +142,8 @@ public:
     int64_t total_size = ls.get_serialize_size() + req_size;
     common::ObCurTraceId::TraceId *trace_id = common::ObCurTraceId::get_trace_id();
     uint32_t flag = 0;
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
-      // with trace id
-      flag = 1;
-      total_size = total_size + trace_id->get_serialize_size();
-    }
+    flag = 1;
+    total_size = total_size + trace_id->get_serialize_size();
     if (total_size <= buf_size_ - RESERVED_SIZE) {
       while(NULL == header) {
         CriticalGuard(get_qs());
@@ -301,7 +296,7 @@ public:
   }
   void set_dst_cluster_id(const int64_t cluster_id) {
     if (cluster_id == common::OB_INVALID_CLUSTER_ID) {
-      RPC_LOG(ERROR, "cluster_id is invalid, unexpected", "server", server_, K(cluster_id));
+      RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "cluster_id is invalid, unexpected", "server", server_, K(cluster_id));
     } else if (cluster_id != dst_cluster_id_) {
       const int64_t old_cluster_id = dst_cluster_id_;
       dst_cluster_id_ = cluster_id;
@@ -459,8 +454,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
     bool is_hp_eio_enabled = false;
-    if (static_cast<int32_t>(GCONF.high_priority_net_thread_count) > 0
-        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2220) {
+    if (static_cast<int32_t>(GCONF.high_priority_net_thread_count) > 0) {
       is_hp_eio_enabled = true;
     }
 

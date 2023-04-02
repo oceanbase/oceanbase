@@ -35,6 +35,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "sql/monitor/ob_sql_plan.h"
 namespace oceanbase
 {
 
@@ -241,7 +242,6 @@ int ObOutlineExecutor::print_outline(ObExecContext &ctx, ObLogPlan *log_plan, Ob
 {
   void *tmp_ptr = NULL;
   char *buf = NULL;
-  int64_t pos = 0;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(log_plan)) {
     ret = OB_ERR_UNEXPECTED;
@@ -250,10 +250,15 @@ int ObOutlineExecutor::print_outline(ObExecContext &ctx, ObLogPlan *log_plan, Ob
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to alloc memory", K(ret));
   } else if (FALSE_IT(buf = static_cast<char *>(tmp_ptr))) {
-  } else if (OB_FAIL(log_plan->print_outline_oneline(buf, OB_MAX_SQL_LENGTH, pos))) {
-    LOG_WARN("fail to print outline", K(ret), K(buf), K(pos));
   } else {
-    outline.assign_ptr(buf, static_cast<ObString::obstr_size_t>(pos));
+    PlanText plan_text;
+    plan_text.buf_ = buf;
+    plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
+    if (OB_FAIL(ObSqlPlan::get_plan_outline_info_one_line(plan_text, log_plan))) {
+      LOG_WARN("failed to get plan outline info", K(ret));
+    } else {
+      outline.assign_ptr(buf, static_cast<ObString::obstr_size_t>(plan_text.pos_));
+    }
   }
   return ret;
 }

@@ -141,7 +141,7 @@ void ObHashGroupByOp::reset()
   first_batch_from_store_ = true;
   is_init_distinct_data_ = false;
   use_distinct_data_ = false;
-  distinct_data_set_.reset();
+  reset_distinct_info();
   bypass_ctrl_.reset();
   by_pass_nth_group_ = 0;
   by_pass_child_brs_ = nullptr;
@@ -693,9 +693,11 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
                             expr->datum_meta_.type_,
                             NULL_LAST,//这里null last还是first无所谓
                             expr->datum_meta_.cs_type_,
-                            lib::is_oracle_mode());
-      hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
-      hash_func.batch_hash_func_ = expr->basic_funcs_->murmur_hash_batch_;
+                            expr->datum_meta_.scale_,
+                            lib::is_oracle_mode(),
+                            expr->obj_meta_.has_lob_header());
+      hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_v2_;
+      hash_func.batch_hash_func_ = expr->basic_funcs_->murmur_hash_v2_batch_;
       if (OB_FAIL(hash_funcs_.push_back(hash_func))) {
         LOG_WARN("failed to push back hash function", K(ret));
       } else if (OB_FAIL(cmp_funcs_.push_back(cmp_func))) {
@@ -734,6 +736,17 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
   return ret;
 }
 
+void ObHashGroupByOp::reset_distinct_info()
+{
+  hash_funcs_.destroy();
+  cmp_funcs_.destroy();
+  sort_collations_.destroy();
+  distinct_data_set_.destroy_my_skip();
+  distinct_data_set_.destroy_items();
+  distinct_data_set_.destroy_distinct_map();
+  distinct_data_set_.reset();
+}
+
 int ObHashGroupByOp::finish_insert_distinct_data()
 {
   int ret = OB_SUCCESS;
@@ -758,6 +771,7 @@ int ObHashGroupByOp::insert_distinct_data()
   bool inserted = false;
   const ObChunkDatumStore::StoredRow *store_row = nullptr;
   if (!is_init_distinct_data_ && OB_FAIL(init_distinct_info(false))) {
+    LOG_WARN("failed to init distinct info", K(ret));
   } else if (OB_FAIL(distinct_data_set_.insert_row(distinct_origin_exprs_, has_exists, inserted))) {
     LOG_WARN("failed to insert row", K(ret));
   } else {
@@ -1228,7 +1242,7 @@ int ObHashGroupByOp::calc_groupby_exprs_hash(ObIArray<ObExpr*> &groupby_exprs,
       } else if (OB_FAIL(expr->eval(eval_ctx_, result))) {
         LOG_WARN("eval failed", K(ret));
       } else {
-        ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_;
+        ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_v2_;
         hash_value = hash_func(*result, hash_value);
       }
     }
@@ -1812,7 +1826,7 @@ void ObHashGroupByOp::calc_groupby_exprs_hash_batch(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: groupby exprs is null", K(ret));
       } else {
-        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_batch_;
+        ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_v2_batch_;
         const bool is_batch_seed = (i > 0);
         hash_func(base_hash_vals_,
                   expr->locate_batch_datums(eval_ctx_), expr->is_batch_result(),
@@ -1835,7 +1849,7 @@ void ObHashGroupByOp::calc_groupby_exprs_hash_batch(
     ObExpr *expr = groupby_exprs.at(i);
     if (OB_ISNULL(expr)) {
     } else {
-      ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_batch_;
+      ObBatchDatumHashFunc hash_func = expr->basic_funcs_->murmur_hash_v2_batch_;
       const bool is_batch_seed = (i > 0);
       hash_func(hash_vals_,
                 expr->locate_batch_datums(eval_ctx_), expr->is_batch_result(),
@@ -2621,7 +2635,7 @@ int ObHashGroupByOp::init_by_pass_op()
   bypass_ctrl_.open_by_pass_ctrl();
   uint64_t cut_ratio = 0;
   uint64_t default_cut_ratio = ObAdaptiveByPassCtrl::INIT_CUT_RATIO;
-  err_sim = E(EventTable::EN_ADAPTIVE_GROUP_BY_SMALL_CACHE) 0;
+  err_sim = OB_E(EventTable::EN_ADAPTIVE_GROUP_BY_SMALL_CACHE) 0;
   if (0 != err_sim) {
     if (INT32_MAX == std::abs(err_sim)) {
       force_by_pass_ = true;

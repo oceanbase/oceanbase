@@ -240,7 +240,6 @@ inline ObWarningBuffer *&ob_get_tsi_warning_buffer()
 {
   return g_warning_buffer;
 }
-
 inline const ObString ob_get_tsi_err_msg(int code)
 {
   ObString ret;

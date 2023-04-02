@@ -32,23 +32,25 @@ a	b
 9	5
 explain  select * from t2 where b in (select a from t1);
 Query Plan
-=============================================
-|ID|OPERATOR            |NAME|EST. ROWS|COST|
----------------------------------------------
-|0 |HASH RIGHT SEMI JOIN|    |3        |6   |
-|1 | TABLE SCAN         |t1  |3        |2   |
-|2 | TABLE SCAN         |t2  |10       |3   |
-=============================================
-
-Outputs & filters: 
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |    |3       |6           |
+|1 | TABLE SCAN          |t1  |3       |2           |
+|2 | TABLE SCAN          |t2  |10      |3           |
+=====================================================
+Outputs & filters:
 -------------------------------------
-  0 - output([t2.a], [t2.b]), filter(nil), rowset=256, 
+  0 - output([t2.a], [t2.b]), filter(nil), rowset=256
       equal_conds([t2.b = t1.a]), other_conds(nil)
-  1 - output([t1.a]), filter(nil), rowset=256, 
+  1 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p0)
-  2 - output([t2.b], [t2.a]), filter(nil), rowset=256, 
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.b], [t2.a]), filter(nil), rowset=256
       access([t2.b], [t2.a]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 select * from t2 where b in (select a from t1);
 a	b
 1	1
@@ -65,23 +67,25 @@ primary key(pk1, pk2, pk3)
 insert into t3 select a,a, a,a,a from t0;
 explain  select * from t3 where b in (select a from t1);
 Query Plan
-=============================================
-|ID|OPERATOR            |NAME|EST. ROWS|COST|
----------------------------------------------
-|0 |HASH RIGHT SEMI JOIN|    |3        |6   |
-|1 | TABLE SCAN         |t1  |3        |2   |
-|2 | TABLE SCAN         |t3  |10       |3   |
-=============================================
-
-Outputs & filters: 
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |    |3       |6           |
+|1 | TABLE SCAN          |t1  |3       |2           |
+|2 | TABLE SCAN          |t3  |10      |3           |
+=====================================================
+Outputs & filters:
 -------------------------------------
-  0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2], [t3.pk3]), filter(nil), rowset=256, 
+  0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2], [t3.pk3]), filter(nil), rowset=256
       equal_conds([t3.b = t1.a]), other_conds(nil)
-  1 - output([t1.a]), filter(nil), rowset=256, 
+  1 - output([t1.a]), filter(nil), rowset=256
       access([t1.a]), partitions(p0)
-  2 - output([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), filter(nil), rowset=256, 
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), filter(nil), rowset=256
       access([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t3.pk1], [t3.pk2], [t3.pk3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select * from t3 where b in (select a from t1);
 a	b	pk1	pk2	pk3
 1	1	1	1	1
@@ -99,23 +103,25 @@ A.a + 10*B.a, A.a + 10*B.a, A.a + 10*B.a, A.a + 10*B.a
 from t0 A, t0 B where B.a <5;
 explain  select * from t3 where b in (select a from t0);
 Query Plan
-=============================================
-|ID|OPERATOR            |NAME|EST. ROWS|COST|
----------------------------------------------
-|0 |HASH RIGHT SEMI JOIN|    |10       |15  |
-|1 | TABLE SCAN         |t0  |10       |3   |
-|2 | TABLE SCAN         |t3  |50       |7   |
-=============================================
-
-Outputs & filters: 
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |    |10      |15          |
+|1 | TABLE SCAN          |t0  |10      |3           |
+|2 | TABLE SCAN          |t3  |50      |7           |
+=====================================================
+Outputs & filters:
 -------------------------------------
-  0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2]), filter(nil), rowset=256, 
+  0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2]), filter(nil), rowset=256
       equal_conds([t3.b = t0.a]), other_conds(nil)
-  1 - output([t0.a]), filter(nil), rowset=256, 
+  1 - output([t0.a]), filter(nil), rowset=256
       access([t0.a]), partitions(p0)
-  2 - output([t3.pk1], [t3.pk2], [t3.b], [t3.a]), filter(nil), rowset=256, 
+      is_index_back=false, is_global_index=false,
+      range_key([t0.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t3.pk1], [t3.pk2], [t3.b], [t3.a]), filter(nil), rowset=256
       access([t3.pk1], [t3.pk2], [t3.b], [t3.a]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t3.pk1], [t3.pk2]), range(MIN,MIN ; MAX,MAX)always true
 select * from t3 where b in (select A.a+B.a from t0 A, t0 B where B.a<5);
 a	b	pk1	pk2
 0	0	0	0
@@ -134,23 +140,25 @@ a	b	pk1	pk2
 9	9	9	9
 explain  select * from t1 where a in (select b from t2);
 Query Plan
-========================================
-|ID|OPERATOR      |NAME |EST. ROWS|COST|
-----------------------------------------
-|0 |HASH SEMI JOIN|     |3        |6   |
-|1 | TABLE SCAN   |t1   |3        |2   |
-|2 | TABLE SCAN   |t2(b)|10       |3   |
-========================================
-
-Outputs & filters: 
+================================================
+|ID|OPERATOR       |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |HASH SEMI JOIN |     |3       |6           |
+|1 | TABLE SCAN    |t1   |3       |2           |
+|2 | TABLE SCAN    |t2(b)|10      |3           |
+================================================
+Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b]), filter(nil), rowset=256, 
+  0 - output([t1.a], [t1.b]), filter(nil), rowset=256
       equal_conds([t1.a = t2.b]), other_conds(nil)
-  1 - output([t1.a], [t1.b]), filter(nil), rowset=256, 
+  1 - output([t1.a], [t1.b]), filter(nil), rowset=256
       access([t1.a], [t1.b]), partitions(p0)
-  2 - output([t2.b]), filter(nil), rowset=256, 
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.b]), filter(nil), rowset=256
       access([t2.b]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t2.b], [t2.__pk_increment]), range(MIN,MIN ; MAX,MAX)always true
 select * from t1;
 a	b
 1	1
@@ -189,35 +197,38 @@ explain  select 1 from t2 where
 c2 in (select 1 from t3, t2) and
 c1 in (select convert(c6,char(1)) from t2);
 Query Plan
-=====================================================
-|ID|OPERATOR                   |NAME |EST. ROWS|COST|
------------------------------------------------------
-|0 |HASH SEMI JOIN             |     |1        |6   |
-|1 | NESTED-LOOP JOIN CARTESIAN|     |1        |4   |
-|2 |  TABLE SCAN               |t2   |1        |2   |
-|3 |  MATERIAL                 |     |1        |2   |
-|4 |   SUBPLAN SCAN            |VIEW3|1        |2   |
-|5 |    TABLE SCAN             |t3   |1        |2   |
-|6 | TABLE SCAN                |t2   |1        |2   |
-=====================================================
-
-Outputs & filters: 
+=============================================================
+|ID|OPERATOR                    |NAME |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |HASH SEMI JOIN              |     |1       |6           |
+|1 | NESTED-LOOP JOIN CARTESIAN |     |1       |4           |
+|2 |  TABLE SCAN                |t2   |1       |2           |
+|3 |  MATERIAL                  |     |1       |2           |
+|4 |   SUBPLAN SCAN             |VIEW3|1       |2           |
+|5 |    TABLE SCAN              |t3   |1       |2           |
+|6 | TABLE SCAN                 |t2   |1       |2           |
+=============================================================
+Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter(nil), rowset=256, 
+  0 - output([1]), filter(nil), rowset=256
       equal_conds([cast(t2.c1, VARCHAR(1048576)) = cast(cast(t2.c6, CHAR(1)), VARCHAR(1048576))]), other_conds(nil)
-  1 - output([t2.c1]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
-  2 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(1, 0))]), rowset=256, 
+  1 - output([t2.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
+  2 - output([t2.c1]), filter([cast(t2.c2, DECIMAL(-1, -1)) = cast(1, DECIMAL(1, 0))]), rowset=256
       access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
   3 - output(nil), filter(nil), rowset=256
-  4 - output(nil), filter(nil), rowset=256, 
+  4 - output(nil), filter(nil), rowset=256
       access(nil)
-  5 - output([1]), filter(nil), rowset=256, 
-      access(nil), partitions(p0), 
-      limit(1), offset(nil)
-  6 - output([t2.c6]), filter(nil), rowset=256, 
+  5 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c6]), filter(nil), rowset=256
       access([t2.c6]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
 drop table t2, t3;
 # 
 # BUG#57431: subquery returns wrong result (semijoin=on) with pred AND

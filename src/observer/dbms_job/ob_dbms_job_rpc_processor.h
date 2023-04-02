@@ -38,7 +38,7 @@ public:
   virtual void on_invalid() {}
   virtual void on_timeout()
   {
-    SQL_EXE_LOG(WARN, "run dbms job timeout!");
+    SQL_EXE_LOG_RET(WARN, common::OB_TIMEOUT, "run dbms job timeout!");
   }
 
   rpc::frame::ObReqTransport::AsyncCB *clone(const rpc::frame::SPAlloc &alloc) const

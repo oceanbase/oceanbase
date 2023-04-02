@@ -181,6 +181,11 @@ public:
                                   char *buf,
                                   int64_t buf_len,
                                   int64_t &pos) const;
+  int print_spatial_index_column(const ObTableSchema &table_schema,
+                                 const ObColumnSchemaV2 &column,
+                                 char *buf,
+                                 int64_t buf_len,
+                                 int64_t &pos) const;
   int print_prefix_index_column(const ObColumnSchemaV2 &column,
                                 bool is_last,
                                 char *buf,
@@ -327,6 +332,7 @@ public:
                                const ObStmtNodeTree *param_list,
                                const ObStmtNodeTree *return_type,
                                const common::ObString &body,
+                               const common::ObString &clause,
                                char* buf,
                                const int64_t& buf_len,
                                int64_t &pos,

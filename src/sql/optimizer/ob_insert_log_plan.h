@@ -13,6 +13,7 @@
 #ifndef _OB_INSERT_LOG_PLAN_H
 #define _OB_INSERT_LOG_PLAN_H
 #include "sql/optimizer/ob_del_upd_log_plan.h"
+#include "sql/ob_sql_define.h"
 
 namespace oceanbase
 {
@@ -30,7 +31,7 @@ public:
   { }
   virtual ~ObInsertLogPlan()
   { }
-  virtual int generate_raw_plan() override;
+  virtual int generate_normal_raw_plan() override;
 
   const ObInsertStmt *get_stmt() const override
   { return reinterpret_cast<const ObInsertStmt*>(stmt_); }
@@ -64,6 +65,14 @@ protected:
                              ObShardingInfo *insert_sharding,
                              bool is_multi_part);
   int candi_allocate_pdml_insert();
+  int candi_allocate_optimizer_stats_gathering();
+  int candi_allocate_root_optimizer_stats_gathering();
+
+  int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
+                                                OSG_TYPE type,
+                                                OSGShareInfo &info);
+  int generate_osg_share_info(OSGShareInfo &info);
+
   virtual int check_insert_need_multi_partition_dml(ObLogicalOperator &top,
                                                     ObTablePartitionInfo *insert_table_partition,
                                                     ObShardingInfo *insert_sharding,
@@ -114,6 +123,7 @@ protected:
                                       ObRawExpr *&column_conv_expr);
 
 private:
+  int check_need_online_stats_gather(bool &need_osg);
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);
 private:
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> replace_del_index_del_infos_;

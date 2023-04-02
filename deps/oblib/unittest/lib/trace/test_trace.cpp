@@ -54,7 +54,7 @@ TEST(TestTrace, basic_test)
   FLUSH_TRACE();
   auto t = std::thread([=]() {
     // RPC框架端完成初始化
-    OBTRACE->init(trace_id, proxy->span_id_, (auto_flush << 7) + level);
+    OBTRACE->init(trace_id, proxy->get_span_id(), (auto_flush << 7) + level);
     //
     FLTSpanGuard(ObSql);
     FLT_SET_TAG(sql_id, 123);

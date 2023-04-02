@@ -21,6 +21,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 LogTaskHeaderInfo& LogTaskHeaderInfo::operator=(const LogTaskHeaderInfo &rval)
@@ -29,8 +30,8 @@ LogTaskHeaderInfo& LogTaskHeaderInfo::operator=(const LogTaskHeaderInfo &rval)
     this->begin_lsn_ = rval.begin_lsn_;
     this->end_lsn_ = rval.end_lsn_;
     this->log_id_ = rval.log_id_;
-    this->min_log_ts_ = rval.min_log_ts_;
-    this->max_log_ts_ = rval.max_log_ts_;
+    this->min_scn_ = rval.min_scn_;
+    this->max_scn_ = rval.max_scn_;
     this->data_len_ = rval.data_len_;
     this->proposal_id_ = rval.proposal_id_;
     this->prev_lsn_ = rval.prev_lsn_;
@@ -49,8 +50,8 @@ void LogTaskHeaderInfo::reset()
   begin_lsn_.reset();
   end_lsn_.reset();
   log_id_ = OB_INVALID_LOG_ID;
-  min_log_ts_ = OB_INVALID_TIMESTAMP;
-  max_log_ts_ = OB_INVALID_TIMESTAMP;
+  min_scn_.reset();
+  max_scn_.reset();
   data_len_ = 0;
   proposal_id_ = INVALID_PROPOSAL_ID;
   prev_lsn_.reset();
@@ -179,9 +180,9 @@ void LogTask::set_group_log_checksum(const int64_t data_checksum)
   header_.data_checksum_ = data_checksum;
 }
 
-void LogTask::inc_update_max_log_ts(const int64_t log_ts)
+void LogTask::inc_update_max_scn(const SCN &scn)
 {
-  inc_update(&(header_.max_log_ts_), log_ts);
+  header_.max_scn_.inc_update(scn);
 }
 
 void LogTask::update_data_len(const int64_t data_len)
@@ -202,10 +203,10 @@ int LogTask::set_initial_header_info(const LogTaskHeaderInfo &header_info)
     header_.log_id_ = header_info.log_id_;
     header_.is_padding_log_ = header_info.is_padding_log_;
     header_.proposal_id_ = header_info.proposal_id_;
-    header_.min_log_ts_ = header_info.min_log_ts_;
+    header_.min_scn_ = header_info.min_scn_;
     update_data_len(header_info.data_len_);
-    // Note: 这里不能直接赋值，需用inc_update，因为其他log_entry可能已经更新了max_log_ts_
-    inc_update_max_log_ts(header_info.max_log_ts_);
+    // Note: 这里不能直接赋值，需用inc_update，因为其他log_entry可能已经更新了max_scn_
+    inc_update_max_scn(header_info.max_scn_);
     // The first log is responsible for changing state to valid.
     set_valid();
     PALF_LOG(TRACE, "set_initial_header_info", K(ret), K(header_info), KPC(this));
@@ -234,7 +235,7 @@ int LogTask::update_header_info(const LSN &committed_end_lsn, const int64_t accu
   return ret;
 }
 
-int LogTask::set_group_header(const LSN &lsn, const int64_t log_ts, const LogGroupEntryHeader &group_entry_header)
+int LogTask::set_group_header(const LSN &lsn, const SCN &scn, const LogGroupEntryHeader &group_entry_header)
 {
   // caller need hold lock
   // this function is called when receiving log
@@ -244,14 +245,14 @@ int LogTask::set_group_header(const LSN &lsn, const int64_t log_ts, const LogGro
     PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), K(group_entry_header));
   } else if (is_valid()) {
     ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "log_task has been valid", K(ret), K(lsn), K(log_ts), K(group_entry_header), KPC(this));
+    PALF_LOG(WARN, "log_task has been valid", K(ret), K(lsn), K(scn), K(group_entry_header), KPC(this));
   } else {
     header_.begin_lsn_ = lsn;
     header_.log_id_ = group_entry_header.get_log_id();
     header_.is_padding_log_ = group_entry_header.is_padding_log();
     header_.proposal_id_ = group_entry_header.get_log_proposal_id();  // leader's proposal_id when generate this log
-    header_.min_log_ts_ = log_ts;
-    header_.max_log_ts_ = group_entry_header.get_max_timestamp();
+    header_.min_scn_ = scn;
+    header_.max_scn_ = group_entry_header.get_max_scn();
     header_.data_len_ = group_entry_header.get_data_len();          // total len without log_group_entry_header
     header_.committed_end_lsn_ = group_entry_header.get_committed_end_lsn();  // 乱序收日志时前面空洞补齐后需要该值
     header_.accum_checksum_ = group_entry_header.get_accum_checksum();

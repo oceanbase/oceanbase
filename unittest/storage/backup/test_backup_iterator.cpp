@@ -73,7 +73,7 @@ protected:
 
 
 TestBackupIndexIterator::TestBackupIndexIterator()
-    : TestDataFilePrepare(&getter, "TestBackupIndexIterator"),
+    : TestDataFilePrepare(&getter, "TestBackupIndexIterator", OB_DEFAULT_MACRO_BLOCK_SIZE, 500),
       tenant_base_(500),
       job_desc_(),
       backup_dest_(),
@@ -148,7 +148,7 @@ void TestBackupIndexIterator::inner_init_()
   backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
   backup_data_type_.set_major_data_backup();
   incarnation_ = 1;
-  tenant_id_ = 1002;
+  tenant_id_ = 1;
   dest_id_ = 1;
   ls_id_ = ObLSID(0);
   turn_id_ = 1;

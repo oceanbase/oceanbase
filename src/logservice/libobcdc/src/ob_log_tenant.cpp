@@ -204,6 +204,7 @@ void ObLogTenant::reset()
   committer_cur_schema_version_ = OB_INVALID_VERSION;
   committer_next_trans_schema_version_ = OB_INVALID_VERSION;
   cf_handle_ = NULL;
+  ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
 }
 
 int ObLogTenant::alloc_global_trans_seq_and_schema_version_for_ddl(
@@ -376,7 +377,7 @@ int ObLogTenant::update_sys_ls_info(const PartTransTask &task)
   }
   // Only heartbeat and DDL transaction tasks are allowed
   else if (OB_UNLIKELY(! task.is_ddl_trans()
-        && ! task.is_ls_table_trans()
+        && ! task.is_ls_op_trans()
         && ! task.is_sys_ls_heartbeat())) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("task is not DDL trans task, or LS Table, or HEARTBEAT, not supported", KR(ret), K(task));
@@ -824,7 +825,7 @@ void ObLogTenantGuard::revert_tenant()
   if (OB_NOT_NULL(tenant_) && OB_NOT_NULL(tenant_mgr)) {
     int revert_ret = tenant_mgr->revert_tenant(tenant_);
     if (OB_SUCCESS != revert_ret) {
-      LOG_ERROR("revert ObLogTenant fail", K(revert_ret), KPC(tenant_));
+      LOG_ERROR_RET(revert_ret, "revert ObLogTenant fail", K(revert_ret), KPC(tenant_));
     } else {
       tenant_ = NULL;
     }
@@ -895,8 +896,11 @@ int ObLogTenant::init_tz_info_(const uint64_t tenant_id)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tz_info_map_->init(ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP))) {
     LOG_ERROR("fail to init tz_info_map_", K(tenant_id), KR(ret));
-  } else if (TCTX.timezone_info_getter_->init_tz_info_wrap(tenant_id, tz_info_map_version_,
-        *tz_info_map_, *tz_info_wrap_)) {
+  } else if (TCTX.timezone_info_getter_->init_tz_info_wrap(
+      tenant_id,
+      tz_info_map_version_,
+      *tz_info_map_,
+      *tz_info_wrap_)) {
     LOG_ERROR("fail to init tz info wrap", KR(ret), K(tenant_id));
   } else {
     // succ

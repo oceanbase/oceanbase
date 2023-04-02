@@ -54,7 +54,6 @@ struct ObTableMetaInfo
       part_size_(0),
       average_row_size_(0),
       row_count_(0),
-      is_only_memtable_data_(false),
       cost_est_type_(ObEstimateType::OB_CURRENT_STAT_EST),
       has_opt_stat_(false),
       is_empty_table_(false),
@@ -68,7 +67,7 @@ struct ObTableMetaInfo
   TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size),
                K_(part_size), K_(average_row_size), K_(table_column_count),
                K_(table_rowkey_count), K_(table_row_count), K_(row_count),
-               K_(is_only_memtable_data), K_(cost_est_type), K_(has_opt_stat),
+               K_(cost_est_type), K_(has_opt_stat),
                K_(is_empty_table), K_(micro_block_count));
 
   /// the following fields come from schema info
@@ -85,7 +84,6 @@ struct ObTableMetaInfo
   double average_row_size_; //main table best partition average row size
 
   double row_count_;  // row count after filters, estimated by stat manager
-  bool is_only_memtable_data_; // whether has only memtable data
   ObEstimateType cost_est_type_; // cost estimation type
   bool has_opt_stat_;
   bool is_empty_table_;
@@ -107,6 +105,7 @@ struct ObIndexMetaInfo
       is_index_back_(false),
       is_unique_index_(false),
       is_global_index_(false),
+      is_geo_index_(false),
       index_micro_block_count_(-1)
   { }
   virtual ~ObIndexMetaInfo()
@@ -126,6 +125,7 @@ struct ObIndexMetaInfo
   bool is_index_back_; // is index back
   bool is_unique_index_; // is unique index
   bool is_global_index_; // whether is global index
+  bool is_geo_index_; // whether is spatial index
   int64_t index_micro_block_count_;  // micro block count from table static info
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);
@@ -180,9 +180,11 @@ struct ObCostTableScanInfo
      is_inner_path_(false),
      can_use_batch_nlj_(false),
      ranges_(),
+     ss_ranges_(),
      range_columns_(),
      prefix_filters_(),
      pushdown_prefix_filters_(),
+     ss_postfix_range_filters_(),
      postfix_filters_(),
      table_filters_(),
      table_metas_(NULL),
@@ -193,6 +195,8 @@ struct ObCostTableScanInfo
      postfix_filter_sel_(1.0),
      table_filter_sel_(1.0),
      join_filter_sel_(1.0),
+     ss_prefix_ndv_(1.0),
+     ss_postfix_range_filters_sel_(1.0),
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE)
   { }
   virtual ~ObCostTableScanInfo()
@@ -206,7 +210,8 @@ struct ObCostTableScanInfo
                K_(is_virtual_table), K_(is_unique),
                K_(is_inner_path), K_(can_use_batch_nlj),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
-               K_(postfix_filter_sel), K_(table_filter_sel));
+               K_(postfix_filter_sel), K_(table_filter_sel),
+               K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -218,6 +223,7 @@ struct ObCostTableScanInfo
   bool is_inner_path_;
   bool can_use_batch_nlj_;
   ObRangesArray ranges_;  // all the ranges
+  ObRangesArray ss_ranges_;  // skip scan ranges
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> index_access_column_items_; // all the access columns
@@ -225,6 +231,7 @@ struct ObCostTableScanInfo
   //这几个filter的分类参考OptimizerUtil::classify_filters()
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> prefix_filters_; // filters match index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_prefix_filters_; // filters match index prefix along pushed down filter
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> ss_postfix_range_filters_;  // range conditions extract postfix range for skip scan
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> postfix_filters_; // filters evaluated before index back, but not index prefix
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;  // filters evaluated after index back
 
@@ -239,6 +246,8 @@ struct ObCostTableScanInfo
   double postfix_filter_sel_;
   double table_filter_sel_;
   double join_filter_sel_;
+  double ss_prefix_ndv_;  // skip scan prefix columns NDV
+  double ss_postfix_range_filters_sel_;
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
 private:
@@ -603,6 +612,7 @@ public:
     const double DEFAULT_CMP_INT_COST,
     const double DEFAULT_CMP_NUMBER_COST,
     const double DEFAULT_CMP_CHAR_COST,
+    const double DEFAULT_CMP_GEO_COST,
     const double INVALID_CMP_COST,
     const double DEFAULT_HASH_INT_COST,
     const double DEFAULT_HASH_NUMBER_COST,
@@ -635,7 +645,8 @@ public:
     const double DEFAULT_UPDATE_CHECK_PER_ROW_COST,
     const double DEFAULT_DELETE_PER_ROW_COST,
     const double DEFAULT_DELETE_INDEX_PER_ROW_COST,
-    const double DEFAULT_DELETE_CHECK_PER_ROW_COST
+    const double DEFAULT_DELETE_CHECK_PER_ROW_COST,
+    const double DEFAULT_SPATIAL_PER_ROW_COST
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
@@ -652,6 +663,7 @@ public:
       CMP_INT_COST(DEFAULT_CMP_INT_COST),
       CMP_NUMBER_COST(DEFAULT_CMP_NUMBER_COST),
       CMP_CHAR_COST(DEFAULT_CMP_CHAR_COST),
+      CMP_SPATIAL_COST(DEFAULT_CMP_GEO_COST),
       HASH_DEFAULT_COST(DEFAULT_HASH_INT_COST),
       HASH_INT_COST(DEFAULT_HASH_INT_COST),
       HASH_NUMBER_COST(DEFAULT_HASH_NUMBER_COST),
@@ -683,7 +695,8 @@ public:
       UPDATE_CHECK_PER_ROW_COST(DEFAULT_UPDATE_CHECK_PER_ROW_COST),
       DELETE_PER_ROW_COST(DEFAULT_DELETE_PER_ROW_COST),
       DELETE_INDEX_PER_ROW_COST(DEFAULT_DELETE_INDEX_PER_ROW_COST),
-      DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST)
+      DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST),
+      SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST)
     {}
     /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
     double CPU_TUPLE_COST;
@@ -715,6 +728,8 @@ public:
     double CMP_NUMBER_COST;
     /** 比较一次字符串的代价 */
     double CMP_CHAR_COST;
+    /** 比较一次空间数据的代价 */
+    double CMP_SPATIAL_COST;
     /** 对于无法获取数据类型的情况，默认的hash代价 */
     double HASH_DEFAULT_COST;
     /** 计算一个整型变量的hash值的代价 */
@@ -777,6 +792,8 @@ public:
     double DELETE_INDEX_PER_ROW_COST;
     //delete单个约束检查代价
     double DELETE_CHECK_PER_ROW_COST;
+    //空间索引扫描的线性参数
+    double SPATIAL_PER_ROW_COST;
   };
 
 	ObOptEstCostModel(
@@ -992,6 +1009,11 @@ protected:
 														const ObCostTableScanInfo &est_cost_info,
 														double &cost);
 
+  // estimate the spatial calculation and sort cost for spatial index
+  int cost_table_get_one_batch_spatial(double row_count,
+                                       const ObCostTableScanInfo &est_cost_info,
+                                       double &cost);
+
   // @param[in] is_index_back 仅在对索引扫描的回表扫描进行估计时为true
   //estimate one batch table get cost, truly estimation function
   int cost_table_get_one_batch_inner(double row_count,
@@ -1005,6 +1027,9 @@ protected:
                                               const ObCostTableScanInfo &est_cost_info,
                                               bool is_scan_index,
                                               double &res);
+
+  int cost_skip_scan_prefix_scan_one_row(const ObCostTableScanInfo &est_cost_info,
+                                         double &cost);
 protected:
   const double (&comparison_params_)[common::ObMaxTC + 1];
   const double (&hash_params_)[common::ObMaxTC + 1];

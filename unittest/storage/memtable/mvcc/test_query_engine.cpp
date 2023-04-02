@@ -28,7 +28,7 @@ namespace unittest
 using namespace oceanbase::common;
 using namespace oceanbase::keybtree;
 using namespace oceanbase::memtable;
-using ObQueryEngineIterator = ObQueryEngine::Iterator<BtreeIterator>;
+using ObQueryEngineIterator = ObQueryEngine::Iterator<BtreeIterator<ObStoreRowkeyWrapper, ObMvccRow *>>;
 
 TEST(TestObQueryEngine, get_and_set_table_index_node)
 {

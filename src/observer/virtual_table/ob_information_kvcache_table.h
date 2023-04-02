@@ -36,7 +36,14 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
   inline void set_addr(common::ObAddr &addr) {addr_ = &addr;}
-  virtual int set_ip(common::ObAddr *addr);
+
+private:
+  virtual int set_ip();
+  virtual int inner_open() override;
+  int get_tenant_info();
+  int get_handles(ObKVCacheInst *&inst, ObDiagnoseTenantInfo *& tenant_info);
+  int set_diagnose_info(ObKVCacheInst *inst, ObDiagnoseTenantInfo *tenant_info);
+  int process_row(const ObKVCacheInst *inst);
 
 private:
   enum CACHE_COLUMN
@@ -65,6 +72,7 @@ private:
   common::ObStringBuf str_buf_;
   common::ObObj cells_[common::OB_ROW_MAX_COLUMNS_COUNT];
   common::ObArenaAllocator arenallocator_;
+  common::ObDiagnoseTenantInfo tenant_di_info_;
   common::ObArray<std::pair<uint64_t, common::ObDiagnoseTenantInfo*> > tenant_dis_;
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaKvCacheTable);
 };
@@ -72,4 +80,3 @@ private:
 }
 }
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_KVCACHE_TABLE */
-

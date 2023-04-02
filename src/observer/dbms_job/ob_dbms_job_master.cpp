@@ -222,9 +222,7 @@ void ObDBMSJobThread::handle(void *task)
   if (OB_ISNULL(task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("null ptr", K(ret), K(task));
-  } else if (OB_ISNULL(master = static_cast<ObDBMSJobMaster *>(task))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("master is null", K(ret), K(master), K(task));
+  } else if (FALSE_IT(master = static_cast<ObDBMSJobMaster *>(task))) {
   } else if (OB_FAIL(master->scheduler())) {
     LOG_ERROR("fail to run dbms job master", K(ret));
   }

@@ -23,6 +23,7 @@
 #include "lib/allocator/ob_tc_malloc.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_virtual_rpc_protocol_processor.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::serialization;
@@ -142,7 +143,7 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
   ObRpcPacket *pkt = NULL;
   easy_connection_t *easy_conn = NULL;
   bool is_current_normal_mode = true;
-  common::ObTimeGuard timeguard("ObRpcNetHandler::decode", common::OB_EASY_HANDLER_COST_TIME);
+  const int64_t start_ts = common::ObClockGenerator::getClock();
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ms)) {
     ret = OB_INVALID_ARGUMENT;
@@ -191,15 +192,15 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
         LOG_ERROR("failed to decode", K(easy_conn), KP(ms), K(is_current_normal_mode), K(ret));
       } else {
         if (NULL != pkt) {
-          const int64_t receive_ts = common::ObTimeUtility::current_time();
+          const int64_t receive_ts = common::ObClockGenerator::getClock();
           const int64_t fly_ts = receive_ts - pkt->get_timestamp();
           if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
-            LOG_WARN("packet fly cost too much time", "pcode", pkt->get_pcode(),
+            LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),
                     "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), "connection", easy_connection_str(ms->c));
           }
           pkt->set_receive_ts(receive_ts);
-          if (timeguard.get_diff() > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
-            LOG_WARN("packet decode cost too much time", "pcode", pkt->get_pcode(), K(timeguard), "connection", easy_connection_str(ms->c));
+          if (receive_ts - start_ts > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
+            LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "packet decode cost too much time", "pcode", pkt->get_pcode(), "connection", easy_connection_str(ms->c));
           }
         } else {
           //receive data is not enough
@@ -218,13 +219,13 @@ int ObRpcNetHandler::encode(easy_request_t *req, void *packet)
 
   if (OB_ISNULL(req)) {
     eret = EASY_ERROR;
-    LOG_ERROR("req should not be NULL", K(eret));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "req should not be NULL", K(eret));
   } else if (OB_ISNULL(packet)) {
     eret = EASY_ERROR;
-    LOG_ERROR("packet should not be NULL", K(eret));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "packet should not be NULL", K(eret));
   } else if (OB_ISNULL(req->ms) || OB_ISNULL(easy_conn = req->ms->c)) {
     eret = EASY_ERROR;
-    LOG_ERROR("Easy message session(ms) or ms pool is NULL", K(eret), "ms", "req->ms");
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "Easy message session(ms) or ms pool is NULL", K(eret), "ms", "req->ms");
   } else if (NULL == easy_conn->user_data) {
     is_current_normal_mode = true;
   } else {
@@ -248,7 +249,7 @@ int ObRpcNetHandler::encode(easy_request_t *req, void *packet)
     req->pcode = pkt->get_pcode();
     const uint64_t *trace_id = pkt->get_trace_id();
     if (trace_id == NULL) {
-      LOG_WARN("trace_id should not be NULL");
+      LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "trace_id should not be NULL");
     } else {
       req->trace_id[0] = trace_id[0];
       req->trace_id[1] = trace_id[1];
@@ -256,11 +257,11 @@ int ObRpcNetHandler::encode(easy_request_t *req, void *packet)
       req->trace_id[3] = trace_id[3];
     }
 
-    const int64_t receive_ts = common::ObTimeUtility::current_time();
+    const int64_t receive_ts = common::ObClockGenerator::getClock();
     const int64_t wait_ts = receive_ts - pkt->get_timestamp();
 
     if (!pkt->is_resp() && wait_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
-      LOG_WARN("packet wait too much time before encode", "pcode", pkt->get_pcode(),
+      LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet wait too much time before encode", "pcode", pkt->get_pcode(),
                "wait_ts", wait_ts, "send_timestamp", pkt->get_timestamp());
     }
 
@@ -285,7 +286,7 @@ uint64_t ObRpcNetHandler::get_packet_id(easy_connection_t *c, void *packet)
   UNUSED(c);
   uint64_t pkt_id = common::OB_INVALID_ID;
   if (OB_ISNULL(packet)) {
-    LOG_ERROR("packet should not be NULL");
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "packet should not be NULL");
   } else {
     pkt_id = static_cast<ObRpcPacket *>(packet)->get_chid();
     pkt_id = (pkt_id<<16) | (c->fd & 0xffff);
@@ -298,7 +299,7 @@ int ObRpcNetHandler::on_connect(easy_connection_t *c)
   int eret = EASY_OK;
   if (OB_ISNULL(c)) {
     eret = EASY_ERROR;
-    LOG_ERROR("invalid argument", K(eret), K(c));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(eret), K(c));
   } else {
     LOG_INFO("rpc connection accept", "dest", easy_connection_str(c));
   }
@@ -310,7 +311,7 @@ int ObRpcNetHandler::on_disconnect(easy_connection_t *c)
   int eret = EASY_OK;
   if (OB_ISNULL(c)) {
     eret = EASY_ERROR;
-    LOG_ERROR("invalid argument", K(eret), K(c));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(eret), K(c));
   } else {
     if (NULL != c->user_data) {
       //free ctx memory of compress ctx when necessary
@@ -329,7 +330,7 @@ int ObRpcNetHandler::on_disconnect(easy_connection_t *c)
 void ObRpcNetHandler::set_trace_info(easy_request_t *req, void *packet)
 {
   if (OB_ISNULL(req) || OB_ISNULL(packet)) {
-    LOG_ERROR("packet should not be NULL");
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "packet should not be NULL");
   } else {
     ObRpcPacket *pkt = static_cast<ObRpcPacket *>(packet);
     req->request_arrival_time = (pkt->get_request_arrival_time() ? pkt->get_request_arrival_time() : common::ObTimeUtility::current_time());
@@ -344,7 +345,7 @@ void ObRpcNetHandler::set_trace_info(easy_request_t *req, void *packet)
     req->session_id = pkt->get_session_id();
     const uint64_t *trace_id = pkt->get_trace_id();
     if (trace_id == NULL) {
-      LOG_WARN("trace_id should not be NULL");
+      LOG_WARN_RET(common::OB_ERR_UNEXPECTED, "trace_id should not be NULL");
     } else {
       req->trace_id[0] = trace_id[0];
       req->trace_id[1] = trace_id[1];
@@ -358,9 +359,9 @@ char *ObRpcNetHandler::easy_alloc(easy_pool_t *pool, int64_t size) const
 {
   char *buf = NULL;
   if (size > UINT32_MAX || size < 0) {
-    LOG_WARN("easy alloc fail", K(size));
+    LOG_WARN_RET(common::OB_ALLOCATE_MEMORY_FAILED, "easy alloc fail", K(size));
   } else if (OB_ISNULL(pool)) {
-    LOG_ERROR("Easy pool is NULL");
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "Easy pool is NULL");
   } else {
     buf = static_cast<char*>(easy_pool_alloc(pool, static_cast<uint32_t>(size)));
   }

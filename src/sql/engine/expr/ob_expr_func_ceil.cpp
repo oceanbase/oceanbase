@@ -82,7 +82,8 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
       if (OB_FAIL(ObExprResultTypeUtil::get_round_result_type(res_type, type1.get_type()))) {
         LOG_WARN("get round result type failed", K(ret), K(type1), K(res_type));
       } else if (ObMaxType == res_type) {
-        ret = OB_ERR_UNEXPECTED;
+        // 兼容mysql处理不合法类型的报错行为
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("unexpected result type", K(ret), K(type1), K(res_type));
       } else {
         type.set_type(res_type);
@@ -99,7 +100,11 @@ int ObExprCeilFloor::calc_result_type1(ObExprResType &type,
     //no need to test ret here
     // scale
     type.set_scale(0);
-    type.set_precision(type1.get_precision());
+    if (lib::is_mysql_mode() && type.is_double()) {
+      type.set_precision(17); // float length of 0
+    } else {
+      type.set_precision(type1.get_precision());
+    }
   }
 
   ObExprOperator::calc_result_flag1(type, type1);
@@ -244,8 +249,8 @@ int do_eval_batch_ceil_floor(const ObExpr &expr,
           res_datums[i].set_double(ceil(arg_datums.at(i)->get_double()));
         }
       }
+      eval_flag.set(i);
     }
-    eval_flag.set(i);
   }
   return ret;
 }

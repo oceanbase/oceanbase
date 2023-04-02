@@ -108,7 +108,7 @@ int ObExprEncodeSortkey::eval_encode_sortkey(const ObExpr &expr, ObEvalCtx &ctx,
             share::ObEncParam *param = new (buf + i / 3) share::ObEncParam();
             param->type_ = expr.args_[i]->datum_meta_.type_;
             param->cs_type_ = expr.args_[i]->datum_meta_.cs_type_;
-            param->is_var_len_ = is_pad_char_to_full_length(sess->get_sql_mode());
+            param->is_var_len_ = !lib::is_oracle_mode() && is_pad_char_to_full_length(sess->get_sql_mode());
             param->is_memcmp_ = lib::is_oracle_mode();
             param->is_nullable_ = true;
             int64_t odr = order->get_int();
@@ -150,10 +150,11 @@ int ObExprEncodeSortkey::eval_encode_sortkey(const ObExpr &expr, ObEvalCtx &ctx,
       unsigned char *buf
         = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, encode_ctx->max_len_));
       if (OB_ISNULL(buf)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("invalid argument", K(ret), K(encode_ctx->max_len_));
       }
       // encode
+      bool has_invalid_uni = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i += 3) {
         ObDatum *data = NULL;
         if (OB_FAIL(expr.args_[i]->eval(ctx, data))) {
@@ -167,12 +168,17 @@ int ObExprEncodeSortkey::eval_encode_sortkey(const ObExpr &expr, ObEvalCtx &ctx,
               LOG_WARN("failed  to encode sortkey", K(ret));
             }
           } else {
+            if (!params[i/3].is_valid_uni_) has_invalid_uni=true;
             data_len += tmp_data_len;
           }
         }
       }
       if (OB_SUCC(ret)) {
-        res_datum.set_string(ObString(data_len, (char *)buf));
+        if (has_invalid_uni) {
+          res_datum.set_null();
+        } else {
+          res_datum.set_string(ObString(data_len, (char *)buf));
+        }
       } else if (ret == OB_BUF_NOT_ENOUGH) {
         encode_ctx->max_len_ = encode_ctx->max_len_ * 2;
         continue;
@@ -286,10 +292,11 @@ int ObExprEncodeSortkey::eval_encode_sortkey_batch(const ObExpr &expr,
       unsigned char *buf
         = reinterpret_cast<unsigned char *>(expr.get_str_res_mem(ctx, encode_ctx->max_len_, i));
       if (OB_ISNULL(buf)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("invalid argument", K(ret), K(buf));
       }
-      for (int64_t j = 0; OB_SUCC(ret) && j < expr.arg_cnt_; j += 3) {
+      bool has_invalid_uni = false;
+      for (int64_t j = 0; !has_invalid_uni && OB_SUCC(ret) && j < expr.arg_cnt_; j += 3) {
         ObDatum &data = expr.args_[j]->locate_expr_datum(ctx, i);
         int64_t tmp_data_len = 0;
         if (OB_FAIL(share::ObSortkeyConditioner::process_key_conditioning(
@@ -299,11 +306,16 @@ int ObExprEncodeSortkey::eval_encode_sortkey_batch(const ObExpr &expr,
             LOG_WARN("failed  to encode sortkey", K(ret));
           }
         } else {
+          if (!params[j/3].is_valid_uni_) has_invalid_uni=true;
           encode_len += tmp_data_len;
         }
       }
       if (OB_SUCC(ret)) {
-        expr.locate_expr_datum(ctx, i).set_string(ObString(encode_len, (char *)buf));
+        if (has_invalid_uni) {
+          expr.locate_expr_datum(ctx, i).set_null();
+        } else {
+          expr.locate_expr_datum(ctx, i).set_string(ObString(encode_len, (char *)buf));
+        }
       } else if (ret == OB_BUF_NOT_ENOUGH) {
         encode_ctx->max_len_ = encode_ctx->max_len_ * 2;
         continue;

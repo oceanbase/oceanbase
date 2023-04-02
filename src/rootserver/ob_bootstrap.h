@@ -105,6 +105,7 @@ private:
   virtual int create_ls();
   virtual int wait_elect_ls(common::ObAddr &master_rs);
 
+  int notify_sys_tenant_config_();
 private:
   volatile bool stop_;
   share::ObLSLeaderElectionWaiter ls_leader_waiter_;

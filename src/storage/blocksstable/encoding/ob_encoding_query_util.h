@@ -158,6 +158,7 @@ OB_INLINE int32_t *get_store_class_tag_map()
     -1, // ObIntervalSC
     -1, // ObLobSC
     -1, // ObJsonSC
+    -1, // ObGeometrySC
     -1 // ObMaxSC
   };
   return store_class_tag_map;

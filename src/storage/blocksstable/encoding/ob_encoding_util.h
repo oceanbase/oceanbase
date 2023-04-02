@@ -68,17 +68,24 @@ enum ObObjTypeStoreClass
   ObIntervalSC, //oracle interval year to month interval day to second
   ObLobSC,  //lob
   ObJsonSC, // json
+  ObGeometrySC, // geometry
   ObMaxSC,
 };
 
 OB_INLINE bool is_string_encoding_valid(const ObObjTypeStoreClass sc)
 {
-  return (sc == ObStringSC || sc == ObTextSC || sc == ObJsonSC);
+  return (sc == ObStringSC || sc == ObTextSC || sc == ObJsonSC || sc == ObGeometrySC);
 }
 
 OB_INLINE bool store_class_might_contain_lob_locator(const ObObjTypeStoreClass sc)
 {
-  return (sc == ObTextSC || sc == ObLobSC || sc == ObJsonSC);
+  return (sc == ObTextSC || sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC);
+}
+
+OB_INLINE bool is_var_length_type(const ObObjTypeStoreClass sc)
+{
+  return (sc == ObNumberSC || sc == ObStringSC || sc == ObTextSC
+      || sc == ObLobSC || sc == ObJsonSC || sc == ObGeometrySC);
 }
 
 OB_INLINE ObObjTypeStoreClass *get_store_class_map()
@@ -107,6 +114,7 @@ OB_INLINE ObObjTypeStoreClass *get_store_class_map()
     ObStringSC, // ObRowIDTC
     ObLobSC,    //ObLobTC
     ObJsonSC,   //ObJsonTC
+    ObGeometrySC, //ObGeometryTC
     ObMaxSC // ObMaxTC
   };
   STATIC_ASSERT(ARRAYSIZEOF(store_class_map) == common::ObMaxTC + 1,
@@ -165,6 +173,7 @@ OB_INLINE int64_t *get_type_size_map()
     -1, // ObURowID
     -1, //Lob
     -1, //Json
+    -1, //Geometry
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(type_size_map) == common::ObMaxType + 1,
@@ -224,6 +233,7 @@ OB_INLINE int64_t *get_estimate_base_store_size_map()
     8, // ObURowID
     8, //Lob
     9, // ObJsonType
+    9, // ObGeometryType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(estimate_base_store_size_map) == common::ObMaxType + 1,
@@ -409,7 +419,8 @@ inline static int batch_load_data_to_datum(
   }
   case ObStringSC:
   case ObTextSC:
-  case ObJsonSC: {
+  case ObJsonSC:
+  case ObGeometrySC: {
     for (int64_t i = 0; i < row_cap; ++i) {
       if (!datums[i].is_null()) {
         datums[i].ptr_ = cell_datas[i];
@@ -480,7 +491,7 @@ OB_INLINE bool fp_int_cmp(const T left, const T right, const ObFPIntCmpOpType cm
     res = left != right;
     break;
   default:
-    STORAGE_LOG(ERROR, "Not Supported compare operation type", K(cmp_op));
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Not Supported compare operation type", K(cmp_op));
   }
   return res;
 }

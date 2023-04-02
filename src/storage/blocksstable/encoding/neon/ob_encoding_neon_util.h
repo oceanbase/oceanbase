@@ -28,7 +28,7 @@ template <typename T_OUT, typename T_IN, int CMP_TYPE>
 static T_OUT neon_cmp_int(T_IN left, T_IN right)
 {
   UNUSEDx(left, right);
-  STORAGE_LOG(ERROR, "Unsupported neon compare", K(lbt()));
+  STORAGE_LOG_RET(ERROR, OB_NOT_SUPPORTED, "Unsupported neon compare", K(lbt()));
   return left;
 }
 

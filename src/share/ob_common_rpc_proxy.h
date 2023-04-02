@@ -65,6 +65,7 @@ public:
   RPC_S(PRD create_tablegroup, obrpc::OB_CREATE_TABLEGROUP, (ObCreateTablegroupArg), UInt64);
   RPC_S(PRD create_table, obrpc::OB_CREATE_TABLE, (ObCreateTableArg), ObCreateTableRes);
   RPC_S(PRD alter_table, obrpc::OB_ALTER_TABLE, (ObAlterTableArg), ObAlterTableRes);
+  RPC_S(PRD create_hidden_table, obrpc::OB_CREATE_HIDDEN_TABLE, (obrpc::ObCreateHiddenTableArg), ObCreateHiddenTableRes);
   RPC_S(PRD alter_database, obrpc::OB_ALTER_DATABASE, (ObAlterDatabaseArg));
   RPC_S(PRD drop_database, obrpc::OB_DROP_DATABASE, (ObDropDatabaseArg), ObDropDatabaseRes);
   RPC_S(PRD drop_tablegroup, obrpc::OB_DROP_TABLEGROUP, (ObDropTablegroupArg));
@@ -72,6 +73,7 @@ public:
   RPC_S(PRD drop_table, obrpc::OB_DROP_TABLE, (ObDropTableArg), ObDDLRes);
   RPC_S(PRD rename_table, obrpc::OB_RENAME_TABLE, (ObRenameTableArg));
   RPC_S(PRD truncate_table, obrpc::OB_TRUNCATE_TABLE, (ObTruncateTableArg), ObDDLRes);
+  RPC_S(PRD truncate_table_v2, obrpc::OB_TRUNCATE_TABLE_V2, (ObTruncateTableArg), ObDDLRes);
   RPC_S(PRD create_index, obrpc::OB_CREATE_INDEX, (ObCreateIndexArg), ObAlterTableRes);
   RPC_S(PRD drop_index, obrpc::OB_DROP_INDEX, (ObDropIndexArg), ObDropIndexRes);
   RPC_S(PRD flashback_index, obrpc::OB_FLASHBACK_INDEX, (ObFlashBackIndexArg));
@@ -135,7 +137,7 @@ public:
   RPC_S(PRD cancel_evolve_task, obrpc::OB_RS_CANCEL_EVOLVE_TASK, (ObModifyPlanBaselineArg));
   RPC_S(PR5 admin_load_baseline, obrpc::OB_ADMIN_LOAD_BASELINE, (ObLoadPlanBaselineArg));
   // RPC_S(PRD drop_plan_baseline, obrpc::OB_DROP_PLAN_BASELINE, (ObDropPlanBaselineArg));
-  
+
   //----End of definitions for managing plan_baselines----
 
   //----Definitions for managing udf----
@@ -219,13 +221,8 @@ public:
   RPC_S(PR5 admin_upgrade_cmd, obrpc::OB_ADMIN_UPGRADE_CMD, (Bool));
   RPC_S(PR5 admin_rolling_upgrade_cmd, obrpc::OB_ADMIN_ROLLING_UPGRADE_CMD, (ObAdminRollingUpgradeArg));
   RPC_S(PR5 admin_clear_balance_task, obrpc::OB_ADMIN_FLUSH_BALANCE_INFO, (ObAdminClearBalanceTaskArg));
-  //RPC_S(PRD alter_cluster_attr, obrpc::OB_ALTER_CLUSTER_ATTR_DDL, (ObAlterClusterInfoArg));
   RPC_S(PRD get_tenant_schema_versions, obrpc::OB_GET_TENANT_SCHEMA_VERSIONS, (ObGetSchemaArg), obrpc::ObTenantSchemaVersions);
-  //RPC_S(PRD get_cluster_stats, obrpc::OB_GET_CLUSTER_STATS, obrpc::ObClusterTenantStats);
   // RPC_S(PRD update_freeze_schema_version, obrpc::OB_UPDATE_FREEZE_SCHEMA_VERSIONS, (Int64), obrpc::ObTenantSchemaVersions);
-  //RPC_S(PRD alter_cluster, obrpc::OB_ALTER_CLUSTER, (ObAdminClusterArg));
-  //RPC_S(PRD update_standby_cluster_info, obrpc::OB_UPDATE_STANDBY_CLUSTER_INFO, (share::ObClusterAddr));
-  //RPC_S(PR5 alter_cluster_info, obrpc::OB_ALTER_CLUSTER_INFO, (ObAlterClusterInfoArg));
 
   RPC_S(PR5 add_server, obrpc::OB_ADD_SERVER, (ObAdminServerArg));
   RPC_S(PR5 delete_server, obrpc::OB_DELETE_SERVER, (ObAdminServerArg));
@@ -243,6 +240,11 @@ public:
   RPC_S(PR5 calc_column_checksum_response, obrpc::OB_CALC_COLUMN_CHECKSUM_RESPONSE, (obrpc::ObCalcColumnChecksumResponseArg));
   RPC_S(PR5 build_ddl_single_replica_response, obrpc::OB_DDL_BUILD_SINGLE_REPLICA_RESPONSE, (obrpc::ObDDLBuildSingleReplicaResponseArg));
   RPC_S(PR5 cancel_ddl_task, obrpc::OB_CANCEL_DDL_TASK, (obrpc::ObCancelDDLTaskArg));
+  RPC_S(PR5 start_redef_table, obrpc::OB_START_REDEF_TABLE, (ObStartRedefTableArg), ObStartRedefTableRes);
+  RPC_S(PR5 copy_table_dependents, obrpc::OB_COPY_TABLE_DEPENDENTS, (ObCopyTableDependentsArg));
+  RPC_S(PR5 finish_redef_table, obrpc::OB_FINISH_REDEF_TABLE, (ObFinishRedefTableArg));
+  RPC_S(PR5 abort_redef_table, obrpc::OB_ABORT_REDEF_TABLE, (obrpc::ObAbortRedefTableArg));
+  RPC_S(PR5 update_ddl_task_active_time, obrpc::OB_UPDATE_DDL_TASK_ACTIVE_TIME, (obrpc::ObUpdateDDLTaskActiveTimeArg));
 
   RPC_S(PR5 backup_ls_data_res, OB_BACKUP_LS_DATA_RES, (ObBackupTaskRes));
   RPC_S(PR5 delete_backup_ls_task_res, OB_DELETE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
@@ -261,7 +263,6 @@ public:
   RPC_S(PRD broadcast_schema, OB_BROADCAST_SCHEMA, (obrpc::ObBroadcastSchemaArg));
   //RPC_S(PR5 get_switchover_status, OB_GET_SWITCHOVER_STATUS, obrpc::ObGetSwitchoverStatusRes);
   RPC_S(PR5 check_merge_finish, OB_CHECK_MERGE_FINISH, (obrpc::ObCheckMergeFinishArg));
-  //RPC_S(PR5 check_cluster_valid_to_add, OB_CHECK_CLUSTER_VALID_TO_ADD, (obrpc::ObCheckAddStandbyArg), obrpc::ObCheckAddStandbyRes);
   RPC_S(PR5 get_recycle_schema_versions, OB_GET_RECYCLE_SCHEMA_VERSIONS, (obrpc::ObGetRecycleSchemaVersionsArg), obrpc::ObGetRecycleSchemaVersionsResult);
 
   // backup and restore
@@ -291,6 +292,19 @@ public:
   //----Definitions for Application Context----
   RPC_S(PRD do_context_ddl, obrpc::OB_DO_CONTEXT_DDL, (ObContextDDLArg));
   //----End of definitions for Application Context----
+
+  //----Definitions for sync rewrite rules----
+  RPC_S(PR5 admin_sync_rewrite_rules, obrpc::OB_ADMIN_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
+  //----End of Definitions for sync rewrite rules----
+
+  //----Definitions for managing row level security----
+  RPC_S(PRD handle_rls_policy_ddl, obrpc::OB_HANDLE_RLS_POLICY_DDL, (ObRlsPolicyDDLArg));
+  RPC_S(PRD handle_rls_group_ddl, obrpc::OB_HANDLE_RLS_GROUP_DDL, (ObRlsGroupDDLArg));
+  RPC_S(PRD handle_rls_context_ddl, obrpc::OB_HANDLE_RLS_CONTEXT_DDL, (ObRlsContextDDLArg));
+  //----End of definitions for managing row level security----
+
+  RPC_S(PRD recompile_all_views_batch, obrpc::OB_RECOMPILE_ALL_VIEWS_BATCH, (ObRecompileAllViewsBatchArg));
+  RPC_S(PRD try_add_dep_infos_for_synonym_batch, obrpc::OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, (ObTryAddDepInofsForSynonymBatchArg));
 public:
   void set_rs_mgr(share::ObRsMgr &rs_mgr)
   {
@@ -382,25 +396,6 @@ protected:
                Out &result, Handle *handle, const ObRpcOpts &opts)
   {
     CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, args, result, handle, opts));
-  }
-
-  template <typename Input>
-  int rpc_call(ObRpcPacketCode pcode,
-               const Input &args, Handle *handle, const ObRpcOpts &opts)
-  {
-    CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, args, handle, opts));
-  }
-
-  template <typename Output>
-  int rpc_call(ObRpcPacketCode pcode, Output &result,
-               Handle *handle, const ObRpcOpts &opts)
-  {
-    CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, result, handle, opts));
-  }
-
-  int rpc_call(ObRpcPacketCode pcode, Handle *handle, const ObRpcOpts &opts)
-  {
-    CALL_WITH_RETRY(ObRpcProxy::rpc_call(pcode, handle, opts));
   }
 
   template <typename Input>

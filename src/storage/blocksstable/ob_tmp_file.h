@@ -14,10 +14,10 @@
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_TMP_FILE_H_
 
 #include "lib/container/ob_se_array.h"
-#include "storage/blocksstable/ob_macro_block_handle.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_tmp_file_store.h"
 #include "storage/ob_resource_map.h"
+#include "ob_macro_block_handle.h"
+#include "ob_block_manager.h"
+#include "ob_tmp_file_store.h"
 
 namespace oceanbase
 {
@@ -27,11 +27,11 @@ namespace blocksstable
 class ObTmpFile;
 class ObTmpFileExtent;
 
-struct ObTmpFileIOInfo
+struct ObTmpFileIOInfo final
 {
 public:
   ObTmpFileIOInfo();
-  virtual ~ObTmpFileIOInfo();
+  ~ObTmpFileIOInfo();
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K_(fd), K_(dir_id), K_(size), K_(tenant_id), KP_(buf), K_(io_desc));
@@ -43,14 +43,14 @@ public:
   common::ObIOFlag io_desc_;
 };
 
-class ObTmpFileIOHandle
+class ObTmpFileIOHandle final
 {
 public:
-  struct ObIOReadHandle {
+  struct ObIOReadHandle final {
     ObIOReadHandle();
     ObIOReadHandle(const ObMacroBlockHandle &macro_handle, char *buf, const int64_t offset,
         const int64_t size);
-    virtual ~ObIOReadHandle();
+    ~ObIOReadHandle();
     ObIOReadHandle(const ObIOReadHandle &other);
     ObIOReadHandle &operator=(const ObIOReadHandle &other);
     TO_STRING_KV(K_(macro_handle), K_(offset), K_(size), KP_(buf));
@@ -60,11 +60,11 @@ public:
     int64_t size_;
   };
 
-  struct ObPageCacheHandle {
+  struct ObPageCacheHandle final {
     ObPageCacheHandle();
     ObPageCacheHandle(const ObTmpPageValueHandle &page_handle, char *buf, const int64_t offset,
         const int64_t size);
-    virtual ~ObPageCacheHandle();
+    ~ObPageCacheHandle();
     ObPageCacheHandle(const ObPageCacheHandle &other);
     ObPageCacheHandle &operator=(const ObPageCacheHandle &other);
     TO_STRING_KV(K_(page_handle), K_(offset), K_(size), KP_(buf));
@@ -74,11 +74,11 @@ public:
     int64_t size_;
   };
 
-  struct ObBlockCacheHandle {
+  struct ObBlockCacheHandle final {
     ObBlockCacheHandle();
     ObBlockCacheHandle(const ObTmpBlockValueHandle &block_handle, char *buf, const int64_t offset,
         const int64_t size);
-    virtual ~ObBlockCacheHandle();
+    ~ObBlockCacheHandle();
     ObBlockCacheHandle(const ObBlockCacheHandle &other);
     ObBlockCacheHandle &operator=(const ObBlockCacheHandle &other);
     TO_STRING_KV(K_(block_handle), K_(offset), K_(size), KP_(buf));
@@ -89,7 +89,7 @@ public:
   };
 
   ObTmpFileIOHandle();
-  virtual ~ObTmpFileIOHandle();
+  ~ObTmpFileIOHandle();
   OB_INLINE char *get_buffer() { return buf_; }
   OB_INLINE int64_t get_data_size() { return size_; }
   int prepare_read(
@@ -130,36 +130,36 @@ private:
   int do_wait(const int64_t timeout_ms);
 
 private:
+  bool is_read_;
+  bool has_wait_;
+  bool update_offset_in_file_;
+  int64_t fd_;
+  int64_t dir_id_;
+  int64_t size_;  //has read or to write size.
+  int64_t expect_read_size_;
+  int64_t last_read_offset_; // only for more than 8MB read.
+  uint64_t tenant_id_;
+  char *buf_;
+  common::ObIOFlag io_flag_;
   common::ObSEArray<ObTmpFileIOHandle::ObIOReadHandle, 1> io_handles_;
   common::ObSEArray<ObTmpFileIOHandle::ObPageCacheHandle, 1> page_cache_handles_;
   common::ObSEArray<ObTmpFileIOHandle::ObBlockCacheHandle, 1> block_cache_handles_;
-  int64_t fd_;
-  int64_t dir_id_;
-  uint64_t tenant_id_;
-  char *buf_;
-  int64_t size_;  //has read or to write size.
-  bool is_read_;
-  bool has_wait_;
-  int64_t expect_read_size_;
-  int64_t last_read_offset_; // only for more than 8MB read.
-  common::ObIOFlag io_flag_;
-  bool update_offset_in_file_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
-class ObTmpFileExtent
+class ObTmpFileExtent final
 {
 public:
   explicit ObTmpFileExtent(ObTmpFile *file);
-  virtual ~ObTmpFileExtent();
-  virtual int read(const ObTmpFileIOInfo &io_info, const int64_t offset, const int64_t size,
+  ~ObTmpFileExtent();
+  int read(const ObTmpFileIOInfo &io_info, const int64_t offset, const int64_t size,
       char *buf, ObTmpFileIOHandle &handle);
-  virtual int write(const ObTmpFileIOInfo &io_info, int64_t &size, char *&buf);
+  int write(const ObTmpFileIOInfo &io_info, int64_t &size, char *&buf);
   void reset();
   OB_INLINE bool is_closed() const { return is_closed_; }
   bool is_valid();
   bool close(bool force = false);
-  bool close(int32_t &free_page_start_id, int32_t &free_page_nums, bool force = false);
+  bool close(uint8_t &free_page_start_id, uint8_t &free_page_nums, bool force = false);
   void unclose(const int32_t page_nums = -1);
   bool is_alloced() const { return is_alloced_; }
   OB_INLINE void set_global_offset(const int64_t g_offset_start, const int64_t g_offset_end);
@@ -167,38 +167,37 @@ public:
   OB_INLINE int64_t get_global_end() const { return g_offset_end_; }
   OB_INLINE int64_t get_global_start() const { return g_offset_start_; }
   OB_INLINE void alloced() { is_alloced_ = true; }
-  OB_INLINE void set_start_page_id(const int32_t start_page_id) { start_page_id_ = start_page_id; }
-  OB_INLINE int32_t get_start_page_id() const { return start_page_id_; }
-  OB_INLINE void set_page_nums(const int32_t page_nums) { page_nums_ = page_nums; }
-  OB_INLINE int32_t get_page_nums() const { return page_nums_; }
+  OB_INLINE void set_start_page_id(const uint8_t start_page_id) { start_page_id_ = start_page_id; }
+  OB_INLINE uint8_t get_start_page_id() const { return start_page_id_; }
+  OB_INLINE void set_page_nums(const uint8_t page_nums) { page_nums_ = page_nums; }
+  OB_INLINE uint8_t get_page_nums() const { return page_nums_; }
   OB_INLINE void set_block_id(const int64_t block_id) { block_id_ = block_id; }
   OB_INLINE int64_t get_block_id() const { return block_id_; }
-  OB_INLINE void set_offset(const int64_t offset) { offset_ = offset; }
-  OB_INLINE int32_t get_offset() const { return offset_; }
+  OB_INLINE int32_t get_offset() const { return ATOMIC_LOAD(&offset_); }
   OB_INLINE ObTmpFile &get_owner() { return *owner_; }
   TO_STRING_KV(K_(is_alloced), K_(fd), K_(g_offset_start), K_(g_offset_end), KP_(owner),
       K_(start_page_id), K_(page_nums), K_(block_id), K_(offset), K_(is_closed));
 
 private:
   bool is_alloced_;
+  bool is_closed_; // only if close, this extent cannot be used.
+  uint8_t start_page_id_;
+  uint8_t page_nums_;
+  int32_t offset_;
   int64_t fd_;
   int64_t g_offset_start_;
   int64_t g_offset_end_;
   ObTmpFile *owner_;
-  int32_t start_page_id_;
-  int32_t page_nums_;
   int64_t block_id_;
-  int32_t offset_;
   common::SpinRWLock lock_;
-  bool is_closed_; // only if close, this extent cannot be used.
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileExtent);
 };
 
-class ObTmpFileMeta
+class ObTmpFileMeta final
 {
 public:
   explicit ObTmpFileMeta() : fd_(-1), dir_id_(-1), allocator_(NULL), extents_() {}
-  virtual ~ObTmpFileMeta();
+  ~ObTmpFileMeta();
   int clear();
   int init(const int64_t fd, const int64_t dir_id, common::ObIAllocator *allocator);
   ObTmpFileExtent *get_last_extent();
@@ -219,7 +218,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileMeta);
 };
 
-class ObTmpFile
+class ObTmpFile final
 {
 public:
   enum FileWhence
@@ -228,7 +227,7 @@ public:
     CUR_SEEK,
   };
   ObTmpFile();
-  virtual ~ObTmpFile();
+  ~ObTmpFile();
   int init(const int64_t fd, const int64_t dir_id, common::ObIAllocator &allocator);
   int aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &handle);
   int aio_pread(const ObTmpFileIOInfo &io_info, const int64_t offset, ObTmpFileIOHandle &handle);
@@ -269,6 +268,10 @@ private:
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
   int64_t find_first_extent(const int64_t offset);
+  void update_extent_idx_cache(const int64_t last_extent_id,
+                               const int64_t last_extent_min_offset,
+                               const int64_t last_extent_max_offset);
+  int64_t get_extent_idx_from_cache(const int64_t offset) const;
 
 private:
   // NOTE:
@@ -278,32 +281,33 @@ private:
   static const int64_t BIG_FILE_PREALLOC_EXTENT_SIZE = 8;
   static const int64_t READ_SIZE_PER_BATCH = 8 * 1024 * 1024; // 8MB
 
-  ObTmpFileMeta file_meta_;
+  bool is_inited_;
   bool is_big_;
-  uint64_t tenant_id_;
-  int64_t offset_;  // read offset
-  common::ObIAllocator *allocator_;
   int64_t last_extent_id_;
   int64_t last_extent_min_offset_;
   int64_t last_extent_max_offset_;
+  int64_t offset_;  // read offset
+  uint64_t tenant_id_;
+  common::SpinRWLock extent_idx_lock_;
   common::SpinRWLock lock_;
-  bool is_inited_;
+  common::ObIAllocator *allocator_;
+  ObTmpFileMeta file_meta_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpFile);
 };
 
-class ObTmpFileHandle : public storage::ObResourceHandle<ObTmpFile>
+class ObTmpFileHandle final: public storage::ObResourceHandle<ObTmpFile>
 {
 public:
   ObTmpFileHandle();
-  virtual ~ObTmpFileHandle();
+  ~ObTmpFileHandle();
   virtual void reset() override;
 private:
   friend class ObTmpFileManager;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileHandle);
 };
 
-class ObTmpFileManager
+class ObTmpFileManager final
 {
 public:
   static ObTmpFileManager &get_instance();
@@ -378,7 +382,7 @@ private:
 
 private:
   ObTmpFileManager();
-  virtual ~ObTmpFileManager();
+  ~ObTmpFileManager();
   int get_next_dir(int64_t &next_dir);
   int get_next_fd(int64_t &next_fd);
   void next_value(int64_t &current_val, int64_t &next_val);
@@ -389,11 +393,11 @@ private:
   static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
   static const int64_t BLOCK_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
-  storage::ObResourceMap<int64_t, ObTmpFile> files_;
+  bool is_inited_;
   int64_t next_fd_;
   int64_t next_dir_;
   common::SpinRWLock rm_file_lock_;
-  bool is_inited_;
+  storage::ObResourceMap<int64_t, ObTmpFile> files_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileManager);
 };

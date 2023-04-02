@@ -1291,1536 +1291,1628 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[94].info_ = "Indicate how many bytes the interm result manager can alloc most for this tenant" ;
-      ObSysVars[94].name_ = "ob_interm_result_mem_limit" ;
-      ObSysVars[94].data_type_ = ObIntType ;
-      ObSysVars[94].value_ = "2147483648" ;
-      ObSysVars[94].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[94].id_ = SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT] = 94 ;
-    ObSysVars[94].alias_ = "OB_SV_INTERM_RESULT_MEM_LIMIT" ;
+      ObSysVars[94].info_ = "Abort a recursive common table expression if it does more than this number of iterations." ;
+      ObSysVars[94].name_ = "cte_max_recursion_depth" ;
+      ObSysVars[94].data_type_ = ObUInt64Type ;
+      ObSysVars[94].value_ = "1000" ;
+      ObSysVars[94].min_val_ = "0" ;
+      ObSysVars[94].max_val_ = "4294967295" ;
+      ObSysVars[94].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[94].id_ = SYS_VAR_CTE_MAX_RECURSION_DEPTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CTE_MAX_RECURSION_DEPTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CTE_MAX_RECURSION_DEPTH] = 94 ;
+    ObSysVars[94].alias_ = "OB_SV_CTE_MAX_RECURSION_DEPTH" ;
     }();
 
     [&] (){
-      ObSysVars[95].info_ = "Indicate whether sql stmt hit right partition, readonly to user, modify by ob" ;
-      ObSysVars[95].name_ = "ob_proxy_partition_hit" ;
+      ObSysVars[95].info_ = "The maximum available memory in bytes for the internal stack used for regular expression matching operations" ;
+      ObSysVars[95].name_ = "regexp_stack_limit" ;
       ObSysVars[95].data_type_ = ObIntType ;
-      ObSysVars[95].value_ = "1" ;
-      ObSysVars[95].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[95].id_ = SYS_VAR_OB_PROXY_PARTITION_HIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_PARTITION_HIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_PARTITION_HIT] = 95 ;
-    ObSysVars[95].alias_ = "OB_SV_PROXY_PARTITION_HIT" ;
+      ObSysVars[95].value_ = "8000000" ;
+      ObSysVars[95].min_val_ = "0" ;
+      ObSysVars[95].max_val_ = "2147483647" ;
+      ObSysVars[95].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[95].id_ = SYS_VAR_REGEXP_STACK_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REGEXP_STACK_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REGEXP_STACK_LIMIT] = 95 ;
+    ObSysVars[95].alias_ = "OB_SV_REGEXP_STACK_LIMIT" ;
     }();
 
     [&] (){
-      ObSysVars[96].info_ = "log level in session" ;
-      ObSysVars[96].name_ = "ob_log_level" ;
-      ObSysVars[96].data_type_ = ObVarcharType ;
-      ObSysVars[96].value_ = "disabled" ;
-      ObSysVars[96].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[96].id_ = SYS_VAR_OB_LOG_LEVEL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_LOG_LEVEL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_LOG_LEVEL] = 96 ;
-    ObSysVars[96].alias_ = "OB_SV_LOG_LEVEL" ;
+      ObSysVars[96].info_ = "The time limit for regular expression matching operations, default unit is milliseconds" ;
+      ObSysVars[96].name_ = "regexp_time_limit" ;
+      ObSysVars[96].data_type_ = ObIntType ;
+      ObSysVars[96].value_ = "32" ;
+      ObSysVars[96].min_val_ = "0" ;
+      ObSysVars[96].max_val_ = "2147483647" ;
+      ObSysVars[96].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[96].id_ = SYS_VAR_REGEXP_TIME_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REGEXP_TIME_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REGEXP_TIME_LIMIT] = 96 ;
+    ObSysVars[96].alias_ = "OB_SV_REGEXP_TIME_LIMIT" ;
     }();
 
     [&] (){
-      ObSysVars[97].info_ = "Query timeout in microsecond(us)" ;
-      ObSysVars[97].name_ = "ob_query_timeout" ;
+      ObSysVars[97].info_ = "Indicate how many bytes the interm result manager can alloc most for this tenant" ;
+      ObSysVars[97].name_ = "ob_interm_result_mem_limit" ;
       ObSysVars[97].data_type_ = ObIntType ;
-      ObSysVars[97].value_ = "10000000" ;
+      ObSysVars[97].value_ = "2147483648" ;
       ObSysVars[97].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[97].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
-      ObSysVars[97].id_ = SYS_VAR_OB_QUERY_TIMEOUT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_QUERY_TIMEOUT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_QUERY_TIMEOUT] = 97 ;
-    ObSysVars[97].alias_ = "OB_SV_QUERY_TIMEOUT" ;
+      ObSysVars[97].id_ = SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT] = 97 ;
+    ObSysVars[97].alias_ = "OB_SV_INTERM_RESULT_MEM_LIMIT" ;
     }();
 
     [&] (){
-      ObSysVars[98].info_ = "read consistency level: 3=STRONG, 2=WEAK, 1=FROZEN" ;
-      ObSysVars[98].name_ = "ob_read_consistency" ;
+      ObSysVars[98].info_ = "Indicate whether sql stmt hit right partition, readonly to user, modify by ob" ;
+      ObSysVars[98].name_ = "ob_proxy_partition_hit" ;
       ObSysVars[98].data_type_ = ObIntType ;
-      ObSysVars[98].enum_names_ = "[u'', u'FROZEN', u'WEAK', u'STRONG']" ;
-      ObSysVars[98].value_ = "3" ;
-      ObSysVars[98].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[98].id_ = SYS_VAR_OB_READ_CONSISTENCY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_READ_CONSISTENCY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_READ_CONSISTENCY] = 98 ;
-    ObSysVars[98].alias_ = "OB_SV_READ_CONSISTENCY" ;
+      ObSysVars[98].value_ = "1" ;
+      ObSysVars[98].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[98].id_ = SYS_VAR_OB_PROXY_PARTITION_HIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_PARTITION_HIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_PARTITION_HIT] = 98 ;
+    ObSysVars[98].alias_ = "OB_SV_PROXY_PARTITION_HIT" ;
     }();
 
     [&] (){
-      ObSysVars[99].info_ = "whether use transform in session" ;
-      ObSysVars[99].name_ = "ob_enable_transformation" ;
-      ObSysVars[99].data_type_ = ObIntType ;
-      ObSysVars[99].value_ = "1" ;
-      ObSysVars[99].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[99].id_ = SYS_VAR_OB_ENABLE_TRANSFORMATION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRANSFORMATION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_TRANSFORMATION] = 99 ;
-    ObSysVars[99].alias_ = "OB_SV_ENABLE_TRANSFORMATION" ;
+      ObSysVars[99].info_ = "log level in session" ;
+      ObSysVars[99].name_ = "ob_log_level" ;
+      ObSysVars[99].data_type_ = ObVarcharType ;
+      ObSysVars[99].value_ = "disabled" ;
+      ObSysVars[99].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[99].id_ = SYS_VAR_OB_LOG_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_LOG_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_LOG_LEVEL] = 99 ;
+    ObSysVars[99].alias_ = "OB_SV_LOG_LEVEL" ;
     }();
 
     [&] (){
-      ObSysVars[100].info_ = "The max duration of one transaction" ;
-      ObSysVars[100].name_ = "ob_trx_timeout" ;
+      ObSysVars[100].info_ = "Query timeout in microsecond(us)" ;
+      ObSysVars[100].name_ = "ob_query_timeout" ;
       ObSysVars[100].data_type_ = ObIntType ;
-      ObSysVars[100].value_ = "86400000000" ;
+      ObSysVars[100].value_ = "10000000" ;
       ObSysVars[100].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[100].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
-      ObSysVars[100].id_ = SYS_VAR_OB_TRX_TIMEOUT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRX_TIMEOUT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRX_TIMEOUT] = 100 ;
-    ObSysVars[100].alias_ = "OB_SV_TRX_TIMEOUT" ;
+      ObSysVars[100].id_ = SYS_VAR_OB_QUERY_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_QUERY_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_QUERY_TIMEOUT] = 100 ;
+    ObSysVars[100].alias_ = "OB_SV_QUERY_TIMEOUT" ;
     }();
 
     [&] (){
-      ObSysVars[101].info_ = "whether use plan cache in session" ;
-      ObSysVars[101].name_ = "ob_enable_plan_cache" ;
+      ObSysVars[101].info_ = "read consistency level: 3=STRONG, 2=WEAK, 1=FROZEN" ;
+      ObSysVars[101].name_ = "ob_read_consistency" ;
       ObSysVars[101].data_type_ = ObIntType ;
-      ObSysVars[101].value_ = "1" ;
-      ObSysVars[101].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[101].id_ = SYS_VAR_OB_ENABLE_PLAN_CACHE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PLAN_CACHE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PLAN_CACHE] = 101 ;
-    ObSysVars[101].alias_ = "OB_SV_ENABLE_PLAN_CACHE" ;
+      ObSysVars[101].enum_names_ = "[u'', u'FROZEN', u'WEAK', u'STRONG']" ;
+      ObSysVars[101].value_ = "3" ;
+      ObSysVars[101].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[101].id_ = SYS_VAR_OB_READ_CONSISTENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_READ_CONSISTENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_READ_CONSISTENCY] = 101 ;
+    ObSysVars[101].alias_ = "OB_SV_READ_CONSISTENCY" ;
     }();
 
     [&] (){
-      ObSysVars[102].info_ = "whether can select from index table" ;
-      ObSysVars[102].name_ = "ob_enable_index_direct_select" ;
+      ObSysVars[102].info_ = "whether use transform in session" ;
+      ObSysVars[102].name_ = "ob_enable_transformation" ;
       ObSysVars[102].data_type_ = ObIntType ;
-      ObSysVars[102].value_ = "0" ;
+      ObSysVars[102].value_ = "1" ;
       ObSysVars[102].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[102].id_ = SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT] = 102 ;
-    ObSysVars[102].alias_ = "OB_SV_ENABLE_INDEX_DIRECT_SELECT" ;
+      ObSysVars[102].id_ = SYS_VAR_OB_ENABLE_TRANSFORMATION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRANSFORMATION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_TRANSFORMATION] = 102 ;
+    ObSysVars[102].alias_ = "OB_SV_ENABLE_TRANSFORMATION" ;
     }();
 
     [&] (){
-      ObSysVars[103].info_ = "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully" ;
-      ObSysVars[103].name_ = "ob_proxy_set_trx_executed" ;
+      ObSysVars[103].info_ = "The max duration of one transaction" ;
+      ObSysVars[103].name_ = "ob_trx_timeout" ;
       ObSysVars[103].data_type_ = ObIntType ;
-      ObSysVars[103].value_ = "0" ;
-      ObSysVars[103].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[103].id_ = SYS_VAR_OB_PROXY_SET_TRX_EXECUTED ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_SET_TRX_EXECUTED)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_SET_TRX_EXECUTED] = 103 ;
-    ObSysVars[103].alias_ = "OB_SV_PROXY_SET_TRX_EXECUTED" ;
+      ObSysVars[103].value_ = "86400000000" ;
+      ObSysVars[103].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[103].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
+      ObSysVars[103].id_ = SYS_VAR_OB_TRX_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRX_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRX_TIMEOUT] = 103 ;
+    ObSysVars[103].alias_ = "OB_SV_TRX_TIMEOUT" ;
     }();
 
     [&] (){
-      ObSysVars[104].info_ = "enable aggregation function to be push-downed through exchange nodes" ;
-      ObSysVars[104].name_ = "ob_enable_aggregation_pushdown" ;
+      ObSysVars[104].info_ = "whether use plan cache in session" ;
+      ObSysVars[104].name_ = "ob_enable_plan_cache" ;
       ObSysVars[104].data_type_ = ObIntType ;
       ObSysVars[104].value_ = "1" ;
-      ObSysVars[104].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[104].id_ = SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN] = 104 ;
-    ObSysVars[104].alias_ = "OB_SV_ENABLE_AGGREGATION_PUSHDOWN" ;
+      ObSysVars[104].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[104].id_ = SYS_VAR_OB_ENABLE_PLAN_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PLAN_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PLAN_CACHE] = 104 ;
+    ObSysVars[104].alias_ = "OB_SV_ENABLE_PLAN_CACHE" ;
     }();
 
     [&] (){
-      ObSysVars[105].info_ = "" ;
-      ObSysVars[105].name_ = "ob_last_schema_version" ;
+      ObSysVars[105].info_ = "whether can select from index table" ;
+      ObSysVars[105].name_ = "ob_enable_index_direct_select" ;
       ObSysVars[105].data_type_ = ObIntType ;
       ObSysVars[105].value_ = "0" ;
-      ObSysVars[105].flags_ = ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[105].id_ = SYS_VAR_OB_LAST_SCHEMA_VERSION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_LAST_SCHEMA_VERSION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_LAST_SCHEMA_VERSION] = 105 ;
-    ObSysVars[105].alias_ = "OB_SV_LAST_SCHEMA_VERSION" ;
+      ObSysVars[105].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[105].id_ = SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT] = 105 ;
+    ObSysVars[105].alias_ = "OB_SV_ENABLE_INDEX_DIRECT_SELECT" ;
     }();
 
     [&] (){
-      ObSysVars[106].info_ = "Global debug sync facility" ;
-      ObSysVars[106].name_ = "ob_global_debug_sync" ;
-      ObSysVars[106].data_type_ = ObVarcharType ;
-      ObSysVars[106].value_ = "" ;
-      ObSysVars[106].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[106].id_ = SYS_VAR_OB_GLOBAL_DEBUG_SYNC ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_GLOBAL_DEBUG_SYNC)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_GLOBAL_DEBUG_SYNC] = 106 ;
-    ObSysVars[106].alias_ = "OB_SV_GLOBAL_DEBUG_SYNC" ;
+      ObSysVars[106].info_ = "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully" ;
+      ObSysVars[106].name_ = "ob_proxy_set_trx_executed" ;
+      ObSysVars[106].data_type_ = ObIntType ;
+      ObSysVars[106].value_ = "0" ;
+      ObSysVars[106].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[106].id_ = SYS_VAR_OB_PROXY_SET_TRX_EXECUTED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_SET_TRX_EXECUTED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_SET_TRX_EXECUTED] = 106 ;
+    ObSysVars[106].alias_ = "OB_SV_PROXY_SET_TRX_EXECUTED" ;
     }();
 
     [&] (){
-      ObSysVars[107].info_ = "this value is global variables last modified time when server session create, used for proxy to judge whether global vars has changed between two server session" ;
-      ObSysVars[107].name_ = "ob_proxy_global_variables_version" ;
+      ObSysVars[107].info_ = "enable aggregation function to be push-downed through exchange nodes" ;
+      ObSysVars[107].name_ = "ob_enable_aggregation_pushdown" ;
       ObSysVars[107].data_type_ = ObIntType ;
-      ObSysVars[107].value_ = "0" ;
-      ObSysVars[107].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[107].id_ = SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION] = 107 ;
-    ObSysVars[107].alias_ = "OB_SV_PROXY_GLOBAL_VARIABLES_VERSION" ;
+      ObSysVars[107].value_ = "1" ;
+      ObSysVars[107].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[107].id_ = SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN] = 107 ;
+    ObSysVars[107].alias_ = "OB_SV_ENABLE_AGGREGATION_PUSHDOWN" ;
     }();
 
     [&] (){
-      ObSysVars[108].info_ = "control whether use show trace" ;
-      ObSysVars[108].name_ = "ob_enable_show_trace" ;
+      ObSysVars[108].info_ = "" ;
+      ObSysVars[108].name_ = "ob_last_schema_version" ;
       ObSysVars[108].data_type_ = ObIntType ;
       ObSysVars[108].value_ = "0" ;
-      ObSysVars[108].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[108].id_ = SYS_VAR_OB_ENABLE_SHOW_TRACE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_SHOW_TRACE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_SHOW_TRACE] = 108 ;
-    ObSysVars[108].alias_ = "OB_SV_ENABLE_SHOW_TRACE" ;
+      ObSysVars[108].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[108].id_ = SYS_VAR_OB_LAST_SCHEMA_VERSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_LAST_SCHEMA_VERSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_LAST_SCHEMA_VERSION] = 108 ;
+    ObSysVars[108].alias_ = "OB_SV_LAST_SCHEMA_VERSION" ;
     }();
 
     [&] (){
-      ObSysVars[109].info_ = "" ;
-      ObSysVars[109].name_ = "ob_bnl_join_cache_size" ;
-      ObSysVars[109].data_type_ = ObIntType ;
-      ObSysVars[109].value_ = "10485760" ;
-      ObSysVars[109].min_val_ = "1" ;
-      ObSysVars[109].max_val_ = "9223372036854775807" ;
-      ObSysVars[109].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[109].id_ = SYS_VAR_OB_BNL_JOIN_CACHE_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_BNL_JOIN_CACHE_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_BNL_JOIN_CACHE_SIZE] = 109 ;
-    ObSysVars[109].alias_ = "OB_SV_BNL_JOIN_CACHE_SIZE" ;
+      ObSysVars[109].info_ = "Global debug sync facility" ;
+      ObSysVars[109].name_ = "ob_global_debug_sync" ;
+      ObSysVars[109].data_type_ = ObVarcharType ;
+      ObSysVars[109].value_ = "" ;
+      ObSysVars[109].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[109].id_ = SYS_VAR_OB_GLOBAL_DEBUG_SYNC ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_GLOBAL_DEBUG_SYNC)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_GLOBAL_DEBUG_SYNC] = 109 ;
+    ObSysVars[109].alias_ = "OB_SV_GLOBAL_DEBUG_SYNC" ;
     }();
 
     [&] (){
-      ObSysVars[110].info_ = "Indicate current client session user privilege, readonly after modified by first observer" ;
-      ObSysVars[110].name_ = "ob_proxy_user_privilege" ;
+      ObSysVars[110].info_ = "this value is global variables last modified time when server session create, used for proxy to judge whether global vars has changed between two server session" ;
+      ObSysVars[110].name_ = "ob_proxy_global_variables_version" ;
       ObSysVars[110].data_type_ = ObIntType ;
       ObSysVars[110].value_ = "0" ;
-      ObSysVars[110].min_val_ = "0" ;
-      ObSysVars[110].max_val_ = "9223372036854775807" ;
       ObSysVars[110].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[110].id_ = SYS_VAR_OB_PROXY_USER_PRIVILEGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_USER_PRIVILEGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_USER_PRIVILEGE] = 110 ;
-    ObSysVars[110].alias_ = "OB_SV_PROXY_USER_PRIVILEGE" ;
+      ObSysVars[110].id_ = SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_GLOBAL_VARIABLES_VERSION] = 110 ;
+    ObSysVars[110].alias_ = "OB_SV_PROXY_GLOBAL_VARIABLES_VERSION" ;
     }();
 
     [&] (){
-      ObSysVars[111].info_ = "When the DRC system copies data into the target cluster, it needs to be set to the CLUSTER_ID that should be written into commit log of OceanBase, in order to avoid loop replication of data. Normally, it does not need to be set, and OceanBase will use the default value, which is the CLUSTER_ID of current cluster of OceanBase. 0 indicates it is not set, please do not set it to 0" ;
-      ObSysVars[111].base_class_ = "ObStrictRangeIntSysVar" ;
-      ObSysVars[111].name_ = "ob_org_cluster_id" ;
+      ObSysVars[111].info_ = "control whether use show trace" ;
+      ObSysVars[111].name_ = "ob_enable_show_trace" ;
       ObSysVars[111].data_type_ = ObIntType ;
       ObSysVars[111].value_ = "0" ;
-      ObSysVars[111].min_val_ = "0" ;
-      ObSysVars[111].max_val_ = "4294967295" ;
       ObSysVars[111].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[111].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_ob_org_cluster_id" ;
-      ObSysVars[111].id_ = SYS_VAR_OB_ORG_CLUSTER_ID ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ORG_CLUSTER_ID)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ORG_CLUSTER_ID] = 111 ;
-    ObSysVars[111].alias_ = "OB_SV_ORG_CLUSTER_ID" ;
+      ObSysVars[111].id_ = SYS_VAR_OB_ENABLE_SHOW_TRACE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_SHOW_TRACE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_SHOW_TRACE] = 111 ;
+    ObSysVars[111].alias_ = "OB_SV_ENABLE_SHOW_TRACE" ;
     }();
 
     [&] (){
-      ObSysVars[112].info_ = "percentage of tenant memory resources that can be used by plan cache" ;
-      ObSysVars[112].name_ = "ob_plan_cache_percentage" ;
+      ObSysVars[112].info_ = "" ;
+      ObSysVars[112].name_ = "ob_bnl_join_cache_size" ;
       ObSysVars[112].data_type_ = ObIntType ;
-      ObSysVars[112].value_ = "5" ;
-      ObSysVars[112].min_val_ = "0" ;
-      ObSysVars[112].max_val_ = "100" ;
-      ObSysVars[112].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[112].id_ = SYS_VAR_OB_PLAN_CACHE_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PLAN_CACHE_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PLAN_CACHE_PERCENTAGE] = 112 ;
-    ObSysVars[112].alias_ = "OB_SV_PLAN_CACHE_PERCENTAGE" ;
+      ObSysVars[112].value_ = "10485760" ;
+      ObSysVars[112].min_val_ = "1" ;
+      ObSysVars[112].max_val_ = "9223372036854775807" ;
+      ObSysVars[112].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[112].id_ = SYS_VAR_OB_BNL_JOIN_CACHE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_BNL_JOIN_CACHE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_BNL_JOIN_CACHE_SIZE] = 112 ;
+    ObSysVars[112].alias_ = "OB_SV_BNL_JOIN_CACHE_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[113].info_ = "memory usage percentage of plan_cache_limit at which plan cache eviction will be trigger" ;
-      ObSysVars[113].name_ = "ob_plan_cache_evict_high_percentage" ;
+      ObSysVars[113].info_ = "Indicate current client session user privilege, readonly after modified by first observer" ;
+      ObSysVars[113].name_ = "ob_proxy_user_privilege" ;
       ObSysVars[113].data_type_ = ObIntType ;
-      ObSysVars[113].value_ = "90" ;
+      ObSysVars[113].value_ = "0" ;
       ObSysVars[113].min_val_ = "0" ;
-      ObSysVars[113].max_val_ = "100" ;
-      ObSysVars[113].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[113].id_ = SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE] = 113 ;
-    ObSysVars[113].alias_ = "OB_SV_PLAN_CACHE_EVICT_HIGH_PERCENTAGE" ;
+      ObSysVars[113].max_val_ = "9223372036854775807" ;
+      ObSysVars[113].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[113].id_ = SYS_VAR_OB_PROXY_USER_PRIVILEGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PROXY_USER_PRIVILEGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PROXY_USER_PRIVILEGE] = 113 ;
+    ObSysVars[113].alias_ = "OB_SV_PROXY_USER_PRIVILEGE" ;
     }();
 
     [&] (){
-      ObSysVars[114].info_ = "memory usage percentage  of plan_cache_limit at which plan cache eviction will be stopped" ;
-      ObSysVars[114].name_ = "ob_plan_cache_evict_low_percentage" ;
+      ObSysVars[114].info_ = "When the DRC system copies data into the target cluster, it needs to be set to the CLUSTER_ID that should be written into commit log of OceanBase, in order to avoid loop replication of data. Normally, it does not need to be set, and OceanBase will use the default value, which is the CLUSTER_ID of current cluster of OceanBase. 0 indicates it is not set, please do not set it to 0" ;
+      ObSysVars[114].base_class_ = "ObStrictRangeIntSysVar" ;
+      ObSysVars[114].name_ = "ob_org_cluster_id" ;
       ObSysVars[114].data_type_ = ObIntType ;
-      ObSysVars[114].value_ = "50" ;
+      ObSysVars[114].value_ = "0" ;
       ObSysVars[114].min_val_ = "0" ;
-      ObSysVars[114].max_val_ = "100" ;
-      ObSysVars[114].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[114].id_ = SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE] = 114 ;
-    ObSysVars[114].alias_ = "OB_SV_PLAN_CACHE_EVICT_LOW_PERCENTAGE" ;
+      ObSysVars[114].max_val_ = "4294967295" ;
+      ObSysVars[114].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[114].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_ob_org_cluster_id" ;
+      ObSysVars[114].id_ = SYS_VAR_OB_ORG_CLUSTER_ID ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ORG_CLUSTER_ID)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ORG_CLUSTER_ID] = 114 ;
+    ObSysVars[114].alias_ = "OB_SV_ORG_CLUSTER_ID" ;
     }();
 
     [&] (){
-      ObSysVars[115].info_ = "When the recycle bin is enabled, dropped tables and their dependent objects are placed in the recycle bin. When the recycle bin is disabled, dropped tables and their dependent objects are not placed in the recycle bin; they are just dropped." ;
-      ObSysVars[115].name_ = "recyclebin" ;
+      ObSysVars[115].info_ = "percentage of tenant memory resources that can be used by plan cache" ;
+      ObSysVars[115].name_ = "ob_plan_cache_percentage" ;
       ObSysVars[115].data_type_ = ObIntType ;
-      ObSysVars[115].value_ = "0" ;
-      ObSysVars[115].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[115].id_ = SYS_VAR_RECYCLEBIN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RECYCLEBIN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RECYCLEBIN] = 115 ;
-    ObSysVars[115].alias_ = "OB_SV_RECYCLEBIN" ;
+      ObSysVars[115].value_ = "5" ;
+      ObSysVars[115].min_val_ = "0" ;
+      ObSysVars[115].max_val_ = "100" ;
+      ObSysVars[115].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[115].id_ = SYS_VAR_OB_PLAN_CACHE_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PLAN_CACHE_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PLAN_CACHE_PERCENTAGE] = 115 ;
+    ObSysVars[115].alias_ = "OB_SV_PLAN_CACHE_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[116].info_ = "Indicate features that observer supports, readonly after modified by first observer" ;
-      ObSysVars[116].name_ = "ob_capability_flag" ;
-      ObSysVars[116].data_type_ = ObUInt64Type ;
-      ObSysVars[116].value_ = "0" ;
+      ObSysVars[116].info_ = "memory usage percentage of plan_cache_limit at which plan cache eviction will be trigger" ;
+      ObSysVars[116].name_ = "ob_plan_cache_evict_high_percentage" ;
+      ObSysVars[116].data_type_ = ObIntType ;
+      ObSysVars[116].value_ = "90" ;
       ObSysVars[116].min_val_ = "0" ;
-      ObSysVars[116].max_val_ = "18446744073709551615" ;
-      ObSysVars[116].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[116].id_ = SYS_VAR_OB_CAPABILITY_FLAG ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_CAPABILITY_FLAG)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_CAPABILITY_FLAG] = 116 ;
-    ObSysVars[116].alias_ = "OB_SV_CAPABILITY_FLAG" ;
+      ObSysVars[116].max_val_ = "100" ;
+      ObSysVars[116].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[116].id_ = SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE] = 116 ;
+    ObSysVars[116].alias_ = "OB_SV_PLAN_CACHE_EVICT_HIGH_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[117].info_ = "when query is with topk hint, is_result_accurate indicates whether the result is acuurate or not " ;
-      ObSysVars[117].name_ = "is_result_accurate" ;
+      ObSysVars[117].info_ = "memory usage percentage  of plan_cache_limit at which plan cache eviction will be stopped" ;
+      ObSysVars[117].name_ = "ob_plan_cache_evict_low_percentage" ;
       ObSysVars[117].data_type_ = ObIntType ;
-      ObSysVars[117].value_ = "1" ;
-      ObSysVars[117].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[117].id_ = SYS_VAR_IS_RESULT_ACCURATE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_IS_RESULT_ACCURATE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_IS_RESULT_ACCURATE] = 117 ;
-    ObSysVars[117].alias_ = "OB_SV_IS_RESULT_ACCURATE" ;
+      ObSysVars[117].value_ = "50" ;
+      ObSysVars[117].min_val_ = "0" ;
+      ObSysVars[117].max_val_ = "100" ;
+      ObSysVars[117].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[117].id_ = SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PLAN_CACHE_EVICT_LOW_PERCENTAGE] = 117 ;
+    ObSysVars[117].alias_ = "OB_SV_PLAN_CACHE_EVICT_LOW_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[118].info_ = "The variable determines how OceanBase should handle an ambiguous boundary datetime value a case in which it is not clear whether the datetime is in standard or daylight saving time" ;
-      ObSysVars[118].name_ = "error_on_overlap_time" ;
+      ObSysVars[118].info_ = "When the recycle bin is enabled, dropped tables and their dependent objects are placed in the recycle bin. When the recycle bin is disabled, dropped tables and their dependent objects are not placed in the recycle bin; they are just dropped." ;
+      ObSysVars[118].name_ = "recyclebin" ;
       ObSysVars[118].data_type_ = ObIntType ;
       ObSysVars[118].value_ = "0" ;
-      ObSysVars[118].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[118].id_ = SYS_VAR_ERROR_ON_OVERLAP_TIME ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ERROR_ON_OVERLAP_TIME)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_ERROR_ON_OVERLAP_TIME] = 118 ;
-    ObSysVars[118].alias_ = "OB_SV_ERROR_ON_OVERLAP_TIME" ;
+      ObSysVars[118].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[118].id_ = SYS_VAR_RECYCLEBIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RECYCLEBIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RECYCLEBIN] = 118 ;
+    ObSysVars[118].alias_ = "OB_SV_RECYCLEBIN" ;
     }();
 
     [&] (){
-      ObSysVars[119].info_ = "What DBMS is OceanBase compatible with? MYSQL means it behaves like MySQL while ORACLE means it behaves like Oracle." ;
-      ObSysVars[119].name_ = "ob_compatibility_mode" ;
-      ObSysVars[119].data_type_ = ObIntType ;
-      ObSysVars[119].enum_names_ = "[u'MYSQL', u'ORACLE']" ;
+      ObSysVars[119].info_ = "Indicate features that observer supports, readonly after modified by first observer" ;
+      ObSysVars[119].name_ = "ob_capability_flag" ;
+      ObSysVars[119].data_type_ = ObUInt64Type ;
       ObSysVars[119].value_ = "0" ;
-      ObSysVars[119].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::WITH_UPGRADE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[119].id_ = SYS_VAR_OB_COMPATIBILITY_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_COMPATIBILITY_MODE] = 119 ;
-    ObSysVars[119].alias_ = "OB_SV_COMPATIBILITY_MODE" ;
+      ObSysVars[119].min_val_ = "0" ;
+      ObSysVars[119].max_val_ = "18446744073709551615" ;
+      ObSysVars[119].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[119].id_ = SYS_VAR_OB_CAPABILITY_FLAG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_CAPABILITY_FLAG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_CAPABILITY_FLAG] = 119 ;
+    ObSysVars[119].alias_ = "OB_SV_CAPABILITY_FLAG" ;
     }();
 
     [&] (){
-      ObSysVars[120].info_ = "The percentage limitation of tenant memory for SQL execution." ;
-      ObSysVars[120].name_ = "ob_sql_work_area_percentage" ;
+      ObSysVars[120].info_ = "when query is with topk hint, is_result_accurate indicates whether the result is acuurate or not " ;
+      ObSysVars[120].name_ = "is_result_accurate" ;
       ObSysVars[120].data_type_ = ObIntType ;
-      ObSysVars[120].value_ = "5" ;
-      ObSysVars[120].min_val_ = "0" ;
-      ObSysVars[120].max_val_ = "100" ;
-      ObSysVars[120].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[120].id_ = SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE] = 120 ;
-    ObSysVars[120].alias_ = "OB_SV_SQL_WORK_AREA_PERCENTAGE" ;
+      ObSysVars[120].value_ = "1" ;
+      ObSysVars[120].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[120].id_ = SYS_VAR_IS_RESULT_ACCURATE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_IS_RESULT_ACCURATE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_IS_RESULT_ACCURATE] = 120 ;
+    ObSysVars[120].alias_ = "OB_SV_IS_RESULT_ACCURATE" ;
     }();
 
     [&] (){
-      ObSysVars[121].info_ = "The safe weak read snapshot version in one server" ;
-      ObSysVars[121].on_update_func_ = "ObSysVarOnUpdateFuncs::update_safe_weak_read_snapshot" ;
-      ObSysVars[121].name_ = "ob_safe_weak_read_snapshot" ;
+      ObSysVars[121].info_ = "The variable determines how OceanBase should handle an ambiguous boundary datetime value a case in which it is not clear whether the datetime is in standard or daylight saving time" ;
+      ObSysVars[121].name_ = "error_on_overlap_time" ;
       ObSysVars[121].data_type_ = ObIntType ;
-      ObSysVars[121].value_ = "1" ;
-      ObSysVars[121].min_val_ = "0" ;
-      ObSysVars[121].max_val_ = "9223372036854775807" ;
-      ObSysVars[121].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[121].id_ = SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT] = 121 ;
-    ObSysVars[121].alias_ = "OB_SV_SAFE_WEAK_READ_SNAPSHOT" ;
+      ObSysVars[121].value_ = "0" ;
+      ObSysVars[121].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[121].id_ = SYS_VAR_ERROR_ON_OVERLAP_TIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ERROR_ON_OVERLAP_TIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ERROR_ON_OVERLAP_TIME] = 121 ;
+    ObSysVars[121].alias_ = "OB_SV_ERROR_ON_OVERLAP_TIME" ;
     }();
 
     [&] (){
-      ObSysVars[122].info_ = "the routing policy of obproxy/java client and observer internal retry, 1=READONLY_ZONE_FIRST, 2=ONLY_READONLY_ZONE, 3=UNMERGE_ZONE_FIRST, 4=UNMERGE_FOLLOWER_FIRST" ;
-      ObSysVars[122].name_ = "ob_route_policy" ;
+      ObSysVars[122].info_ = "What DBMS is OceanBase compatible with? MYSQL means it behaves like MySQL while ORACLE means it behaves like Oracle." ;
+      ObSysVars[122].name_ = "ob_compatibility_mode" ;
       ObSysVars[122].data_type_ = ObIntType ;
-      ObSysVars[122].enum_names_ = "[u'', u'READONLY_ZONE_FIRST', u'ONLY_READONLY_ZONE', u'UNMERGE_ZONE_FIRST', u'UNMERGE_FOLLOWER_FIRST']" ;
-      ObSysVars[122].value_ = "1" ;
-      ObSysVars[122].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[122].id_ = SYS_VAR_OB_ROUTE_POLICY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ROUTE_POLICY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ROUTE_POLICY] = 122 ;
-    ObSysVars[122].alias_ = "OB_SV_ROUTE_POLICY" ;
+      ObSysVars[122].enum_names_ = "[u'MYSQL', u'ORACLE']" ;
+      ObSysVars[122].value_ = "0" ;
+      ObSysVars[122].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::WITH_UPGRADE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[122].id_ = SYS_VAR_OB_COMPATIBILITY_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_COMPATIBILITY_MODE] = 122 ;
+    ObSysVars[122].alias_ = "OB_SV_COMPATIBILITY_MODE" ;
     }();
 
     [&] (){
-      ObSysVars[123].info_ = "whether do the checksum of the packet between the client and the server" ;
-      ObSysVars[123].name_ = "ob_enable_transmission_checksum" ;
+      ObSysVars[123].info_ = "The percentage limitation of tenant memory for SQL execution." ;
+      ObSysVars[123].name_ = "ob_sql_work_area_percentage" ;
       ObSysVars[123].data_type_ = ObIntType ;
-      ObSysVars[123].value_ = "1" ;
-      ObSysVars[123].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::QUERY_SENSITIVE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[123].id_ = SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM] = 123 ;
-    ObSysVars[123].alias_ = "OB_SV_ENABLE_TRANSMISSION_CHECKSUM" ;
+      ObSysVars[123].value_ = "5" ;
+      ObSysVars[123].min_val_ = "0" ;
+      ObSysVars[123].max_val_ = "100" ;
+      ObSysVars[123].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[123].id_ = SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE] = 123 ;
+    ObSysVars[123].alias_ = "OB_SV_SQL_WORK_AREA_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[124].info_ = "set to 1 (the default by MySQL), foreign key constraints are checked. If set to 0, foreign key constraints are ignored" ;
-      ObSysVars[124].name_ = "foreign_key_checks" ;
+      ObSysVars[124].info_ = "The safe weak read snapshot version in one server" ;
+      ObSysVars[124].on_update_func_ = "ObSysVarOnUpdateFuncs::update_safe_weak_read_snapshot" ;
+      ObSysVars[124].name_ = "ob_safe_weak_read_snapshot" ;
       ObSysVars[124].data_type_ = ObIntType ;
       ObSysVars[124].value_ = "1" ;
-      ObSysVars[124].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[124].id_ = SYS_VAR_FOREIGN_KEY_CHECKS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_FOREIGN_KEY_CHECKS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_FOREIGN_KEY_CHECKS] = 124 ;
-    ObSysVars[124].alias_ = "OB_SV_FOREIGN_KEY_CHECKS" ;
+      ObSysVars[124].min_val_ = "0" ;
+      ObSysVars[124].max_val_ = "9223372036854775807" ;
+      ObSysVars[124].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[124].id_ = SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT] = 124 ;
+    ObSysVars[124].alias_ = "OB_SV_SAFE_WEAK_READ_SNAPSHOT" ;
     }();
 
     [&] (){
-      ObSysVars[125].info_ = "the trace id of current executing statement" ;
-      ObSysVars[125].name_ = "ob_statement_trace_id" ;
-      ObSysVars[125].data_type_ = ObVarcharType ;
-      ObSysVars[125].value_ = "Y0-0" ;
-      ObSysVars[125].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[125].id_ = SYS_VAR_OB_STATEMENT_TRACE_ID ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_STATEMENT_TRACE_ID)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_STATEMENT_TRACE_ID] = 125 ;
-    ObSysVars[125].alias_ = "OB_SV_STATEMENT_TRACE_ID" ;
+      ObSysVars[125].info_ = "the routing policy of obproxy/java client and observer internal retry, 1=READONLY_ZONE_FIRST, 2=ONLY_READONLY_ZONE, 3=UNMERGE_ZONE_FIRST, 4=UNMERGE_FOLLOWER_FIRST" ;
+      ObSysVars[125].name_ = "ob_route_policy" ;
+      ObSysVars[125].data_type_ = ObIntType ;
+      ObSysVars[125].enum_names_ = "[u'', u'READONLY_ZONE_FIRST', u'ONLY_READONLY_ZONE', u'UNMERGE_ZONE_FIRST', u'UNMERGE_FOLLOWER_FIRST']" ;
+      ObSysVars[125].value_ = "1" ;
+      ObSysVars[125].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[125].id_ = SYS_VAR_OB_ROUTE_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ROUTE_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ROUTE_POLICY] = 125 ;
+    ObSysVars[125].alias_ = "OB_SV_ROUTE_POLICY" ;
     }();
 
     [&] (){
-      ObSysVars[126].info_ = "Enable the flashback of table truncation." ;
-      ObSysVars[126].name_ = "ob_enable_truncate_flashback" ;
+      ObSysVars[126].info_ = "whether do the checksum of the packet between the client and the server" ;
+      ObSysVars[126].name_ = "ob_enable_transmission_checksum" ;
       ObSysVars[126].data_type_ = ObIntType ;
-      ObSysVars[126].value_ = "0" ;
-      ObSysVars[126].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[126].id_ = SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK] = 126 ;
-    ObSysVars[126].alias_ = "OB_SV_ENABLE_TRUNCATE_FLASHBACK" ;
+      ObSysVars[126].value_ = "1" ;
+      ObSysVars[126].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::QUERY_SENSITIVE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[126].id_ = SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM] = 126 ;
+    ObSysVars[126].alias_ = "OB_SV_ENABLE_TRANSMISSION_CHECKSUM" ;
     }();
 
     [&] (){
-      ObSysVars[127].info_ = "ip white list for tenant, support % and _ and multi ip(separated by commas), support ip match and wild match" ;
-      ObSysVars[127].name_ = "ob_tcp_invited_nodes" ;
-      ObSysVars[127].data_type_ = ObVarcharType ;
-      ObSysVars[127].value_ = "127.0.0.1,::1" ;
-      ObSysVars[127].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[127].id_ = SYS_VAR_OB_TCP_INVITED_NODES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TCP_INVITED_NODES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TCP_INVITED_NODES] = 127 ;
-    ObSysVars[127].alias_ = "OB_SV_TCP_INVITED_NODES" ;
+      ObSysVars[127].info_ = "set to 1 (the default by MySQL), foreign key constraints are checked. If set to 0, foreign key constraints are ignored" ;
+      ObSysVars[127].name_ = "foreign_key_checks" ;
+      ObSysVars[127].data_type_ = ObIntType ;
+      ObSysVars[127].value_ = "1" ;
+      ObSysVars[127].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[127].id_ = SYS_VAR_FOREIGN_KEY_CHECKS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_FOREIGN_KEY_CHECKS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_FOREIGN_KEY_CHECKS] = 127 ;
+    ObSysVars[127].alias_ = "OB_SV_FOREIGN_KEY_CHECKS" ;
     }();
 
     [&] (){
-      ObSysVars[128].info_ = "current priority used for SQL throttling" ;
-      ObSysVars[128].name_ = "sql_throttle_current_priority" ;
-      ObSysVars[128].data_type_ = ObIntType ;
-      ObSysVars[128].value_ = "100" ;
-      ObSysVars[128].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[128].id_ = SYS_VAR_SQL_THROTTLE_CURRENT_PRIORITY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_CURRENT_PRIORITY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_CURRENT_PRIORITY] = 128 ;
-    ObSysVars[128].alias_ = "OB_SV_SQL_THROTTLE_CURRENT_PRIORITY" ;
+      ObSysVars[128].info_ = "the trace id of current executing statement" ;
+      ObSysVars[128].name_ = "ob_statement_trace_id" ;
+      ObSysVars[128].data_type_ = ObVarcharType ;
+      ObSysVars[128].value_ = "Y0-0" ;
+      ObSysVars[128].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::READONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[128].id_ = SYS_VAR_OB_STATEMENT_TRACE_ID ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_STATEMENT_TRACE_ID)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_STATEMENT_TRACE_ID] = 128 ;
+    ObSysVars[128].alias_ = "OB_SV_STATEMENT_TRACE_ID" ;
     }();
 
     [&] (){
-      ObSysVars[129].info_ = "sql throttle priority, query may not be allowed to execute if its priority isnt greater than this value." ;
-      ObSysVars[129].name_ = "sql_throttle_priority" ;
+      ObSysVars[129].info_ = "Enable the flashback of table truncation." ;
+      ObSysVars[129].name_ = "ob_enable_truncate_flashback" ;
       ObSysVars[129].data_type_ = ObIntType ;
-      ObSysVars[129].value_ = "-1" ;
-      ObSysVars[129].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[129].id_ = SYS_VAR_SQL_THROTTLE_PRIORITY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_PRIORITY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_PRIORITY] = 129 ;
-    ObSysVars[129].alias_ = "OB_SV_SQL_THROTTLE_PRIORITY" ;
+      ObSysVars[129].value_ = "0" ;
+      ObSysVars[129].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[129].id_ = SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK] = 129 ;
+    ObSysVars[129].alias_ = "OB_SV_ENABLE_TRUNCATE_FLASHBACK" ;
     }();
 
     [&] (){
-      ObSysVars[130].info_ = "query may not be allowed to execute if its rt isnt less than this value." ;
-      ObSysVars[130].name_ = "sql_throttle_rt" ;
-      ObSysVars[130].data_type_ = ObNumberType ;
-      ObSysVars[130].value_ = "-1" ;
+      ObSysVars[130].info_ = "ip white list for tenant, support % and _ and multi ip(separated by commas), support ip match and wild match" ;
+      ObSysVars[130].name_ = "ob_tcp_invited_nodes" ;
+      ObSysVars[130].data_type_ = ObVarcharType ;
+      ObSysVars[130].value_ = "127.0.0.1,::1" ;
       ObSysVars[130].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[130].id_ = SYS_VAR_SQL_THROTTLE_RT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_RT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_RT] = 130 ;
-    ObSysVars[130].alias_ = "OB_SV_SQL_THROTTLE_RT" ;
+      ObSysVars[130].id_ = SYS_VAR_OB_TCP_INVITED_NODES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TCP_INVITED_NODES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TCP_INVITED_NODES] = 130 ;
+    ObSysVars[130].alias_ = "OB_SV_TCP_INVITED_NODES" ;
     }();
 
     [&] (){
-      ObSysVars[131].info_ = "query may not be allowed to execute if its CPU usage isnt less than this value." ;
-      ObSysVars[131].name_ = "sql_throttle_cpu" ;
-      ObSysVars[131].data_type_ = ObNumberType ;
-      ObSysVars[131].value_ = "-1" ;
-      ObSysVars[131].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[131].id_ = SYS_VAR_SQL_THROTTLE_CPU ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_CPU)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_CPU] = 131 ;
-    ObSysVars[131].alias_ = "OB_SV_SQL_THROTTLE_CPU" ;
+      ObSysVars[131].info_ = "current priority used for SQL throttling" ;
+      ObSysVars[131].name_ = "sql_throttle_current_priority" ;
+      ObSysVars[131].data_type_ = ObIntType ;
+      ObSysVars[131].value_ = "100" ;
+      ObSysVars[131].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[131].id_ = SYS_VAR_SQL_THROTTLE_CURRENT_PRIORITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_CURRENT_PRIORITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_CURRENT_PRIORITY] = 131 ;
+    ObSysVars[131].alias_ = "OB_SV_SQL_THROTTLE_CURRENT_PRIORITY" ;
     }();
 
     [&] (){
-      ObSysVars[132].info_ = "query may not be allowed to execute if its number of IOs isnt less than this value." ;
-      ObSysVars[132].name_ = "sql_throttle_io" ;
+      ObSysVars[132].info_ = "sql throttle priority, query may not be allowed to execute if its priority isnt greater than this value." ;
+      ObSysVars[132].name_ = "sql_throttle_priority" ;
       ObSysVars[132].data_type_ = ObIntType ;
       ObSysVars[132].value_ = "-1" ;
       ObSysVars[132].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[132].id_ = SYS_VAR_SQL_THROTTLE_IO ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_IO)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_IO] = 132 ;
-    ObSysVars[132].alias_ = "OB_SV_SQL_THROTTLE_IO" ;
+      ObSysVars[132].id_ = SYS_VAR_SQL_THROTTLE_PRIORITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_PRIORITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_PRIORITY] = 132 ;
+    ObSysVars[132].alias_ = "OB_SV_SQL_THROTTLE_PRIORITY" ;
     }();
 
     [&] (){
-      ObSysVars[133].info_ = "query may not be allowed to execute if its network usage isnt less than this value." ;
-      ObSysVars[133].name_ = "sql_throttle_network" ;
+      ObSysVars[133].info_ = "query may not be allowed to execute if its rt isnt less than this value." ;
+      ObSysVars[133].name_ = "sql_throttle_rt" ;
       ObSysVars[133].data_type_ = ObNumberType ;
       ObSysVars[133].value_ = "-1" ;
       ObSysVars[133].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[133].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_sql_throttle_queue_time" ;
-      ObSysVars[133].id_ = SYS_VAR_SQL_THROTTLE_NETWORK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_NETWORK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_NETWORK] = 133 ;
-    ObSysVars[133].alias_ = "OB_SV_SQL_THROTTLE_NETWORK" ;
+      ObSysVars[133].id_ = SYS_VAR_SQL_THROTTLE_RT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_RT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_RT] = 133 ;
+    ObSysVars[133].alias_ = "OB_SV_SQL_THROTTLE_RT" ;
     }();
 
     [&] (){
-      ObSysVars[134].info_ = "query may not be allowed to execute if its number of logical reads isnt less than this value." ;
-      ObSysVars[134].name_ = "sql_throttle_logical_reads" ;
-      ObSysVars[134].data_type_ = ObIntType ;
+      ObSysVars[134].info_ = "query may not be allowed to execute if its CPU usage isnt less than this value." ;
+      ObSysVars[134].name_ = "sql_throttle_cpu" ;
+      ObSysVars[134].data_type_ = ObNumberType ;
       ObSysVars[134].value_ = "-1" ;
       ObSysVars[134].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[134].id_ = SYS_VAR_SQL_THROTTLE_LOGICAL_READS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_LOGICAL_READS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_LOGICAL_READS] = 134 ;
-    ObSysVars[134].alias_ = "OB_SV_SQL_THROTTLE_LOGICAL_READS" ;
+      ObSysVars[134].id_ = SYS_VAR_SQL_THROTTLE_CPU ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_CPU)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_CPU] = 134 ;
+    ObSysVars[134].alias_ = "OB_SV_SQL_THROTTLE_CPU" ;
     }();
 
     [&] (){
-      ObSysVars[135].info_ = "auto_increment service cache size" ;
-      ObSysVars[135].name_ = "auto_increment_cache_size" ;
+      ObSysVars[135].info_ = "query may not be allowed to execute if its number of IOs isnt less than this value." ;
+      ObSysVars[135].name_ = "sql_throttle_io" ;
       ObSysVars[135].data_type_ = ObIntType ;
-      ObSysVars[135].value_ = "1000000" ;
-      ObSysVars[135].min_val_ = "1" ;
-      ObSysVars[135].max_val_ = "100000000" ;
-      ObSysVars[135].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[135].id_ = SYS_VAR_AUTO_INCREMENT_CACHE_SIZE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTO_INCREMENT_CACHE_SIZE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_AUTO_INCREMENT_CACHE_SIZE] = 135 ;
-    ObSysVars[135].alias_ = "OB_SV_AUTO_INCREMENT_CACHE_SIZE" ;
+      ObSysVars[135].value_ = "-1" ;
+      ObSysVars[135].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[135].id_ = SYS_VAR_SQL_THROTTLE_IO ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_IO)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_IO] = 135 ;
+    ObSysVars[135].alias_ = "OB_SV_SQL_THROTTLE_IO" ;
     }();
 
     [&] (){
-      ObSysVars[136].info_ = "JIT execution engine mode, default is AUTO" ;
-      ObSysVars[136].name_ = "ob_enable_jit" ;
-      ObSysVars[136].data_type_ = ObIntType ;
-      ObSysVars[136].enum_names_ = "[u'OFF', u'AUTO', u'FORCE']" ;
-      ObSysVars[136].value_ = "0" ;
-      ObSysVars[136].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[136].id_ = SYS_VAR_OB_ENABLE_JIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_JIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_JIT] = 136 ;
-    ObSysVars[136].alias_ = "OB_SV_ENABLE_JIT" ;
+      ObSysVars[136].info_ = "query may not be allowed to execute if its network usage isnt less than this value." ;
+      ObSysVars[136].name_ = "sql_throttle_network" ;
+      ObSysVars[136].data_type_ = ObNumberType ;
+      ObSysVars[136].value_ = "-1" ;
+      ObSysVars[136].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[136].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_sql_throttle_queue_time" ;
+      ObSysVars[136].id_ = SYS_VAR_SQL_THROTTLE_NETWORK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_NETWORK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_NETWORK] = 136 ;
+    ObSysVars[136].alias_ = "OB_SV_SQL_THROTTLE_NETWORK" ;
     }();
 
     [&] (){
-      ObSysVars[137].info_ = "the percentage limitation of some temp tablespace size in tenant disk." ;
-      ObSysVars[137].name_ = "ob_temp_tablespace_size_percentage" ;
+      ObSysVars[137].info_ = "query may not be allowed to execute if its number of logical reads isnt less than this value." ;
+      ObSysVars[137].name_ = "sql_throttle_logical_reads" ;
       ObSysVars[137].data_type_ = ObIntType ;
-      ObSysVars[137].value_ = "0" ;
-      ObSysVars[137].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[137].id_ = SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE] = 137 ;
-    ObSysVars[137].alias_ = "OB_SV_TEMP_TABLESPACE_SIZE_PERCENTAGE" ;
+      ObSysVars[137].value_ = "-1" ;
+      ObSysVars[137].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[137].id_ = SYS_VAR_SQL_THROTTLE_LOGICAL_READS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_THROTTLE_LOGICAL_READS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_THROTTLE_LOGICAL_READS] = 137 ;
+    ObSysVars[137].alias_ = "OB_SV_SQL_THROTTLE_LOGICAL_READS" ;
     }();
 
     [&] (){
-      ObSysVars[138].info_ = "the dir to place plugin dll" ;
-      ObSysVars[138].name_ = "plugin_dir" ;
-      ObSysVars[138].data_type_ = ObVarcharType ;
-      ObSysVars[138].value_ = "./plugin_dir/" ;
-      ObSysVars[138].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
-      ObSysVars[138].id_ = SYS_VAR_PLUGIN_DIR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLUGIN_DIR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLUGIN_DIR] = 138 ;
-    ObSysVars[138].alias_ = "OB_SV_PLUGIN_DIR" ;
+      ObSysVars[138].info_ = "auto_increment service cache size" ;
+      ObSysVars[138].name_ = "auto_increment_cache_size" ;
+      ObSysVars[138].data_type_ = ObIntType ;
+      ObSysVars[138].value_ = "1000000" ;
+      ObSysVars[138].min_val_ = "1" ;
+      ObSysVars[138].max_val_ = "100000000" ;
+      ObSysVars[138].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[138].id_ = SYS_VAR_AUTO_INCREMENT_CACHE_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AUTO_INCREMENT_CACHE_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AUTO_INCREMENT_CACHE_SIZE] = 138 ;
+    ObSysVars[138].alias_ = "OB_SV_AUTO_INCREMENT_CACHE_SIZE" ;
     }();
 
     [&] (){
-      ObSysVars[139].info_ = "The limited percentage of tenant memory for sql audit" ;
-      ObSysVars[139].name_ = "ob_sql_audit_percentage" ;
+      ObSysVars[139].info_ = "JIT execution engine mode, default is AUTO" ;
+      ObSysVars[139].name_ = "ob_enable_jit" ;
       ObSysVars[139].data_type_ = ObIntType ;
-      ObSysVars[139].value_ = "3" ;
-      ObSysVars[139].min_val_ = "0" ;
-      ObSysVars[139].max_val_ = "80" ;
-      ObSysVars[139].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[139].id_ = SYS_VAR_OB_SQL_AUDIT_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SQL_AUDIT_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SQL_AUDIT_PERCENTAGE] = 139 ;
-    ObSysVars[139].alias_ = "OB_SV_SQL_AUDIT_PERCENTAGE" ;
+      ObSysVars[139].enum_names_ = "[u'OFF', u'AUTO', u'FORCE']" ;
+      ObSysVars[139].value_ = "0" ;
+      ObSysVars[139].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[139].id_ = SYS_VAR_OB_ENABLE_JIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_JIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_JIT] = 139 ;
+    ObSysVars[139].alias_ = "OB_SV_ENABLE_JIT" ;
     }();
 
     [&] (){
-      ObSysVars[140].info_ = "wether use sql audit in session" ;
-      ObSysVars[140].name_ = "ob_enable_sql_audit" ;
+      ObSysVars[140].info_ = "the percentage limitation of some temp tablespace size in tenant disk." ;
+      ObSysVars[140].name_ = "ob_temp_tablespace_size_percentage" ;
       ObSysVars[140].data_type_ = ObIntType ;
-      ObSysVars[140].value_ = "1" ;
-      ObSysVars[140].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[140].id_ = SYS_VAR_OB_ENABLE_SQL_AUDIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_SQL_AUDIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_SQL_AUDIT] = 140 ;
-    ObSysVars[140].alias_ = "OB_SV_ENABLE_SQL_AUDIT" ;
+      ObSysVars[140].value_ = "0" ;
+      ObSysVars[140].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[140].id_ = SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TEMP_TABLESPACE_SIZE_PERCENTAGE] = 140 ;
+    ObSysVars[140].alias_ = "OB_SV_TEMP_TABLESPACE_SIZE_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[141].info_ = "Enable use sql plan baseline" ;
-      ObSysVars[141].name_ = "optimizer_use_sql_plan_baselines" ;
-      ObSysVars[141].data_type_ = ObIntType ;
-      ObSysVars[141].value_ = "0" ;
-      ObSysVars[141].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[141].id_ = SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES] = 141 ;
-    ObSysVars[141].alias_ = "OB_SV_OPTIMIZER_USE_SQL_PLAN_BASELINES" ;
+      ObSysVars[141].info_ = "the dir to place plugin dll" ;
+      ObSysVars[141].name_ = "plugin_dir" ;
+      ObSysVars[141].data_type_ = ObVarcharType ;
+      ObSysVars[141].value_ = "./plugin_dir/" ;
+      ObSysVars[141].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
+      ObSysVars[141].id_ = SYS_VAR_PLUGIN_DIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLUGIN_DIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLUGIN_DIR] = 141 ;
+    ObSysVars[141].alias_ = "OB_SV_PLUGIN_DIR" ;
     }();
 
     [&] (){
-      ObSysVars[142].info_ = "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline." ;
-      ObSysVars[142].name_ = "optimizer_capture_sql_plan_baselines" ;
+      ObSysVars[142].info_ = "The limited percentage of tenant memory for sql audit" ;
+      ObSysVars[142].name_ = "ob_sql_audit_percentage" ;
       ObSysVars[142].data_type_ = ObIntType ;
-      ObSysVars[142].value_ = "0" ;
-      ObSysVars[142].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[142].id_ = SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES] = 142 ;
-    ObSysVars[142].alias_ = "OB_SV_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES" ;
+      ObSysVars[142].value_ = "3" ;
+      ObSysVars[142].min_val_ = "0" ;
+      ObSysVars[142].max_val_ = "80" ;
+      ObSysVars[142].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[142].id_ = SYS_VAR_OB_SQL_AUDIT_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SQL_AUDIT_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SQL_AUDIT_PERCENTAGE] = 142 ;
+    ObSysVars[142].alias_ = "OB_SV_SQL_AUDIT_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[143].info_ = "number of threads allowed to run parallel statements before statement queuing will be used." ;
-      ObSysVars[143].name_ = "parallel_servers_target" ;
+      ObSysVars[143].info_ = "wether use sql audit in session" ;
+      ObSysVars[143].name_ = "ob_enable_sql_audit" ;
       ObSysVars[143].data_type_ = ObIntType ;
-      ObSysVars[143].value_ = "0" ;
-      ObSysVars[143].min_val_ = "0" ;
-      ObSysVars[143].max_val_ = "9223372036854775807" ;
-      ObSysVars[143].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[143].id_ = SYS_VAR_PARALLEL_SERVERS_TARGET ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_SERVERS_TARGET)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_SERVERS_TARGET] = 143 ;
-    ObSysVars[143].alias_ = "OB_SV_PARALLEL_SERVERS_TARGET" ;
+      ObSysVars[143].value_ = "1" ;
+      ObSysVars[143].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[143].id_ = SYS_VAR_OB_ENABLE_SQL_AUDIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_SQL_AUDIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_SQL_AUDIT] = 143 ;
+    ObSysVars[143].alias_ = "OB_SV_ENABLE_SQL_AUDIT" ;
     }();
 
     [&] (){
-      ObSysVars[144].info_ = "If set true, transaction open the elr optimization." ;
-      ObSysVars[144].name_ = "ob_early_lock_release" ;
+      ObSysVars[144].info_ = "Enable use sql plan baseline" ;
+      ObSysVars[144].name_ = "optimizer_use_sql_plan_baselines" ;
       ObSysVars[144].data_type_ = ObIntType ;
       ObSysVars[144].value_ = "0" ;
-      ObSysVars[144].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[144].id_ = SYS_VAR_OB_EARLY_LOCK_RELEASE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_EARLY_LOCK_RELEASE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_EARLY_LOCK_RELEASE] = 144 ;
-    ObSysVars[144].alias_ = "OB_SV_EARLY_LOCK_RELEASE" ;
+      ObSysVars[144].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[144].id_ = SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES] = 144 ;
+    ObSysVars[144].alias_ = "OB_SV_OPTIMIZER_USE_SQL_PLAN_BASELINES" ;
     }();
 
     [&] (){
-      ObSysVars[145].info_ = "The stmt interval timeout of transaction(us)" ;
-      ObSysVars[145].name_ = "ob_trx_idle_timeout" ;
+      ObSysVars[145].info_ = "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline." ;
+      ObSysVars[145].name_ = "optimizer_capture_sql_plan_baselines" ;
       ObSysVars[145].data_type_ = ObIntType ;
-      ObSysVars[145].value_ = "86400000000" ;
+      ObSysVars[145].value_ = "0" ;
       ObSysVars[145].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[145].id_ = SYS_VAR_OB_TRX_IDLE_TIMEOUT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRX_IDLE_TIMEOUT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRX_IDLE_TIMEOUT] = 145 ;
-    ObSysVars[145].alias_ = "OB_SV_TRX_IDLE_TIMEOUT" ;
+      ObSysVars[145].id_ = SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES] = 145 ;
+    ObSysVars[145].alias_ = "OB_SV_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES" ;
     }();
 
     [&] (){
-      ObSysVars[146].info_ = "specifies the encryption algorithm used in the functions aes_encrypt and aes_decrypt" ;
-      ObSysVars[146].name_ = "block_encryption_mode" ;
+      ObSysVars[146].info_ = "number of threads allowed to run parallel statements before statement queuing will be used." ;
+      ObSysVars[146].name_ = "parallel_servers_target" ;
       ObSysVars[146].data_type_ = ObIntType ;
-      ObSysVars[146].enum_names_ = "[u'aes-128-ecb', u'aes-192-ecb', u'aes-256-ecb', u'aes-128-cbc', u'aes-192-cbc', u'aes-256-cbc', u'aes-128-cfb1', u'aes-192-cfb1', u'aes-256-cfb1', u'aes-128-cfb8', u'aes-192-cfb8', u'aes-256-cfb8', u'aes-128-cfb128', u'aes-192-cfb128', u'aes-256-cfb128', u'aes-128-ofb', u'aes-192-ofb', u'aes-256-ofb']" ;
       ObSysVars[146].value_ = "0" ;
-      ObSysVars[146].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[146].id_ = SYS_VAR_BLOCK_ENCRYPTION_MODE ;
+      ObSysVars[146].min_val_ = "0" ;
+      ObSysVars[146].max_val_ = "9223372036854775807" ;
+      ObSysVars[146].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[146].id_ = SYS_VAR_PARALLEL_SERVERS_TARGET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_SERVERS_TARGET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_SERVERS_TARGET] = 146 ;
+    ObSysVars[146].alias_ = "OB_SV_PARALLEL_SERVERS_TARGET" ;
+    }();
+
+    [&] (){
+      ObSysVars[147].info_ = "If set true, transaction open the elr optimization." ;
+      ObSysVars[147].name_ = "ob_early_lock_release" ;
+      ObSysVars[147].data_type_ = ObIntType ;
+      ObSysVars[147].value_ = "0" ;
+      ObSysVars[147].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[147].id_ = SYS_VAR_OB_EARLY_LOCK_RELEASE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_EARLY_LOCK_RELEASE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_EARLY_LOCK_RELEASE] = 147 ;
+    ObSysVars[147].alias_ = "OB_SV_EARLY_LOCK_RELEASE" ;
+    }();
+
+    [&] (){
+      ObSysVars[148].info_ = "The stmt interval timeout of transaction(us)" ;
+      ObSysVars[148].name_ = "ob_trx_idle_timeout" ;
+      ObSysVars[148].data_type_ = ObIntType ;
+      ObSysVars[148].value_ = "86400000000" ;
+      ObSysVars[148].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[148].id_ = SYS_VAR_OB_TRX_IDLE_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRX_IDLE_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRX_IDLE_TIMEOUT] = 148 ;
+    ObSysVars[148].alias_ = "OB_SV_TRX_IDLE_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[149].info_ = "specifies the encryption algorithm used in the functions aes_encrypt and aes_decrypt" ;
+      ObSysVars[149].name_ = "block_encryption_mode" ;
+      ObSysVars[149].data_type_ = ObIntType ;
+      ObSysVars[149].enum_names_ = "[u'aes-128-ecb', u'aes-192-ecb', u'aes-256-ecb', u'aes-128-cbc', u'aes-192-cbc', u'aes-256-cbc', u'aes-128-cfb1', u'aes-192-cfb1', u'aes-256-cfb1', u'aes-128-cfb8', u'aes-192-cfb8', u'aes-256-cfb8', u'aes-128-cfb128', u'aes-192-cfb128', u'aes-256-cfb128', u'aes-128-ofb', u'aes-192-ofb', u'aes-256-ofb']" ;
+      ObSysVars[149].value_ = "0" ;
+      ObSysVars[149].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[149].id_ = SYS_VAR_BLOCK_ENCRYPTION_MODE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_BLOCK_ENCRYPTION_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_BLOCK_ENCRYPTION_MODE] = 146 ;
-    ObSysVars[146].alias_ = "OB_SV_BLOCK_ENCRYPTION_MODE" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_BLOCK_ENCRYPTION_MODE] = 149 ;
+    ObSysVars[149].alias_ = "OB_SV_BLOCK_ENCRYPTION_MODE" ;
     }();
 
     [&] (){
-      ObSysVars[147].info_ = "specifies the default date format to use with the TO_CHAR and TO_DATE functions, (YYYY-MM-DD HH24:MI:SS) is Common value" ;
-      ObSysVars[147].name_ = "nls_date_format" ;
-      ObSysVars[147].data_type_ = ObVarcharType ;
-      ObSysVars[147].value_ = "DD-MON-RR" ;
-      ObSysVars[147].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[147].id_ = SYS_VAR_NLS_DATE_FORMAT ;
+      ObSysVars[150].info_ = "specifies the default date format to use with the TO_CHAR and TO_DATE functions, (YYYY-MM-DD HH24:MI:SS) is Common value" ;
+      ObSysVars[150].name_ = "nls_date_format" ;
+      ObSysVars[150].data_type_ = ObVarcharType ;
+      ObSysVars[150].value_ = "DD-MON-RR" ;
+      ObSysVars[150].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[150].id_ = SYS_VAR_NLS_DATE_FORMAT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_DATE_FORMAT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DATE_FORMAT] = 147 ;
-    ObSysVars[147].alias_ = "OB_SV_NLS_DATE_FORMAT" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DATE_FORMAT] = 150 ;
+    ObSysVars[150].alias_ = "OB_SV_NLS_DATE_FORMAT" ;
     }();
 
     [&] (){
-      ObSysVars[148].info_ = "specifies the default date format to use with the TO_CHAR and TO_TIMESTAMP functions, (YYYY-MM-DD HH24:MI:SS.FF) is Common value" ;
-      ObSysVars[148].name_ = "nls_timestamp_format" ;
-      ObSysVars[148].data_type_ = ObVarcharType ;
-      ObSysVars[148].value_ = "DD-MON-RR HH.MI.SSXFF AM" ;
-      ObSysVars[148].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[148].id_ = SYS_VAR_NLS_TIMESTAMP_FORMAT ;
+      ObSysVars[151].info_ = "specifies the default date format to use with the TO_CHAR and TO_TIMESTAMP functions, (YYYY-MM-DD HH24:MI:SS.FF) is Common value" ;
+      ObSysVars[151].name_ = "nls_timestamp_format" ;
+      ObSysVars[151].data_type_ = ObVarcharType ;
+      ObSysVars[151].value_ = "DD-MON-RR HH.MI.SSXFF AM" ;
+      ObSysVars[151].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[151].id_ = SYS_VAR_NLS_TIMESTAMP_FORMAT ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_TIMESTAMP_FORMAT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_TIMESTAMP_FORMAT] = 148 ;
-    ObSysVars[148].alias_ = "OB_SV_NLS_TIMESTAMP_FORMAT" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_TIMESTAMP_FORMAT] = 151 ;
+    ObSysVars[151].alias_ = "OB_SV_NLS_TIMESTAMP_FORMAT" ;
     }();
 
     [&] (){
-      ObSysVars[149].info_ = "specifies the default timestamp with time zone format to use with the TO_CHAR and TO_TIMESTAMP_TZ functions, (YYYY-MM-DD HH24:MI:SS.FF TZR TZD) is common value" ;
-      ObSysVars[149].name_ = "nls_timestamp_tz_format" ;
-      ObSysVars[149].data_type_ = ObVarcharType ;
-      ObSysVars[149].value_ = "DD-MON-RR HH.MI.SSXFF AM TZR" ;
-      ObSysVars[149].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[149].id_ = SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT] = 149 ;
-    ObSysVars[149].alias_ = "OB_SV_NLS_TIMESTAMP_TZ_FORMAT" ;
-    }();
-
-    [&] (){
-      ObSysVars[150].info_ = "percentage of tenant memory resources that can be used by tenant meta data" ;
-      ObSysVars[150].name_ = "ob_reserved_meta_memory_percentage" ;
-      ObSysVars[150].data_type_ = ObIntType ;
-      ObSysVars[150].value_ = "10" ;
-      ObSysVars[150].min_val_ = "1" ;
-      ObSysVars[150].max_val_ = "100" ;
-      ObSysVars[150].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[150].id_ = SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE] = 150 ;
-    ObSysVars[150].alias_ = "OB_SV_RESERVED_META_MEMORY_PERCENTAGE" ;
-    }();
-
-    [&] (){
-      ObSysVars[151].info_ = "If set true, sql will update sys variable while schema version changed." ;
-      ObSysVars[151].name_ = "ob_check_sys_variable" ;
-      ObSysVars[151].data_type_ = ObIntType ;
-      ObSysVars[151].value_ = "1" ;
-      ObSysVars[151].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[151].id_ = SYS_VAR_OB_CHECK_SYS_VARIABLE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_CHECK_SYS_VARIABLE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_CHECK_SYS_VARIABLE] = 151 ;
-    ObSysVars[151].alias_ = "OB_SV_CHECK_SYS_VARIABLE" ;
-    }();
-
-    [&] (){
-      ObSysVars[152].info_ = "specifies the default language of the database, used for messages, day and month names, the default sorting mechanism, the default values of NLS_DATE_LANGUAGE and NLS_SORT." ;
-      ObSysVars[152].name_ = "nls_language" ;
+      ObSysVars[152].info_ = "specifies the default timestamp with time zone format to use with the TO_CHAR and TO_TIMESTAMP_TZ functions, (YYYY-MM-DD HH24:MI:SS.FF TZR TZD) is common value" ;
+      ObSysVars[152].name_ = "nls_timestamp_tz_format" ;
       ObSysVars[152].data_type_ = ObVarcharType ;
-      ObSysVars[152].value_ = "AMERICAN" ;
-      ObSysVars[152].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[152].id_ = SYS_VAR_NLS_LANGUAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_LANGUAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_LANGUAGE] = 152 ;
-    ObSysVars[152].alias_ = "OB_SV_NLS_LANGUAGE" ;
+      ObSysVars[152].value_ = "DD-MON-RR HH.MI.SSXFF AM TZR" ;
+      ObSysVars[152].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[152].id_ = SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT] = 152 ;
+    ObSysVars[152].alias_ = "OB_SV_NLS_TIMESTAMP_TZ_FORMAT" ;
     }();
 
     [&] (){
-      ObSysVars[153].info_ = "specifies the name of the territory whose conventions are to be followed for day and week numbering, establishes the default date format, the default decimal character and group separator, and the default ISO and local currency symbols." ;
-      ObSysVars[153].name_ = "nls_territory" ;
-      ObSysVars[153].data_type_ = ObVarcharType ;
-      ObSysVars[153].value_ = "AMERICA" ;
-      ObSysVars[153].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[153].id_ = SYS_VAR_NLS_TERRITORY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_TERRITORY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_TERRITORY] = 153 ;
-    ObSysVars[153].alias_ = "OB_SV_NLS_TERRITORY" ;
+      ObSysVars[153].info_ = "percentage of tenant memory resources that can be used by tenant meta data" ;
+      ObSysVars[153].name_ = "ob_reserved_meta_memory_percentage" ;
+      ObSysVars[153].data_type_ = ObIntType ;
+      ObSysVars[153].value_ = "10" ;
+      ObSysVars[153].min_val_ = "1" ;
+      ObSysVars[153].max_val_ = "100" ;
+      ObSysVars[153].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[153].id_ = SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE] = 153 ;
+    ObSysVars[153].alias_ = "OB_SV_RESERVED_META_MEMORY_PERCENTAGE" ;
     }();
 
     [&] (){
-      ObSysVars[154].info_ = "specifies the collating sequence for character value comparison in various SQL operators and clauses." ;
-      ObSysVars[154].name_ = "nls_sort" ;
-      ObSysVars[154].data_type_ = ObVarcharType ;
-      ObSysVars[154].value_ = "BINARY" ;
-      ObSysVars[154].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[154].id_ = SYS_VAR_NLS_SORT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_SORT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_SORT] = 154 ;
-    ObSysVars[154].alias_ = "OB_SV_NLS_SORT" ;
+      ObSysVars[154].info_ = "If set true, sql will update sys variable while schema version changed." ;
+      ObSysVars[154].name_ = "ob_check_sys_variable" ;
+      ObSysVars[154].data_type_ = ObIntType ;
+      ObSysVars[154].value_ = "1" ;
+      ObSysVars[154].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[154].id_ = SYS_VAR_OB_CHECK_SYS_VARIABLE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_CHECK_SYS_VARIABLE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_CHECK_SYS_VARIABLE] = 154 ;
+    ObSysVars[154].alias_ = "OB_SV_CHECK_SYS_VARIABLE" ;
     }();
 
     [&] (){
-      ObSysVars[155].info_ = "specifies the collation behavior of the database session. value can be BINARY | LINGUISTIC | ANSI" ;
-      ObSysVars[155].name_ = "nls_comp" ;
+      ObSysVars[155].info_ = "specifies the default language of the database, used for messages, day and month names, the default sorting mechanism, the default values of NLS_DATE_LANGUAGE and NLS_SORT." ;
+      ObSysVars[155].name_ = "nls_language" ;
       ObSysVars[155].data_type_ = ObVarcharType ;
-      ObSysVars[155].value_ = "BINARY" ;
-      ObSysVars[155].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[155].id_ = SYS_VAR_NLS_COMP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_COMP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_COMP] = 155 ;
-    ObSysVars[155].alias_ = "OB_SV_NLS_COMP" ;
+      ObSysVars[155].value_ = "AMERICAN" ;
+      ObSysVars[155].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[155].id_ = SYS_VAR_NLS_LANGUAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_LANGUAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_LANGUAGE] = 155 ;
+    ObSysVars[155].alias_ = "OB_SV_NLS_LANGUAGE" ;
     }();
 
     [&] (){
-      ObSysVars[156].info_ = "specifies the default characterset of the database, This parameter defines the encoding of the data in the CHAR, VARCHAR2, LONG and CLOB columns of a table." ;
-      ObSysVars[156].name_ = "nls_characterset" ;
+      ObSysVars[156].info_ = "specifies the name of the territory whose conventions are to be followed for day and week numbering, establishes the default date format, the default decimal character and group separator, and the default ISO and local currency symbols." ;
+      ObSysVars[156].name_ = "nls_territory" ;
       ObSysVars[156].data_type_ = ObVarcharType ;
-      ObSysVars[156].value_ = "AL32UTF8" ;
-      ObSysVars[156].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::WITH_CREATE | ObSysVarFlag::READONLY ;
-      ObSysVars[156].id_ = SYS_VAR_NLS_CHARACTERSET ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_CHARACTERSET)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_CHARACTERSET] = 156 ;
-    ObSysVars[156].alias_ = "OB_SV_NLS_CHARACTERSET" ;
+      ObSysVars[156].value_ = "AMERICA" ;
+      ObSysVars[156].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[156].id_ = SYS_VAR_NLS_TERRITORY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_TERRITORY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_TERRITORY] = 156 ;
+    ObSysVars[156].alias_ = "OB_SV_NLS_TERRITORY" ;
     }();
 
     [&] (){
-      ObSysVars[157].info_ = "specifies the default characterset of the database, This parameter defines the encoding of the data in the NCHAR, NVARCHAR2 and NCLOB columns of a table." ;
-      ObSysVars[157].name_ = "nls_nchar_characterset" ;
+      ObSysVars[157].info_ = "specifies the collating sequence for character value comparison in various SQL operators and clauses." ;
+      ObSysVars[157].name_ = "nls_sort" ;
       ObSysVars[157].data_type_ = ObVarcharType ;
-      ObSysVars[157].value_ = "AL16UTF16" ;
-      ObSysVars[157].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[157].id_ = SYS_VAR_NLS_NCHAR_CHARACTERSET ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_NCHAR_CHARACTERSET)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_NCHAR_CHARACTERSET] = 157 ;
-    ObSysVars[157].alias_ = "OB_SV_NLS_NCHAR_CHARACTERSET" ;
+      ObSysVars[157].value_ = "BINARY" ;
+      ObSysVars[157].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[157].id_ = SYS_VAR_NLS_SORT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_SORT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_SORT] = 157 ;
+    ObSysVars[157].alias_ = "OB_SV_NLS_SORT" ;
     }();
 
     [&] (){
-      ObSysVars[158].info_ = "specifies the language to use for the spelling of day and month names and date abbreviations (a.m., p.m., AD, BC) returned by the TO_DATE and TO_CHAR functions." ;
-      ObSysVars[158].name_ = "nls_date_language" ;
+      ObSysVars[158].info_ = "specifies the collation behavior of the database session. value can be BINARY | LINGUISTIC | ANSI" ;
+      ObSysVars[158].name_ = "nls_comp" ;
       ObSysVars[158].data_type_ = ObVarcharType ;
-      ObSysVars[158].value_ = "AMERICAN" ;
-      ObSysVars[158].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[158].id_ = SYS_VAR_NLS_DATE_LANGUAGE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_DATE_LANGUAGE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DATE_LANGUAGE] = 158 ;
-    ObSysVars[158].alias_ = "OB_SV_NLS_DATE_LANGUAGE" ;
+      ObSysVars[158].value_ = "BINARY" ;
+      ObSysVars[158].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[158].id_ = SYS_VAR_NLS_COMP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_COMP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_COMP] = 158 ;
+    ObSysVars[158].alias_ = "OB_SV_NLS_COMP" ;
     }();
 
     [&] (){
-      ObSysVars[159].info_ = "specifies the default length semantics to use for VARCHAR2 and CHAR table columns, user-defined object attributes, and PL/SQL variables in database objects created in the session. SYS user use BYTE intead of NLS_LENGTH_SEMANTICS." ;
-      ObSysVars[159].name_ = "nls_length_semantics" ;
+      ObSysVars[159].info_ = "specifies the default characterset of the database, This parameter defines the encoding of the data in the CHAR, VARCHAR2, LONG and CLOB columns of a table." ;
+      ObSysVars[159].name_ = "nls_characterset" ;
       ObSysVars[159].data_type_ = ObVarcharType ;
-      ObSysVars[159].value_ = "BYTE" ;
-      ObSysVars[159].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[159].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_length_semantics_is_valid" ;
-      ObSysVars[159].id_ = SYS_VAR_NLS_LENGTH_SEMANTICS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_LENGTH_SEMANTICS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_LENGTH_SEMANTICS] = 159 ;
-    ObSysVars[159].alias_ = "OB_SV_NLS_LENGTH_SEMANTICS" ;
+      ObSysVars[159].value_ = "AL32UTF8" ;
+      ObSysVars[159].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::WITH_CREATE | ObSysVarFlag::READONLY ;
+      ObSysVars[159].id_ = SYS_VAR_NLS_CHARACTERSET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_CHARACTERSET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_CHARACTERSET] = 159 ;
+    ObSysVars[159].alias_ = "OB_SV_NLS_CHARACTERSET" ;
     }();
 
     [&] (){
-      ObSysVars[160].info_ = "determines whether an error is reported when there is data loss during an implicit or explicit character type conversion between NCHAR/NVARCHAR2 and CHAR/VARCHAR2." ;
-      ObSysVars[160].name_ = "nls_nchar_conv_excp" ;
+      ObSysVars[160].info_ = "specifies the default characterset of the database, This parameter defines the encoding of the data in the NCHAR, NVARCHAR2 and NCLOB columns of a table." ;
+      ObSysVars[160].name_ = "nls_nchar_characterset" ;
       ObSysVars[160].data_type_ = ObVarcharType ;
-      ObSysVars[160].value_ = "FALSE" ;
-      ObSysVars[160].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[160].id_ = SYS_VAR_NLS_NCHAR_CONV_EXCP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_NCHAR_CONV_EXCP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_NCHAR_CONV_EXCP] = 160 ;
-    ObSysVars[160].alias_ = "OB_SV_NLS_NCHAR_CONV_EXCP" ;
+      ObSysVars[160].value_ = "AL16UTF16" ;
+      ObSysVars[160].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[160].id_ = SYS_VAR_NLS_NCHAR_CHARACTERSET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_NCHAR_CHARACTERSET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_NCHAR_CHARACTERSET] = 160 ;
+    ObSysVars[160].alias_ = "OB_SV_NLS_NCHAR_CHARACTERSET" ;
     }();
 
     [&] (){
-      ObSysVars[161].info_ = "specifies which calendar system Oracle uses." ;
-      ObSysVars[161].name_ = "nls_calendar" ;
+      ObSysVars[161].info_ = "specifies the language to use for the spelling of day and month names and date abbreviations (a.m., p.m., AD, BC) returned by the TO_DATE and TO_CHAR functions." ;
+      ObSysVars[161].name_ = "nls_date_language" ;
       ObSysVars[161].data_type_ = ObVarcharType ;
-      ObSysVars[161].value_ = "GREGORIAN" ;
+      ObSysVars[161].value_ = "AMERICAN" ;
       ObSysVars[161].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[161].id_ = SYS_VAR_NLS_CALENDAR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_CALENDAR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_CALENDAR] = 161 ;
-    ObSysVars[161].alias_ = "OB_SV_NLS_CALENDAR" ;
+      ObSysVars[161].id_ = SYS_VAR_NLS_DATE_LANGUAGE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_DATE_LANGUAGE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DATE_LANGUAGE] = 161 ;
+    ObSysVars[161].alias_ = "OB_SV_NLS_DATE_LANGUAGE" ;
     }();
 
     [&] (){
-      ObSysVars[162].info_ = "specifies the characters to use as the decimal character and group separator, overrides those characters defined implicitly by NLS_TERRITORY." ;
-      ObSysVars[162].name_ = "nls_numeric_characters" ;
+      ObSysVars[162].info_ = "specifies the default length semantics to use for VARCHAR2 and CHAR table columns, user-defined object attributes, and PL/SQL variables in database objects created in the session. SYS user use BYTE intead of NLS_LENGTH_SEMANTICS." ;
+      ObSysVars[162].name_ = "nls_length_semantics" ;
       ObSysVars[162].data_type_ = ObVarcharType ;
-      ObSysVars[162].value_ = ".," ;
-      ObSysVars[162].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[162].id_ = SYS_VAR_NLS_NUMERIC_CHARACTERS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_NUMERIC_CHARACTERS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_NUMERIC_CHARACTERS] = 162 ;
-    ObSysVars[162].alias_ = "OB_SV_NLS_NUMERIC_CHARACTERS" ;
+      ObSysVars[162].value_ = "BYTE" ;
+      ObSysVars[162].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[162].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_length_semantics_is_valid" ;
+      ObSysVars[162].id_ = SYS_VAR_NLS_LENGTH_SEMANTICS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_LENGTH_SEMANTICS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_LENGTH_SEMANTICS] = 162 ;
+    ObSysVars[162].alias_ = "OB_SV_NLS_LENGTH_SEMANTICS" ;
     }();
 
     [&] (){
-      ObSysVars[163].info_ = "enable batching of the RHS IO in NLJ" ;
-      ObSysVars[163].name_ = "_nlj_batching_enabled" ;
-      ObSysVars[163].data_type_ = ObIntType ;
-      ObSysVars[163].value_ = "1" ;
-      ObSysVars[163].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[163].id_ = SYS_VAR__NLJ_BATCHING_ENABLED ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__NLJ_BATCHING_ENABLED)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__NLJ_BATCHING_ENABLED] = 163 ;
-    ObSysVars[163].alias_ = "OB_SV__NLJ_BATCHING_ENABLED" ;
+      ObSysVars[163].info_ = "determines whether an error is reported when there is data loss during an implicit or explicit character type conversion between NCHAR/NVARCHAR2 and CHAR/VARCHAR2." ;
+      ObSysVars[163].name_ = "nls_nchar_conv_excp" ;
+      ObSysVars[163].data_type_ = ObVarcharType ;
+      ObSysVars[163].value_ = "FALSE" ;
+      ObSysVars[163].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[163].id_ = SYS_VAR_NLS_NCHAR_CONV_EXCP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_NCHAR_CONV_EXCP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_NCHAR_CONV_EXCP] = 163 ;
+    ObSysVars[163].alias_ = "OB_SV_NLS_NCHAR_CONV_EXCP" ;
     }();
 
     [&] (){
-      ObSysVars[164].info_ = "The name of tracefile." ;
-      ObSysVars[164].name_ = "tracefile_identifier" ;
+      ObSysVars[164].info_ = "specifies which calendar system Oracle uses." ;
+      ObSysVars[164].name_ = "nls_calendar" ;
       ObSysVars[164].data_type_ = ObVarcharType ;
-      ObSysVars[164].value_ = "" ;
-      ObSysVars[164].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[164].id_ = SYS_VAR_TRACEFILE_IDENTIFIER ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRACEFILE_IDENTIFIER)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_TRACEFILE_IDENTIFIER] = 164 ;
-    ObSysVars[164].alias_ = "OB_SV_TRACEFILE_IDENTIFIER" ;
+      ObSysVars[164].value_ = "GREGORIAN" ;
+      ObSysVars[164].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[164].id_ = SYS_VAR_NLS_CALENDAR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_CALENDAR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_CALENDAR] = 164 ;
+    ObSysVars[164].alias_ = "OB_SV_NLS_CALENDAR" ;
     }();
 
     [&] (){
-      ObSysVars[165].info_ = "ratio used to decide whether push down should be done in distribtued query optimization." ;
-      ObSysVars[165].name_ = "_groupby_nopushdown_cut_ratio" ;
-      ObSysVars[165].data_type_ = ObUInt64Type ;
-      ObSysVars[165].value_ = "3" ;
-      ObSysVars[165].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[165].id_ = SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO] = 165 ;
-    ObSysVars[165].alias_ = "OB_SV__GROUPBY_NOPUSHDOWN_CUT_RATIO" ;
+      ObSysVars[165].info_ = "specifies the characters to use as the decimal character and group separator, overrides those characters defined implicitly by NLS_TERRITORY." ;
+      ObSysVars[165].name_ = "nls_numeric_characters" ;
+      ObSysVars[165].data_type_ = ObVarcharType ;
+      ObSysVars[165].value_ = ".," ;
+      ObSysVars[165].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[165].id_ = SYS_VAR_NLS_NUMERIC_CHARACTERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_NUMERIC_CHARACTERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_NUMERIC_CHARACTERS] = 165 ;
+    ObSysVars[165].alias_ = "OB_SV_NLS_NUMERIC_CHARACTERS" ;
     }();
 
     [&] (){
-      ObSysVars[166].info_ = "set the tq broadcasting fudge factor percentage." ;
-      ObSysVars[166].name_ = "_px_broadcast_fudge_factor" ;
+      ObSysVars[166].info_ = "enable batching of the RHS IO in NLJ" ;
+      ObSysVars[166].name_ = "_nlj_batching_enabled" ;
       ObSysVars[166].data_type_ = ObIntType ;
-      ObSysVars[166].value_ = "100" ;
-      ObSysVars[166].min_val_ = "0" ;
-      ObSysVars[166].max_val_ = "100" ;
-      ObSysVars[166].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[166].id_ = SYS_VAR__PX_BROADCAST_FUDGE_FACTOR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_BROADCAST_FUDGE_FACTOR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PX_BROADCAST_FUDGE_FACTOR] = 166 ;
-    ObSysVars[166].alias_ = "OB_SV__PX_BROADCAST_FUDGE_FACTOR" ;
+      ObSysVars[166].value_ = "1" ;
+      ObSysVars[166].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[166].id_ = SYS_VAR__NLJ_BATCHING_ENABLED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__NLJ_BATCHING_ENABLED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__NLJ_BATCHING_ENABLED] = 166 ;
+    ObSysVars[166].alias_ = "OB_SV__NLJ_BATCHING_ENABLED" ;
     }();
 
     [&] (){
-      ObSysVars[167].on_update_func_ = "ObSysVarOnUpdateFuncs::update_tx_isolation" ;
-      ObSysVars[167].info_ = "Transaction Isolcation Levels: READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE" ;
-      ObSysVars[167].session_special_update_func_ = "ObSysVarSessionSpecialUpdateFuncs::update_tx_isolation" ;
+      ObSysVars[167].info_ = "The name of tracefile." ;
+      ObSysVars[167].name_ = "tracefile_identifier" ;
       ObSysVars[167].data_type_ = ObVarcharType ;
-      ObSysVars[167].value_ = "READ-COMMITTED" ;
-      ObSysVars[167].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[167].base_class_ = "ObSessionSpecialVarcharSysVar" ;
-      ObSysVars[167].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_tx_isolation" ;
-      ObSysVars[167].id_ = SYS_VAR_TRANSACTION_ISOLATION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_ISOLATION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_ISOLATION] = 167 ;
-      ObSysVars[167].name_ = "transaction_isolation" ;
-    ObSysVars[167].alias_ = "OB_SV_TRANSACTION_ISOLATION" ;
+      ObSysVars[167].value_ = "" ;
+      ObSysVars[167].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[167].id_ = SYS_VAR_TRACEFILE_IDENTIFIER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRACEFILE_IDENTIFIER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRACEFILE_IDENTIFIER] = 167 ;
+    ObSysVars[167].alias_ = "OB_SV_TRACEFILE_IDENTIFIER" ;
     }();
 
     [&] (){
-      ObSysVars[168].info_ = "the max duration of waiting on row lock of one transaction" ;
-      ObSysVars[168].name_ = "ob_trx_lock_timeout" ;
-      ObSysVars[168].data_type_ = ObIntType ;
-      ObSysVars[168].value_ = "-1" ;
-      ObSysVars[168].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[168].id_ = SYS_VAR_OB_TRX_LOCK_TIMEOUT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRX_LOCK_TIMEOUT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRX_LOCK_TIMEOUT] = 168 ;
-    ObSysVars[168].alias_ = "OB_SV_TRX_LOCK_TIMEOUT" ;
+      ObSysVars[168].info_ = "ratio used to decide whether push down should be done in distribtued query optimization." ;
+      ObSysVars[168].name_ = "_groupby_nopushdown_cut_ratio" ;
+      ObSysVars[168].data_type_ = ObUInt64Type ;
+      ObSysVars[168].value_ = "3" ;
+      ObSysVars[168].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[168].id_ = SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO] = 168 ;
+    ObSysVars[168].alias_ = "OB_SV__GROUPBY_NOPUSHDOWN_CUT_RATIO" ;
     }();
 
     [&] (){
-      ObSysVars[169].info_ = "" ;
-      ObSysVars[169].name_ = "validate_password_check_user_name" ;
+      ObSysVars[169].info_ = "set the tq broadcasting fudge factor percentage." ;
+      ObSysVars[169].name_ = "_px_broadcast_fudge_factor" ;
       ObSysVars[169].data_type_ = ObIntType ;
-      ObSysVars[169].enum_names_ = "[u'on', u'off']" ;
-      ObSysVars[169].value_ = "0" ;
-      ObSysVars[169].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[169].id_ = SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME] = 169 ;
-    ObSysVars[169].alias_ = "OB_SV_VALIDATE_PASSWORD_CHECK_USER_NAME" ;
+      ObSysVars[169].value_ = "100" ;
+      ObSysVars[169].min_val_ = "0" ;
+      ObSysVars[169].max_val_ = "100" ;
+      ObSysVars[169].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[169].id_ = SYS_VAR__PX_BROADCAST_FUDGE_FACTOR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_BROADCAST_FUDGE_FACTOR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PX_BROADCAST_FUDGE_FACTOR] = 169 ;
+    ObSysVars[169].alias_ = "OB_SV__PX_BROADCAST_FUDGE_FACTOR" ;
     }();
 
     [&] (){
-      ObSysVars[170].info_ = "" ;
-      ObSysVars[170].name_ = "validate_password_length" ;
-      ObSysVars[170].data_type_ = ObUInt64Type ;
-      ObSysVars[170].value_ = "0" ;
-      ObSysVars[170].min_val_ = "0" ;
-      ObSysVars[170].max_val_ = "2147483647" ;
-      ObSysVars[170].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[170].id_ = SYS_VAR_VALIDATE_PASSWORD_LENGTH ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_LENGTH)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_LENGTH] = 170 ;
-    ObSysVars[170].alias_ = "OB_SV_VALIDATE_PASSWORD_LENGTH" ;
+      ObSysVars[170].on_update_func_ = "ObSysVarOnUpdateFuncs::update_tx_isolation" ;
+      ObSysVars[170].info_ = "Transaction Isolcation Levels: READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE" ;
+      ObSysVars[170].session_special_update_func_ = "ObSysVarSessionSpecialUpdateFuncs::update_tx_isolation" ;
+      ObSysVars[170].data_type_ = ObVarcharType ;
+      ObSysVars[170].value_ = "READ-COMMITTED" ;
+      ObSysVars[170].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[170].base_class_ = "ObSessionSpecialVarcharSysVar" ;
+      ObSysVars[170].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_tx_isolation" ;
+      ObSysVars[170].id_ = SYS_VAR_TRANSACTION_ISOLATION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_ISOLATION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_ISOLATION] = 170 ;
+      ObSysVars[170].name_ = "transaction_isolation" ;
+    ObSysVars[170].alias_ = "OB_SV_TRANSACTION_ISOLATION" ;
     }();
 
     [&] (){
-      ObSysVars[171].info_ = "" ;
-      ObSysVars[171].name_ = "validate_password_mixed_case_count" ;
-      ObSysVars[171].data_type_ = ObUInt64Type ;
-      ObSysVars[171].value_ = "0" ;
-      ObSysVars[171].min_val_ = "0" ;
-      ObSysVars[171].max_val_ = "2147483647" ;
-      ObSysVars[171].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[171].id_ = SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT] = 171 ;
-    ObSysVars[171].alias_ = "OB_SV_VALIDATE_PASSWORD_MIXED_CASE_COUNT" ;
+      ObSysVars[171].info_ = "the max duration of waiting on row lock of one transaction" ;
+      ObSysVars[171].name_ = "ob_trx_lock_timeout" ;
+      ObSysVars[171].data_type_ = ObIntType ;
+      ObSysVars[171].value_ = "-1" ;
+      ObSysVars[171].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[171].id_ = SYS_VAR_OB_TRX_LOCK_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRX_LOCK_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRX_LOCK_TIMEOUT] = 171 ;
+    ObSysVars[171].alias_ = "OB_SV_TRX_LOCK_TIMEOUT" ;
     }();
 
     [&] (){
       ObSysVars[172].info_ = "" ;
-      ObSysVars[172].name_ = "validate_password_number_count" ;
-      ObSysVars[172].data_type_ = ObUInt64Type ;
+      ObSysVars[172].name_ = "validate_password_check_user_name" ;
+      ObSysVars[172].data_type_ = ObIntType ;
+      ObSysVars[172].enum_names_ = "[u'on', u'off']" ;
       ObSysVars[172].value_ = "0" ;
-      ObSysVars[172].min_val_ = "0" ;
-      ObSysVars[172].max_val_ = "2147483647" ;
       ObSysVars[172].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[172].id_ = SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT] = 172 ;
-    ObSysVars[172].alias_ = "OB_SV_VALIDATE_PASSWORD_NUMBER_COUNT" ;
+      ObSysVars[172].id_ = SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME] = 172 ;
+    ObSysVars[172].alias_ = "OB_SV_VALIDATE_PASSWORD_CHECK_USER_NAME" ;
     }();
 
     [&] (){
       ObSysVars[173].info_ = "" ;
-      ObSysVars[173].name_ = "validate_password_policy" ;
-      ObSysVars[173].data_type_ = ObIntType ;
-      ObSysVars[173].enum_names_ = "[u'low', u'medium']" ;
+      ObSysVars[173].name_ = "validate_password_length" ;
+      ObSysVars[173].data_type_ = ObUInt64Type ;
       ObSysVars[173].value_ = "0" ;
+      ObSysVars[173].min_val_ = "0" ;
+      ObSysVars[173].max_val_ = "2147483647" ;
       ObSysVars[173].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[173].id_ = SYS_VAR_VALIDATE_PASSWORD_POLICY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_POLICY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_POLICY] = 173 ;
-    ObSysVars[173].alias_ = "OB_SV_VALIDATE_PASSWORD_POLICY" ;
+      ObSysVars[173].id_ = SYS_VAR_VALIDATE_PASSWORD_LENGTH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_LENGTH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_LENGTH] = 173 ;
+    ObSysVars[173].alias_ = "OB_SV_VALIDATE_PASSWORD_LENGTH" ;
     }();
 
     [&] (){
       ObSysVars[174].info_ = "" ;
-      ObSysVars[174].name_ = "validate_password_special_char_count" ;
+      ObSysVars[174].name_ = "validate_password_mixed_case_count" ;
       ObSysVars[174].data_type_ = ObUInt64Type ;
       ObSysVars[174].value_ = "0" ;
       ObSysVars[174].min_val_ = "0" ;
       ObSysVars[174].max_val_ = "2147483647" ;
       ObSysVars[174].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[174].id_ = SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT] = 174 ;
-    ObSysVars[174].alias_ = "OB_SV_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT" ;
+      ObSysVars[174].id_ = SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT] = 174 ;
+    ObSysVars[174].alias_ = "OB_SV_VALIDATE_PASSWORD_MIXED_CASE_COUNT" ;
     }();
 
     [&] (){
       ObSysVars[175].info_ = "" ;
-      ObSysVars[175].name_ = "default_password_lifetime" ;
+      ObSysVars[175].name_ = "validate_password_number_count" ;
       ObSysVars[175].data_type_ = ObUInt64Type ;
       ObSysVars[175].value_ = "0" ;
       ObSysVars[175].min_val_ = "0" ;
-      ObSysVars[175].max_val_ = "65535" ;
+      ObSysVars[175].max_val_ = "2147483647" ;
       ObSysVars[175].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[175].id_ = SYS_VAR_DEFAULT_PASSWORD_LIFETIME ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_PASSWORD_LIFETIME)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_DEFAULT_PASSWORD_LIFETIME] = 175 ;
-    ObSysVars[175].alias_ = "OB_SV_DEFAULT_PASSWORD_LIFETIME" ;
+      ObSysVars[175].id_ = SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT] = 175 ;
+    ObSysVars[175].alias_ = "OB_SV_VALIDATE_PASSWORD_NUMBER_COUNT" ;
     }();
 
     [&] (){
-      ObSysVars[176].info_ = "store all session labels for all label security policy." ;
-      ObSysVars[176].name_ = "_ob_ols_policy_session_labels" ;
-      ObSysVars[176].data_type_ = ObVarcharType ;
-      ObSysVars[176].value_ = "" ;
-      ObSysVars[176].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[176].id_ = SYS_VAR__OB_OLS_POLICY_SESSION_LABELS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_OLS_POLICY_SESSION_LABELS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OB_OLS_POLICY_SESSION_LABELS] = 176 ;
-    ObSysVars[176].alias_ = "OB_SV__OB_OLS_POLICY_SESSION_LABELS" ;
+      ObSysVars[176].info_ = "" ;
+      ObSysVars[176].name_ = "validate_password_policy" ;
+      ObSysVars[176].data_type_ = ObIntType ;
+      ObSysVars[176].enum_names_ = "[u'low', u'medium']" ;
+      ObSysVars[176].value_ = "0" ;
+      ObSysVars[176].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[176].id_ = SYS_VAR_VALIDATE_PASSWORD_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_POLICY] = 176 ;
+    ObSysVars[176].alias_ = "OB_SV_VALIDATE_PASSWORD_POLICY" ;
     }();
 
     [&] (){
-      ObSysVars[177].info_ = "store trace info" ;
-      ObSysVars[177].name_ = "ob_trace_info" ;
-      ObSysVars[177].data_type_ = ObVarcharType ;
-      ObSysVars[177].value_ = "" ;
-      ObSysVars[177].flags_ = ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[177].id_ = SYS_VAR_OB_TRACE_INFO ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRACE_INFO)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRACE_INFO] = 177 ;
-    ObSysVars[177].alias_ = "OB_SV_TRACE_INFO" ;
+      ObSysVars[177].info_ = "" ;
+      ObSysVars[177].name_ = "validate_password_special_char_count" ;
+      ObSysVars[177].data_type_ = ObUInt64Type ;
+      ObSysVars[177].value_ = "0" ;
+      ObSysVars[177].min_val_ = "0" ;
+      ObSysVars[177].max_val_ = "2147483647" ;
+      ObSysVars[177].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[177].id_ = SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT] = 177 ;
+    ObSysVars[177].alias_ = "OB_SV_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT" ;
     }();
 
     [&] (){
-      ObSysVars[178].info_ = "least number of partitions per slave to start partition-based scan" ;
-      ObSysVars[178].name_ = "_px_partition_scan_threshold" ;
-      ObSysVars[178].data_type_ = ObIntType ;
-      ObSysVars[178].value_ = "64" ;
+      ObSysVars[178].info_ = "" ;
+      ObSysVars[178].name_ = "default_password_lifetime" ;
+      ObSysVars[178].data_type_ = ObUInt64Type ;
+      ObSysVars[178].value_ = "0" ;
       ObSysVars[178].min_val_ = "0" ;
-      ObSysVars[178].max_val_ = "100" ;
-      ObSysVars[178].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[178].id_ = SYS_VAR__PX_PARTITION_SCAN_THRESHOLD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_PARTITION_SCAN_THRESHOLD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PX_PARTITION_SCAN_THRESHOLD] = 178 ;
-    ObSysVars[178].alias_ = "OB_SV__PX_PARTITION_SCAN_THRESHOLD" ;
+      ObSysVars[178].max_val_ = "65535" ;
+      ObSysVars[178].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[178].id_ = SYS_VAR_DEFAULT_PASSWORD_LIFETIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_PASSWORD_LIFETIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DEFAULT_PASSWORD_LIFETIME] = 178 ;
+    ObSysVars[178].alias_ = "OB_SV_DEFAULT_PASSWORD_LIFETIME" ;
     }();
 
     [&] (){
-      ObSysVars[179].info_ = "broadcast optimization." ;
-      ObSysVars[179].name_ = "_ob_px_bcast_optimization" ;
-      ObSysVars[179].data_type_ = ObIntType ;
-      ObSysVars[179].enum_names_ = "[u'WORKER', u'SERVER']" ;
-      ObSysVars[179].value_ = "1" ;
-      ObSysVars[179].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[179].id_ = SYS_VAR__OB_PX_BCAST_OPTIMIZATION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PX_BCAST_OPTIMIZATION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PX_BCAST_OPTIMIZATION] = 179 ;
-    ObSysVars[179].alias_ = "OB_SV__OB_PX_BCAST_OPTIMIZATION" ;
+      ObSysVars[179].info_ = "store all session labels for all label security policy." ;
+      ObSysVars[179].name_ = "_ob_ols_policy_session_labels" ;
+      ObSysVars[179].data_type_ = ObVarcharType ;
+      ObSysVars[179].value_ = "" ;
+      ObSysVars[179].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[179].id_ = SYS_VAR__OB_OLS_POLICY_SESSION_LABELS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_OLS_POLICY_SESSION_LABELS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_OLS_POLICY_SESSION_LABELS] = 179 ;
+    ObSysVars[179].alias_ = "OB_SV__OB_OLS_POLICY_SESSION_LABELS" ;
     }();
 
     [&] (){
-      ObSysVars[180].info_ = "percentage threshold to use slave mapping plan" ;
-      ObSysVars[180].name_ = "_ob_px_slave_mapping_threshold" ;
-      ObSysVars[180].data_type_ = ObIntType ;
-      ObSysVars[180].value_ = "200" ;
-      ObSysVars[180].min_val_ = "0" ;
-      ObSysVars[180].max_val_ = "1000" ;
-      ObSysVars[180].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[180].id_ = SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD] = 180 ;
-    ObSysVars[180].alias_ = "OB_SV__OB_PX_SLAVE_MAPPING_THRESHOLD" ;
+      ObSysVars[180].info_ = "store trace info" ;
+      ObSysVars[180].name_ = "ob_trace_info" ;
+      ObSysVars[180].data_type_ = ObVarcharType ;
+      ObSysVars[180].value_ = "" ;
+      ObSysVars[180].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[180].id_ = SYS_VAR_OB_TRACE_INFO ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_TRACE_INFO)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_TRACE_INFO] = 180 ;
+    ObSysVars[180].alias_ = "OB_SV_TRACE_INFO" ;
     }();
 
     [&] (){
-      ObSysVars[181].info_ = "A DML statement can be parallelized only if you have explicitly enabled parallel DML in the session or in the SQL statement." ;
-      ObSysVars[181].name_ = "_enable_parallel_dml" ;
+      ObSysVars[181].info_ = "least number of partitions per slave to start partition-based scan" ;
+      ObSysVars[181].name_ = "_px_partition_scan_threshold" ;
       ObSysVars[181].data_type_ = ObIntType ;
-      ObSysVars[181].value_ = "0" ;
-      ObSysVars[181].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[181].id_ = SYS_VAR__ENABLE_PARALLEL_DML ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PARALLEL_DML)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PARALLEL_DML] = 181 ;
-    ObSysVars[181].alias_ = "OB_SV__ENABLE_PARALLEL_DML" ;
+      ObSysVars[181].value_ = "64" ;
+      ObSysVars[181].min_val_ = "0" ;
+      ObSysVars[181].max_val_ = "100" ;
+      ObSysVars[181].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[181].id_ = SYS_VAR__PX_PARTITION_SCAN_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_PARTITION_SCAN_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PX_PARTITION_SCAN_THRESHOLD] = 181 ;
+    ObSysVars[181].alias_ = "OB_SV__PX_PARTITION_SCAN_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[182].info_ = "minimum number of rowid range granules to generate per slave." ;
-      ObSysVars[182].name_ = "_px_min_granules_per_slave" ;
+      ObSysVars[182].info_ = "broadcast optimization." ;
+      ObSysVars[182].name_ = "_ob_px_bcast_optimization" ;
       ObSysVars[182].data_type_ = ObIntType ;
-      ObSysVars[182].value_ = "13" ;
-      ObSysVars[182].min_val_ = "0" ;
-      ObSysVars[182].max_val_ = "100" ;
-      ObSysVars[182].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[182].id_ = SYS_VAR__PX_MIN_GRANULES_PER_SLAVE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_MIN_GRANULES_PER_SLAVE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PX_MIN_GRANULES_PER_SLAVE] = 182 ;
-    ObSysVars[182].alias_ = "OB_SV__PX_MIN_GRANULES_PER_SLAVE" ;
+      ObSysVars[182].enum_names_ = "[u'WORKER', u'SERVER']" ;
+      ObSysVars[182].value_ = "1" ;
+      ObSysVars[182].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[182].id_ = SYS_VAR__OB_PX_BCAST_OPTIMIZATION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PX_BCAST_OPTIMIZATION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PX_BCAST_OPTIMIZATION] = 182 ;
+    ObSysVars[182].alias_ = "OB_SV__OB_PX_BCAST_OPTIMIZATION" ;
     }();
 
     [&] (){
-      ObSysVars[183].info_ = "limit the effect of data import and export operations" ;
-      ObSysVars[183].name_ = "secure_file_priv" ;
-      ObSysVars[183].data_type_ = ObVarcharType ;
-      ObSysVars[183].value_ = "NULL" ;
-      ObSysVars[183].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NULLABLE ;
-      ObSysVars[183].id_ = SYS_VAR_SECURE_FILE_PRIV ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SECURE_FILE_PRIV)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SECURE_FILE_PRIV] = 183 ;
-    ObSysVars[183].alias_ = "OB_SV_SECURE_FILE_PRIV" ;
+      ObSysVars[183].info_ = "percentage threshold to use slave mapping plan" ;
+      ObSysVars[183].name_ = "_ob_px_slave_mapping_threshold" ;
+      ObSysVars[183].data_type_ = ObIntType ;
+      ObSysVars[183].value_ = "200" ;
+      ObSysVars[183].min_val_ = "0" ;
+      ObSysVars[183].max_val_ = "1000" ;
+      ObSysVars[183].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[183].id_ = SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD] = 183 ;
+    ObSysVars[183].alias_ = "OB_SV__OB_PX_SLAVE_MAPPING_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[184].info_ = "enables or disables the reporting of warning messages by the PL/SQL compiler, and specifies which warning messages to show as errors." ;
-      ObSysVars[184].name_ = "plsql_warnings" ;
-      ObSysVars[184].data_type_ = ObVarcharType ;
-      ObSysVars[184].value_ = "ENABLE:ALL" ;
-      ObSysVars[184].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[184].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings" ;
-      ObSysVars[184].id_ = SYS_VAR_PLSQL_WARNINGS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_WARNINGS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_WARNINGS] = 184 ;
-    ObSysVars[184].alias_ = "OB_SV_PLSQL_WARNINGS" ;
+      ObSysVars[184].info_ = "A DML statement can be parallelized only if you have explicitly enabled parallel DML in the session or in the SQL statement." ;
+      ObSysVars[184].name_ = "_enable_parallel_dml" ;
+      ObSysVars[184].data_type_ = ObIntType ;
+      ObSysVars[184].value_ = "0" ;
+      ObSysVars[184].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[184].id_ = SYS_VAR__ENABLE_PARALLEL_DML ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PARALLEL_DML)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PARALLEL_DML] = 184 ;
+    ObSysVars[184].alias_ = "OB_SV__ENABLE_PARALLEL_DML" ;
     }();
 
     [&] (){
-      ObSysVars[185].info_ = "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement." ;
-      ObSysVars[185].name_ = "_enable_parallel_query" ;
+      ObSysVars[185].info_ = "minimum number of rowid range granules to generate per slave." ;
+      ObSysVars[185].name_ = "_px_min_granules_per_slave" ;
       ObSysVars[185].data_type_ = ObIntType ;
-      ObSysVars[185].value_ = "1" ;
-      ObSysVars[185].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[185].id_ = SYS_VAR__ENABLE_PARALLEL_QUERY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PARALLEL_QUERY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PARALLEL_QUERY] = 185 ;
-    ObSysVars[185].alias_ = "OB_SV__ENABLE_PARALLEL_QUERY" ;
+      ObSysVars[185].value_ = "13" ;
+      ObSysVars[185].min_val_ = "0" ;
+      ObSysVars[185].max_val_ = "100" ;
+      ObSysVars[185].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[185].id_ = SYS_VAR__PX_MIN_GRANULES_PER_SLAVE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_MIN_GRANULES_PER_SLAVE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PX_MIN_GRANULES_PER_SLAVE] = 185 ;
+    ObSysVars[185].alias_ = "OB_SV__PX_MIN_GRANULES_PER_SLAVE" ;
     }();
 
     [&] (){
-      ObSysVars[186].info_ = "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement." ;
-      ObSysVars[186].name_ = "_force_parallel_query_dop" ;
-      ObSysVars[186].data_type_ = ObUInt64Type ;
-      ObSysVars[186].value_ = "1" ;
-      ObSysVars[186].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[186].id_ = SYS_VAR__FORCE_PARALLEL_QUERY_DOP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_PARALLEL_QUERY_DOP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_PARALLEL_QUERY_DOP] = 186 ;
-    ObSysVars[186].alias_ = "OB_SV__FORCE_PARALLEL_QUERY_DOP" ;
+      ObSysVars[186].info_ = "limit the effect of data import and export operations" ;
+      ObSysVars[186].name_ = "secure_file_priv" ;
+      ObSysVars[186].data_type_ = ObVarcharType ;
+      ObSysVars[186].value_ = "NULL" ;
+      ObSysVars[186].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NULLABLE ;
+      ObSysVars[186].id_ = SYS_VAR_SECURE_FILE_PRIV ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SECURE_FILE_PRIV)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SECURE_FILE_PRIV] = 186 ;
+    ObSysVars[186].alias_ = "OB_SV_SECURE_FILE_PRIV" ;
     }();
 
     [&] (){
-      ObSysVars[187].info_ = "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement." ;
-      ObSysVars[187].name_ = "_force_parallel_dml_dop" ;
-      ObSysVars[187].data_type_ = ObUInt64Type ;
-      ObSysVars[187].value_ = "1" ;
-      ObSysVars[187].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[187].id_ = SYS_VAR__FORCE_PARALLEL_DML_DOP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_PARALLEL_DML_DOP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_PARALLEL_DML_DOP] = 187 ;
-    ObSysVars[187].alias_ = "OB_SV__FORCE_PARALLEL_DML_DOP" ;
+      ObSysVars[187].info_ = "enables or disables the reporting of warning messages by the PL/SQL compiler, and specifies which warning messages to show as errors." ;
+      ObSysVars[187].name_ = "plsql_warnings" ;
+      ObSysVars[187].data_type_ = ObVarcharType ;
+      ObSysVars[187].value_ = "ENABLE:ALL" ;
+      ObSysVars[187].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[187].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings" ;
+      ObSysVars[187].id_ = SYS_VAR_PLSQL_WARNINGS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_WARNINGS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_WARNINGS] = 187 ;
+    ObSysVars[187].alias_ = "OB_SV_PLSQL_WARNINGS" ;
     }();
 
     [&] (){
-      ObSysVars[188].info_ = "PL/SQL timeout in microsecond(us)" ;
-      ObSysVars[188].name_ = "ob_pl_block_timeout" ;
+      ObSysVars[188].info_ = "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement." ;
+      ObSysVars[188].name_ = "_enable_parallel_query" ;
       ObSysVars[188].data_type_ = ObIntType ;
-      ObSysVars[188].value_ = "3216672000000000" ;
-      ObSysVars[188].min_val_ = "0" ;
-      ObSysVars[188].max_val_ = "9223372036854775807" ;
-      ObSysVars[188].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[188].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
-      ObSysVars[188].id_ = SYS_VAR_OB_PL_BLOCK_TIMEOUT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PL_BLOCK_TIMEOUT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PL_BLOCK_TIMEOUT] = 188 ;
-    ObSysVars[188].alias_ = "OB_SV_PL_BLOCK_TIMEOUT" ;
+      ObSysVars[188].value_ = "1" ;
+      ObSysVars[188].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[188].id_ = SYS_VAR__ENABLE_PARALLEL_QUERY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PARALLEL_QUERY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PARALLEL_QUERY] = 188 ;
+    ObSysVars[188].alias_ = "OB_SV__ENABLE_PARALLEL_QUERY" ;
     }();
 
     [&] (){
-      ObSysVars[189].on_update_func_ = "ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope" ;
-      ObSysVars[189].info_ = "Transaction access mode" ;
-      ObSysVars[189].session_special_update_func_ = "ObSysVarSessionSpecialUpdateFuncs::update_tx_read_only" ;
-      ObSysVars[189].data_type_ = ObIntType ;
-      ObSysVars[189].value_ = "0" ;
-      ObSysVars[189].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[189].base_class_ = "ObSessionSpecialBoolSysVar" ;
-      ObSysVars[189].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_tx_read_only" ;
-      ObSysVars[189].id_ = SYS_VAR_TRANSACTION_READ_ONLY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_READ_ONLY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_READ_ONLY] = 189 ;
-      ObSysVars[189].name_ = "transaction_read_only" ;
-    ObSysVars[189].alias_ = "OB_SV_TRANSACTION_READ_ONLY" ;
+      ObSysVars[189].info_ = "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement." ;
+      ObSysVars[189].name_ = "_force_parallel_query_dop" ;
+      ObSysVars[189].data_type_ = ObUInt64Type ;
+      ObSysVars[189].value_ = "1" ;
+      ObSysVars[189].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[189].id_ = SYS_VAR__FORCE_PARALLEL_QUERY_DOP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_PARALLEL_QUERY_DOP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_PARALLEL_QUERY_DOP] = 189 ;
+    ObSysVars[189].alias_ = "OB_SV__FORCE_PARALLEL_QUERY_DOP" ;
     }();
 
     [&] (){
-      ObSysVars[190].info_ = "specifies tenant resource plan." ;
-      ObSysVars[190].name_ = "resource_manager_plan" ;
-      ObSysVars[190].data_type_ = ObVarcharType ;
-      ObSysVars[190].value_ = "" ;
-      ObSysVars[190].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[190].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_update_resource_manager_plan" ;
-      ObSysVars[190].id_ = SYS_VAR_RESOURCE_MANAGER_PLAN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RESOURCE_MANAGER_PLAN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_RESOURCE_MANAGER_PLAN] = 190 ;
-    ObSysVars[190].alias_ = "OB_SV_RESOURCE_MANAGER_PLAN" ;
+      ObSysVars[190].info_ = "A QUERY statement can be parallelized only if you have explicitly enabled parallel QUERY in the session or in the SQL statement." ;
+      ObSysVars[190].name_ = "_force_parallel_dml_dop" ;
+      ObSysVars[190].data_type_ = ObUInt64Type ;
+      ObSysVars[190].value_ = "1" ;
+      ObSysVars[190].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[190].id_ = SYS_VAR__FORCE_PARALLEL_DML_DOP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_PARALLEL_DML_DOP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_PARALLEL_DML_DOP] = 190 ;
+    ObSysVars[190].alias_ = "OB_SV__FORCE_PARALLEL_DML_DOP" ;
     }();
 
     [&] (){
-      ObSysVars[191].info_ = "indicate whether the Performance Schema is enabled" ;
-      ObSysVars[191].name_ = "performance_schema" ;
+      ObSysVars[191].info_ = "PL/SQL timeout in microsecond(us)" ;
+      ObSysVars[191].name_ = "ob_pl_block_timeout" ;
       ObSysVars[191].data_type_ = ObIntType ;
-      ObSysVars[191].value_ = "0" ;
-      ObSysVars[191].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[191].id_ = SYS_VAR_PERFORMANCE_SCHEMA ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA] = 191 ;
-    ObSysVars[191].alias_ = "OB_SV_PERFORMANCE_SCHEMA" ;
+      ObSysVars[191].value_ = "3216672000000000" ;
+      ObSysVars[191].min_val_ = "0" ;
+      ObSysVars[191].max_val_ = "9223372036854775807" ;
+      ObSysVars[191].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[191].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
+      ObSysVars[191].id_ = SYS_VAR_OB_PL_BLOCK_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_PL_BLOCK_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_PL_BLOCK_TIMEOUT] = 191 ;
+    ObSysVars[191].alias_ = "OB_SV_PL_BLOCK_TIMEOUT" ;
     }();
 
     [&] (){
-      ObSysVars[192].info_ = "specifies the string to use as the local currency symbol for the L number format element. The default value of this parameter is determined by NLS_TERRITORY." ;
-      ObSysVars[192].name_ = "nls_currency" ;
-      ObSysVars[192].data_type_ = ObVarcharType ;
-      ObSysVars[192].value_ = "$" ;
-      ObSysVars[192].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[192].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_currency_too_long" ;
-      ObSysVars[192].id_ = SYS_VAR_NLS_CURRENCY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_CURRENCY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_CURRENCY] = 192 ;
-    ObSysVars[192].alias_ = "OB_SV_NLS_CURRENCY" ;
+      ObSysVars[192].on_update_func_ = "ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope" ;
+      ObSysVars[192].info_ = "Transaction access mode" ;
+      ObSysVars[192].session_special_update_func_ = "ObSysVarSessionSpecialUpdateFuncs::update_tx_read_only" ;
+      ObSysVars[192].data_type_ = ObIntType ;
+      ObSysVars[192].value_ = "0" ;
+      ObSysVars[192].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[192].base_class_ = "ObSessionSpecialBoolSysVar" ;
+      ObSysVars[192].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_tx_read_only" ;
+      ObSysVars[192].id_ = SYS_VAR_TRANSACTION_READ_ONLY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_TRANSACTION_READ_ONLY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_TRANSACTION_READ_ONLY] = 192 ;
+      ObSysVars[192].name_ = "transaction_read_only" ;
+    ObSysVars[192].alias_ = "OB_SV_TRANSACTION_READ_ONLY" ;
     }();
 
     [&] (){
-      ObSysVars[193].info_ = "specifies the string to use as the international currency symbol for the C number format element. The default value of this parameter is determined by NLS_TERRITORY" ;
-      ObSysVars[193].name_ = "nls_iso_currency" ;
+      ObSysVars[193].info_ = "specifies tenant resource plan." ;
+      ObSysVars[193].name_ = "resource_manager_plan" ;
       ObSysVars[193].data_type_ = ObVarcharType ;
-      ObSysVars[193].value_ = "AMERICA" ;
-      ObSysVars[193].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[193].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_iso_currency_is_valid" ;
-      ObSysVars[193].id_ = SYS_VAR_NLS_ISO_CURRENCY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_ISO_CURRENCY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_ISO_CURRENCY] = 193 ;
-    ObSysVars[193].alias_ = "OB_SV_NLS_ISO_CURRENCY" ;
+      ObSysVars[193].value_ = "" ;
+      ObSysVars[193].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[193].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_update_resource_manager_plan" ;
+      ObSysVars[193].id_ = SYS_VAR_RESOURCE_MANAGER_PLAN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RESOURCE_MANAGER_PLAN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RESOURCE_MANAGER_PLAN] = 193 ;
+    ObSysVars[193].alias_ = "OB_SV_RESOURCE_MANAGER_PLAN" ;
     }();
 
     [&] (){
-      ObSysVars[194].info_ = "specifies the dual currency symbol for the territory. The default is the dual currency symbol defined in the territory of your current language environment." ;
-      ObSysVars[194].name_ = "nls_dual_currency" ;
-      ObSysVars[194].data_type_ = ObVarcharType ;
-      ObSysVars[194].value_ = "$" ;
-      ObSysVars[194].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[194].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_currency_too_long" ;
-      ObSysVars[194].id_ = SYS_VAR_NLS_DUAL_CURRENCY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_DUAL_CURRENCY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DUAL_CURRENCY] = 194 ;
-    ObSysVars[194].alias_ = "OB_SV_NLS_DUAL_CURRENCY" ;
+      ObSysVars[194].info_ = "indicate whether the Performance Schema is enabled" ;
+      ObSysVars[194].name_ = "performance_schema" ;
+      ObSysVars[194].data_type_ = ObIntType ;
+      ObSysVars[194].value_ = "0" ;
+      ObSysVars[194].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[194].id_ = SYS_VAR_PERFORMANCE_SCHEMA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PERFORMANCE_SCHEMA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PERFORMANCE_SCHEMA] = 194 ;
+    ObSysVars[194].alias_ = "OB_SV_PERFORMANCE_SCHEMA" ;
     }();
 
     [&] (){
-      ObSysVars[195].info_ = "Lets you control conditional compilation of each PL/SQL unit independently." ;
-      ObSysVars[195].name_ = "plsql_ccflags" ;
+      ObSysVars[195].info_ = "specifies the string to use as the local currency symbol for the L number format element. The default value of this parameter is determined by NLS_TERRITORY." ;
+      ObSysVars[195].name_ = "nls_currency" ;
       ObSysVars[195].data_type_ = ObVarcharType ;
-      ObSysVars[195].value_ = "" ;
-      ObSysVars[195].flags_ = ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::ORACLE_ONLY ;
-      ObSysVars[195].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_plsql_ccflags" ;
-      ObSysVars[195].id_ = SYS_VAR_PLSQL_CCFLAGS ;
+      ObSysVars[195].value_ = "$" ;
+      ObSysVars[195].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[195].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_currency_too_long" ;
+      ObSysVars[195].id_ = SYS_VAR_NLS_CURRENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_CURRENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_CURRENCY] = 195 ;
+    ObSysVars[195].alias_ = "OB_SV_NLS_CURRENCY" ;
+    }();
+
+    [&] (){
+      ObSysVars[196].info_ = "specifies the string to use as the international currency symbol for the C number format element. The default value of this parameter is determined by NLS_TERRITORY" ;
+      ObSysVars[196].name_ = "nls_iso_currency" ;
+      ObSysVars[196].data_type_ = ObVarcharType ;
+      ObSysVars[196].value_ = "AMERICA" ;
+      ObSysVars[196].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[196].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_iso_currency_is_valid" ;
+      ObSysVars[196].id_ = SYS_VAR_NLS_ISO_CURRENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_ISO_CURRENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_ISO_CURRENCY] = 196 ;
+    ObSysVars[196].alias_ = "OB_SV_NLS_ISO_CURRENCY" ;
+    }();
+
+    [&] (){
+      ObSysVars[197].info_ = "specifies the dual currency symbol for the territory. The default is the dual currency symbol defined in the territory of your current language environment." ;
+      ObSysVars[197].name_ = "nls_dual_currency" ;
+      ObSysVars[197].data_type_ = ObVarcharType ;
+      ObSysVars[197].value_ = "$" ;
+      ObSysVars[197].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[197].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_nls_currency_too_long" ;
+      ObSysVars[197].id_ = SYS_VAR_NLS_DUAL_CURRENCY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_NLS_DUAL_CURRENCY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DUAL_CURRENCY] = 197 ;
+    ObSysVars[197].alias_ = "OB_SV_NLS_DUAL_CURRENCY" ;
+    }();
+
+    [&] (){
+      ObSysVars[198].info_ = "Lets you control conditional compilation of each PL/SQL unit independently." ;
+      ObSysVars[198].name_ = "plsql_ccflags" ;
+      ObSysVars[198].data_type_ = ObVarcharType ;
+      ObSysVars[198].value_ = "" ;
+      ObSysVars[198].flags_ = ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[198].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_plsql_ccflags" ;
+      ObSysVars[198].id_ = SYS_VAR_PLSQL_CCFLAGS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_CCFLAGS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CCFLAGS] = 195 ;
-    ObSysVars[195].alias_ = "OB_SV_PLSQL_CCFLAGS" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_CCFLAGS] = 198 ;
+    ObSysVars[198].alias_ = "OB_SV_PLSQL_CCFLAGS" ;
     }();
 
     [&] (){
-      ObSysVars[196].info_ = "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully" ;
-      ObSysVars[196].name_ = "_ob_proxy_session_temporary_table_used" ;
-      ObSysVars[196].data_type_ = ObIntType ;
-      ObSysVars[196].value_ = "0" ;
-      ObSysVars[196].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[196].id_ = SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED] = 196 ;
-    ObSysVars[196].alias_ = "OB_SV__OB_PROXY_SESSION_TEMPORARY_TABLE_USED" ;
-    }();
-
-    [&] (){
-      ObSysVars[197].info_ = "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement." ;
-      ObSysVars[197].name_ = "_enable_parallel_ddl" ;
-      ObSysVars[197].data_type_ = ObIntType ;
-      ObSysVars[197].value_ = "1" ;
-      ObSysVars[197].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[197].id_ = SYS_VAR__ENABLE_PARALLEL_DDL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PARALLEL_DDL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PARALLEL_DDL] = 197 ;
-    ObSysVars[197].alias_ = "OB_SV__ENABLE_PARALLEL_DDL" ;
-    }();
-
-    [&] (){
-      ObSysVars[198].info_ = "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement." ;
-      ObSysVars[198].name_ = "_force_parallel_ddl_dop" ;
-      ObSysVars[198].data_type_ = ObUInt64Type ;
-      ObSysVars[198].value_ = "1" ;
-      ObSysVars[198].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[198].id_ = SYS_VAR__FORCE_PARALLEL_DDL_DOP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_PARALLEL_DDL_DOP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_PARALLEL_DDL_DOP] = 198 ;
-    ObSysVars[198].alias_ = "OB_SV__FORCE_PARALLEL_DDL_DOP" ;
-    }();
-
-    [&] (){
-      ObSysVars[199].info_ = "whether needs to do parameterization? EXACT - query will not do parameterization; FORCE - query will do parameterization." ;
-      ObSysVars[199].name_ = "cursor_sharing" ;
+      ObSysVars[199].info_ = "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully" ;
+      ObSysVars[199].name_ = "_ob_proxy_session_temporary_table_used" ;
       ObSysVars[199].data_type_ = ObIntType ;
-      ObSysVars[199].enum_names_ = "[u'FORCE', u'EXACT']" ;
       ObSysVars[199].value_ = "0" ;
-      ObSysVars[199].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[199].id_ = SYS_VAR_CURSOR_SHARING ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CURSOR_SHARING)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CURSOR_SHARING] = 199 ;
-    ObSysVars[199].alias_ = "OB_SV_CURSOR_SHARING" ;
+      ObSysVars[199].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[199].id_ = SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED] = 199 ;
+    ObSysVars[199].alias_ = "OB_SV__OB_PROXY_SESSION_TEMPORARY_TABLE_USED" ;
     }();
 
     [&] (){
-      ObSysVars[200].info_ = "specifies whether null aware anti join plan allow generated" ;
-      ObSysVars[200].name_ = "_optimizer_null_aware_antijoin" ;
+      ObSysVars[200].info_ = "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement." ;
+      ObSysVars[200].name_ = "_enable_parallel_ddl" ;
       ObSysVars[200].data_type_ = ObIntType ;
       ObSysVars[200].value_ = "1" ;
-      ObSysVars[200].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[200].id_ = SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN] = 200 ;
-    ObSysVars[200].alias_ = "OB_SV__OPTIMIZER_NULL_AWARE_ANTIJOIN" ;
+      ObSysVars[200].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[200].id_ = SYS_VAR__ENABLE_PARALLEL_DDL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PARALLEL_DDL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PARALLEL_DDL] = 200 ;
+    ObSysVars[200].alias_ = "OB_SV__ENABLE_PARALLEL_DDL" ;
     }();
 
     [&] (){
-      ObSysVars[201].info_ = "enable partial rollup push down optimization." ;
-      ObSysVars[201].name_ = "_px_partial_rollup_pushdown" ;
-      ObSysVars[201].data_type_ = ObIntType ;
-      ObSysVars[201].enum_names_ = "[u'OFF', u'ADAPTIVE']" ;
+      ObSysVars[201].info_ = "A DDL statement can be parallelized only if you have explicitly enabled parallel DDL in the session or in the SQL statement." ;
+      ObSysVars[201].name_ = "_force_parallel_ddl_dop" ;
+      ObSysVars[201].data_type_ = ObUInt64Type ;
       ObSysVars[201].value_ = "1" ;
-      ObSysVars[201].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[201].id_ = SYS_VAR__PX_PARTIAL_ROLLUP_PUSHDOWN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_PARTIAL_ROLLUP_PUSHDOWN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PX_PARTIAL_ROLLUP_PUSHDOWN] = 201 ;
-    ObSysVars[201].alias_ = "OB_SV__PX_PARTIAL_ROLLUP_PUSHDOWN" ;
+      ObSysVars[201].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[201].id_ = SYS_VAR__FORCE_PARALLEL_DDL_DOP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_PARALLEL_DDL_DOP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_PARALLEL_DDL_DOP] = 201 ;
+    ObSysVars[201].alias_ = "OB_SV__FORCE_PARALLEL_DDL_DOP" ;
     }();
 
     [&] (){
-      ObSysVars[202].info_ = "enable distinct aggregate function to partial rollup push down optimization." ;
-      ObSysVars[202].name_ = "_px_dist_agg_partial_rollup_pushdown" ;
+      ObSysVars[202].info_ = "whether needs to do parameterization? EXACT - query will not do parameterization; FORCE - query will do parameterization." ;
+      ObSysVars[202].name_ = "cursor_sharing" ;
       ObSysVars[202].data_type_ = ObIntType ;
-      ObSysVars[202].enum_names_ = "[u'OFF', u'ADAPTIVE']" ;
-      ObSysVars[202].value_ = "1" ;
-      ObSysVars[202].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[202].id_ = SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN ;
+      ObSysVars[202].enum_names_ = "[u'FORCE', u'EXACT']" ;
+      ObSysVars[202].value_ = "0" ;
+      ObSysVars[202].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[202].id_ = SYS_VAR_CURSOR_SHARING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CURSOR_SHARING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CURSOR_SHARING] = 202 ;
+    ObSysVars[202].alias_ = "OB_SV_CURSOR_SHARING" ;
+    }();
+
+    [&] (){
+      ObSysVars[203].info_ = "specifies whether null aware anti join plan allow generated" ;
+      ObSysVars[203].name_ = "_optimizer_null_aware_antijoin" ;
+      ObSysVars[203].data_type_ = ObIntType ;
+      ObSysVars[203].value_ = "1" ;
+      ObSysVars[203].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[203].id_ = SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN] = 203 ;
+    ObSysVars[203].alias_ = "OB_SV__OPTIMIZER_NULL_AWARE_ANTIJOIN" ;
+    }();
+
+    [&] (){
+      ObSysVars[204].info_ = "enable partial rollup push down optimization." ;
+      ObSysVars[204].name_ = "_px_partial_rollup_pushdown" ;
+      ObSysVars[204].data_type_ = ObIntType ;
+      ObSysVars[204].enum_names_ = "[u'OFF', u'ADAPTIVE']" ;
+      ObSysVars[204].value_ = "1" ;
+      ObSysVars[204].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[204].id_ = SYS_VAR__PX_PARTIAL_ROLLUP_PUSHDOWN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_PARTIAL_ROLLUP_PUSHDOWN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PX_PARTIAL_ROLLUP_PUSHDOWN] = 204 ;
+    ObSysVars[204].alias_ = "OB_SV__PX_PARTIAL_ROLLUP_PUSHDOWN" ;
+    }();
+
+    [&] (){
+      ObSysVars[205].info_ = "enable distinct aggregate function to partial rollup push down optimization." ;
+      ObSysVars[205].name_ = "_px_dist_agg_partial_rollup_pushdown" ;
+      ObSysVars[205].data_type_ = ObIntType ;
+      ObSysVars[205].enum_names_ = "[u'OFF', u'ADAPTIVE']" ;
+      ObSysVars[205].value_ = "1" ;
+      ObSysVars[205].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[205].id_ = SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN] = 202 ;
-    ObSysVars[202].alias_ = "OB_SV__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN] = 205 ;
+    ObSysVars[205].alias_ = "OB_SV__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN" ;
     }();
 
     [&] (){
-      ObSysVars[203].info_ = "control audit log trail job in mysql mode" ;
-      ObSysVars[203].name_ = "_create_audit_purge_job" ;
-      ObSysVars[203].data_type_ = ObVarcharType ;
-      ObSysVars[203].value_ = "" ;
-      ObSysVars[203].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[203].id_ = SYS_VAR__CREATE_AUDIT_PURGE_JOB ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__CREATE_AUDIT_PURGE_JOB)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__CREATE_AUDIT_PURGE_JOB] = 203 ;
-    ObSysVars[203].alias_ = "OB_SV__CREATE_AUDIT_PURGE_JOB" ;
-    }();
-
-    [&] (){
-      ObSysVars[204].info_ = "drop audit log trail job in mysql mode" ;
-      ObSysVars[204].name_ = "_drop_audit_purge_job" ;
-      ObSysVars[204].data_type_ = ObVarcharType ;
-      ObSysVars[204].value_ = "" ;
-      ObSysVars[204].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[204].id_ = SYS_VAR__DROP_AUDIT_PURGE_JOB ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__DROP_AUDIT_PURGE_JOB)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__DROP_AUDIT_PURGE_JOB] = 204 ;
-    ObSysVars[204].alias_ = "OB_SV__DROP_AUDIT_PURGE_JOB" ;
-    }();
-
-    [&] (){
-      ObSysVars[205].info_ = "set purge job interval in mysql mode, range in 1-999 days" ;
-      ObSysVars[205].name_ = "_set_purge_job_interval" ;
-      ObSysVars[205].data_type_ = ObVarcharType ;
-      ObSysVars[205].value_ = "" ;
-      ObSysVars[205].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[205].id_ = SYS_VAR__SET_PURGE_JOB_INTERVAL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_PURGE_JOB_INTERVAL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__SET_PURGE_JOB_INTERVAL] = 205 ;
-    ObSysVars[205].alias_ = "OB_SV__SET_PURGE_JOB_INTERVAL" ;
-    }();
-
-    [&] (){
-      ObSysVars[206].info_ = "set purge job status in mysql mode, range: true/false" ;
-      ObSysVars[206].name_ = "_set_purge_job_status" ;
+      ObSysVars[206].info_ = "control audit log trail job in mysql mode" ;
+      ObSysVars[206].name_ = "_create_audit_purge_job" ;
       ObSysVars[206].data_type_ = ObVarcharType ;
       ObSysVars[206].value_ = "" ;
       ObSysVars[206].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[206].id_ = SYS_VAR__SET_PURGE_JOB_STATUS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_PURGE_JOB_STATUS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__SET_PURGE_JOB_STATUS] = 206 ;
-    ObSysVars[206].alias_ = "OB_SV__SET_PURGE_JOB_STATUS" ;
+      ObSysVars[206].id_ = SYS_VAR__CREATE_AUDIT_PURGE_JOB ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__CREATE_AUDIT_PURGE_JOB)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__CREATE_AUDIT_PURGE_JOB] = 206 ;
+    ObSysVars[206].alias_ = "OB_SV__CREATE_AUDIT_PURGE_JOB" ;
     }();
 
     [&] (){
-      ObSysVars[207].info_ = "set last archive timestamp in mysql mode, must utc time in usec from 1970" ;
-      ObSysVars[207].name_ = "_set_last_archive_timestamp" ;
+      ObSysVars[207].info_ = "drop audit log trail job in mysql mode" ;
+      ObSysVars[207].name_ = "_drop_audit_purge_job" ;
       ObSysVars[207].data_type_ = ObVarcharType ;
       ObSysVars[207].value_ = "" ;
       ObSysVars[207].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[207].id_ = SYS_VAR__SET_LAST_ARCHIVE_TIMESTAMP ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_LAST_ARCHIVE_TIMESTAMP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__SET_LAST_ARCHIVE_TIMESTAMP] = 207 ;
-    ObSysVars[207].alias_ = "OB_SV__SET_LAST_ARCHIVE_TIMESTAMP" ;
+      ObSysVars[207].id_ = SYS_VAR__DROP_AUDIT_PURGE_JOB ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__DROP_AUDIT_PURGE_JOB)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__DROP_AUDIT_PURGE_JOB] = 207 ;
+    ObSysVars[207].alias_ = "OB_SV__DROP_AUDIT_PURGE_JOB" ;
     }();
 
     [&] (){
-      ObSysVars[208].info_ = "clear last archive timestamp in mysql mode" ;
-      ObSysVars[208].name_ = "_clear_last_archive_timestamp" ;
+      ObSysVars[208].info_ = "set purge job interval in mysql mode, range in 1-999 days" ;
+      ObSysVars[208].name_ = "_set_purge_job_interval" ;
       ObSysVars[208].data_type_ = ObVarcharType ;
       ObSysVars[208].value_ = "" ;
       ObSysVars[208].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[208].id_ = SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP ;
+      ObSysVars[208].id_ = SYS_VAR__SET_PURGE_JOB_INTERVAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_PURGE_JOB_INTERVAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SET_PURGE_JOB_INTERVAL] = 208 ;
+    ObSysVars[208].alias_ = "OB_SV__SET_PURGE_JOB_INTERVAL" ;
+    }();
+
+    [&] (){
+      ObSysVars[209].info_ = "set purge job status in mysql mode, range: true/false" ;
+      ObSysVars[209].name_ = "_set_purge_job_status" ;
+      ObSysVars[209].data_type_ = ObVarcharType ;
+      ObSysVars[209].value_ = "" ;
+      ObSysVars[209].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[209].id_ = SYS_VAR__SET_PURGE_JOB_STATUS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_PURGE_JOB_STATUS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SET_PURGE_JOB_STATUS] = 209 ;
+    ObSysVars[209].alias_ = "OB_SV__SET_PURGE_JOB_STATUS" ;
+    }();
+
+    [&] (){
+      ObSysVars[210].info_ = "set last archive timestamp in mysql mode, must utc time in usec from 1970" ;
+      ObSysVars[210].name_ = "_set_last_archive_timestamp" ;
+      ObSysVars[210].data_type_ = ObVarcharType ;
+      ObSysVars[210].value_ = "" ;
+      ObSysVars[210].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[210].id_ = SYS_VAR__SET_LAST_ARCHIVE_TIMESTAMP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_LAST_ARCHIVE_TIMESTAMP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SET_LAST_ARCHIVE_TIMESTAMP] = 210 ;
+    ObSysVars[210].alias_ = "OB_SV__SET_LAST_ARCHIVE_TIMESTAMP" ;
+    }();
+
+    [&] (){
+      ObSysVars[211].info_ = "clear last archive timestamp in mysql mode" ;
+      ObSysVars[211].name_ = "_clear_last_archive_timestamp" ;
+      ObSysVars[211].data_type_ = ObVarcharType ;
+      ObSysVars[211].value_ = "" ;
+      ObSysVars[211].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[211].id_ = SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP] = 208 ;
-    ObSysVars[208].alias_ = "OB_SV__CLEAR_LAST_ARCHIVE_TIMESTAMP" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__CLEAR_LAST_ARCHIVE_TIMESTAMP] = 211 ;
+    ObSysVars[211].alias_ = "OB_SV__CLEAR_LAST_ARCHIVE_TIMESTAMP" ;
     }();
 
     [&] (){
-      ObSysVars[209].info_ = "Manually control some behaviors of aggregation" ;
-      ObSysVars[209].name_ = "_aggregation_optimization_settings" ;
-      ObSysVars[209].data_type_ = ObUInt64Type ;
-      ObSysVars[209].value_ = "0" ;
-      ObSysVars[209].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[209].id_ = SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS] = 209 ;
-    ObSysVars[209].alias_ = "OB_SV__AGGREGATION_OPTIMIZATION_SETTINGS" ;
-    }();
-
-    [&] (){
-      ObSysVars[210].info_ = "enable shared hash table hash join optimization." ;
-      ObSysVars[210].name_ = "_px_shared_hash_join" ;
-      ObSysVars[210].data_type_ = ObIntType ;
-      ObSysVars[210].value_ = "1" ;
-      ObSysVars[210].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[210].id_ = SYS_VAR__PX_SHARED_HASH_JOIN ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_SHARED_HASH_JOIN)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__PX_SHARED_HASH_JOIN] = 210 ;
-    ObSysVars[210].alias_ = "OB_SV__PX_SHARED_HASH_JOIN" ;
-    }();
-
-    [&] (){
-      ObSysVars[211].info_ = "" ;
-      ObSysVars[211].name_ = "sql_notes" ;
-      ObSysVars[211].data_type_ = ObIntType ;
-      ObSysVars[211].value_ = "0" ;
-      ObSysVars[211].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[211].id_ = SYS_VAR_SQL_NOTES ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_NOTES)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_NOTES] = 211 ;
-    ObSysVars[211].alias_ = "OB_SV_SQL_NOTES" ;
-    }();
-
-    [&] (){
-      ObSysVars[212].info_ = "in certain case, warnings would be transformed to errors" ;
-      ObSysVars[212].name_ = "innodb_strict_mode" ;
-      ObSysVars[212].data_type_ = ObIntType ;
-      ObSysVars[212].value_ = "1" ;
+      ObSysVars[212].info_ = "Manually control some behaviors of aggregation" ;
+      ObSysVars[212].name_ = "_aggregation_optimization_settings" ;
+      ObSysVars[212].data_type_ = ObUInt64Type ;
+      ObSysVars[212].value_ = "0" ;
       ObSysVars[212].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[212].id_ = SYS_VAR_INNODB_STRICT_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STRICT_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STRICT_MODE] = 212 ;
-    ObSysVars[212].alias_ = "OB_SV_INNODB_STRICT_MODE" ;
+      ObSysVars[212].id_ = SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS] = 212 ;
+    ObSysVars[212].alias_ = "OB_SV__AGGREGATION_OPTIMIZATION_SETTINGS" ;
     }();
 
     [&] (){
-      ObSysVars[213].info_ = "settings for window function optimizations" ;
-      ObSysVars[213].name_ = "_windowfunc_optimization_settings" ;
-      ObSysVars[213].data_type_ = ObUInt64Type ;
-      ObSysVars[213].value_ = "0" ;
-      ObSysVars[213].min_val_ = "0" ;
-      ObSysVars[213].max_val_ = "9223372036854775807" ;
-      ObSysVars[213].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[213].id_ = SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS] = 213 ;
-    ObSysVars[213].alias_ = "OB_SV__WINDOWFUNC_OPTIMIZATION_SETTINGS" ;
+      ObSysVars[213].info_ = "enable shared hash table hash join optimization." ;
+      ObSysVars[213].name_ = "_px_shared_hash_join" ;
+      ObSysVars[213].data_type_ = ObIntType ;
+      ObSysVars[213].value_ = "1" ;
+      ObSysVars[213].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[213].id_ = SYS_VAR__PX_SHARED_HASH_JOIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__PX_SHARED_HASH_JOIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__PX_SHARED_HASH_JOIN] = 213 ;
+    ObSysVars[213].alias_ = "OB_SV__PX_SHARED_HASH_JOIN" ;
     }();
 
     [&] (){
-      ObSysVars[214].info_ = "control whether print svr_ip,execute_time,trace_id" ;
-      ObSysVars[214].name_ = "ob_enable_rich_error_msg" ;
+      ObSysVars[214].info_ = "" ;
+      ObSysVars[214].name_ = "sql_notes" ;
       ObSysVars[214].data_type_ = ObIntType ;
       ObSysVars[214].value_ = "0" ;
       ObSysVars[214].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[214].id_ = SYS_VAR_OB_ENABLE_RICH_ERROR_MSG ;
+      ObSysVars[214].id_ = SYS_VAR_SQL_NOTES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_NOTES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_NOTES] = 214 ;
+    ObSysVars[214].alias_ = "OB_SV_SQL_NOTES" ;
+    }();
+
+    [&] (){
+      ObSysVars[215].info_ = "in certain case, warnings would be transformed to errors" ;
+      ObSysVars[215].name_ = "innodb_strict_mode" ;
+      ObSysVars[215].data_type_ = ObIntType ;
+      ObSysVars[215].value_ = "1" ;
+      ObSysVars[215].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[215].id_ = SYS_VAR_INNODB_STRICT_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_STRICT_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_STRICT_MODE] = 215 ;
+    ObSysVars[215].alias_ = "OB_SV_INNODB_STRICT_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[216].info_ = "settings for window function optimizations" ;
+      ObSysVars[216].name_ = "_windowfunc_optimization_settings" ;
+      ObSysVars[216].data_type_ = ObUInt64Type ;
+      ObSysVars[216].value_ = "0" ;
+      ObSysVars[216].min_val_ = "0" ;
+      ObSysVars[216].max_val_ = "9223372036854775807" ;
+      ObSysVars[216].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[216].id_ = SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS] = 216 ;
+    ObSysVars[216].alias_ = "OB_SV__WINDOWFUNC_OPTIMIZATION_SETTINGS" ;
+    }();
+
+    [&] (){
+      ObSysVars[217].info_ = "control whether print svr_ip,execute_time,trace_id" ;
+      ObSysVars[217].name_ = "ob_enable_rich_error_msg" ;
+      ObSysVars[217].data_type_ = ObIntType ;
+      ObSysVars[217].value_ = "0" ;
+      ObSysVars[217].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[217].id_ = SYS_VAR_OB_ENABLE_RICH_ERROR_MSG ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_RICH_ERROR_MSG)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_RICH_ERROR_MSG] = 214 ;
-    ObSysVars[214].alias_ = "OB_SV_ENABLE_RICH_ERROR_MSG" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_RICH_ERROR_MSG] = 217 ;
+    ObSysVars[217].alias_ = "OB_SV_ENABLE_RICH_ERROR_MSG" ;
+    }();
+
+    [&] (){
+      ObSysVars[218].info_ = "control whether lob use partial update" ;
+      ObSysVars[218].name_ = "log_row_value_options" ;
+      ObSysVars[218].data_type_ = ObVarcharType ;
+      ObSysVars[218].value_ = "" ;
+      ObSysVars[218].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[218].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid" ;
+      ObSysVars[218].id_ = SYS_VAR_LOG_ROW_VALUE_OPTIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_ROW_VALUE_OPTIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_ROW_VALUE_OPTIONS] = 218 ;
+    ObSysVars[218].alias_ = "OB_SV_LOG_ROW_VALUE_OPTIONS" ;
+    }();
+
+    [&] (){
+      ObSysVars[219].info_ = "max stale time(us) for weak read query " ;
+      ObSysVars[219].name_ = "ob_max_read_stale_time" ;
+      ObSysVars[219].data_type_ = ObIntType ;
+      ObSysVars[219].value_ = "5000000" ;
+      ObSysVars[219].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[219].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large" ;
+      ObSysVars[219].id_ = SYS_VAR_OB_MAX_READ_STALE_TIME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_MAX_READ_STALE_TIME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_MAX_READ_STALE_TIME] = 219 ;
+    ObSysVars[219].alias_ = "OB_SV_MAX_READ_STALE_TIME" ;
+    }();
+
+    [&] (){
+      ObSysVars[220].info_ = "control wether we need to gather optimizer stats on insert into select/create table as select" ;
+      ObSysVars[220].name_ = "_optimizer_gather_stats_on_load" ;
+      ObSysVars[220].data_type_ = ObIntType ;
+      ObSysVars[220].value_ = "1" ;
+      ObSysVars[220].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[220].id_ = SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD] = 220 ;
+    ObSysVars[220].alias_ = "OB_SV__OPTIMIZER_GATHER_STATS_ON_LOAD" ;
+    }();
+
+    [&] (){
+      ObSysVars[221].info_ = "used in the dblink write transaction, the TM side informs the RM side of the necessary information about establishing a reverse dblink by setting system variables" ;
+      ObSysVars[221].name_ = "_set_reverse_dblink_infos" ;
+      ObSysVars[221].data_type_ = ObVarcharType ;
+      ObSysVars[221].value_ = "" ;
+      ObSysVars[221].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[221].id_ = SYS_VAR__SET_REVERSE_DBLINK_INFOS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SET_REVERSE_DBLINK_INFOS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SET_REVERSE_DBLINK_INFOS] = 221 ;
+    ObSysVars[221].alias_ = "OB_SV__SET_REVERSE_DBLINK_INFOS" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -2829,7 +2921,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 215;
+static int64_t var_amount = 222;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

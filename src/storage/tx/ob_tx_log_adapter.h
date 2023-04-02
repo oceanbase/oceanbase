@@ -19,6 +19,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 class LSN;
@@ -48,11 +52,12 @@ class ObITxLogAdapter
 public:
   virtual int submit_log(const char *buf,
                          const int64_t size,
-                         const int64_t base_ts,
+                         const share::SCN &base_ts,
                          ObTxBaseLogCb *cb,
                          const bool need_nonblock) = 0;
 
   virtual int get_role(bool &is_leader, int64_t &epoch) = 0;
+  virtual int get_max_decided_scn(share::SCN &scn) = 0;
 
 private:
 };
@@ -65,10 +70,11 @@ public:
   int init(ObITxLogParam *param);
   int submit_log(const char *buf,
                  const int64_t size,
-                 const int64_t base_ts,
+                 const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock);
   int get_role(bool &is_leader, int64_t &epoch);
+  int get_max_decided_scn(share::SCN &scn);
 
 private:
   logservice::ObLogHandler *log_handler_;

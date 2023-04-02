@@ -34,6 +34,7 @@ ObLogRouteService::ObLogRouteService() :
     systable_queryer_(),
     all_svr_cache_(),
     ls_route_timer_task_(*this),
+    timer_(),
     timer_id_(-1),
     tg_id_(-1),
     background_refresh_time_sec_(0),
@@ -65,6 +66,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     const int64_t blacklist_history_clear_interval_min)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const int64_t size = sizeof(ObLSRouterValue);
   lib::ObMemAttr log_router_mem_attr(OB_SYS_TENANT_ID, "LogRouter");
   lib::ObMemAttr asyn_task_mem_attr(OB_SYS_TENANT_ID, "RouterAsynTask");
@@ -94,8 +96,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
           all_server_cache_update_interval_sec, all_zone_cache_update_interval_sec))) {
     LOG_WARN("all_svr_cache_ init failed", KR(ret), K(prefer_region), K(all_server_cache_update_interval_sec),
         K(all_zone_cache_update_interval_sec));
-  } else if (OB_FAIL(TG_START(lib::TGDefIDs::LogRouterTimer))) {
-    LOG_ERROR("init LogRouterTimer failed", KR(ret));
+  } else if (OB_FAIL(timer_.init("LogRouter"))) {
+    LOG_ERROR("fail to init itable gc timer", K(ret));
   } else if (OB_FAIL(TG_CREATE(lib::TGDefIDs::LogRouteService, tg_id_))) {
     LOG_ERROR("TG_CREATE failed", KR(ret));
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
@@ -114,6 +116,11 @@ int ObLogRouteService::init(ObISQLClient *proxy,
 
     is_stopped_ = true;
     is_inited_ = true;
+
+    if (OB_TMP_FAIL(update_all_server_and_zone_cache_())) {
+      LOG_WARN("update_all_server_and_zone_cache_ failed, will retry", K(tmp_ret));
+    }
+
     LOG_INFO("ObLogRouteService init succ", K(prefer_region), K(cluster_id), K(is_across_cluster),
         K(timer_id_), K(tg_id_));
   }
@@ -127,6 +134,9 @@ int ObLogRouteService::start()
 
   if (OB_FAIL(ls_route_timer_task_.init(lib::TGDefIDs::LogRouterTimer))) {
     LOG_WARN("ObLSRouteTimerTask init failed", KR(ret));
+  } else if (OB_FAIL(timer_.schedule(ls_route_timer_task_, ObLSRouteTimerTask::REFRESH_INTERVAL,
+      true/*repeat*/))) {
+    LOG_WARN("fail to schedule min minor sstable gc task", K(ret));
   } else {
     is_stopped_ = false;
     LOG_INFO("ObLogRouteService start succ", K(timer_id_), K(tg_id_));
@@ -139,7 +149,7 @@ void ObLogRouteService::stop()
 {
   LOG_INFO("ObLogRouteService stop begin");
   is_stopped_ = true;
-  TG_STOP(lib::TGDefIDs::LogRouterTimer);
+  timer_.stop();
   LOG_INFO("ObLogRouteService stop finish");
 }
 
@@ -147,7 +157,7 @@ void ObLogRouteService::wait()
 {
   if (IS_INIT) {
     LOG_INFO("ObLogRouteService wait begin");
-    TG_WAIT(lib::TGDefIDs::LogRouterTimer);
+    timer_.wait();
     int64_t num = 0;
     int ret = OB_SUCCESS;
     while (OB_SUCC(TG_GET_QUEUE_NUM(tg_id_, num)) && num > 0) {
@@ -165,7 +175,8 @@ void ObLogRouteService::wait()
 void ObLogRouteService::destroy()
 {
   if (IS_INIT) {
-    TG_DESTROY(lib::TGDefIDs::LogRouterTimer);
+    LOG_INFO("ObLogRouteService destroy begin");
+    timer_.destroy();
     ls_route_timer_task_.destroy();
     timer_id_ = -1;
     tg_id_ = -1;
@@ -185,6 +196,7 @@ void ObLogRouteService::destroy()
     blacklist_history_clear_interval_min_ = 0;
 
     is_inited_ = false;
+    LOG_INFO("ObLogRouteService destroy finish");
   }
 }
 
@@ -787,9 +799,15 @@ int ObLogRouteService::handle_when_ls_route_info_not_exist_(
 
     if (OB_FAIL(update_server_list_(router_key, *router_value))) {
       LOG_WARN("update_server_list_ failed", KR(ret), K(router_key));
-    } else if (OB_FAIL(ls_router_map_.insert(router_key, router_value))) {
-      if (OB_ENTRY_EXIST != ret) {
-        LOG_WARN("LSRouterMap insert failed", KR(ret), K(router_key));
+      // SQL execution may fail, reset ret is OB_SUCCESS to ensure that the key is inserted into the map
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ls_router_map_.insert(router_key, router_value))) {
+        if (OB_ENTRY_EXIST != ret) {
+          LOG_WARN("LSRouterMap insert failed", KR(ret), K(router_key));
+        }
       }
     }
 
@@ -962,11 +980,7 @@ int ObLogRouteService::ObLSRouteTimerTask::init(int tg_id)
     ret = OB_INIT_TWICE;
     LOG_ERROR("ObLSRouteTimerTask has already been inited", KR(ret));
   } else {
-    if (OB_FAIL(TG_SCHEDULE(tg_id, *this, REFRESH_INTERVAL, false/*schedule repeatly*/))) {
-      LOG_ERROR("fail to schedule ObLSRouteTimerTask", KR(ret), K(tg_id));
-    } else {
-      is_inited_ = true;
-    }
+    is_inited_ = true;
   }
 
   return ret;
@@ -1003,8 +1017,8 @@ int ObLogRouteService::schedule_ls_timer_task_()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLSRouteTimerTask has not been inited", KR(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(timer_id_, ls_route_timer_task_, background_refresh_time_sec_, false/*schedule repeatly*/))) {
-    LOG_ERROR("fail to schedule ObLSRouteTimerTask", KR(ret), K(timer_id_));
+  } else {
+    // do nothing
   }
 
   return ret;

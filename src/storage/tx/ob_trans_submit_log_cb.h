@@ -53,15 +53,15 @@ public:
   void reset();
   void reuse();
 public:
-  int set_log_ts(const int64_t log_ts);
-  int64_t get_log_ts() const { return log_ts_; }
+  int set_log_ts(const share::SCN &log_ts);
+  const share::SCN &get_log_ts() const { return log_ts_; }
   int set_lsn(const palf::LSN &lsn);
   palf::LSN get_lsn() const { return lsn_; }
   void set_submit_ts(const int64_t submit_ts) { submit_ts_ = submit_ts; }
   int64_t get_submit_ts() const { return submit_ts_; }
   TO_STRING_KV(K_(log_ts), K_(lsn), K_(submit_ts));
 protected:
-  int64_t log_ts_;
+  share::SCN log_ts_;
   palf::LSN lsn_;
   int64_t submit_ts_;
 };
@@ -80,8 +80,15 @@ public:
   void destroy() { reset(); }
   ObTxLogType get_last_log_type() const;
   ObTransCtx *get_ctx() { return ctx_; }
-  void set_tx_data(ObTxData *tx_data) { tx_data_ = tx_data; }
-  ObTxData* get_tx_data() { return tx_data_; }
+  void set_tx_data(ObTxData *tx_data)
+  {
+    if (OB_ISNULL(tx_data)) {
+      tx_data_guard_.reset();
+    } else {
+      tx_data_guard_.init(tx_data);
+    }
+  }
+  ObTxData* get_tx_data() { return tx_data_guard_.tx_data(); }
   void set_callbacks(const memtable::ObCallbackScope &callbacks) { callbacks_ = callbacks; }
   memtable::ObCallbackScope& get_callbacks() { return callbacks_; }
   void set_callbacked() { is_callbacked_ = true; }
@@ -94,6 +101,10 @@ public:
   int on_failure();
   int64_t get_execute_hint() { return trans_id_.hash(); }
   ObTxMDSRange &get_mds_range() { return mds_range_; }
+
+  void set_first_part_scn(const share::SCN &first_part_scn) { first_part_scn_ = first_part_scn; }
+  share::SCN get_first_part_scn() { return first_part_scn_; }
+
   //bool is_callbacking() const { return is_callbacking_; }
 public:
   INHERIT_TO_STRING_KV("ObTxBaseLogCb",
@@ -103,12 +114,13 @@ public:
                        K_(trans_id),
                        K_(ls_id),
                        KP_(ctx),
-                       KP_(tx_data),
+                       K_(tx_data_guard),
                        K(is_callbacked_),
                        K(mds_range_),
-                       K(cb_arg_array_));
+                       K(cb_arg_array_),
+                       K(first_part_scn_));
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
+  // DISALLOW_COPY_AND_ASSIGN(ObTxLogCb);
 private:
   void check_warn_() const;
 private:
@@ -116,14 +128,59 @@ private:
   share::ObLSID ls_id_;
   ObTransID trans_id_;
   ObTransCtx *ctx_;
-  ObTxData *tx_data_;
+  ObTxDataGuard tx_data_guard_;
   memtable::ObCallbackScope callbacks_;
   bool is_callbacked_;
   ObTxMDSRange mds_range_;
   ObTxCbArgArray cb_arg_array_;
+  share::SCN first_part_scn_;
   //bool is_callbacking_;
 };
 
+struct ObTxLogBigSegmentInfo
+{
+  ObTxBigSegmentBuf segment_buf_;
+  share::SCN submit_base_scn_;
+  logservice::ObReplayBarrierType submit_barrier_type_;
+  ObTxLogCb *submit_log_cb_template_;
+
+  common::ObDList<ObTxLogCb> unsynced_segment_part_cbs_;
+
+  void reset()
+  {
+    segment_buf_.reset();
+    submit_base_scn_.min_scn();
+    submit_barrier_type_ = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+    if (OB_NOT_NULL(submit_log_cb_template_)) {
+      share::mtl_free(submit_log_cb_template_);
+    }
+    submit_log_cb_template_ = nullptr;
+
+    if (!unsynced_segment_part_cbs_.is_empty()) {
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "all log cbs need return before reset",
+                K(unsynced_segment_part_cbs_.get_size()), K(unsynced_segment_part_cbs_.get_first()),
+                K(unsynced_segment_part_cbs_.get_last()));
+    }
+  }
+
+  ObTxLogBigSegmentInfo() : submit_log_cb_template_(nullptr) { reset(); }
+
+  void reuse()
+  {
+    segment_buf_.reset();
+    submit_base_scn_.min_scn();
+    submit_barrier_type_ = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+    if (OB_NOT_NULL(submit_log_cb_template_)) {
+      submit_log_cb_template_->reset();
+    }
+  }
+
+  TO_STRING_KV(K(segment_buf_),
+               K(submit_base_scn_),
+               K(submit_barrier_type_),
+               KPC(submit_log_cb_template_),
+               K(unsynced_segment_part_cbs_.get_size()));
+};
 } // transaction
 } // oceanbase
 

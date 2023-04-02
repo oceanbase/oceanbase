@@ -134,7 +134,7 @@ int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
       }
     } while (OB_ENTRY_NOT_EXIST == ret);
   }
-  
+
   return ret;
 }
 

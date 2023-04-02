@@ -22,9 +22,10 @@ class ObGroupLookupOp : public ObLocalIndexLookupOp
 {
 public:
   ObGroupLookupOp() : ObLocalIndexLookupOp(ObNewRowIterator::IterType::ObGroupLookupOp),
-                      index_group_cnt_(1),
-                      lookup_group_cnt_(1)
-  {}
+                      group_iter_()
+  {
+    lookup_iter_ = &group_iter_;
+  }
   virtual ~ObGroupLookupOp();
   virtual void reset() override
   {
@@ -32,25 +33,29 @@ public:
     index_group_cnt_ = 1;
     lookup_group_cnt_ = 1;
   }
-  virtual int64_t get_index_group_cnt() override  { return index_group_cnt_; }
+  virtual int64_t get_index_group_cnt() const override  { return index_group_cnt_; }
+  virtual void set_index_group_cnt(int64_t group_cnt_) override {index_group_cnt_ = group_cnt_;}
   virtual void inc_index_group_cnt() override { ++index_group_cnt_; }
-  virtual int64_t get_lookup_group_cnt() override  { return lookup_group_cnt_; }
+  virtual int64_t get_lookup_group_cnt() const  override  { return lookup_group_cnt_; }
   virtual void inc_lookup_group_cnt() override { ++lookup_group_cnt_; }
   virtual int switch_rowkey_scan_group() override
   {
     return static_cast<ObGroupScanIter *>(rowkey_iter_)->switch_scan_group();
+  }
+  virtual int set_rowkey_scan_group(int64_t group_id) override
+  {
+    return static_cast<ObGroupScanIter *>(rowkey_iter_)->set_scan_group(group_id);
   }
   virtual ObNewRowIterator *&get_lookup_storage_iter() override;
   int init_group_range(int64_t cur_group_idx, int64_t group_size) override;
   virtual bool need_next_index_batch() const override;
   virtual int init_group_scan_iter(int64_t cur_group_idx,
                                    int64_t group_size,
-                                   ObIAllocator &allocator,
                                    ObExpr *group_id_expr);
   virtual int switch_lookup_scan_group() override;
+  virtual int set_lookup_scan_group(int64_t group_id) override;
 public:
-  int64_t index_group_cnt_;  // number of groups fetched from index table
-  int64_t lookup_group_cnt_; // number of groups fetched from lookup table
+  ObGroupScanIter group_iter_;
 };
 
 class ObDASGroupScanOp : public ObDASScanOp
@@ -62,7 +67,8 @@ public:
   int open_op() override;
   int release_op() override;
   virtual int rescan() override;
-  virtual int switch_scan_group();
+  virtual int switch_scan_group() override;
+  virtual int set_scan_group(int64_t group_id) override;
   int64_t get_cur_group_idx() const { return iter_.get_cur_group_idx(); }
   void init_group_range(int64_t cur_group_idx, int64_t group_size);
   virtual ObLocalIndexLookupOp *get_lookup_op() override
@@ -70,7 +76,7 @@ public:
   ObNewRowIterator *get_storage_scan_iter() override;
   int do_local_index_lookup() override;
   int decode_task_result(ObIDASTaskResult *task_result) override;
-  int fill_task_result(ObIDASTaskResult &task_result, bool &has_more) override;
+  int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   void set_is_exec_remote(bool v) { is_exec_remote_ = v; }
   virtual bool need_all_output() override { return is_exec_remote_; }
   TO_STRING_KV(K(iter_), KP(group_lookup_op_), K(group_size_), K(cur_group_idx_));

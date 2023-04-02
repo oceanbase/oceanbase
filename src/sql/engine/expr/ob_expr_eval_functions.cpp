@@ -21,6 +21,7 @@
 #include "ob_expr_regexp_count.h"
 #include "ob_expr_conv.h"
 #include "ob_expr_current_user.h"
+#include "ob_expr_current_user_priv.h"
 #include "ob_expr_cur_time.h"
 #include "ob_expr_database.h"
 #include "ob_expr_date.h"
@@ -261,9 +262,54 @@
 #include "ob_expr_json_merge_patch.h"
 #include "ob_expr_json_pretty.h"
 #include "ob_expr_json_member_of.h"
+#include "ob_expr_json_equal.h"
 #include "ob_expr_sha.h"
 #include "ob_expr_compress.h"
 #include "ob_expr_statement_digest.h"
+#include "ob_expr_is_json.h"
+#include "ob_expr_json_query.h"
+#include "ob_expr_json_exists.h"
+#include "ob_expr_treat.h"
+#include "ob_expr_point.h"
+#include "ob_expr_spatial_collection.h"
+#include "ob_expr_st_geomfromtext.h"
+#include "ob_expr_st_area.h"
+#include "ob_expr_st_intersects.h"
+#include "ob_expr_st_x.h"
+#include "ob_expr_st_transform.h"
+#include "ob_expr_priv_st_transform.h"
+#include "ob_expr_st_covers.h"
+#include "ob_expr_st_bestsrid.h"
+#include "ob_expr_st_astext.h"
+#include "ob_expr_st_buffer.h"
+#include "ob_expr_spatial_cellid.h"
+#include "ob_expr_spatial_mbr.h"
+#include "ob_expr_st_geomfromewkb.h"
+#include "ob_expr_st_geomfromwkb.h"
+#include "ob_expr_st_geomfromewkt.h"
+#include "ob_expr_st_asewkt.h"
+#include "ob_expr_st_srid.h"
+#include "ob_expr_st_distance.h"
+#include "ob_expr_st_geometryfromtext.h"
+#include "ob_expr_priv_st_setsrid.h"
+#include "ob_expr_priv_st_point.h"
+#include "ob_expr_priv_st_geogfromtext.h"
+#include "ob_expr_priv_st_geographyfromtext.h"
+#include "ob_expr_st_isvalid.h"
+#include "ob_expr_st_dwithin.h"
+#include "ob_expr_st_aswkb.h"
+#include "ob_expr_st_distance_sphere.h"
+#include "ob_expr_st_contains.h"
+#include "ob_expr_st_within.h"
+#include "ob_expr_priv_st_asewkb.h"
+#include "ob_expr_name_const.h"
+#include "ob_expr_format_bytes.h"
+#include "ob_expr_format_pico_time.h"
+#include "ob_expr_encrypt.h"
+#include "ob_expr_coalesce.h"
+#include "ob_expr_cast.h"
+#include "ob_expr_icu_version.h"
+#include "ob_expr_sql_mode_convert.h"
 
 namespace oceanbase
 {
@@ -699,7 +745,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTzOffset::eval_tz_offset,                                     /* 349 */
   ObExprOrahash::eval_orahash,                                        /* 350 */
   ObExprGetUserVar::eval_get_user_var,                                /* 351 */
-  ObExprUtil::eval_generated_column,                                  /* 352 */
+  NULL, //ObExprUtil::eval_generated_column,                          /* 352 */
   NULL, //ObExprCalcPartitionBase::calc_opt_route_hash_one            /* 353 */
   calc_convert_expr,                                                  /* 354 */
   ObExprSetToStr::calc_to_str_expr,                                   /* 355 */
@@ -862,8 +908,78 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,                                                               /* 509 */
 #endif
   ObExprDayName::calc_dayname,                                        /* 510 */
-  ObExprNullif::eval_nullif_enumset                                   /* 511 */
-
+  ObExprNullif::eval_nullif_enumset,                                  /* 511 */
+  ObExprSTIntersects::eval_st_intersects,                             /* 512 */
+  ObExprSTX::eval_st_x,                                               /* 513 */
+  ObExprSTY::eval_st_y,                                               /* 514 */
+  ObExprSTLatitude::eval_st_latitude,                                 /* 515 */
+  ObExprSTLongitude::eval_st_longitude,                               /* 516 */
+  ObExprSTTransform::eval_st_transform,                               /* 517 */
+  ObExprPoint::eval_point,                                            /* 518 */
+  ObExprLineString::eval_linestring,                                  /* 519 */
+  ObExprMultiPoint::eval_multipoint,                                  /* 520 */
+  ObExprMultiLineString::eval_multilinestring,                        /* 521 */
+  ObExprPolygon::eval_polygon,                                        /* 522 */
+  ObExprMultiPolygon::eval_multipolygon,                              /* 523 */
+  ObExprGeomCollection::eval_geomcollection,                          /* 524 */
+  ObExprPrivSTCovers::eval_st_covers,                                 /* 525 */
+  ObExprPrivSTBestsrid::eval_st_bestsrid,                             /* 526 */
+  ObExprSTAsText::eval_st_astext,                                     /* 527 */
+  ObExprSTAsWkt::eval_st_astext,                                      /* 528 */
+  ObExprSTBufferStrategy::eval_st_buffer_strategy,                    /* 529 */
+  ObExprSTBuffer::eval_st_buffer,                                     /* 530 */
+  ObExprSpatialCellid::eval_spatial_cellid,                           /* 531 */
+  ObExprSpatialMbr::eval_spatial_mbr,                                 /* 532 */
+  ObExprPrivSTGeomFromEWKB::eval_st_geomfromewkb,                     /* 533 */
+  ObExprSTGeomFromWKB::eval_st_geomfromwkb,                           /* 534 */
+  ObExprSTGeometryFromWKB::eval_st_geometryfromwkb,                   /* 535 */
+  ObExprPrivSTGeomFromEwkt::eval_st_geomfromewkt,                     /* 536 */
+  ObExprPrivSTAsEwkt::eval_priv_st_asewkt,                            /* 537 */
+  ObExprGeometryCollection::eval_geometrycollection,                  /* 538 */
+  ObExprSTSRID::eval_st_srid,                                         /* 539 */
+  ObExprSTDistance::eval_st_distance,                                 /* 540 */
+  ObExprPrivSTSetSRID::eval_priv_st_setsrid,                          /* 541 */
+  ObExprSTGeometryFromText::eval_st_geometryfromtext,                 /* 542 */
+  ObExprPrivSTPoint::eval_priv_st_point,                              /* 543 */
+  ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext,                /* 544 */
+  ObExprPrivSTGeographyFromText::eval_priv_st_geographyfromtext,      /* 545 */
+  ObExprSTIsValid::eval_st_isvalid,                                   /* 546 */
+  ObExprPrivSTBuffer::eval_priv_st_buffer,                            /* 547 */
+  ObExprSTAsWkb::eval_st_aswkb,                                       /* 548 */
+  ObExprStPrivAsEwkb::eval_priv_st_as_ewkb,                           /* 549 */
+  ObExprSTAsBinary::eval_st_asbinary,                                 /* 550 */
+  ObExprSTDistanceSphere::eval_st_distance_sphere,                    /* 551 */
+  ObExprPrivSTDWithin::eval_st_dwithin,                               /* 552 */
+  ObExprSTContains::eval_st_contains,                                 /* 553 */
+  ObExprSTWithin::eval_st_within,                                     /* 554 */
+  ObExprPrivSTTransform::eval_priv_st_transform,                      /* 555 */
+  ObExprSTGeomFromText::eval_st_geomfromtext,                         /* 556 */
+  ObExprSTArea::eval_st_area,                                         /* 557 */
+  ObExprCurrentUserPriv::eval_current_user_priv,                      /* 558 */
+  ObExprSqlModeConvert::sql_mode_convert,                             /* 559 */
+  ObExprJsonValue::eval_ora_json_value,                               /* 560 */
+  ObExprIsJson::eval_is_json,                                         /* 561 */
+  ObExprJsonEqual::eval_json_equal,                                   /* 562 */
+  ObExprJsonQuery::eval_json_query,                                   /* 563 */
+  ObExprJsonMergePatch::eval_ora_json_merge_patch,                    /* 564 */
+  ObExprJsonExists::eval_json_exists,                                 /* 565 */
+  ObExprJsonArray::eval_ora_json_array,                               /* 566 */
+  ObExprJsonObject::eval_ora_json_object,                             /* 567 */
+  ObExprTreat::eval_treat,                                            /* 568 */
+  ObExprUuid2bin::uuid2bin,                                           /* 569 */
+  ObExprIsUuid::is_uuid,                                              /* 570 */
+  ObExprBin2uuid::bin2uuid,                                           /* 571 */
+  ObExprNameConst::eval_name_const,                                   /* 572 */
+  ObExprFormatBytes::eval_format_bytes,                               /* 573 */
+  ObExprFormatPicoTime::eval_format_pico_time,                        /* 574 */
+  ObExprDesEncrypt::eval_des_encrypt_with_key,                        /* 575 */
+  ObExprDesEncrypt::eval_des_encrypt_with_default,                    /* 576 */
+  ObExprDesDecrypt::eval_des_decrypt,                                 /* 577 */
+  ObExprEncrypt::eval_encrypt,                                        /* 578 */
+  ObExprEncode::eval_encode,                                          /* 579 */
+  ObExprDecode::eval_decode,                                          /* 580 */
+  ObExprICUVersion::eval_version,                                     /* 581 */
+  ObExprCast::eval_cast_multiset,                                     /* 582 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -964,7 +1080,20 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprInstrb::calc_instrb_expr_batch,                               /* 94 */
   ObExprNaNvl::eval_nanvl_batch,                                      /* 95 */
   ObExprNvlUtil::calc_nvl_expr_batch,                                 /* 96 */
-  ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch                       /* 97 */
+  ObExprNvl2Oracle::calc_nvl2_oracle_expr_batch,                      /* 97 */
+  ObExprUuid2bin::uuid2bin_batch,                                     /* 98 */
+  ObExprIsUuid::is_uuid_batch,                                        /* 99 */
+  ObExprBin2uuid::bin2uuid_batch,                                     /* 100 */
+  ObExprFormatBytes::eval_format_bytes_batch,                         /* 101 */
+  ObExprFormatPicoTime::eval_format_pico_time_batch,                  /* 102 */
+  ObExprDesEncrypt::eval_des_encrypt_batch_with_default,              /* 103 */
+  ObExprDesEncrypt::eval_des_encrypt_batch_with_key,                  /* 104 */
+  ObExprDesDecrypt::eval_des_decrypt_batch,                           /* 105 */
+  ObExprEncrypt::eval_encrypt_batch,                                  /* 106 */
+  ObExprEncode::eval_encode_batch,                                    /* 107 */
+  ObExprDecode::eval_decode_batch,                                    /* 108 */
+  ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
+  ObExprIsNot::calc_batch_is_not_null                                 /* 110 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

@@ -60,14 +60,6 @@ public:
     rowkey_ = nullptr;
     hash_val_ = 0;
   }
-  static const ObMemtableKey& get_min_key() {
-    static ObMemtableKey key(&common::ObStoreRowkey::MIN_STORE_ROWKEY);
-    return key;
-  }
-  static const ObMemtableKey& get_max_key() {
-    static ObMemtableKey key(&common::ObStoreRowkey::MAX_STORE_ROWKEY);
-    return key;
-  }
 public:
   int compare(const ObMemtableKey &other, int &cmp) const
   {
@@ -304,17 +296,8 @@ public:
   uint64_t hash() const { return rowkey_->hash(); }
   int checksum(common::ObBatchChecksum &bc) const { return rowkey_->checksum(bc); }
   int64_t to_string(char *buf, const int64_t buf_len) const { return rowkey_->to_string(buf, buf_len); }
+  const ObObj *get_ptr() const { return rowkey_->get_obj_ptr(); }
   const char *repr() const { return rowkey_->repr(); }
-  static const ObStoreRowkeyWrapper& get_min_key()
-  {
-    static ObStoreRowkeyWrapper key_wrapper(&common::ObStoreRowkey::MIN_STORE_ROWKEY);
-    return key_wrapper;
-  }
-  static const ObStoreRowkeyWrapper& get_max_key() 
-  {
-    static ObStoreRowkeyWrapper key_wrapper(&common::ObStoreRowkey::MAX_STORE_ROWKEY);
-    return key_wrapper;
-  }
 public:
   const common::ObStoreRowkey *rowkey_;
 };

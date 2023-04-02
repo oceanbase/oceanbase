@@ -25,7 +25,7 @@ public:
   ObStorageHASrcProvider();
   virtual ~ObStorageHASrcProvider();
   int init(const uint64_t tenant_id, const ObMigrationOpType::TYPE &type, storage::ObStorageRpc *storage_rpc);
-  int choose_ob_src(const share::ObLSID &ls_id, const int64_t local_clog_checkpoint_ts,
+  int choose_ob_src(const share::ObLSID &ls_id, const share::SCN &local_clog_checkpoint_scn,
       ObStorageHASrcInfo &src_info);
 
 private:
@@ -33,7 +33,7 @@ private:
   int fetch_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &addr,
       common::ObIArray<common::ObAddr> &addr_list);
   int inner_choose_ob_src_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const int64_t local_clog_checkpoint_ts, const common::ObIArray<common::ObAddr> &addr_list,
+      const share::SCN &local_clog_checkpoint_scn, const common::ObIArray<common::ObAddr> &addr_list,
       common::ObAddr &choosen_src_addr);
   int fetch_ls_meta_info_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &member_addr,
       obrpc::ObFetchLSMetaInfoResp &ls_meta_info);

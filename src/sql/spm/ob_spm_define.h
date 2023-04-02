@@ -43,6 +43,12 @@ struct ObBaselineKey : public ObILibCacheKey
     constructed_sql_(),
     sql_id_(),
     sql_cs_type_(common::ObCollationType::CS_TYPE_INVALID) {}
+  ObBaselineKey(const ObBaselineKey &other)
+  : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
+    db_id_(other.db_id_),
+    constructed_sql_(other.constructed_sql_),
+    sql_id_(other.sql_id_),
+    sql_cs_type_(other.sql_cs_type_) {}
   ObBaselineKey(uint64_t db_id, const ObString &constructed_sql, const ObString &sql_id)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
     db_id_(db_id),
@@ -201,7 +207,8 @@ public:
   ObSpmSet(ObPlanCache *lib_cache, lib::MemoryContext &mem_context)
     : ObILibCacheNode(lib_cache, mem_context),
       is_inited_(false),
-      baseline_key_()
+      baseline_key_(),
+      enabled_fixed_baseline_count_(0)
   {
   }
   virtual ~ObSpmSet()
@@ -226,6 +233,7 @@ private:
   ObBaselineKey baseline_key_; //used for manager key memory
   common::ObSEArray<ObPlanBaselineItem*, 4> baseline_array_;
   common::ObSEArray<ObPlanBaselineItem*, 4> fixed_baseline_array_;
+  int64_t enabled_fixed_baseline_count_;
 };
 
 struct BaselineCmp
@@ -248,7 +256,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       handle_cache_mode_(MODE_INVALID),
       plan_hash_value_(0),
       offset_(-1),
-      need_sync_(false),
+      check_execute_status_(false),
       is_retry_for_spm_(false),
       capture_baseline_(false),
       new_plan_hash_(0),
@@ -258,7 +266,11 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       spm_force_disable_(false),
       has_fixed_plan_to_check_(false),
       evolution_plan_type_(OB_PHY_PLAN_UNINITIALIZED),
-      select_plan_type_(INVALID_TYPE)
+      select_plan_type_(INVALID_TYPE),
+      cur_baseline_not_enable_(false),
+      need_spm_timeout_(false),
+      baseline_exec_time_(0),
+      evolution_task_in_two_plan_set_(false)
   {}
   enum SpmMode {
     MODE_INVALID,
@@ -279,6 +291,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     STAT_ADD_BASELINE_PLAN,       // add baseline plan to plan cache evolution layer
     STAT_ACCEPT_EVOLUTION_PLAN,   // accept evolution plan as baseline and move it from evolution layer to plan layer 
     STAT_ACCEPT_BASELINE_PLAN,    // move baeline plan from evolution layer to plan layer 
+    STAT_FIRST_EXECUTE_PLAN,
+    STAT_FALLBACK_EXECUTE_PLAN,
     STAT_MAX
   };
   enum SpmSelectPlanType
@@ -288,6 +302,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     BASELINE_PLAN,
     MAX_TYPE
   };
+  void reset();
   void set_get_normal_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_NORMAL; }
   void set_get_offset_mode() { handle_cache_mode_ = MODE_GET_OFFSET; }
   void set_get_for_update_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_FOR_UPDATE; }
@@ -304,7 +319,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   SpmMode handle_cache_mode_;
   uint64_t plan_hash_value_;
   int64_t offset_;
-  bool need_sync_;
+  bool check_execute_status_;
   bool is_retry_for_spm_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   bool capture_baseline_;
@@ -316,6 +331,10 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   bool has_fixed_plan_to_check_;
   ObPhyPlanType evolution_plan_type_;
   SpmSelectPlanType select_plan_type_; // for retry
+  bool cur_baseline_not_enable_;
+  bool need_spm_timeout_;
+  int64_t baseline_exec_time_;
+  bool evolution_task_in_two_plan_set_;
 };
 
 struct EvolutionTaskResult

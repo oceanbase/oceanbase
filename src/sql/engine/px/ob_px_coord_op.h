@@ -118,8 +118,7 @@ protected:
   int check_all_sqc(common::ObIArray<ObDfo *> &active_dfos,
       int64_t &time_offset,
       bool &all_dfo_terminate,
-      int64_t &cur_timestamp,
-      bool &server_all_alive);
+      int64_t &cur_timestamp);
 
   int calc_admited_worker_count(int64_t px_expected,
                                   int64_t query_expected,
@@ -160,6 +159,7 @@ protected:
   int64_t time_recorder_;
   int64_t batch_rescan_param_version_;
   ObExtraServerAliveCheck server_alive_checker_;
+  int64_t last_px_batch_rescan_size_;
 };
 
 class ObPxCoordSpec : public ObPxReceiveSpec

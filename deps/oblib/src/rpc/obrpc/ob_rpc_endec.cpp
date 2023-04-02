@@ -71,7 +71,7 @@ int init_packet(ObRpcProxy& proxy, ObRpcPacket& pkt, ObRpcPacketCode pcode, cons
   return proxy.init_pkt(&pkt, pcode, opts, unneed_response);
 }
 
-int rpc_decode_ob_packet(ObRpcMemPool& pool, char* buf, int64_t sz, ObRpcPacket*& ret_pkt)
+int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcPacket*& ret_pkt)
 {
   int ret = common::OB_SUCCESS;
   ObRpcPacket* pkt = (ObRpcPacket*)pool.alloc(sizeof(ObRpcPacket));

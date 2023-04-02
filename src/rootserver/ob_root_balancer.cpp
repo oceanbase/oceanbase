@@ -110,7 +110,7 @@ int ObRootBalancer::idle() const
 void ObRootBalancer::wakeup()
 {
   if (!inited_) {
-    LOG_WARN("not init");
+    LOG_WARN_RET(OB_NOT_INIT, "not init");
   } else {
     idling_.wakeup();
   }

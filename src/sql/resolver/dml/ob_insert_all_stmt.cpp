@@ -74,45 +74,6 @@ int ObInsertAllStmt::assign(const ObInsertAllStmt &other)
   return ret;
 }
 
-int ObInsertAllStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                             const common::ObIArray<ObRawExpr*> &new_exprs)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDelUpdStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
-    LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); i++) {
-      if (OB_ISNULL(table_info_.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(table_info_.at(i)->replace_exprs(other_exprs, new_exprs))) {
-        LOG_WARN("failed to replace exprs", K(ret));
-      } else { /*do nothing*/ }
-    }
-
-  }
-  return ret;
-}
-
-int ObInsertAllStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); i++) {
-    if (OB_ISNULL(table_info_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(table_info_.at(i)->get_relation_exprs(expr_checker))) {
-      LOG_WARN("failed to get relation exprs", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDelUpdStmt::inner_get_relation_exprs(expr_checker))) {
-      LOG_WARN("get delup stmt relation exprs failed", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObInsertAllStmt::check_table_be_modified(uint64_t ref_table_id, bool& found) const
 {
   int ret = OB_SUCCESS;
@@ -153,6 +114,36 @@ int ObInsertAllStmt::get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs
       LOG_WARN("get null table info", K(ret));
     } else if (OB_FAIL(append(view_check_exprs, table_info->view_check_exprs_))) {
       LOG_WARN("failed to append view check exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObInsertAllStmt::get_all_values_vector(ObIArray<ObRawExpr*> &all_values_vector) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObInsertAllTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info))  {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret));
+    } else if (OB_FAIL(append(all_values_vector, table_info->values_vector_))) {
+      LOG_WARN("failed to append values vector", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObInsertAllStmt::get_all_when_cond_exprs(ObIArray<ObRawExpr*> &all_when_cond_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObInsertAllTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info))  {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret));
+    } else if (OB_FAIL(append(all_when_cond_exprs, table_info->when_cond_exprs_))) {
+      LOG_WARN("failed to append when cond exprs", K(ret));
     }
   }
   return ret;

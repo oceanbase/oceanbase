@@ -92,7 +92,7 @@ public:
                   || OB_ISNULL(r)
                   || (l->cnt_ != r->cnt_)) {
         *err_ = OB_ERR_UNEXPECTED;
-        SQL_LOG(WARN, "invalid parameter", KPC(l), KPC(r), K(*err_));
+        SQL_LOG_RET(WARN, *err_, "invalid parameter", KPC(l), KPC(r), K(*err_));
       } else {
         const ObDatum *lcells = l->cells();
         const ObDatum *rcells = r->cells();
@@ -101,7 +101,7 @@ public:
           const int64_t idx = sort_collations_.at(i).field_idx_;
           if (idx >= exprs_.count()) {
             *err_ = OB_ERR_UNEXPECTED;
-            SQL_LOG(WARN, "compare column id greater than exprs count", K(*err_),
+            SQL_LOG_RET(WARN, *err_, "compare column id greater than exprs count", K(*err_),
                       K(idx), K(exprs_.count()));
           } else {
             bool null_first = (NULL_FIRST == sort_collations_.at(i).null_pos_);
@@ -176,7 +176,7 @@ public:
       const common::ObIArray<uint64_t> &cycle_by_columns)
     : allocator_(allocator), input_rows_(),
   sort_collations_(sort_collations), cycle_by_columns_(cycle_by_columns),
-  left_output_(left_output) {};
+  left_output_(left_output), last_node_level_(UINT64_MAX) {};
   virtual ~ObSearchMethodOp() = default;
 
   virtual int finish_add_row(bool sort) = 0;
@@ -193,6 +193,7 @@ public:
   int is_same_row(ObChunkDatumStore::StoredRow &row_1st, ObChunkDatumStore::StoredRow &row_2nd,
                   bool &is_cycle);
   int64_t count() { return input_rows_.count(); }
+  virtual uint64_t get_last_node_level() { return last_node_level_; }
   const static int64_t ROW_EXTRA_SIZE = 0;
 protected:
   // hard code seed, 24bit max prime number
@@ -203,6 +204,8 @@ protected:
   const common::ObIArray<uint64_t> &cycle_by_columns_;
   common::ObArray<ObChunkDatumStore::StoredRow*> recycle_rows_;
   const ExprFixedArray &left_output_;
+  // 记录当前查询行在树中的level
+  uint64_t last_node_level_;
 };
 
 class ObDepthFisrtSearchOp : public ObSearchMethodOp
@@ -213,7 +216,7 @@ public:
       const common::ObIArray<ObSortFieldCollation> &sort_collations,
       const common::ObIArray<uint64_t> &cycle_by_columns) :
     ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns),
-    hash_filter_rows_(), hash_col_idx_(), last_node_level_(UINT64_MAX),
+    hash_filter_rows_(), hash_col_idx_(),
     current_search_path_(), search_stack_(allocator_)
   { }
   virtual ~ObDepthFisrtSearchOp() {
@@ -238,8 +241,6 @@ private:
 private:
   RowMap hash_filter_rows_;
   common::ObSEArray<uint64_t, 32> hash_col_idx_;
-  // 记录当前查询行在树中的level
-  uint64_t last_node_level_;
   /**
    *                              level
    *            A                   0
@@ -265,7 +266,9 @@ public:
       const common::ObIArray<ObSortFieldCollation> &sort_collations,
       const common::ObIArray<uint64_t> &cycle_by_columns) :
     ObSearchMethodOp(allocator, left_output, sort_collations, cycle_by_columns), bst_root_(),
-    current_parent_node_(&bst_root_), search_queue_(allocator), search_results_() {}
+    current_parent_node_(&bst_root_), search_queue_(allocator), search_results_() {
+      last_node_level_ = 0;
+    }
   virtual ~ObBreadthFisrtSearchOp() = default;
 
   virtual int finish_add_row(bool sort) override;

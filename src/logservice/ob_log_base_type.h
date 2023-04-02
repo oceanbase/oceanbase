@@ -17,6 +17,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace logservice
 {
 enum ObLogBaseType
@@ -59,13 +63,26 @@ enum ObLogBaseType
   DAS_ID_LOG_BASE_TYPE = 15,
   //for recovery_ls_service
   RESTORE_SERVICE_LOG_BASE_TYPE = 16,
+
+  RESERVED_SNAPSHOT_LOG_BASE_TYPE = 17,
+
+  MEDIUM_COMPACTION_LOG_BASE_TYPE = 18,
+
+  // for arb garbage collect service,
+  ARB_GARBAGE_COLLECT_SERVICE_LOG_BASE_TYPE = 19,
+  // for data_dictionary_service
+  DATA_DICT_LOG_BASE_TYPE = 20,
+
+  // for arbitration service
+  ARBITRATION_SERVICE_LOG_BASE_TYPE = 21,
   // pay attention!!!
   // add log type in log_base_type_to_string
-
   // max value
   MAX_LOG_BASE_TYPE,
 };
 
+// Define the maximum length of ObLogBaseType string
+static constexpr int64_t OB_LOG_BASE_TYPE_STR_MAX_LEN = 128;
 static inline
 int log_base_type_to_string(const ObLogBaseType log_type,
                             char *str,
@@ -106,6 +123,16 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"DAS_ID", str_len);
   } else if (log_type == RESTORE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"RESTORE_SERVICE", str_len);
+  } else if (log_type == RESERVED_SNAPSHOT_LOG_BASE_TYPE) {
+    strncpy(str ,"RESERVED_SNAPSHOT", str_len);
+  } else if (log_type == MEDIUM_COMPACTION_LOG_BASE_TYPE) {
+    strncpy(str ,"MEDIUM_COMPACTION", str_len);
+  } else if (log_type == ARB_GARBAGE_COLLECT_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str ,"ARB_GARBAGE_COLLECTE_SERVICE", str_len);
+  } else if (log_type == DATA_DICT_LOG_BASE_TYPE) {
+    strncpy(str ,"DATA_DICTIONARY_SERVICE", str_len);
+  } else if (log_type == ARBITRATION_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str ,"ARBITRATION_SERVICE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
@@ -123,7 +150,7 @@ public:
   virtual int replay(const void *buffer,
                      const int64_t nbytes,
                      const palf::LSN &lsn,
-                     const int64_t ts_ns) = 0;
+                     const share::SCN &scn) = 0;
 };
 
 class ObIRoleChangeSubHandler
@@ -156,8 +183,8 @@ public:
 class ObICheckpointSubHandler
 {
 public:
-  virtual int64_t get_rec_log_ts() = 0;
-  virtual int flush(int64_t rec_log_ts) = 0;
+  virtual share::SCN get_rec_scn() = 0;
+  virtual int flush(share::SCN &scn) = 0;
 };
 
 #define REGISTER_TO_LOGSERVICE(type, subhandler)                                            \

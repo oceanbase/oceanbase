@@ -544,6 +544,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
       case SESSION_ID: {
         cells[cell_idx].set_uint64(record.data_.session_id_);
       } break;
+      case PROXY_SESSION_ID: {
+        cells[cell_idx].set_uint64(record.data_.proxy_session_id_);
+      } break;
       case TRACE_ID: {
         int len = record.data_.trace_id_.to_string(trace_id_, sizeof(trace_id_));
         cells[cell_idx].set_varchar(trace_id_, len);
@@ -921,8 +924,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         break;
       }
       case SNAPSHOT_VERSION: {
-        //TODO:SCN
-        uint64_t set_v = record.data_.get_snapshot_version() < 0 ? 0 : record.data_.get_snapshot_version();
+        uint64_t set_v = record.data_.get_snapshot_version().is_valid() ? record.data_.get_snapshot_version().get_val_for_inner_table_field() : 0;
         cells[cell_idx].set_uint64(set_v);
         break;
       }
@@ -959,6 +961,26 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                            ObCharset::get_default_charset()));
       } break;
+      case RULE_NAME: {
+        if ((record.data_.rule_name_len_ > 0) && (NULL != record.data_.rule_name_)) {
+          cells[cell_idx].set_varchar(record.data_.rule_name_, record.data_.rule_name_len_);
+        } else {
+          cells[cell_idx].set_varchar("");
+        }
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                             ObCharset::get_default_charset()));
+      } break;
+      case TX_INTERNAL_ROUTE_FLAG: {
+        cells[cell_idx].set_uint64(record.data_.txn_free_route_flag_);
+        break;
+      }
+      case PARTITION_HIT: {
+        cells[cell_idx].set_bool(record.data_.partition_hit_);
+      } break;
+      case TX_INTERNAL_ROUTE_VERSION: {
+        cells[cell_idx].set_uint64(record.data_.txn_free_route_version_);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

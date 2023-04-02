@@ -102,7 +102,7 @@ ObMetaPointer<T>::ObMetaPointer(const ObMetaDiskAddr &addr, ObMetaObjGuard<T> &g
   guard.get_obj(obj_);
   if (nullptr != obj_.ptr_) {
     if (nullptr == obj_.pool_) {
-      STORAGE_LOG(ERROR, "object pool is nullptr", K_(obj));
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K_(obj));
       ob_abort();
     } else {
       obj_.ptr_->inc_ref();
@@ -346,7 +346,7 @@ void ObMetaPointer<T>::set_obj(ObMetaObjGuard<T> &guard)
   set_attr_for_obj(obj_.ptr_);
   if (nullptr != obj_.ptr_) {
     if (nullptr == obj_.pool_) {
-      STORAGE_LOG(ERROR, "object pool is nullptr", K_(obj));
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K_(obj));
       ob_abort();
     } else {
       obj_.ptr_->inc_ref();
@@ -426,14 +426,14 @@ void ObMetaPointer<T>::reset_obj()
 {
   if (nullptr != obj_.ptr_) {
     if (nullptr == obj_.pool_) {
-      STORAGE_LOG(ERROR, "object pool is nullptr", K_(obj));
+      STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K_(obj));
       ob_abort();
     } else {
       const int64_t ref_cnt = obj_.ptr_->dec_ref();
       if (0 == ref_cnt) {
         obj_.pool_->release(obj_.ptr_);
       } else if (OB_UNLIKELY(ref_cnt < 0)) {
-        STORAGE_LOG(ERROR, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
+        STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj ref cnt may be leaked", K(ref_cnt), KPC(this));
       }
       obj_.ptr_ = nullptr;
     }
@@ -457,7 +457,7 @@ ObMetaPointer<T> &ObMetaPointer<T>::operator = (const ObMetaPointer<T> &other)
     obj_.pool_ = other.obj_.pool_;
     if (nullptr != other.obj_.ptr_) {
       if (nullptr == other.obj_.pool_) {
-        STORAGE_LOG(ERROR, "object pool is nullptr", K(other));
+        STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "object pool is nullptr", K(other));
         ob_abort();
       } else {
         obj_.ptr_ = other.obj_.ptr_;

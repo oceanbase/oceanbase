@@ -324,15 +324,15 @@ void TestOptimizerUtils::explain_plan_json(ObLogPlan *logical_plan, std::ofstrea
 
   output_buf[pos++] = '\n';
 
-  // 1. generate json
-  Value *val = NULL;
-  logical_plan->get_plan_root()->to_json(output_buf, OB_MAX_LOG_BUFFER_SIZE, pos, val);
-  Tidy tidy(val);
-  LOG_DEBUG("succ to generate json object", K(pos));
+  // // 1. generate json
+  // Value *val = NULL;
+  // logical_plan->get_plan_root()->to_json(output_buf, OB_MAX_LOG_BUFFER_SIZE, pos, val);
+  // Tidy tidy(val);
+  // LOG_DEBUG("succ to generate json object", K(pos));
 
-  // 2. from json to string
-  pos = tidy.to_string(buf, OB_MAX_LOG_BUFFER_SIZE);
-  LOG_DEBUG("succ to print json to string", K(pos));
+  // // 2. from json to string
+  // pos = tidy.to_string(buf, OB_MAX_LOG_BUFFER_SIZE);
+  // LOG_DEBUG("succ to print json to string", K(pos));
 
   if (pos < OB_MAX_LOG_BUFFER_SIZE -2) {
     output_buf[pos + 1] = '\n';
@@ -403,6 +403,7 @@ void TestOptimizerUtils::run_test(const char* test_file,
 }
 
 void TestOptimizerUtils::init_histogram(
+    common::ObIAllocator &allocator,
     const ObHistType type,
     const double sample_size,
     const double density,
@@ -418,13 +419,13 @@ void TestOptimizerUtils::init_histogram(
   hist.set_sample_size(sample_size);
   hist.set_density(density);
   int64_t bucket_cnt = 0;
+  hist.prepare_allocate_buckets(allocator, repeat_count.count());
   for (int64_t i = 0; i < repeat_count.count(); i++) {
-    ObHistBucket bucket(repeat_count.at(i), num_elements.at(i));
-    hist.get_buckets().push_back(bucket);
-    hist.get_buckets().at(hist.get_buckets().count() - 1).endpoint_value_.set_int(value.at(i));
-    bucket_cnt += num_elements.at(i);
+    hist.get(i).endpoint_num_ = repeat_count.at(i);
+    hist.get(i).endpoint_repeat_count_ = num_elements.at(i);
+    hist.get(i).endpoint_value_.set_int(value.at(i));
   }
-  hist.set_bucket_cnt(bucket_cnt);
+  hist.set_bucket_cnt(repeat_count.count());
 }
 
 void TestOptimizerUtils::run_fail_test(const char *test_file)
@@ -483,7 +484,7 @@ void TestOptimizerUtils::formalize_tmp_file(const char *tmp_file)
   std::string cmd_string = "./remove_pointer.py ";
   cmd_string += tmp_file;
   if (0 != system(cmd_string.c_str())) {
-    LOG_ERROR("fail formalize tmp file", K(cmd_string.c_str()));
+    LOG_ERROR_RET(OB_ERR_SYS, "fail formalize tmp file", K(cmd_string.c_str()));
   }
 }
 
@@ -491,10 +492,11 @@ int MockCacheObjectFactory::alloc(ObPhysicalPlan *&plan,
                                 uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheObject *cache_obj = NULL;
+  ObILibCacheObject *cache_obj = NULL;
   if (OB_FAIL(alloc(cache_obj, ObLibCacheNameSpace::NS_CRSR, tenant_id))) {
     LOG_WARN("alloc physical plan failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(cache_obj) || OB_UNLIKELY(!cache_obj->is_sql_crsr())) {
+  } else if (OB_ISNULL(cache_obj) ||
+             OB_UNLIKELY(ObLibCacheNameSpace::NS_CRSR != cache_obj->get_ns())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache object is invalid", KPC(cache_obj));
   } else {
@@ -512,10 +514,11 @@ int MockCacheObjectFactory::alloc(ObPLFunction *&func,
                                 uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheObject *cache_obj = NULL;
+  ObILibCacheObject *cache_obj = NULL;
   if (OB_FAIL(alloc(cache_obj, ns, tenant_id))) {
     LOG_WARN("alloc cache object failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(cache_obj) || OB_UNLIKELY(!cache_obj->is_prcr())) {
+  } else if (OB_ISNULL(cache_obj) ||
+             OB_UNLIKELY(ObLibCacheNameSpace::NS_PRCR != cache_obj->get_ns())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache object is invalid", KPC(cache_obj));
   } else {
@@ -532,10 +535,11 @@ int MockCacheObjectFactory::alloc(ObPLPackage *&package,
                                 uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheObject *cache_obj = NULL;
+  ObILibCacheObject *cache_obj = NULL;
   if (OB_FAIL(alloc(cache_obj, ObLibCacheNameSpace::NS_PKG, tenant_id))) {
     LOG_WARN("alloc cache object failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(cache_obj) || OB_UNLIKELY(!cache_obj->is_pkg())) {
+  } else if (OB_ISNULL(cache_obj) ||
+             OB_UNLIKELY(ObLibCacheNameSpace::NS_PKG != cache_obj->get_ns())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cache object is invalid", KPC(cache_obj));
   } else {
@@ -548,7 +552,7 @@ int MockCacheObjectFactory::alloc(ObPLPackage *&package,
   return ret;
 }
 
-int MockCacheObjectFactory::alloc(ObPlanCacheObject *&cache_obj,
+int MockCacheObjectFactory::alloc(ObILibCacheObject *&cache_obj,
                                 ObLibCacheNameSpace ns, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -619,7 +623,7 @@ int MockCacheObjectFactory::alloc(ObPlanCacheObject *&cache_obj,
   return ret;
 }
 
-void MockCacheObjectFactory::free(ObPlanCacheObject *cache_obj)
+void MockCacheObjectFactory::free(ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cache_obj)) {
@@ -638,12 +642,12 @@ void MockCacheObjectFactory::free(ObPlanCacheObject *cache_obj)
   }
 }
 
-void MockCacheObjectFactory::inner_free(ObPlanCacheObject *cache_obj)
+void MockCacheObjectFactory::inner_free(ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
 
   lib::MemoryContext entity = cache_obj->get_mem_context();
-  WITH_CONTEXT(entity) { cache_obj->~ObPlanCacheObject(); }
+  WITH_CONTEXT(entity) { cache_obj->~ObILibCacheObject(); }
   cache_obj = NULL;
   DESTROY_CONTEXT(entity);
 }

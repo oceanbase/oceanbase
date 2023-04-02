@@ -32,6 +32,8 @@ public:
   int inner_est_cost(double child_card, double &op_cost);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual const char *get_name() const;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 protected:
   virtual int generate_rowid_expr_for_trigger() override;
   virtual int generate_multi_part_partition_id_expr() override;

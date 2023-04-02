@@ -35,7 +35,7 @@ enum CopyStatType
 class ObStatsEstimator
 {
 public:
-  ObStatsEstimator(ObExecContext &ctx);
+  explicit ObStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
 protected:
 
@@ -43,7 +43,7 @@ protected:
 
   int64_t get_item_size() const { return stat_items_.count(); }
 
-  int decode();
+  int decode(ObIAllocator &allocator);
 
   int add_result(ObObj &obj)  { return results_.push_back(obj); }
 
@@ -69,6 +69,9 @@ protected:
                        double est_percent,
                        bool block_sample,
                        ObString &sample_hint);
+
+  int fill_sample_info(common::ObIAllocator &alloc,
+                       const ObAnalyzeSampleInfo &sample_info);
 
   int fill_parallel_info(common::ObIAllocator &alloc,
                          int64_t degree);
@@ -97,12 +100,15 @@ private:
   int copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
                             ObIArray<ObOptStat> &dst_opt_stats);
 
-  int copy_col_stats(ObIArray<ObOptColumnStat *> &src_col_stats,
+  int copy_col_stats(const int64_t cur_row_cnt,
+                     const int64_t total_row_cnt,
+                     ObIArray<ObOptColumnStat *> &src_col_stats,
                      ObIArray<ObOptColumnStat *> &dst_col_stats);
 
 protected:
 
   ObExecContext &ctx_;
+  ObIAllocator &allocator_;
 
   ObString db_name_;
   ObString from_table_;
@@ -116,6 +122,7 @@ protected:
 
   ObArray<ObStatItem *> stat_items_;
   ObArray<ObObj> results_;
+  double sample_value_;
 };
 
 

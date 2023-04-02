@@ -38,11 +38,6 @@ public:
             int64_t in_read_size,
             ReadBuf &read_buf,
             int64_t &out_read_size) const;
-  int pread(const char *block_name,
-            const offset_t read_lsn,
-            int64_t in_read_size,
-            ReadBuf &read_buf,
-            int64_t &out_read_size) const;
 private:
   int limit_and_align_in_read_size_by_block_size_(
       offset_t aligned_start_offset,

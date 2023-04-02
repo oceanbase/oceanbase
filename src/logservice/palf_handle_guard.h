@@ -67,24 +67,11 @@ public:
   // int append(const PalfAppendOptions &options,
   //            const void *buffer,
   //            const int64_t nbytes,
-  //            const int64_t ref_ts_ns,
+  //            const int64_t ref_scn,
   //            LSN &lsn,
-  //            int64_t &ts_ns);
+  //            int64_t &scn);
   DELEGATE_WITH_RET(palf_handle_, append, int);
   DELEGATE_WITH_RET(palf_handle_, raw_write, int);
-  // @brief reads up to count bytes from palf handle at lsn into the buffer starting at buf, return the timestamp
-  //        and actuall read size.
-  // @param[out] void *&, buffer used to save read reuslt.
-  // @param[in] const int64_t, wanted read size.
-  // @param[in] const LSN, wanted read position.
-  // @param[out] int64_t &, the data timestamp.
-  // @param[out] int64_t &, actuall read size.
-  //  int pread(void *&buffer,
-  //            const int64_t nbytes,
-  //            const LSN &lsn,
-  //            int64_t &ts_ns,
-  //            int64_t &rnbytes);
-  DELEGATE_WITH_RET(palf_handle_, pread, int);
   // @brief alloc an iterator of palf, used to iterate file from start lsn
   // 1. alloc PalfBufferIterator, this iterator will get something append by caller.
   // @param[in] const LSN &, the start lsn of iterator.
@@ -104,10 +91,10 @@ public:
     return palf_handle_.seek(start_lsn, iter);
   }
 
-  int seek(const int64_t ts_ns,
+  int seek(const share::SCN &scn,
            PalfGroupBufferIterator &iter)
   {
-    return palf_handle_.seek(ts_ns, iter);
+    return palf_handle_.seek(scn, iter);
   }
 
   // @breif, query lsn by timestamp, note that this function may be time-consuming
@@ -116,8 +103,8 @@ public:
   // @breif, query lsn by timestamp, note that this function may be time-consuming
   // @param[in] const int64_t, specified timestamp(ns).
   // @param[out] LSN&, the lower bound lsn which include timestamp.
-  // int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &lsn, int64_t &ts);
-  DELEGATE_WITH_RET(palf_handle_, locate_by_ts_ns_coarsely, int);
+  // int locate_by_scn_coarsely(const int64_t scn, LSN &lsn, int64_t &ts);
+  DELEGATE_WITH_RET(palf_handle_, locate_by_scn_coarsely, int);
 
   DELEGATE_WITH_RET(palf_handle_, locate_by_lsn_coarsely, int);
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
@@ -129,26 +116,26 @@ public:
   // @breif, get begin lsn, begin lsn maybe smaller than recycable lsn, because palf will not delete data before
   //         recycable lsn immediately.
   // @param[out] int64_t&, begin lsn.
-  // int get_base_ts_ns(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_ts_ns, int);
+  // int get_base_scn(int64_t &ts) const;
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_scn, int);
   // int get_begin_lsn(palf::LSN &lsn) const;
   CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_lsn, int);
   // @brief, get timestamp of begin lsn.
   // @param[out] int64_t&, timestmap.
-  // int get_begin_ts_ns(int64_t &ts) const;
-  // CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_ts_ns, int);
+  // int get_begin_scn(int64_t &ts) const;
+  // CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_scn, int);
   // @brief, get end lsn.
   // @param[out] LSN&, end lsn.
   // int get_end_lsn(LSN &lsn) const;
   CONST_DELEGATE_WITH_RET(palf_handle_, get_end_lsn, int);
   // @brief, get timestamp of end lsn.
   // @param[out] int64_t, timestamp.
-  // int get_end_ts_ns(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_end_ts_ns, int);
+  // int get_end_scn(int64_t &ts) const;
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_end_scn, int);
   // @brief, get max timestamp.
   // @param[out] int64_t, timestamp.
-  // int get_max_ts_ns(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_max_ts_ns, int);
+  // int get_max_scn(int64_t &ts) const;
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_max_scn, int);
 
   // @brief, get role of this replica
   // @param[out] common::ObRole&
@@ -161,6 +148,10 @@ public:
     return palf_handle_.get_role(role, proposal_id, unused_state);
   }
 
+  int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state)
+  {
+    return palf_handle_.get_role(role, proposal_id, is_pending_state);
+  }
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
   // int get_paxos_member_list(common::ObMemberList &member_list) const override final;
@@ -170,7 +161,7 @@ public:
   // @param[in] common::ObMemberList: current memberlist, for pre-check
   // @param[in] const int64_t curr_replica_num: current replica num, for pre-check
   // @param[in] const int64_t new_replica_num: new replica num
-  // @param[in] const int64_t timeout_ns: timeout, ns
+  // @param[in] const int64_t timeout_us: timeout, ns
   // @return
   // - OB_SUCCESS: change_replica_num successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -181,7 +172,7 @@ public:
   // @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
-  // @param[in] const int64_t timeout_ns: add member timeout, ns
+  // @param[in] const int64_t timeout_us: add member timeout, ns
   // @return
   // - OB_SUCCESS: add member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -190,13 +181,13 @@ public:
   // - other: bug
   // int add_member(const common::ObMember &member,
   //                const int64_t paxos_replica_num,
-  //                const int64_t timeout_ns)
+  //                const int64_t timeout_us)
   DELEGATE_WITH_RET(palf_handle_, add_member, int);
 
   // @brief, remove a member from paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be removed
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after removing 'member'
-  // @param[in] const int64_t timeout_ns: remove member timeout, ns
+  // @param[in] const int64_t timeout_us: remove member timeout, ns
   // @return
   // - OB_SUCCESS: remove member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -205,13 +196,13 @@ public:
   // - other: bug
   // int remove_member(const common::ObMember &member,
   //                const int64_t paxos_replica_num,
-  //                const int64_t timeout_ns)
+  //                const int64_t timeout_us)
   DELEGATE_WITH_RET(palf_handle_, remove_member, int);
 
   // @brief, replace old_member with new_member, can be called only in leader
   // @param[in] const common::ObMember &removed_member: member will be removed
   // @param[in] const common::ObMember &added_member: member wil be added
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -227,6 +218,8 @@ public:
   DELEGATE_WITH_RET(palf_handle_, set_location_cache_cb, int);
   DELEGATE_WITH_RET(palf_handle_, change_access_mode, int);
   DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);
+  DELEGATE_WITH_RET(palf_handle_, flashback, int);
+  CONST_DELEGATE_WITH_RET(palf_handle_, stat, int);
 private:
   PalfHandle palf_handle_;
   PalfEnv *palf_env_;

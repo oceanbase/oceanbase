@@ -14,6 +14,8 @@
 #define protected public
 #define private public
 #include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/blocksstable/ob_tmp_file_store.h"
+#include "storage/blocksstable/ob_tmp_file_cache.h"
 #include "ob_row_generate.h"
 #include "ob_data_file_prepare.h"
 #include "share/ob_simple_mem_limit_getter.h"
@@ -80,6 +82,7 @@ class TestTmpFileStress : public share::ObThreadPool
 {
 public:
   TestTmpFileStress();
+  TestTmpFileStress(ObTenantBase *tenant_ctx);
   virtual ~TestTmpFileStress();
   int init(const int fd, const bool is_write, const int64_t thread_cnt, ObTableSchema *table_schema,
       const bool is_plain_data, const bool is_big_file);
@@ -103,11 +106,19 @@ private:
   bool is_big_file_;
   ObTableSchema *table_schema_;
   bool is_plain_;
+  ObTenantBase *tenant_ctx_;
 };
 
 TestTmpFileStress::TestTmpFileStress()
   : thread_cnt_(0), size_(OB_SERVER_BLOCK_MGR.get_macro_block_size()), fd_(0),
     is_write_(false), is_big_file_(false), table_schema_(NULL), is_plain_(false)
+{
+}
+
+TestTmpFileStress::TestTmpFileStress(ObTenantBase *tenant_ctx)
+  : thread_cnt_(0), size_(OB_SERVER_BLOCK_MGR.get_macro_block_size()), fd_(0),
+    is_write_(false), is_big_file_(false), table_schema_(NULL), is_plain_(false),
+    tenant_ctx_(tenant_ctx)
 {
 }
 
@@ -255,7 +266,6 @@ void TestTmpFileStress::write_data(const int64_t macro_block_size)
   io_info.fd_ = fd_;
   io_info.size_ = macro_block_size;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   char *buf = new char[BUF_COUNT * macro_block_size];
   const int64_t timeout_ms = 5000;
@@ -276,7 +286,6 @@ void TestTmpFileStress::write_plain_data(char *&buf, const int64_t macro_block_s
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info.fd_ = fd_;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   buf = new char[BUF_COUNT * macro_block_size];
   const int64_t timeout_ms = 5000;
@@ -302,7 +311,6 @@ void TestTmpFileStress::read_data(const int64_t macro_block_size)
   io_info.fd_ = fd_;
   io_info.size_ = macro_block_size;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   char *buf = new char[macro_block_size];
   for (int64_t i = 0; i < BUF_COUNT; ++i) {
@@ -325,7 +333,6 @@ void TestTmpFileStress::read_plain_data(const char *read_buf, const int64_t macr
   io_info.fd_ = fd_;
   io_info.size_ = macro_block_size;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   char *buf = new char[BUF_COUNT * macro_block_size];
   int64_t offset = 0;
@@ -344,8 +351,7 @@ void TestTmpFileStress::read_plain_data(const char *read_buf, const int64_t macr
 
 void TestTmpFileStress::run1()
 {
-  ObTenantBase tenant_ctx(1);
-  ObTenantEnv::set_tenant(&tenant_ctx);
+  ObTenantEnv::set_tenant(tenant_ctx_);
   if (is_plain_) {
     char *buf = NULL;
     write_plain_data(buf, size_);
@@ -363,6 +369,7 @@ class TestMultiTmpFileStress : public share::ObThreadPool
 {
 public:
   TestMultiTmpFileStress();
+  TestMultiTmpFileStress(ObTenantBase *tenant_ctx);
   virtual ~TestMultiTmpFileStress();
   int init(const int64_t file_cnt, const int64_t dir_id, const int64_t thread_cnt,
       ObTableSchema *table_schema, const bool is_plain_data, const bool is_big_file);
@@ -377,6 +384,7 @@ private:
   ObTableSchema *table_schema_;
   bool is_big_file_;
   bool is_plain_data_;
+  ObTenantBase *tenant_ctx_;
 };
 
 TestMultiTmpFileStress::TestMultiTmpFileStress()
@@ -386,6 +394,16 @@ TestMultiTmpFileStress::TestMultiTmpFileStress()
     table_schema_(NULL),
     is_big_file_(false),
     is_plain_data_(false)
+{
+}
+TestMultiTmpFileStress::TestMultiTmpFileStress(ObTenantBase *tenant_ctx)
+  : file_cnt_(0),
+    dir_id_(-1),
+    thread_cnt_perf_file_(0),
+    table_schema_(NULL),
+    is_big_file_(false),
+    is_plain_data_(false),
+    tenant_ctx_(tenant_ctx)
 {
 }
 
@@ -421,7 +439,7 @@ void TestMultiTmpFileStress::run_plain_case()
 {
   int ret = OB_SUCCESS;
   int64_t fd = 0;
-  TestTmpFileStress test;
+  TestTmpFileStress test(tenant_ctx_);
   ret = ObTmpFileManager::get_instance().open(fd, dir_id_);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = test.init(fd, true, thread_cnt_perf_file_, table_schema_, is_plain_data_, is_big_file_);
@@ -437,8 +455,8 @@ void TestMultiTmpFileStress::run_normal_case()
   int ret = OB_SUCCESS;
   int64_t fd = 0;
   const int64_t timeout_ms = 50000;
-  TestTmpFileStress test_write;
-  TestTmpFileStress test_read;
+  TestTmpFileStress test_write(tenant_ctx_);
+  TestTmpFileStress test_read(tenant_ctx_);
   ret = ObTmpFileManager::get_instance().open(fd, dir_id_);
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "open file success", K(fd));
@@ -458,6 +476,7 @@ void TestMultiTmpFileStress::run_normal_case()
 
 void TestMultiTmpFileStress::run1()
 {
+  ObTenantEnv::set_tenant(tenant_ctx_);
   if (is_plain_data_) {
     run_plain_case();
   } else {
@@ -561,6 +580,7 @@ void TestTmpFile::TearDown()
   table_schema_.reset();
   ObTmpFileManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
+  ObTmpFileStore::get_instance().destroy();
   TestDataFilePrepare::TearDown();
 }
 
@@ -584,7 +604,6 @@ TEST_F(TestTmpFile, test_big_file)
   char *read_buf = (char *)malloc(write_size);
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
@@ -650,7 +669,7 @@ TEST_F(TestTmpFile, test_multi_small_file_single_thread_read_write)
   const int64_t file_cnt = 4;
   const bool is_plain_data = false;
   const bool is_big_file = false;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -679,7 +698,7 @@ TEST_F(TestTmpFile, test_multi_small_file_multi_thread_read_write )
   const int64_t file_cnt = 4;
   const bool is_plain_data = false;
   const bool is_big_file = false;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -720,7 +739,6 @@ TEST_F(TestTmpFile, test_inner_read_offset_and_seek)
   char *read_buf = new char [macro_block_size + 256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = macro_block_size + 256;
@@ -788,7 +806,7 @@ TEST_F(TestTmpFile, test_single_file_single_thread_read_write)
   const int64_t file_cnt = 1;
   const bool is_plain_data = false;
   const bool is_big_file = true;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -832,7 +850,6 @@ TEST_F(TestTmpFile, test_aio_read_and_write)
 
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = macro_block_size + 256;
@@ -902,8 +919,8 @@ TEST_F(TestTmpFile, test_100_small_files)
   int64_t fd = 0;
   int count = 100;
   const int64_t timeout_ms = 50000;
-  TestTmpFileStress test_write;
-  TestTmpFileStress test_read;
+  TestTmpFileStress test_write(MTL_CTX());
+  TestTmpFileStress test_read(MTL_CTX());
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
   while (count--) {
@@ -944,7 +961,7 @@ TEST_F(TestTmpFile, test_single_file_multi_thread_read_write)
   const int64_t file_cnt = 1;
   const bool is_plain_data = false;
   const bool is_big_file = true;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -974,7 +991,7 @@ TEST_F(TestTmpFile, test_multi_file_single_thread_read_write)
   const int64_t file_cnt = 4;
   const bool is_plain_data = false;
   const bool is_big_file = true;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1004,7 +1021,7 @@ TEST_F(TestTmpFile, test_multi_file_multi_thread_read_write)
   const int64_t file_cnt = 4;
   const bool is_plain_data = false;
   const bool is_big_file = true;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1034,7 +1051,7 @@ TEST_F(TestTmpFile, test_write_not_macro_size)
   const int64_t file_cnt = 1;
   const bool is_plain_data = true;
   const bool is_big_file = true;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1075,7 +1092,6 @@ TEST_F(TestTmpFile, test_write_less_than_macro_block_size)
   char *read_buf = new char [256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = 256;
@@ -1163,7 +1179,6 @@ TEST_F(TestTmpFile, test_write_more_than_one_macro_block)
   char *read_buf = new char [macro_block_size + 256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = macro_block_size + 256;
@@ -1266,7 +1281,6 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info1.fd_ = fd_1;
   io_info1.tenant_id_ = 1;
-  io_info1.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info1.io_desc_.set_wait_event(2);
   io_info1.buf_ = write_buf;
   io_info1.size_ = macro_block_size + 256;
@@ -1275,7 +1289,6 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   ASSERT_EQ(OB_SUCCESS, ret);
   io_info2.fd_ = fd_2;
   io_info2.tenant_id_ = 1;
-  io_info2.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info2.io_desc_.set_wait_event(2);
   io_info2.buf_ = write_buf;
   io_info2.size_ = macro_block_size + 256;
@@ -1346,14 +1359,12 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
 
   new_io_info.fd_ = new_fd;
   new_io_info.tenant_id_ = 1;
-  new_io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   new_io_info.io_desc_.set_wait_event(2);
   new_io_info.buf_ = write_buf;
   new_io_info.size_ = macro_block_size + 256;
 
   old_io_info.fd_ = old_fd;
   old_io_info.tenant_id_ = 1;
-  old_io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   old_io_info.io_desc_.set_wait_event(2);
   old_io_info.buf_ = write_buf;
   old_io_info.size_ = macro_block_size + 256;
@@ -1396,7 +1407,7 @@ TEST_F(TestTmpFile, test_single_dir_multi_file)
   const int64_t file_cnt = 4;
   const bool is_plain_data = false;
   const bool is_big_file = false;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1426,7 +1437,7 @@ TEST_F(TestTmpFile, test_drop_tenant_file)
   const int64_t file_cnt = 4;
   const bool is_plain_data = false;
   const bool is_big_file = true;
-  TestMultiTmpFileStress test;
+  TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1447,8 +1458,8 @@ TEST_F(TestTmpFile, test_drop_tenant_file)
   int64_t fd = 0;
   int count = 100;
   const int64_t timeout_ms = 50000;
-  TestTmpFileStress test_write;
-  TestTmpFileStress test_read;
+  TestTmpFileStress test_write(MTL_CTX());
+  TestTmpFileStress test_read(MTL_CTX());
   ret = ObTmpFileManager::get_instance().alloc_dir(dir);
   ASSERT_EQ(OB_SUCCESS, ret);
   while (count--) {
@@ -1496,7 +1507,6 @@ TEST_F(TestTmpFile, test_handle_double_wait)
   char *read_buf = new char [256];
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = 256;
@@ -1554,7 +1564,6 @@ TEST_F(TestTmpFile, test_sql_workload)
 
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_category(ObIOCategory::USER_IO);
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
@@ -1638,15 +1647,15 @@ TEST_F(TestTmpFile, test_page_buddy)
   ret = page_buddy_1.init(allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  int32_t page_nums = 64;
-  int32_t alloced_page_nums = 64;
-  int32_t start_page_id = -1;
+  uint8_t page_nums = 64;
+  uint8_t alloced_page_nums = 64;
+  uint8_t start_page_id = 255;
   ASSERT_EQ(true, page_buddy_1.is_empty());
   ret = page_buddy_1.alloc(page_nums, start_page_id, alloced_page_nums);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, page_buddy_1.is_empty());
 
-  int32_t start_page_id_2 = -1;
+  uint8_t start_page_id_2 = 255;
   ret = page_buddy_1.alloc(page_nums, start_page_id_2, alloced_page_nums);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, page_buddy_1.is_empty());
@@ -1705,6 +1714,204 @@ TEST_F(TestTmpFile, test_page_buddy)
   ASSERT_EQ(alloced_page_nums, page_nums);
   ASSERT_EQ(false, page_buddy_4.is_empty());
 }
+
+TEST_F(TestTmpFile, test_tmp_file_sync)
+{
+  int ret = OB_SUCCESS;
+  int64_t dir = -1;
+  int64_t fd = -1;
+  ObTmpFileIOInfo io_info;
+  ObTmpFileIOHandle handle;
+  ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ObTmpFileManager::get_instance().open(fd, dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  int64_t write_size = 16*1024;
+  char *write_buf = (char *)malloc(write_size);
+  for (int64_t i = 0; i < write_size; ++i) {
+    write_buf[i] = static_cast<char>(i % 256);
+  }
+  io_info.fd_ = fd;
+  io_info.tenant_id_ = 1;
+  io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+  io_info.io_desc_.set_wait_event(2);
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+  const int64_t timeout_ms = 5000;
+  int64_t write_time = ObTimeUtility::current_time();
+  ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+  write_time = ObTimeUtility::current_time() - write_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  free(write_buf);
+
+  STORAGE_LOG(INFO, "test_tmp_file_sync");
+  STORAGE_LOG(INFO, "io time", K(write_time));
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  ASSERT_EQ(1, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+  ObTmpFileManager::get_instance().sync(fd, 5000);
+  ASSERT_EQ(0, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+
+  store_handle.get_tenant_store()->print_block_usage();
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
+
+  ObTmpFileManager::get_instance().remove(fd);
+}
+
+TEST_F(TestTmpFile, test_tmp_file_sync_same_block)
+{
+  int ret = OB_SUCCESS;
+  int64_t dir = -1;
+  int64_t fd1, fd2 = -1;
+  const int64_t timeout_ms = 5000;
+  ObTmpFileIOHandle handle;
+  ObTmpFileIOInfo io_info;
+  io_info.tenant_id_ = 1;
+  io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+  io_info.io_desc_.set_wait_event(2);
+  int64_t write_size = 16 *1024;
+  char *write_buf = (char *)malloc(write_size);
+  for (int64_t i = 0; i < write_size; ++i) {
+    write_buf[i] = static_cast<char>(i % 256);
+  }
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+
+  ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = ObTmpFileManager::get_instance().open(fd1, dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  io_info.fd_ = fd1;
+  int64_t write_time = ObTimeUtility::current_time();
+  ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+  write_time = ObTimeUtility::current_time() - write_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = ObTmpFileManager::get_instance().open(fd2, dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  io_info.fd_ = fd2;
+  write_time = ObTimeUtility::current_time();
+  ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+  write_time = ObTimeUtility::current_time() - write_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  free(write_buf);
+
+  STORAGE_LOG(INFO, "test_tmp_file_sync_same_block");
+  STORAGE_LOG(INFO, "io time", K(write_time));
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+  ASSERT_EQ(1, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+  ObTmpFileManager::get_instance().sync(fd1, 5000);
+  ASSERT_EQ(1, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+  ObTmpFileManager::get_instance().sync(fd2, 5000);
+  ASSERT_EQ(0, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+
+  store_handle.get_tenant_store()->print_block_usage();
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
+
+  ObTmpFileManager::get_instance().remove(fd1);
+  ObTmpFileManager::get_instance().remove(fd2);
+}
+
+TEST_F(TestTmpFile, test_tmp_file_wash)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_ms = 5000;
+  int count = 64;
+  int64_t dir = -1;
+  int64_t fd = -1;
+  ObTmpFileIOHandle handle;
+  ObTmpFileIOInfo io_info;
+  io_info.tenant_id_ = 1;
+  io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+  io_info.io_desc_.set_wait_event(2);
+  int64_t write_size = 1024 *1024;
+  char *write_buf = (char *)malloc(write_size);
+  for (int64_t i = 0; i < write_size; ++i) {
+    write_buf[i] = static_cast<char>(i % 256);
+  }
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+
+  for(int64_t i=0; i<count;i++){
+    ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObTmpFileManager::get_instance().open(fd, dir);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    io_info.fd_ = fd;
+    ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    if(i==count/2){
+      ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+  }
+
+  free(write_buf);
+
+  STORAGE_LOG(INFO, "test_tmp_file_wash");
+  ObTmpTenantFileStoreHandle store_handle;
+  OB_TMP_FILE_STORE.get_store(1, store_handle);
+
+  int64_t oldest_id = -1;
+  int64_t oldest_time = INT64_MAX;
+  int64_t newest_time = -1;
+  int64_t newest_id = -1;
+  int64_t used_up_id = -1;
+  ObTmpTenantMemBlockManager::TmpMacroBlockMap::iterator iter;
+  for(iter = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.begin();
+      iter != store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.end(); ++iter){
+    int64_t alloc_time = iter->second->get_alloc_time();
+    if (alloc_time < oldest_time){
+      oldest_id = iter->first;
+      oldest_time = alloc_time;
+    }
+    if (alloc_time > newest_time){
+      newest_id = iter->first;
+      newest_time = alloc_time;
+    }
+    if(iter->second->get_free_page_nums()==0){
+      used_up_id = iter->first;
+    }
+  }
+  ObTmpMacroBlock* wash_block;
+  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(newest_id, wash_block);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  wash_block->alloc_time_ = wash_block->alloc_time_ - 60 * 1000000L;
+
+  ObArray<ObTmpMacroBlock*> free_blocks;
+  ASSERT_EQ(64, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+  store_handle.get_tenant_store()->tmp_mem_block_manager_.wash(3,free_blocks);
+  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(oldest_id, wash_block);
+  ASSERT_NE(OB_SUCCESS, ret);
+  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(newest_id, wash_block);
+  ASSERT_NE(OB_SUCCESS, ret);
+  ret = store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.get_refactored(used_up_id, wash_block);
+  ASSERT_NE(OB_SUCCESS, ret);
+  ASSERT_EQ(61, store_handle.get_tenant_store()->tmp_mem_block_manager_.t_mblk_map_.size());
+
+
+  store_handle.get_tenant_store()->print_block_usage();
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
+
+  count = 64;
+  while (count--) {
+    ret = ObTmpFileManager::get_instance().remove(count);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+}
+
 
 }  // end namespace unittest
 }  // end namespace oceanbase

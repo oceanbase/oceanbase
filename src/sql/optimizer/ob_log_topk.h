@@ -41,10 +41,8 @@ namespace sql
     inline int64_t get_minimum_row_count() const {return minimum_row_count_;}
     inline int64_t get_topk_precision() const {return topk_precision_;}
     int get_topk_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
-    virtual int print_my_plan_annotation(char *buf,
-                                         int64_t &buf_len,
-                                         int64_t &pos,
-                                         ExplainType type);
+    virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
   private:
     int64_t minimum_row_count_;
     int64_t topk_precision_;

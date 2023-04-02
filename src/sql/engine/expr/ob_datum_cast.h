@@ -17,6 +17,7 @@
 #include "common/ob_zerofill_info.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "lib/charset/ob_charset.h"
 #include "share/ob_errno.h"
 #include "share/datum/ob_datum.h"
@@ -32,6 +33,7 @@ class ObPhysicalPlanCtx;
 int datum_accuracy_check(const ObExpr &expr,
                          const uint64_t cast_mode,
                          ObEvalCtx &ctx,
+                         bool has_lob_header,
                          const common::ObDatum &in_datum,
                          ObDatum &res_datum,
                          int &warning);
@@ -43,9 +45,16 @@ int datum_accuracy_check(const ObExpr &expr,
                          const uint64_t cast_mode,
                          ObEvalCtx &ctx,
                          const common::ObAccuracy &acc,
+                         bool has_lob_header,
                          const common::ObDatum &in_datum,
                          ObDatum &res_datum,
                          int &warning);
+
+// 根据in_type,force_use_standard_format信息，从session中获取fromat_str
+int common_get_nls_format(const ObBasicSessionInfo *session,
+                                 const ObObjType in_type,
+                                 const bool force_use_standard_format,
+                                 ObString &format_str);
 
 // 检查str以check_cs_type作为字符集是否合法
 // strict_mode下，如果上述检查失败，返回错误码
@@ -62,11 +71,13 @@ int ob_datum_to_ob_time_with_date(const common::ObDatum &datum,
                                   common::ObTime& ob_time,
                                   const int64_t cur_ts_value,
                                   const bool is_dayofmonth,
-                                  const ObDateSqlMode date_sql_mode);
+                                  const ObDateSqlMode date_sql_mode,
+                                  const bool has_lob_header);
 int ob_datum_to_ob_time_without_date(const common::ObDatum &datum,
                                     const common::ObObjType type,
                                     const common::ObTimeZoneInfo *tz_info,
-                                    common::ObTime &ob_time);
+                                    common::ObTime &ob_time,
+                                    const bool has_lob_header);
 // 进行datetime到string的转换，除了ob_datum_cast.cpp需要使用，有的表达式也需要将结果
 // 从datetime转为string, 例如ObExprTimeStampAdd
 int common_datetime_string(const common::ObObjType in_type,
@@ -87,7 +98,8 @@ public:
 static int hextoraw_string(const ObExpr &expr,
                     const common::ObString &in_str,
                     ObEvalCtx &ctx,
-                    ObDatum &res_datum);
+                    ObDatum &res_datum,
+                    bool &has_set_res);
 static int hextoraw(const ObExpr &expr, const common::ObDatum &in,
                     const common::ObObjType &in_type,
                     const common::ObCollationType &in_cs_type,
@@ -99,7 +111,8 @@ static int uint_to_raw(const common::number::ObNumber &uint_num, const ObExpr &e
 static int unhex(const ObExpr &expr,
                  const common::ObString &in_str,
                  ObEvalCtx &ctx,
-                 ObDatum &res_datum);
+                 ObDatum &res_datum,
+                 bool &has_set_res);
 static int rawtohex(const ObExpr &expr,
                     const common::ObString &in_str,
                     ObEvalCtx &ctx,

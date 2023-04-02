@@ -14,6 +14,7 @@
 #include "ob_sstable_row_lock_checker.h"
 #include "storage/tx/ob_trans_define.h"
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
 
 namespace oceanbase {
@@ -109,7 +110,7 @@ int ObSSTableRowLockChecker::check_row_locked(ObStoreRowLockState &lock_state)
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next row", K(ret), K_(multi_version_range));
         }
-      } else if (0 != lock_state.trans_version_ || lock_state.is_locked_) {
+      } else if (SCN::min_scn() != lock_state.trans_version_ || lock_state.is_locked_) {
         break;
       }
     }
@@ -117,14 +118,14 @@ int ObSSTableRowLockChecker::check_row_locked(ObStoreRowLockState &lock_state)
       ret = OB_SUCCESS;
     }
   }
-  if (OB_SUCC(ret) && 
+  if (OB_SUCC(ret) &&
         transaction::ObTransVersion::INVALID_TRANS_VERSION != prefetcher_.row_lock_check_version_) {
-    if (OB_UNLIKELY(lock_state.trans_version_ != 0 || lock_state.is_locked_)) {
+    if (OB_UNLIKELY(lock_state.trans_version_ != SCN::min_scn() || lock_state.is_locked_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected lock state", K(ret), K_(lock_state.trans_version), K_(lock_state.is_locked)); 
-    } else {
-      lock_state.trans_version_ = prefetcher_.row_lock_check_version_; 
-    }
+      LOG_WARN("Unexpected lock state", K(ret), K_(lock_state.trans_version), K_(lock_state.is_locked));
+    } else if (OB_FAIL(lock_state.trans_version_.convert_for_tx(prefetcher_.row_lock_check_version_))) {
+      LOG_WARN("failed to convert_for_tx", K(ret), K(prefetcher_.row_lock_check_version_));
+    } else {/*do nothing*/}
   }
   return ret;
 }

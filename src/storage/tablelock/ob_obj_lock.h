@@ -19,6 +19,7 @@
 #include "lib/hash/ob_iteratable_hashset.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/hash/ob_hashmap.h"
+#include "share/scn.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/ob_i_store.h"
 
@@ -79,12 +80,10 @@ public:
 };
 
 typedef ObDList<ObTableLockOpLinkNode> ObTableLockOpList;
-typedef common::LinkHashNode<ObLockID> ObOBJLockHashNode;
-typedef common::LinkHashValue<ObLockID> ObOBJLockHashValue;
-class ObOBJLock : public ObOBJLockHashValue
+class ObOBJLock : public ObTransHashLink<ObOBJLock>
 {
 public:
-  ObOBJLock();
+  ObOBJLock(const ObLockID &lock_id);
   int lock(
       const ObLockParam &param,
       storage::ObStoreCtx &ctx,
@@ -106,22 +105,22 @@ public:
   // only update the status of the exact one with the same lock_op
   int update_lock_status(
       const ObTableLockOp &lock_op,
-      const int64_t commit_version,
-      const int64_t commit_log_ts,
+      const share::SCN commit_version,
+      const share::SCN commit_scn,
       const ObTableLockOpStatus status,
       ObMalloc &allocator);
-
   int check_allow_lock(
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
       ObTxIDSet &conflict_tx_set,
       bool &conflict_with_dml_lock,
+      ObMalloc &allocator,
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
-  int64_t get_min_ddl_lock_committed_log_ts(const int64_t flushed_log_ts) const;
+  share::SCN get_min_ddl_lock_committed_scn(const share::SCN &flushed_scn) const;
   int get_table_lock_store_info(
       ObIArray<ObTableLockOp> &store_arr,
-      int64_t freeze_log_ts);
+      const share::SCN &freeze_scn);
 
   void reset(ObMalloc &allocator);
   void reset_without_lock(ObMalloc &allocator);
@@ -133,6 +132,10 @@ public:
   int get_lock_op_iter(
       const ObLockID &lock_id,
       ObLockOpIterator &iter) const;
+  const ObLockID &get_lock_id() const { return lock_id_; }
+  void set_lock_id(const ObLockID &lock_id) { lock_id_ = lock_id; }
+  bool contain(const ObLockID &lock_id) { return lock_id_ == lock_id; }
+  TO_STRING_KV(K_(lock_id), K_(is_deleted), K_(row_share), K_(row_exclusive));
 private:
   void print_() const;
   void reset_(ObMalloc &allocator);
@@ -151,19 +154,32 @@ private:
       const bool only_check_dml_lock = false);
   int update_lock_status_(
       const ObTableLockOp &lock_op,
-      const int64_t commit_version,
-      const int64_t commit_log_ts,
+      const share::SCN &commit_version,
+      const share::SCN &commit_scn,
       const ObTableLockOpStatus status,
       ObTableLockOpList *op_list);
+  void wakeup_waiters_(const ObTableLockOp &lock_op);
   int recover_(
       const ObTableLockOp &lock_op,
       ObMalloc &allocator);
-  int lock_(
+  int fast_lock(
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
       bool &need_retry,
       ObMalloc &allocator,
+      ObTxIDSet &conflict_tx_set);
+  int slow_lock(
+      const ObLockParam &param,
+      const ObTableLockOp &lock_op,
+      const ObTableLockMode &lock_mode_in_same_trans,
+      bool &need_retry,
+      ObMalloc &allocator,
+      ObTxIDSet &conflict_tx_set);
+  int try_fast_lock_(
+      const ObTableLockOp &lock_op,
+      const ObTableLockMode &lock_mode_in_same_trans,
+      bool &need_retry,
       ObTxIDSet &conflict_tx_set);
   int unlock_(
       const ObTableLockOp &unlock_op,
@@ -262,12 +278,13 @@ private:
   ObTableLockOpList *map_[TABLE_LOCK_MODE_COUNT];
   int64_t row_share_;
   int64_t row_exclusive_;
+  ObLockID lock_id_;
 };
 
 class ObOBJLockFactory
 {
 public:
-  static ObOBJLock *alloc(const uint64_t tenant_id);
+  static ObOBJLock *alloc(const uint64_t tenant_id, const ObLockID &lock_id);
   static void release(ObOBJLock *e);
   static int64_t alloc_count_;
   static int64_t release_count_;
@@ -288,27 +305,14 @@ public:
       p = NULL;
     }
   }
-  static ObOBJLockHashNode* alloc_node(ObOBJLock* p)
-  {
-    UNUSED(p);
-    return op_alloc(ObOBJLockHashNode);
-  }
-  static void free_node(ObOBJLockHashNode* node)
-  {
-    if (NULL != node) {
-      op_free(node);
-      node = NULL;
-    }
-  }
 };
 
 class ObOBJLockMap
 {
-  typedef common::ObLinkHashMap<ObLockID, ObOBJLock, ObOBJLockAlloc> Map;
-  const static int MIN_MAP_SIZE = 1 << 10;
+  typedef ObTransHashMap<ObLockID, ObOBJLock, ObOBJLockAlloc, common::SpinRWLock, 1 << 10> Map;
 public:
   ObOBJLockMap() :
-      lock_map_(MIN_MAP_SIZE),
+      lock_map_(),
       allocator_(),
       is_inited_(false)
   {}
@@ -330,8 +334,8 @@ public:
       const ObTableLockOp &lock_op);
   int update_lock_status(
       const ObTableLockOp &lock_op,
-      const int64_t commit_version,
-      const int64_t commit_log_ts,
+      const share::SCN commit_version,
+      const share::SCN commit_scn,
       const ObTableLockOpStatus status);
   bool is_inited() const { return is_inited_; }
   int check_allow_lock(
@@ -341,10 +345,8 @@ public:
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
   void print();
-  int64_t get_min_ddl_committed_log_ts(int64_t &flushed_log_ts);
-  int get_table_lock_store_info(
-      ObIArray<ObTableLockOp> &store_arr,
-      int64_t freeze_log_ts);
+  share::SCN get_min_ddl_committed_scn(share::SCN &flushed_scn);
+  int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, share::SCN freeze_scn);
   // get all the lock id in the lock map
   // @param[out] iter, the iterator returned.
   // int get_lock_id_iter(ObLockIDIterator &iter);
@@ -363,13 +365,13 @@ private:
       : err_code_(OB_SUCCESS),
         iter_(iter)
     {}
-    bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock)
+    bool operator()(ObOBJLock *obj_lock)
     {
       int ret = OB_SUCCESS;
       UNUSED(obj_lock);
       bool need_continue = true;
-      if (OB_FAIL(iter_.push(lock_id))) {
-        TABLELOCK_LOG(WARN, "push lock id into iterator failed", K(ret), K(lock_id));
+      if (OB_FAIL(iter_.push(obj_lock->get_lock_id()))) {
+        TABLELOCK_LOG(WARN, "push lock id into iterator failed", "lock_id", obj_lock->get_lock_id(), K(ret));
         need_continue = false;
         err_code_ = ret;
       }
@@ -383,10 +385,10 @@ private:
   class PrintLockFunctor
   {
   public:
-    bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock)
+    bool operator()(ObOBJLock *obj_lock)
     {
       bool bool_ret = true;
-      TABLELOCK_LOG(INFO, "LockID: ", K(lock_id));
+      TABLELOCK_LOG(INFO, "LockID: ", "lock_id", obj_lock->get_lock_id());
       obj_lock->print();
       return bool_ret;
     }
@@ -396,9 +398,8 @@ private:
   public:
     explicit ResetLockFunctor(ObMalloc &allocator) : allocator_(allocator)
     {}
-    bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock)
+    bool operator()(ObOBJLock *obj_lock)
     {
-      UNUSED(lock_id);
       bool bool_ret = true;
       obj_lock->reset(allocator_);
       return bool_ret;
@@ -409,28 +410,28 @@ private:
   class GetMinCommittedDDLLogtsFunctor
   {
   public:
-    explicit GetMinCommittedDDLLogtsFunctor(int64_t &flushed_log_ts)
-      : min_committed_log_ts_(INT64_MAX),
-        flushed_log_ts_(flushed_log_ts) {}
-    bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock);
-    int64_t get_min_committed_log_ts() { return min_committed_log_ts_; }
+    explicit GetMinCommittedDDLLogtsFunctor(share::SCN &flushed_scn)
+      : min_committed_scn_(share::SCN::max_scn()),
+        flushed_scn_(flushed_scn) {}
+    bool operator()(ObOBJLock *obj_lock);
+    share::SCN get_min_committed_scn() { return min_committed_scn_; }
 
   private:
-    int64_t min_committed_log_ts_;
-    int64_t flushed_log_ts_;
+    share::SCN min_committed_scn_;
+    share::SCN flushed_scn_;
   };
   class GetTableLockStoreInfoFunctor
   {
   public:
     explicit GetTableLockStoreInfoFunctor(ObIArray<ObTableLockOp> &store_arr,
-                                          int64_t freeze_log_ts)
+                                          share::SCN freeze_scn)
       : store_arr_(store_arr),
-        freeze_log_ts_(freeze_log_ts) {}
-    bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock);
+        freeze_scn_(freeze_scn) {}
+    bool operator()(ObOBJLock *obj_lock);
 
   private:
     ObIArray<ObTableLockOp> &store_arr_;
-    int64_t freeze_log_ts_;
+    share::SCN freeze_scn_;
   };
 
 private:

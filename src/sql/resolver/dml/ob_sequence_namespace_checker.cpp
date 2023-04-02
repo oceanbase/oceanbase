@@ -107,7 +107,7 @@ int ObSequenceNamespaceChecker::check_sequence_with_synonym_recursively(const ui
       LOG_WARN("get synonym failed", K(ret), K(tenant_id), K(database_id), K(sequence_name));
     } else if (exist_with_synonym) {
       syn_checker.set_synonym(true);
-      if (OB_FAIL(syn_checker.add_synonym_id(synonym_id))) {
+      if (OB_FAIL(syn_checker.add_synonym_id(synonym_id, database_id))) {
         LOG_WARN("failed to add synonym id", K(ret));
       } else {
         if (OB_FAIL(check_sequence_with_synonym_recursively(tenant_id, object_db_id, object_seq_name, syn_checker,

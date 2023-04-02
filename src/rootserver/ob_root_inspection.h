@@ -107,6 +107,7 @@ private:
   share::schema::ObMultiVersionSchemaService &schema_service_;
   ObTableGroupCheckInfoMap check_part_option_map_;
   common::hash::ObHashSet<uint64_t> part_option_not_match_set_;
+  common::ObArenaAllocator allocator_;
   bool is_inited_;
 };
 
@@ -156,11 +157,13 @@ public:
   void start() { stopped_ = false; }
   void stop() { stopped_ = true; }
   virtual int check_all();
+  int check_tenant(const uint64_t tenant_id);
 
   inline bool is_zone_passed() const { return zone_passed_; }
   inline bool is_sys_param_passed() const { return sys_param_passed_; }
   inline bool is_sys_stat_passed() const { return sys_stat_passed_; }
   inline bool is_sys_table_schema_passed() const { return sys_table_schema_passed_; }
+  inline bool is_data_version_passed() const { return data_version_passed_; }
   inline bool is_all_checked() const { return all_checked_; }
   inline bool is_all_passed() const { return all_passed_; }
   inline bool can_retry() const { return can_retry_ && !stopped_; }
@@ -185,17 +188,16 @@ public:
 private:
   static const int64_t NAME_BUF_LEN = 64;
   typedef common::ObFixedLengthString<NAME_BUF_LEN> Name;
+  int construct_tenant_ids_(common::ObIArray<uint64_t> &tenant_ids);
   int check_zone();
-  int check_sys_stat();
-  int check_sys_param();
+  int check_sys_stat_();
+  int check_sys_stat_(const uint64_t tenant_id);
+  int check_sys_param_();
+  int check_sys_param_(const uint64_t tenant_id);
 
   template<typename Item>
   int get_names(const common::ObDList<Item> &list, common::ObIArray<const char*> &names);
   int get_sys_param_names(common::ObIArray<const char *> &names);
-  int check_and_insert_sys_params(uint64_t tenant_id,
-                                  const char *table_name,
-                                  const common::ObIArray<const char *> &names,
-                                  const common::ObSqlString &extra_cond);
   int check_names(const uint64_t tenant_id,
                   const char *table_name,
                   const common::ObIArray<const char *> &names,
@@ -217,10 +219,14 @@ private:
                                   const share::schema::ObColumnSchemaV2 &hard_code_column,
                                   const bool ignore_column_id);
 
+  int check_data_version_();
+  int check_data_version_(const uint64_t tenant_id);
+
   bool check_str_with_lower_case_(const ObString &str);
   int check_sys_view_(const uint64_t tenant_id,
                       const share::schema::ObTableSchema &hard_code_table);
   int check_cancel();
+  int check_tenant_status_(const uint64_t tenant_id);
 private:
   bool inited_;
   volatile bool stopped_;
@@ -229,6 +235,7 @@ private:
   bool sys_param_passed_;
   bool sys_stat_passed_;
   bool sys_table_schema_passed_;
+  bool data_version_passed_;
 
   bool all_checked_;
   bool all_passed_;

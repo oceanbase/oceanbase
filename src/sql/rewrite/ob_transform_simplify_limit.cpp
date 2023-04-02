@@ -28,6 +28,7 @@ int ObTransformSimplifyLimit::transform_one_stmt(common::ObIArray<ObParentDMLStm
     LOG_WARN("failed to add limit to semi right table", K(ret));
   } else {
     trans_happened = is_happened;
+    OPT_TRACE("add limit to semi right table:", is_happened);
   }
 
   if (OB_SUCC(ret)) {
@@ -35,6 +36,7 @@ int ObTransformSimplifyLimit::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("failed to push down limit offset", K(ret));
     } else {
       trans_happened = (trans_happened || is_happened);
+      OPT_TRACE("push down limit offset:", is_happened);
     }
   }
 
@@ -43,6 +45,7 @@ int ObTransformSimplifyLimit::transform_one_stmt(common::ObIArray<ObParentDMLStm
       LOG_WARN("failed to push down limit order for union", K(ret));
     } else {
       trans_happened = (trans_happened || is_happened);
+      OPT_TRACE("push down limit order for union:", is_happened);
     }
   }
 
@@ -95,7 +98,7 @@ int ObTransformSimplifyLimit::check_need_add_limit_to_semi_right_table(ObDMLStmt
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(semi_info));
   } else if (!right_table->is_generated_table()) {
-    /* do nothing */
+    need_add = !right_table->is_link_type();
   } else if (OB_ISNULL(ref_query = right_table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ref_query));
@@ -233,12 +236,12 @@ int ObTransformSimplifyLimit::do_pushdown_limit_offset(ObSelectStmt *upper_stmt,
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(new_expr.push_back(add_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(upper_stmt->replace_inner_stmt_expr(old_expr, new_expr))) {
-        LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(add_expr->set_param_exprs(rownum_expr, upper_offset))) {
         LOG_WARN("set param exprs failed", K(ret));
       } else if (OB_FAIL(add_expr->formalize(ctx_->session_info_))) {
         LOG_WARN("formalize add operator failed", K(ret));
+      } else if (OB_FAIL(upper_stmt->replace_relation_exprs(old_expr, new_expr))) {
+        LOG_WARN("failed to replace expr", K(ret));
       }
     }
   }

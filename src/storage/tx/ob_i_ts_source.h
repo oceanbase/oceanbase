@@ -54,22 +54,6 @@ private:
   bool need_inc_;
 };
 
-class ObITsSource
-{
-public:
-  virtual int update_gts(const int64_t gts, bool &update) = 0;
-  virtual int get_gts(const MonotonicTs stc, ObTsCbTask *task, int64_t &gts, MonotonicTs &receive_gts_ts) = 0;
-  virtual int get_gts(ObTsCbTask *task, int64_t &gts) = 0;
-  virtual int wait_gts_elapse(const int64_t gts, ObTsCbTask *task, bool &need_wait) = 0;
-  virtual int wait_gts_elapse(const int64_t gts) = 0;
-  virtual int refresh_gts(const bool need_refresh) = 0;
-  virtual int update_base_ts(const int64_t base_ts) = 0;
-  virtual int get_base_ts(int64_t &base_ts) = 0;
-  virtual bool is_external_consistent() = 0;
-public:
-  VIRTUAL_TO_STRING_KV("", "");
-};
-
 }
 }//end of namespace oceanbase
 

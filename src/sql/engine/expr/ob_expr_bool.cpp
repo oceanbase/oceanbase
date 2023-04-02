@@ -110,7 +110,14 @@ CHECK_IS_TRUE_FUNC_NAME(other_type)
   {
     if (ob_is_json(expr.args_[0]->datum_meta_.type_)) {
       int cmp_result = 0;
-      if (OB_FAIL(ObJsonExprHelper::is_json_zero(child_datum->get_string(), cmp_result))) {
+      ObString j_str = child_datum->get_string();
+      ObLobLocatorV2 loc(j_str, expr.args_[0]->obj_meta_.has_lob_header());
+      if (OB_FAIL(loc.get_inrow_data(j_str))) {
+        if (ret != OB_ERR_NULL_VALUE) {
+          COMMON_LOG(WARN, "get lob inrow data failed", K(ret));
+        }
+        cmp_result = 1; // outrow json must not be zero
+      } else if (OB_FAIL(ObJsonExprHelper::is_json_zero(j_str, cmp_result))) {
         LOG_WARN("failed: compare json", K(ret));
       } else {
         res_datum.set_int32(cmp_result);

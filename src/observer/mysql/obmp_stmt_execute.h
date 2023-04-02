@@ -115,6 +115,7 @@ public:
       case obmysql::MYSQL_TYPE_ORA_BLOB:
       case obmysql::MYSQL_TYPE_ORA_CLOB:
       case obmysql::MYSQL_TYPE_JSON:
+      case obmysql::MYSQL_TYPE_GEOMETRY:
         is_support = true;
         break;
       case obmysql::MYSQL_TYPE_COMPLEX:
@@ -145,6 +146,7 @@ protected:
   sql::ObSqlCtx &get_ctx() { return ctx_; }
   ObQueryRetryCtrl &get_retry_ctrl() { return retry_ctrl_; }
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
+  void record_execute_time(const sql::ObPhysicalPlan *plan, const int64_t end_time) const;
   int request_params(sql::ObSQLSessionInfo *session,
                      const char* &pos,
                      uint32_t ps_stmt_checksum,

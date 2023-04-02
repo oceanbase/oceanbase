@@ -64,6 +64,7 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
   ObString output;
   ObString space(1, " ");
   ObExprStrResAlloc expr_res_alloc(expr, ctx);
+  bool has_lob_header = expr.obj_meta_.has_lob_header();
   if (OB_FAIL(expr.args_[0]->eval(ctx, count))) {
     LOG_WARN("evaluate parameters failed", K(ret));
   } else if (count->is_null()) {
@@ -75,17 +76,23 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
              K(count->get_int()), K(max_size));
     LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "space", static_cast<int>(max_size));
     expr_datum.set_null();
-  } else if (OB_FAIL(ObExprRepeat::repeat(output, is_null,
-                                          space, count->get_int(), expr_res_alloc, max_size))) {
-    LOG_WARN("do repeat failed", K(ret));
   } else {
-    if (is_null) {
-      expr_datum.set_null();
+    if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+      ret = ObExprRepeat::repeat(output, is_null, space, count->get_int(), expr_res_alloc, max_size);
+    } else { // text tc
+      ret = ObExprRepeat::repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null,
+                                      space, count->get_int(), expr_res_alloc, max_size);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("do repeat failed", K(ret));
     } else {
-      expr_datum.set_string(output);
+      if (is_null) {
+        expr_datum.set_null();
+      } else {
+        expr_datum.set_string(output);
+      }
     }
   }
-
   return ret;
 }
 

@@ -31,13 +31,12 @@ using namespace common;
 using namespace share;
 
 ObLeaderCoordinator::ObLeaderCoordinator()
-: all_ls_election_reference_info_(nullptr), is_inited_(false) {}
+    : all_ls_election_reference_info_(nullptr),
+      is_running_(false),
+      lock_(common::ObLatchIds::ELECTION_LOCK)
+{}
 
-int ObLeaderCoordinator::mtl_init(ObLeaderCoordinator *&p_coordinator)
-{
-  LC_TIME_GUARD(1_s);
-  return p_coordinator->init_and_start();
-}
+ObLeaderCoordinator::~ObLeaderCoordinator() {}
 
 struct AllLsElectionReferenceInfoFactory
 {
@@ -46,7 +45,7 @@ struct AllLsElectionReferenceInfoFactory
     LC_TIME_GUARD(1_s);
     ObArray<LsElectionReferenceInfo> *new_all_ls_election_reference_info = nullptr;
     if (nullptr == (new_all_ls_election_reference_info = (ObArray<LsElectionReferenceInfo>*)mtl_malloc(sizeof(ObArray<LsElectionReferenceInfo>), "Coordinator"))) {
-      COORDINATOR_LOG(ERROR, "alloc memory failed", K(MTL_ID()));
+      COORDINATOR_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
     } else {
       new(new_all_ls_election_reference_info) ObArray<LsElectionReferenceInfo>();
     }
@@ -61,38 +60,75 @@ struct AllLsElectionReferenceInfoFactory
   }
 };
 
-int ObLeaderCoordinator::init_and_start()
+void ObLeaderCoordinator::destroy()
+{
+  LC_TIME_GUARD(1_s);
+  recovery_detect_timer_.stop_and_wait();
+  failure_detect_timer_.stop_and_wait();
+  AllLsElectionReferenceInfoFactory::delete_obj(all_ls_election_reference_info_);
+  all_ls_election_reference_info_ = NULL;
+  COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl destroy");
+}
+
+int ObLeaderCoordinator::mtl_init(ObLeaderCoordinator *&p_coordinator)// init timer
 {
   LC_TIME_GUARD(1_s);
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  if(is_inited_) {
+  ObSpinLockGuard guard(p_coordinator->lock_);
+  if(p_coordinator->is_running_) {
     ret = OB_INIT_TWICE;
-    COORDINATOR_LOG(ERROR, "has been inited alread]y", KR(ret), K(MTL_ID()));
-  } else if (CLICK_FAIL(timer_.init_and_start(1, 1_ms, "CoordTimer"))) {
-    COORDINATOR_LOG(ERROR, "fail to init and start timer", KR(ret), K(MTL_ID()));
-  } else if (nullptr == (all_ls_election_reference_info_ = AllLsElectionReferenceInfoFactory::create_new())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    COORDINATOR_LOG(ERROR, "fail to new all_ls_election_reference_info_", KR(ret), K(MTL_ID()));
+    COORDINATOR_LOG(ERROR, "has been inited alread]y", KR(ret));
+  } else if (CLICK_FAIL(p_coordinator->recovery_detect_timer_.init_and_start(1, 1_ms, "CoordTR"))) {
+    COORDINATOR_LOG(ERROR, "fail to init and start recovery_detect_timer", KR(ret));
+  } else if (CLICK_FAIL(p_coordinator->failure_detect_timer_.init_and_start(1, 1_ms, "CoordTF"))) {
+    COORDINATOR_LOG(ERROR, "fail to init and start failure_detect_timer", KR(ret));
   } else {
-    new(all_ls_election_reference_info_) ObArray<LsElectionReferenceInfo>();
-    if (CLICK_FAIL(timer_.schedule_task_ignore_handle_repeat(500_ms,
-                                                          [this](){ refresh(); return false; }))) {
-      COORDINATOR_LOG(ERROR, "schedule repeat task failed", KR(ret), K(MTL_ID()));
+    COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl init success", KR(ret));
+  }
+  return ret;
+}
+
+int ObLeaderCoordinator::mtl_start(ObLeaderCoordinator *&p_coordinator)// start run timer task
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  if (nullptr == (p_coordinator->all_ls_election_reference_info_ = AllLsElectionReferenceInfoFactory::create_new())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    COORDINATOR_LOG(ERROR, "fail to new all_ls_election_reference_info_", KR(ret));
+  } else {
+    new(p_coordinator->all_ls_election_reference_info_) ObArray<LsElectionReferenceInfo>();
+    if (CLICK_FAIL(p_coordinator->recovery_detect_timer_.schedule_task_repeat(
+        p_coordinator->refresh_priority_task_handle_,
+        500_ms,
+        [p_coordinator](){ p_coordinator->refresh(); return false; }))) {
+      COORDINATOR_LOG(ERROR, "schedule repeat task failed", KR(ret));
     } else {
-      is_inited_ = true;
-      COORDINATOR_LOG(INFO, "init leader coordinator success", KR(ret), K(MTL_ID()), K(lbt()));
+      p_coordinator->is_running_ = true;
+      COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl start success", KR(ret));
     }
   }
   return ret;
 }
 
-void ObLeaderCoordinator::stop_and_wait()
+void ObLeaderCoordinator::mtl_stop(ObLeaderCoordinator *&p_coordinator)// stop timer task
 {
-  LC_TIME_GUARD(1_s);
-  timer_.stop_and_wait();
-  ObSpinLockGuard guard(lock_);
-  is_inited_ = false;
+  if (OB_ISNULL(p_coordinator)) {
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_coordinator is NULL");
+  } else {
+    p_coordinator->is_running_ = false;
+    p_coordinator->refresh_priority_task_handle_.stop();
+    COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl stop");
+  }
+}
+
+void ObLeaderCoordinator::mtl_wait(ObLeaderCoordinator *&p_coordinator)// wait timer task
+{
+  if (OB_ISNULL(p_coordinator)) {
+    COORDINATOR_LOG_RET(WARN, OB_INVALID_ARGUMENT, "p_coordinator is NULL");
+  } else {
+    p_coordinator->refresh_priority_task_handle_.wait();
+    COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl wait");
+  }
 }
 
 void ObLeaderCoordinator::refresh()
@@ -102,11 +138,11 @@ void ObLeaderCoordinator::refresh()
   ObArray<LsElectionReferenceInfo> *new_all_ls_election_reference_info = AllLsElectionReferenceInfoFactory::create_new();
   if (nullptr == new_all_ls_election_reference_info) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    COORDINATOR_LOG(WARN, "alloc new_all_ls_election_reference_info failed", KR(ret), K(MTL_ID()));
+    COORDINATOR_LOG(WARN, "alloc new_all_ls_election_reference_info failed", KR(ret));
   } else if (CLICK_FAIL(TableAccessor::get_all_ls_election_reference_info(*new_all_ls_election_reference_info))) {
-    COORDINATOR_LOG(WARN, "get all ls election reference info failed", KR(ret), K(MTL_ID()));
+    COORDINATOR_LOG(WARN, "get all ls election reference info failed", KR(ret));
   } else {
-    COORDINATOR_LOG(INFO, "refresh __all_ls_election_reference_info success", KR(ret), K(MTL_ID()), K(*new_all_ls_election_reference_info));
+    COORDINATOR_LOG(INFO, "refresh __all_ls_election_reference_info success", KR(ret), K(*new_all_ls_election_reference_info));
     ObSpinLockGuard guard(lock_);
     std::swap(new_all_ls_election_reference_info, all_ls_election_reference_info_);
   }
@@ -118,16 +154,16 @@ int ObLeaderCoordinator::get_ls_election_reference_info(const share::ObLSID &ls_
   LC_TIME_GUARD(1_s);
   ObSpinLockGuard guard(lock_);
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    COORDINATOR_LOG(ERROR, "call before init", KR(ret));
+  if (!is_running_) {
+    ret = OB_NOT_RUNNING;
+    COORDINATOR_LOG(WARN, "not running", KR(ret));
   } else {
     int64_t idx = 0;
     for (; idx < all_ls_election_reference_info_->count(); ++idx) {
       if (all_ls_election_reference_info_->at(idx).element<0>() == ls_id.id()) {
         if (CLICK_FAIL(reference_info.assign(all_ls_election_reference_info_->at(idx)))) {
           COORDINATOR_LOG(WARN, "fail to assign reference info",
-                                KR(ret), K(MTL_ID()), KPC_(all_ls_election_reference_info));
+                                KR(ret), KPC_(all_ls_election_reference_info));
         }
         break;
       }
@@ -135,7 +171,7 @@ int ObLeaderCoordinator::get_ls_election_reference_info(const share::ObLSID &ls_
     if (idx == all_ls_election_reference_info_->count()) {
       ret = OB_ENTRY_NOT_EXIST;
       COORDINATOR_LOG(WARN, "can not find this ls_id in all_ls_election_reference_info_",
-                            KR(ret), K(MTL_ID()), K(ls_id), KPC_(all_ls_election_reference_info));
+                            KR(ret), K(ls_id), KPC_(all_ls_election_reference_info));
     }
   }
   return ret;

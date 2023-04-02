@@ -48,6 +48,7 @@ private:
 };
 
 struct ObLobMetaScanResult {
+  ObLobMetaScanResult() : info_(), st_(0), len_(0) {}
   ObLobMetaInfo info_;
   uint32_t st_;
   uint32_t len_;
@@ -62,10 +63,13 @@ public:
   int get_next_row(ObLobMetaInfo &row);
   int get_next_row(ObLobMetaScanResult &result);
   uint64_t get_cur_pos() { return cur_pos_; }
+  uint64_t get_cur_byte_pos() { return cur_byte_pos_; }
+  ObLobMetaInfo get_cur_info() { return cur_info_; }
   void reset();
   bool is_range_begin(const ObLobMetaInfo& info);
   bool is_range_end(const ObLobMetaInfo& info);
   bool is_range_over(const ObLobMetaInfo& info);
+  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K_(cur_info));
 private:
   bool is_in_range(const ObLobMetaInfo& info);
 private:
@@ -74,20 +78,54 @@ private:
   ObLobAccessParam param_;
   ObTableScanParam scan_param_;
   uint64_t cur_pos_;
+  uint64_t cur_byte_pos_;
+  ObLobMetaInfo cur_info_;
 };
 
 struct ObLobMetaWriteResult {
+  ObLobMetaWriteResult() : info_(), data_(), need_alloc_macro_id_(false), is_update_(false), old_info_() {}
   ObLobMetaInfo info_;
   ObString data_;
   bool need_alloc_macro_id_;
+  bool is_update_;
+  ObLobMetaInfo old_info_;
 };
 
 class ObLobMetaWriteIter {
 public:
   ObLobMetaWriteIter(const ObString& data, ObIAllocator* allocator, uint32_t piece_block_size);
+  int open(ObLobAccessParam &param,
+           uint64_t padding_size,
+           ObString &post_data,
+           ObString &remain_buf,
+           ObString &seq_id_st,
+           ObString &seq_id_end);
   int open(ObLobAccessParam &param, ObILobApator* adapter);
+  int open(ObLobAccessParam &param,
+           void *iter, // ObLobQueryIter
+           ObString &read_buf,
+           uint64_t padding_size,
+           ObString &post_data,
+           ObString &remain_buf,
+           ObString &seq_id_st,
+           ObString &seq_id_end);
   int get_next_row(ObLobMetaWriteResult &row);
   int close();
+  TO_STRING_KV(K_(seq_id), K_(offset), K_(lob_id), K_(piece_id), K_(coll_type), K_(piece_block_size),
+               K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info));
+private:
+  int try_fill_data(
+      ObLobMetaWriteResult& row,
+      ObString &data,
+      uint64_t base,
+      bool is_padding,
+      bool &use_inner_buffer,
+      bool &fill_full);
+  int try_fill_data(
+      ObLobMetaWriteResult& row,
+      bool &use_inner_buffer,
+      bool &fill_full);
+  int try_update_last_info(ObLobMetaWriteResult &row);
 private:
   ObLobSeqId seq_id_;       // seq id
   uint64_t offset_;       // write or append offset in macro block
@@ -97,7 +135,15 @@ private:
   common::ObCollationType coll_type_;
   uint32_t piece_block_size_;
   ObLobMetaScanIter scan_iter_; // use scan iter directly
- };
+  uint64_t padding_size_;
+  ObLobSeqId seq_id_end_;
+  ObString post_data_;
+  ObString remain_buf_;
+  ObString inner_buffer_;
+  ObIAllocator* allocator_;
+  ObLobMetaInfo last_info_;
+  void *iter_; // ObLobQueryIter
+};
  
 class ObLobMetaManager {
 public:
@@ -125,6 +171,26 @@ private:
   ObPersistentLobApator persistent_lob_adapter_;
 };
 
+OB_INLINE int64_t ob_lob_writer_length_validation(const common::ObCollationType &coll_type,
+                                                  const int64_t &data_len,
+                                                  const int64_t &write_len,
+                                                  int64_t &write_char_len)
+{
+  int64_t len_ret = write_len;
+  if (write_len > data_len) {
+    // if (coll_type == CS_TYPE_BINARY) {
+      OB_ASSERT(0); // ToDo: Debug only
+    // }
+  }
+  if (write_char_len > len_ret) {
+    if (coll_type == CS_TYPE_BINARY) {
+      write_char_len = len_ret;
+    } else {
+      OB_ASSERT(0); // ToDo: Debug only
+    }
+  }
+  return len_ret;
+}
 
 } // storage
 } // oceanbase

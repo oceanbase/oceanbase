@@ -214,3 +214,132 @@ drop table t4;
 set ob_enable_transformation = on;
 connection syscon;
 --sleep 2
+
+--enable_sorted_result
+--explain_protocol 0
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+--enable_warnings
+
+create table t1 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20)) partition by hash(c1) partitions 2;
+create table t2 (c1 int primary key, c2 decimal, c3 int, c4 varchar(20));
+
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t1 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (12, 9, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (4, 3, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (9, 10, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (7, 4, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (6, 7, null, 'a');
+
+insert into t1 (c1, c2, c3, c4) values (18, 1, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (19, 2, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (20, 3, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (21, 5, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (22, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (23, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (24, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (25, 7, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (26, 9, null, 'a');
+insert into t1 (c1, c2, c3, c4) values (28, 3, null, 'a');
+
+
+insert into t2 (c1, c2, c3, c4) values (1, 1, 1, 'a');
+insert into t2 (c1, c2, c3, c4) values (2, 2, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (3, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (11, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (5, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (15, 13, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (17, 12, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (6, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (7, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (10, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (13, 6, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (14, 17, null, 'a');
+
+
+insert into t2 (c1, c2, c3, c4) values (18, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (19, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (20, 6, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (21, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (22, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (23, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (24, 6, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (26, 3, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (27, 5, null, 'a');
+insert into t2 (c1, c2, c3, c4) values (29, 12, null, 'a');
+
+--explain_protocol 3
+select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) as x from t1;
+#
+select c1, (select c1 from t2 where t2.c1 >= t1.c1 and t2.c2 > t1.c3 limit 1) as x from t1;
+select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
+select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
+select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
+select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
+select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
+select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
+
+
+select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
+
+
+select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
+
+
+select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
+
+--explain_protocol 0
+--disable_warnings
+drop table if exists t1;
+drop table if exists t3;
+--enable_warnings
+
+
+
+create table t1 (c1 int primary key, c2 int, c3 int, c4 int) ;
+create table t3 (c1 int primary key, c2 int, c3 int, c4 int, index(c3)) ;
+
+insert into t1 (c1, c2, c3, c4) values (1, 1, 1, 1);
+insert into t1 (c1, c2, c3, c4) values (2, 2, 2, 2);
+insert into t1 (c1, c2, c3, c4) values (12,9, 3, 3);
+insert into t1 (c1, c2, c3, c4) values (4, 3, 4, 4);
+insert into t1 (c1, c2, c3, c4) values (3, 3, 5, 5);
+insert into t1 (c1, c2, c3, c4) values (9, 10,6, 6);
+insert into t1 (c1, c2, c3, c4) values (7, 4, 7, 7);
+insert into t1 (c1, c2, c3, c4) values (6, 7, 8, 8);
+
+insert into t1 (c1, c2, c3, c4) values (18, 1,9, 9);
+insert into t1 (c1, c2, c3, c4) values (19, 2,10,10);
+insert into t1 (c1, c2, c3, c4) values (20, 3,11,11);
+insert into t1 (c1, c2, c3, c4) values (21, 5,12,12);
+insert into t1 (c1, c2, c3, c4) values (22, 7,13,13);
+insert into t1 (c1, c2, c3, c4) values (23, 7,14,14);
+insert into t1 (c1, c2, c3, c4) values (24, 7,15,15);
+insert into t1 (c1, c2, c3, c4) values (25, 7,16,16);
+insert into t1 (c1, c2, c3, c4) values (26, 9,17,17);
+insert into t1 (c1, c2, c3, c4) values (28, 3,18,18);
+
+insert into t3 (c1, c2, c3, c4) values (1, 1, 1, 1);
+insert into t3 (c1, c2, c3, c4) values (2, 2, 2, 2);
+insert into t3 (c1, c2, c3, c4) values (12,9, 3, 3);
+insert into t3 (c1, c2, c3, c4) values (4, 3, 4, 4);
+insert into t3 (c1, c2, c3, c4) values (3, 3, 5, 5);
+insert into t3 (c1, c2, c3, c4) values (9, 10,6, 6);
+insert into t3 (c1, c2, c3, c4) values (7, 4, 7, 7);
+insert into t3 (c1, c2, c3, c4) values (6, 7, 8, 8);
+
+insert into t3 (c1, c2, c3, c4) values (18, 1,9, 9);
+insert into t3 (c1, c2, c3, c4) values (19, 2,10,10);
+insert into t3 (c1, c2, c3, c4) values (20, 3,11,11);
+insert into t3 (c1, c2, c3, c4) values (21, 5,12,12);
+insert into t3 (c1, c2, c3, c4) values (22, 7,13,13);
+insert into t3 (c1, c2, c3, c4) values (23, 7,14,14);
+insert into t3 (c1, c2, c3, c4) values (24, 7,15,15);
+insert into t3 (c1, c2, c3, c4) values (25, 7,16,16);
+insert into t3 (c1, c2, c3, c4) values (26, 9,17,17);
+insert into t3 (c1, c2, c3, c4) values (28, 3,18,18);
+
+select /*+ no_rewrite*/ * from t1 where exists (select /*+no_unnest */ 1 from t3 where t1.c1 > t3.c3 and t3.c4 < 100 limit 1) ;

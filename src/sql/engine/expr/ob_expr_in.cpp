@@ -836,13 +836,21 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
       ObObjType left_type = rt_expr.args_[0]->datum_meta_.type_;
       ObCollationType left_cs = rt_expr.args_[0]->datum_meta_.cs_type_;
       ObObjType right_type = rt_expr.args_[1]->args_[0]->datum_meta_.type_;
+      const bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
+                                  rt_expr.args_[1]->args_[0]->obj_meta_.has_lob_header();
+      ObScale scale1 = rt_expr.args_[0]->datum_meta_.scale_;
+      ObScale scale2 = rt_expr.args_[1]->datum_meta_.scale_;
       rt_expr.inner_functions_ = func_buf;
       DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-          left_type, right_type, lib::is_oracle_mode(), left_cs);
+          left_type, right_type, scale1, scale2, lib::is_oracle_mode(), left_cs, has_lob_header);
       for (int i = 0; i < rt_expr.inner_func_cnt_; i++) {
         rt_expr.inner_functions_[i] = (void *)func_ptr;
       }
-      if (!is_param_all_const() || rt_expr.inner_func_cnt_ <= 2 ||
+      // expr in/not will use same hash func for both left/right param
+      // string and text type cannot share hash func now
+      bool is_string_text_cmp = (ob_is_string_tc(left_type) && ob_is_text_tc(right_type)) ||
+                                (ob_is_text_tc(left_type) && ob_is_string_tc(right_type));
+      if (!is_param_all_const() || rt_expr.inner_func_cnt_ <= 2 || is_string_text_cmp ||
           (ob_is_json(left_type) || ob_is_json(right_type)) ||
           (ob_is_urowid(left_type) || ob_is_urowid(right_type))) {
         rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_without_row_fallback;
@@ -852,7 +860,8 @@ int ObExprInOrNotIn::cg_expr_without_row(ObIAllocator &allocator,
       //now only support c1 in (1,2,3,4...) to be vectorized
       if (is_param_can_vectorized()) {
         //目前认为右边参数 <= 2时， nest_loop算法的效果一定比hash更好
-        if (rt_expr.inner_func_cnt_ <= 2 || ob_is_urowid(left_type) || ob_is_urowid(right_type)) {
+        if (rt_expr.inner_func_cnt_ <= 2 || is_string_text_cmp ||
+            ob_is_urowid(left_type) || ob_is_urowid(right_type)) {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row_fallback;
         } else {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row;
@@ -880,6 +889,9 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
     ObSEArray<ObObjType, 8> left_types;
     ObSEArray<ObCollationType, 8> left_cs_arr;
     ObSEArray<ObObjType, 8> right_types;
+    ObSEArray<bool, 8> has_lob_headers;
+    ObSEArray<ObScale, 8> left_scales;
+    ObSEArray<ObScale, 8> right_scales;
 
     #define LEFT_ROW rt_expr.args_[0]
     #define LEFT_ROW_ELE(i) rt_expr.args_[0]->args_[i]
@@ -895,12 +907,21 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
       } else if (OB_FAIL(left_cs_arr.push_back(
                            LEFT_ROW_ELE(i)->datum_meta_.cs_type_))) {
         LOG_WARN("failed to push back element", K(ret));
+      } else if (OB_FAIL(has_lob_headers.push_back(
+                         LEFT_ROW_ELE(i)->obj_meta_.has_lob_header()))) {
+        LOG_WARN("failed to push back element", K(ret));
+      } else if (OB_FAIL(left_scales.push_back(LEFT_ROW_ELE(i)->datum_meta_.scale_))) {
+        LOG_WARN("failed to push back element", K(ret));
       } else { /* do nothing */ }
     } // end for
 
     for (int i = 0; OB_SUCC(ret) && i < RIGHT_ROW(0)->arg_cnt_; i++) {
       if (OB_FAIL(right_types.push_back(RIGHT_ROW_ELE(0, i)->datum_meta_.type_))) {
         LOG_WARN("failed to push back element", K(ret));
+      } else if (OB_FAIL(right_scales.push_back(RIGHT_ROW_ELE(0, i)->datum_meta_.scale_))) {
+        LOG_WARN("failed to push back element", K(ret));
+      } else {
+        has_lob_headers.at(i) = has_lob_headers.at(i) || (RIGHT_ROW_ELE(0, i)->obj_meta_.has_lob_header());
       }
     }
     if (OB_SUCC(ret)) {
@@ -911,13 +932,18 @@ int ObExprInOrNotIn::cg_expr_with_row(ObIAllocator &allocator,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
+        // expr in/not will use same hash func for both left/right param
+        // string and text type cannot share hash func now
+        bool is_string_text_cmp = false;
         for (int i = 0; i < left_types.count(); i++) {
           DatumCmpFunc func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              left_types.at(i), right_types.at(i), lib::is_oracle_mode(),
-              left_cs_arr.at(i));
+              left_types.at(i), right_types.at(i), left_scales.at(i), right_scales.at(i),
+              lib::is_oracle_mode(), left_cs_arr.at(i), has_lob_headers.at(i));
           func_buf[i] = (void *)func_ptr;
+          is_string_text_cmp |= (ob_is_string_tc(left_types.at(i)) && ob_is_text_tc(right_types.at(i))) ||
+                                (ob_is_text_tc(left_types.at(i)) && ob_is_string_tc(right_types.at(i)));
         }  // end for
-        if (!is_param_all_const()) {
+        if (!is_param_all_const() || is_string_text_cmp) {
           rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_with_row_fallback;
         } else {
           rt_expr.eval_func_ = &ObExprInOrNotIn::eval_in_with_row;
@@ -976,13 +1002,15 @@ int ObExprInOrNotIn::cg_expr_with_subquery(common::ObIAllocator &allocator,
       for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.inner_func_cnt_; i++) {
         auto &l = left_types.at(i);
         auto &r = RIGHT_ROW_ELE(0, i)->obj_meta_;
+        bool has_lob_header = l.has_lob_header() || r.has_lob_header();
         if (ObDatumFuncs::is_string_type(l.get_type())
             && ObDatumFuncs::is_string_type(r.get_type())) {
           CK(l.get_collation_type() == r.get_collation_type());
         }
         if (OB_SUCC(ret)) {
           funcs[i] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              l.get_type(), r.get_type(), lib::is_oracle_mode(), l.get_collation_type());
+              l.get_type(), r.get_type(), l.get_scale(), r.get_scale(),
+              lib::is_oracle_mode(), l.get_collation_type(), has_lob_header);
           CK(NULL != funcs[i]);
         }
       }
@@ -1088,6 +1116,7 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
         }
       }
       if (OB_SUCC(ret)) {
+        static const char SPACE = ' ';
         check_left_can_cmp_mem(expr, input_left, skip, eval_flags, batch_size, can_cmp_mem);
         if (can_cmp_mem) {
           const char *ptr0 = right_store[0]->ptr_;
@@ -1097,20 +1126,26 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
           for (int64_t i = 0; i < batch_size; ++i) {
             if (input_left[i].is_null()) {
               results[i].set_null();
+            } else if (input_left[i].len_ > 0 && SPACE == input_left[i].ptr_[input_left[i].len_ - 1]) {
+              can_cmp_mem = false;
+              break;
             } else {
               bool is_equal = false;
               left = &input_left[i];
-              is_equal = (left->len_ >= len0 
-                          && 0 == MEMCMP(ptr0, left->ptr_, len0) 
+              is_equal = (left->len_ >= len0
+                          && 0 == MEMCMP(ptr0, left->ptr_, len0)
                           && is_all_space(left->ptr_ + len0, left->len_ - len0));
-              is_equal = is_equal || (left->len_ >= len1 
-                                      && 0 == MEMCMP(ptr1, left->ptr_, len1) 
+              is_equal = is_equal || (left->len_ >= len1
+                                      && 0 == MEMCMP(ptr1, left->ptr_, len1)
                                       && is_all_space(left->ptr_ + len1, left->len_ - len1));
               results[i].set_int(is_equal);
             }
           }
-          eval_flags.set_all(batch_size);
-        } else {
+          if (can_cmp_mem) {
+            eval_flags.set_all(batch_size);
+          }
+        }
+        if (!can_cmp_mem) {
           for (int64_t i = 0; i < batch_size; ++i) {
             if (skip.at(i) || eval_flags.at(i)) {
               continue;
@@ -1215,7 +1250,7 @@ int ObExprInOrNotIn::eval_in_with_row(const ObExpr &expr,
                 //设置ObDatum的hash函数
                 if (OB_SUCC(ret)) {
                   in_ctx->hash_func_buff_[j] =
-                           (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->murmur_hash_);
+                           (void *)(RIGHT_ROW_ELE(i, j)->basic_funcs_->murmur_hash_v2_);
                 }
               }
             } else {
@@ -1739,7 +1774,7 @@ int ObExprInOrNotIn::build_right_hash_without_row(const int64_t in_id,
             }
             if (OB_SUCC(ret)) {
               in_ctx->hash_func_buff_[0] = (void *)
-                              (expr.args_[1]->args_[i]->basic_funcs_->murmur_hash_);
+                              (expr.args_[1]->args_[i]->basic_funcs_->murmur_hash_v2_);
             }
           }
           Row<ObDatum> tmp_row;
@@ -1786,7 +1821,6 @@ void ObExprInOrNotIn::check_left_can_cmp_mem(const ObExpr &expr,
                                              bool &can_cmp_mem)
 {
   UNUSED(datum);
-  static const char SPACE = ' ';
   can_cmp_mem = can_cmp_mem && T_OP_IN == expr.type_ && 2 == expr.inner_func_cnt_ 
                 && ObBitVector::bit_op_zero(skip, eval_flags, batch_size, 
                                [](const uint64_t l, const uint64_t r) { return (l | r); });

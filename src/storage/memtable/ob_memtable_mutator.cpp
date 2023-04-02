@@ -850,8 +850,6 @@ int ObMutatorWriter::append_row_kv(
     is_with_head = false;
   } else if (OB_FAIL(redo.callback_->get_cluster_version(cluster_version))) {
     TRANS_LOG(WARN, "get cluster version faild.", K(ret));
-  } else if (cluster_version < CLUSTER_VERSION_4_0_0_0) {
-    is_with_head = false;
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(mtk)) {

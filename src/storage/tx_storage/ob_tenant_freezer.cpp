@@ -27,6 +27,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 
@@ -40,6 +41,8 @@ ObTenantFreezer::ObTenantFreezer()
     rs_mgr_(nullptr),
     config_(nullptr),
     allocator_mgr_(nullptr),
+    freeze_thread_pool_(),
+    freeze_thread_pool_lock_(common::ObLatchIds::FREEZE_THREAD_POOL_LOCK),
     exist_ls_freezing_(false),
     last_update_ts_(0)
 {}
@@ -86,6 +89,8 @@ int ObTenantFreezer::init()
              K(GCONF.self_addr_));
   } else if (OB_FAIL(freeze_trigger_pool_.init_and_start(FREEZE_TRIGGER_THREAD_NUM))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze trigger pool", KR(ret));
+  } else if (OB_FAIL(freeze_thread_pool_.init_and_start(FREEZE_THREAD_NUM))) {
+    LOG_WARN("[TenantFreezer] fail to initialize freeze thread pool", KR(ret));
   } else if (OB_FAIL(freeze_trigger_timer_.init_and_start(freeze_trigger_pool_,
                                                           TIME_WHEEL_PRECISION,
                                                           "FrzTrigger"))) {
@@ -194,13 +199,16 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls)
   // wait if there is a freeze is doing
   do {
     retry_times++;
-    if (OB_FAIL(ls->logstream_freeze()) && OB_ENTRY_EXIST == ret) {
+    if (OB_FAIL(ls->logstream_freeze(true/*is_sync*/)) && OB_ENTRY_EXIST == ret) {
       ob_usleep(SLEEP_TS);
     }
     if (retry_times % 10 == 0) {
-      LOG_WARN("wait ls freeze finished cost too much time", K(retry_times));
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait ls freeze finished cost too much time", K(retry_times));
     }
   } while (ret == OB_ENTRY_EXIST);
+  if (OB_NOT_RUNNING == ret) {
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 
@@ -244,11 +252,41 @@ int ObTenantFreezer::tenant_freeze_()
   return ret;
 }
 
-int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
-                                   const bool is_force_freeze)
+int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  share::ObLSID ls_id;
+  ObLSService *ls_srv = MTL(ObLSService *);
+  ObLSHandle handle;
+  ObLS *ls = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+    LOG_WARN("[TenantFreezer] fail to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
+  } else if (OB_FAIL(ls->logstream_freeze())) {
+    LOG_WARN("[TenantFreezer] logstream freeze failed", KR(ret), K(ls_id));
+  }
+
+  return ret;
+}
+
+int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
+                                   const bool is_force_freeze,
+                                   const bool is_sync)
+{
+  return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID), tablet_id, is_force_freeze, is_sync);
+}
+
+int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
+                                   const common::ObTabletID &tablet_id,
+                                   const bool is_force_freeze,
+                                   const bool is_sync)
+{
+  int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   ObLSService *ls_srv = MTL(ObLSService *);
   ObLSHandle handle;
@@ -258,15 +296,14 @@ int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-  } else if (OB_UNLIKELY(nullptr == GCTX.location_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("[TenantFreezer] location service ptr is null", KR(ret));
-  } else if (OB_FAIL(GCTX.location_service_->get(tenant_info_.tenant_id_,
-                                                 tablet_id,
-                                                 INT64_MAX,
-                                                 is_cache_hit,
-                                                 ls_id))) {
-    LOG_WARN("[TenantFreezer] fail to get ls id according to tablet_id", KR(ret), K(tablet_id));
+  } else if (!ls_id.is_valid()) {
+    // if ls_id is invalid, get ls id by tablet id
+    if (OB_FAIL(GCTX.location_service_->get(tenant_info_.tenant_id_, tablet_id, INT64_MAX, is_cache_hit, ls_id))) {
+      LOG_WARN("[TenantFreezer] fail to get ls id according to tablet_id", KR(ret), K(tablet_id));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("[TenantFreezer] fail to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
@@ -274,10 +311,8 @@ int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
   } else if (OB_FAIL(is_force_freeze
                      ? ls->force_tablet_freeze(tablet_id)
-                     : ls->tablet_freeze(tablet_id))) {
+                     : ls->tablet_freeze(tablet_id, is_sync))) {
     LOG_WARN("[TenantFreezer] fail to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
-  } else {
-    LOG_INFO("[TenantFreezer] succeed to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
   }
 
   return ret;
@@ -391,25 +426,25 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
     // skip freeze when there is another self freeze task is running
     if (++skip_count > 10) {
       int64_t cost_time = (FREEZE_TRIGGER_INTERVAL * skip_count);
-      LOG_WARN("A tx data tenant self freeze task cost too much time",
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "A tx data tenant self freeze task cost too much time",
                   K(tenant_info_.tenant_id_), K(skip_count), K(cost_time));
     }
   } else if (OB_FAIL(get_tenant_tx_data_mem_used_(tenant_tx_data_mem_used))) {
     LOG_WARN("[TenantFreezer] get tenant tx data mem used failed.", KR(ret));
   } else {
     int64_t total_memory = lib::get_tenant_memory_limit(tenant_info_.tenant_id_);
-    int64_t hold_memory = lib::get_tenant_memory_hold(tenant_info_.tenant_id_);
+    int64_t memstore_hold_memory = lib::get_tenant_memory_hold(tenant_info_.tenant_id_, ObCtxIds::MEMSTORE_CTX_ID);
     int64_t self_freeze_min_limit_ = total_memory * (ObTxDataTable::TX_DATA_FREEZE_TRIGGER_MIN_PERCENTAGE / 100);
     int64_t self_freeze_max_limit_ = total_memory * (ObTxDataTable::TX_DATA_FREEZE_TRIGGER_MAX_PERCENTAGE / 100);
     int64_t self_freeze_tenant_hold_limit_
       = (total_memory * (double(get_freeze_trigger_percentage_()) / 100));
 
     if ((tenant_tx_data_mem_used > self_freeze_max_limit_)
-        || ((hold_memory > self_freeze_tenant_hold_limit_)
+        || ((memstore_hold_memory > self_freeze_tenant_hold_limit_)
             && (tenant_tx_data_mem_used > self_freeze_min_limit_))) {
       // trigger tx data self freeze
       LOG_INFO("[TenantFreezer] Trigger Tx Data Table Self Freeze. ", K(tenant_info_.tenant_id_),
-               K(tenant_tx_data_mem_used), K(self_freeze_max_limit_), K(hold_memory),
+               K(tenant_tx_data_mem_used), K(self_freeze_max_limit_), K(memstore_hold_memory),
                K(self_freeze_tenant_hold_limit_), K(self_freeze_min_limit_));
 
       int tmp_ret = OB_SUCCESS;
@@ -444,7 +479,7 @@ int ObTenantFreezer::check_and_do_freeze()
   int64_t check_and_freeze_end_ts = ObTimeUtil::current_time();
   int64_t spend_time = check_and_freeze_end_ts - check_and_freeze_start_ts;
   if (spend_time > 2_s) {
-    STORAGE_LOG(WARN, "check and do freeze spend too much time", K(spend_time));
+    STORAGE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "check and do freeze spend too much time", K(spend_time));
   }
   return ret;
 }
@@ -651,6 +686,33 @@ int ObTenantFreezer::get_tenant_mem_limit(
   return ret;
 }
 
+bool ObTenantFreezer::is_replay_pending_log_too_large(const int64_t pending_size)
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = true;
+  int64_t total_memstore_used = 0;
+  int64_t memstore_limit = 0;
+  int64_t unused = 0;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (OB_FAIL(get_tenant_memstore_cond(unused,
+                                              total_memstore_used,
+                                              unused,
+                                              memstore_limit,
+                                              unused,
+                                              false/* not force refresh */))) {
+    LOG_WARN("get tenant memstore condition failed", K(ret));
+  } else {
+    int64_t memstore_left = memstore_limit - total_memstore_used - REPLAY_RESERVE_MEMSTORE_BYTES;
+    memstore_left = (memstore_left > 0 ? memstore_left : 0);
+    memstore_left >>= 5; // Estimate the size of memstore based on 32 times expansion.
+                         // 16 times for replay and 16 times for replay
+    bool_ret = (pending_size >= memstore_left);
+  }
+  return bool_ret;
+}
+
 int ObTenantFreezer::get_tenant_memstore_cond(
     int64_t &active_memstore_used,
     int64_t &total_memstore_used,
@@ -661,7 +723,6 @@ int ObTenantFreezer::get_tenant_memstore_cond(
 {
   int ret = OB_SUCCESS;
   int64_t unused = 0;
-  const int64_t refresh_interval = 100 * 1000; // 100 ms
   int64_t current_time = OB_TSC_TIMESTAMP.current_time();
   RLOCAL_INIT(int64_t, last_refresh_timestamp, 0);
   RLOCAL(int64_t, last_active_memstore_used);
@@ -680,7 +741,7 @@ int ObTenantFreezer::get_tenant_memstore_cond(
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
   } else if (!force_refresh &&
-             current_time - last_refresh_timestamp < refresh_interval) {
+             current_time - last_refresh_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
     active_memstore_used = last_active_memstore_used;
     total_memstore_used = last_total_memstore_used;
     memstore_freeze_trigger = last_memstore_freeze_trigger;
@@ -839,7 +900,6 @@ int ObTenantFreezer::get_freeze_trigger_(ObTenantFreezeCtx &ctx)
 int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
 {
   int ret = OB_SUCCESS;
-  const int64_t check_memstore_limit_interval = 1 * 1000 * 1000;
   RLOCAL(int64_t, last_check_timestamp);
   RLOCAL(bool, last_result);
   int64_t current_time = OB_TSC_TIMESTAMP.current_time();
@@ -850,7 +910,7 @@ int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
   } else {
     const uint64_t tenant_id = tenant_info_.tenant_id_;
     if (!last_result &&
-        current_time - last_check_timestamp < check_memstore_limit_interval) {
+        current_time - last_check_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
       // Check once when the last memory burst or tenant_id does not match or the interval reaches the threshold
       is_out_of_mem = false;
     } else {
@@ -861,7 +921,7 @@ int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
       } else if (OB_FAIL(get_tenant_mem_usage_(ctx))) {
         LOG_WARN("[TenantFreezer] fail to get mem usage", KR(ret), K(tenant_info_.tenant_id_));
       } else {
-        is_out_of_mem = (ctx.total_memstore_hold_ > ctx.mem_memstore_limit_);
+        is_out_of_mem = (ctx.total_memstore_hold_ > ctx.mem_memstore_limit_ + REPLAY_RESERVE_MEMSTORE_BYTES);
       }
       last_check_timestamp = current_time;
     }
@@ -1049,12 +1109,12 @@ int ObTenantFreezer::get_global_frozen_scn_(int64_t &frozen_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t tenant_id = tenant_info_.tenant_id_;
-  int64_t tmp_frozen_scn = 0;
 
+  SCN tmp_frozen_scn;
   if (OB_FAIL(rootserver::ObMajorFreezeHelper::get_frozen_scn(tenant_id, tmp_frozen_scn))) {
     LOG_WARN("get_frozen_scn failed", KR(ret), K(tenant_id));
   } else {
-    frozen_scn = tmp_frozen_scn;
+    frozen_scn = tmp_frozen_scn.get_val_for_tx();
   }
 
   return ret;
@@ -1189,7 +1249,8 @@ void ObTenantFreezer::log_frozen_memstore_info_if_need_(const ObTenantFreezeCtx 
 {
   int ret = OB_SUCCESS;
   ObTenantMemstoreAllocator *tenant_allocator = NULL;
-  if (ctx.total_memstore_hold_ > ctx.memstore_freeze_trigger_) {
+  if (ctx.total_memstore_hold_ > ctx.memstore_freeze_trigger_ ||
+      ctx.active_memstore_used_ > ctx.memstore_freeze_trigger_) {
     // There is an unreleased memstable
     LOG_INFO("[TenantFreezer] tenant have inactive memstores",
              K(ctx.active_memstore_used_),

@@ -74,6 +74,10 @@ void ObTenantDutyTask::update_all_tenants()
         LOG_WARN("update tenant ctx throttle fail", K(ret));
         ret = OB_SUCCESS;
       }
+      if (OB_FAIL(update_tenant_rpc_percentage(ids[i]))) {
+        LOG_WARN("update tenant rpc percentage fail", K(ret));
+        ret = OB_SUCCESS;
+      }
     }
   }
 }
@@ -147,7 +151,7 @@ int ObTenantDutyTask::update_tenant_ctx_memory_throttle(uint64_t tenant_id)
           // use sql_work_area
           continue;
         }
-        auto *ta = alloc->get_tenant_ctx_allocator(tenant_id, i);
+        auto ta = alloc->get_tenant_ctx_allocator(tenant_id, i);
         if (OB_NOT_NULL(ta)) {
           if (OB_FAIL(ta->set_limit(ctx_id == i ? limit : INT64_MAX))) {
             LOG_ERROR("set_limit failed", K(ret), K(tenant_id), K(ctx_id), K(limit));
@@ -223,7 +227,7 @@ int ObTenantDutyTask::update_tenant_wa_percentage(uint64_t tenant_id)
              "shouldn't greater than 100 or be negative",
              K(wa_pctg));
   } else {
-    auto *ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
+    auto ta = lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
         tenant_id, common::ObCtxIds::WORK_AREA);
     if (ta != nullptr) {
       if (OB_FAIL(lib::set_wa_limit(tenant_id, wa_pctg))) {
@@ -237,6 +241,24 @@ int ObTenantDutyTask::update_tenant_wa_percentage(uint64_t tenant_id)
                  K(ret));
        }
      }
+  }
+  return ret;
+}
+
+int ObTenantDutyTask::update_tenant_rpc_percentage(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    // do nothing
+  } else {
+    int64_t rpc_pct_lmt = tenant_config->rpc_memory_limit_percentage;
+    if (0 == rpc_pct_lmt) {
+      rpc_pct_lmt = 100;
+    }
+    if (OB_FAIL(set_rpc_limit(tenant_id, rpc_pct_lmt))) {
+      LOG_WARN("failed to set tenant rpc ctx limit", K(ret), K(tenant_id), K(rpc_pct_lmt));
+    }
   }
   return ret;
 }

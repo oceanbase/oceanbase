@@ -29,7 +29,7 @@ void* ObEasySqlRequestOperator::get_sql_session(ObRequest* req)
   if (OB_ISNULL(ez_req)
       || OB_ISNULL(ez_req->ms)
       || OB_ISNULL(ez_req->ms->c)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req));
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(ez_req));
   } else {
     session = ez_req->ms->c->user_data;
   }
@@ -43,7 +43,7 @@ SSL* ObEasySqlRequestOperator::get_sql_ssl_st(ObRequest* req)
   if (OB_ISNULL(ez_req)
       || OB_ISNULL(ez_req->ms)
       || OB_ISNULL(ez_req->ms->c)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req));
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(ez_req));
   } else if (NULL != ez_req->ms->c->sc) {
     ssl_st = ez_req->ms->c->sc->connection ;
   }
@@ -55,7 +55,7 @@ char* ObEasySqlRequestOperator::alloc_sql_response_buffer(ObRequest* req, int64_
   void *buf = NULL;
   easy_request_t* ez_req = req->get_ez_req();
   if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms) || OB_ISNULL(ez_req->ms->pool)) {
-    RPC_LOG(ERROR, "ez_req is not corret");
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "ez_req is not corret");
   } else {
     buf = easy_pool_alloc(
         ez_req->ms->pool, static_cast<uint32_t>(size));
@@ -63,18 +63,12 @@ char* ObEasySqlRequestOperator::alloc_sql_response_buffer(ObRequest* req, int64_
   return static_cast<char*>(buf);
 }
 
-void ObEasySqlRequestOperator::free_sql_response_buffer(ObRequest* req, void *buf)
-{
-  (void)req;
-  (void)buf;
-}
-
 char *ObEasySqlRequestOperator::sql_reusable_alloc(ObRequest* req, int64_t size)
 {
   void *buf = NULL;
   easy_request_t* ez_req = req->get_ez_req();
   if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms) || OB_ISNULL(ez_req->ms->pool)) {
-    RPC_LOG(ERROR, "ez_req is not corret");
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "ez_req is not corret");
   } else {
     if(NULL == (buf = req->reusable_mem_.alloc(size))) {
       buf = easy_pool_alloc(
@@ -93,11 +87,11 @@ ObAddr ObEasySqlRequestOperator::get_peer(const ObRequest* req)
   easy_request_t* ez_req = req->ez_req_;
   if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms)
       || OB_ISNULL(ez_req->ms->c)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req));
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(ez_req));
   } else {
     easy_addr_t &ez = ez_req->ms->c->addr;
     if (!ez2ob_addr(addr, ez)) {
-      RPC_LOG(ERROR, "fail to convert easy_addr to ob_addr", K(ez_req));
+      RPC_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "fail to convert easy_addr to ob_addr", K(ez_req));
     } // otherwise leave addr be zeros
   }
   return addr;
@@ -107,7 +101,7 @@ void ObEasySqlRequestOperator::disconnect_sql_conn(ObRequest* req)
 {
   easy_request_t* ez_req = req->get_ez_req();
   if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req));
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(ez_req));
   } else {
     easy_connection_destroy_dispatch(ez_req->ms->c);
   }
@@ -117,7 +111,7 @@ void ObEasySqlRequestOperator::finish_sql_request(ObRequest* req)
 {
   easy_request_t* ez_req = req->get_ez_req();
   if (OB_ISNULL(ez_req) || OB_ISNULL(ez_req->ms)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req));
+    RPC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(ez_req));
   } else {
     if (ez_req->retcode != EASY_AGAIN) {
       obmysql::request_finish_callback();

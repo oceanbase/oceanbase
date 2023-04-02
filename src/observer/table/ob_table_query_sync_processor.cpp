@@ -22,6 +22,8 @@
 #include "lib/string/ob_strings.h"
 #include "lib/rc/ob_rc.h"
 #include "storage/tx/ob_trans_service.h"
+#include "ob_table_cg_service.h"
+#include "ob_htable_filter_operator.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -32,24 +34,7 @@ using namespace oceanbase::sql;
 /**
  * ---------------------------------------- ObTableQuerySyncSession ----------------------------------------
  */
-int ObTableQuerySyncSession::deep_copy_select_columns(const ObTableQuery &query)
-{
-  int ret = OB_SUCCESS;
-  const ObIArray<ObString> &select_columns = query.get_select_columns();
-  const int64_t N = select_columns.count();
-  ObString tmp_str;
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
-    if (OB_FAIL(ob_write_string(*get_allocator(), select_columns.at(i), tmp_str))) {
-      LOG_WARN("failed to copy column name", K(ret));
-      break;
-    } else if (OB_FAIL(query_.add_select_column(tmp_str))) {
-      LOG_WARN("failed to add column name", K(ret));
-    }
-  } // end for
-  return ret;
-}
-
-void ObTableQuerySyncSession::set_result_iterator(ObNormalTableQueryResultIterator *query_result)
+void ObTableQuerySyncSession::set_result_iterator(ObTableQueryResultIterator *query_result)
 {
   result_iterator_ = query_result;
   if (OB_NOT_NULL(result_iterator_)) {
@@ -75,8 +60,6 @@ int ObTableQuerySyncSession::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iterator_mementity_ should be NULL", K(ret));
   } else {
-    table_service_ctx_.scan_param_.scan_allocator_ = &mem_context->get_arena_allocator();
-    table_service_ctx_.scan_param_.allocator_ = &mem_context->get_arena_allocator();
     iterator_mementity_ = mem_context;
   }
   return ret;
@@ -119,7 +102,7 @@ ObQuerySyncMgr &ObQuerySyncMgr::get_instance()
       instance = OB_NEW(ObQuerySyncMgr, ObModIds::TABLE_PROC);
       if (OB_LIKELY(OB_NOT_NULL(instance))) {
         if (common::OB_SUCCESS != instance->init()) {
-          LOG_WARN("failed to init ObQuerySyncMgr instance");
+          LOG_WARN_RET(OB_ERROR, "failed to init ObQuerySyncMgr instance");
           OB_DELETE(ObQuerySyncMgr, ObModIds::TABLE_PROC, instance);
           instance = NULL;
           ATOMIC_BCAS(&once_, 1, 0);
@@ -138,8 +121,12 @@ ObQuerySyncMgr &ObQuerySyncMgr::get_instance()
 int ObQuerySyncMgr::init()
 {
   int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < DEFAULT_LOCK_ARR_SIZE; ++i) {
+    locker_arr_[i].set_latch_id(ObLatchIds::TABLE_API_LOCK);
+  }
   if (OB_FAIL(query_session_map_.create(QUERY_SESSION_MAX_SIZE, ObModIds::TABLE_PROC, ObModIds::TABLE_PROC))) {
     LOG_WARN("fail to create query session map", K(ret));
+  } else if (FALSE_IT(timer_.set_run_wrapper(MTL_CTX()))) { // 设置当前租户上下文
   } else if (OB_FAIL(timer_.init())) {
     LOG_WARN("fail to init timer_", K(ret));
   } else if (OB_FAIL(timer_.schedule(query_session_recycle_, QUERY_SESSION_CLEAN_DELAY, true))) {
@@ -214,14 +201,6 @@ void ObQuerySyncMgr::clean_timeout_query_session()
           if (OB_FAIL(rollback_trans(*query_session))) {
             LOG_WARN("failed to rollback trans for query session", K(ret), K(sess_id));
           }
-          access_service = MTL(ObAccessService *);
-          ObTableServiceQueryCtx *table_service_ctx = query_session->get_table_service_ctx();
-          if (OB_ISNULL(table_service_ctx)) {
-            ret = OB_ERR_NULL_VALUE;
-            LOG_WARN("free query session fail, table service context null", K(ret));
-          } else {
-            table_service_ctx->destroy_result_iterator(access_service);
-          }
           (void)query_session_map_.erase_refactored(sess_id);
           OB_DELETE(ObTableQuerySyncSession, ObModIds::TABLE_PROC, query_session);
           // connection loses or bug exists
@@ -295,10 +274,9 @@ int ObQuerySyncMgr::ObGetAllSessionIdOp::operator()(QuerySessionPair &entry) {
  */
 ObTableQuerySyncP::ObTableQuerySyncP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
-      table_service_ctx_(nullptr),
       result_row_count_(0),
       query_session_id_(0),
-      allocator_(ObModIds::TABLE_PROC),
+      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       query_session_(nullptr)
 {}
 
@@ -348,7 +326,6 @@ void ObTableQuerySyncP::reset_ctx()
 {
   result_row_count_ = 0;
   query_session_ = nullptr;
-  table_service_ctx_ = nullptr;
   ObTableApiProcessorBase::reset_ctx();
 }
 
@@ -356,32 +333,6 @@ ObTableAPITransCb *ObTableQuerySyncP::new_callback(rpc::ObRequest *req)
 {
   UNUSED(req);
   return nullptr;
-}
-
-int ObTableQuerySyncP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id = arg_.tablet_id_;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = NULL;
-  if (!tablet_id.is_valid()) {
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(table_id), K(table_schema));
-    } else if (!table_schema->is_partitioned_table()) {
-      tablet_id = table_schema->get_tablet_id();
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("partitioned table not supported", K(ret), K(table_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
 }
 
 int ObTableQuerySyncP::get_session_id(uint64_t &real_sessid, uint64_t arg_sessid)
@@ -436,96 +387,142 @@ int ObTableQuerySyncP::get_query_session(uint64_t sessid, ObTableQuerySyncSessio
   return ret;
 }
 
-int ObTableQuerySyncP::query_scan_with_old_context(const int64_t timeout)
+int ObTableQuerySyncP::init_tb_ctx(ObTableCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  ObTableQueryResultIterator *result_iterator = query_session_->get_result_iterator();
-  if (OB_ISNULL(result_iterator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query result iterator null", K(ret));
+  ObIAllocator &allocator = *query_session_->get_allocator();
+  ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
+  ObExprFrameInfo &expr_frame_info = query_ctx.expr_frame_info_;
+  bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
+  ctx.set_scan(true);
+
+  if (ctx.is_init()) {
+    LOG_INFO("tb ctx has been inited", K(ctx));
+  } else if (OB_FAIL(ctx.init_common(credential_,
+                                     arg_.tablet_id_,
+                                     arg_.table_name_,
+                                     get_timeout_ts()))) {
+    LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(ctx.init_scan(query_session_->get_query(), is_weak_read))) {
+    LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_));
+  } else if (OB_FAIL(ObTableExprCgService::generate_exprs(ctx,
+                                                          allocator,
+                                                          expr_frame_info))) {
+    LOG_WARN("fail to generate exprs", K(ret), K(ctx));
+  } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(ctx, expr_frame_info))) {
+    LOG_WARN("fail to alloc expr memory", K(ret));
+  } else if (OB_FAIL(ctx.classify_scan_exprs())) {
+    LOG_WARN("fail to classify scan exprs", K(ret));
+  } else if (OB_FAIL(ctx.init_exec_ctx())) {
+    LOG_WARN("fail to init exec ctx", K(ret), K(ctx));
   } else {
-    ObTableQueryResult *query_result = nullptr;
-    result_iterator->set_one_result(&result_);  // set result_ as container
-    if (ObTimeUtility::current_time() > timeout) {
-      ret = OB_TRANS_TIMEOUT;
-      LOG_WARN("exceed operatiton timeout", K(ret));
-    } else if (OB_FAIL(result_iterator->get_next_result(query_result))) {
-      if (OB_ITER_END == ret) {
-        result_.is_end_ = true;  // set scan end
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to scan result", K(ret));
-      }
-    } else {
-      result_.is_end_ = !result_iterator->has_more_result();
-    }
+    ctx.set_init_flag(true);
+    ctx.set_expr_info(&query_ctx.expr_frame_info_);
   }
+
   return ret;
 }
 
-int ObTableQuerySyncP::query_scan_with_new_context(
-    ObTableQuerySyncSession *query_session, table::ObTableQueryResultIterator *result_iterator, const int64_t timeout)
+int ObTableQuerySyncP::execute_query()
 {
   int ret = OB_SUCCESS;
-  ObTableQueryResult *query_result = nullptr;
-  if (ObTimeUtility::current_time() > timeout) {
-    ret = OB_TRANS_TIMEOUT;
-    LOG_WARN("exceed operatiton timeout", K(ret), K(rpc_pkt_)->get_timeout());
-  } else if (OB_ISNULL(result_iterator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null result iterator", K(ret));
-  } else if (OB_FAIL(result_iterator->get_next_result(query_result))) {
-    if (OB_ITER_END == ret) {  // scan to end
-      ret = OB_SUCCESS;
+  ObIAllocator *allocator = query_session_->get_allocator();
+  ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
+  ObTableQuery &query = query_session_->get_query();
+  ObTableApiSpec *spec = nullptr;
+  ObTableApiExecutor *executor = nullptr;
+  ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
+  ObTableApiScanRowIterator &row_iter = query_ctx.row_iter_;
+  ObTableQueryResultIterator *result_iter = nullptr;
+  bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+
+  // 1. create scan executor
+  if (OB_FAIL(ObTableSpecCgService::generate<TABLE_API_EXEC_SCAN>(*allocator, tb_ctx, spec))) {
+    LOG_WARN("fail to generate scan spec", K(ret), K(tb_ctx));
+  } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
+    LOG_WARN("fail to generate executor", K(ret), K(tb_ctx));
+  } else {
+    query_ctx.executor_ = static_cast<ObTableApiScanExecutor*>(executor);
+    query_ctx.spec_ = spec;
+  }
+
+  // 2. create result iterator
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(*allocator,
+                                                                  query,
+                                                                  is_hkv,
+                                                                  result_,
+                                                                  tb_ctx,
+                                                                  result_iter))) {
+      LOG_WARN("fail to generate query result iterator", K(ret));
+    } else if (OB_FAIL(row_iter.open(query_ctx.executor_))) {
+      LOG_WARN("fail to open scan row iterator", K(ret));
+    } else {
+      result_iter->set_scan_result(&row_iter);
+      // hbase model, compress the result packet
+      if (is_hkv) {
+        ObCompressorType compressor_type = INVALID_COMPRESSOR;
+        if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(
+            GCONF.tableapi_transport_compress_func, compressor_type))) {
+          compressor_type = INVALID_COMPRESSOR;
+        } else if (NONE_COMPRESSOR == compressor_type) {
+          compressor_type = INVALID_COMPRESSOR;
+        }
+        this->set_result_compress_type(compressor_type);
+        ret = OB_SUCCESS; // reset ret
+      }
+    }
+  }
+
+  // 3. do scan and save result iter
+  if (OB_SUCC(ret)) {
+    ObTableQueryResult *one_result = nullptr;
+    query_session_->set_result_iterator(result_iter);
+    if (ObTimeUtility::current_time() > timeout_ts_) {
+      ret = OB_TRANS_TIMEOUT;
+      LOG_WARN("exceed operatiton timeout", K(ret));
+    } else if (OB_FAIL(result_iter->get_next_result(one_result))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next result", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        result_.is_end_ = true;
+      }
+    } else if (result_iter->has_more_result()) {
+      result_.is_end_ = false;
+      query_session_->set_trans_desc(trans_desc_); // save processor's trans_desc_ to query session
+    } else {
+      // no more result
       result_.is_end_ = true;
     }
-  } else if (result_iterator->has_more_result()){
-    result_.is_end_ = false;
-    query_session->deep_copy_select_columns(arg_.query_);
-    query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator));
-    query_session->set_trans_desc(trans_desc_); // save processor's trans_desc_ to query session
-  } else {
-    result_.is_end_ = true;
   }
+
   return ret;
 }
 
 int ObTableQuerySyncP::query_scan_with_init()
 {
   int ret = OB_SUCCESS;
-  table_service_ctx_ = query_session_->get_table_service_ctx();
-  table_service_ctx_->scan_param_.is_thread_scope_ = false;
-  uint64_t &table_id = table_service_ctx_->param_table_id();
-  table_service_ctx_->init_param(
-      timeout_ts_,
-      this,
-      query_session_->get_allocator(),
-      false /*ignored*/,
-      arg_.entity_type_,
-      table::ObBinlogRowImageType::MINIMAL /*ignored*/);
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  table::ObTableQueryResultIterator *result_iterator = nullptr;
-  const bool is_readonly = true;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
+  ObArenaAllocator *allocator = query_session_->get_allocator();
+  ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
+  ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
+  ObTableQuery &query = query_session_->get_query();
 
-  if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != tablet_ids.count()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
-  } else if (FALSE_IT(table_service_ctx_->param_tablet_id() = tablet_ids.at(0))) {
-  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_->param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, table_service_ctx_->param_ls_id(), timeout_ts_))) {
-    LOG_WARN("failed to start readonly transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_query(*table_service_ctx_, arg_.query_, result_, result_iterator))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to execute query", K(ret), K(table_id));
-    }
-  } else if (OB_FAIL(query_scan_with_new_context(query_session_, result_iterator, timeout_ts_))) {
-    LOG_WARN("fail to query, need rollback", K(ret));
+  if (OB_FAIL(arg_.query_.deep_copy(*allocator, query))) { // 存储的key range是引用，所以这里需要深拷贝
+    LOG_WARN("fail to deep copy query", K(ret), K(arg_.query_));
+  } else if (OB_FAIL(init_tb_ctx(tb_ctx))) {
+    LOG_WARN("fail to init table ctx", K(ret));
+  } else if (OB_FAIL(start_trans(true, /* is_readonly */
+                                 sql::stmt::T_SELECT,
+                                 arg_.consistency_level_,
+                                 tb_ctx.get_ref_table_id(),
+                                 tb_ctx.get_ls_id(),
+                                 tb_ctx.get_timeout_ts()))) {
+    LOG_WARN("fail to start readonly transaction", K(ret), K(tb_ctx));
+  } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+    LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
+  } else if (OB_FAIL(execute_query())) {
+    LOG_WARN("fail to execute query", K(ret));
   } else {
     audit_row_count_ = result_.get_row_count();
     result_.query_session_id_ = query_session_id_;
@@ -537,15 +534,35 @@ int ObTableQuerySyncP::query_scan_with_init()
 int ObTableQuerySyncP::query_scan_without_init()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(query_session_->get_result_iterator()) || OB_ISNULL(query_session_->get_table_service_ctx())) {
+  ObTableQueryResultIterator *result_iter = query_session_->get_result_iterator();
+  ObTableQuerySyncCtx &query_ctx = query_session_->get_query_ctx();
+  ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
+
+  if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("unexpected null result iterator or table service context", K(ret));
-  } else if (OB_FAIL(query_scan_with_old_context(timeout_ts_))) {
-    LOG_WARN("fail to query scan with old context", K(ret));
+    LOG_WARN("unexpected null result iterator", K(ret));
+  } else if (OB_FAIL(result_.assign_property_names(tb_ctx.get_query_col_names()))) {
+    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
   } else {
-    audit_row_count_ = result_.get_row_count();
-    result_.query_session_id_ = query_session_id_;
+    ObTableQueryResult *query_result = nullptr;
+    result_iter->set_one_result(&result_);  // set result_ as container
+    if (ObTimeUtility::current_time() > timeout_ts_) {
+      ret = OB_TRANS_TIMEOUT;
+      LOG_WARN("exceed operatiton timeout", K(ret));
+    } else if (OB_FAIL(result_iter->get_next_result(query_result))) {
+      if (OB_ITER_END == ret) {
+        result_.is_end_ = true;  // set scan end
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to scan result", K(ret));
+      }
+    } else {
+      result_.is_end_ = !result_iter->has_more_result();
+      result_.query_session_id_ = query_session_id_;
+      audit_row_count_ = result_.get_row_count();
+    }
   }
+
   return ret;
 }
 
@@ -580,7 +597,6 @@ int ObTableQuerySyncP::try_process()
     LOG_WARN("fail to get query session id", K(ret), K(arg_.query_session_id_));
   } else if (OB_FAIL(get_query_session(query_session_id_, query_session_))) {
     LOG_WARN("fail to get query session", K(ret), K(query_session_id_));
-  } else if (FALSE_IT(table_service_ctx_ = query_session_->get_table_service_ctx())) {
   } else if (FALSE_IT(timeout_ts_ = get_timeout_ts())) {
   } else {
     if (ObQueryOperationType::QUERY_START == arg_.query_type_) {
@@ -619,13 +635,12 @@ int ObTableQuerySyncP::destory_query_session(bool need_rollback_trans)
   int tmp_ret = ret;
 
   ObQuerySyncMgr::get_instance().get_locker(query_session_id_).lock();
-  if (OB_ISNULL(query_session_) || OB_ISNULL(table_service_ctx_)) {
+  if (OB_ISNULL(query_session_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null value", K(ret), KP_(query_session), KP_(table_service_ctx));
+    LOG_WARN("Unexpected null value", K(ret), KP_(query_session));
   } else if (OB_FAIL(ObQuerySyncMgr::get_instance().get_query_session_map()->erase_refactored(query_session_id_))) {
     LOG_WARN("fail to erase query session from query sync mgr", K(ret));
   } else {
-    table_service_ctx_->destroy_result_iterator(access_service_);
     OB_DELETE(ObTableQuerySyncSession, ObModIds::TABLE_PROC, query_session_);
     LOG_DEBUG("destory query session success", K(ret), K(query_session_id_));
   }

@@ -105,7 +105,7 @@ public:
   int update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used);
   int rollback_local_report_target_used(uint64_t tenant_id, const ObAddr &server, int64_t local_report);
   int get_global_target_usage(uint64_t tenant_id, const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
-  int reset_statistics(uint64_t tenant_id, uint64_t version);
+  int reset_leader_statistics(uint64_t tenant_id);
   
   // for px_admission
   int apply_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
@@ -128,7 +128,7 @@ private:
 class ObPxResRefreshFunctor
 {
 public:
-  ObPxResRefreshFunctor() {}
+  ObPxResRefreshFunctor() : need_refresh_all_(true) {}
   ~ObPxResRefreshFunctor() {}
   bool operator()(const ObPxTenantInfo &px_tenant_info, ObPxResInfo *px_res_info)
   {
@@ -140,7 +140,7 @@ public:
       ret = common::OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "target_monitor is null", K(ret), K(px_tenant_info));
     } else if (OB_FAIL(px_res_info->get_target_monitor()->refresh_statistics(need_refresh_all_))) {
-      COMMON_LOG(WARN, "target monitor refresh statistics failed", K(ret), KPC(px_res_info->get_target_monitor()));
+      COMMON_LOG(WARN, "target monitor refresh statistics failed", K(ret), K(px_tenant_info), KPC(px_res_info->get_target_monitor()));
     }
     //外面需要遍历所有的租户，此处不能返回false
     return true;

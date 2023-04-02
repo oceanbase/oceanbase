@@ -242,8 +242,9 @@ int MockObServer::init(const char *schema_file,
 int MockObServer::init_multi_tenant()
 {
   int ret = OB_SUCCESS;
+  GCONF.cpu_count = 6;
 
-  if (OB_SUCCESS != (ret = multi_tenant_.init(self_addr_, 6))) {
+  if (OB_SUCCESS != (ret = multi_tenant_.init(self_addr_))) {
     STORAGE_LOG(WARN, "init multi_tenant failed", K(ret));
   } else if (OB_SUCCESS != (ret = multi_tenant_.create_tenant_without_unit(OB_SYS_TENANT_ID, 3, 3))) {
     STORAGE_LOG(WARN, "add sys tenant failed", K(ret));
@@ -333,6 +334,7 @@ int MockObServer::stop()
   if (!is_inited_) {
     STORAGE_LOG(WARN, "ob server not inited");
     ret = OB_NOT_INIT;
+  } else if (FALSE_IT(net_frame_.sql_nio_stop())) {
   } else if (OB_SUCCESS != (ret = net_frame_.stop())) {
     STORAGE_LOG(WARN, "net frame stop error", K(ret));
   } else {
@@ -365,7 +367,7 @@ MockSchemaService *MockObServer::get_schema_service()
   MockSchemaService *ss = NULL;
 
   if (!is_inited_) {
-    STORAGE_LOG(WARN, "ob server not inited");
+    STORAGE_LOG_RET(WARN, OB_NOT_INIT, "ob server not inited");
   } else {
     ss = schema_service_;
   }

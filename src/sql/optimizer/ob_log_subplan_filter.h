@@ -82,10 +82,9 @@ public:
 
   int get_exists_style_exprs(ObIArray<ObRawExpr*> &subquery_exprs);
 
-  int inner_replace_generated_agg_expr(
+  virtual int inner_replace_op_exprs(
       const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs) override;
 
-  virtual int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
   // 从子节点中抽取估算代价相关的信息，存入children_cost_info中
   int get_children_cost_info(double &first_child_refine_card, common::ObIArray<ObBasicCostInfo> &children_cost_info);
   void set_update_set(bool update_set)
@@ -97,20 +96,42 @@ public:
   virtual int compute_sharding_info() override;
   inline DistAlgo get_distributed_algo() { return dist_algo_; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { dist_algo_ = set_dist_algo; }
-  
+
   int add_px_batch_rescan_flag(bool flag) { return enable_px_batch_rescans_.push_back(flag); }
   common::ObIArray<bool> &get_px_batch_rescans() {  return enable_px_batch_rescans_; }
-  
-  inline bool &get_enable_das_batch_rescans() { return enable_das_batch_rescans_; }
+
+  inline bool enable_das_batch_rescans() { return enable_das_batch_rescans_; }
+  inline void set_enable_das_batch_rescans(bool flag) { enable_das_batch_rescans_ = flag; }
   int check_and_set_use_batch();
-  int check_if_match_das_batch_rescan(bool &enable_das_batch_rescans);
   int check_if_match_das_batch_rescan(ObLogicalOperator *root,
                                       bool &enable_das_batch_rescans);
   int set_use_das_batch(ObLogicalOperator* root);
 
   int allocate_startup_expr_post() override;
 
+  int allocate_startup_expr_post(int64_t child_idx) override;
+
   int allocate_subquery_id();
+
+  int replace_nested_subquery_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+
+  common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
+
+  common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
+
+  int get_repart_sharding_info(ObLogicalOperator* child_op,
+                               ObShardingInfo *&strong_sharding,
+                               ObIArray<ObShardingInfo*> &weak_sharding);
+
+  int rebuild_repart_sharding_info(const ObShardingInfo *input_sharding,
+                                   ObIArray<ObRawExpr*> &src_keys,
+                                   ObIArray<ObRawExpr*> &target_keys,
+                                   EqualSets &input_esets,
+                                   ObShardingInfo *&out_sharding);
+
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
@@ -128,6 +149,9 @@ protected:
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
   common::ObSEArray<bool , 8, common::ModulePageAllocator, true> enable_px_batch_rescans_;
+
+  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
+  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
   bool enable_das_batch_rescans_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);

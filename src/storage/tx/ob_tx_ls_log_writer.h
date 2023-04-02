@@ -160,7 +160,7 @@ public:
   void destroy();
 
 public:
-  int submit_start_working_log(const int64_t &leader_epoch, int64_t &log_ts);
+  int submit_start_working_log(const int64_t &leader_epoch, share::SCN &log_ts);
 
 public:
   int on_success(ObTxLSLogCb *cb);
@@ -177,7 +177,7 @@ private:
   int submit_ls_log_(T &ls_log,
                      const enum logservice::ObReplayBarrierType barrier_type,
                      bool need_nonblock,
-                     int64_t &log_ts);
+                     share::SCN &log_ts);
   int get_log_cb_(const ObTxLogType &log_type, ObTxLSLogCb *&cb);
   int return_log_cb_(ObTxLSLogCb *cb);
   bool enough_log_cb_();
@@ -207,7 +207,7 @@ template <typename T>
 int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
                                     const enum logservice::ObReplayBarrierType barrier_type,
                                     bool need_nonblock,
-                                    int64_t &log_ts)
+                                    share::SCN &log_ts)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard cb_guard(cbs_lock_);
@@ -221,7 +221,7 @@ int ObTxLSLogWriter::submit_ls_log_(T &ls_log,
     }
   } else if (nullptr == cb || OB_FAIL(cb->serialize_ls_log(ls_log, replay_hint, barrier_type))) {
     TRANS_LOG(WARN, "[TxLsLogWriter] serialize ls log error", KR(ret), K(T::LOG_TYPE), KP(cb));
-  } else if (OB_FAIL(tx_log_adapter_->submit_log(cb->get_log_buf(), cb->get_log_pos(), 0, cb, need_nonblock))) {
+  } else if (OB_FAIL(tx_log_adapter_->submit_log(cb->get_log_buf(), cb->get_log_pos(), share::SCN::min_scn(), cb, need_nonblock))) {
     return_log_cb_(cb);
     cb = nullptr;
     TRANS_LOG(WARN, "[TxLsLogWriter] submit ls log failed", KR(ret), K(T::LOG_TYPE), K(ls_id_));

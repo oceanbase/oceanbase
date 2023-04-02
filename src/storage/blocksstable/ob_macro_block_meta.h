@@ -19,6 +19,7 @@
 #include "share/schema/ob_table_param.h"
 #include "share/ob_encryption_util.h"
 #include "common/ob_store_format.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 
 namespace oceanbase
@@ -37,6 +38,7 @@ private:
   static const int32_t DATA_BLOCK_META_VAL_VERSION = 1;
 public:
   ObDataBlockMetaVal();
+  explicit ObDataBlockMetaVal(ObIAllocator &allocator);
   ~ObDataBlockMetaVal();
   void reset();
   bool is_valid() const;
@@ -52,8 +54,8 @@ public:
         K_(row_count_delta), K_(max_merged_trans_version), K_(is_encrypted),
         K_(is_deleted), K_(contain_uncommitted_row), K_(compressor_type),
         K_(master_key_id), K_(encrypt_id), K_(encrypt_key), K_(row_store_type),
-        K_(schema_version), K_(snapshot_version),
-        K_(logic_id), K_(macro_id), K_(column_checksums));
+        K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag),
+        K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row));
 public:
   int32_t version_;
   int32_t length_;
@@ -66,14 +68,15 @@ public:
   int64_t data_zsize_;    // sum of size of compressed/encrypted micro blocks
   int64_t original_size_; // sum of size of original micro blocks
   int64_t progressive_merge_round_;
-  int64_t block_offset_;
-  int64_t block_size_;
+  int64_t block_offset_;  // offset of n-1 level index micro blocks
+  int64_t block_size_;    // size of n-1 level index micro blocks
   int64_t row_count_;
   int64_t row_count_delta_;
   int64_t max_merged_trans_version_;
   bool is_encrypted_;
   bool is_deleted_;
   bool contain_uncommitted_row_;
+  bool is_last_row_last_flag_;
   ObCompressorType compressor_type_;
   int64_t master_key_id_;
   int64_t encrypt_id_;
@@ -84,6 +87,9 @@ public:
   ObLogicMacroBlockId logic_id_;
   MacroBlockId macro_id_;
   common::ObSEArray<int64_t, 4> column_checksums_;
+  bool has_string_out_row_;
+  bool all_lob_in_row_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
 };
@@ -92,6 +98,7 @@ class ObDataMacroBlockMeta final
 {
 public:
   ObDataMacroBlockMeta();
+  explicit ObDataMacroBlockMeta(ObIAllocator &allocator);
   ~ObDataMacroBlockMeta();
   int assign(const ObDataMacroBlockMeta &meta);
   int deep_copy(ObDataMacroBlockMeta *&dst, ObIAllocator &allocator) const;
@@ -111,6 +118,10 @@ public:
   {
     return rowkey.assign(end_key_.datums_, end_key_.datum_cnt_);
   }
+  OB_INLINE bool is_last_row_last_flag() const
+  {
+    return val_.is_last_row_last_flag_;
+  }
   OB_INLINE bool is_valid() const
   {
     return val_.is_valid() && end_key_.is_valid();
@@ -119,11 +130,15 @@ public:
   {
     val_.reset();
     end_key_.reset();
+    nested_offset_ = 0;
+    nested_size_ = 0;
   }
   TO_STRING_KV(K_(val), K_(end_key));
 public:
   ObDataBlockMetaVal val_;
   ObDatumRowkey end_key_; // rowkey is primary key
+  int64_t nested_offset_;
+  int64_t nested_size_;
   DISALLOW_COPY_AND_ASSIGN(ObDataMacroBlockMeta);
 };
 

@@ -18,6 +18,7 @@
 #include "lib/task/ob_timer.h"
 #include "lib/list/ob_list.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "sql/monitor/ob_exec_stat.h"
 
 
 namespace oceanbase
@@ -76,15 +77,15 @@ public:
   int add_list(EvolutionTaskResult& result);
   int check_baseline_exists(ObSpmCacheCtx& spm_ctx,
                             const uint64_t plan_hash,
-                            const bool cache_only,
-                            bool& is_exists);
+                            bool& is_exists,
+                            bool& need_add_baseline);
   int get_best_baseline(ObSpmCacheCtx& spm_ctx,
                         ObCacheObjGuard& obj_guard);
   int add_baseline(ObSpmCacheCtx& spm_ctx,
                    ObPlanCacheCtx& pc_ctx,
                    ObPhysicalPlan* plan);
   int update_plan_baseline_statistic(EvolutionTaskResult& result);
-  int accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx);
+  int accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, const ObAuditRecordData &audit_record);
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
   int sync_baseline_from_inner_table();
   int sync_baseline_from_server();
@@ -103,13 +104,14 @@ public:
                          int64_t &baseline_affected);
   int load_baseline(ObBaselineKey &key, ObPhysicalPlan* plan, const bool fixed, const bool enabled);
   int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
+  int evict_plan_baseline(ObSpmCacheCtx& spm_ctx);
+  int check_evolution_task();
 private:
   int init(uint64_t tenant_id);
   int init_mem_context(uint64_t tenant_id);
 private:
   lib::MemoryContext mem_context_;
   common::ObIAllocator* inner_allocator_;
-  ObPlanCache* lib_cache_;
   ObPlanBaselineSqlService sql_service_;
   ObPlanBaselineRefreshTask refresh_task_;
   bool inited_;

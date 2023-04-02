@@ -41,10 +41,10 @@ public:
   { return access_exprs_; }
   inline common::ObIArray<ObRawExpr *> &get_access_exprs()
   { return access_exprs_; }
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  int get_temp_table_plan(ObLogicalOperator *& insert_op);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableAccess);
 

@@ -124,9 +124,8 @@ int ObInformationParametersTable::fill_row_cells(const ObRoutineInfo *routine_in
           break;
         }
         case (CHARACTER_OCTET_LENGTH): {
-          if((common::ObStringTC == param_type.get_type_class()
-             && param_type.get_charset_type() != CHARSET_ANY)
-             || common::ObTextTC == param_type.get_type_class()) {
+          if((common::ObStringTC == param_type.get_type_class() || common::ObTextTC == param_type.get_type_class())
+             && param_type.get_charset_type() != CHARSET_ANY) {
             ObCollationType coll = param_type.get_collation_type();
             int64_t mbmaxlen = 0;
             if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(coll, mbmaxlen))) {

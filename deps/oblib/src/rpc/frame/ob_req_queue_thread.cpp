@@ -48,7 +48,7 @@ ObReqQueue::~ObReqQueue()
 void ObReqQueue::set_qhandler(ObiReqQHandler *qhandler)
 {
   if (OB_ISNULL(qhandler)) {
-    LOG_ERROR("invalid argument", K(qhandler));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid argument", K(qhandler));
   }
   qhandler_ = qhandler;
 }
@@ -102,8 +102,14 @@ int ObReqQueue::process_task(void *task)
         } else {
           ObCurTraceId::set(trace_id);
         }
-        if (OB_LOG_LEVEL_NONE != packet.get_log_level()) {
-          ObThreadLogLevelUtils::init(packet.get_log_level());
+        // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
+        if (OB_LOGGER.is_info_as_wdiag()) {
+          ObThreadLogLevelUtils::clear();
+        } else {
+          int8_t log_level = packet.get_log_level();
+          if (OB_LOG_LEVEL_NONE != log_level) {
+            ObThreadLogLevelUtils::init(log_level);
+          }
         }
       } else {
         // mysql command request
@@ -142,7 +148,7 @@ void ObReqQueue::loop()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(qhandler_));
   } else if (OB_FAIL(qhandler_->onThreadCreated(nullptr))) {
-    LOG_ERROR("do thread craeted fail, thread will exit", K(ret));
+    LOG_ERROR("do thread created fail, thread will exit", K(ret));
   } else {
     // The main loop threads process tasks.
     while (!Thread::current().has_set_stop()) {

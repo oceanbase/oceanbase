@@ -39,6 +39,10 @@ ObTableIterParam::ObTableIterParam()
       is_same_schema_column_(false),
       vectorized_enabled_(false),
       has_virtual_columns_(false),
+      has_lob_column_out_(false),
+      is_for_foreign_check_(false),
+      limit_prefetch_(false),
+      ss_rowkey_prefix_cnt_(0),
       pd_storage_flag_(0)
 {
 }
@@ -62,8 +66,12 @@ void ObTableIterParam::reset()
   is_same_schema_column_ = false;
   pd_storage_flag_ = 0;
   pushdown_filter_ = nullptr;
+  ss_rowkey_prefix_cnt_ = 0;
   vectorized_enabled_ = false;
   has_virtual_columns_ = false;
+  has_lob_column_out_ = false;
+  is_for_foreign_check_ = false;
+  limit_prefetch_ = false;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -90,18 +98,17 @@ int ObTableIterParam::check_read_info_valid()
   return ret;
 }
 
-int ObTableIterParam::has_lob_column_out(const bool is_get, bool &has_lob_column) const
+int ObTableIterParam::refresh_lob_column_out_status()
 {
   int ret = OB_SUCCESS;
-  const ObTableReadInfo *read_info = nullptr;
-  has_lob_column = false;
-  if (OB_ISNULL(read_info = get_read_info(is_get))) {
+  has_lob_column_out_ = false;
+  if (OB_ISNULL(read_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null read info", K(ret));
   } else {
-    const ObColDescIArray &out_cols = read_info->get_columns_desc();
-    for (int64_t i = 0; !has_lob_column && i < out_cols.count(); i++) {
-      has_lob_column = (out_cols.at(i).col_type_.is_lob_v2());
+    const ObColDescIArray &out_cols = read_info_->get_columns_desc();
+    for (int64_t i = 0; !has_lob_column_out_ && i < out_cols.count(); i++) {
+      has_lob_column_out_ = (is_lob_storage(out_cols.at(i).col_type_.get_type()));
     }
   }
   return ret;
@@ -110,11 +117,8 @@ int ObTableIterParam::has_lob_column_out(const bool is_get, bool &has_lob_column
 bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) const
 {
   bool bret = is_x86() && query_flag.is_use_fuse_row_cache() && !query_flag.is_read_latest() &&
-      nullptr != full_read_info_ && !has_virtual_columns_ && !need_scn_ && is_same_schema_column_;
-  const ObColDescIArray &col_descs = full_read_info_->get_columns_desc();
-  for (int64_t i = 0; bret && i < col_descs.count(); i++) {
-    bret = !(col_descs.at(i).col_type_.is_lob_v2());
-  }
+      nullptr != full_read_info_ && !need_scn_ && is_same_schema_column_
+       && !has_virtual_columns_ && !has_lob_column_out_;
   return bret;
 }
 
@@ -133,7 +137,11 @@ DEF_TO_STRING(ObTableIterParam)
        K_(is_same_schema_column),
        K_(pd_storage_flag),
        K_(vectorized_enabled),
-       K_(has_virtual_columns));
+       K_(has_virtual_columns),
+       K_(has_lob_column_out),
+       K_(is_for_foreign_check),
+       K_(limit_prefetch),
+       K_(ss_rowkey_prefix_cnt));
   J_OBJ_END();
   return pos;
 }
@@ -190,6 +198,7 @@ int ObTableAccessParam::init(
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.need_scn_ = scan_param.need_scn_;
+    iter_param_.is_for_foreign_check_ = scan_param.is_for_foreign_check_;
     padding_cols_ = &table_param.get_pad_col_projector();
     projector_size_ = scan_param.projector_size_;
 
@@ -207,8 +216,10 @@ int ObTableAccessParam::init(
 
     iter_param_.pd_storage_flag_ = scan_param.pd_storage_flag_;
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
-     //disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
-    if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_)) {
+     // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
+     // disable blockscan if use index skip scan as no large range to scan
+    if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_ ||
+        scan_param.use_index_skip_scan())) {
       iter_param_.disable_blockscan();
 
     }
@@ -218,14 +229,40 @@ int ObTableAccessParam::init(
     iter_param_.has_virtual_columns_ = table_param.has_virtual_column();
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
     iter_param_.vectorized_enabled_ = nullptr != op_ && op_->is_vectorized();
+    iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
 
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
       STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
+    } else if (scan_param.use_index_skip_scan() &&
+        OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
+      STORAGE_LOG(WARN, "Failed to get prefix for skip scan", K(ret));
     } else {
       is_inited_ = true;
     }
   }
 
+  return ret;
+}
+
+int ObTableAccessParam::get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param)
+{
+  int ret = OB_SUCCESS;
+  const int64_t key_range_count = scan_param.key_ranges_.count();
+  const int64_t skip_range_count = scan_param.ss_key_ranges_.count();
+  if (OB_UNLIKELY(key_range_count != skip_range_count)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(key_range_count), K(skip_range_count));
+  } else {
+    const int64_t prefix = iter_param.get_schema_rowkey_count() - scan_param.ss_key_ranges_.at(0).start_key_.length();
+    if (OB_UNLIKELY(prefix <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid argument", K(ret), K(prefix), K(scan_param.key_ranges_), K(scan_param.ss_key_ranges_));
+    } else {
+      iter_param.ss_rowkey_prefix_cnt_ = prefix;
+    }
+  }
   return ret;
 }
 
@@ -246,7 +283,13 @@ int ObTableAccessParam::init_merge_param(
     iter_param_.is_multi_version_minor_merge_ = is_multi_version_minor_merge;
     iter_param_.read_info_ = &read_info;
     iter_param_.full_read_info_ = &read_info;
-    is_inited_ = true;
+    if (OB_FAIL(iter_param_.check_read_info_valid())) {
+      STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -278,6 +321,8 @@ int ObTableAccessParam::init_dml_access_param(
     }
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
       STORAGE_LOG(WARN, "Failed to check read info valdie", K(ret), K(iter_param_));
+    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+      STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else {
       is_inited_ = true;
     }

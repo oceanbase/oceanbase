@@ -40,6 +40,8 @@
 #include "observer/ob_server_struct.h"
 #include "common/storage/ob_sequence.h"
 #include "ob_tx_elr_util.h"
+#include "ob_tx_free_route.h"
+#include "ob_tx_free_route_msg.h"
 
 namespace oceanbase
 {
@@ -165,10 +167,10 @@ public:
   virtual void handle(void *task) override;
 public:
   int check_trans_partition_leader_unsafe(const share::ObLSID &ls_id, bool &is_leader);
-  int get_weak_read_snapshot(const uint64_t tenant_id, int64_t &snapshot_version);
+  int get_weak_read_snapshot(const uint64_t tenant_id, share::SCN &snapshot_version);
   int calculate_trans_cost(const ObTransID &tid, uint64_t &cost);
-  int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, int64_t &min_prepare_version);
-  int get_min_undecided_log_ts(const share::ObLSID &ls_id, int64_t &log_ts);
+  int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, share::SCN &min_prepare_version);
+  int get_min_undecided_log_ts(const share::ObLSID &ls_id, share::SCN &log_ts);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();
@@ -207,7 +209,7 @@ private:
 private:
   int handle_redo_sync_task_(ObDupTableRedoSyncTask *task, bool &need_release_task);
   int handle_dup_pre_commit_task_(ObPreCommitTask *task, bool &need_release_task);
-  int get_gts_(int64_t &snapshot_version,
+  int get_gts_(share::SCN &snapshot_version,
       MonotonicTs &receive_gts_ts,
       const int64_t trans_expired_time,
       const int64_t stmt_expired_time,
@@ -221,8 +223,10 @@ public:
                     ObITxCallback *endTransCb,
                     const bool is_rollback,
                     const int64_t expire_ts);
-  int get_max_commit_version(int64_t &commit_version) const;
+  int get_max_commit_version(share::SCN &commit_version) const;
+  int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
   #include "ob_trans_service_v4.h"
+  #include "ob_tx_free_route_api.h"
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue

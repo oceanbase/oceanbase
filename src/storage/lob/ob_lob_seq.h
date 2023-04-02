@@ -37,8 +37,13 @@ public:
   void set_seq_id(ObString& seq_id);
   void set_allocator(ObIAllocator* allocator);
   int get_next_seq_id(ObString& seq_id);
+  int get_next_seq_id(ObString& seq_id, ObLobSeqId &end);
   void get_seq_id(ObString& seq_id);
+  int compare(ObLobSeqId &other);
   void reset();
+  static char* store32be(char *ptr, uint32_t val);
+  static uint32_t load32be(const char *ptr);
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   int init_digits();
   int init_seq_buf();
@@ -76,7 +81,7 @@ public:
   static const uint32_t LOB_SEQ_DEFAULT_SEQ_BUF_LEN = 1024 * 8;
   static const uint32_t LOB_SEQ_ID_MIN = 256;
   static const uint32_t LOB_SEQ_STEP_LEN = 256;
-
+  static const uint32_t LOB_SEQ_STEP_MAX = UINT32_MAX;//65535;
 };
 
 } // storage

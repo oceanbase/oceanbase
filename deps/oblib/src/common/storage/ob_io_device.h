@@ -108,7 +108,7 @@ public:
     free_iocbs_.destroy();
     if (OB_NOT_NULL(first_iocb_)) {
       if (OB_ISNULL(allocator_)) {
-        STORAGE_LOG(ERROR, "allocator is nullptr!!!", K_(is_inited), KP_(allocator), KP_(first_iocb));
+        STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "allocator is nullptr!!!", K_(is_inited), KP_(allocator), KP_(first_iocb));
       } else {
         allocator_->free(first_iocb_);
       }
@@ -147,7 +147,7 @@ public:
       free_iocbs_.push(ptr);
     } else {
       if (OB_ISNULL(allocator_)) {
-        STORAGE_LOG(ERROR, "allocator is nullptr!!!", K_(is_inited), KP_(allocator), KP_(first_iocb), KP(ptr));
+        STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "allocator is nullptr!!!", K_(is_inited), KP_(allocator), KP_(first_iocb), KP(ptr));
       } else {
         allocator_->free(ptr);
       }

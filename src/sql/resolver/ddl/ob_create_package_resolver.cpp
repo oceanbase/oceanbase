@@ -153,9 +153,13 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
           } else if (OB_SYS_TENANT_ID == session_info_->get_effective_tenant_id()) {
             // 系统租户在创建系统包, 环境变量使用Oracle租户默认的环境变量
             // sql_mode = "PIPES_AS_CONCAT,STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH"
-            if (OB_FAIL(package_info.set_exec_env(ObString("2151677954,45,46,46,")))) {
-              LOG_WARN("failed to set system package exec env",
-                        K(ret), K(session_info_->get_effective_tenant_id()), K(package_info));
+            if (common::ORACLE_MODE == compa_mode) {
+              if (OB_FAIL(package_info.set_exec_env(ObString("2151677954,45,46,46,")))) {
+                LOG_WARN("failed to set system package exec env",
+                          K(ret), K(session_info_->get_effective_tenant_id()), K(package_info));
+              }
+            } else {
+              OZ (package_info.set_exec_env(ObString("4194304,45,45,45,")));
             }
           } else {
             char buf[OB_MAX_PROC_ENV_LENGTH];
@@ -167,10 +171,9 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
             } else {}
           }
           if (OB_SUCC(ret) && resolve_success) {
-            if (OB_FAIL(resolve_functions_spec(package_info, create_package_arg.public_routine_infos_,
-                                   package_ast.get_routine_table()))) {
-              LOG_WARN("failed to resolve function spec", K(ret));
-            }
+            OZ (resolve_functions_spec(package_info,
+                                       create_package_arg.public_routine_infos_,
+                                       package_ast.get_routine_table()));
           }
           if (OB_SUCC(ret)) {
             ObString dep_attr;
@@ -315,6 +318,8 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
     //process basic info
     routine_info.set_tenant_id(package_info.get_tenant_id());
     routine_info.set_owner_id(package_info.get_owner_id());
+    routine_info.set_database_id(package_info.get_database_id());
+    routine_info.set_package_id(package_info.get_package_id());
     routine_info.set_routine_type(routine_type);
     routine_info.set_subprogram_id(i);
     routine_info.set_exec_env(package_info.get_exec_env());
@@ -334,6 +339,16 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
       }
       if (pl_routine_info->is_pipelined()) {
         routine_info.set_pipelined();
+      }
+      //set data access info
+      if (pl_routine_info->is_no_sql()) {
+        routine_info.set_no_sql();
+      } else if (pl_routine_info->is_reads_sql_data()) {
+        routine_info.set_reads_sql_data();
+      } else if (pl_routine_info->is_modifies_sql_data()) {
+        routine_info.set_modifies_sql_data();
+      } else {
+        routine_info.set_contains_sql();
       }
       // udt type 相关信息设置
       if (pl_routine_info->is_udt_routine()) {
@@ -559,40 +574,31 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
         if (OB_SUCC(ret)) {
           obrpc::ObCreatePackageArg &create_package_arg = stmt->get_create_package_arg();
           ObIArray<ObRoutineInfo> &routine_list = create_package_arg.public_routine_infos_;
-          const ObPLRoutineTable &routine_table = package_body_ast.get_routine_table();
+          const ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
+          const ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
           ObRoutineInfo routine_info;
           const ObPLRoutineInfo *pl_routine_info = NULL;
-          ObArray<const ObRoutineInfo *> routine_infos;
+          ObSEArray<const ObRoutineInfo *, 2> routine_infos;
+          ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
           uint64_t database_id = OB_INVALID_ID;
           OZ (schema_checker_->get_schema_guard()->get_database_id(
             session_info_->get_effective_tenant_id(), db_name, database_id));
           OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
             session_info_->get_effective_tenant_id(), package_spec_info->get_package_id(),
             routine_infos));
-          for (int64_t i = ObPLRoutineTable::NORMAL_ROUTINE_START_IDX;
-               OB_SUCC(ret) && i < package_spec_ast.get_routine_table().get_count(); i++) {
-            const ObRoutineInfo* tmp_routine_info = NULL;
-            bool found = false;
-            OX (routine_info.reset());
-            OZ (routine_table.get_routine_info(i, pl_routine_info));
-            for (int64_t j = 0; OB_SUCC(ret) && j < routine_infos.count(); ++j) {
-              tmp_routine_info = routine_infos.at(j);
-              if (tmp_routine_info->get_subprogram_id() == i) {
-                ObString route_sql = pl_routine_info->get_route_sql();
-                ObString routine_body = pl_routine_info->get_routine_body();
-                CK (false == found);
-                OX (found = true);
-                OX (routine_info = *tmp_routine_info);
-                OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                      *allocator_, session_info_->get_dtc_params(), route_sql));
-                OX (routine_info.set_route_sql(route_sql));
-                OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                      *allocator_, session_info_->get_dtc_params(), routine_body));
-                OX (routine_info.set_routine_body(routine_body));
-              }
+
+          if (OB_SUCC(ret) && routine_infos.empty() && package_spec_ast.get_routine_table().get_count() > 1) {
+            OZ (ObCreatePackageResolver::resolve_functions_spec(
+              *package_spec_info, routine_spec_infos, package_spec_ast.get_routine_table()));
+            CK (routine_spec_infos.count() > 0);
+            for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
+              OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
             }
-            OZ (routine_list.push_back(routine_info));
           }
+
+
+          OZ (update_routine_route_sql(*allocator_, *session_info_, routine_list,
+                                       spec_routine_table, body_routine_table, routine_infos));
         }
         if (OB_FAIL(ret) && ret != OB_ERR_UNEXPECTED && ret != OB_ERR_TOO_LONG_IDENT) {
           LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE BODY",
@@ -643,7 +649,11 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
         if (OB_UNLIKELY(OB_SYS_TENANT_ID == session_info_->get_effective_tenant_id())) {
           // 系统租户在创建系统包, 环境变量使用Oracle租户默认的环境变量
           // sql_mode = "PIPES_AS_CONCAT,STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH"
-          OZ (package_info.set_exec_env(ObString("2151677954,45,46,46,")));
+          if (common::ORACLE_MODE == compa_mode) {
+            OZ (package_info.set_exec_env(ObString("2151677954,45,46,46,")));
+          } else {
+            OZ (package_info.set_exec_env(ObString("4194304,45,45,45,")));
+          }
         } else {
           char buf[OB_MAX_PROC_ENV_LENGTH];
           int64_t pos = 0;
@@ -674,5 +684,41 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
   }
   return ret;
 }
+
+int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocator,
+                                                          const ObSQLSessionInfo &session_info,
+                                                          ObIArray<ObRoutineInfo> &public_routine_list,
+                                                          const ObPLRoutineTable &spec_routine_table,
+                                                          const ObPLRoutineTable &body_routine_table,
+                                                          ObIArray<const ObRoutineInfo *> &routine_infos)
+{
+  int ret = OB_SUCCESS;
+  const ObPLRoutineInfo *pl_routine_info = NULL;
+  ObRoutineInfo routine_info;
+  for (int64_t i = ObPLRoutineTable::NORMAL_ROUTINE_START_IDX;
+       OB_SUCC(ret) && i < spec_routine_table.get_count(); i++) {
+    const ObRoutineInfo* tmp_routine_info = NULL;
+    bool found = false;
+    OX (routine_info.reset());
+    OZ (body_routine_table.get_routine_info(i, pl_routine_info));
+    for (int64_t j = 0; OB_SUCC(ret) && j < routine_infos.count(); ++j) {
+      tmp_routine_info = routine_infos.at(j);
+      if (tmp_routine_info->get_subprogram_id() == i) {
+        ObString route_sql = pl_routine_info->get_route_sql();
+        ObString routine_body = pl_routine_info->get_routine_body();
+        CK (false == found);
+        OX (found = true);
+        OX (routine_info = *tmp_routine_info);
+        OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), route_sql));
+        OX (routine_info.set_route_sql(route_sql));
+        OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));
+        OX (routine_info.set_routine_body(routine_body));
+      }
+    }
+    OZ (public_routine_list.push_back(routine_info));
+  }
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase

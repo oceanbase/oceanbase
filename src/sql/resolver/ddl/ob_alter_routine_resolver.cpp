@@ -20,7 +20,7 @@
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_router.h"
 #include "pl/ob_pl_stmt.h"
-
+#include "pl/parser/parse_stmt_item_type.h"
 namespace oceanbase
 {
 using namespace common;
@@ -80,8 +80,12 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
     //Step4: do real alter resolve
     if (OB_FAIL(ret)) {
     } else if (lib::is_mysql_mode()) {
-      // TODO: alter routien not supported in mysql mode
       OX (alter_routine_stmt->get_routine_arg().routine_info_ = *routine_info);
+      OZ (resolve_clause_list(parse_tree.children_[1], alter_routine_stmt->get_routine_arg()));
+      OX (alter_routine_stmt->get_routine_arg().db_name_ = db_name);
+      OX (alter_routine_stmt->get_routine_arg().routine_info_.set_tenant_id(routine_info->get_tenant_id()));
+      OX (alter_routine_stmt->get_routine_arg().routine_info_.set_routine_id(routine_info->get_routine_id()));
+      OX (alter_routine_stmt->get_routine_arg().is_need_alter_ = true);
     } else {
       CK (OB_NOT_NULL(parse_tree.children_[1]));
       OZ (resolve_impl(
@@ -97,6 +101,34 @@ int ObAlterRoutineResolver::resolve(const ParseNode &parse_tree)
       obrpc::ObCreateRoutineArg &crt_routine_arg = alter_routine_stmt->get_routine_arg();
       ObErrorInfo &error_info = crt_routine_arg.error_info_;
       error_info.collect_error_info(&(crt_routine_arg.routine_info_));
+    }
+  }
+  return ret;
+}
+
+int ObAlterRoutineResolver::resolve_clause_list(
+  const ParseNode *node, obrpc::ObCreateRoutineArg &crt_routine_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(node)) {
+    CK (T_SP_CLAUSE_LIST == node->type_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      const ObStmtNodeTree *child = node->children_[i];
+      if (OB_NOT_NULL(child)) {
+        if (T_SP_INVOKE == child->type_) {
+          if (SP_INVOKER == child->value_) {
+            crt_routine_arg.routine_info_.set_invoker_right();
+          } else if (SP_DEFINER == child->value_) {
+            crt_routine_arg.routine_info_.clear_invoker_right();
+          }
+        } else {
+          // do nothing
+          /* Currently, ob only support SQL SECURITY and LANGUAGE SQL opt clause,
+             other clauses have no real meaning, they are advisory only.
+             MYSQL server does not use them to constrain what kinds of statements
+             a routine is permitted to execute. */
+        }
+      }
     }
   }
   return ret;

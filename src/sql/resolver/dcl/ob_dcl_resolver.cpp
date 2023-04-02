@@ -155,7 +155,7 @@ int ObDCLResolver::check_oracle_password_strength(int64_t tenant_id,
         } else if (OB_FAIL(pool->acquire(session_info_, conn))) {
           LOG_WARN("failed to acquire inner connection", K(ret));
         } else if (OB_FAIL(conn->execute_read(session_info_->get_effective_tenant_id(), 
-              sql.ptr(), res, true, false))) {
+              sql.ptr(), res, true))) {
           LOG_WARN("execute sql failed", K(ret), K(sql));
         } else if (OB_ISNULL(sql_result = res.get_result())) {
           ret = OB_ERR_UNEXPECTED;

@@ -29,6 +29,8 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_table.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -48,7 +50,9 @@ const int64_t BF_MICRO_BLOCK_HEADER_MAGIC = 1015;
 const int64_t SERVER_SUPER_BLOCK_MAGIC = 1018;
 const int64_t LINKED_MACRO_BLOCK_HEADER_MAGIC = 1019;
 
-const int64_t MICRO_BLOCK_HEADER_VERSION = 1;
+const int64_t MICRO_BLOCK_HEADER_VERSION_1 = 1;
+const int64_t MICRO_BLOCK_HEADER_VERSION_2 = 2;
+const int64_t MICRO_BLOCK_HEADER_VERSION = MICRO_BLOCK_HEADER_VERSION_2;
 const int64_t LINKED_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MICRO_BLOCK_HEADER_VERSION = 1;
@@ -72,9 +76,11 @@ struct ObMacroDataSeq
   static const int64_t BIT_PARALLEL_IDX = 11;
   static const int64_t BIT_BLOCK_TYPE = 3;
   static const int64_t BIT_MERGE_TYPE = 2;
-  static const int64_t BIT_RESERVED = 15;
+  static const int64_t BIT_SSTABLE_SEQ = 10;
+  static const int64_t BIT_RESERVED = 5;
   static const int64_t BIT_SIGN = 1;
   static const int64_t MAX_PARALLEL_IDX = (0x1UL << BIT_PARALLEL_IDX) - 1;
+  static const int64_t MAX_SSTABLE_SEQ = (0x1UL << BIT_SSTABLE_SEQ) - 1;
   enum BlockType {
     DATA_BLOCK = 0,
     INDEX_BLOCK = 1,
@@ -104,6 +110,17 @@ struct ObMacroDataSeq
   OB_INLINE bool is_index_block() const { return block_type_ == INDEX_BLOCK; }
   OB_INLINE bool is_meta_block() const { return block_type_ == META_BLOCK; }
   OB_INLINE bool is_major_merge() const { return merge_type_ == MAJOR_MERGE; }
+  OB_INLINE int set_sstable_seq(const int16_t sstable_logic_seq)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(sstable_logic_seq >= MAX_SSTABLE_SEQ || sstable_logic_seq < 0)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "Invalid sstable seq", K(ret), K(sstable_logic_seq));
+    } else {
+      sstable_logic_seq_ = sstable_logic_seq;
+    }
+    return ret;
+  }
   OB_INLINE int set_parallel_degree(const int64_t parallel_idx)
   {
     int ret = common::OB_SUCCESS;
@@ -129,6 +146,7 @@ struct ObMacroDataSeq
       uint64_t parallel_idx_ : BIT_PARALLEL_IDX;
       uint64_t block_type_ : BIT_BLOCK_TYPE;
       uint64_t merge_type_ : BIT_MERGE_TYPE;
+      uint64_t sstable_logic_seq_ : BIT_SSTABLE_SEQ;
       uint64_t reserved_ : BIT_RESERVED;
       uint64_t sign_ : BIT_SIGN;
     };
@@ -283,7 +301,6 @@ struct ObColumnHeader
     HAS_EXTEND_VALUE = 0x2,
     BIT_PACKING = 0x4,
     LAST_VAR_FIELD = 0x8,
-    OUT_ROW = 0x10,
     MAX_ATTRIBUTE,
   };
   static constexpr int8_t OB_COLUMN_HEADER_V1 = 0;
@@ -314,7 +331,6 @@ struct ObColumnHeader
   inline bool has_extend_value() const { return attr_ & HAS_EXTEND_VALUE; }
   inline bool is_bit_packing() const { return attr_ & BIT_PACKING; }
   inline bool is_last_var_field() const { return attr_ & LAST_VAR_FIELD; }
-  inline bool is_out_row() const { return attr_ & OUT_ROW; }
   inline bool is_span_column() const
   {
     return COLUMN_EQUAL == type_ || COLUMN_SUBSTR == type_;
@@ -329,7 +345,6 @@ struct ObColumnHeader
   inline void set_has_extend_value_attr() { attr_ |= HAS_EXTEND_VALUE; }
   inline void set_bit_packing_attr() { attr_ |= BIT_PACKING; }
   inline void set_last_var_field_attr() { attr_ |= LAST_VAR_FIELD; }
-  inline void set_out_row() { attr_ |= OUT_ROW; }
 
   TO_STRING_KV(K_(version), K_(type), K_(attr), K_(obj_type),
       K_(extend_value_offset), K_(offset), K_(length));
@@ -560,7 +575,6 @@ struct ObColumnEncodingCtx
   bool only_raw_encoding_;
   bool is_refed_;
   bool need_sort_;
-  bool is_out_row_column_;
 
   ObColumnEncodingCtx() { reset(); }
   void reset() { memset(this, 0, sizeof(*this)); }
@@ -577,7 +591,7 @@ struct ObColumnEncodingCtx
       K_(extend_value_bit), KP_(col_datums), KP_(ht), KP_(prefix_tree),
       K_(*encoding_ctx), K_(detected_encoders),
       K_(last_prefix_length), K_(max_string_size), K_(only_raw_encoding),
-      K_(is_refed), K_(need_sort), K_(is_out_row_column));
+      K_(is_refed), K_(need_sort));
 };
 
 struct ObBloomFilterMacroBlockHeader
@@ -730,15 +744,15 @@ public:
         && (!is_sparse_row_ || (is_valid_col_idx_type(get_column_idx_type()) && sparse_column_cnt_ >= 0))
         && column_cnt_ > 0;
   }
-  OB_INLINE int64_t get_special_value_array_size(const int64_t serialize_column_cnt) const 
+  OB_INLINE int64_t get_special_value_array_size(const int64_t serialize_column_cnt) const
   {
     return (sizeof(uint8_t) * serialize_column_cnt + 1) >> 1;
   }
-  OB_INLINE int64_t get_total_array_size(const int64_t serialize_column_cnt) const 
+  OB_INLINE int64_t get_total_array_size(const int64_t serialize_column_cnt) const
   {
     // offset_array + special_val_array + column_idx_array[SPARSE]
     return  (get_offset_type_len() + (is_sparse_row_ ? get_column_idx_type_len() : 0)) * serialize_column_cnt
-                + (get_special_value_array_size(serialize_column_cnt)); 
+                + (get_special_value_array_size(serialize_column_cnt));
   }
   OB_INLINE int set_offset_type(const BYTES_LEN column_offset_type)
   {
@@ -1152,13 +1166,13 @@ public:
   ObDDLMacroBlockRedoInfo();
   ~ObDDLMacroBlockRedoInfo() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id), K_(start_log_ts));
+  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id), K_(start_scn));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
   ObDDLMacroBlockType block_type_;
-  common::ObLogicMacroBlockId logic_id_;
-  int64_t start_log_ts_;
+  ObLogicMacroBlockId logic_id_;
+  share::SCN start_scn_;
 };
 
 }//end namespace blocksstable

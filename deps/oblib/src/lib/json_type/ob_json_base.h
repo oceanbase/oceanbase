@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains interface support for the json base abstraction.
  */
 
 #ifndef OCEANBASE_SQL_OB_JSON_BASE
@@ -16,11 +17,14 @@
 #include "ob_json_path.h"
 #include "lib/number/ob_number_v2.h" // for number::ObNumber
 #include "lib/timezone/ob_time_convert.h" // for ObTime
+#include "lib/timezone/ob_timezone_info.h"
 
 namespace oceanbase {
 namespace common {
 
 class ObIJsonBase;
+class ObJsonNode;
+class ObOTimestampData;
 
 enum class ObJsonInType
 {
@@ -30,20 +34,39 @@ enum class ObJsonInType
 
 enum class ObJsonNodeType
 {
-  J_NULL, // 0
+  J_NULL, // 0 oracle & mysql
   J_DECIMAL,
   J_INT,
   J_UINT,
   J_DOUBLE,
-  J_STRING, // 5
-  J_OBJECT,
-  J_ARRAY,
+  J_STRING, // 5 oracle & mysql
+  J_OBJECT, // oracle & mysql
+  J_ARRAY, // oracle & mysql
   J_BOOLEAN,
   J_DATE,
   J_TIME, // 10
   J_DATETIME,
   J_TIMESTAMP,
   J_OPAQUE,
+
+  /* oracle json extended types: type(), scalar type */
+  J_OFLOAT = 15, //  number float
+  J_ODOUBLE = 16,  //  number double
+  J_ODECIMAL = 17, // number number
+  J_OINT = 18, // number number
+  J_OLONG = 19,  // number number
+  J_OBINARY = 20, // binary string
+  J_OOID = 21, // binary string
+  J_ORAWHEX = 22, // binary string
+  J_ORAWID = 23, // binary string
+  J_ORACLEDATE = 24, // date
+  J_ODATE = 25,  // timestamp string
+  J_OTIMESTAMP = 26, // timestamp string
+  J_OTIMESTAMPTZ = 27, // timestamptz string
+  J_ODAYSECOND = 28, // daySecondInterval string
+  J_OYEARMONTH = 29, // yearMonthInterval string
+  J_MAX_TYPE,
+
   J_ERROR = 200 // 14
 };
 
@@ -55,9 +78,22 @@ enum class JsonOpaqueType
   J_OPAQUE_GEOMETRY // not support now
 };
 
+#define FROM_BLOB_FLAG 1
+#define HAS_BLOB_FLAG(flags) ((flags) & 1)
+
 typedef common::ObVector<ObIJsonBase *> ObJsonBaseVector;
 typedef common::ObSortedVector<ObIJsonBase *> ObJsonBaseSortedVector;
 typedef std::pair<ObString, ObIJsonBase*> ObJsonObjPair;
+typedef common::hash::ObHashMap<ObString, ObIJsonBase*> PassingMap;
+
+typedef struct ObSeekParentInfo
+{
+  ObIJsonBase *parent_jb_;
+  JsonPathIterator parent_path_;
+  bool is_subpath_;
+
+  int path_size_;
+} ObSeekParentInfo;
 
 class JsonObjectIterator
 {
@@ -97,6 +133,7 @@ public:
   OB_INLINE bool is_tree() const { return get_internal_type() == ObJsonInType::JSON_TREE; }
   OB_INLINE bool is_bin() const { return get_internal_type() == ObJsonInType::JSON_BIN; }
   OB_INLINE ObIAllocator *get_allocator() { return allocator_; }
+  OB_INLINE void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
 public:
   // Get internal json type(tree or binary).
   //
@@ -200,9 +237,11 @@ public:
   // @param [in] only_need_one Whether only one result or not.
   // @param [out] res          The result of seek.
   // @return Returns OB_SUCCESS on success, error code otherwise.
+  virtual bool is_real_json_null(const ObIJsonBase* ptr) const;
   virtual int seek(const ObJsonPath &path, uint32_t node_cnt, bool is_auto_wrap,
-                   bool only_need_one, ObJsonBaseVector &res) const;
-  
+                   bool only_need_one, ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
+  virtual int seek(ObIAllocator* allocator, const ObJsonPath &path, uint32_t node_cnt, bool is_auto_wrap,
+                   bool only_need_one, bool is_lax, ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
   // Change json to string
   //
   // @param [in, out] j_buf   The dest buf.
@@ -226,7 +265,7 @@ public:
   // @param [in] other  Another ObIJsonBase.
   // @param [out] res   Less than other returns -1, greater than 1, equal returns 0.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  virtual int compare(const ObIJsonBase &other, int &res) const;
+  virtual int compare(const ObIJsonBase &other, int &res, bool is_path = false) const;
 
   // Get depth of current json document.
   //
@@ -265,6 +304,7 @@ public:
   // getter
   virtual bool get_boolean() const = 0;
   virtual double get_double() const = 0;
+  virtual float get_float() const = 0;
   virtual int64_t get_int() const = 0;
   virtual uint64_t get_uint() const = 0;
   virtual const char *get_data() const = 0;
@@ -273,14 +313,19 @@ public:
   virtual ObPrecision get_decimal_precision() const = 0;
   virtual ObScale get_decimal_scale() const = 0;
   virtual int get_obtime(ObTime &t) const = 0;
+  bool is_json_number(ObJsonNodeType json_type) const;
+  bool is_json_scalar(ObJsonNodeType json_type) const;
+  bool is_json_string(ObJsonNodeType json_type) const;
+  bool is_json_date(ObJsonNodeType json_type) const;
 
   // for cast
   int to_int(int64_t &value, bool check_range = false, bool force_convert = false) const;
   int to_uint(uint64_t &value, bool fail_on_negative = false, bool check_range = false) const;
   int to_double(double &value) const;
   int to_number(ObIAllocator *allocator, number::ObNumber &number) const;
-  int to_datetime(int64_t &value) const;
+  int to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t = nullptr) const;
   int to_date(int32_t &value) const;
+  int to_otimestamp(common::ObOTimestampData &value, ObTimeConvertCtx *cvrt_ctx = nullptr) const;
   int to_time(int64_t &value) const;
   int to_bit(uint64_t &value) const;
 protected:
@@ -329,6 +374,12 @@ private:
   // @param [in, out] j_buf      The dest buf.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int print_double(ObJsonBuffer &j_buf) const;
+
+  // Change json float to string.
+  //
+  // @param [in, out] j_buf      The dest buf.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int print_float(ObJsonBuffer &j_buf) const;
 
   // Change json opaque to string.
   //
@@ -387,6 +438,7 @@ private:
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int compare_datetime(ObDTMode dt_mode_a, const ObIJsonBase &other, int &res) const;
 
+  int path_compare_string(const ObString &str_l, const ObString &str_r, int &res) const;
   // Check whether the search is complete.
   //
   // @param [in] res             The result.
@@ -396,14 +448,12 @@ private:
   {
     return (only_need_one && res.size() > 0);
   }
-
   // Store the seeking results of all path statements to hits.
   //
   // @param [in] dup  The answer found in the current path expression, preventing repeated additions.
   // @param [in] res  The result of seeking.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int add_if_missing(ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
-
   // Find in ellipsis.
   //
   // @param [in] cur_node          The current path node.
@@ -427,10 +477,11 @@ private:
   // @param [in,out] dup           The answer found in the current path expression, preventing repeated additions.
   // @param [in,out] res           The result of seeking.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int find_array_range(const JsonPathIterator &next_node, const JsonPathIterator &last_node,
-                       const ObJsonPathBasicNode* path_node, bool is_auto_wrap, bool only_need_one,
-                       ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
-
+  int find_array_range(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                      bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                      ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
   // Find in array cell.
   //
   // @param [in] cur_node          The current path node.
@@ -440,9 +491,11 @@ private:
   // @param [in,out] dup           The answer found in the current path expression, preventing repeated additions.
   // @param [in,out] res           The result of seeking.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int find_array_cell(const JsonPathIterator &next_node, const JsonPathIterator &last_node,
-                      const ObJsonPathBasicNode* path_node, bool is_auto_wrap, bool only_need_one,
-                      ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  int find_array_cell(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                      bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                      ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
 
   // Find in member wildcard.
   //
@@ -471,6 +524,396 @@ private:
                   const ObJsonPathBasicNode *path_node, bool is_auto_wrap, bool only_need_one,
                   ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
 
+  // find in oracle wildcard: ..  (allocator can not be null)
+  //
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  int find_ellipsis(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                    const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                    const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                    bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                    ObJsonBaseVector &res, PassingMap* sql_var) const;
+  // find in oracle array wildcard:[*] (allocator can not be null)
+  //
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  int find_array_wildcard(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                          const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                          const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                          bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                          ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
+  // find in oracle array_range:[index, index1 to index2, last-index3,...]
+  //
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  int find_multi_array_ranges(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                              const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                              const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                              bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                              ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
+  // Find in member wildcard: .*
+  //
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  int find_member_wildcard(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                          const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                          const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                          bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                          ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
+  // Find in member: .keyname
+  //
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  int find_member(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                  const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                  const ObJsonPathBasicNode *path_node, bool is_auto_wrap,
+                  bool only_need_one, bool is_lax, ObJsonBaseSortedVector &dup,
+                  ObJsonBaseVector &res, PassingMap* sql_var = NULL) const;
+  // Find in basic_node, including: .., .*, [*], .keyname, [index, index1 to index2, last-index3,...]
+  //
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  int find_basic_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                        const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                        bool is_auto_wrap, bool only_need_one, bool is_lax,
+                        ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                        PassingMap* sql_var = NULL) const;
+  int find_array_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      bool is_auto_wrap, bool only_need_one, bool is_lax,
+                      ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                      PassingMap* sql_var = NULL) const;
+  // item_function:ceiling(). (allocator can not be null)
+  // legal for number
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_ceiling_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;// According to the path node, recursively query results dow.
+  // item_function:floor(). (allocator can not be null)
+  // legal for number
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_floor_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function:abs(). (allocator can not be null)
+  // legal for number
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_abs_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // numeric_item_method:abs(), floor(), ceiling(). (allocator can not be null)
+  // legal for number
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_numeric_item_method (ObIAllocator* allocator, ObSeekParentInfo &parent_info, const JsonPathIterator &cur_node,
+                                const JsonPathIterator &last_node,const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                                bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function:type(). (allocator can not be null)
+  /* returning J_STRING:
+        "null" for a value of null.
+        "boolean" for a value of true or false.
+        "number" for a number.
+        "string" for a string.
+        "array" for an array.
+        "object" for an object.
+  */
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_type_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function:size(). (allocator can not be null)
+  // returning uint: the number of elements in an array, or 1 for a scalar or an object
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_size_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function:length(). (allocator can not be null)
+  // returning uint: the number of characters in the targeted JSON string, interpreted as a SQL NUMBER.
+  //                 returng J_NULL(is_null_ = false) for other json_type()
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_length_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function:boolean()/booleanOnly(). (allocator can not be null)
+  // for booleanOnly() :return boolean for J_BOOL, returng J_NULL(is_null_ = false) for other json_type()
+  // for boolean() :return boolean for J_BOOL,
+  //                return J_String for J_String
+  //                return J_NULL(is_null_ = false) for other json_type()
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_boolean_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  bool check_legal_ora_date(const ObString date) const;
+  // item_function: date()
+  // legal for J_String
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_date_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function: timestamp()
+  // legal for J_String
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_timestamp_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function: double()
+  // legal for J_Number & J_String, but retun J_NULL when str_to_double failed.
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_double_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function: number()
+  // legal for J_Number & J_String, but retun J_NULL when str_to_number failed.
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_number_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function: number()
+  // legal for JSON Scalar.
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_string_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                      const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                      bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // item_function: upper() & lower()
+  // legal for JSON String.
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @param [in] node_cnt      The count of json node.
+  // @param [in] is_auto_wrap  Whether is auto wrap or not.
+  // @param [in] only_need_one Whether only one result or not.
+  // @param [in] lax_mode      Whether lax_mode or not.
+  // @param [out] res          The result of seek.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_trans_method(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                        const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                        const ObJsonPathFuncNode *path_node, bool is_auto_wrap, bool only_need_one,
+                        bool is_lax, ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
+  // Used to determine whether type conversion is required
+  // is left and right the same josn type, divided into three categories: string, number and date
+  // @param [in] allocator     The json allocator.
+  // @param [in] path          The json path.
+  // @return                   boolean
+  bool is_same_type(ObIJsonBase* left, ObIJsonBase* right) const;
+  int trans_to_json_number(ObIAllocator* allocator, ObString num_str, ObIJsonBase* &origin) const;
+  int trans_to_boolean(ObIAllocator* allocator, ObString num_str, ObIJsonBase* &origin) const;
+  int trans_to_date_timestamp(ObIAllocator* allocator, ObString num_str,
+                              ObIJsonBase* &origin, bool is_date) const;
+  int trans_json_node (ObIAllocator* allocator, ObIJsonBase* &left, ObIJsonBase* &right) const;
+  // Used to compare with multiple right_arg, when left_arg is the results found by the sub_path
+  //
+  // @param [in] allocator       The json allocator.
+  // @param [in] hit             The results found by the sub_path.
+  // @param [in] node_type       The node_type, could be: >, >=, ==...
+  // @param [in] right_arg       The right_arg, could be: scalar or sql_var
+  // @param [in] only_need_one   Whether only one result or not.
+  // @param [in] lax_mode        Whether lax_mode or not.
+  // @param [out] filter_result  The result of compare.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int cmp_to_right_recursively(ObIAllocator* allocator, const ObJsonBaseVector& hit,
+                              const ObJsonPathNodeType node_type,
+                              ObIJsonBase* right_arg, bool& filter_result) const;
+  // Used to compare with multiple left_arg, when right_arg is the results found by the sub_path
+  //
+  // @param [in] allocator       The json allocator.
+  // @param [in] hit             The results found by the sub_path.
+  // @param [in] node_type       The node_type, could be: >, >=, ==...
+  // @param [in] left_arg        The right_arg, could be: scalar or sql_var
+  // @param [in] only_need_one   Whether only one result or not.
+  // @param [in] lax_mode        Whether lax_mode or not.
+  // @param [out] filter_result  The result of compare.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int cmp_to_left_recursively(ObIAllocator* allocator, const ObJsonBaseVector& hit,
+                              const ObJsonPathNodeType node_type,
+                              ObIJsonBase* right_arg, bool& filter_result) const;
+  // Used to compare with the right_arg
+  // when left_arg is the results found by the sub_path and the last path node is func_node
+  //
+  // @param [in] allocator       The json allocator.
+  // @param [in] hit             The results found by the sub_path.
+  // @param [in] node_type       The node_type, could be: >, >=, ==...
+  // @param [in] right_arg       The right_arg, could be: scalar or sql_var
+  // @param [in] only_need_one   Whether only one result or not.
+  // @param [in] lax_mode        Whether lax_mode or not.
+  // @param [out] filter_result  The result of compare.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int cmp_to_right_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
+                            const ObJsonPathNodeType node_type,
+                            const ObJsonPathNodeType last_sub_path_node_type,
+                            ObIJsonBase* right_arg, bool& filter_result) const;
+  // Used to compare with the left_arg
+  // when left_arg is the results found by the sub_path and the last path node is func_node
+  //
+  // @param [in] allocator       The json allocator.
+  // @param [in] hit             The results found by the sub_path.
+  // @param [in] node_type       The node_type, could be: >, >=, ==...
+  // @param [in] right_arg       The right_arg, could be: scalar or sql_var
+  // @param [in] only_need_one   Whether only one result or not.
+  // @param [in] lax_mode        Whether lax_mode or not.
+  // @param [out] filter_result  The result of compare.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int cmp_to_left_strictly(ObIAllocator* allocator, ObIJsonBase* hit,
+                          const ObJsonPathNodeType node_type,
+                          const ObJsonPathNodeType last_sub_path_node_type,
+                          ObIJsonBase* right_arg, bool& filter_result) const;
+  int cmp_based_on_node_type(ObJsonPathNodeType node_type, int res, bool& ret_bool) const;
+  int get_sign_result_right_subpath(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                                    const ObJsonPathFilterNode *path_node, bool& filter_result,
+                                    ObIJsonBase* left_arg, PassingMap* sql_var = NULL) const;
+  int get_sign_result_left_subpath(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                                  const ObJsonPathFilterNode *path_node, bool& filter_result,
+                                  ObIJsonBase* right_arg, PassingMap* sql_var = NULL) const;
+  int get_scalar(ObIAllocator* allocator, const ObJsonPathNodeType type,
+                const ObPathScalar scalar_content, ObIJsonBase* &scalar) const;
+  int compare_scalar(ObIAllocator* allocator, const ObJsonPathFilterNode *path_node,
+                     bool& filter_result) const;
+  int get_sign_comp_result(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                          const ObJsonPathFilterNode *path_node,
+                          bool& filter_result, PassingMap* sql_var = NULL) const;
+  bool has_sub_string(const ObString& left, const ObString& right) const;
+  int str_cmp_autowrap(ObIAllocator* allocator, const ObString& right_str,
+                        const ObJsonPathFilterNode *path_node,
+                        bool autowrap, bool& filter_result) const;
+  int str_comp_predicate(const ObString& left, const ObString& right,
+                         const ObJsonPathFilterNode *path_node, bool& filter_result) const;
+  int get_str_comp_result(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                          const ObJsonPathFilterNode *path_node,
+                          bool& filter_result, PassingMap* sql_var = NULL) const;
+  int find_func_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                       bool is_auto_wrap, bool only_need_one, bool is_lax,
+                      ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const;
   // According to the path node, recursively query results dow.
   //
   // @param [in] cur_node          The current path node.
@@ -480,9 +923,52 @@ private:
   // @param [in,out] dup           The answer found in the current path expression, preventing repeated additions.
   // @param [in,out] res           The result of seeking.
   // @return Returns OB_SUCCESS on success, error code otherwise.
-  int find_child(const JsonPathIterator &cur_node, const JsonPathIterator &last_node, 
-                 bool is_auto_wrap, bool only_need_one, ObJsonBaseSortedVector &dup,
-                 ObJsonBaseVector &res) const;
+  int find_comp_result(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const ObJsonPathFilterNode *path_node,
+                      bool& filter_result, PassingMap* sql_var = NULL) const;
+  int get_half_ans(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                  ObJsonPathNodeType node_type, const ObJsonPathFilterNode *path_node,
+                  bool& filter_result, PassingMap* sql_var) const;
+  // According to the path node, recursively query results dow.
+  //
+  // @param [in] cur_node          The current path node.
+  // @param [in,out] last_node     The last path node of path.
+  // @param [in,out] is_auto_wrap  Is auto wrap or not.
+  // @param [in,out] only_need_one Whether finish when get one result or not.
+  // @param [in,out] dup           The answer found in the current path expression, preventing repeated additions.
+  // @param [in,out] res           The result of seeking.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_cond_result(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                      const ObJsonPathFilterNode *path_node,
+                      bool& filter_result, PassingMap* sql_var = NULL) const;
+  // According to the path node, recursively query results dow.
+  //
+  // @param [in] cur_node          The current path node.
+  // @param [in,out] last_node     The last path node of path.
+  // @param [in,out] is_auto_wrap  Is auto wrap or not.
+  // @param [in,out] only_need_one Whether finish when get one result or not.
+  // @param [in,out] dup           The answer found in the current path expression, preventing repeated additions.
+  // @param [in,out] res           The result of seeking.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_filter_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                        const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                        bool is_auto_wrap, bool only_need_one, bool is_lax,
+                        ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                        PassingMap* sql_var) const;
+  // According to the path node, recursively query results dow.
+  //
+  // @param [in] cur_node          The current path node.
+  // @param [in,out] last_node     The last path node of path.
+  // @param [in,out] is_auto_wrap  Is auto wrap or not.
+  // @param [in,out] only_need_one Whether finish when get one result or not.
+  // @param [in,out] dup           The answer found in the current path expression, preventing repeated additions.
+  // @param [in,out] res           The result of seeking.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  int find_child(ObIAllocator* allocator, ObSeekParentInfo &parent_info,
+                  const JsonPathIterator &cur_node, const JsonPathIterator &last_node,
+                  bool is_auto_wrap, bool only_need_one, bool is_lax,
+                  ObJsonBaseSortedVector &dup, ObJsonBaseVector &res,
+                  PassingMap* sql_var = NULL) const;
 private:
   ObIAllocator *allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObIJsonBase);
@@ -516,10 +1002,12 @@ public:
   virtual ~ObJsonBaseFactory() {};
   static int get_json_base(ObIAllocator *allocator, const ObString &buf,
                            ObJsonInType in_type, ObJsonInType expect_type,
-                           ObIJsonBase *&out);
+                           ObIJsonBase *&out, uint32_t parse_flag = 0);
+  static int get_json_tree(ObIAllocator *allocator, const ObString &str,
+                           ObJsonInType in_type, ObJsonNode *&out, uint32_t parse_flag = 0);
   static int get_json_base(ObIAllocator *allocator, const char *ptr, uint64_t length,
                            ObJsonInType in_type, ObJsonInType expect_type,
-                           ObIJsonBase *&out);
+                           ObIJsonBase *&out, uint32_t parse_flag = 0);
   static int transform(ObIAllocator *allocator, ObIJsonBase *src,
                        ObJsonInType expect_type, ObIJsonBase *&out);
 private:
@@ -531,6 +1019,18 @@ class ObJsonBaseUtil final
 public:
   ObJsonBaseUtil() {}
   virtual ~ObJsonBaseUtil() {}
+
+  // get is valid json datetime type.
+  //
+  // @param [in] jtype The json node type.
+  // @return Returns true on time type, false otherwise.
+  static ObObjType get_time_type(ObJsonNodeType json_type);
+
+  // get is valid json datetime type.
+  //
+  // @param [in] jtype The json node type.
+  // @return Returns true on time type, false otherwise.
+  static bool is_time_type(ObJsonNodeType j_type);
 
   // Get ObDTMode by json datetime type.
   //
@@ -691,6 +1191,8 @@ public:
   // @return Returns OB_SUCCESS on success, error code otherwise.
   static int sort_array_pointer(ObIJsonBase *orig, ObSortedVector<ObIJsonBase *> &vec);
 
+  static int str_up_to_low(ObIAllocator* allocator, const ObString &src, ObString &dst);
+  static int str_low_to_up(ObIAllocator* allocator, const ObString &src, ObString &dst);
   // Binary lookup of an sorted array index.
   //
   // @param [in] vec   The vector of sorted array pointers.

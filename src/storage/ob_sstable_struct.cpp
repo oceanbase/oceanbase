@@ -88,8 +88,12 @@ int64_t ObParalleMergeInfo::to_paral_info_string(char *buf, const int64_t buf_le
     J_OBJ_START();
     for (int i = 0; i < ARRAY_IDX_MAX; ++i) {
       J_OBJ_START();
-      J_KV("type", get_para_info_str(i), "min", info_[i].min_value_, "max", info_[i].max_value_,
-          "avg", info_[i].count_ > 0 ? info_[i].sum_value_ / info_[i].count_ : 0);
+      if (0 == info_[i].count_ && 0 == info_[i].sum_value_) {
+        J_KV("type", get_para_info_str(i), "info", "EMPTY");
+      } else {
+        J_KV("type", get_para_info_str(i), "min", info_[i].min_value_, "max", info_[i].max_value_,
+            "avg", info_[i].count_ > 0 ? info_[i].sum_value_ / info_[i].count_ : 0);
+      }
       J_OBJ_END();
       J_COMMA();
     }
@@ -218,13 +222,5 @@ void ObSSTableMergeInfo::dump_info(const char *msg)
     new_macro_KB_per_s = (macro_block_count_ - multiplexed_macro_block_count_) * 2 * 1024 * 1000 * 1000 / merge_cost_time;
   }
   FLOG_INFO("dump merge info", K(msg), K(output_row_per_s), K(new_macro_KB_per_s), K(*this));
-}
-
-ObMergeChecksumInfo::ObMergeChecksumInfo()
-  : column_checksums_(NULL),
-    increment_column_checksums_(NULL),
-    concurrent_cnt_(0),
-    column_count_(0)
-{
 }
 

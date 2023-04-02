@@ -24,22 +24,17 @@ namespace sql
 
 void ObSelectStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos,
                                ObSelectStmt *stmt,
-                               ObIArray<ObString> *column_list,
-                               bool is_set_subquery)
+                               ObIArray<ObString> *column_list)
 {
   ObDMLStmtPrinter::init(buf, buf_len, pos, stmt);
   column_list_ = column_list;
-  is_set_subquery_ = is_set_subquery;
 }
 
 int ObSelectStmtPrinter::do_print()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited!", K(ret));
-  } else if (OB_ISNULL(stmt_)) {
+  if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else if (!stmt_->is_select_stmt()) {
@@ -53,8 +48,11 @@ int ObSelectStmtPrinter::do_print()
       LOG_WARN("column_list size should be equal select_item size", K(ret),
           K(column_list_->count()), K(select_stmt->get_select_item_size()));
     } else {
-      expr_printer_.init(buf_, buf_len_, pos_, print_params_, param_store_);
-      if (stmt_->is_unpivot_select()) {
+      expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_, param_store_);
+      if ((print_params_.force_print_cte_ || print_params_.print_with_cte_) &&
+           OB_FAIL(print_cte_define())) {
+        LOG_WARN("failed to print cte", K(ret));
+      } else if (stmt_->is_unpivot_select()) {
         if (OB_FAIL(print_unpivot())) {
           LOG_WARN("fail to print_unpivot",
                    KPC(stmt_->get_transpose_item()), K(ret));
@@ -64,7 +62,6 @@ int ObSelectStmtPrinter::do_print()
       }
     }
   }
-
   return ret;
 }
 
@@ -80,29 +77,24 @@ int ObSelectStmtPrinter::print()
     LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()), K(ret));
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    if (!select_stmt->is_root_stmt() || is_set_subquery_) {
-      DATA_PRINTF("(");
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(print_with())) {
-        LOG_WARN("print with failed");
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (select_stmt->is_set_stmt()) {
-        // union, intersect, except
-        if (OB_FAIL(print_set_op_stmt())) {
-          LOG_WARN("fail to print set_op stmt", K(ret), K(*stmt_));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(print_with())) {
+      LOG_WARN("print with failed");
+    } else if (print_params_.print_with_cte_ &&
+               OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
+    } else if (select_stmt->is_set_stmt()) {
+      if (select_stmt->is_recursive_union() &&
+          !print_params_.print_origin_stmt_) {
+        // for dblink, print a embeded recursive union query block
+        if (OB_FAIL(print_recursive_union_stmt())) {
+          LOG_WARN("failed to print recursive union stmt", K(ret));
         }
-      } else if (OB_FAIL(print_basic_stmt())) {
-        LOG_WARN("fail to print basic stmt", K(ret), K(*stmt_));
+      } else if (OB_FAIL(print_set_op_stmt())) {
+        LOG_WARN("fail to print set_op stmt", K(ret), K(*stmt_));
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (!select_stmt->is_root_stmt() || is_set_subquery_) {
-        DATA_PRINTF(")");
-      }
+    } else if (OB_FAIL(print_basic_stmt())) {
+      LOG_WARN("fail to print basic stmt", K(ret), K(*stmt_));
     }
   }
 
@@ -126,8 +118,9 @@ int ObSelectStmtPrinter::print_unpivot()
              K(stmt_->get_table_items().count()), K(ret));
   } else {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    if (!select_stmt->is_root_stmt()) {
-      DATA_PRINTF("(");
+
+    if (print_params_.print_with_cte_ && OB_FAIL(print_cte_define())) {
+      LOG_WARN("failed to print cte", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -216,7 +209,7 @@ int ObSelectStmtPrinter::print_unpivot()
                 ObRawExpr *expr = in_pair.exprs_.at(0);
                 int64_t pos = 0;
                 ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                              stmt_->get_query_ctx()->get_timezone_info());
+                                              schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
                 if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                   LOG_WARN("print expr definition failed", KPC(expr), K(ret));
                 } else {
@@ -228,7 +221,7 @@ int ObSelectStmtPrinter::print_unpivot()
                   ObRawExpr *expr = in_pair.exprs_.at(j);
                   int64_t pos = 0;
                   ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
-                                                stmt_->get_query_ctx()->get_timezone_info());
+                                                schema_guard_, stmt_->get_query_ctx()->get_timezone_info());
                   if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
                     LOG_WARN("print expr definition failed", KPC(expr), K(ret));
                   } else {
@@ -251,12 +244,6 @@ int ObSelectStmtPrinter::print_unpivot()
     }
 
     DATA_PRINTF(" )");
-
-    if (OB_SUCC(ret)) {
-      if (!select_stmt->is_root_stmt()) {
-        DATA_PRINTF(")");
-      }
-    }
   }
 
   return ret;
@@ -271,8 +258,8 @@ int ObSelectStmtPrinter::print_set_op_stmt()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()), K(ret));
   } else {
-    // todo: 目前 union 展平后无法保证与原始 sql 相同
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
+    // todo: 目前 union 展平后无法保证与原始 sql 相同
     ObSEArray<ObSelectStmt*, 2> child_stmts;
     if (!select_stmt->is_set_stmt() || 2 > select_stmt->get_set_query().count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -287,13 +274,22 @@ int ObSelectStmtPrinter::print_set_op_stmt()
       if (select_stmt->get_children_swapped()) {
         std::swap(child_stmts.at(0), child_stmts.at(1));
       }
-      bool is_set_subquery = true;
-      ObSelectStmtPrinter stmt_printer(buf_, buf_len_, pos_, child_stmts.at(0), print_params_,
-                                       column_list_, is_set_subquery);
+      DATA_PRINTF("(");
+      ObSelectStmtPrinter stmt_printer(buf_,
+                                       buf_len_,
+                                       pos_,
+                                       child_stmts.at(0),
+                                       schema_guard_,
+                                       print_params_,
+                                       /*force_col_alias*/true);
+      stmt_printer.set_column_list(column_list_);
+      stmt_printer.disable_print_cte();
       ObString set_op_str = ObString::make_string(
                                 ObSelectStmt::set_operator_str(select_stmt->get_set_op()));
       if (OB_FAIL(stmt_printer.do_print())) {
         LOG_WARN("fail to print left stmt", K(ret), K(*child_stmts.at(0)));
+      } else {
+        DATA_PRINTF(")");
       }
       for (int64_t i = 1; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
         DATA_PRINTF(" %.*s ", LEN_AND_PTR(set_op_str)); // print set_op
@@ -305,9 +301,12 @@ int ObSelectStmtPrinter::print_set_op_stmt()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child_stmt should not be NULL", K(ret));
         } else {
-          stmt_printer.init(buf_, buf_len_, pos_, child_stmts.at(i), column_list_, is_set_subquery);
+          DATA_PRINTF("(");
+          stmt_printer.init(buf_, buf_len_, pos_, child_stmts.at(i), column_list_);
           if (OB_FAIL(stmt_printer.do_print())) {
             LOG_WARN("fail to print child stmt", K(ret));
+          } else {
+            DATA_PRINTF(")");
           }
         }
       }
@@ -323,7 +322,45 @@ int ObSelectStmtPrinter::print_set_op_stmt()
       }
     }
   }
+  return ret;
+}
 
+int ObSelectStmtPrinter::print_recursive_union_stmt()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ should not be NULL", K(ret));
+  } else if (!stmt_->is_select_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()), K(ret));
+  } else {
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
+    TableItem *table = NULL;
+    if (OB_FAIL(find_recursive_cte_table(select_stmt, table))) {
+      LOG_WARN("failed to find recursive cte table", K(ret));
+    } else if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else  {
+      DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE ");
+      DATA_PRINTF("%.*s", LEN_AND_PTR(table->table_name_));
+      if (OB_FAIL(print_cte_define_title(select_stmt))) {
+        LOG_WARN("failed to printf cte title", K(ret));
+      } else {
+        DATA_PRINTF("(");
+        if (OB_FAIL(print_set_op_stmt())) {
+          LOG_WARN("failed to print", K(ret));
+        } else if (OB_FAIL(print_search_and_cycle(select_stmt))) {
+          LOG_WARN("print search and cycle failed", K(ret));
+        } else {
+          DATA_PRINTF(")");
+          DATA_PRINTF(" select * from ");
+          DATA_PRINTF("%.*s", LEN_AND_PTR(table->table_name_));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -388,6 +425,9 @@ int ObSelectStmtPrinter::print_select()
         if (select_stmt->has_distinct()) { // distinct
           DATA_PRINTF("distinct ");
         }
+        if (select_stmt->get_select_item_size() == 0) {
+          DATA_PRINTF("1 ");
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
           const SelectItem &select_item = select_stmt->get_select_item(i);
           if (NULL != select_item.expr_ && select_item.expr_->is_column_ref_expr()) {
@@ -407,28 +447,13 @@ int ObSelectStmtPrinter::print_select()
           // create view(a,b) v as select c1,c2 as alias from t1;
           // 替换后：              select c1 as a, c2 as b from t1
           // 因此需要将最顶层stmt中相应别名表达式的func_name替换成column_name
-          bool need_add_alias = force_col_alias_;
-          if (OB_ISNULL(expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("select item expr is null");
-          } else if (select_item.is_real_alias_) {
-            need_add_alias = true;
-          } else if (select_stmt->is_root_stmt()) {
-            if (print_params_.is_show_create_view_) {
-              need_add_alias = true;
-            }
-          } else if (OB_ISNULL(select_stmt->get_parent_namespace_stmt())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("upper_scope_stmt is NULL", K(ret));
-          } else if (select_stmt->get_parent_namespace_stmt()->is_delete_stmt() ||
-                     select_stmt->get_parent_namespace_stmt()->is_update_stmt() ||
-                     (select_stmt->get_parent_namespace_stmt()->is_root_stmt() &&
-                      is_set_subquery_)) {
-            need_add_alias = true;
-          }
+          bool need_add_alias = need_print_alias() || select_item.is_real_alias_;
           if (OB_SUCC(ret)) {
             ObRawExpr *tmp_expr = expr;
-            if (OB_FAIL(ObRawExprUtils::erase_inner_added_exprs(tmp_expr, expr))) {
+            if (OB_ISNULL(expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr is null", K(ret), K(expr));
+            } else if (OB_FAIL(ObRawExprUtils::erase_inner_added_exprs(tmp_expr, expr))) {
               LOG_WARN("erase inner cast expr failed", K(ret));
             } else if (OB_ISNULL(expr)) {
               ret = OB_ERR_UNEXPECTED;
@@ -453,18 +478,17 @@ int ObSelectStmtPrinter::print_select()
               alias_string = select_item.expr_name_;
             }
             /* oracle模式下，由于部分函数的别名可能出现双引号“”，将导致二次解析出错，因此需要将这些双引号去掉
-            *  https://work.aone.alibaba-inc.com/issue/28227961
+            *
             */
             ObArenaAllocator arena_alloc;
             if (is_oracle_mode && OB_FAIL(remove_double_quotation_for_string(alias_string,
                                                                              arena_alloc))) {
               LOG_WARN("failed to remove double quotation for string", K(ret));
             } else {
-              if (is_oracle_mode) {
-                DATA_PRINTF(" AS \"%.*s\"", LEN_AND_PTR(alias_string));
-              } else {
-                DATA_PRINTF(" AS `%.*s`", LEN_AND_PTR(alias_string));
-              }
+              DATA_PRINTF(" AS ");
+              PRINT_QUOT;
+              DATA_PRINTF("%.*s", LEN_AND_PTR(alias_string));
+              PRINT_QUOT;
             }
           }
           DATA_PRINTF(",");
@@ -623,7 +647,7 @@ int ObSelectStmtPrinter::print_group_by()
         }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs_size; ++i) {
-        if (OB_FAIL(expr_printer_.do_print(group_exprs.at(i), T_GROUP_SCOPE))) {
+        if (OB_FAIL(print_expr_except_const_number(group_exprs.at(i), T_GROUP_SCOPE))) {
           LOG_WARN("fail to print group expr", K(ret));
         }
         DATA_PRINTF(",");
@@ -634,7 +658,7 @@ int ObSelectStmtPrinter::print_group_by()
             DATA_PRINTF(" rollup( ");
           } else { /* do nothing. */ }
           for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs_size; ++i) {
-            if (OB_FAIL(expr_printer_.do_print(rollup_exprs.at(i), T_GROUP_SCOPE))) {
+            if (OB_FAIL(print_expr_except_const_number(rollup_exprs.at(i), T_GROUP_SCOPE))) {
               LOG_WARN("fail to print group expr", K(ret));
             }
             DATA_PRINTF(",");
@@ -744,28 +768,37 @@ int ObSelectStmtPrinter::print_order_by()
         const OrderItem &order_item = select_stmt->get_order_item(i);
         ObRawExpr *order_expr = order_item.expr_;
         int64_t sel_item_pos = -1;
-        for (int64_t j = 0; j < select_stmt->get_select_item_size(); ++j) {
-          if (order_item.expr_ == select_stmt->get_select_item(j).expr_) {
+        if (OB_ISNULL(order_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (T_FUN_SYS_CAST == order_expr->get_expr_type() &&
+                   CM_IS_IMPLICIT_CAST(order_expr->get_extra())) {
+          order_expr = order_expr->get_param_expr(0);
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_select_item_size(); ++j) {
+          ObRawExpr *select_expr = select_stmt->get_select_item(j).expr_;
+          if (OB_ISNULL(select_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (T_FUN_SYS_CAST == select_expr->get_expr_type() &&
+                     CM_IS_IMPLICIT_CAST(select_expr->get_extra())) {
+            select_expr = select_expr->get_param_expr(0);
+          }
+          if (order_expr == select_expr) {
             sel_item_pos = j + 1;
             break;
           }
         }
         if (sel_item_pos != -1) {
-          ObObjParam val;
-          val.set_int(sel_item_pos);
-          val.set_scale(0);
-          val.set_param_meta();
-          expr.set_expr_type(T_INT);
-          expr.set_value(val);
-          order_expr = &expr;
-        }
-        if (OB_SUCC(ret)) {
+          DATA_PRINTF(" %ld", sel_item_pos);
+        } else {
           DATA_PRINTF(" ");
+          if (OB_FAIL(print_expr_except_const_number(order_item.expr_, T_ORDER_SCOPE))) {
+            LOG_WARN("fail to print order by expr", K(ret));
+          }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(expr_printer_.do_print(order_expr, T_ORDER_SCOPE))) {
-            LOG_WARN("fail to print order by expr", K(ret));
-          } else if (lib::is_mysql_mode()) {
+          if (lib::is_mysql_mode()) {
             if (is_descending_direction(order_item.order_type_)) {
               DATA_PRINTF(" desc");
             }
@@ -801,9 +834,7 @@ int ObSelectStmtPrinter::print_for_update()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Not a valid select stmt", K(stmt_->get_stmt_type()), K(ret));
   } else if (is_oracle_mode()) {
-    if (is_generated_table_ || stmt_->get_parent_namespace_stmt() != NULL) {
-      // do nothing
-    } else {
+    if (is_root_stmt()) {
       const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
       bool has_for_update_ = false;
       int64_t wait_time = -1;
@@ -863,193 +894,6 @@ int ObSelectStmtPrinter::print_for_update()
   return ret;
 }
 
-//把cte的定义完整的恢复出来
-int ObSelectStmtPrinter::print_with()
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCC(ret)) {
-    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    const ObIArray<TableItem *> &cte_tables = select_stmt->get_cte_definitions();
-    if (select_stmt->get_cte_definition_size() == 0) {
-      // don't print
-    } else {
-      DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE");
-      //恢复定义，cte先放本stmt中T_WITH_CLAUSE产生的的cte，再放parent放过来的
-      for (int64_t i = 0; i < cte_tables.count() && OB_SUCC(ret); i++) {
-        TableItem* cte_table = cte_tables.at(i);
-        //打印定义
-        if (OB_ISNULL(cte_table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("the cte tableitem can not be null", K(ret));
-        } else if (TableItem::NORMAL_CTE == cte_table->cte_type_
-                  || TableItem::RECURSIVE_CTE == cte_table->cte_type_) {
-          if (OB_ISNULL(cte_table->node_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("the parser node of a cte table can not be null", K(ret));
-          } else if (OB_FAIL(print_cte_define_title(cte_table))) {
-            LOG_WARN("print column name failed", K(ret));
-          } else if (OB_FAIL(print_table(cte_table, true))) {
-            LOG_WARN("print table failed", K(ret));
-          } else if ((TableItem::RECURSIVE_CTE == cte_table->cte_type_)
-                      && OB_FAIL(print_search_and_cycle(cte_table))) {
-            LOG_WARN("print search and cycle failed", K(ret));
-          }
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected cte type", K(ret), K(cte_table->cte_type_));
-        }
-        //打印尾巴
-        if (OB_FAIL(ret)) {
-          //do nothing
-        } else if (i == cte_tables.count() - 1) {
-          DATA_PRINTF(" ");
-        } else {
-          DATA_PRINTF(", ");
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObSelectStmtPrinter::print_cte_define_title(TableItem* cte_table)
-{
-  int ret = OB_SUCCESS;
-  //递归cte一定是定义了别名列表的
-  //打印cte的表一定不要打印库名?
-  //DATA_PRINTF(" %.*s)", LEN_AND_PTR(cte_table->table_name_));
-  //cte在mysql中定义和使用是，不允许类似 db.cte_name这种使用方法，打印的时候我们
-  //不能打印database name
-  ObSelectStmt *sub_select_stmt = NULL;
-  PRINT_TABLE_NAME(cte_table);
-  if (OB_ISNULL(cte_table->node_->children_[1]) && (TableItem::RECURSIVE_CTE == cte_table->cte_type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the recursive cte must have the colume definition", K(ret));
-  } else if (OB_NOT_NULL(cte_table->node_->children_[1])) {
-    DATA_PRINTF("(");
-    sub_select_stmt = cte_table->ref_query_;
-    const ObIArray<SelectItem> &sub_select_items = sub_select_stmt->get_select_items();
-    //打印列
-    for (int64_t i = 0; i < sub_select_items.count() && OB_SUCC(ret); ++i) {
-      if (T_CTE_SEARCH_COLUMN == sub_select_items.at(i).expr_->get_expr_type()
-          || T_CTE_CYCLE_COLUMN == sub_select_items.at(i).expr_->get_expr_type()) {
-        //伪列不需要打印出来
-      } else {
-        DATA_PRINTF("%.*s", LEN_AND_PTR(sub_select_items.at(i).alias_name_));
-        if (i != sub_select_items.count() - 1
-            && T_CTE_SEARCH_COLUMN != sub_select_items.at(i+1).expr_->get_expr_type()
-            && T_CTE_CYCLE_COLUMN != sub_select_items.at(i+1).expr_->get_expr_type()) {
-          DATA_PRINTF(", ");
-        }
-      }
-    }
-    DATA_PRINTF(")");
-  } else {
-    //do nothing, the normal cte without column alias is OK
-  }
-  DATA_PRINTF(" as ");
-  return ret;
-}
-
-int ObSelectStmtPrinter::print_search_and_cycle(TableItem* cte_table)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("PrintSelectStmt");
-  ObSelectStmt *sub_select_stmt = NULL;
-  if (OB_ISNULL(sub_select_stmt = cte_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the cte table must have ref sub query", K(ret));
-  } else if (OB_ISNULL(cte_table->node_->children_[1])) {
-    //优化路径，没有列定义的肯定不是递归cte
-    //do nothing
-  } else {
-    const ObIArray<SelectItem> &sub_select_items = sub_select_stmt->get_select_items();
-    const ObIArray<OrderItem> &search_items = sub_select_stmt->get_search_by_items();
-    if (!search_items.empty()) {
-      DATA_PRINTF(" search ");
-      if (sub_select_stmt->is_breadth_search()) {
-        DATA_PRINTF("breadth first by ");
-      } else {
-        DATA_PRINTF("depth first by ");
-      }
-    }
-
-    for (int64_t i = 0; i < search_items.count() && OB_SUCC(ret); ++i) {
-      allocator.reuse();
-      ObString column_name = ((ObColumnRefRawExpr*)(search_items.at(i).expr_))->get_column_name();
-      CONVERT_CHARSET_FOR_RPINT(allocator, column_name);
-      DATA_PRINTF(" %.*s ", LEN_AND_PTR(column_name));
-      if (lib::is_mysql_mode()) {
-        if (is_descending_direction(search_items.at(i).order_type_)) {
-          DATA_PRINTF("DESC ");
-        }
-      } else if (search_items.at(i).order_type_ == NULLS_FIRST_ASC) {
-        DATA_PRINTF("ASC NULLS FIRST ");
-      } else if (search_items.at(i).order_type_ == NULLS_LAST_ASC) {//use default value
-        /*do nothing*/
-      } else if (search_items.at(i).order_type_ == NULLS_FIRST_DESC) {//use default value
-        DATA_PRINTF("DESC ");
-      } else if (search_items.at(i).order_type_== NULLS_LAST_DESC) {
-        DATA_PRINTF("DESC NULLS LAST ");
-      }
-      if (i != search_items.count() - 1) {
-        DATA_PRINTF(", ");
-      } else {
-        DATA_PRINTF(" ");
-      }
-    }
-
-    for (int64_t i = 0; i < sub_select_items.count() && OB_SUCC(ret); ++i) {
-      if (T_CTE_SEARCH_COLUMN == sub_select_items.at(i).expr_->get_expr_type()) {
-        DATA_PRINTF("set ");
-        DATA_PRINTF(" %.*s ", LEN_AND_PTR(sub_select_items.at(i).alias_name_));
-      }
-    }
-
-    const ObIArray<ColumnItem> &cycle_items = sub_select_stmt->get_cycle_items();
-    if (!cycle_items.empty()) {
-      DATA_PRINTF("cycle ");
-    }
-
-    for (int64_t i = 0; i < cycle_items.count() && OB_SUCC(ret); ++i) {
-      allocator.reuse();
-      ObString column_name = ((ObColumnRefRawExpr*)(cycle_items.at(i).expr_))->get_column_name();
-      CONVERT_CHARSET_FOR_RPINT(allocator, column_name);
-      DATA_PRINTF("%.*s ", LEN_AND_PTR(column_name));
-      if (i != cycle_items.count() - 1) {
-        DATA_PRINTF(", ");
-      } else {
-        DATA_PRINTF(" ");
-      }
-    }
-
-    for (int64_t i = 0; i < sub_select_items.count() && OB_SUCC(ret); ++i) {
-      if (T_CTE_CYCLE_COLUMN == sub_select_items.at(i).expr_->get_expr_type()) {
-        ObRawExpr *v;
-        ObRawExpr *d_v;
-        DATA_PRINTF("set ");
-        DATA_PRINTF("%.*s ", LEN_AND_PTR(sub_select_items.at(i).alias_name_));
-        DATA_PRINTF("to ");
-        ((ObPseudoColumnRawExpr*)(sub_select_items.at(i).expr_))->get_cte_cycle_value(v, d_v);
-        if (OB_ISNULL(v)
-            || OB_ISNULL(d_v)
-            || !v->is_const_raw_expr()
-            || !d_v->is_const_raw_expr()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected const expr", K(ret), KPC(v), KPC(d_v));
-        } else {
-          ObObj non_cycle_vale = ((ObConstRawExpr*)v)->get_value();
-          ObObj cycle_vale = ((ObConstRawExpr*)d_v)->get_value();
-          DATA_PRINTF("'%.*s' ", LEN_AND_PTR(non_cycle_vale.get_string()));
-          DATA_PRINTF("default ");
-          DATA_PRINTF("'%.*s' ", LEN_AND_PTR(cycle_vale.get_string()));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObSelectStmtPrinter::print_with_check_option()
 {
   int ret = OB_SUCCESS;
@@ -1076,6 +920,33 @@ int ObSelectStmtPrinter::print_with_check_option()
       } else if (VIEW_CHECK_OPTION_LOCAL == view_check_option) {
         DATA_PRINTF(" with local check option");
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectStmtPrinter::find_recursive_cte_table(const ObSelectStmt* stmt, TableItem* &table)
+{
+  int ret = OB_SUCCESS;
+  table = NULL;
+  ObSelectStmt* set_query = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (!stmt->is_recursive_union() ||
+             OB_ISNULL(set_query=stmt->get_set_query(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect recurisve cte stmt", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && !table && i < set_query->get_table_items().count(); ++i) {
+    TableItem *table_item = set_query->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (!table_item->is_fake_cte_table()) {
+      //do nothing
+    } else {
+      table = table_item;
     }
   }
   return ret;

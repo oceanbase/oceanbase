@@ -30,16 +30,23 @@
 #define OB_UTF16_BIN        OB_UTF16 "_bin"
 #define OB_UTF16_UNICODE_CI OB_UTF16 "_unicode_ci"
 
+#define OB_LATIN1 "latin1"
+#define OB_LATIN1_SWEDISH_CI OB_LATIN1 "_swedish_ci"
+#define OB_LATIN1_BIN OB_LATIN1 "_bin"
+
 /* wm_wc and wc_mb return codes */
-#define OB_CS_ILSEQ	0     // mb_wc wrong sequence
-#define OB_CS_ILUNI	0     // wc_mb fail to encode Unicode to charset
-// not enough bytes for wc_mb and mb_wc
-#define OB_CS_TOOSMALL  -101
-#define OB_CS_TOOSMALL2 -102
-#define OB_CS_TOOSMALL3 -103
-#define OB_CS_TOOSMALL4 -104
-#define OB_CS_TOOSMALL5 -105
-#define OB_CS_TOOSMALL6 -106
+#define OB_CS_ILSEQ	0     /* Wrong by sequence: wb_wc                   */
+#define OB_CS_ILUNI	0     /* Cannot encode Unicode to charset: wc_mb    */
+#define OB_CS_SUCCESS 0
+#define OB_CS_NUM_OUT_OF_RANGE -3
+#define OB_CS_TOOSMALL  -101  /* Need at least one byte:    wc_mb and mb_wc */
+#define OB_CS_TOOSMALL2 -102  /* Need at least two bytes:   wc_mb and mb_wc */
+#define OB_CS_TOOSMALL3 -103  /* Need at least three bytes: wc_mb and mb_wc */
+/* These following three are currently not really used */
+#define OB_CS_TOOSMALL4 -104  /* Need at least 4 bytes: wc_mb and mb_wc */
+#define OB_CS_TOOSMALL5 -105  /* Need at least 5 bytes: wc_mb and mb_wc */
+#define OB_CS_TOOSMALL6 -106  /* Need at least 6 bytes: wc_mb and mb_wc */
+/* A helper macros for "need at least n bytes" */
 #define OB_CS_TOOSMALLN(n)    (-100-(n))
 
 #define OB_SEQ_INTTAIL	1
@@ -109,6 +116,9 @@
 #define	_MY_B	0100	
 #define	_MY_X	0200	
 
+#define ob_toupper(s, c) (uchar)((s)->to_upper[(uchar)(c)])
+#define ob_tolower(s, c) (uchar)((s)->to_lower[(uchar)(c)])
+#define ob_sort_order(s,c) (uchar)((s)->sort_order[(uchar)(c)])
 
 struct ObCharsetInfo;
 struct ObUCAInfo;
@@ -152,10 +162,10 @@ typedef size_t (*ob_charset_conv_case)(const struct ObCharsetInfo *,
                                        char *, size_t, char *, size_t);
 
 extern ObUCAInfo ob_uca_v400;
-extern uchar uca520_length[4352];
-extern uint16 *uca520_weight[4352];
-extern uchar uca_length[256];
-extern uint16 *uca_weight[256];
+extern uchar ob_uca520_length[4352];
+extern uint16 *ob_uca520_weight[4352];
+extern uchar ob_uca_length[256];
+extern uint16 *ob_uca_weight[256];
 
 typedef struct
 {
@@ -270,7 +280,6 @@ typedef struct ObCollationHandler
   // 获取weight_string结果的长度
   size_t (*strnxfrmlen)(const struct ObCharsetInfo *, size_t);
   // makes a sortkey suitable for memcmp() corresponding to the given variable length string
-  // for more details: https://yuque.antfin.com/guoyun.lgy/gz2cw4/fdsv1b
   size_t  (*strnxfrm_varlen)(const struct ObCharsetInfo*,
                              uchar* dst, size_t dst_len, uint nweights,
                              const uchar *src, size_t srclen,
@@ -352,8 +361,6 @@ struct ObCharsetInfo
 #define	ob_toascii(c)	((c) & 0177)
 #define ob_tocntrl(c)	((c) & 31)
 #define ob_toprint(c)	((c) | 64)
-#define ob_toupper(s,c)	(char) ((s)->to_upper[(uchar) (c)])
-#define ob_tolower(s,c)	(char) ((s)->to_lower[(uchar) (c)])
 #define	ob_isalpha(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & (_MY_U | _MY_L) : 0)
 #define	ob_isupper(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_U : 0)
 #define	ob_islower(s, c)  ((s)->ctype != NULL ? ((s)->ctype+1)[(uchar) (c)] & _MY_L : 0)
@@ -426,7 +433,9 @@ extern ObCharsetInfo ob_charset_gb18030_bin;
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
-
+extern ObCollationHandler ob_collation_binary_handler;
+extern ObCollationHandler ob_collation_8bit_bin_handler;
+extern ObCollationHandler ob_collation_8bit_simple_ci_handler;
 //=============================================================================
 
 void ob_fill_8bit(const ObCharsetInfo *cs, char* to, size_t l, int fill);
@@ -604,7 +613,42 @@ size_t ob_strnxfrmlen_unicode_full_bin(const struct ObCharsetInfo *, size_t);
 
 size_t ob_strnxfrmlen_utf8mb4(const struct ObCharsetInfo *, size_t);
 
+uint ob_mbcharlen_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+                      uint c __attribute__((unused)));
+
+size_t ob_numchars_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+		      const char *b, const char *e);
+
+size_t ob_charpos_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+                       const char *b  __attribute__((unused)),
+                       const char *e  __attribute__((unused)),
+                       size_t pos);
+
+size_t ob_max_bytes_charpos_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+                       const char *b  __attribute__((unused)),
+                       const char *e  __attribute__((unused)),
+                       size_t max_bytes,
+                       size_t *char_len);
+
+size_t ob_lengthsp_binary(const ObCharsetInfo *cs __attribute__((unused)),
+                          const char *ptr __attribute__((unused)),
+                          size_t length);
+
+int ob_mb_ctype_8bit(const ObCharsetInfo *cs, int *ctype,
+                   const uchar *s, const uchar *e);
+
+size_t ob_well_formed_len_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+                               const char *start, const char *end,
+                               size_t nchars, int *error);
 char *strmake(char *, const char *, size_t);
+
+size_t ob_casedn_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+    char* str __attribute__((unused)), size_t srclen __attribute__((unused)),
+    char* dst __attribute__((unused)), size_t dstlen __attribute__((unused)));
+
+size_t ob_caseup_8bit(const ObCharsetInfo *cs __attribute__((unused)),
+    char* str __attribute__((unused)), size_t srclen __attribute__((unused)),
+    char* dst __attribute__((unused)), size_t dstlen __attribute__((unused)));
 
 extern "C" void right_to_die_or_duty_to_live_c();
 

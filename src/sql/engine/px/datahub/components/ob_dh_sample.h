@@ -111,6 +111,8 @@ public:
       const SortDef &sort_def);
   virtual ~ObDynamicSamplePieceMsgCtx() = default;
   int init(const ObIArray<uint64_t> &tablet_ids);
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual void reset_resource() override;
   virtual void destroy();
   int process_piece(const ObDynamicSamplePieceMsg &piece);
   int split_range(
@@ -140,6 +142,7 @@ public:
   ObArray<uint64_t> tablet_ids_;
   int64_t expect_range_count_;
   ObArray<ObChunkDatumStore *> sample_stores_;
+  ObMonitorNode op_monitor_info_;
   ObSortOpImpl sort_impl_;
   ObExecContext &exec_ctx_;
   ObChunkDatumStore::ShadowStoredRow last_store_row_;

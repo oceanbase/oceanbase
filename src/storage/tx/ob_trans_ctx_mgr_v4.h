@@ -89,8 +89,7 @@ typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;
 
 struct ObTxCreateArg
 {
-  ObTxCreateArg(const bool can_elr,
-                const bool for_replay,
+  ObTxCreateArg(const bool for_replay,
                 const uint64_t tenant_id,
                 const ObTransID &trans_id,
                 const share::ObLSID &ls_id,
@@ -100,8 +99,7 @@ struct ObTxCreateArg
                 const common::ObAddr &scheduler,
                 const int64_t trans_expired_time,
                 ObTransService *trans_service)
-      : can_elr_(can_elr),
-        for_replay_(for_replay),
+      : for_replay_(for_replay),
         tenant_id_(tenant_id),
         tx_id_(trans_id),
         ls_id_(ls_id),
@@ -118,11 +116,10 @@ struct ObTxCreateArg
         && trans_expired_time_ > 0
         && NULL != trans_service_;
   }
-  TO_STRING_KV(K_(can_elr), K_(for_replay),
+  TO_STRING_KV(K_(for_replay),
                  K_(tenant_id), K_(tx_id),
                  K_(ls_id), K_(cluster_id), K_(cluster_version),
                  K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service));
-  bool can_elr_;
   bool for_replay_;
   uint64_t tenant_id_;
   ObTransID tx_id_;
@@ -140,7 +137,7 @@ const static char OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID[] = "ObTxCtxMgr";
 typedef common::ObSimpleIterator<ObTransID, OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID, 16> ObTxIDIterator;
 
 // LogStream Transaction Context Manager
-class ObLSTxCtxMgr: public ObLSTxCtxMgrHashValue
+class ObLSTxCtxMgr: public ObTransHashLink<ObLSTxCtxMgr>
 {
 // ut
   friend class unittest::TestTxCtxTable;
@@ -238,7 +235,7 @@ public:
 
   // Get the min prepare version of transaction module of current observer for slave read
   // @param [out] min_prepare_version: MIN(uncommitted tx_ctx's prepare version | ObLSTxCtxMgr)
-  int get_ls_min_uncommit_tx_prepare_version(int64_t &min_prepare_version);
+  int get_ls_min_uncommit_tx_prepare_version(share::SCN &min_prepare_version);
 
   // Check the ObLSTxCtxMgr's status; if it's stopped, the new transaction ctx will not be created;
   // otherwise, the tx_ctx is created normally
@@ -288,7 +285,7 @@ public:
                                 ObTransID &block_tx_id);
 
   // check schduler status for tx gc
-  int check_scheduler_status(int64_t &min_start_scn, MinStartScnStatus &status);
+  int check_scheduler_status(share::SCN &min_start_scn, MinStartScnStatus &status);
 
   // Get this ObLSTxCtxMgr's ls_id_
   const share::ObLSID &get_ls_id() const { return ls_id_; }
@@ -318,6 +315,12 @@ public:
   // @param [in] tx_id
   // @param [in] fd
   int dump_single_tx_data_2_text(const int64_t tx_id, FILE *fd);
+
+  // check this ObLSTxCtxMgr contains the specified ObLSID
+  bool contain(const share::ObLSID &ls_id)
+  {
+    return ls_id_ == ls_id;
+  }
 
 public:
   // Increase this ObLSTxCtxMgr's total_tx_ctx_count
@@ -353,13 +356,13 @@ public:
   static int64_t get_tx_ctx_map_buckets_cnt()
   { return ObLSTxCtxMap::get_buckets_cnt(); }
 
-  // Get the minimum value of rec_log_ts of TxCtx in this ObLSTxCtxMgr;
+  // Get the minimum value of rec_scn of TxCtx in this ObLSTxCtxMgr;
   // This value is used as the starting point of the redo replay required by the ObTxCtxTable file;
-  // @param [out] rec_log_ts MIN(TxCtx's rec_log_ts in ObLSTxCtxMgr)
-  int get_rec_log_ts(int64_t &rec_log_ts);
+  // @param [out] rec_scnMIN(TxCtx's rec_scn in ObLSTxCtxMgr)
+  int get_rec_scn(share::SCN &rec_scn);
 
   // Notify that the ObTxCtxTable corresponding to this ObLSTxCtxMgr has completed the flush operation;
-  // Traverse ObLSTxCtxMgr and set the prev_rec_log_ts of each ObTxCtx to OB_INVALID_TIMESTAMP;
+  // Traverse ObLSTxCtxMgr and set the prev_rec_scn of each ObTxCtx to OB_INVALID_TIMESTAMP;
   int on_tx_ctx_table_flushed();
 
   // Print all transaction information in this ObLSTxCtxMgr to the log;
@@ -381,7 +384,7 @@ public:
   int check_with_tx_data(const ObTransID &tx_id, ObITxDataCheckFunctor &fn);
 
   // TODO Remove
-  int get_min_undecided_log_ts(int64_t &log_ts);
+  int get_min_undecided_scn(share::SCN &scn);
 
   //1. During the minor merge process, the status of uncommitted transactions will be actively
   //   queried; if ObPartTransCtx is released due to Rebuild, and the query cannot be performed,
@@ -426,21 +429,21 @@ public:
   // Replay the start working log entry. Traverse ObLSTxCtxMgr and set the data_complete_ of each
   // ObTxCtx to false. Make all the preceding ACTIVE_INFO log entry invalid.
   // @param [in] log: The start working log entry
-  int replay_start_working_log(const ObTxStartWorkingLog &log, int64_t start_working_ts);
+  int replay_start_working_log(const ObTxStartWorkingLog &log, share::SCN start_working_scn);
 
   // START_WORKING log entry is successfully written to the PALF; According to the current
   // ObLSTxCtxMgr's status, drive ObLSTxCtxMgr to continue to execute the switch_to_leader routine
   // or resume_leader routine;
-  int on_start_working_log_cb_succ(int64_t start_working_ts);
+  int on_start_working_log_cb_succ(share::SCN start_working_scn);
 
   // START_WORKING log entry failed to written to the PALF;
   // Break the switch_to_leader routine or resume_leader routine; switch the ObLSTxCtxMgr's state to F_WORKING
   int on_start_working_log_cb_fail();
 
   // 1.In order to support slave-read, it is necessary to ensure the partial order relationship
-  //   between log_id and log_ts; then before the transaction submits redolog to the PALF,
-  //   The log entry's log id and log ts will be generated by the PALF, and the partial order
-  //   relationship between log_id and log_ts is guaranteed by the PALF;
+  //   between log_id and scn; then before the transaction submits redolog to the PALF,
+  //   The log entry's log id and scn ts will be generated by the PALF, and the partial order
+  //   relationship between log_id and scn is guaranteed by the PALF;
   // 2.So the redolog entry's commit version may be bigger than the GTS version;
   //   In the normal transaction execution process, you need to wait for GTS version >= commit version
   //   before executing the inc the publish_version and responding to the client commit success;
@@ -451,13 +454,13 @@ public:
   //   When start executing swith_to_leader routine, wait_gts_elapse will be called to ensure that
   //   GTS has exceeded this batch_commit_version;
   // @param [in] replay_commit_version : replayed single-ls-tx's log entry commit version;
-  void update_max_replay_commit_version(const int64_t replay_commit_version)
+  void update_max_replay_commit_version(const share::SCN &replay_commit_version)
   {
-    inc_update(&max_replay_commit_version_, replay_commit_version);
+    max_replay_commit_version_.inc_update(replay_commit_version);
   }
 
-  // Iterate all tx ctx in this ls and get the min_start_log_ts
-  int get_min_start_log_ts(int64_t &min_start_log_ts);
+  // Iterate all tx ctx in this ls and get the min_start_scn
+  int get_min_start_scn(share::SCN &min_start_scn);
 
   // Get the trans_service corresponding to this ObLSTxCtxMgr;
   transaction::ObTransService *get_trans_service() { return txs_; }
@@ -471,11 +474,13 @@ public:
   int64_t get_state() { return get_state_(); }
 
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
-  int refresh_aggre_rec_log_ts();
+  int refresh_aggre_rec_scn();
 
   // Update aggre_log_ts without lock, because we canot lock using the order of
   // ObPartTransCtx -> ObLSTxCtxMgr, It will be a deadlock with normal order.
-  int update_aggre_log_ts_wo_lock(int64_t rec_log_ts);
+  int update_aggre_log_ts_wo_lock(share::SCN rec_log_ts);
+
+  int get_max_decided_scn(share::SCN & scn);
 
   TO_STRING_KV(KP(this),
                K_(ls_id),
@@ -484,10 +489,10 @@ public:
                State::state_str(state_),
                K_(total_tx_ctx_count),
                K_(ls_retain_ctx_mgr),
-               K_(aggre_rec_log_ts),
-               K_(prev_aggre_rec_log_ts),
+               K_(aggre_rec_scn),
+               K_(prev_aggre_rec_scn),
                "uref",
-               (!is_inited_ ? -1 : get_uref()));
+               (!is_inited_ ? -1 : get_ref()));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSTxCtxMgr);
 
@@ -507,7 +512,7 @@ private:
   int get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&tx_ctx);
   int submit_start_working_log_();
   int try_wait_gts_and_inc_max_commit_ts_();
-  int64_t get_aggre_rec_log_ts_();
+  share::SCN get_aggre_rec_scn_();
 public:
   static const int64_t MAX_HASH_ITEM_PRINT = 16;
   static const int64_t WAIT_SW_CB_TIMEOUT = 100 * 1000; // 100 ms
@@ -701,7 +706,7 @@ private:
   ObITsMgr *ts_mgr_;
 
   // See the ObLSTxCtxMgr's member function update_max_replay_commit_version
-  int64_t max_replay_commit_version_;
+  share::SCN max_replay_commit_version_;
 
   // Recover log timestamp for aggregated tx ctx. For the purpose of Durability,
   // we need a space to store rec_log_ts for checkpoint[1]. Although tx ctx
@@ -710,8 +715,8 @@ private:
   // remembered while must be released soon, in the ctx_mgr.
   //
   // [1]: It you are interested in rec_log_ts, you can see ARIES paper.
-  int64_t aggre_rec_log_ts_;
-  int64_t prev_aggre_rec_log_ts_;
+  share::SCN aggre_rec_scn_;
+  share::SCN prev_aggre_rec_scn_;
 
   // Online timestamp for ObLSTxCtxMgr
   int64_t online_ts_;
@@ -779,8 +784,8 @@ public:
   }
 };
 
-typedef common::ObLinkHashMap<share::ObLSID, ObLSTxCtxMgr,
-        ObLSTxCtxMgrAlloc, common::RefHandle> ObLSTxCtxMgrMap;
+typedef transaction::ObTransHashMap<share::ObLSID, ObLSTxCtxMgr,
+        ObLSTxCtxMgrAlloc, common::ObQSyncLock> ObLSTxCtxMgrMap;
 
 class ObTxCtxMgr
 {
@@ -885,13 +890,10 @@ public:
   // Get the min prepare version of transaction module of current observer for slave read
   // @param [in] indicates the specified ls;
   // @param [out] min_prepare_version: MIN(uncommitted transaction ctx's prepare version)
-  int get_ls_min_uncommit_tx_prepare_version(const share::ObLSID &ls_id, int64_t &min_prepare_version);
-
-  //int get_min_prepare_version(const ObPartitionKey &partition, const int64_t log_ts, int64_t &min_prepare_version);
-  //int get_min_undecided_log_ts(const share::ObLSID &ls_id, int64_t &log_ts);
+  int get_ls_min_uncommit_tx_prepare_version(const share::ObLSID &ls_id, share::SCN &min_prepare_version);
 
   // TODO
-  int get_min_undecided_log_ts(const share::ObLSID &ls_id, int64_t &log_ts);
+  int get_min_undecided_scn(const share::ObLSID &ls_id, share::SCN &scn);
 
   // Get all ls ID in the observer
   // param [out] ls_id_iter: ObLSIDIterator is Used to return all ls id in the observer,
@@ -942,6 +944,8 @@ public:
 
   // @param [in] ls_id: the specified ls_id
   int check_scheduler_status(share::ObLSID ls_id);
+
+  int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
 
 private:
   int create_ls_(const int64_t tenant_id,

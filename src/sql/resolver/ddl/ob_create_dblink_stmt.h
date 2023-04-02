@@ -32,7 +32,12 @@ public:
   inline int set_cluster_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_cluster_name(name); }
   inline int set_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_tenant_name(name); }
   inline int set_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_user_name(name); }
-  inline int set_password(const common::ObString &pwd) { return create_dblink_arg_.dblink_info_.set_password(pwd); }
+  int set_password(const common::ObString &pwd);
+  inline void set_reverse_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_reverse_host_addr(addr); }
+  inline int set_reverse_cluster_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_cluster_name(name); }
+  inline int set_reverse_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_tenant_name(name); }
+  inline int set_reverse_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_user_name(name); }
+  int set_reverse_password(const common::ObString &pwd);
   inline void set_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_host_addr(addr);; }
   inline int set_conn_string(const common::ObString &str) { return create_dblink_arg_.dblink_info_.set_conn_string(str); }
   inline int set_service_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_service_name(name); }

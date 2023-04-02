@@ -65,11 +65,6 @@ namespace sql
     EXCHANGE_NUMBERING,                                   // numbering exchange out for px
     GEN_SIGNATURE,                                  // generating plan signature
     GEN_LOCATION_CONSTRAINT,                      //generate plan location constraint, used from plan cache
-    EXPLAIN_COLLECT_WIDTH,                     // explain calculate column width
-    EXPLAIN_WRITE_BUFFER,                            // explain write plan table
-    EXPLAIN_WRITE_BUFFER_OUTPUT,             // explain write output and filters
-    EXPLAIN_WRITE_BUFFER_OUTLINE,            // explain write outline
-    EXPLAIN_INDEX_SELECTION_INFO,            // explain index selection info
     EXTRACT_PARAMS_FOR_SUBPLAN,                 // extract params for subplan
 		/**
 		 * alloc granule iterator after all other operation
@@ -89,18 +84,11 @@ namespace sql
     PX_ESTIMATE_SIZE,
     BLOOM_FILTER,
 
-    // dblink
-    ALLOC_LINK,
-    GEN_LINK_STMT,
     ALLOC_STARTUP_EXPR,
-    COPY_PART_EXPR,
-    TRAVERSE_OP_END
-  };
+    ADJUST_SHARED_EXPR,
 
-  struct CopyPartExprCtx {
-    common::ObSEArray<ObRawExpr*, 4> used_part_exprs_;
-    common::ObSEArray<ObRawExpr*, 4> cache_lookup_calc_part_id_exprs_;
-    common::ObSEArray<ObRawExpr*, 4> new_lookup_calc_part_id_exprs_;
+    COLLECT_BATCH_EXEC_PARAM,
+    TRAVERSE_OP_END
   };
 
   struct NumberingCtx
@@ -204,9 +192,10 @@ namespace sql
                            const ObSelectStmt *table_query) const;
     int init_env_info(ObDMLStmt &stmt);
     int get_stmt_max_table_dop(ObDMLStmt &stmt,
-                               int64_t &max_dop);
-    int get_stmt_max_table_parallel_hint(ObDMLStmt &stmt,
-                                         int64_t &max_table_parallel);
+                               int64_t &max_table_dop);
+    int get_stmt_parallel_info(ObDMLStmt *stmt,
+                               int64_t &max_table_dop,
+                               int64_t &max_table_parallel);
     int get_session_parallel_info(ObDMLStmt &stmt,
                                   bool use_pdml,
                                   bool &session_px_enable_parallel,

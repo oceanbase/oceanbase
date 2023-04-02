@@ -67,13 +67,13 @@ public:
   inline uint64_t get_total_payload() const;
   inline uint64_t get_total_used() const;
 
-  void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator, const ObMemAttr &attr);
-  ObTenantCtxAllocator &get_tenant_ctx_allocator() const;
+  void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator);
   void set_max_chunk_cache_cnt(const int cnt)
   { chunk_free_list_.set_max_chunk_cache_cnt(cnt); }
   void reset();
   void set_locker(ISetLocker *locker) { locker_ = locker; }
   int64_t sync_wash(int64_t wash_size=INT64_MAX);
+  bool check_has_unfree();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(BlockSet);
@@ -106,11 +106,13 @@ private:
 
 void BlockSet::lock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->lock();
 }
 
 void BlockSet::unlock()
 {
+  ObDisableDiagnoseGuard diagnose_disable_guard;
   locker_->unlock();
 }
 

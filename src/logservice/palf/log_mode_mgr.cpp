@@ -22,6 +22,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace palf
 {
 
@@ -118,6 +119,18 @@ int LogModeMgr::get_access_mode(AccessMode &access_mode) const
   return ret;
 }
 
+int LogModeMgr::get_mode_version(int64_t &mode_version) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
+  } else {
+    mode_version = ATOMIC_LOAD(reinterpret_cast<const int64_t *>(&applied_mode_meta_.mode_version_));
+  }
+  return ret;
+}
+
 int LogModeMgr::get_access_mode(int64_t &mode_version, AccessMode &access_mode) const
 {
   int ret = OB_SUCCESS;
@@ -131,7 +144,7 @@ int LogModeMgr::get_access_mode(int64_t &mode_version, AccessMode &access_mode) 
   return ret;
 }
 
-int LogModeMgr::get_ref_ts_ns(int64_t &mode_version, int64_t &ref_ts_ns) const
+int LogModeMgr::get_ref_scn(int64_t &mode_version, SCN &ref_scn) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -139,7 +152,7 @@ int LogModeMgr::get_ref_ts_ns(int64_t &mode_version, int64_t &ref_ts_ns) const
     PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
   } else {
     mode_version = applied_mode_meta_.mode_version_;
-    ref_ts_ns = applied_mode_meta_.ref_ts_ns_;
+    ref_scn = applied_mode_meta_.ref_scn_;
   }
   return ret;
 }
@@ -168,6 +181,11 @@ bool LogModeMgr::can_raw_write() const
   return applied_mode_meta_.access_mode_ == AccessMode::RAW_WRITE && can_do_paxos_accept();
 }
 
+bool LogModeMgr::can_receive_log() const
+{
+  return applied_mode_meta_.access_mode_ != AccessMode::FLASHBACK;
+}
+
 // need lock-free
 bool LogModeMgr::is_in_pending_state() const
 {
@@ -178,6 +196,12 @@ bool LogModeMgr::is_in_pending_state() const
 bool LogModeMgr::can_do_paxos_accept() const
 {
   return MODE_PREPARE != state_;
+}
+
+// proected by lock_ in PalfHandleImpl
+bool LogModeMgr::need_skip_log_barrier() const
+{
+  return applied_mode_meta_.access_mode_ == AccessMode::FLASHBACK && can_do_paxos_accept();
 }
 
 int LogModeMgr::can_change_access_mode_(const int64_t mode_version) const
@@ -193,17 +217,18 @@ int LogModeMgr::can_change_access_mode_(const int64_t mode_version) const
   // leader_epoch_ hasn't been updated when state_ is equal to MODE_INIT, so don't check epoch when init
   if ((false == is_leader_active) || (state_ != ModeChangeState::MODE_INIT && is_epoch_changed)) {
     ret = OB_NOT_MASTER;
-    PALF_LOG(WARN, "self is not master, can not change_mode", K(ret), K_(palf_id), K_(self));
+    PALF_LOG(WARN, "self is not master, can not change_mode", K(ret), K_(palf_id), K_(self),
+        K(is_leader_active), K_(state), K(is_epoch_changed));
   } else if (state_ != ModeChangeState::MODE_INIT && (see_newer_mode_meta || see_newer_log)) {
     ret = OB_NOT_MASTER;
-    PALF_LOG(WARN, "ser newer mode_meta/log, cann't change_acces_mode", K(ret), K_(palf_id), K_(self),
+    PALF_LOG(WARN, "see newer mode_meta/log, cann't change_acces_mode", K(ret), K_(palf_id), K_(self),
         K(see_newer_mode_meta), K_(max_majority_accepted_mode_meta), K_(accepted_mode_meta),
         K(see_newer_log), K_(max_majority_accepted_pid), K_(local_max_log_pid),
         K_(max_majority_lsn), K_(local_max_lsn));
   } else if (applied_mode_meta_.mode_version_ != mode_version) {
     // mode_version is the proposal_id of PALF when access_mode was applied
     ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "state don't matches, can not change_mode", K_(palf_id), K_(self),
+    PALF_LOG(WARN, "state don't matches, can not change_mode", K(ret), K_(palf_id), K_(self),
         K(mode_version), "curr_proposal_id", state_mgr_->get_proposal_id(), K_(applied_mode_meta));
   }
   return ret;
@@ -213,12 +238,10 @@ int LogModeMgr::init_change_mode_()
 {
   int ret = OB_SUCCESS;
   int64_t replica_num = 0;
-  if (OB_FAIL(config_mgr_->get_curr_member_list(follower_list_))) {
-    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), K_(palf_id), K_(self));
+  if (OB_FAIL(config_mgr_->get_alive_member_list_with_arb(follower_list_, replica_num))) {
+    PALF_LOG(WARN, "get_alive_member_list_with_arb failed", K(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(follower_list_.remove_server(self_))) {
     PALF_LOG(WARN, "remove_server failed", K(ret), K_(palf_id), K_(self), K_(follower_list));
-  } else if (OB_FAIL(config_mgr_->get_replica_num(replica_num))) {
-    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), K_(palf_id), K_(self));
   } else {
     majority_cnt_ = replica_num / 2 + 1;
     leader_epoch_ = state_mgr_->get_leader_epoch();
@@ -267,7 +290,7 @@ bool LogModeMgr::is_state_changed() const
       }
       default:
       {
-        PALF_LOG(ERROR, "Invalid ModeChangeState", K_(palf_id), K_(self), K_(state));
+        PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Invalid ModeChangeState", K_(palf_id), K_(self), K_(state));
         break;
       }
     }
@@ -285,10 +308,12 @@ bool LogModeMgr::can_finish_change_mode_() const
   bool bool_ret = false;
   LSN last_slide_lsn, committed_end_lsn;
   int64_t unused_id = 0;
-  bool_ret = sw_->is_all_committed_log_slided_out(last_slide_lsn, unused_id, committed_end_lsn);
+  const LSN max_lsn = sw_->get_max_lsn();
+  bool_ret = sw_->is_all_committed_log_slided_out(last_slide_lsn, unused_id, committed_end_lsn) &&
+      (committed_end_lsn >= max_lsn);
   if (false == bool_ret && palf_reach_time_interval(500 * 1000, wait_committed_log_slide_warn_ts_)) {
     PALF_LOG(INFO, "wait is_all_committed_log_slided_out", K(bool_ret), K(last_slide_lsn),
-        K(committed_end_lsn));
+        K(committed_end_lsn), K(max_lsn));
   }
   return bool_ret;
 }
@@ -324,28 +349,32 @@ void LogModeMgr::reset_status_()
 int LogModeMgr::change_access_mode(
     const int64_t mode_version,
     const AccessMode &access_mode,
-    const int64_t ref_ts_ns)
+    const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (false == is_valid_access_mode(access_mode) ||
-             OB_INVALID_TIMESTAMP == ref_ts_ns ||
+             !ref_scn.is_valid() ||
              INVALID_PROPOSAL_ID == mode_version ||
              mode_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self), K(access_mode),
-        K(ref_ts_ns), K(mode_version));
+        K(ref_scn), K(mode_version));
   } else if (OB_FAIL(can_change_access_mode_(mode_version))) {
     PALF_LOG(WARN, "can_change_access_mode failed", K(ret), K_(palf_id), K_(self));
+  } else if (applied_mode_meta_.access_mode_ == access_mode) {
+    ret = OB_SUCCESS;
+    PALF_LOG(INFO, "don't need change access_mode to self", K_(palf_id), K_(self),
+        K(access_mode), K_(applied_mode_meta));
   } else if (false == can_switch_access_mode_(applied_mode_meta_.access_mode_, access_mode)) {
     ret = OB_STATE_NOT_MATCH;
     PALF_LOG(WARN, "can not switch access_mode", K_(palf_id), K_(self),
         K(access_mode), K_(applied_mode_meta));
   } else {
     const bool is_reconfirm = false;
-    ret = switch_state_(access_mode, ref_ts_ns, is_reconfirm);
+    ret = switch_state_(access_mode, ref_scn, is_reconfirm);
   }
   return ret;
 }
@@ -362,13 +391,14 @@ int LogModeMgr::reconfirm_mode_meta()
         K(ret), K_(palf_id), K_(self));
   } else {
     const bool is_reconfirm = true;
-    ret = switch_state_(AccessMode::INVALID_ACCESS_MODE, OB_INVALID_TIMESTAMP, is_reconfirm);
+    SCN invalid_scn;
+    ret = switch_state_(AccessMode::INVALID_ACCESS_MODE, invalid_scn, is_reconfirm);
   }
   return ret;
 }
 
 int LogModeMgr::switch_state_(const AccessMode &access_mode,
-                              const int64_t ref_ts_ns,
+                              const SCN &ref_scn,
                               const bool is_reconfirm)
 {
   int ret = OB_SUCCESS;
@@ -411,18 +441,37 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
     case (ModeChangeState::MODE_ACCEPT):
     {
       if (is_reach_majority_()) {
+        //TODO(yunlong):check conflict
+
         // not reaches majority until LogModeMeta is been flushed by leader,
         // otherwise next change_access_mode/reconfirm may learn wrong ModeMeta
-        if (false == is_reconfirm && false == can_finish_change_mode_()) {
-        } else if (accepted_mode_meta_.proposal_id_ == new_proposal_id_) {
-          // LogModeMeta takes effect when reaches majority
-          applied_mode_meta_ = accepted_mode_meta_;
-          if (applied_mode_meta_.ref_ts_ns_ != OB_INVALID_TIMESTAMP &&
-              OB_FAIL(sw_->inc_update_log_ts_base(applied_mode_meta_.ref_ts_ns_))) {
-            PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
-                K_(applied_mode_meta));
-          } else {
-            change_done = true;
+        if (accepted_mode_meta_.proposal_id_ == new_proposal_id_) {
+          // Scenario: There are 3 replicas A, B and C, they are all flashbacked, in this time,
+          // user change_access_mode to APPEND.
+          // Problem: if A restarts after being flashbacked, A's committed_end_lsn will be smaller
+          // than max_flushed_end_lsn even if log in max_flushed_end_lsn has been committed (The
+          // committed_end_lsn recorded in last LogEntryHeader is smaller than it's end_lsn).
+          // Then A was elected to be leader and change access mode to APPEND, if we don't advance
+          // committed_end_lsn of A, some logs which should be readable becomes unreadable in APPEND MODE.
+          // Reason: so we advance committed_end_lsn after switching to APPEND to make last logs readable.
+          if (false == is_reconfirm &&
+              AccessMode::FLASHBACK == applied_mode_meta_.access_mode_ &&
+              AccessMode::APPEND == accepted_mode_meta_.access_mode_) {
+            LSN max_flushed_end_lsn;
+            (void) sw_->get_max_flushed_end_lsn(max_flushed_end_lsn);
+            (void) sw_->try_advance_committed_end_lsn(max_flushed_end_lsn);
+          }
+          // wait all committed log slide out
+          change_done = (true == is_reconfirm)? true: can_finish_change_mode_();
+          if (change_done) {
+            applied_mode_meta_ = accepted_mode_meta_;
+            const bool is_applied_mode_meta = true;
+            (void) submit_accept_req_(new_proposal_id_, is_applied_mode_meta, applied_mode_meta_);
+            if (applied_mode_meta_.ref_scn_.is_valid() && AccessMode::APPEND == applied_mode_meta_.access_mode_ &&
+                OB_FAIL(sw_->inc_update_scn_base(applied_mode_meta_.ref_scn_))) {
+              PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
+                  K_(applied_mode_meta));
+            }
           }
         } else {
           PALF_LOG(INFO, "mode_meta hasn't been flushed in leader", K(ret), K_(palf_id), K_(self),
@@ -432,10 +481,11 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
         const int64_t mode_version = new_proposal_id_;
         LogModeMeta mode_meta = max_majority_accepted_mode_meta_;
         mode_meta.proposal_id_ = new_proposal_id_;
-        if (false == is_reconfirm && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, ref_ts_ns))) {
+        const bool is_applied_mode_meta = false;
+        if (false == is_reconfirm && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, ref_scn))) {
           PALF_LOG(WARN, "generate mode_meta failed", K(ret), K_(palf_id), K_(self),
-              K(access_mode), K(ref_ts_ns), K_(new_proposal_id));
-        } else if (OB_FAIL(submit_accept_req_(new_proposal_id_, mode_meta))) {
+              K(access_mode), K(ref_scn), K_(new_proposal_id));
+        } else if (OB_FAIL(submit_accept_req_(new_proposal_id_, is_applied_mode_meta, mode_meta))) {
           PALF_LOG(WARN, "submit_accept_req_ failed", K(ret), K_(palf_id), K_(self),
               K(mode_meta), K_(new_proposal_id));
         }
@@ -491,19 +541,22 @@ int LogModeMgr::submit_prepare_req_(const bool need_inc_pid, const bool need_sen
   return ret;
 }
 
-int LogModeMgr::submit_accept_req_(const int64_t proposal_id, const LogModeMeta &mode_meta)
+int LogModeMgr::submit_accept_req_(const int64_t proposal_id,
+                                   const bool is_applied_mode_meta,
+                                   const LogModeMeta &mode_meta)
 {
   int ret = OB_SUCCESS;
   const bool has_accepted = (accepted_mode_meta_.proposal_id_ == mode_meta.proposal_id_);
-  if (false == has_accepted && OB_FAIL(receive_mode_meta_(self_, proposal_id, mode_meta))) {
+  if (false == has_accepted && OB_FAIL(receive_mode_meta_(self_, proposal_id, is_applied_mode_meta, mode_meta))) {
     PALF_LOG(WARN, "receive_mode_meta failed", K(ret), K_(palf_id), K_(self), K(mode_meta));
   } else if (follower_list_.is_valid() &&
-      OB_FAIL(log_engine_->submit_change_mode_meta_req(follower_list_, proposal_id, mode_meta))) {
+      OB_FAIL(log_engine_->submit_change_mode_meta_req(follower_list_, proposal_id,
+          is_applied_mode_meta, mode_meta))) {
     PALF_LOG(WARN, "submit_prepare_meta_req failed", K(ret), K_(palf_id), K_(self),
-        K_(follower_list), K(proposal_id), K(mode_meta));
+        K_(follower_list), K(proposal_id), K(is_applied_mode_meta), K(mode_meta));
   } else {
     PALF_LOG(INFO, "submit_change_mode_meta_req success", K(ret), K_(palf_id), K_(self),
-        K_(follower_list), K_(ack_list), K(proposal_id), K(mode_meta));
+        K_(follower_list), K_(ack_list), K(proposal_id), K(is_applied_mode_meta), K(mode_meta));
     last_submit_req_ts_ = common::ObTimeUtility::current_time();
   }
   return ret;
@@ -560,9 +613,13 @@ bool LogModeMgr::can_receive_mode_meta(const int64_t proposal_id,
   if (IS_NOT_INIT ||
       proposal_id == INVALID_PROPOSAL_ID ||
       false == mode_meta.is_valid()) {
-  } else if (false == state_mgr_->can_receive_log(proposal_id)) {
-    PALF_LOG(WARN, "can_receive_mode_meta failed", K_(palf_id), K_(self),
+  } else if (false == state_mgr_->can_receive_config_log(proposal_id)) {
+    // for arbitration replica, is_sync_enabled is false, so check can_receive_mode_meta
+    // with LogStateMgr::can_receive_config_log
+    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "can_receive_mode_meta failed", K_(palf_id), K_(self),
         K(proposal_id), K(mode_meta));
+  } else if (accepted_mode_meta_.proposal_id_ > mode_meta.proposal_id_) {
+    // skip, do not receive mode_meta with smaller proposal_id
   } else if (accepted_mode_meta_.proposal_id_ == mode_meta.proposal_id_) {
     bool_ret = true;
     has_accepted = true;
@@ -574,6 +631,7 @@ bool LogModeMgr::can_receive_mode_meta(const int64_t proposal_id,
 
 int LogModeMgr::receive_mode_meta(const common::ObAddr &server,
                                   const int64_t proposal_id,
+                                  const bool is_applied_mode_meta,
                                   const LogModeMeta &mode_meta)
 {
   int ret = OB_SUCCESS;
@@ -581,17 +639,18 @@ int LogModeMgr::receive_mode_meta(const common::ObAddr &server,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    ret = receive_mode_meta_(server, proposal_id, mode_meta);
+    ret = receive_mode_meta_(server, proposal_id, is_applied_mode_meta, mode_meta);
   }
   return ret;
 }
 
 int LogModeMgr::receive_mode_meta_(const common::ObAddr &server,
                                    const int64_t proposal_id,
+                                   const bool is_applied_mode_meta,
                                    const LogModeMeta &mode_meta)
 {
   int ret = OB_SUCCESS;
-  if (proposal_id == INVALID_PROPOSAL_ID || 
+  if (proposal_id == INVALID_PROPOSAL_ID ||
       false == mode_meta.is_valid() ||
       proposal_id < mode_meta.proposal_id_) {
     ret = OB_INVALID_ARGUMENT;
@@ -601,6 +660,7 @@ int LogModeMgr::receive_mode_meta_(const common::ObAddr &server,
     flush_ctx.type_ = MetaType::MODE_META;
     flush_ctx.proposal_id_ = proposal_id;
     flush_ctx.log_mode_meta_ = mode_meta;
+    flush_ctx.is_applied_mode_meta_ = is_applied_mode_meta;
     // why need to record LogModeMeta in FlushCtx?
     // we need to record 'accepted_mode_meta_' as max flushed LogModeMeta, if a follower
     // receives two LogModeMeta A and B successively.
@@ -618,7 +678,8 @@ int LogModeMgr::receive_mode_meta_(const common::ObAddr &server,
   return ret;
 }
 
-int LogModeMgr::after_flush_mode_meta(const LogModeMeta &mode_meta)
+// is_applied_mode_meta is true, caller should hold Wlock in PalfHandleImpl
+int LogModeMgr::after_flush_mode_meta(const bool is_applied_mode_meta, const LogModeMeta &mode_meta)
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard guard(lock_);
@@ -627,6 +688,10 @@ int LogModeMgr::after_flush_mode_meta(const LogModeMeta &mode_meta)
   } else {
     accepted_mode_meta_ = (mode_meta.proposal_id_ > accepted_mode_meta_.proposal_id_)?
         mode_meta: accepted_mode_meta_;
+    if (is_applied_mode_meta) {
+      applied_mode_meta_ = (mode_meta.proposal_id_ > applied_mode_meta_.proposal_id_)?
+          mode_meta: applied_mode_meta_;
+    }
   }
   return ret;
 }
@@ -649,6 +714,35 @@ int LogModeMgr::ack_mode_meta(const common::ObAddr &server, const int64_t propos
   } else {
     PALF_LOG(INFO, "ack_mode_meta success", K(ret), K_(palf_id), K_(self), K(server),
         K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list));
+  }
+  return ret;
+}
+
+// require rlock in PalfHandleImpl
+int LogModeMgr::submit_fetch_mode_meta_resp(const common::ObAddr &server,
+                                            const int64_t msg_proposal_id,
+                                            const int64_t accepted_mode_pid)
+{
+  int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
+  common::ObMemberList member_list;
+  (void) member_list.add_server(server);
+  LogModeMeta mode_meta;
+  bool is_applied_mode_meta = false;
+  if (applied_mode_meta_.proposal_id_ >= accepted_mode_meta_.proposal_id_) {
+    is_applied_mode_meta = true;
+    mode_meta = applied_mode_meta_;
+  } else {
+    is_applied_mode_meta = false;
+    mode_meta = accepted_mode_meta_;
+  }
+  if ((accepted_mode_pid == INVALID_PROPOSAL_ID || mode_meta.proposal_id_ >= accepted_mode_pid) &&
+      OB_FAIL(log_engine_->submit_change_mode_meta_req(member_list, msg_proposal_id, is_applied_mode_meta, mode_meta))) {
+    PALF_LOG(WARN, "submit_change_mode_meta_req failed", K(ret), K_(palf_id), K(server),
+        K(server), K(msg_proposal_id), K(mode_meta));
+  } else {
+    PALF_LOG(INFO, "submit_change_mode_meta_req success", K(ret), K_(palf_id), K(server), K(mode_meta),
+        K(accepted_mode_pid));
   }
   return ret;
 }

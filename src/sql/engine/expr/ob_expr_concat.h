@@ -53,6 +53,10 @@ public:
                          const char *obj2_ptr,
                          const int32_t other_len,
                          common::ObIAllocator *allocator);
+  static int calc_text(common::ObObj &result,
+                                     const common::ObObj obj1,
+                                     const common::ObObj obj2,
+                                     ObIAllocator *allocator);
 
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,

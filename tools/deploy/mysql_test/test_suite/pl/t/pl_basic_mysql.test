@@ -1,0 +1,2113 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: linlin.xll
+#owner group: sql1
+#tags: pl
+#description:
+
+--result_format 4
+--enable_sorted_result
+
+--disable_query_log
+--disable_result_log
+--source mysql_test/include/index_quick_major.inc
+--enable_query_log
+--enable_result_log
+
+--disable_warnings
+drop table if exists a,b,t,t1;
+drop procedure if exists p;
+drop procedure if exists f;
+drop procedure if exists pp;
+drop procedure if exists gather_table_stats;
+--enable_warnings
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection default;
+
+#case 1
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure f(inout x int)
+begin
+set x = x+1;
+end//
+sleep 3 //
+create procedure p(x int)
+begin
+declare i int;
+set i=i+1;
+if(1=1)
+then
+begin
+declare j int;
+select 1 from a where a1=i into x;
+end;
+end if;
+while i>1 do
+set i=i-1;
+end while;
+call f(x);
+end//
+delimiter ;//
+call p(1);
+drop table a;
+drop procedure f;
+drop procedure p;
+
+#case 2
+create table a(a1 int,a2 int,a3 int);
+--error 0,1305
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+declare i bigint default 0;
+set i=i+1;
+if(i=1)
+then
+select 1 from dual;
+end if;
+end//
+call pro1()//
+delimiter ;//
+select * from a;
+drop table a;
+
+#case 3
+create table a(a1 int,a2 int,a3 int);
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+declare i bigint default 0;
+set i=i+1;
+if(i=1)
+then
+insert into a values(1,1,1);
+end if;
+end//
+call pro1()//
+delimiter ;//
+select * from a;
+drop table a;
+
+#case 4
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p(x bigint)
+begin
+select x from dual;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 5
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p(x bigint)
+begin
+insert into a values(x,1,1);
+end//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 6
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p()
+begin
+declare i bigint default 0;
+set i=i+1;
+if(i=1)
+then
+insert into a values(1,1,1);
+end if;
+end//
+delimiter ;//
+call p();
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 7
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p(x bigint)
+begin
+declare i bigint default 0;
+set i=i+1;
+if(i>x)
+then
+insert into a values(0,0,0);
+else
+insert into a values(1,1,1);
+end if;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 8
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p(x bigint)
+begin
+declare i bigint default 1;
+if(x<i)
+then
+insert into a values(0,0,0);
+else
+insert into a values(1,1,1);
+end if;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 9
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p(x bigint, y bigint)
+begin
+if(x<y)
+then
+insert into a values(0,0,0);
+else
+insert into a values(1,1,1);
+end if;
+end//
+delimiter ;//
+call p(1,2);
+select * from a;
+call p(2,1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 10
+create table a(a1 int,a2 int,a3 int);
+delimiter //;
+create procedure p(x bigint)
+begin
+declare i bigint default 1;
+if(x>i)
+then
+insert into a values(x,x,x);
+else
+insert into a values(i,i,i);
+end if;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 11
+create table a(a1 char(5),a2 char(5),a3 char(5));
+delimiter //;
+create procedure p(x char(5), y int)
+begin
+declare i bigint default 1;
+if(y>i)
+then
+insert into a values(x,x,x);
+else
+insert into a values('i','i','i');
+end if;
+end//
+delimiter ;//
+call p('x', 1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 12
+create table a(a1 int);
+delimiter //;
+create procedure p()
+begin
+select *,* from a;
+end//
+delimiter ;//
+--error 5011
+call p;
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 13
+create table a(a1 bigint);
+delimiter //;
+create procedure p(x bigint)
+begin
+DECLARE cur Cursor FOR select * from a;
+open cur;
+fetch cur into x;
+close cur;
+end//
+delimiter ;//
+--error 1329
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 14
+delimiter //;
+CREATE PROCEDURE p(a bigint)
+BEGIN
+label1: LOOP
+SET a = a + 1;
+IF a < 10 THEN
+LEAVE label1;
+END IF;
+END LOOP label1;
+END//
+delimiter ;//
+call p(1);
+drop procedure p;
+
+#case 15
+create table a(a1 bigint);
+delimiter //;
+CREATE PROCEDURE p(a bigint)
+BEGIN
+label1: LOOP
+SET a = a + 1;
+IF a < 10 THEN
+insert into a values(a);
+else
+LEAVE label1;
+END IF;
+END LOOP label1;
+END//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 16
+create table a(a1 bigint);
+delimiter //;
+CREATE PROCEDURE p(a bigint)
+BEGIN
+label1: LOOP
+SET a = a + 1;
+IF a < 10 THEN
+iterate label1;
+elseif a< 20 then
+insert into a values(a);
+else
+LEAVE label1;
+END IF;
+END LOOP label1;
+END//
+delimiter ;//
+call p(1);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 17
+delimiter //;
+CREATE PROCEDURE p(a bigint, sum bigint)
+BEGIN
+label1: LOOP
+begin
+declare b bigint;
+set b=a+1;
+IF a+b > sum THEN
+LEAVE label1;
+else
+set a=b;
+END IF;
+end;
+END LOOP label1;
+END//
+delimiter ;//
+#### TODO: 执行时间过长导致farm失败, 暂时改小循环次数
+## call p(1,1000000);
+call p(1,10000);
+drop procedure p;
+
+#case 18
+delimiter //;
+CREATE PROCEDURE p(a bigint)
+BEGIN
+label1: Repeat
+begin
+declare b bigint;
+SET b = a + 1;
+end;
+UNTIL a<10
+END repeat label1;
+END//
+delimiter ;//
+call p(1);
+drop procedure p;
+
+#case 19
+delimiter //;
+CREATE PROCEDURE p(a bigint)
+BEGIN
+label1: Repeat
+begin
+declare b int;
+SET b = a + 1;
+end;
+UNTIL a<10
+END repeat label1;
+END//
+delimiter ;//
+call p(1);
+drop procedure p;
+
+#case 20
+delimiter //;
+--error 1327
+CREATE PROCEDURE p(a bigint)
+BEGIN
+label1: Repeat
+begin
+declare b bigint;
+SET b = a + 1;
+end;
+UNTIL b<10
+END repeat label1;
+END//
+delimiter ;//
+
+#case 21
+set @a=1;
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+if(@a=1)
+then
+select @a;
+end if;
+end//
+call pro1()//
+delimiter ;//
+
+#case 22
+create table a(a1 int);
+set @a=1;
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+if(@a=1)
+then
+insert into a values(1);
+else
+insert into a values(@a);
+end if;
+end//
+call pro1()//
+delimiter ;//
+select * from a;
+drop table a;
+
+#case 23
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+set @a=1;
+end//
+call pro1()//
+delimiter ;//
+
+#case 24
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+set @b='b';
+end//
+call pro1()//
+delimiter ;//
+
+#case 25
+drop procedure pro1;
+delimiter //;
+--error 1327
+create procedure pro1()
+begin
+set @@session.a=1;
+end//
+--error 1305
+call pro1()//
+delimiter ;//
+
+#case 26
+set @@session.ob_trx_timeout=100000000;
+select @@session.ob_trx_timeout;
+--error 1305
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+set @@session.ob_trx_timeout=100000001;
+end//
+call pro1()//
+delimiter ;//
+select @@session.ob_trx_timeout;
+set @@session.ob_trx_timeout=100000000;
+
+#case 27
+drop procedure pro1;
+delimiter //;
+--error 1327
+create procedure pro1()
+begin
+set @@global.a=1;
+end//
+--error 1305
+call pro1()//
+delimiter ;//
+
+#case 28
+set @@global.ob_trx_timeout=100000000;
+select @@global.ob_trx_timeout;
+--error 1305
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+set @@global.ob_trx_timeout=100000001;
+end//
+call pro1()//
+delimiter ;//
+select @@global.ob_trx_timeout;
+set @@global.ob_trx_timeout=100000000;
+
+#case 29
+create table a(a1 int);
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+set @a=1+1;
+if(@a=2) then
+insert into a values(@a);
+else
+insert into a values(1);
+end if;
+end//
+call pro1()//
+delimiter ;//
+select * from a;
+drop table a;
+
+#case 30
+create table a(a1 varchar(100));
+delimiter //;
+create procedure p(x varchar(100))
+begin
+select * from a where a1=x;
+end//
+delimiter ;//
+call p('fff');
+drop procedure p;
+drop table a;
+
+#case 31
+create table a(a1 varchar(100));
+delimiter //;
+create procedure p(x varchar(100))
+begin
+declare a1 varchar(100) default 'fff';
+select * from a where a1=x;
+end//
+delimiter ;//
+--error 1318
+call p();
+call p('a');
+drop procedure p;
+drop table a;
+
+#case 32
+create table a(a1 varchar(100));
+delimiter //;
+create procedure p(x varchar(100))
+begin
+insert into a values(x);
+end//
+delimiter ;//
+call p('fff');
+select * from a;
+drop procedure p;
+drop table a;
+
+#case 33
+create table a(a1 varchar(100));
+delimiter //;
+create procedure p(inout x varchar(10))
+begin
+set x='bbb';
+end//
+create procedure pp()
+begin
+declare x varchar(10) default 'aaa';
+call p(x);
+insert into a values(x);
+end//
+delimiter ;//
+call pp();
+select * from a;
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+#case 34
+create table a(a1 varchar(100));
+create table b(b1 int);
+delimiter //;
+create procedure p(inout x varchar(10))
+begin
+insert into a values(x);
+insert into b values(x);
+end//
+create procedure pp(inout x int)
+begin
+insert into a values(x);
+insert into b values(x);
+end//
+delimiter ;//
+set @px = 1;
+call p(@px);
+set @py = 1;
+call pp(@py);
+select * from a;
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+
+#case 35
+create table a(a1 varchar(100));
+delimiter //;
+create procedure p(x varchar(4))
+begin
+insert into a values(x);
+end//
+delimiter ;//
+--error 1406
+call p('gggggggg');
+call p('gggg');
+select * from a;
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+#case 36
+create table a(a1 varchar(100));
+insert into a values('a');
+create table b(b1 varchar(100));
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+BEGIN
+DECLARE x varchar(100);
+DECLARE c CURSOR FOR SELECT a1 FROM a;
+OPEN c;
+fetch c into x;
+CLOSE c;
+insert into b values(x);
+END//
+call pro1()//
+delimiter ;//
+select * from b;
+drop table a;
+drop table b;
+
+#case 37
+create table a(a1 varchar(10));
+delimiter //;
+create procedure p(x varchar(100))
+begin
+case x
+when 1 then insert into a values('1');
+else insert into a values('0');
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 38
+create table a(a1 varchar(10));
+delimiter //;
+create procedure p(x varchar(100))
+begin
+case x
+when 1 then insert into a values('1');
+when 2 then insert into a values('2');
+else insert into a values('0');
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 39
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case x
+when 1 then insert into a values(1);
+when 2 then insert into a values(2);
+else insert into a values(0);
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 40
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case x
+when 1 then insert into a values(1);
+when 2 then insert into a values(2);
+else insert into a values(0);
+if x > 1 then insert into a values(100);
+else insert into a values(-100);
+end if;
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 41
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case x
+when 1 then insert into a values(1);
+when 2 then insert into a values(2);
+else insert into a values(0);
+end case;
+if x > 1 then insert into a values(100);
+else insert into a values(-100);
+end if;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 42
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case
+when x=1 then insert into a values(1);
+when x=2 then insert into a values(2);
+else insert into a values(0);
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 43
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case
+when x=1 then insert into a values(1);
+when x=2 then insert into a values(2);
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+--error ER_SP_CASE_NOT_FOUND
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 44
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case x
+when 1 then insert into a values(1);
+when 2 then insert into a values(2);
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+call p(2);
+select * from a;
+--error ER_SP_CASE_NOT_FOUND
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 45
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+declare exit handler for 1339
+insert into a values(-1);
+case x
+when 1 then insert into a values(1);
+end case;
+end//
+delimiter ;//
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 46
+create table a(a1 int);
+delimiter //;
+create procedure p(x int)
+begin
+case x
+when 1 then insert into a values(1);
+end case;
+end//
+delimiter ;//
+call p(1);
+select * from a;
+--error ER_SP_CASE_NOT_FOUND
+call p(3);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 47
+create table b(b1 char(6));
+delimiter //;
+create procedure p()
+begin
+declare x char(5) default 'a';
+declare y char(6) default concat(x, 1);
+insert into b values(y);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop procedure p;
+
+#case 48
+set @@sql_mode=PAD_CHAR_TO_FULL_LENGTH;
+create table b(b1 char(6));
+delimiter //;
+create procedure p()
+begin
+declare x char(5) default 'a';
+declare y char(6) default concat(x, 1);
+insert into b values(y);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop procedure p;
+set @@sql_mode=default;
+
+#case 49
+set @@sql_mode=PAD_CHAR_TO_FULL_LENGTH;
+create table b(b1 char(6));
+delimiter //;
+create procedure p()
+begin
+declare x char(5) default 'a';
+declare y char(6) default concat(x, 1);
+insert into b values(y);
+end//
+delimiter ;//
+set @@sql_mode=default;
+call p();
+select * from b;
+drop table b;
+drop procedure p;
+
+#case 50
+create table a(a1 char(6));
+delimiter //;
+create procedure p(a int)
+begin
+insert into a values(a);
+end//
+delimiter ;//
+#connection obsys;
+select route_sql from oceanbase.__all_routine where routine_name = 'p' and database_id = (select database_id from oceanbase.__all_database where database_name = database());
+#select route_sql from oceanbase.__all_virtual_routine where routine_name = 'p';
+#connection default;
+drop procedure p;
+drop table a;
+
+#case 51
+create table b(b1 char(6));
+delimiter //;
+create procedure p(a int)
+begin
+declare x char(5) default 'a';
+declare y char(6) default concat(x, 1);
+insert into b values(y);
+end//
+delimiter ;//
+#connection obsys;
+#connection obsys;
+select route_sql from oceanbase.__all_routine where routine_name = 'p' and database_id = (select database_id from oceanbase.__all_database where database_name = database());
+#select route_sql from oceanbase.__all_virtual_routine where routine_name = 'p';
+#connection default;
+drop procedure p;
+drop table b;
+
+#case 52
+set @@sql_mode=PAD_CHAR_TO_FULL_LENGTH;
+create table b(b1 char(6));
+create table a(a1 char(5));
+insert into a values('a');
+delimiter //;
+create procedure p()
+begin
+declare x char(5);
+declare y char(6);
+select a1 from a into x;
+set y = concat(x, 1);
+insert into b values(y);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+set @@sql_mode=default;
+
+#case 53
+create table b(b1 char(6));
+create table a(a1 char(5));
+insert into a values('a');
+delimiter //;
+create procedure p()
+begin
+declare x char(5);
+select a1 from a into x;
+insert into b values(x);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop table a;
+drop procedure p;
+
+#case 54
+set @xxx = 'asd';
+create table b(b1 char(6));
+create table a(a1 char(5));
+insert into a values('a');
+insert into b values(@xxx);
+delimiter //;
+create procedure p()
+begin
+select a1 from a into @xxx;
+insert into b values(@xxx);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop table a;
+drop procedure p;
+
+#case 55
+set @xxx = 'asd';
+create table b(b1 char(6), b2 char(6));
+create table a(a1 char(5), a2 char(5));
+insert into a values('a', 'a');
+insert into b values(@xxx, 'asd');
+delimiter //;
+create procedure p()
+begin
+select a1 from a into @xxx;
+insert into b values(@xxx,@xxx);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop table a;
+drop procedure p;
+
+#case 56
+set @xxx = 'asd';
+create table b(b1 char(6), b2 char(6));
+create table a(a1 char(5), a2 char(5));
+insert into a values('a', 'a');
+insert into b values(@xxx, 'asd');
+delimiter //;
+create procedure p()
+begin
+declare x char(6);
+select a1,a2 from a into @xxx, x;
+insert into b values(@xxx, x);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop table a;
+drop procedure p;
+
+#case 57
+set @xxx = 'asd';
+create table b(b1 char(6), b2 char(6));
+create table a(a1 char(5), a2 char(5));
+insert into a values('a', 'a');
+insert into b values(@xxx, 'asd');
+delimiter //;
+create procedure p()
+begin
+declare x char(6);
+select a1,a2 from a into x, x;
+insert into b values(@xxx, x);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop table a;
+drop procedure p;
+
+#case 58
+set @xxx = 'asd';
+create table b(b1 char(6), b2 char(6));
+create table a(a1 char(5), a2 char(5));
+insert into a values('a', 'a');
+insert into b values(@xxx, 'asd');
+delimiter //;
+create procedure p()
+begin
+declare x char(6);
+declare y char(6);
+select a1,a2 from a into @xxx, x;
+set y = @xxx;
+insert into b values(y, x);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop table a;
+drop procedure p;
+
+#case 59
+set @xxx = 'asd';
+create table b(b1 char(6), b2 char(6));
+insert into b values(@xxx, 'asd');
+delimiter //;
+create procedure p()
+begin
+declare x char(6);
+set x='a';
+insert into b values(@xxx, x);
+end//
+delimiter ;//
+call p();
+select * from b;
+drop table b;
+drop procedure p;
+
+#case 60
+create table a(a1 int, a2 varchar(10));
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+declare x varchar(10) default 'x';
+declare y varchar(10) default 'y';
+declare xx int default 1;
+declare yy int default 2;
+set y = x;
+set yy = xx;
+set x = 'a';
+set xx = 9;
+insert into a values(yy, y);
+end//
+call pro1()//
+delimiter ;//
+select * from a;
+drop table a;
+
+#case 61
+delimiter //;
+--error 1064
+create procedure p()
+begin
+declare if int default 0;
+end//
+delimiter ;//
+
+#case 62
+delimiter //;
+create procedure p()
+begin
+declare if1 int default 0;
+end//
+delimiter ;//
+drop procedure p;
+
+#case 63
+delimiter //;
+create procedure p()
+begin
+declare count int default 0;
+end//
+delimiter ;//
+drop procedure p;
+
+#case 64
+delimiter //;
+create procedure p()
+begin
+declare count1 int default 0;
+end//
+delimiter ;//
+drop procedure p;
+
+#case 65
+set autocommit=0;
+create table a(a1 int);
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+BEGIN
+insert into a values(1);
+commit;
+END//
+call pro1()//
+delimiter ;//
+select * from a;
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+BEGIN
+insert into a values(2);
+rollback;
+END//
+call pro1()//
+delimiter ;//
+select * from a;
+set autocommit=1;
+drop table a;
+
+#case 66
+create table fib(id int, value bigint);
+delimiter //;
+create procedure p(x int, out y bigint)
+begin
+if x = 0 then set y = 0;
+elseif x = 1 then set y = 1;
+else
+begin
+declare a, b bigint default 0;
+call p(x-1, a);
+call p(x-2, b);
+set y = a+b;
+end;
+end if;
+end//
+create procedure pp(x int)
+begin
+declare i int default 0;
+declare result bigint default 0;
+while i < x do
+call p(i, result);
+insert into fib values(i, result);
+set i = i + 1;
+end while;
+end//
+delimiter ;//
+set @@max_sp_recursion_depth = 10;
+call pp(10);
+set @@max_sp_recursion_depth = 0;
+select * from fib;
+drop table fib;
+drop procedure p;
+drop procedure pp;
+
+#case 67
+delimiter //;
+create procedure p()
+begin
+call p();
+end//
+delimiter ;//
+-- error ER_SP_RECURSION_LIMIT
+call p();
+drop procedure p;
+
+#case 68
+create table a(a1 bigint, a2 timestamp);
+delimiter //;
+create procedure p()
+begin
+declare x bigint default 1;
+update a set a2=CURRENT_TIMESTAMP where a1=x;
+end //
+delimiter ;//
+call p();
+drop table a;
+drop procedure p;
+
+#case 69
+create table a(a1 bigint, a2 timestamp);
+delimiter //;
+create procedure p()
+begin
+declare x bigint default 1;
+declare y timestamp;
+set y = CURRENT_TIMESTAMP;
+update a set a2=y where a1=x;
+end //
+delimiter ;//
+call p();
+drop table a;
+drop procedure p;
+
+#case 70
+create table a(a1 timestamp);
+create table b(b1 timestamp);
+insert into a values('2018-01-02 10:10:32.000000');
+delimiter //;
+create procedure p()
+begin
+declare x timestamp;
+select a1 from a into x;
+insert into b values(x);
+end //
+delimiter ;//
+call p;
+select * from a;
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+
+#case 71
+create table a(a1 decimal(12,2),a2 timestamp);
+create table b(b1 decimal(12,2),b2 timestamp);
+insert into a values(1.1,'2018-01-02 10:10:32.000000');
+delimiter //;
+create procedure p()
+begin
+declare x decimal(12,2);
+declare y timestamp;
+select a1,a2 from a into x,y;
+insert into b values(x,y);
+end //
+delimiter ;//
+call p;
+select * from a;
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+
+#case 72
+create table a(a1 decimal(12,2),a2 timestamp);
+create table b(b1 decimal(12,2),b2 timestamp);
+insert into a values(1.1,'2018-01-02 10:10:32.000000');
+delimiter //;
+create procedure p()
+begin
+declare x decimal(12,2);
+declare y timestamp;
+declare c1 cursor for select a1,a2 from a;
+open c1;
+fetch c1 into x,y;
+close c1;
+insert into b values(x,y);
+end //
+delimiter ;//
+call p;
+select * from a;
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+
+#case 73
+create table if not exists bmsql_customer (
+  c_w_id         INTEGER        NOT NULL,
+  c_d_id         INTEGER        NOT NULL,
+  c_id           INTEGER        NOT NULL,
+  c_data         VARCHAR(500),
+  PRIMARY KEY (c_w_id, c_d_id, c_id)
+);
+insert into bmsql_customer values(1,1,1,'a');
+delimiter //;
+create procedure p(IN in_w_id int,
+                   IN in_d_id int,
+                   IN in_c_id int,
+                   IN in_c_d_id int,
+                   IN in_c_w_id int,
+                   IN in_h_amount DECIMAL(6,2)
+                  )
+begin
+   UPDATE bmsql_customer
+   SET c_data = SUBSTR(CONCAT('C_ID=', CAST(in_c_id AS CHAR),
+                              ' C_D_ID=', CAST(in_c_d_id AS CHAR),
+                              ' C_W_ID=', CAST(in_c_w_id AS CHAR),
+                              ' D_ID=', CAST(in_d_id AS CHAR),
+                              ' W_ID=', CAST(in_w_id AS CHAR),
+                              ' H_AMOUNT=', ROUND(in_h_amount,2)), 1, 500)
+   WHERE c_w_id = in_c_w_id AND c_d_id = in_c_d_id AND c_id = in_c_id;
+end//
+delimiter ;//
+call p(1,1,1,1,1,1.1);
+drop table bmsql_customer;
+drop procedure p;
+
+#case 74
+create table a(a1 varchar(20));
+delimiter //;
+create procedure p(x int)
+begin
+update a set a1=cast(x as char) where a1=1;
+end//
+delimiter ;//
+call p(1);
+drop table a;
+drop procedure p;
+
+#case 75
+drop procedure pro1;
+delimiter //;
+create procedure pro1()
+begin
+declare x int default 0;
+set x=rand();
+end//
+call pro1()//
+delimiter ;//
+drop procedure pro1;
+
+#case 76
+create table a(a1 int);
+delimiter //;
+create procedure p(
+arg1 int,
+arg2 int,
+arg3 int,
+arg4 int,
+arg5 int,
+arg6 int,
+arg7 int,
+arg8 int,
+arg9 int,
+arg10 int
+)
+begin
+declare x int default 1;
+set x = arg10;
+insert into a values(x);
+end //
+delimiter ;//
+call p(1,2,3,4,5,6,7,8,9,10);
+select * from a;
+drop table a;
+drop procedure p;
+
+#case 77
+create table a(a1 int);
+delimiter //;
+create procedure p1(
+INOUT arg1 int,
+INOUT arg2 int,
+INOUT arg3 int,
+INOUT arg4 int,
+INOUT arg5 int,
+INOUT arg6 int,
+INOUT arg7 int,
+INOUT arg8 int,
+INOUT arg9 int,
+INOUT arg10 int)
+begin
+set arg10 = 99;
+end //
+create procedure p()
+begin
+declare arg1 int default 1;
+declare arg2 int default 2;
+declare arg3 int default 3;
+declare arg4 int default 4;
+declare arg5 int default 5;
+declare arg6 int default 6;
+declare arg7 int default 7;
+declare arg8 int default 8;
+declare arg9 int default 9;
+declare arg10 int default 10;
+call p1(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10);
+insert into a values(arg10);
+end //
+delimiter ;//
+call p();
+select * from a;
+drop table a;
+drop procedure p1;
+drop procedure p;
+
+#case 78
+create table a(a1 int);
+delimiter //;
+create procedure p1(
+INOUT arg1 int,
+INOUT arg2 int,
+INOUT arg3 int,
+INOUT arg4 int,
+INOUT arg5 int,
+INOUT arg6 int,
+INOUT arg7 int,
+INOUT arg8 int,
+INOUT arg9 int,
+INOUT arg10 int,
+INOUT arg11 int,
+INOUT arg12 int,
+INOUT arg13 int,
+INOUT arg14 int,
+INOUT arg15 int,
+INOUT arg16 int,
+INOUT arg17 int,
+INOUT arg18 int,
+INOUT arg19 int,
+INOUT arg20 int)
+begin
+set arg20 = 99;
+end //
+create procedure p()
+begin
+declare arg1 int default 1;
+declare arg2 int default 2;
+declare arg3 int default 3;
+declare arg4 int default 4;
+declare arg5 int default 5;
+declare arg6 int default 6;
+declare arg7 int default 7;
+declare arg8 int default 8;
+declare arg9 int default 9;
+declare arg10 int default 10;
+declare arg11 int default 11;
+declare arg12 int default 12;
+declare arg13 int default 13;
+declare arg14 int default 14;
+declare arg15 int default 15;
+declare arg16 int default 16;
+declare arg17 int default 17;
+declare arg18 int default 18;
+declare arg19 int default 19;
+declare arg20 int default 20;
+call p1(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10,arg11,arg12,arg13,arg14,arg15,arg16,arg17,arg18,arg19,arg20);
+insert into a values(arg20);
+end //
+delimiter ;//
+call p();
+select * from a;
+drop table a;
+drop procedure p1;
+drop procedure p;
+
+#case 79
+create table a(a1 timestamp);
+delimiter //;
+create procedure p()
+begin
+declare x int default 1;
+while x <=10 do
+insert into a values(CURRENT_TIMESTAMP);
+set x = x+1;
+end while;
+end //
+delimiter ;//
+call p;
+select count(*) from a;
+drop table a;
+drop procedure p;
+
+#case 80
+create table a(a1 timestamp);
+delimiter //;
+create procedure p()
+begin
+declare x int default 1;
+declare y timestamp;
+while x <=10 do
+set y = CURRENT_TIMESTAMP;
+insert into a values(y);
+set x = x+1;
+end while;
+end //
+delimiter ;//
+call p;
+select count(*) from a;
+drop table a;
+drop procedure p;
+
+#case 81
+create table a(a1 decimal(6,2));
+insert into a values(1.11);
+create table b(b1 decimal(6,2));
+delimiter //;
+create procedure p()
+begin
+declare x decimal(6,2);
+declare c cursor for select a1 from a;
+open c;
+fetch c into x;
+close c;
+insert into b values(x);
+end //
+delimiter ;//
+call p;
+select * from a;
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+
+#case 82
+create table a(a1 decimal(6,2));
+insert into a values(1.11);
+create table b(b1 int);
+delimiter //;
+create procedure p()
+begin
+declare x int;
+declare c cursor for select a1 from a;
+open c;
+fetch c into x;
+close c;
+insert into b values(x);
+end //
+delimiter ;//
+call p;
+select * from a;
+select * from b;
+drop table a;
+drop table b;
+drop procedure p;
+
+#case 83
+create table a(a1 decimal(6,2));
+delimiter //;
+create procedure p(x int)
+begin
+insert into a values(x);
+select * from a where a1=x;
+end //
+delimiter ;//
+#connection obsys;
+select route_sql from oceanbase.__all_routine where routine_name = 'p' and database_id = (select database_id from oceanbase.__all_database where database_name = database());
+#select route_sql from oceanbase.__all_virtual_routine where routine_name = 'p';
+#connection default;
+drop table a;
+drop procedure p;
+
+#case 84
+delimiter //;
+create procedure p()
+begin
+insert into table_not_exist values(1);
+end //
+delimiter ;//
+--error 1146
+call p();
+drop procedure p;
+
+#case 85
+delimiter //;
+create procedure p()
+label1:
+begin
+end label1//
+delimiter ;//
+call p();
+drop procedure p;
+
+#case 86
+delimiter //;
+create procedure p()
+begin
+end//
+delimiter ;//
+call p();
+drop procedure p;
+
+#case 87
+delimiter //;
+create procedure p()
+begin
+declare i int default 3;
+label1: begin
+if i > 0 then
+set i = i-1;
+else leave label1;
+end if;
+end;
+end//
+delimiter ;//
+call p();
+drop procedure p;
+
+#case 88
+delimiter //;
+--error 1313
+create procedure p()
+return 42;//
+delimiter ;//
+
+#case 89
+set @a=0;
+select @a;
+delimiter //;
+create procedure p(out x int)
+begin
+set x=1;
+end//
+delimiter ;//
+call p(@a);
+select @a;
+drop procedure p;
+
+#case 90
+delimiter //;
+create procedure gather_table_stats(tenant_name varchar(128), db_name varchar(128), table_name varchar(128))
+begin
+end//
+delimiter ;//
+drop procedure gather_table_stats;
+
+#case 91
+delimiter //;
+create procedure gather_table_stats(tenant_name int, db_name int, table_name int)
+begin
+end//
+delimiter ;//
+drop procedure gather_table_stats;
+
+#case 92
+delimiter //;
+create procedure gather_table_stats(tenant_name int, db_name int, t_name int)
+begin
+end//
+delimiter ;//
+call gather_table_stats(1,1,1);
+drop procedure gather_table_stats;
+
+#case 93
+--error 0,1305
+drop function f;
+delimiter //;
+create function f(x int) returns int
+begin
+  if x>1 then
+    return x;
+  else
+    signal SQLSTATE '01000';
+  end if;
+end//
+delimiter ;//
+select f(2);
+--error 1321
+select f(1);
+drop function f;
+
+#case 94
+delimiter //;
+create function f(x int) returns int
+begin
+  if x>1 then
+    return x;
+  else
+    signal SQLSTATE '02000';
+  end if;
+end//
+delimiter ;//
+select f(2);
+--error 1643
+select f(1);
+drop function f;
+
+#case 95
+delimiter //;
+create function f(x int) returns int
+begin
+  if x>1 then
+    return NULL;
+  else
+    signal SQLSTATE '02000';
+  end if;
+end//
+delimiter ;//
+select f(2);
+--error 1643
+select f(1);
+drop function f;
+
+### need has return in mysql function
+###
+
+delimiter //;
+DROP FUNCTION IF EXISTS `fun6`//
+
+--error 1320
+CREATE FUNCTION fun6 ( p1 INT) RETURNS VARCHAR(20)
+BEGIN
+  SET p1 = p1 + 3;
+  SET p1 = p1 * 2;
+  SET @num = p1 * p1;
+END//
+
+--error 1305
+SELECT fun6(5)//
+SELECT @num//
+
+--error 1320
+CREATE FUNCTION fun6 ( p1 INT) RETURNS VARCHAR(20)
+BEGIN
+  SET @num = p1 * p1;
+END//
+
+--error 1305
+SELECT fun6(5)//
+SELECT @num//
+
+DROP FUNCTION IF EXISTS `fun6`//
+delimiter ;//
+
+### label dup
+###
+delimiter //;
+--disable_warnings ONCE
+DROP TABLE IF EXISTS result1//
+CREATE TABLE result1(
+id INT,
+res1 VARCHAR(50),
+res2 VARCHAR(50)
+)//
+DROP PROCEDURE IF EXISTS `pro_1`//
+
+CREATE PROCEDURE pro_1()
+BEGIN
+  label1:BEGIN
+    INSERT INTO result1 VALUES(1,'结果表：','标签label1');
+    label2:BEGIN
+      INSERT INTO result1 VALUES(2,'结果表：','标签label2');
+    END label2;
+  END label1;
+END//
+
+CALL pro_1()//
+
+CREATE PROCEDURE pro_2()
+BEGIN
+  label1:BEGIN
+    INSERT INTO result1 VALUES(3,'结果表：','标签label1');
+  END label1;
+  label1:BEGIN
+    INSERT INTO result1 VALUES(4,'结果表：','标签label1');
+  END label1;
+END//
+
+CALL pro_2()//
+
+--error 1309
+CREATE PROCEDURE pro_3()
+BEGIN
+  label1:BEGIN
+    INSERT INTO result1 VALUES(5,'结果表：','标签label1');
+    label1:BEGIN
+      INSERT INTO result1 VALUES(6,'结果表：','标签label1');
+    END label1;
+  END label1;
+END//
+
+--error 1305
+CALL pro_3()//
+
+SELECT * FROM result1//
+--disable_warnings
+DROP TABLE IF EXISTS result1//
+DROP PROCEDURE IF EXISTS `pro_1`//
+DROP PROCEDURE IF EXISTS `pro_2`//
+DROP PROCEDURE IF EXISTS `pro_3`//
+--enable_warnings
+delimiter ;//
+
+delimiter //;
+###   ### varchar
+###   ###
+###   DROP TABLE IF EXISTS t2//
+###   --error 1074
+###   CREATE TABLE t2 (
+###     id INT,
+###     res1 VARCHAR(128),
+###     d1 VARCHAR(16384)
+###   )//
+###   DROP TABLE IF EXISTS t3//
+###   --error 1074
+###   CREATE TABLE t3 (
+###     id INT,
+###     res1 VARCHAR(128),
+###     d1 VARCHAR(262145)
+###   )//
+###   DROP FUNCTION IF EXISTS fun_l//
+###   --error 1074
+###   CREATE FUNCTION fun_l() RETURNS VARCHAR(262144)
+###   BEGIN
+###     DECLARE d1 VARCHAR(262144123456);
+###     SET d1='123456789012345678901234567890';
+###     RETURN '定义长度262144123456的VARCHAR(262144123456)类型的变量';
+###   END//
+###   --error 1305
+###   SELECT fun_l()//
+
+### char
+###
+--disable_warnings
+ DROP TABLE IF EXISTS t1//
+ DROP TABLE IF EXISTS t2//
+--enable_warnings
+ CREATE TABLE t1 (
+   id INT,
+   res1 VARCHAR(128),
+   d1 CHAR(255)
+ )//
+### --error 1074
+### TODO:
+### CREATE TABLE t2 (
+###   id INT,
+###   res1 VARCHAR(128),
+###   d1 CHAR(256)
+### )//
+--disable_warnings ONCE
+ DROP TABLE IF EXISTS t3//
+ --error 1074
+ CREATE TABLE t3 (
+   id INT,
+   res1 VARCHAR(128),
+   d1 CHAR(257)
+ )//
+ DROP PROCEDURE IF EXISTS `pro_1`//
+ --error 1074
+ CREATE PROCEDURE pro_1()
+ BEGIN
+   DECLARE d1 CHAR(257);
+   SET d1='CHAR[(M)] M表示以字符为单位的列长度, M范围是 0~255';
+   INSERT INTO t1 VALUES(1,'变量形式插入CHAR(257)类型数据',d1);
+ END//
+ --error 1305
+ CALL pro_1()//
+ SELECT * FROM t1//
+
+
+### varbinary
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1//
+CREATE TABLE t1 (
+  d1 VARBINARY(65536)
+)//
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t2//
+--error 1074
+CREATE TABLE t2 (
+  d1 VARBINARY(1048577)
+)//
+
+DROP FUNCTION IF EXISTS `fun_l`//
+--error 1074
+CREATE FUNCTION fun_l() RETURNS VARBINARY(65535)
+BEGIN
+  DECLARE d1 VARBINARY(65536);
+  SET d1='123456789012345678901234567890';
+  RETURN '定义长度65536的VARCHAR类型的变量';
+END//
+
+--error 1305
+SELECT fun_l()//
+
+
+### number
+###
+DROP FUNCTION IF EXISTS `fun_l`//
+--error 1426
+CREATE FUNCTION fun_l() RETURNS DEC(65,30)
+BEGIN
+  DECLARE a DEC(66,30);
+  SET a=123450.1415;
+  RETURN a;
+END//
+--error 1305
+SELECT fun_l()//
+DROP FUNCTION IF EXISTS `fun_2`//
+--error 1425
+CREATE FUNCTION fun_2() RETURNS DEC(65,30)
+BEGIN
+  DECLARE a DEC(65,31);
+  SET a=50.1;
+  RETURN a;
+END//
+--error 1305
+SELECT fun_2()//
+
+### datetime
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t2//
+--error 1426
+CREATE TABLE t2 (
+  id INT,
+  res1 VARCHAR(128),
+  d1 DATETIME(7)
+)//
+DROP FUNCTION IF EXISTS `fun_l`//
+--error 1426
+CREATE FUNCTION fun_l() RETURNS DATETIME(6)
+BEGIN
+  DECLARE d2 DATETIME(7) DEFAULT '2021-07-02 23:59:59.999999';
+  RETURN d2;
+END//
+--error 1305
+SELECT fun_l()//
+
+### datetime max value insert fail
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t2//
+CREATE TABLE t2 (
+  id INT,
+  res1 VARCHAR(128),
+  d1 DATETIME,
+  d2 DATETIME(0),
+  d3 DATETIME(6)
+)//
+INSERT INTO t2 VALUES(1,'插入DATETIME类型数据','1000-01-01 00:00:00.123','2000-01-01 00:00:00.123','9999-12-31 23:59:59.999999')//
+DROP PROCEDURE IF EXISTS `pro_1`//
+CREATE PROCEDURE pro_1()
+BEGIN
+  DECLARE d1 DATETIME DEFAULT '1000-01-01 00:00:00.000000';
+  DECLARE d2 DATETIME(0) DEFAULT '2021-07-02 23:59:59.999999';
+  DECLARE d3 DATETIME(6) DEFAULT '9999-12-31 23:59:59.999999';
+  INSERT INTO t2 VALUES(2,'变量形式插入DATETIME类型数据',d1,d2,d3);
+  INSERT INTO t2 VALUES(3,'直接插入DATETIME类型数据','3000-01-01 00:00:00.123','4000-01-01 00:00:00.123','9999-12-31 23:59:59.999999');
+END//
+CALL pro_1()//
+SELECT * FROM t2//
+
+### int
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1//
+CREATE TABLE t1 (
+  id INT,
+  res1 VARCHAR(128),
+  a INT(255)
+)//
+DROP PROCEDURE IF EXISTS `pro_1`//
+--error 1439
+CREATE PROCEDURE pro_1()
+BEGIN
+  DECLARE a INT(256);
+  SET a=4294967295;
+  INSERT INTO t1 VALUES(1,'插入INT类型数据',a);
+END//
+--error 1305
+CALL pro_1()//
+SELECT * FROM t1//
+
+### commit
+### rollback
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1//
+CREATE TABLE t1
+( a INT
+)//
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t2//
+CREATE TABLE t2
+( a INT
+)//
+
+INSERT INTO t1 VALUES (1),(2),(3)//
+
+DROP PROCEDURE IF EXISTS `pro`//
+CREATE PROCEDURE pro()
+BEGIN
+  INSERT INTO t1 VALUES (4);
+  COMMIT;
+END//
+
+call pro()//
+
+select * from t1//
+
+DROP PROCEDURE IF EXISTS `pro`//
+CREATE PROCEDURE pro()
+BEGIN
+  INSERT INTO t1 VALUES (4);
+  ROLLBACK;
+END//
+
+call pro()//
+
+select * from t1//
+
+DROP FUNCTION IF EXISTS `fun1`//
+####mysql: ERROR 1422 (HY000): Explicit or implicit commit is not allowed in stored function or trigger.
+--error 1422
+CREATE FUNCTION fun1() RETURNS VARCHAR(128)
+BEGIN
+  INSERT INTO t1 VALUES (4);
+  COMMIT;
+  return '显示提交';
+END//
+
+DROP FUNCTION IF EXISTS `fun2`//
+CREATE FUNCTION fun2() RETURNS VARCHAR(128)
+BEGIN
+  INSERT INTO t1 VALUES (4);
+  return '隐式提交';
+END//
+
+select fun2()//
+
+select * from t1//
+
+DROP FUNCTION IF EXISTS `fun3`//
+--error 1422
+CREATE FUNCTION fun3() RETURNS VARCHAR(128)
+BEGIN
+  INSERT INTO t1 VALUES (4);
+  ROLLBACK;
+  return '回滚';
+END//
+
+### BIT
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1;//
+DROP PROCEDURE IF EXISTS `pro_2`;//
+--error 1439
+CREATE PROCEDURE pro_2()
+BEGIN
+  CREATE TABLE t1 (id INT,a BIT(65));
+  INSERT INTO t1 VALUES(1,b'0');
+END;
+//
+
+### load data
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1//
+CREATE TABLE t1 (a INT)//
+INSERT INTO t1 VALUES (1),(2),(3)//
+DROP PROCEDURE IF EXISTS `pro_22`//
+
+--error 1314
+CREATE PROCEDURE pro_22()
+BEGIN
+  LOAD DATA INFILE 'data.txt' INTO TABLE t1;
+END//
+
+### lock
+###
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1//
+CREATE TABLE t1 (a INT)//
+INSERT INTO t1 VALUES (1),(2),(3)//
+DROP PROCEDURE IF EXISTS `pro_1`//
+--error 1314
+CREATE PROCEDURE pro_1()
+BEGIN
+  LOCK TABLES t1 READ;
+END//
+
+delimiter ;//
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t1;
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t2;
+--disable_warnings ONCE
+DROP TABLE IF EXISTS t3;
+DROP PROCEDURE IF EXISTS `pro_1`;
+DROP FUNCTION IF EXISTS `fun_l`;
+DROP PROCEDURE IF EXISTS `pro_22`;

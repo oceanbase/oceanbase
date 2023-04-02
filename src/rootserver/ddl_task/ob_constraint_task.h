@@ -104,10 +104,12 @@ public:
   virtual int process() override;
   int update_check_constraint_finish(const int ret_code);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
-  virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
+  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
+  virtual void flt_set_task_span_tag() const override;
+  virtual void flt_set_status_span_tag() const override;
+  virtual int cleanup_impl() override;
 private:
-  int switch_status(const share::ObDDLTaskStatus new_status, const int ret_code);
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
   int wait_trans_end();
@@ -121,7 +123,6 @@ private:
   int set_constraint_validated();
   int set_new_not_null_column_validate();
   int remove_task_record();
-  int cleanup();
   int report_error_code();
   int report_check_constraint_error_code();
   int report_foreign_key_constraint_error_code();
@@ -138,14 +139,12 @@ private:
   int set_alter_constraint_ddl_stmt_str_for_fk(
       obrpc::ObAlterTableArg &alter_table_arg,
       common::ObIAllocator &allocator);
-  int check_table_exist(bool &exist);
   int check_replica_end(bool &is_end);
   int check_health();
 private:
   static const int64_t OB_CONSTRAINT_TASK_VERSION = 1;
   common::TCRWLock lock_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
-  int64_t ret_code_;
   obrpc::ObAlterTableArg alter_table_arg_;
   common::ObArenaAllocator allocator_;
   ObRootService *root_service_;

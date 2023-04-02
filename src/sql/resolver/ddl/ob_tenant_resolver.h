@@ -125,6 +125,9 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
         if (common::CHARSET_INVALID == charset_type) {
           ret = common::OB_ERR_UNKNOWN_CHARSET;
           LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+        } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(charset_type,
+                                                                          session_info->get_effective_tenant_id()))) {
+          LOG_WARN("failed to check charset data version valid", K(ret));
         } else {
           charset_type_ = charset_type;
           if (stmt->get_stmt_type() == stmt::T_MODIFY_TENANT) {
@@ -142,12 +145,25 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
         if (common::CS_TYPE_INVALID == collation_type) {
           ret = common::OB_ERR_UNKNOWN_COLLATION;
           LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
+        } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(collation_type),
+                                                                          session_info->get_effective_tenant_id()))) {
+          LOG_WARN("failed to check charset data version valid", K(ret));
         } else {
           collation_type_ = collation_type;
           if (stmt->get_stmt_type() == stmt::T_MODIFY_TENANT) {
             ret = OB_NOT_SUPPORTED;
             SQL_LOG(WARN, "tenant can't change collation", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant change collation");
+          }
+        }
+        break;
+      }
+      case T_ENABLE_ARBITRATION_SERVICE: {
+        const bool enable_arbitration_service = option_node->children_[0]->value_ ? true : false;
+        stmt->set_enable_arbitration_service(enable_arbitration_service);
+        if (stmt->get_stmt_type() == stmt::T_MODIFY_TENANT) {
+          if (OB_FAIL(alter_option_bitset_.add_member(obrpc::ObModifyTenantArg::ENABLE_ARBITRATION_SERVICE))) {
+            SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
           }
         }
         break;

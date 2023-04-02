@@ -33,12 +33,12 @@ public:
 
   static constexpr int32_t n_second_level(int64_t nbits)
   {
-    return ((nbits - 1) >> 6) + 1;
+    return static_cast<int32_t>(((nbits - 1) >> 6) + 1);
   }
 
   static constexpr int32_t n_first_level(int64_t nbits)
   {
-    return ((n_second_level(nbits) - 1) >> 6) + 1;
+    return static_cast<int32_t>(((n_second_level(nbits) - 1) >> 6) + 1);
   }
 
   static constexpr int64_t buf_len(int64_t nbits)

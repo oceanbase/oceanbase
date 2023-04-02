@@ -25,6 +25,10 @@
 #include "ob_log_trans_ctx_mgr.h"       // IObLogTransCtxMgr
 #include "ob_log_trans_stat_mgr.h"      // IObLogTransStatMgr
 #include "ob_log_committer.h"           // IObLogCommitter
+#include "ob_log_formatter.h"           // IObLogFormatter
+#include "ob_log_meta_data_struct.h"    // ObDictTenantInfo
+#include "ob_log_ddl_processor.h"       // ObLogDDLProcessor
+#include "ob_log_meta_data_service.h"   // GLOGMETADATASERVICE
 
 #define _STAT(level, tag_str, args...) _OBLOG_SEQUENCER_LOG(level, "[STAT] [SEQ] " tag_str, ##args)
 #define STAT(level, tag_str, args...) OBLOG_SEQUENCER_LOG(level, "[STAT] [SEQ] " tag_str, ##args)
@@ -65,6 +69,7 @@ ObLogSequencer::ObLogSequencer()
     redo_dispatcher_(NULL),
     msg_sorter_(NULL),
     err_handler_(NULL),
+    schema_inc_replay_(),
     global_checkpoint_(OB_INVALID_TIMESTAMP),
     last_global_checkpoint_(OB_INVALID_TIMESTAMP),
     global_seq_(0),
@@ -93,7 +98,8 @@ void ObLogSequencer::configure(const ObLogConfig &config)
   LOG_INFO("[CONFIG]", K(print_participant_not_serve_info));
 }
 
-int ObLogSequencer::init(const int64_t thread_num,
+int ObLogSequencer::init(
+    const int64_t thread_num,
     const int64_t queue_size,
     IObLogTransCtxMgr &trans_ctx_mgr,
     IObLogTransStatMgr &trans_stat_mgr,
@@ -113,6 +119,8 @@ int ObLogSequencer::init(const int64_t thread_num,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(SequencerThread::init(thread_num, queue_size))) {
     LOG_ERROR("init sequencer queue thread fail", KR(ret), K(thread_num), K(queue_size));
+  } else if (OB_FAIL(schema_inc_replay_.init(false/*is_start_progress*/))) {
+    LOG_ERROR("schema_inc_replay_ init failed", KR(ret));
   } else {
     round_value_ = 0;
     heartbeat_round_value_ = 0;
@@ -154,6 +162,7 @@ void ObLogSequencer::destroy()
   redo_dispatcher_ = NULL;
   msg_sorter_ = NULL;
   err_handler_ = NULL;
+  schema_inc_replay_.destroy();
   global_checkpoint_ = OB_INVALID_TIMESTAMP;
   last_global_checkpoint_ = OB_INVALID_TIMESTAMP;
   global_seq_ = 0;
@@ -215,7 +224,7 @@ int ObLogSequencer::push(PartTransTask *part_trans_task, volatile bool &stop_fla
 
     if (OB_SUCC(ret)) {
       (void)ATOMIC_AAF(&queue_part_trans_task_count_, 1);
-      do_stat_for_part_trans_task_count_(*part_trans_task, 1);
+      do_stat_for_part_trans_task_count_(*part_trans_task, 1, false/*is_sub_stat*/);
     }
 
     if (OB_FAIL(ret)) {
@@ -313,6 +322,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
+    const ObTransID trans_id = trans_ctx->get_trans_id();
 
     if (OB_FAIL(trans_ctx->get_tenant_id(tenant_id))) {
       LOG_ERROR("trans_ctx get_tenant_id fail", KR(ret), K(tenant_id));
@@ -351,6 +361,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
             monitor.mark_and_get_cost("dml-done", true);
           } // while
         } else if (is_ddl_trans){
+          trans_ctx->set_trans_redo_dispatched();
           // need sort_participants = on, which make sure the first PartTransTask of
           // participant_list is DDL_TRANS.
           // TODO: consider more idea to handle this.
@@ -369,7 +380,7 @@ int ObLogSequencer::handle_to_be_sequenced_trans_(TrxSortElem &trx_sort_elem,
       }
     }
 
-    LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), KPC(trans_ctx));
+    LOG_DEBUG("handle_to_be_sequenced_trans_ end", KR(ret), K(trans_id));
   }
 
   return ret;
@@ -698,7 +709,7 @@ int ObLogSequencer::push_task_into_committer_(PartTransTask *task,
     LOG_ERROR("sequencer has not been initialized", KR(ret), K(tenant));
   } else {
     // Counting the number of partitioned tasks
-    do_stat_for_part_trans_task_count_(*task, -task_count);
+    do_stat_for_part_trans_task_count_(*task, task_count, true/*is_sub_stat*/);
 
     RETRY_FUNC(stop_flag, (*trans_committer_), push, task, task_count, DATA_OP_TIMEOUT, tenant);
   }
@@ -742,7 +753,8 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
       ObByteLockGuard guard(trans_queue_lock_);
       trans_queue_.push(trx_sort_elem);
 
-      _DSTAT("[TRANS_QUEUE] TRANS_ID=%s QUEUE_SIZE=%lu IS_DML=%d",
+      _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=%lu IS_DML=%d",
+          tenant_id,
           to_cstring(trx_sort_elem),
           trans_queue_.size(),
           is_dml_trans);
@@ -820,13 +832,22 @@ int ObLogSequencer::handle_ddl_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, 
   return ret;
 }
 
-int ObLogSequencer::handle_multi_data_source_info_(ObLogTenant &tenant, TransCtx &trans_ctx, volatile bool &stop_flag)
+int ObLogSequencer::handle_multi_data_source_info_(
+    ObLogTenant &tenant,
+    TransCtx &trans_ctx,
+    volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  const bool is_using_data_dict = is_data_dict_refresh_mode(TCTX.refresh_mode_);
   PartTransTask *part_trans_task = trans_ctx.get_participant_objs();
   IObLogPartMgr &part_mgr = tenant.get_part_mgr();
 
   while (OB_SUCC(ret) && OB_NOT_NULL(part_trans_task)) {
+    if (! part_trans_task->is_sys_ls_part_trans()) {
+      // USER_LS part_trans_task in DIST_DDL_TRANS won't into dispatcher, set_ref_cnt to 1 to
+      // recycle the part_trans_task.
+      part_trans_task->set_ref_cnt(1);
+    }
     if (part_trans_task->get_multi_data_source_info().has_tablet_change_op()) {
       const CDCTabletChangeInfoArray &tablet_change_info_arr =
           part_trans_task->get_multi_data_source_info().get_tablet_change_info_arr();
@@ -847,47 +868,181 @@ int ObLogSequencer::handle_multi_data_source_info_(ObLogTenant &tenant, TransCtx
           }
         } else if (tablet_change_info.is_delete_tablet_op()) {
           // 1. delete tablet should wait all task in dml_parse done.
-          while (OB_SUCC(ret) && ! stop_flag) {
-            int64_t reader_task_count = 0;
-            int64_t dml_parser_task_count = 0;
-
-            if (OB_ISNULL(TCTX.dml_parser_) || OB_ISNULL(TCTX.reader_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("dml_parser or reader is null", KR(ret));
-            } else {
-              TCTX.reader_->get_task_count(reader_task_count);
-
-              if (OB_FAIL(TCTX.dml_parser_->get_log_entry_task_count(dml_parser_task_count))) {
-                LOG_ERROR("get_dml_parser_task_count failed", KR(ret), K(dml_parser_task_count));
-              } else if (0 < (reader_task_count + dml_parser_task_count)) {
-                LOG_DEBUG("barrier tablet_change_info(delete_tablet_op) waiting reader and dml_parser empty",
-                    K(tablet_change_info), K(reader_task_count), K(dml_parser_task_count));
-                // sleep 100ms and retry
-                const static int64_t WAIT_PARSER_EMPTY_TIME = 100 * 1000;
-                ob_usleep(WAIT_PARSER_EMPTY_TIME);
-              } else {
-                break;
-              }
+          if (OB_FAIL(wait_until_parser_done_(stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
             }
-          }
-
           // 2. apply delete_tablet_op
-          if (OB_SUCC(ret)) {
-            if (stop_flag) {
-              ret = OB_IN_STOP_STATE;
-            } else if (OB_FAIL(part_mgr.apply_delete_tablet_change(tablet_change_info))) {
-              LOG_ERROR("apply_delete_tablet_change failed", KR(ret), K(tablet_change_info), K(tenant), KPC(part_trans_task));
-            } else {
-              LOG_DEBUG("CDC_DELETE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
-            }
+          } else if (OB_FAIL(part_mgr.apply_delete_tablet_change(tablet_change_info))) {
+            LOG_ERROR("apply_delete_tablet_change failed", KR(ret), K(tablet_change_info), K(tenant), KPC(part_trans_task));
+          } else {
+            LOG_DEBUG("CDC_DELETE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
           }
         }
+      }
+    }
+
+    // handle ddl_operation and inc_data_dict in sequencer
+    // only when (1) CDC is using data_dict and (2) part_trans is in SYS_LS
+    if (OB_SUCC(ret) && is_using_data_dict && part_trans_task->is_sys_ls_part_trans()) {
+      ObLogDDLProcessor *ddl_processor = TCTX.ddl_processor_;
+      LOG_DEBUG("handle_ddl_trans and mds for data_dict mode begin", KPC(part_trans_task));
+
+      if (OB_ISNULL(ddl_processor)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("expect valid ddl_processor", KR(ret));
+      // Barrier transaction: should wait all task in dml_parser/reader/Formatter done.
+      } else if (OB_FAIL(wait_until_formatter_done_(stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("wait_until_formatter_done_ failed", KR(ret), KPC(part_trans_task));
+        }
+      } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("handle_ddl_trans for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
+        }
+      } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
+          && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
+        LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
+            K(stop_flag));
+      } else {
+        LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
       }
     }
 
     if (OB_SUCC(ret)) {
       part_trans_task = part_trans_task->next_task();
     }
+  } // end while
+
+  if (OB_SUCC(ret) && stop_flag) {
+    ret = OB_IN_STOP_STATE;
+  }
+
+  return ret;
+}
+
+int ObLogSequencer::handle_ddl_multi_data_source_info_(
+    PartTransTask &part_trans_task,
+    ObLogTenant &tenant,
+    TransCtx &trans_ctx)
+{
+  int ret = OB_SUCCESS;
+  DictTenantArray &tenant_metas = part_trans_task.get_dict_tenant_array();
+  DictDatabaseArray &database_metas = part_trans_task.get_dict_database_array();
+  DictTableArray &table_metas = part_trans_task.get_dict_table_array();
+  const bool need_replay = (tenant_metas.count() > 0)
+      || (database_metas.count() > 0)
+      || (table_metas.count() > 0);
+
+  if (need_replay) {
+    const uint64_t tenant_id = part_trans_task.get_tenant_id();
+    ObDictTenantInfoGuard dict_tenant_info_guard;
+    ObDictTenantInfo *tenant_info = nullptr;
+
+    if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
+      LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tenant_info is nullptr", K(tenant_id));
+    } else if (OB_FAIL(schema_inc_replay_.replay(part_trans_task, tenant_metas, database_metas, table_metas, *tenant_info))) {
+      LOG_ERROR("schema_inc_replay_ replay failed", KR(ret), K(part_trans_task), K(tenant_info));
+    }
+  } else {
+    // do nothing
+  }
+
+  LOG_DEBUG("handle_ddl_multi_data_source_info_ done", KR(ret), K(need_replay),
+      "tenant_meta_cnt", tenant_metas.count(),
+      "db_meta_cnt", database_metas.count(),
+      "tb_meta_cnt", table_metas.count(),
+      K(part_trans_task));
+
+  return ret;
+}
+
+int ObLogSequencer::wait_until_parser_done_(volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(TCTX.dml_parser_) || OB_ISNULL(TCTX.reader_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("dml_parser or reader is null", KR(ret));
+  } else {
+    while (OB_SUCC(ret) && ! stop_flag) {
+      int64_t reader_task_count = 0;
+      int64_t dml_parser_task_count = 0;
+      TCTX.reader_->get_task_count(reader_task_count);
+
+      if (OB_FAIL(TCTX.dml_parser_->get_log_entry_task_count(dml_parser_task_count))) {
+        LOG_ERROR("get_dml_parser_task_count failed", KR(ret), K(dml_parser_task_count));
+      } else if (0 < (reader_task_count + dml_parser_task_count)) {
+        const static int64_t PRINT_WAIT_PARSER_TIMEOUT = 10 * _SEC_;
+        if (REACH_TIME_INTERVAL(PRINT_WAIT_PARSER_TIMEOUT)) {
+          LOG_INFO("DDL barrier waiting reader and dml_parser empty",
+              K(reader_task_count), K(dml_parser_task_count));
+        } else {
+          LOG_DEBUG("DDL barrier waiting reader and dml_parser empty",
+              K(reader_task_count), K(dml_parser_task_count));
+        }
+        // sleep 100ms and retry
+        const static int64_t WAIT_PARSER_EMPTY_TIME = 100 * 1000;
+        ob_usleep(WAIT_PARSER_EMPTY_TIME);
+      } else {
+        break;
+      }
+    } // end while
+  }
+
+  if (stop_flag) {
+    ret = OB_IN_STOP_STATE;
+  }
+
+  return ret;
+}
+
+int ObLogSequencer::wait_until_formatter_done_(volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(TCTX.formatter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("formatter is null", KR(ret));
+  } else if (OB_FAIL(wait_until_parser_done_(stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("wait_until_parser_done_ failed", KR(ret));
+    }
+  } else {
+    while (OB_SUCC(ret) && ! stop_flag) {
+      int64_t formatter_br_task_count = 0;
+      int64_t formatter_log_entray_task_count = 0;
+      // should also wait stmt handling in lob_merger.
+      // not get_task_count from lob_merger cause formatter and lob_merger will push task to each
+      // other, which may leads to wrong total_task in formatter and lob_merger in concurrent case.
+      int64_t lob_merger_task_count = 0;
+
+      if (OB_FAIL(TCTX.formatter_->get_task_count(formatter_br_task_count, formatter_log_entray_task_count, lob_merger_task_count))) {
+        LOG_ERROR("get_dml_parser_task_count failed", KR(ret), K(formatter_br_task_count), K(formatter_log_entray_task_count));
+      } else if (0 < (formatter_br_task_count + formatter_log_entray_task_count + lob_merger_task_count)) {
+        const static int64_t PRINT_WAIT_PARSER_TIMEOUT = 10 * _SEC_;
+
+        if (REACH_TIME_INTERVAL(PRINT_WAIT_PARSER_TIMEOUT)) {
+          LOG_INFO("DDL barrier transaction waiting Formatter empty",
+              K(formatter_br_task_count), K(formatter_log_entray_task_count), K(lob_merger_task_count));
+        } else {
+          LOG_DEBUG("DDL barrier transaction waiting Formatter empty",
+              K(formatter_br_task_count), K(formatter_log_entray_task_count), K(lob_merger_task_count));
+        }
+        // sleep 100ms and retry
+        const static int64_t WAIT_FORMATTER_EMPTY_TIME = 100 * 1000;
+        ob_usleep(WAIT_FORMATTER_EMPTY_TIME);
+      } else {
+        break;
+      }
+    }
+  }
+
+  if (stop_flag) {
+    ret = OB_IN_STOP_STATE;
   }
 
   return ret;
@@ -934,31 +1089,45 @@ int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, Ob
   return ret;
 }
 
-void ObLogSequencer::do_stat_for_part_trans_task_count_(PartTransTask &part_trans_task,
-    const int64_t task_count)
+void ObLogSequencer::do_stat_for_part_trans_task_count_(
+    PartTransTask &part_trans_task,
+    const int64_t task_count,
+    const bool is_sub_stat)
 {
   bool is_hb_sub_stat = false;
   int64_t hb_dec_task_count = 0;
+  int64_t op_task_count = task_count;
+  if (is_sub_stat) {
+    op_task_count = -1 * task_count;
+  }
 
   if (part_trans_task.is_ddl_trans()) {
-    (void)ATOMIC_AAF(&ddl_part_trans_task_count_, task_count);
+    if (is_sub_stat) {
+      (void)ATOMIC_AAF(&ddl_part_trans_task_count_, -1);
+      // dist ddl_task contains dml part_trans_task, should do_stat seperately
+      if (task_count > 1) {
+        (void)ATOMIC_AAF(&dml_part_trans_task_count_, 1 - task_count);
+      }
+    } else {
+      (void)ATOMIC_AAF(&ddl_part_trans_task_count_, op_task_count);
+    }
   } else if (part_trans_task.is_dml_trans()) {
-    (void)ATOMIC_AAF(&dml_part_trans_task_count_, task_count);
+    (void)ATOMIC_AAF(&dml_part_trans_task_count_, op_task_count);
   } else {
     // heartbeat
-    if (task_count < 0) {
+    if (is_sub_stat) {
       is_hb_sub_stat = true;
-      hb_dec_task_count = task_count * SequencerThread::get_thread_num();
+      hb_dec_task_count = op_task_count * SequencerThread::get_thread_num();
       (void)ATOMIC_AAF(&hb_part_trans_task_count_, hb_dec_task_count);
     } else {
-      (void)ATOMIC_AAF(&hb_part_trans_task_count_, task_count);
+      (void)ATOMIC_AAF(&hb_part_trans_task_count_, op_task_count);
     }
   }
 
   if (is_hb_sub_stat) {
     (void)ATOMIC_AAF(&total_part_trans_task_count_, hb_dec_task_count);
   } else {
-    (void)ATOMIC_AAF(&total_part_trans_task_count_, task_count);
+    (void)ATOMIC_AAF(&total_part_trans_task_count_, op_task_count);
   }
 }
 

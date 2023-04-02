@@ -43,20 +43,13 @@ private:
                              const ObDMLStmt &stmt,
                              bool &need_trans) override;
 
+  int sort_transed_stmts();
+
   int check_outline_valid_to_transform(const ObDMLStmt &stmt, bool &need_trans);
 
   int pullup_predicates(ObDMLStmt *stmt,
                         ObIArray<int64_t> &select_list,
                         ObIArray<ObRawExpr *> &properties);
-
-  int preprocess(ObDMLStmt &stmt);
-
-  int preprocess_semi_info(ObDMLStmt &stmt,
-                           SemiInfo *semi_info,
-                           ObIArray<ObRawExpr*> &upper_conds);
-  int preprocess_joined_table(ObDMLStmt &stmt, 
-                              JoinedTable *join_table,
-                              ObIArray<ObRawExpr*> &upper_conds);
 
   int pullup_predicates_from_view(ObDMLStmt &stmt,
                                   ObIArray<int64_t> &sel_ids,
@@ -93,6 +86,12 @@ private:
                                  ObIArray<int64_t> &sel_ids,
                                  ObIArray<ObRawExpr *> &input_pullup_preds,
                                  ObIArray<ObRawExpr *> &output_pullup_preds);
+  int gather_pullup_preds_from_semi_outer_join(ObDMLStmt &stmt,
+                                               ObIArray<ObRawExpr*> &preds,
+                                               bool remove_preds = false);
+  int gather_pullup_preds_from_join_table(TableItem *table,
+                                          ObIArray<ObRawExpr*> &preds,
+                                          bool remove_preds);
 
   int remove_pullup_union_predicates(ObIArray<ObRawExpr *> &exprs);
 
@@ -194,9 +193,9 @@ private:
   int pushdown_semi_info_right_filter(ObDMLStmt *stmt,
                                       ObTransformerCtx *ctx,
                                       SemiInfo *semi_info);
-  
+
   int check_has_shared_query_ref(ObRawExpr *expr, bool &has);
-  
+
   int extract_semi_right_table_filter(ObDMLStmt *stmt,
                                       SemiInfo *semi_info,
                                       ObIArray<ObRawExpr *> &right_filters);
@@ -220,9 +219,18 @@ private:
                                  ObIArray<ObRawExpr *> &pullup_preds,
                                  ObIArray<ObRawExpr *> &pushdown_preds);
 
-  int check_transform_happened(ObDMLStmt *stmt,
-                               ObIArray<ObRawExpr *> &old_conditions,
-                               ObIArray<ObRawExpr *> &new_conditions);
+  int store_all_preds(const ObDMLStmt &stmt, ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds);
+  int store_join_conds(const TableItem *table, ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds);
+  int check_transform_happened(const ObDMLStmt &stmt,
+                               const ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds,
+                               bool &is_happened);
+  int check_join_conds_deduced(const TableItem *table,
+                               const ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds,
+                               uint64_t &idx,
+                               bool &is_happened);
+  int check_conds_deduced(const ObIArray<ObRawExpr *> &old_conditions,
+                          const ObIArray<ObRawExpr *> &new_conditions,
+                          bool &is_happened);
 
   int pushdown_through_winfunc(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &predicates,
@@ -269,7 +277,6 @@ private:
                         ObIArray<ObRawExpr *> &new_conds);
 
   int extract_generalized_column(ObRawExpr *expr,
-                                 const int32_t expr_level,
                                  ObIArray<ObRawExpr *> &output);
 
   int acquire_transform_params(ObDMLStmt *stmt, ObIArray<ObRawExpr *> *&preds);
@@ -278,7 +285,7 @@ private:
                              ObIArray<int64_t> &sel_items,
                              ObIArray<ObRawExpr *> &columns);
 
-  int create_equal_exprs_for_insert(ObDelUpdStmt *del_upd_stmt, bool &is_happened);
+  int create_equal_exprs_for_insert(ObDelUpdStmt *del_upd_stmt);
 
   int print_debug_info(const char *str, ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds);
 
@@ -293,6 +300,32 @@ private:
 
   int get_stmt_to_trans(ObDMLStmt *stmt, ObIArray<ObDMLStmt *> &stmt_to_trans);
 
+  int pullup_predicates_from_set_stmt(ObDMLStmt *stmt, ObIArray<int64_t> &sel_ids, ObIArray<ObRawExpr *> &output_pullup_preds);
+
+  int generate_pullup_predicates_for_subquery(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &pullup_preds);
+
+  int choose_and_rename_predicates_for_subquery(ObQueryRefRawExpr *subquery,
+                                     ObIArray<ObRawExpr *> &preds,
+                                     ObIArray<ObRawExpr *> &renamed_preds);
+
+  int generate_basic_table_pullup_preds(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds);
+
+  int update_current_property(ObDMLStmt &stmt,
+                              ObIArray<ObRawExpr *> &exprs,
+                              ObIArray<ObRawExpr *> &push_down_exprs);
+
+  int get_exprs_cnt_exec(ObIArray<ObRawExpr *> &pullup_preds,
+                          ObIArray<ObRawExpr *> &conds);
+
+  int update_subquery_pullup_preds(ObIArray<ObQueryRefRawExpr *> &subquery_exprs,
+                                  ObIArray<ObRawExpr *> &current_exprs_can_push);
+
+  int remove_simple_op_null_condition(ObSelectStmt &stmt, ObIArray<ObRawExpr *> &pullup_preds);
+
+  int is_column_expr_null(ObDMLStmt *stmt, const ObColumnRefRawExpr *expr, bool &is_null, ObIArray<ObRawExpr *> &constraints);
+
+  int extract_filter_column_exprs_for_insert(ObDelUpdStmt &del_upd_stmt, ObIArray<ObRawExpr *> &columns);
+
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
   ObArenaAllocator allocator_;
@@ -300,6 +333,7 @@ private:
   Ob2DArray<PullupPreds *> stmt_pullup_preds_;
   ObSEArray<ObDMLStmt *, 8> transed_stmts_;
   ObSEArray<ObHint *, 4> applied_hints_;
+  bool real_happened_;
 };
 
 }

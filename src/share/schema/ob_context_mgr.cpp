@@ -120,7 +120,7 @@ int ObContextMgr::init()
 void ObContextMgr::reset()
 {
   if (!is_inited_) {
-    LOG_WARN("context manger not init");
+    LOG_WARN_RET(OB_NOT_INIT, "context manger not init");
   } else {
     context_infos_.clear();
     context_map_.clear();
@@ -238,16 +238,24 @@ int ObContextMgr::rebuild_context_hashmap(const ContextInfos &context_infos,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("context schema is NULL", K(context_schema), K(ret));
     } else {
-      bool overwrite = true;
+      bool overwrite = false;
       ObContextHashWrapper hash_wrapper(context_schema->get_tenant_id(),
                                         context_schema->get_namespace());
-      if (OB_FAIL(context_map.set_refactored(hash_wrapper, context_schema, overwrite))) {
-        LOG_WARN("build context hash map failed", K(ret));
+      int hash_ret = context_map.set_refactored(hash_wrapper, context_schema, overwrite);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : hash_ret;
+        LOG_ERROR("build context hash map failed", KR(ret), KR(hash_ret),
+                  "exist_tenant_id", context_schema->get_tenant_id(),
+                  "exist_context_name", context_schema->get_namespace());
       }
     }
   }
   if (OB_SUCC(ret) && OB_UNLIKELY(context_infos.count() != context_map.count())) {
-    LOG_ERROR("Unexpected context map count", K(context_infos.count()), K(context_map.count()));
+    ret = OB_DUPLICATE_OBJECT_NAME_EXIST;
+    LOG_ERROR("Unexpected context map count", KR(ret), K(context_infos.count()), K(context_map.count()));
+    LOG_DBA_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST,
+                  "msg", "duplicate context name exist after rebuild",
+                  K(context_infos.count()), K(context_map.count()));
     right_to_die_or_duty_to_live();
   }
   return ret;

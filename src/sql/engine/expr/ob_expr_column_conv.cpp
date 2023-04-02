@@ -18,6 +18,8 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "lib/geo/ob_geo_utils.h"
 
 using namespace oceanbase::common;
 
@@ -299,12 +301,50 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
       raw_expr.get_extra(), str_values_))) {
     LOG_WARN("fail to init_enum_set_info", K(ret), K(type_), K(str_values_));
   } else {
+    ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(rt_expr.extra_info_);
     if (op_cg_ctx.session_->is_ignore_stmt()) {
-      ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(rt_expr.extra_info_);
       enumset_info->cast_mode_ = enumset_info->cast_mode_ | CM_WARN_ON_FAIL
                                 | CM_CHARSET_CONVERT_IGNORE_ERR;
     }
+    enumset_info->cast_mode_ |= CM_COLUMN_CONVERT;
     rt_expr.eval_func_ = column_convert;
+  }
+  return ret;
+}
+
+static inline int column_convert_datum_accuracy_check(const ObExpr &expr,
+                                                      ObEvalCtx &ctx,
+                                                      bool has_lob_header,
+                                                      ObDatum &datum,
+                                                      const uint64_t &cast_mode,
+                                                      ObDatum &datum_for_check)
+{
+  int ret = OB_SUCCESS;
+  int warning = OB_SUCCESS;
+  const int64_t max_accuracy_len = static_cast<int64_t>(expr.max_length_);
+  const int64_t str_len_byte = static_cast<int64_t>(datum_for_check.len_);
+  if (OB_FAIL(datum_accuracy_check(expr,
+                                   cast_mode,
+                                   ctx,
+                                   has_lob_header,
+                                   datum_for_check,
+                                   datum,
+                                   warning))) {
+    LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
+    //compatible with old code
+    if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+      ObString column_info_str;
+      ObDatum *column_info = NULL;
+      if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
+        LOG_WARN("evaluate parameter failed", K(ret));
+      } else {
+        column_info_str = column_info->get_string();
+        LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info_str.length(),
+                              column_info_str.ptr(), str_len_byte, max_accuracy_len);
+      }
+      ret = OB_ERR_DATA_TOO_LONG;
+    }
   }
   return ret;
 }
@@ -314,7 +354,6 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
                                      ObDatum &datum)
 {
   int ret = OB_SUCCESS;
-  int warning = OB_SUCCESS;
   if (OB_ISNULL(expr.extra_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("extra_info_ is unexpected", K(ret), KP(expr.extra_info_));
@@ -342,41 +381,95 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
     } else if (val->is_null()) {
       datum.set_null();
     } else {
-      if (ob_is_string_type(out_type)) {
-        ObString str = val->get_string();
-        if (OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
-          LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
-        } else {
-          val->set_string(str);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        const int64_t max_accuracy_len = static_cast<int64_t>(expr.max_length_);
-        const int64_t str_len_byte = static_cast<int64_t>(val->len_);
-        if (OB_FAIL(datum_accuracy_check(expr,
-                                         cast_mode,
-                                         ctx,
-                                         *val,
-                                         datum,
-                                         warning))) {
-          LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
-          //compatible with old code
-          if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-              && PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
-            ObString column_info_str;
-            ObDatum *column_info = NULL;
-            if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
-              LOG_WARN("evaluate parameter failed", K(ret));
-            } else {
-              column_info_str = column_info->get_string();
-              LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info_str.length(),
-                                    column_info_str.ptr(), str_len_byte, max_accuracy_len);
-            }
-            ret = OB_ERR_DATA_TOO_LONG;
+      // cast is done implictly if needed, before call this function
+      // 1. cs type validation for string types
+      // 2. accuracy check and modification
+      // 3. handle delta lob
+      if (!is_lob_storage(out_type)) {
+        if (ob_is_string_type(out_type)) { // in type must not be lob type
+          ObString str = val->get_string();
+          if (OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+            LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+          } else {
+            val->set_string(str);
           }
         }
+        if (OB_SUCC(ret)
+            && OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, false, datum, cast_mode, *val))) {
+          LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr), K(*val));
+        }
+        LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
+      } else {
+        ObObjType in_type = expr.args_[4]->obj_meta_.get_type();
+        ObCollationType in_cs_type = expr.args_[4]->obj_meta_.get_collation_type();
+        bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
+        bool has_lob_header_for_check = has_lob_header;
+        ObString raw_str = val->get_string();
+        ObLobLocatorV2 input_lob(raw_str.ptr(), raw_str.length(), has_lob_header);
+        bool is_delta = input_lob.is_valid() && input_lob.is_delta_temp_lob();
+        if (is_delta) { // delta lob
+          if (!(ob_is_text_tc(in_type))) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("delta lob can not convert to non-text type", K(ret), K(out_type));
+          } else {
+            datum.set_string(raw_str);
+          }
+        } else {
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx); // temp alloc only used for lob types
+          common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+          ObDatum datum_for_check = *val;
+          ObString str;
+          ObTextStringIter striter(in_type, in_cs_type, val->get_string(), has_lob_header);
+          if (OB_FAIL(striter.init(0, ctx.exec_ctx_.get_my_session(), &temp_allocator))) {
+            LOG_WARN("fail to init string iter", K(ret), K(is_strict), K(expr));
+          } else if (OB_FAIL(striter.get_full_data(str))) {
+            LOG_WARN("fail to get full data from string iter", K(ret), K(is_strict), K(expr));
+          } else if (ob_is_geometry(out_type)) {
+            ObGeoType geo_type = ObGeoCastUtils::get_geo_type_from_cast_mode(cast_mode);
+            if (OB_FAIL(ObGeoTypeUtil::check_geo_type(geo_type, str))) {
+              LOG_WARN("fail to check geo type", K(ret), K(str), K(geo_type), K(expr));
+              ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+              LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+            }
+          } else if (OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+            LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+          }
+          if (OB_SUCC(ret)) {
+            has_lob_header_for_check = false; // datum_for_check must have no lob header
+            datum_for_check.set_string(str);
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, has_lob_header_for_check, datum,
+                                                                 cast_mode, datum_for_check))) {
+            LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr), K(datum_for_check));
+          } else {
+            // in type is the same with out type, if length changed, build a new lob
+            ObLobLocatorV2 loc(raw_str, has_lob_header);
+            int64_t old_data_byte_len = 0;
+            if (raw_str.length() > 0) {
+              if (OB_FAIL(loc.get_lob_data_byte_len(old_data_byte_len))) {
+                LOG_WARN("Lob: failed to get data byte len", K(ret));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              int64_t new_data_byte_len = datum.get_string().length();
+              if (new_data_byte_len == old_data_byte_len) {
+                datum.set_string(raw_str);
+              } else {
+                ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &datum);
+                if (OB_FAIL(str_result.init(new_data_byte_len))) {
+                  LOG_WARN("Lob: init lob result failed", K(ret));
+                } else if (OB_FAIL(str_result.append(datum.get_string().ptr(), new_data_byte_len))) {
+                  LOG_WARN("Lob: append lob result failed", K(ret));
+                } else {
+                  str_result.set_result();
+                }
+              }
+            }
+          }
+          LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
+        }
       }
-      LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
     }
   }
 

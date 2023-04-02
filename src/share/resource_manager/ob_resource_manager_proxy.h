@@ -25,6 +25,7 @@ namespace common
 class ObMySQLTransaction;
 class ObString;
 class ObObj;
+class ObMySQLProxy;
 }
 namespace share
 {
@@ -62,14 +63,20 @@ public:
       const common::ObString &group,
       const common::ObObj &comment,
       const common::ObObj &mgmt_p1,
-      const common::ObObj &utilization_limit);
+      const common::ObObj &utilization_limit,
+      const common::ObObj &min_iops,
+      const common::ObObj &max_iops,
+      const common::ObObj &weight_iops);
   int create_plan_directive(
       uint64_t tenant_id,
       const common::ObString &plan,
       const common::ObString &group,
       const common::ObObj &comment,
       const common::ObObj &mgmt_p1,
-      const common::ObObj &utilization_limit);
+      const common::ObObj &utilization_limit,
+      const common::ObObj &min_iops,
+      const common::ObObj &max_iops,
+      const common::ObObj &weight_iops);
   // 这里之所以直接传入 ObObj，而不是传入 ObString 或 int
   // 是为了便于判断传入的参数是否是缺省，如果缺省则 ObObj.is_null() 是 true
   int update_plan_directive(
@@ -78,7 +85,10 @@ public:
       const common::ObString &group,
       const common::ObObj &comment,
       const common::ObObj &mgmt_p1,
-      const common::ObObj &utilization_limit);
+      const common::ObObj &utilization_limit,
+      const common::ObObj &min_iops,
+      const common::ObObj &max_iops,
+      const common::ObObj &weight_iops);
   int delete_plan_directive(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -93,10 +103,43 @@ public:
     uint64_t tenant_id,
     const common::ObString &attribute,
     const common::ObString &value,
+    const common::ObString &consumer_group,
+    const sql::ObSQLSessionInfo &session);
+  int replace_user_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
     const common::ObString &consumer_group);
+  int replace_function_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
+    const common::ObString &consumer_group);
+  int replace_column_mapping_rule(
+    common::ObMySQLTransaction &trans,
+    uint64_t tenant_id,
+    const common::ObString &attribute,
+    const common::ObString &value,
+    const common::ObString &consumer_group,
+    const sql::ObSQLSessionInfo &session);
+  int update_resource_mapping_version(common::ObMySQLTransaction &trans, uint64_t tenant_id);
   int get_all_resource_mapping_rules(
       uint64_t tenant_id,
       common::ObIArray<ObResourceMappingRule> &rules);
+  int get_all_group_info(
+    uint64_t tenant_id,
+    const common::ObString &plan,
+    common::ObIArray<ObResourceUserMappingRule> &rules);
+  int get_all_resource_mapping_rules_by_function(
+    uint64_t tenant_id,
+    const common::ObString &plan,
+    common::ObIArray<ObResourceMappingRule> &rules);
+  int get_all_resource_mapping_rules_for_plan(
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      common::ObIArray<ObResourceIdNameMappingRule> &rules);
   int get_all_resource_mapping_rules_by_user(
       uint64_t tenant_id,
       const common::ObString &plan,
@@ -105,6 +148,41 @@ public:
       uint64_t tenant_id,
       const common::ObString &plan,
       bool &exist);
+  int get_resource_mapping_version(uint64_t tenant_id, int64_t &current_version);
+  int get_all_resource_mapping_rules_by_column(
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      ObIAllocator &allocator,
+      common::ObIArray<ObResourceColumnMappingRule> &rules);
+  int get_next_element(
+      const common::ObString &value,
+      int64_t &pos,
+      char wrapper,
+      common::ObString end_chars,
+      common::ObString &element,
+      bool &is_wrapped);
+  void upper_db_table_name(
+      const bool need_modify_case,
+      const bool is_oracle_mode,
+      const common::ObNameCaseMode case_mode,
+      const bool is_wrapped,
+      common::ObString& name);
+  int parse_column_mapping_rule(
+      common::ObString &value,
+      const sql::ObSQLSessionInfo *session,
+      common::ObString &db_name,
+      common::ObString &table_name,
+      common::ObString &column_name,
+      common::ObString &literal_value,
+      common::ObString &user_name,
+      const common::ObNameCaseMode case_mode);
+  int get_iops_config(
+      const uint64_t tenant_id,
+      const common::ObString &plan,
+      const common::ObString &group,
+      ObPlanDirective &directive);
+  int reset_all_mapping_rules();
+
 private:
   int allocate_consumer_group_id(
       common::ObMySQLTransaction &trans,
@@ -127,12 +205,49 @@ private:
       const common::ObString &group,
       bool &exist);
   int check_if_user_exist(
-      common::ObMySQLTransaction &trans,
       uint64_t tenant_id,
       const common::ObString &user_name,
       bool &exist);
+  int check_if_function_exist(const common::ObString &function_name, bool &exist);
+  int check_if_column_exist(
+      uint64_t tenant_id,
+      const common::ObString &db_name,
+      const common::ObString &table_name,
+      const common::ObString &column_name);
+  int formalize_column_mapping_value(
+      const common::ObString &db_name,
+      const common::ObString &table_name,
+      const common::ObString &column_name,
+      const common::ObString &literal_value,
+      const common::ObString &user_name,
+      bool is_oracle_mode,
+      ObIAllocator &allocator,
+      common::ObString &formalized_value);
+  int check_if_column_and_user_exist(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      common::ObString &value,
+      const sql::ObSQLSessionInfo &session,
+      ObIAllocator &allocator,
+      bool &exist,
+      common::ObString &formalized_value);
   // helper func, 便于集中获取百分比的值，数值范围为 [0, 100]
   int get_percentage(const char *name, const common::ObObj &obj, int64_t &v);
+  // max_iops >= min_iops, 否则抛出错误
+  int check_iops_validity(
+      const uint64_t tenant_id,
+      const common::ObString &plan_name,
+      const common::ObString &group,
+      const int64_t iops_minimum,
+      const int64_t iops_maximum,
+      bool &valid);
+
+  // get user_info from inner mapping_table
+  int get_user_mapping_info(
+      const uint64_t tenant_id,
+      const common::ObString &user,
+      ObResourceUserMappingRule &rule);
+
 public:
   class TransGuard {
   public:

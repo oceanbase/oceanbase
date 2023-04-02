@@ -99,7 +99,8 @@ enum ObPLOpaqueType
   PL_INVALID = -1,
   PL_ANY_TYPE = 0,
   PL_ANY_DATA = 1,
-  PL_XML_TYPE = 2
+  PL_XML_TYPE = 2,
+  PL_JSON_TYPE = 3
 };
 
 enum ObPLIntegerType
@@ -392,6 +393,9 @@ public:
   inline bool is_lob_type() const {
     return PL_OBJ_TYPE == type_ && obj_type_.get_meta_type().is_lob_locator();
   }
+  inline bool is_lob_storage_type() const {
+    return PL_OBJ_TYPE == type_ && obj_type_.get_meta_type().is_lob_storage();
+  }
   inline bool is_long_type() const {
     return PL_OBJ_TYPE == type_ && ObVarcharType == obj_type_.get_meta_type().get_type()
           && obj_type_.get_meta_type().is_cs_collation_free();
@@ -626,11 +630,11 @@ public:
   void reset();
   bool operator==(const ObObjAccessIdx &other) const;
 
-  TO_STRING_KV(K_(elem_type),
-               K_(access_type),
+  TO_STRING_KV(K_(access_type),
                K_(var_name),
                K_(var_type),
                K_(var_index),
+               K_(elem_type),
                K_(type_method_params),
                KP_(get_sysfunc));
 public:
@@ -720,7 +724,7 @@ enum ObPLCursorFlag {
   REF_BY_REFCURSOR = 1, // this a ref cursor
   SESSION_CURSOR = 2, // this cursor is alloc in session memory
   TRANSFERING_RESOURCE = 4, // this cursor is returned by a udf
-  SYNC_CURSOR = 5, // this cursor from package cursor sync, can not used by this server.
+  SYNC_CURSOR = 8, // this cursor from package cursor sync, can not used by this server.
 };
 class ObPLCursorInfo
 {
@@ -938,7 +942,7 @@ public:
 
   static int prepare_entity(sql::ObSQLSessionInfo &session, 
                             lib::MemoryContext &entity);
-  int prepare_spi_result(sql::ObSPIResultSet *&spi_result);
+  int prepare_spi_result(ObPLExecCtx *ctx, sql::ObSPIResultSet *&spi_result);
   int prepare_spi_cursor(sql::ObSPICursor *&spi_cursor,
                           uint64_t tenant_id,
                           uint64_t mem_limit);

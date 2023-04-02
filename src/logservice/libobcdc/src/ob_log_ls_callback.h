@@ -16,6 +16,7 @@
 #include "lib/container/ob_se_array.h"        // ObSEArray
 #include "logservice/palf/lsn.h"              // LSN
 #include "ob_log_ls_define.h"                 // TenantLSID
+#include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
 
 namespace oceanbase
 {
@@ -29,8 +30,7 @@ public:
 public:
   // Add LS
   virtual int add_ls(const TenantLSID &tls_id,
-      const int64_t start_tstamp,
-      const palf::LSN &start_lsn) = 0;
+      const ObLogFetcherStartParameters &start_parameters) = 0;
 };
 
 struct LSRecycleCallback

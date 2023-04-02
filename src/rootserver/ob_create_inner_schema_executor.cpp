@@ -63,7 +63,7 @@ int ObCreateInnerSchemaTask::process()
 
 ObCreateInnerSchemaExecutor::ObCreateInnerSchemaExecutor()
   : is_inited_(false), is_stopped_(false), execute_(false),
-    rwlock_(), schema_service_(nullptr), sql_proxy_(nullptr),
+    rwlock_(ObLatchIds::CREATE_INNER_SCHEMA_EXECUTOR_LOCK), schema_service_(nullptr), sql_proxy_(nullptr),
     rpc_proxy_(nullptr)
 {
 }

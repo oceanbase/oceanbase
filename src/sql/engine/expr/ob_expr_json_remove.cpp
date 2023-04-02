@@ -8,9 +8,11 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_remove.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "deps/oblib/src/lib/json_type/ob_json_path.h"
 #include "ob_expr_json_remove.h"
 #include "ob_expr_json_func_helper.h"
 
@@ -111,7 +113,9 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else {
       ObString path_val = path_data->get_string();
       ObJsonPath *json_path;
-      if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
+      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[i], ctx, temp_allocator, path_val, is_null_result))) {
+        LOG_WARN("fail to get real data.", K(ret), K(path_val));
+      } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, json_path, path_val, i, false))) {
         LOG_WARN("parse text to path failed", K(path_data->get_string()), K(ret));
       } else if (json_path->path_node_cnt() == 0) {
         ret = OB_ERR_JSON_VACUOUS_PATH;
@@ -140,15 +144,8 @@ int ObExprJsonRemove::eval_json_remove(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObString str;
     if (OB_FAIL(json_doc->get_raw_binary(str, &temp_allocator))) {
       LOG_WARN("json_remove get result binary failed", K(ret));
-    } else {
-      char *buf = expr.get_str_res_mem(ctx, str.length());
-      if (OB_ISNULL(buf)){
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("json_remove alloc jsonString failed", K(ret), K(str.length()));
-      } else {
-        MEMCPY(buf, str.ptr(), str.length());
-        res.set_string(buf, str.length());
-      }
+    } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
+      LOG_WARN("fail to pack json result", K(ret));
     }
   }
 

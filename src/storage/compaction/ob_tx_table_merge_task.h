@@ -14,7 +14,6 @@
 #define STORAGE_COMPACTION_OB_TX_TABLE_MERGE_TASK_H_
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
-#include "storage/compaction/ob_i_compaction_filter.h"
 
 namespace oceanbase
 {
@@ -29,16 +28,16 @@ namespace compaction
 class ObTxTableMergeDag;
 class ObTabletMergeCtx;
 
+// for mini merge
 class ObTxTableMergePrepareTask: public ObTabletMergePrepareTask
 {
 public:
   ObTxTableMergePrepareTask();
   virtual ~ObTxTableMergePrepareTask();
   int init();
-  virtual int process() override;
-
 private:
-  int build_merge_ctx();
+  int pre_process_tx_data_table_merge_(ObTabletMergeCtx &ctx);
+  virtual int inner_init_ctx(ObTabletMergeCtx &ctx, bool &skip_merge_task_flag) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTxTableMergePrepareTask);
 };
@@ -51,7 +50,6 @@ public:
   virtual int create_first_task() override;
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
 private:
-  ObTransStatusFilter compaction_filter_;
   DISALLOW_COPY_AND_ASSIGN(ObTxTableMergeDag);
 };
 

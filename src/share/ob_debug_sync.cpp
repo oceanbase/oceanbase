@@ -47,7 +47,7 @@ void ObDSActionArray::clear(const ObDebugSyncPoint sync_point)
       LOG_INFO("clear sync point", K(sync_point));
     }
   } else {
-    LOG_WARN("invalid sync point", K(sync_point));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid sync point", K(sync_point));
   }
 }
 
@@ -270,7 +270,7 @@ void ObDSSessionActions::free_node(ObDSActionNode *node)
     }
     node->action_.reset();
     if (!free_list_.add_first(node)) {
-      LOG_ERROR("add empty node to list should always success");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add empty node to list should always success");
     }
   }
 }
@@ -433,7 +433,7 @@ ObDSEventControl::ObDSEventControl() : stop_(false)
 {
   for (int64_t i = 0; i < ARRAYSIZEOF(events_); ++i) {
     if (!free_.add_first(&events_[i])) {
-      LOG_ERROR("add empty node to list should always success");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add empty node to list should always success");
     }
   }
   cond_.init(ObWaitEventIds::DEBUG_SYNC_COND_WAIT);
@@ -449,7 +449,7 @@ ObDSEventControl::Event *ObDSEventControl::alloc_event()
 {
   Event *e = NULL;
   if (free_.is_empty()) {
-    LOG_WARN("exceed max event count", LITERAL_K(MAX_EVENT_CNT));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "exceed max event count", LITERAL_K(MAX_EVENT_CNT));
   } else {
     e = free_.remove_first();
   }
@@ -461,7 +461,7 @@ void ObDSEventControl::free_event(Event *e)
   if (NULL != e) {
     e->reset();
     if (!free_.add_first(e)) {
-      LOG_ERROR("add empty node to list should always success");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "add empty node to list should always success");
     }
   }
 }
@@ -647,7 +647,7 @@ void ObDSEventControl::stop()
   stop_ = true;
   int tmp_ret = cond_.broadcast();
   if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("condition broadcast failed", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "condition broadcast failed", K(tmp_ret));
   }
 }
 
@@ -982,7 +982,7 @@ ObDebugSync &ObDebugSync::instance()
 
 ObDSActionArray *ObDebugSync::thread_local_actions() const
 {
-  return GET_TSI_MULT(ObDSActionArray, TSI_COMMON_DEBUG_SYNC_ARRAY);
+  return GET_TSI(ObDSActionArray);
 }
 
 ObDSActionArray &ObDebugSync::rpc_spread_actions() const

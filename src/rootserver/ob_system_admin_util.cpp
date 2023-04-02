@@ -50,6 +50,7 @@
 #include "storage/ob_file_system_router.h"
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 namespace oceanbase
 {
 using namespace common;
@@ -191,7 +192,8 @@ int ObAdminSwitchReplicaRole::execute(const ObAdminSwitchReplicaRoleArg &arg)
   } else if (OB_ISNULL(GCTX.lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.lst_operator_ is NULL", K(arg), KR(ret), K(tenant_id));
-  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id, ls_id, ls_info))) {
+  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id,
+                     ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("get ls info from GCTX.lst_operator_ failed", K(arg), KR(ret), K(tenant_id));
   } else if (OB_FAIL(update_ls_election_reference_info_table(arg, tenant_id, ls_info))) {
     LOG_WARN("fail to update ls election reference info", K(arg), KR(ret), K(tenant_id));
@@ -652,11 +654,16 @@ int ObAdminRefreshSchema::call_server(const ObAddr &server)
     arg.schema_info_ = schema_info_;
     ObArray<int> return_code_array;
     ObSwitchSchemaProxy proxy(*GCTX.srv_rpc_proxy_, &ObSrvRpcProxy::switch_schema);
+    int tmp_ret = OB_SUCCESS;
     const int64_t timeout_ts = ctx.get_timeout(0);
     if (OB_FAIL(proxy.call(server, timeout_ts, arg))) {
       LOG_WARN("notify switch schema failed", KR(ret), K(server), K_(schema_version), K_(schema_info));
-    } else if (OB_FAIL(proxy.wait_all(return_code_array))) {
-      LOG_WARN("fail to wait all", KR(ret), K(server));
+    }
+
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("fail to wait all", KR(ret), KR(tmp_ret), K(server));
+    } else if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(return_code_array.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("return_code_array is empty", KR(ret), K(server));
@@ -943,61 +950,75 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
       } else if (item->tenant_ids_.size() > 0) {
         // tenant config
         ObDMLSqlSplicer dml;
-        for (uint64_t tenant_id : item->tenant_ids_) {
-          const char *table_name = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ?
-                                     OB_ALL_SEED_PARAMETER_TNAME : OB_TENANT_PARAMETER_TNAME);
-          tenant_id = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ? OB_SYS_TENANT_ID : tenant_id);
-          uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-          dml.reset();
-          if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-              || OB_FAIL(dml.add_pk_column("zone", item->zone_.ptr()))
-              || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
-              || OB_FAIL(dml.add_pk_column(K(svr_ip)))
-              || OB_FAIL(dml.add_pk_column(K(svr_port)))
-              || OB_FAIL(dml.add_pk_column("name", item->name_.ptr()))
-              || OB_FAIL(dml.add_column("data_type", "varchar"))
-              || OB_FAIL(dml.add_column("value", item->value_.ptr()))
-              || OB_FAIL(dml.add_column("info", item->comment_.ptr()))
-              || OB_FAIL(dml.add_column("config_version", new_version))) {
-            LOG_WARN("add column failed", KR(ret));
-          } else if (OB_FAIL(dml.get_values().append_fmt("usec_to_time(%ld)", new_version))) {
-            LOG_WARN("append valued failed", KR(ret));
-          } else if (OB_FAIL(dml.add_column(false, "gmt_modified"))) {
-            LOG_WARN("add column failed", KR(ret));
-          } else {
-            int64_t affected_rows = 0;
-            ObDMLExecHelper exec(*ctx_.sql_proxy_, exec_tenant_id);
-            ObConfigItem *ci = nullptr;
-            // tenant not exist in RS, use SYS instead
-            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
-            if (!tenant_config.is_valid()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("failed to get tenant config",K(tenant_id),  KR(ret));
-            } else if (OB_ISNULL(tenant_config->get_container().get(
-                                        ObConfigStringKey(item->name_.ptr())))) {
-              ret = OB_ERR_SYS_CONFIG_UNKNOWN;
-              LOG_WARN("can't found config item", KR(ret), K(tenant_id), "item", *item);
+        share::schema::ObSchemaGetterGuard schema_guard;
+        const share::schema::ObSimpleTenantSchema *tenant_schema = NULL;
+        if (OB_FAIL(GSCHEMASERVICE.get_tenant_schema_guard(
+                OB_SYS_TENANT_ID, schema_guard))) {
+          LOG_WARN("fail to get sys tenant schema guard", KR(ret));
+        } else {
+          for (uint64_t tenant_id : item->tenant_ids_) {
+            const char *table_name = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ?
+                                      OB_ALL_SEED_PARAMETER_TNAME : OB_TENANT_PARAMETER_TNAME);
+            tenant_id = (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id ? OB_SYS_TENANT_ID : tenant_id);
+            uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+            dml.reset();
+            if (OB_FAIL(schema_guard.get_tenant_info(exec_tenant_id, tenant_schema))) {
+              LOG_WARN("failed to get tenant ids", KR(ret), K(exec_tenant_id));
+            } else if (OB_ISNULL(tenant_schema)) {
+              ret = OB_TENANT_NOT_EXIST;
+              LOG_WARN("tenant not exist", KR(ret), K(tenant_id));
+            } else if (!tenant_schema->is_normal()) {
+              //tenant not normal, maybe tenant not ready, cannot add tenant config
+            } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
+                || OB_FAIL(dml.add_pk_column("zone", item->zone_.ptr()))
+                || OB_FAIL(dml.add_pk_column("svr_type", print_server_role(OB_SERVER)))
+                || OB_FAIL(dml.add_pk_column(K(svr_ip)))
+                || OB_FAIL(dml.add_pk_column(K(svr_port)))
+                || OB_FAIL(dml.add_pk_column("name", item->name_.ptr()))
+                || OB_FAIL(dml.add_column("data_type", "varchar"))
+                || OB_FAIL(dml.add_column("value", item->value_.ptr()))
+                || OB_FAIL(dml.add_column("info", item->comment_.ptr()))
+                || OB_FAIL(dml.add_column("config_version", new_version))) {
+              LOG_WARN("add column failed", KR(ret));
+            } else if (OB_FAIL(dml.get_values().append_fmt("usec_to_time(%ld)", new_version))) {
+              LOG_WARN("append valued failed", KR(ret));
+            } else if (OB_FAIL(dml.add_column(false, "gmt_modified"))) {
+              LOG_WARN("add column failed", KR(ret));
             } else {
-              ci = *(tenant_config->get_container().get(
-                                    ObConfigStringKey(item->name_.ptr())));
-              if (OB_FAIL(dml.add_column("section", ci->section()))
-                          || OB_FAIL(dml.add_column("scope", ci->scope()))
-                          || OB_FAIL(dml.add_column("source", ci->source()))
-                          || OB_FAIL(dml.add_column("edit_level", ci->edit_level()))) {
-                LOG_WARN("add column failed", KR(ret));
-              } else if (OB_FAIL(exec.exec_insert_update(table_name,
-                                                         dml, affected_rows))) {
-                LOG_WARN("execute insert update failed", K(tenant_id), KR(ret), "item", *item);
-              } else if (is_zero_row(affected_rows) || affected_rows > 2) {
+              int64_t affected_rows = 0;
+              ObDMLExecHelper exec(*ctx_.sql_proxy_, exec_tenant_id);
+              ObConfigItem *ci = nullptr;
+              // tenant not exist in RS, use SYS instead
+              omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+              if (!tenant_config.is_valid()) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected affected rows", K(tenant_id), K(affected_rows), KR(ret));
+                LOG_WARN("failed to get tenant config",K(tenant_id),  KR(ret));
+              } else if (OB_ISNULL(tenant_config->get_container().get(
+                                          ObConfigStringKey(item->name_.ptr())))) {
+                ret = OB_ERR_SYS_CONFIG_UNKNOWN;
+                LOG_WARN("can't found config item", KR(ret), K(tenant_id), "item", *item);
+              } else {
+                ci = *(tenant_config->get_container().get(
+                                      ObConfigStringKey(item->name_.ptr())));
+                if (OB_FAIL(dml.add_column("section", ci->section()))
+                            || OB_FAIL(dml.add_column("scope", ci->scope()))
+                            || OB_FAIL(dml.add_column("source", ci->source()))
+                            || OB_FAIL(dml.add_column("edit_level", ci->edit_level()))) {
+                  LOG_WARN("add column failed", KR(ret));
+                } else if (OB_FAIL(exec.exec_insert_update(table_name,
+                                                          dml, affected_rows))) {
+                  LOG_WARN("execute insert update failed", K(tenant_id), KR(ret), "item", *item);
+                } else if (is_zero_row(affected_rows) || affected_rows > 2) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected affected rows", K(tenant_id), K(affected_rows), KR(ret));
+                }
               }
             }
-          }
-          if (OB_FAIL(ret)) {
-            break;
-          }
-        } // for
+            if (OB_FAIL(ret)) {
+              break;
+            }
+          } // for
+        }
       } else {
         // sys config
         ObDMLSqlSplicer dml;
@@ -1159,7 +1180,7 @@ int ObAdminUpgradeVirtualSchema::execute()
   } else {
     FOREACH(tenant_id, tenant_ids) { // ignore ret
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = execute_(*tenant_id, upgrade_cnt))) {
+      if (OB_SUCCESS != (tmp_ret = execute(*tenant_id, upgrade_cnt))) {
         LOG_WARN("fail to execute upgrade virtual table by tenant", KR(tmp_ret), K(*tenant_id));
       }
       ret = OB_SUCC(ret) ? tmp_ret : ret;
@@ -1175,7 +1196,7 @@ int ObAdminUpgradeVirtualSchema::execute()
   return ret;
 }
 
-int ObAdminUpgradeVirtualSchema::execute_(
+int ObAdminUpgradeVirtualSchema::execute(
     const uint64_t tenant_id,
     int64_t &upgrade_cnt)
 {
@@ -1228,34 +1249,37 @@ int ObAdminUpgradeVirtualSchema::execute_(
 
   // remove tables not exist on hard code tables
   ObSchemaGetterGuard schema_guard;
-  ObArray<const ObTableSchema *> in_mem_tables;
+  ObArray<uint64_t> tids;
   if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("get_schema_guard failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, in_mem_tables))) {
-    LOG_WARN("get_table_schemas_in_tenant failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, tids))) {
+    LOG_WARN("get_table_ids_in_tenant failed", KR(ret), K(tenant_id));
   } else {
-    FOREACH_CNT_X(in_mem_table, in_mem_tables, OB_SUCC(ret)) {
-      if (OB_ISNULL(in_mem_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("in mem table is null", KR(ret), K(tenant_id));
-      } else if (!is_inner_table((*in_mem_table)->get_table_id())
-                 || is_sys_table((*in_mem_table)->get_table_id())) {
+    FOREACH_CNT_X(tid, tids, OB_SUCC(ret)) {
+      const ObTableSchema *in_mem_table = NULL;
+      if (!is_inner_table(*tid) || is_sys_table(*tid)) {
         continue;
-      }
-      bool exist = false;
-      FOREACH_CNT_X(hard_code_table, hard_code_tables, OB_SUCC(ret) && !exist) {
-        if (OB_ISNULL(hard_code_table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("hard code table is null", KR(ret), K(tenant_id));
-        } else if ((*in_mem_table)->get_table_id() == hard_code_table->get_table_id()) {
-          exist = true;
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, *tid, in_mem_table))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(*tid));
+      } else if (OB_ISNULL(in_mem_table)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", KR(ret), K(tenant_id), K(*tid));
+      } else {
+        bool exist = false;
+        FOREACH_CNT_X(hard_code_table, hard_code_tables, OB_SUCC(ret) && !exist) {
+          if (OB_ISNULL(hard_code_table)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("hard code table is null", KR(ret), K(tenant_id));
+          } else if (in_mem_table->get_table_id() == hard_code_table->get_table_id()) {
+            exist = true;
+          }
         }
-      }
-      if (!exist) {
-        if (FAILEDx(ctx_.ddl_service_->drop_inner_table(**in_mem_table))) {
-          LOG_WARN("drop table schema failed", KR(ret), K(tenant_id), KPC(*in_mem_table));
-        } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
-          LOG_WARN("refresh_schema failed", KR(ret), K(tenant_id));
+        if (!exist) {
+          if (FAILEDx(ctx_.ddl_service_->drop_inner_table(*in_mem_table))) {
+            LOG_WARN("drop table schema failed", KR(ret), K(tenant_id), KPC(in_mem_table));
+          } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
+            LOG_WARN("refresh_schema failed", KR(ret), K(tenant_id));
+          }
         }
       }
     }
@@ -1312,23 +1336,49 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
   if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
       tenant_id, schema_guard))) {
     LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                                                   table.get_database_id(),
-                                                   table.get_table_name(),
-                                                   table.is_index_table(),
-                                                   exist_schema))) {
-    LOG_WARN("get table schema failed", KR(ret), K(tenant_id), "table", table.get_table_name());
-    if (OB_TABLE_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
+  } else {
+    ObArenaAllocator allocator;
+    ObString index_name;
+    if (table.is_index_table()) {
+      // In the early version, table name of oracle virtual table index is not right
+      // (data_table_id is mysql virtual table id), which may cause we can't find duplicate index
+      // with table name and duplicate name conflict occur.
+      //
+      // ETC:
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ORA_TID = 15034;
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ORA_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TID = 19998;
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TNAME = "__idx_1099511638779_all_virtual_plan_cache_stat_i1";
+      // OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ORA_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TNAME = "__idx_1099511642810_all_virtual_plan_cache_stat_i1";
+      //
+      // For oracle virtual table index which data_table_id is (1 << 40) | 15034 = 1099511642810,
+      // but it use OB_ALL_VIRTUAL_PLAN_CACHE_STAT_ALL_VIRTUAL_PLAN_CACHE_STAT_I1_TNAME as table name.
+      if (OB_FAIL(table.generate_origin_index_name())) {
+        LOG_WARN("fail to generate origin index name", KR(ret), K(table));
+      } else if (OB_FAIL(ObTableSchema::build_index_table_name(
+                 allocator, table.get_data_table_id(),
+                 table.get_origin_index_name_str(), index_name))) {
+        LOG_WARN("fail to build index table name", KR(ret), K(table));
+      }
     }
-  } else if (OB_ISNULL(exist_schema)) {
-    // no duplicate table name
-  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
-    LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
-             "table", table.get_table_name(), "table_id", table.get_table_id());
-  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-             tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    if (FAILEDx(schema_guard.get_table_schema(
+                tenant_id,
+                table.get_database_id(),
+                table.is_index_table() ? index_name : table.get_table_name(),
+                table.is_index_table(),
+                exist_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(tenant_id), "table", table.get_table_name());
+      if (OB_TABLE_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_ISNULL(exist_schema)) {
+      // no duplicate table name
+    } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
+               "table", table.get_table_name(), "table_id", table.get_table_id());
+    } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
+               tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
+    }
   }
   // 2. try drop table first
   exist_schema = NULL;
@@ -1361,55 +1411,48 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
 int ObAdminUpgradeCmd::execute(const Bool &upgrade)
 {
   int ret = OB_SUCCESS;
-  char min_server_version[OB_SERVER_VERSION_LENGTH];
-  uint64_t current_version = 0;
-  if (OB_FAIL(ctx_.server_mgr_->get_min_server_version(min_server_version))) {
-    LOG_WARN("failed to get the min server version", KR(ret));
-  } else if (OB_FAIL(ObClusterVersion::get_version(min_server_version, current_version))) {
-    LOG_WARN("fail to parse current version", KR(ret), K(min_server_version));
-  } else {
-    // set min_observer_version and enable_upgrade_mode
-    HEAP_VAR(ObAdminSetConfigItem, item) {
-      obrpc::ObAdminSetConfigArg set_config_arg;
-      set_config_arg.is_inner_ = true;
-      const char *min_obs_version_name = "min_observer_version";
-      const char *enable_upgrade_name = "enable_upgrade_mode";
-      ObAdminSetConfig admin_set_config(ctx_);
+  // set enable_upgrade_mode
+  HEAP_VAR(ObAdminSetConfigItem, item) {
+    obrpc::ObAdminSetConfigArg set_config_arg;
+    set_config_arg.is_inner_ = true;
+    const char *enable_upgrade_name = "enable_upgrade_mode";
+    ObAdminSetConfig admin_set_config(ctx_);
+    char min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+    uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
 
-      if (OB_FAIL(item.name_.assign(min_obs_version_name))) {
-        LOG_WARN("assign min_observer_version config name failed", KR(ret));
-      } else if (OB_FAIL(item.value_.assign(min_server_version))) {
-        LOG_WARN("assign min_observer_version config value failed", KR(ret));
+    if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+        min_server_version, OB_SERVER_VERSION_LENGTH, cluster_version)) {
+       ret = OB_INVALID_ARGUMENT;
+       LOG_WARN("fail to print version str", KR(ret), K(cluster_version));
+    } else if (OB_FAIL(item.name_.assign(enable_upgrade_name))) {
+      LOG_WARN("assign enable_upgrade_mode config name failed", KR(ret));
+    } else if (OB_FAIL(item.value_.assign((upgrade ? "true" : "false")))) {
+      LOG_WARN("assign enable_upgrade_mode config value failed", KR(ret));
+    } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
+      LOG_WARN("add enable_upgrade_mode config item failed", KR(ret));
+    } else {
+      const char *upgrade_stage_name = "_upgrade_stage";
+      obrpc::ObUpgradeStage stage = upgrade ?
+                                    obrpc::OB_UPGRADE_STAGE_PREUPGRADE :
+                                    obrpc::OB_UPGRADE_STAGE_NONE;
+      if (OB_FAIL(item.name_.assign(upgrade_stage_name))) {
+        LOG_WARN("assign _upgrade_stage config name failed", KR(ret), K(upgrade));
+      } else if (OB_FAIL(item.value_.assign(obrpc::get_upgrade_stage_str(stage)))) {
+        LOG_WARN("assign _upgrade_stage config value failed", KR(ret), K(stage), K(upgrade));
       } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
-        LOG_WARN("add min_observer_version config item failed", KR(ret));
-      } else if (OB_FAIL(item.name_.assign(enable_upgrade_name))) {
-        LOG_WARN("assign enable_upgrade_mode config name failed", KR(ret));
-      } else if (OB_FAIL(item.value_.assign((upgrade ? "true" : "false")))) {
-        LOG_WARN("assign enable_upgrade_mode config value failed", KR(ret));
-      } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
-        LOG_WARN("add enable_upgrade_mode config item failed", KR(ret));
-      } else if (current_version >= CLUSTER_VERSION_2250) {
-        const char *upgrade_stage_name = "_upgrade_stage";
-        obrpc::ObUpgradeStage stage = upgrade ?
-                                      obrpc::OB_UPGRADE_STAGE_PREUPGRADE :
-                                      obrpc::OB_UPGRADE_STAGE_NONE;
-        if (OB_FAIL(item.name_.assign(upgrade_stage_name))) {
-          LOG_WARN("assign _upgrade_stage config name failed", KR(ret), K(upgrade));
-        } else if (OB_FAIL(item.value_.assign(obrpc::get_upgrade_stage_str(stage)))) {
-          LOG_WARN("assign _upgrade_stage config value failed", KR(ret), K(stage), K(upgrade));
-        } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
-          LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(stage), K(upgrade));
-        }
+        LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(stage), K(upgrade));
       }
-      if (OB_FAIL(ret)) {
-      } else if (admin_set_config.execute(set_config_arg)) {
-        LOG_WARN("execute set config failed", KR(ret));
-      } else {
-        LOG_INFO("change upgrade parameters",
-                 "min_observer_version", min_server_version,
-                 "enable_upgrade_mode", upgrade,
-                 "in_major_version_upgrade_mode", GCONF.in_major_version_upgrade_mode());
-      }
+    }
+    if (FAILEDx(admin_set_config.execute(set_config_arg))) {
+      LOG_WARN("execute set config failed", KR(ret));
+    } else {
+      CLUSTER_EVENT_SYNC_ADD("UPGRADE",
+                             upgrade ? "BEGIN_UPGRADE" : "END_UPGRADE",
+                             "cluster_version", min_server_version);
+      LOG_INFO("change upgrade parameters",
+               "enable_upgrade_mode", upgrade,
+               "in_major_version_upgrade_mode", GCONF.in_major_version_upgrade_mode());
+
     }
   }
   return ret;
@@ -1418,24 +1461,57 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
 int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg)
 {
   int ret = OB_SUCCESS;
-  HEAP_VAR(ObAdminSetConfigItem, upgrade_stage_item) {
+  HEAP_VAR(ObAdminSetConfigItem, item) {
     obrpc::ObAdminSetConfigArg set_config_arg;
     set_config_arg.is_inner_ = true;
     const char *upgrade_stage_name = "_upgrade_stage";
     ObAdminSetConfig admin_set_config(ctx_);
+    char ori_min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+    char min_server_version[OB_SERVER_VERSION_LENGTH] = {'\0'};
+    uint64_t ori_cluster_version = GET_MIN_CLUSTER_VERSION();
 
     if (!arg.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arg", KR(ret), K(arg));
-    } else if (OB_FAIL(upgrade_stage_item.name_.assign(upgrade_stage_name))) {
+    } else if (OB_INVALID_INDEX == ObClusterVersion::print_version_str(
+               ori_min_server_version, OB_SERVER_VERSION_LENGTH, ori_cluster_version)) {
+       ret = OB_INVALID_ARGUMENT;
+       LOG_WARN("fail to print version str", KR(ret), K(ori_cluster_version));
+    } else if (OB_FAIL(item.name_.assign(upgrade_stage_name))) {
       LOG_WARN("assign _upgrade_stage config name failed", KR(ret), K(arg));
-    } else if (OB_FAIL(upgrade_stage_item.value_.assign(obrpc::get_upgrade_stage_str(arg.stage_)))) {
+    } else if (OB_FAIL(item.value_.assign(obrpc::get_upgrade_stage_str(arg.stage_)))) {
       LOG_WARN("assign _upgrade_stage config value failed", KR(ret), K(arg));
-    } else if (OB_FAIL(set_config_arg.items_.push_back(upgrade_stage_item))) {
+    } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
       LOG_WARN("add _upgrade_stage config item failed", KR(ret), K(arg));
-    } else if (admin_set_config.execute(set_config_arg)) {
+    } else if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE == arg.stage_) {
+      // end rolling upgrade, should raise min_observer_version
+      const char *min_obs_version_name = "min_observer_version";
+      if (OB_ISNULL(ctx_.server_mgr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("server_mgr is null", KR(ret));
+      } else if (OB_FAIL(ctx_.server_mgr_->get_min_server_version(min_server_version))) {
+        LOG_WARN("failed to get the min server version", KR(ret));
+      } else if (OB_FAIL(item.name_.assign(min_obs_version_name))) {
+        LOG_WARN("assign min_observer_version config name failed",
+                 KR(ret), K(min_obs_version_name));
+      } else if (OB_FAIL(item.value_.assign(min_server_version))) {
+        LOG_WARN("assign min_observer_version config value failed",
+                 KR(ret), K(min_server_version));
+      } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
+        LOG_WARN("add min_observer_version config item failed", KR(ret), K(item));
+      }
+    }
+    if (FAILEDx(admin_set_config.execute(set_config_arg))) {
       LOG_WARN("execute set config failed", KR(ret));
     } else {
+      if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE != arg.stage_) {
+        CLUSTER_EVENT_SYNC_ADD("UPGRADE", "BEGIN_ROLLING_UPGRADE",
+                               "cluster_version", ori_min_server_version);
+      } else {
+        CLUSTER_EVENT_SYNC_ADD("UPGRADE", "END_ROLLING_UPGRADE",
+                               "cluster_version", min_server_version,
+                               "ori_cluster_version", ori_min_server_version);
+      }
       LOG_INFO("change upgrade parameters", KR(ret), "_upgrade_stage", arg.stage_);
     }
   }
@@ -1911,6 +1987,49 @@ int ObAdminSetTP::call_server(const ObAddr &server)
     LOG_WARN("invalid server", K(server), KR(ret));
   } else if (OB_FAIL(ctx_.rpc_proxy_->to(server).set_tracepoint(arg_))) {
     LOG_WARN("request server report replica failed", KR(ret), K(server));
+  }
+  return ret;
+}
+
+int ObAdminSyncRewriteRules::execute(const obrpc::ObSyncRewriteRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> server_list;
+  if (OB_FAIL(get_tenant_servers(arg.tenant_id_, server_list))) {
+    LOG_WARN("fail to get tenant servers", "tenant_id", arg.tenant_id_, KR(ret));
+  } else {
+    //call tenant servers;
+    for (int64_t j = 0; OB_SUCC(ret) && j < server_list.count(); ++j) {
+      if (OB_FAIL(call_server(server_list.at(j), arg))) {
+        LOG_WARN("fail to call tenant server",
+                 "tenant_id", arg.tenant_id_,
+                 "server addr", server_list.at(j),
+                 KR(ret));
+      }
+    }
+  }
+  server_list.reset();
+  return ret;
+}
+
+int ObAdminSyncRewriteRules::call_server(const common::ObAddr &server,
+                                         const obrpc::ObSyncRewriteRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!ctx_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), KR(ret));
+  } else if (OB_ISNULL(ctx_.rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ctx_.rpc_proxy_->to(server)
+                                     .by(arg.tenant_id_)
+                                     .as(arg.tenant_id_)
+                                     .sync_rewrite_rules(arg))) {
+    LOG_WARN("request server sync rewrite rules failed", KR(ret), K(server));
   }
   return ret;
 }

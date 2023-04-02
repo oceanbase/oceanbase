@@ -225,13 +225,20 @@ ObSqlCtx::ObSqlCtx()
     all_equal_param_constraints_(nullptr),
     all_pre_calc_constraints_(nullptr),
     all_expr_constraints_(nullptr),
+    all_priv_constraints_(nullptr),
     is_ddl_from_primary_(false),
     cur_stmt_(NULL),
     cur_plan_(nullptr),
     can_reroute_sql_(false),
     is_sensitive_(false),
+    is_protocol_weak_read_(false),
     flashback_query_expr_(nullptr),
     is_execute_call_stmt_(false),
+    enable_sql_resource_manage_(false),
+    res_map_rule_id_(OB_INVALID_ID),
+    res_map_rule_param_idx_(OB_INVALID_INDEX),
+    res_map_rule_version_(0),
+    is_text_ps_mode_(false),
     reroute_info_(nullptr)
 {
   sql_id_[0] = '\0';
@@ -264,9 +271,15 @@ void ObSqlCtx::reset()
   all_equal_param_constraints_ = nullptr;
   all_pre_calc_constraints_ = nullptr;
   all_expr_constraints_ = nullptr;
+  all_priv_constraints_ = nullptr;
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   is_sensitive_ = false;
+  enable_sql_resource_manage_ = false;
+  res_map_rule_id_ = OB_INVALID_ID;
+  res_map_rule_param_idx_ = OB_INVALID_INDEX;
+  res_map_rule_version_ = 0;
+  is_protocol_weak_read_ = false;
   if (nullptr != reroute_info_) {
     reroute_info_->reset();
     op_reclaim_free(reroute_info_);
@@ -277,6 +290,7 @@ void ObSqlCtx::reset()
   stmt_type_ = stmt::T_NONE;
   cur_plan_ = nullptr;
   is_execute_call_stmt_ = false;
+  is_text_ps_mode_ = false;
 }
 
 //release dynamic allocated memory
@@ -290,6 +304,7 @@ void ObSqlCtx::clear()
   multi_stmt_rowkey_pos_.reset();
   spm_ctx_.bl_key_.reset();
   cur_stmt_ = nullptr;
+  is_text_ps_mode_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);
@@ -329,11 +344,47 @@ bool ObSqlSchemaGuard::is_link_table(const ObDMLStmt *stmt, uint64_t table_id)
   return is_link;
 }
 
+int ObSqlSchemaGuard::get_dblink_schema(const uint64_t tenant_id,
+                                        const uint64_t dblink_id,
+                                        const share::schema::ObDbLinkSchema *&dblink_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard_->get_dblink_schema(tenant_id,
+                                                      dblink_id,
+                                                      dblink_schema))) {
+    LOG_WARN("failed to get dblink schema", K(ret));
+  }
+  return ret;
+}
+
+int ObSqlSchemaGuard::set_link_table_schema(uint64_t dblink_id,
+                                            const common::ObString &database_name,
+                                            share::schema::ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  table_schema->set_dblink_id(dblink_id);
+  table_schema->set_table_type(share::schema::ObTableType::USER_TABLE);
+  OX(table_schema->set_link_database_name(database_name);)
+  OX (table_schema->set_table_id(next_link_table_id_++));
+  OX (table_schema->set_link_table_id(table_schema->get_table_id()));
+  OV (table_schema->get_table_id() != OB_INVALID_ID,
+      OB_ERR_UNEXPECTED, dblink_id, next_link_table_id_);
+  if (OB_FAIL(table_schemas_.push_back(table_schema))) {
+    LOG_WARN("failed to push back table schema", K(ret));
+  }
+  return ret;
+}
+
 int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
                                          const ObString &database_name,
                                          const ObString &table_name,
                                          const ObTableSchema *&table_schema,
-                                         uint32_t sessid)
+                                         sql::ObSQLSessionInfo *session_info,
+                                         const ObString &dblink_name,
+                                         bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
   int64_t schema_count = table_schemas_.count();
@@ -356,7 +407,9 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
                                              dblink_id,
                                              database_name, table_name,
                                              allocator_, tmp_schema,
-                                             sessid));
+                                             session_info,
+                                             dblink_name,
+                                             is_reverse_link));
     OV (OB_NOT_NULL(tmp_schema));
     OX (tmp_schema->set_table_id(next_link_table_id_++));
     OX (tmp_schema->set_link_table_id(tmp_schema->get_table_id()));
@@ -458,20 +511,12 @@ int ObSqlSchemaGuard::get_column_schema(uint64_t table_id, uint64_t column_id,
 }
 
 int ObSqlSchemaGuard::get_table_schema_version(const uint64_t table_id,
-                                               int64_t &schema_version,
-                                               bool is_link /* = false */) const
+                                               int64_t &schema_version) const
 {
   int ret = OB_SUCCESS;
-  if (is_link) {
-    const ObTableSchema *table_schema = NULL;
-    OZ (get_link_table_schema(table_id, table_schema), table_id);
-    OV (OB_NOT_NULL(table_schema), OB_TABLE_NOT_EXIST, table_id);
-    OX (schema_version = table_schema->get_schema_version());
-  } else {
-    const uint64_t tenant_id = MTL_ID();
-    OV (OB_NOT_NULL(schema_guard_));
-    OZ (schema_guard_->get_schema_version(TABLE_SCHEMA, tenant_id, table_id, schema_version), table_id);
-  }
+  const uint64_t tenant_id = MTL_ID();
+  OV (OB_NOT_NULL(schema_guard_));
+  OZ (schema_guard_->get_schema_version(TABLE_SCHEMA, tenant_id, table_id, schema_version), table_id);
   return ret;
 }
 
@@ -481,18 +526,15 @@ int ObSqlSchemaGuard::get_can_read_index_array(uint64_t table_id,
                                                  bool with_mv,
                                                  bool with_global_index,
                                                  bool with_domain_index,
-                                                 bool is_link /* = false */)
+                                                 bool with_spatial_index)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
-  if (is_link) {
-    size = 0;
-  } else {
-    OV (OB_NOT_NULL(schema_guard_));
-    OZ (schema_guard_->get_can_read_index_array(tenant_id, table_id,
-                                                index_tid_array, size, with_mv,
-                                                with_global_index, with_domain_index));
-  }
+  OV (OB_NOT_NULL(schema_guard_));
+  OZ (schema_guard_->get_can_read_index_array(tenant_id, table_id,
+                                              index_tid_array, size, with_mv,
+                                              with_global_index, with_domain_index,
+                                              with_spatial_index));
   return ret;
 }
 

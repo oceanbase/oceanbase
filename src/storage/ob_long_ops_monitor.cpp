@@ -386,7 +386,7 @@ void ObILongOpsStatHandle::reset()
   if (NULL != ptr_) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = ObLongOpsMonitor::get_instance().dec_handle_ref(*this))) {
-      LOG_WARN("fail to dec handle ref", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "fail to dec handle ref", K(tmp_ret));
     }
   }
 }
@@ -406,7 +406,8 @@ int ObLongOpsMonitor::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLongOpsMonitor has been inited twice", K(ret));
-  } else if (OB_FAIL(map_.init(DEFAULT_BUCKET_NUM, ObModIds::OB_SSTABLE_LONG_OPS_MONITOR,
+  } else if (OB_FAIL(map_.init(DEFAULT_BUCKET_NUM, OB_SERVER_TENANT_ID,
+      ObModIds::OB_SSTABLE_LONG_OPS_MONITOR,
       TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
     LOG_WARN("fail to init map", K(ret));
   } else {

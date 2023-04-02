@@ -69,11 +69,15 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
     } else {
       ObScale scale1 = static_cast<ObScale>(MAX(type1.get_scale(), 0));
       ObScale scale2 = static_cast<ObScale>(MAX(type2.get_scale(), 0));
-      int64_t inter_part_length1 = type1.get_precision() - type1.get_scale();
-      int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
       scale = MAX(scale1, scale2);
-      precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
-                                           + CARRY_OFFSET + scale);
+      if (lib::is_mysql_mode() && type.is_double()) {
+        precision = ObMySQLUtil::float_length(scale);
+      } else {
+        int64_t inter_part_length1 = type1.get_precision() - type1.get_scale();
+        int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
+        precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
+                                            + CARRY_OFFSET + scale);
+      }
     }
 
     type.set_scale(scale);
@@ -878,7 +882,6 @@ int ObExprAdd::add_number_number_batch(BATCH_EVAL_FUNC_ARG_DECL)
       ObNumber::Desc &desc_buf = const_cast<ObNumber::Desc &> (results.at(i)->get_number_desc());
       // Notice that, space of tmp is allocated in frame but without memset operation, which causes random memory content.
       // And the reserved in storage layer should be 0, thus you must replacement new here to avoid checksum error, etc.
-      // Reference: https://work.aone.alibaba-inc.com/issue/40852179
       ObNumber::Desc *res_desc = new (&desc_buf) ObNumber::Desc();
       // speedup detection
       if (ObNumber::try_fast_add(l_num, r_num, res_digits, *res_desc)) {

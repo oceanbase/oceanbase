@@ -88,6 +88,7 @@ enum ObObjType
   ObURowIDType        = 45, // UROWID
   ObLobType           = 46, // Oracle Lob
   ObJsonType          = 47, // Json Type
+  ObGeometryType      = 48, // Geometry type
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -118,7 +119,21 @@ enum ObObjOType
   ObONCharType        = 21,
   ObOURowIDType       = 22,
   ObOLobLocatorType   = 23,
+  ObOJsonType         = 24,
   ObOMaxType          //invalid type, or count of ObObjOType
+};
+
+enum class ObGeoType
+{
+  GEOMETRY = 0,
+  POINT = 1,
+  LINESTRING = 2,
+  POLYGON = 3,
+  MULTIPOINT = 4,
+  MULTILINESTRING = 5,
+  MULTIPOLYGON = 6,
+  GEOMETRYCOLLECTION = 7,
+  GEOTYPEMAX = 31, // 5 bit for geometry type in column schema,set max 31
 };
 
 //for cast/cmp map
@@ -177,6 +192,7 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObONCharType,              //ObNChar=44,
   ObOURowIDType,             //ObURowID=45
   ObOLobLocatorType,         //ObLobType = 46,
+  ObOJsonType,               //ObJsonType = 47,
   ObONotSupport              //ObMaxType,
 };
 
@@ -206,6 +222,7 @@ enum ObObjTypeClass
   ObRowIDTC         = 20, // oracle rowid typeclass, includes urowid and rowid
   ObLobTC           = 21, //oracle lob typeclass
   ObJsonTC          = 22, // json type class 
+  ObGeometryTC      = 23, // geometry type class
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -264,7 +281,8 @@ enum ObObjTypeClass
 		(ObNCharType, ObStringTC),                 \
     (ObURowIDType, ObRowIDTC),                 \
     (ObLobType, ObLobTC),                      \
-    (ObJsonType, ObJsonTC)
+    (ObJsonType, ObJsonTC),                    \
+    (ObGeometryType, ObGeometryTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -302,6 +320,7 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObMaxType,        // no default type for rowid type class
   ObLobType,        // lob
   ObJsonType,       // json
+  ObGeometryType,   // geometry
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -335,6 +354,7 @@ static ObObjTypeClass OBJ_O_TYPE_TO_CLASS[ObOMaxType + 1] =
   ObStringTC,     // ObONChar
   ObRowIDTC,      // ObOURowID
   ObLobTC,        // ObOLobLocator
+  ObJsonTC,       // ObOJsonType
   ObMaxTC
 };
 
@@ -375,6 +395,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*Unknown*/
     IC_NOT_SUPPORT,  /*Raw*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Null->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -401,6 +422,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NO_CAST,  /*NChar*/
     IC_NO_CAST,  /*URowID*/
     IC_NO_CAST,  /*LobLocator*/
+    IC_A_TO_B,  /*JsonType*/
   },
   {/*SmallInt->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -427,6 +449,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_TO_MIDDLE_TYPE,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Int->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -453,6 +476,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_TO_MIDDLE_TYPE,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Float->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -479,6 +503,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_TO_MIDDLE_TYPE,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*BinaryFloat->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -505,6 +530,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*BinaryDouble->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -531,6 +557,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Number->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -557,6 +584,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*Char->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -583,6 +611,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_B,  /*NChar*/
     IC_A_TO_B,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B,  /*JsonType*/
   },
   {/*Varchar->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -609,6 +638,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_C,  /*NChar*/
     IC_A_TO_B,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B,  /*JsonType*/
   },
   {/*Date->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -635,6 +665,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*TimestampTZ->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -661,6 +692,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*TimestampLTZ->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -687,6 +719,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*Timestamp->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -713,6 +746,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*ObRowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*IntervalYM->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -739,6 +773,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*ObRowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*IntervalDS->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -765,6 +800,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*ObRowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*Lob->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -791,6 +827,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
   },
   {/*Extend->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -817,6 +854,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*UnKnown->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -843,6 +881,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NOT_SUPPORT,  /*NChar*/
     IC_NOT_SUPPORT,  /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*Raw->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -869,6 +908,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_B,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT,  /*JsonType*/
   },
   {/*NVarchar->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -895,6 +935,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NO_CAST,   /*NChar*/
     IC_A_TO_B,  /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
   },
   {/*NChar->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -921,6 +962,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_NO_CAST,  /*NChar*/
     IC_A_TO_B, /*URowID*/
     IC_B_TO_A,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
   },
   {/*URowID->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -947,6 +989,7 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_B_TO_A,  /*NChar*/
     IC_NO_CAST, /*URowID*/
     IC_NOT_SUPPORT,  /*LobLocator*/
+    IC_NOT_SUPPORT, /*JsonType*/
   },
   {/*LobLocator->XXX*/
     IC_NOT_SUPPORT,  /*ObONotSupport*/
@@ -973,6 +1016,34 @@ static ImplicitCastDirection OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[ObObjOTyp
     IC_A_TO_B,  /*NChar*/
     IC_NOT_SUPPORT, /*URowID*/
     IC_NO_CAST,  /*LobLocator*/
+    IC_A_TO_B, /*JsonType*/
+  },
+    {/*JsonType->XXX*/
+    IC_NOT_SUPPORT,  /*ObONotSupport*/
+    IC_B_TO_A,  /*Null*/
+    IC_NOT_SUPPORT,  /*SmallInt*/
+    IC_NOT_SUPPORT,  /*Int*/
+    IC_NOT_SUPPORT, /*Float*/
+    IC_NOT_SUPPORT, /*BinaryFloat*/
+    IC_NOT_SUPPORT, /*BinaryDouble*/
+    IC_NOT_SUPPORT,  /*Number*/
+    IC_B_TO_A,  /*Char*/
+    IC_B_TO_A,  /*Varchar*/
+    IC_NOT_SUPPORT,  /*Date*/
+    IC_NOT_SUPPORT,  /*TimestampTZ*/
+    IC_NOT_SUPPORT,  /*TimestampLTZ*/
+    IC_NOT_SUPPORT,  /*Timestamp*/
+    IC_NOT_SUPPORT,  /*IntervalYM*/
+    IC_NOT_SUPPORT,  /*IntervalDS*/
+    IC_B_TO_A,  /*Lob*/
+    IC_NOT_SUPPORT,  /*Extend*/
+    IC_NOT_SUPPORT,  /*Unknown*/
+    IC_NOT_SUPPORT,  /*Raw*/
+    IC_B_TO_A,  /*NVarchar2*/
+    IC_B_TO_A,  /*NChar*/
+    IC_NOT_SUPPORT, /*URowID*/
+    IC_B_TO_A,  /*LobLocator*/
+    IC_B_TO_A, /*JsonType*/
   },
 };
 
@@ -1041,7 +1112,7 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
   return (ObIntTC <= tc && tc <= ObStringTC) || ObLeftTypeTC == tc || ObRightTypeTC == tc
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
-      || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc;
+      || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc;
 }
 
 //used for arithmetic
@@ -1055,16 +1126,30 @@ const char *ob_obj_type_str(ObObjType type);
 const char *ob_sql_type_str(ObObjType type);
 
 //such as "double(10,7)". with accuracy
-int ob_sql_type_str(char *buff, int64_t buff_length, int64_t &pos, ObObjType type, int64_t length, int64_t precision, int64_t scale, ObCollationType coll_type);
+int ob_sql_type_str(char *buff,
+                    int64_t buff_length,
+                    int64_t &pos,
+                    ObObjType type,
+                    int64_t length,
+                    int64_t precision,
+                    int64_t scale,
+                    ObCollationType coll_type,
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
+
 int ob_sql_type_str(const common::ObObjMeta &obj_meta,
                     const common::ObAccuracy &accuracy,
                     const common::ObIArray<ObString> &type_info,
                     const int16_t default_length_semantics,
-                    char *buff, int64_t buff_length, int64_t &pos);
+                    char *buff, int64_t buff_length, int64_t &pos,
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
 
 
 //such as "double". without any accuracy.
-int ob_sql_type_str(char *buff, int64_t buff_length, ObObjType type, ObCollationType coll_type);
+int ob_sql_type_str(char *buff,
+                    int64_t buff_length,
+                    ObObjType type,
+                    ObCollationType coll_type,
+                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
 
 // print obj type class string
 const char *ob_obj_tc_str(ObObjTypeClass tc);
@@ -1101,6 +1186,7 @@ inline bool ob_is_raw_tc(ObObjType type) { return ObRawTC == ob_obj_type_class(t
 inline bool ob_is_interval_tc(ObObjType type) { return ObIntervalTC == ob_obj_type_class(type); }
 inline bool ob_is_lob_tc(ObObjType type) { return ObLobTC == ob_obj_type_class(type); }
 inline bool ob_is_json_tc(ObObjType type) { return ObJsonTC == ob_obj_type_class(type); }
+inline bool ob_is_geometry_tc(ObObjType type) { return ObGeometryTC == ob_obj_type_class(type); }
 
 inline bool is_lob(ObObjType type) { return ob_is_text_tc(type); }
 inline bool is_lob_locator(ObObjType type) { return ObLobType == type; }
@@ -1235,7 +1321,8 @@ inline bool ob_is_accuracy_length_valid_tc(ObObjType type) { return ob_is_string
                                                              ob_is_enumset_tc(type) ||
                                                              ob_is_rowid_tc(type) ||
                                                              ob_is_lob_tc(type) ||
-                                                             ob_is_json_tc(type); }
+                                                             ob_is_json_tc(type) ||
+                                                             ob_is_geometry_tc(type); }
 inline bool ob_is_string_or_enumset_tc(ObObjType type) { return ObStringTC == ob_obj_type_class(type) || ob_is_enumset_tc(type); }
 inline bool ob_is_large_text(ObObjType type) { return ObTextType <= type && ObLongTextType >= type; }
 inline bool ob_is_datetime(const ObObjType type) { return ObDateTimeType == type; }
@@ -1256,7 +1343,8 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_rowid_tc(type)
       || ob_is_lob_locator(type);
 }
-inline bool is_lob_v2(ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type); }
+inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
+inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
 
 // to_string adapter
 template<>

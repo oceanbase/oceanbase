@@ -43,6 +43,7 @@ public:
     dist_hash_funcs_(alloc),
     sort_cmp_funs_(alloc),
     sort_collations_(alloc),
+    popular_values_hash_(alloc),
     calc_tablet_id_expr_(NULL)
   {}
   ~ObPxDistTransmitSpec() {}
@@ -51,6 +52,7 @@ public:
   common::ObHashFuncs dist_hash_funcs_;
   ObSortFuncs sort_cmp_funs_;
   ObSortCollations sort_collations_;
+  common::ObFixedArray<uint64_t, ObIAllocator> popular_values_hash_; // for hybrid hash distribution
   ObExpr *calc_tablet_id_expr_;   // for slave mapping
 };
 
@@ -83,6 +85,8 @@ private:
   int do_sm_broadcast_dist();
   int do_sm_pkey_hash_dist();
   int do_range_dist();
+  int do_hybrid_hash_broadcast_dist();
+  int do_hybrid_hash_random_dist();
 protected:
 
   // We need to send the stored input rows in random order in FULL_INPUT_SAMPLE mode,

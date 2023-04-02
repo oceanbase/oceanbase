@@ -30,7 +30,7 @@ void ObTransStatItem::add(const int64_t value)
   const int64_t now = ObClockGenerator::getClock();
 
   if (value <= 0) {
-    TRANS_LOG(WARN, "invalid argument", K(value)) ;
+    TRANS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", K(value)) ;
   } else {
     while (bool_ret) {
       bool need_print = false;
@@ -512,6 +512,17 @@ void ObTransStatistic::add_trans_log_total_size(const uint64_t tenant_id, const 
 {
   common::ObTenantStatEstGuard guard(tenant_id);
   EVENT_ADD(CLOG_TRANS_LOG_TOTAL_SIZE, value);
+}
+
+void ObTransStatistic::add_local_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(TRANS_LOCAL_TOTAL_USED_TIME, value);
+}
+void ObTransStatistic::add_dist_trans_total_used_time(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(TRANS_DIST_TOTAL_USED_TIME, value);
 }
 
 } // transaction

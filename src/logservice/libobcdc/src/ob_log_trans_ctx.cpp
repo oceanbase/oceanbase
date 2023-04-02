@@ -100,10 +100,11 @@ TransCtx::TransCtx() :
     committed_br_count_(0),
     valid_part_trans_task_count_(0),
     revertable_participant_count_(0),
+    is_trans_redo_dispatched_(false),
     is_trans_sorted_(false),
     br_out_queue_(),
     allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
-    lock_()
+    lock_(ObLatchIds::OBCDC_TRANS_CTX_LOCK)
 {}
 
 TransCtx::~TransCtx()
@@ -133,6 +134,7 @@ void TransCtx::reset()
   committed_br_count_ = 0;
   valid_part_trans_task_count_ = 0;
   revertable_participant_count_ = 0;
+  is_trans_redo_dispatched_ = false;
   is_trans_sorted_ = false;
 
   allocator_.reset();
@@ -500,6 +502,8 @@ int TransCtx::add_ready_participant_(
       } else if (OB_FAIL(part_trans_task.parse_multi_data_source_data())) {
         // parse multi_data_source_data for served part_trans_task.
         LOG_ERROR("parse_multi_data_source_data failed", KR(ret), K(part_trans_task));
+      } else if (OB_FAIL(part_trans_task.parse_multi_data_source_data_for_ddl("Sequencer"))) {
+        LOG_ERROR("parse_multi_data_source_data_for_ddl failed", KR(ret), K(part_trans_task));
       }
       // If the partition transaction is in the participant list, add it to the READY list
       else {
@@ -720,6 +724,9 @@ int TransCtx::revert_participants()
     _TCTX_DSTAT("[REVERT_PARTICIPANTS] TRANS_ID=%s PARTICIPANTS=%ld SEQ=%ld",
         to_cstring(trans_id_.get_id()), participant_count_, seq_);
 
+    // wait redo dispatched cause dispatch_redo and sort&commit br is async steps and dispatched
+    // sorted state may early than dispatched state.
+    wait_trans_redo_dispatched_();
     // Note: All participants are recalled by external modules
     ready_participant_objs_ = NULL;
     ready_participant_count_ = 0;
@@ -819,11 +826,15 @@ int TransCtx::has_valid_br(volatile bool &stop_flag)
   int ret = OB_SUCCESS;
 
   while (OB_SUCC(ret) && !stop_flag) {
-    if (total_br_count_ > 0) {
+    if (0 < get_total_br_count()) {
       break;
-    } else if (is_trans_sorted_ && (0 >= total_br_count_)) {
+    } else if (is_trans_sorted()) {
+      MEM_BARRIER();
       // must duble check to make sure total_br_count less than 0 in case of concurrenct scenes
-      ret = OB_EMPTY_RESULT;
+      // which may leads to data lose.
+      if (0 >= get_total_br_count()) {
+        ret = OB_EMPTY_RESULT;
+      }
     } else {
       ob_usleep(2 * 1000); // sleep 2ms
     }
@@ -852,6 +863,20 @@ int TransCtx::pop_br_for_committer(ObLogBR *&br)
   return ret;
 }
 
+void TransCtx::wait_trans_redo_dispatched_()
+{
+  static const int64_t PRINT_INTERVAL = 5 * _SEC_;
+  static const int64_t WAIT_SLEEP_TIME = 10 * _MSEC_;
+
+  while (! ATOMIC_LOAD(&is_trans_redo_dispatched_)) {
+    usleep(WAIT_SLEEP_TIME);
+    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+      LOG_INFO("waiting redo dispatch finish...", K_(tenant_id), K_(trans_id),
+          K_(participant_count), K_(ready_participant_count), K_(revertable_participant_count),
+          K_(total_br_count), K_(committed_br_count), K_(is_trans_sorted));
+    }
+  }
+}
 
 } // namespace libobcdc
 } // namespace oceanbase

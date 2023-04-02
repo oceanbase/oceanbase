@@ -195,7 +195,7 @@ TEST(TG, thread_pool)
 
 TEST(TG, reentrant_thread_pool)
 {
-  int tg_id = TGDefIDs::TEST7;
+  int tg_id = TGDefIDs::TEST8;
   MyRunnable runnable;
   // start
   ASSERT_EQ(OB_SUCCESS, TG_SET_RUNNABLE(tg_id, runnable));
@@ -315,6 +315,7 @@ int main(int argc, char *argv[])
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_tg_mgr.log", true);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

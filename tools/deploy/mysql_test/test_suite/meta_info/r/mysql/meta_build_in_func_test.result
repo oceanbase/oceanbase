@@ -264,7 +264,7 @@ def					substr(v,1)	253	512	0	Y	0	0	45
 ##cast test
 select substr(cast(date_c as char(1024)), 0) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)), 0)	253	4096	0	Y	0	0	45
+def					substr(cast(date_c as char(1024)), 0)	251	536870908	0	Y	16	0	45
 +---------------------------------------+
 | substr(cast(date_c as char(1024)), 0) |
 +---------------------------------------+
@@ -272,7 +272,7 @@ def					substr(cast(date_c as char(1024)), 0)	253	4096	0	Y	0	0	45
 +---------------------------------------+
 select substr(cast(date_c as char(1024)), 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)), 10)	253	4060	17	Y	0	0	45
+def					substr(cast(date_c as char(1024)), 10)	251	536870908	17	Y	16	0	45
 +----------------------------------------+
 | substr(cast(date_c as char(1024)), 10) |
 +----------------------------------------+
@@ -280,7 +280,7 @@ def					substr(cast(date_c as char(1024)), 10)	253	4060	17	Y	0	0	45
 +----------------------------------------+
 select substr(cast(1024 as char(1024)), 1, 2) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(1024 as char(1024)), 1, 2)	253	8	2	Y	0	0	45
+def					substr(cast(1024 as char(1024)), 1, 2)	251	536870908	2	Y	16	0	45
 +----------------------------------------+
 | substr(cast(1024 as char(1024)), 1, 2) |
 +----------------------------------------+
@@ -288,7 +288,7 @@ def					substr(cast(1024 as char(1024)), 1, 2)	253	8	2	Y	0	0	45
 +----------------------------------------+
 select substr(cast(date_c as char(1024)) from 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)) from 10)	253	4060	17	Y	0	0	45
+def					substr(cast(date_c as char(1024)) from 10)	251	536870908	17	Y	16	0	45
 +--------------------------------------------+
 | substr(cast(date_c as char(1024)) from 10) |
 +--------------------------------------------+
@@ -296,7 +296,7 @@ def					substr(cast(date_c as char(1024)) from 10)	253	4060	17	Y	0	0	45
 +--------------------------------------------+
 select substr(cast(date_c as char(1024)) from 10 for 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)) from 10 for 10)	253	40	10	Y	0	0	45
+def					substr(cast(date_c as char(1024)) from 10 for 10)	251	536870908	10	Y	16	0	45
 +---------------------------------------------------+
 | substr(cast(date_c as char(1024)) from 10 for 10) |
 +---------------------------------------------------+
@@ -572,7 +572,7 @@ def					trim(1)	253	4	1	Y	0	0	45
 +---------+
 select trim(cast(111 as char(1024))) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(cast(111 as char(1024)))	253	4096	3	Y	0	0	45
+def					trim(cast(111 as char(1024)))	252	65532	3	Y	16	0	45
 +-------------------------------+
 | trim(cast(111 as char(1024))) |
 +-------------------------------+
@@ -580,7 +580,7 @@ def					trim(cast(111 as char(1024)))	253	4096	3	Y	0	0	45
 +-------------------------------+
 select trim(LEADING '1' from cast(111 as char(1024))) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(LEADING '1' from cast(111 as char(1024)))	253	4096	0	Y	0	0	45
+def					trim(LEADING '1' from cast(111 as char(1024)))	252	65532	0	Y	16	0	45
 +------------------------------------------------+
 | trim(LEADING '1' from cast(111 as char(1024))) |
 +------------------------------------------------+
@@ -588,7 +588,7 @@ def					trim(LEADING '1' from cast(111 as char(1024)))	253	4096	0	Y	0	0	45
 +------------------------------------------------+
 select trim(TRAILING '1' from cast(111 as char(1024))) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(TRAILING '1' from cast(111 as char(1024)))	253	4096	0	Y	0	0	45
+def					trim(TRAILING '1' from cast(111 as char(1024)))	252	65532	0	Y	16	0	45
 +-------------------------------------------------+
 | trim(TRAILING '1' from cast(111 as char(1024))) |
 +-------------------------------------------------+
@@ -1729,7 +1729,7 @@ def					str_to_date('1970-02-03 10:56:56', NULL)	12	26	0	Y	128	6	63
 +------------------------------------------+
 select coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxddsd'))), length('dir')) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		 ÿ			coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss	8	20	3	Y	32768	0	63
+def					coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss	8	20	3	Y	32768	0	63
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2202,7 +2202,6 @@ def					str_to_date('04/30/2004 ', '%m/%d/%Y ')	10	10	10	Y	128	0	63
 | 2004-04-30                              |
 +-----------------------------------------+
 
-###ADD CASE about http://rb.corp.taobao.com/r/94323/
 select '+' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def					'+' + 1	5	23	1	N	32769	31	63
@@ -2770,7 +2769,7 @@ def					unhex('123')	253	3	2	Y	128	0	63
 +--------------+
 select unhex(cast(repeat('123',5) as char(1024)));
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					unhex(cast(repeat('123',5) as char(1024)))	253	512	8	Y	128	0	63
+def					unhex(cast(repeat('123',5) as char(1024)))	251	536870911	8	Y	144	0	63
 +--------------------------------------------+
 | unhex(cast(repeat('123',5) as char(1024))) |
 +--------------------------------------------+

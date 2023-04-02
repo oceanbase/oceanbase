@@ -126,6 +126,16 @@ private:
   ObLSLocationService &ls_loc_service_;
 };
 
+class ObLSLocationByRpcTimerTask : public common::ObTimerTask
+{
+public:
+  explicit ObLSLocationByRpcTimerTask(ObLSLocationService &ls_loc_service);
+  virtual ~ObLSLocationByRpcTimerTask() {}
+  virtual void runTimerTask() override;
+private:
+  ObLSLocationService &ls_loc_service_;
+};
+
 class ObDumpLSLocationCacheTimerTask : public common::ObTimerTask
 {
 public:

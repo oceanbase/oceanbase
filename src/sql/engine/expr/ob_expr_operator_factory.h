@@ -34,6 +34,7 @@ public:
   static bool is_expr_op_type_valid(ObExprOperatorType type);
   static ObExprOperatorType get_type_by_name(const common::ObString &name);
   static void get_internal_info_by_name(const ObString &name, bool &exist, bool &is_internal);
+  static void get_function_alias_name(const ObString &origin_name, ObString &alias_name);
   static void register_expr_operators();
   static char *str_toupper(char *buff);
   void destroy()

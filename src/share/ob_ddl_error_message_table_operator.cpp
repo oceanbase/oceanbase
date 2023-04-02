@@ -79,7 +79,6 @@ int ObDDLErrorMessageTableOperator::get_index_task_id(
   ObSqlString sql_string;
   const uint64_t tenant_id = index_schema.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  // TODO yiren (2022-05-31), do not use extract_pure_id after merge of object-id.
   const uint64_t target_object_id = index_schema.get_table_id();
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
@@ -146,31 +145,30 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
 int ObDDLErrorMessageTableOperator::load_ddl_user_error(const uint64_t tenant_id,
                                                         const int64_t task_id,
                                                         const uint64_t table_id,
-                                                        const int64_t schema_version,
                                                         ObMySQLProxy &sql_proxy,
                                                         ObBuildDDLErrorMessage &error_message)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  LOG_INFO("begin to load ddl user error", K(tenant_id), K(task_id), K(table_id), K(schema_version));
+  LOG_INFO("begin to load ddl user error", K(tenant_id), K(task_id), K(table_id));
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     sqlclient::ObMySQLResult *result = NULL;
     if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || OB_INVALID_ID == table_id
-        || OB_INVALID_VERSION == schema_version || nullptr != error_message.user_message_)) {
+        || nullptr != error_message.user_message_)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(table_id), K(schema_version));
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(table_id));
     } else if (OB_FAIL(sql.assign_fmt(
         "SELECT ret_code, ddl_type, affected_rows, user_message, dba_message from %s WHERE tenant_id = %ld AND "
-        "task_id = %ld AND object_id = %ld AND schema_version = %ld", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+        "task_id = %ld AND object_id = %ld", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
         ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-        task_id, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), schema_version))) {
+        task_id, ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id)))) {
       LOG_WARN("fail to assign sql", K(ret));
     } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("fail to execute sql", K(ret), K(sql));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ITER_END;
-      LOG_INFO("single replica has not reported before", K(ret), K(table_id), K(schema_version));
+      LOG_INFO("single replica has not reported before", K(ret), K(table_id));
     } else {
       while (OB_SUCC(ret)) {
         if (OB_FAIL(result->next())) {
@@ -348,7 +346,8 @@ int ObDDLErrorMessageTableOperator::build_ddl_error_message(
     const ObString index_name,
     const uint64_t index_id,
     const ObDDLType ddl_type,
-    const char *message)
+    const char *message,
+    int &report_ret_code)
 {
   int ret = OB_SUCCESS;
   int tmp_ret_code = ret_code;
@@ -364,6 +363,7 @@ int ObDDLErrorMessageTableOperator::build_ddl_error_message(
   } else {
     if (OB_ERR_PRIMARY_KEY_DUPLICATE == tmp_ret_code) {
       tmp_ret_code = OB_ERR_DUPLICATED_UNIQUE_KEY;    //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
+      report_ret_code = tmp_ret_code;
     }
     error_message.ret_code_ = tmp_ret_code;
     error_message.ddl_type_ = ddl_type;
@@ -404,7 +404,7 @@ int ObDDLErrorMessageTableOperator::build_ddl_error_message(
 
 int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int ret_code,
     const ObTableSchema &index_schema, const int64_t task_id, const int64_t object_id, const ObAddr &addr,
-    ObMySQLProxy &sql_proxy, const char *index_key)
+    ObMySQLProxy &sql_proxy, const char *index_key, int &report_ret_code)
 {
   int ret = OB_SUCCESS;
   ObBuildDDLErrorMessage error_message;
@@ -422,7 +422,7 @@ int ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(const int r
   } else if (OB_FAIL(index_schema.get_index_name(index_name))) {        //get index name
     LOG_WARN("fail to get index name", K(ret), K(index_name), K(index_table_id));
   } else if (OB_FAIL(build_ddl_error_message(ret_code, index_schema.get_tenant_id(), data_table_id, error_message, index_name,
-      index_table_id, DDL_CREATE_INDEX, index_key))) {
+      index_table_id, DDL_CREATE_INDEX, index_key, report_ret_code))) {
     LOG_WARN("build ddl error message failed", K(ret), K(data_table_id), K(index_name));
   } else if (OB_FAIL(report_ddl_error_message(error_message,    //report into __all_ddl_error_message
       tenant_id, task_id, data_table_id, schema_version, object_id, addr, sql_proxy))) {

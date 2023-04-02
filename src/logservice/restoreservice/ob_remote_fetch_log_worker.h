@@ -17,12 +17,18 @@
 #include "common/ob_queue_thread.h"         // ObCond
 #include "share/ob_thread_pool.h"           // ObThreadPool
 #include "share/ob_ls_id.h"                 // ObLSID
+#include "ob_remote_log_iterator.h"         // ObRemoteLogGroupEntryIterator
 
 namespace oceanbase
 {
 namespace storage
 {
 class ObLSService;
+}
+
+namespace share
+{
+class SCN;
 }
 
 namespace palf
@@ -36,8 +42,9 @@ namespace logservice
 class ObFetchLogTask;
 class ObRemoteSourceGuard;
 class ObRemoteLogParent;
-class ObRemoteLogIterator;
 class ObLogRestoreService;
+class ObLogRestoreAllocator;
+class ObLogRestoreController;
 using oceanbase::share::ObLSID;
 using oceanbase::palf::LSN;
 // Remote fetch log worker
@@ -47,7 +54,11 @@ public:
   ObRemoteFetchWorker();
   ~ObRemoteFetchWorker();
 
-  int init(const uint64_t tenant_id, ObLogRestoreService *restore_service, storage::ObLSService *ls_svr);
+  int init(const uint64_t tenant_id,
+      ObLogRestoreAllocator *allocator,
+      ObLogRestoreController *restore_controller,
+      ObLogRestoreService *restore_service,
+      storage::ObLSService *ls_svr);
   void destroy();
   int start();
   void stop();
@@ -60,18 +71,26 @@ public:
   // @retval other code          unexpected error
   int submit_fetch_log_task(ObFetchLogTask *task);
 
+  int modify_thread_count(const int64_t count);
+
 private:
   void run1();
   void do_thread_task_();
-  int handle(ObFetchLogTask &task);
-  int get_upper_limit_ts_(const ObLSID &id, int64_t &ts);
-  int submit_entries_(const ObLSID &id, const int64_t upper_limit_ts, ObRemoteLogIterator &iter, int64_t &max_submit_log_ts);
-  int cut_group_log_(const ObLSID &id, const LSN &lsn, const int64_t cut_ts, palf::LogGroupEntry &entry);
-  int get_pre_accum_checksum_(const ObLSID &id, const LSN &lsn, int64_t &pre_accum_checksum);
-  int submit_log_(const ObLSID &id, const LSN &lsn, char *buf, const int64_t buf_size);
-  void mark_if_to_end_(ObFetchLogTask &task, const int64_t upper_limit_ts, const int64_t timestamp);
+  int handle_single_task_();
+  int handle_fetch_log_task_(ObFetchLogTask *task);
+  int submit_entries_(ObFetchLogTask &task);
+  int submit_log_(const ObLSID &id, const int64_t proposal_id, const LSN &lsn,
+      const share::SCN &scn, const char *buf, const int64_t buf_size);
+  int wait_restore_quota_(const int64_t size, bool &done);
+  void mark_if_to_end_(ObFetchLogTask &task, const share::SCN &upper_limit_scn, const share::SCN &scn);
   int try_retire_(ObFetchLogTask *&task);
-  void try_update_location_info_(const ObFetchLogTask &task, ObRemoteLogIterator &iter);
+  void try_update_location_info_(const ObFetchLogTask &task, ObRemoteLogGroupEntryIterator &iter);
+
+  int push_submit_array_(ObFetchLogTask &task);
+  int try_consume_data_();
+  int do_consume_data_();
+  int foreach_ls_(const ObLSID &id);
+  void inner_free_task_(ObFetchLogTask &task);
 
   bool is_retry_ret_code_(const int ret_code) const;
   bool is_fatal_error_(const int ret_code) const;
@@ -79,9 +98,11 @@ private:
 private:
   bool inited_;
   uint64_t tenant_id_;
+  ObLogRestoreController *restore_controller_;
   ObLogRestoreService *restore_service_;
   storage::ObLSService *ls_svr_;
   common::ObLightyQueue task_queue_;
+  ObLogRestoreAllocator *allocator_;
 
   common::ObCond cond_;
 private:

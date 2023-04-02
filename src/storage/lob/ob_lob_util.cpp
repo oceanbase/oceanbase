@@ -25,6 +25,30 @@ using namespace transaction;
 namespace storage
 {
 
+int ObLobAccessParam::set_lob_locator(common::ObLobLocatorV2 *lob_locator)
+{
+  int ret = OB_SUCCESS;
+  ObString disk_locator;
+  if (OB_ISNULL(lob_locator)) {
+    // do nothing
+  } else if (!lob_locator->has_lob_header()) {
+    // do nothing
+  } else if (!lob_locator->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("lob locator is invalid", K(ret), KPC(lob_locator));
+  } else if (!(lob_locator->is_lob_disk_locator() || lob_locator->is_persist_lob() || lob_locator->is_full_temp_lob())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("lob locator type is invalid", K(ret), KPC(lob_locator));
+  } else if (OB_FAIL(lob_locator->get_disk_locator(disk_locator))) {
+    LOG_WARN("failed to get lob common from lob locator", K(ret), KPC(lob_locator));
+  } else {
+    lob_common_ = reinterpret_cast<ObLobCommon*>(disk_locator.ptr());
+    handle_size_ = disk_locator.length();
+    lob_locator_ = lob_locator;
+  }
+  return ret;
+}
+
 int ObInsertLobColumnHelper::start_trans(const share::ObLSID &ls_id,
                                          const bool is_for_read,
                                          const int64_t timeout_ts,
@@ -81,7 +105,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const common::ObTabletID tablet_id,
                                                const ObColDesc &column,
                                                blocksstable::ObStorageDatum &datum,
-                                               const int64_t timeout_ts)
+                                               const int64_t timeout_ts,
+                                               const bool has_lob_header)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -93,7 +118,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get lob manager handle.", K(ret));
-  } else if (!column.col_type_.is_lob_v2()) {
+  } else if (!column.col_type_.is_lob_storage()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(column));
   } else if (OB_FAIL(start_trans(ls_id, false/*is_for_read*/, timeout_ts, tx_desc))) {
@@ -102,7 +127,10 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     LOG_WARN("fail to get snapshot", K(ret));
   } else {
     ObString data = datum.get_string();
-    // init lob access param
+    // datum with null ptr and zero len should treat as no lob header
+    bool set_has_lob_header = has_lob_header && data.length() > 0;
+    ObLobLocatorV2 src(data, set_has_lob_header);
+    // 4.0 text tc compatiable
     ObLobAccessParam lob_param;
     lob_param.tx_desc_ = tx_desc;
     lob_param.snapshot_ = snapshot;
@@ -115,25 +143,37 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
     lob_param.timeout_ = timeout_ts;
     lob_param.scan_backward_ = false;
     lob_param.offset_ = 0;
-    lob_param.len_ = ObCharset::strlen_char(lob_param.coll_type_, data.ptr(), data.length());
-
-    if (OB_FAIL(lob_mngr->append(lob_param, data))) {
+    if (!src.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid src lob locator.", K(ret));
+    } else if (OB_FAIL(lob_mngr->append(lob_param, src))) {
       LOG_WARN("lob append failed.", K(ret));
     } else {
-      datum.set_lob_data(*lob_param.lob_common_, lob_param.lob_common_->get_handle_size(lob_param.byte_size_));
-      LOG_DEBUG("henry:write lob column", K(lob_param), KPC(lob_param.lob_common_),
-          K(lob_param.lob_common_->get_handle_size(lob_param.byte_size_)),
-          K(column.col_type_.get_collation_type()));
+      datum.set_lob_data(*lob_param.lob_common_, lob_param.handle_size_);
     }
-
-    if (OB_SUCCESS != (tmp_ret = end_trans(tx_desc, OB_SUCCESS != ret, timeout_ts))) {
-      ret = tmp_ret; 
-      LOG_WARN("fail to end trans", K(ret), KPC(tx_desc), K(lob_param));
-    }
+  }
+  if (OB_SUCCESS != (tmp_ret = end_trans(tx_desc, OB_SUCCESS != ret, timeout_ts))) {
+    ret = tmp_ret;
+    LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
   }
   return ret;
 }
 
+int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
+                                               const share::ObLSID ls_id,
+                                               const common::ObTabletID tablet_id,
+                                               const ObColDesc &column,
+                                               ObObj &obj,
+                                               const int64_t timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  ObStorageDatum datum;
+  datum.from_obj(obj);
+  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, column, datum, timeout_ts, obj.has_lob_header()))) {
+    obj.set_lob_value(obj.get_type(), datum.get_string().ptr(), datum.get_string().length());
+  }
+  return ret;
+}
 
 }
 }

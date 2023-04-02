@@ -19,6 +19,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObAddr;
+}
 using common::ObIAllocator;
 using common::ObString;
 
@@ -49,6 +53,15 @@ public:
                                     int64_t& log_disk_percentage);
   static int check_slog_data_binding(const char *sstable_dir,
                                      const char *slog_dir);
+
+  // Build info for syslog files which is logged when new file created.
+  // The following infors are included:
+  // - self address
+  // - observer version
+  // - OS info
+  // - timezone info
+  static const char *build_syslog_file_info(const common::ObAddr &addr);
+
 private:
   static int decide_disk_size(const struct statvfs& svfs,
                               const int64_t suggested_disk_size,

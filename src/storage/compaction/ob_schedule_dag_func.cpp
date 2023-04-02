@@ -52,12 +52,12 @@ int ObScheduleDagFunc::schedule_tablet_merge_dag(
     const bool is_emergency)
 {
   int ret = OB_SUCCESS;
-  if (MAJOR_MERGE == param.merge_type_) {
+  if (is_major_merge_type(param.merge_type_)) {
     CREATE_DAG(ObTabletMajorMergeDag);
   } else if (MINI_MERGE == param.merge_type_) {
     CREATE_DAG(ObTabletMiniMergeDag);
   } else {
-    CREATE_DAG(ObTabletMinorMergeDag);
+    ret = OB_NOT_SUPPORTED;
   }
   return ret;
 }

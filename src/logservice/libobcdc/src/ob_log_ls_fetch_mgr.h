@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_LS_FETCH_MGR_H__
 #define OCEANBASE_LIBOBCDC_OB_LOG_LS_FETCH_MGR_H__
 
+#include "ob_log_fetching_mode.h"
 #include "ob_log_ls_fetch_ctx.h"                // LSFetchCtx, LSFetchInfoForPrint
 
 #include "share/ob_define.h"                    // OB_SERVER_TENANT_ID
@@ -22,6 +23,7 @@
 #include "lib/allocator/ob_safe_arena.h"        // ObSafeArena
 
 #include "ob_log_config.h"                      // ObLogConfig
+#include "ob_log_fetcher_start_parameters.h"    // ObLogFetcherStartParameters
 
 namespace oceanbase
 {
@@ -39,9 +41,12 @@ public:
 
 public:
   /// add a new LS
-  virtual int add_ls(const TenantLSID &tls_id,
-      const int64_t start_tstamp_ns,
-      const palf::LSN &start_lsn) = 0;
+  virtual int add_ls(
+      const TenantLSID &tls_id,
+      const ObLogFetcherStartParameters &start_parameters,
+      const bool is_loading_data_dict_baseline_data,
+      const ClientFetchingMode fetching_mode,
+      const ObBackupPathString &archive_dest_str) = 0;
 
   /// recycle a LS
   /// mark LS deleted and begin recycle resource
@@ -60,6 +65,10 @@ public:
 
   /// @deprecated
   virtual int set_start_global_trans_version(const int64_t start_global_trans_version) = 0;
+
+  virtual void *get_fetcher_host() const = 0;
+
+  virtual int64_t get_total_count() const = 0;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,18 +95,24 @@ public:
 public:
   int init(const int64_t max_cached_ls_fetch_ctx_count,
       PartProgressController &progress_controller,
-      IObLogPartTransResolverFactory &part_trans_resolver_factory);
+      IObLogPartTransResolverFactory &part_trans_resolver_factory,
+      void *fetcher_host);
   void destroy();
 
 public:
-  virtual int add_ls(const TenantLSID &tls_id,
-      const int64_t start_tstamp_ns,
-      const palf::LSN &start_lsn);
+  virtual int add_ls(
+      const TenantLSID &tls_id,
+      const ObLogFetcherStartParameters &start_parameters,
+      const bool is_loading_data_dict_baseline_data,
+      const ClientFetchingMode fetching_mode,
+      const ObBackupPathString &archive_dest_str);
   virtual int recycle_ls(const TenantLSID &tls_id);
   virtual int remove_ls(const TenantLSID &tls_id);
   virtual int get_ls_fetch_ctx(const TenantLSID &tls_id, LSFetchCtx *&ctx);
   virtual void print_k_slowest_ls();
   virtual int set_start_global_trans_version(const int64_t start_global_trans_version);
+  virtual void *get_fetcher_host() const { return fetcher_; }
+  virtual int64_t get_total_count() const { return ctx_map_.count(); }
 
   template <typename Func> int for_each_ls(Func &func)
   {
@@ -149,7 +164,8 @@ private:
   };
 
 private:
-  bool                            inited_;
+  bool                            is_inited_;
+  void                            *fetcher_;
   PartProgressController          *progress_controller_;
   IObLogPartTransResolverFactory  *part_trans_resolver_factory_;
 

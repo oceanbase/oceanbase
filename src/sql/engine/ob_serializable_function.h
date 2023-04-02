@@ -65,6 +65,36 @@ typedef void (*ser_eval_batch_function)(ObBatchEvalFuncTag &);
   OB_SFA_SQL_EXPR_EVAL_BATCH,                    \
   OB_SFA_EXPR_BASIC_PART2,                       \
   OB_SFA_EXPR_STR_BASIC_PART2,                   \
+  OB_SFA_RELATION_EXPR_EVAL_TEXT,                \
+  OB_SFA_RELATION_EXPR_TEXT_EVAL_BATCH,          \
+  OB_SFA_DATUM_CMP_TEXT,                         \
+  OB_SFA_RELATION_EXPR_EVAL_TEXT_STR,            \
+  OB_SFA_RELATION_EXPR_TEXT_STR_EVAL_BATCH,      \
+  OB_SFA_DATUM_CMP_TEXT_STR,                     \
+  OB_SFA_RELATION_EXPR_EVAL_STR_TEXT,            \
+  OB_SFA_RELATION_EXPR_STR_TEXT_EVAL_BATCH,      \
+  OB_SFA_DATUM_CMP_STR_TEXT,                     \
+  OB_SFA_EXPR_JSON_BASIC_PART1,                  \
+  OB_SFA_EXPR_JSON_BASIC_PART2,                  \
+  OB_SFA_RELATION_EXPR_EVAL_JSON,                \
+  OB_SFA_RELATION_EXPR_JSON_EVAL_BATCH,          \
+  OB_SFA_DATUM_CMP_JSON,                         \
+  OB_SFA_FIXED_DOUBLE_NULLSAFE_CMP,              \
+  OB_SFA_FIXED_DOUBLE_BASIC_PART1,               \
+  OB_SFA_FIXED_DOUBLE_BASIC_PART2,               \
+  OB_SFA_FIXED_DOUBLE_CMP_EVAL,                  \
+  OB_SFA_FIXED_DOUBLE_CMP_EVAL_BATCH,            \
+  OB_SFA_DATUM_FIXED_DOUBLE_CMP,                 \
+  OB_SFA_EXPR_GEO_BASIC_PART1,                   \
+  OB_SFA_EXPR_GEO_BASIC_PART2,                   \
+  OB_SFA_RELATION_EXPR_EVAL_GEO,                 \
+  OB_SFA_RELATION_EXPR_GEO_EVAL_BATCH,           \
+  OB_SFA_DATUM_CMP_GEO,                          \
+  OB_SFA_DATUM_NULLSAFE_TEXT_CMP,                \
+  OB_SFA_DATUM_NULLSAFE_TEXT_STR_CMP,            \
+  OB_SFA_DATUM_NULLSAFE_STR_TEXT_CMP,            \
+  OB_SFA_DATUM_NULLSAFE_JSON_CMP,                \
+  OB_SFA_DATUM_NULLSAFE_GEO_CMP,                 \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

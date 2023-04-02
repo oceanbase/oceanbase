@@ -13,11 +13,11 @@
 #include "observer/virtual_table/ob_virtual_sql_plan_statistics.h"
 #include "common/object/ob_object.h"
 #include "sql/plan_cache/ob_plan_cache.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_req_time_service.h"
 #include "share/inner_table/ob_inner_table_schema.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -79,8 +79,7 @@ struct ObGetAllOperatorStatOp
   common::ObIArray<ObOperatorStat> *key_array_;
 };
 
-ObVirtualSqlPlanStatistics::ObVirtualSqlPlanStatistics()
-    :pcm_(NULL),
+ObVirtualSqlPlanStatistics::ObVirtualSqlPlanStatistics() :
     tenant_id_array_(),
     operator_stat_array_(),
     tenant_id_(0),
@@ -103,50 +102,45 @@ void ObVirtualSqlPlanStatistics::reset()
 int ObVirtualSqlPlanStatistics::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pcm_)) {
-    ret = OB_INVALID_ARGUMENT;
-    SERVER_LOG(WARN, "invalid argument", K(ret));
+  uint64_t start_tenant_id = 0;
+  uint64_t end_tenant_id = 0;
+  if (key_ranges_.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "invalid key range", K(ret), K(key_ranges_.count()));
   } else {
-    uint64_t start_tenant_id = 0;
-    uint64_t end_tenant_id = 0;
-    if (key_ranges_.count() < 1) {
+    ObNewRange &range = key_ranges_.at(0);
+    if (OB_UNLIKELY(range.get_start_key().get_obj_cnt() != 5
+                    || range.get_end_key().get_obj_cnt() != 5)) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "invalid key range", K(ret), K(key_ranges_.count()));
+      SERVER_LOG(WARN, "unexpected  # of rowkey columns",
+                 K(ret),
+                 "size of start key", range.get_start_key().get_obj_cnt(),
+                 "size of end key", range.get_end_key().get_obj_cnt());
     } else {
-      ObNewRange &range = key_ranges_.at(0);
-      if (OB_UNLIKELY(range.get_start_key().get_obj_cnt() != 5
-                      || range.get_end_key().get_obj_cnt() != 5)) {
+      ObObj tenant_id_low = range.get_start_key().get_obj_ptr()[0];
+      ObObj tenant_id_high = range.get_end_key().get_obj_ptr()[0];
+      if (tenant_id_low.is_min_value()
+          && tenant_id_high.is_max_value()) {
+        start_tenant_id = OB_SYS_TENANT_ID;
+        end_tenant_id = OB_SYS_TENANT_ID;
+      } else if (tenant_id_low.get_type() != ObIntType
+          || tenant_id_high.get_type() != ObIntType) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "unexpected  # of rowkey columns",
-                   K(ret),
-                   "size of start key", range.get_start_key().get_obj_cnt(),
-                   "size of end key", range.get_end_key().get_obj_cnt());
+        SERVER_LOG(WARN, "invalid tenant id", K(ret), K(tenant_id_low), K(tenant_id_high));
       } else {
-        ObObj tenant_id_low = range.get_start_key().get_obj_ptr()[0];
-        ObObj tenant_id_high = range.get_end_key().get_obj_ptr()[0];
-        if (tenant_id_low.is_min_value()
-            && tenant_id_high.is_max_value()) {
-          start_tenant_id = OB_SYS_TENANT_ID;
-          end_tenant_id = OB_SYS_TENANT_ID;
-        } else if (tenant_id_low.get_type() != ObIntType
-            || tenant_id_high.get_type() != ObIntType) {
+        start_tenant_id = tenant_id_low.get_int();
+        end_tenant_id = tenant_id_high.get_int();
+        if (start_tenant_id != end_tenant_id) {
           ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "invalid tenant id", K(ret), K(tenant_id_low), K(tenant_id_high));
-        } else {
-          start_tenant_id = tenant_id_low.get_int();
-          end_tenant_id = tenant_id_high.get_int();
-          if (start_tenant_id != end_tenant_id) {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid tenant id range, can only search one tenant",
-                       K(ret), K(start_tenant_id), K(end_tenant_id));
-          } else if (OB_SYS_TENANT_ID == start_tenant_id) {
-            //查询租户为系统租户，可以查询所有的plan cache
-            if (OB_FAIL(get_all_tenant_id())) {
-              SERVER_LOG(WARN, "fail to get all tenant id", K(ret));
-            }
-          } else if (OB_FAIL(tenant_id_array_.push_back(start_tenant_id))) {
-            SERVER_LOG(WARN, "fail to push back tenent id", K(ret));
+          SERVER_LOG(WARN, "invalid tenant id range, can only search one tenant",
+                     K(ret), K(start_tenant_id), K(end_tenant_id));
+        } else if (OB_SYS_TENANT_ID == start_tenant_id) {
+          //查询租户为系统租户，可以查询所有的plan cache
+          if (OB_FAIL(get_all_tenant_id())) {
+            SERVER_LOG(WARN, "fail to get all tenant id", K(ret));
           }
+        } else if (OB_FAIL(tenant_id_array_.push_back(start_tenant_id))) {
+          SERVER_LOG(WARN, "fail to push back tenent id", K(ret));
         }
       }
     }
@@ -157,12 +151,8 @@ int ObVirtualSqlPlanStatistics::inner_open()
 int ObVirtualSqlPlanStatistics::get_all_tenant_id()
 {
   int ret = OB_SUCCESS;
-  ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
-  if (OB_UNLIKELY(NULL == pcm_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-  } else if (OB_FAIL(pcm_->get_plan_cache_map().foreach_refactored(op))) {
-    SERVER_LOG(WARN, "fail to traverse pcm", K(ret));
+  if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
+    SERVER_LOG(WARN, "failed to add tenant id", K(ret));
   }
   return ret;
 }
@@ -175,21 +165,12 @@ int ObVirtualSqlPlanStatistics::get_row_from_specified_tenant(uint64_t tenant_id
   is_end = false;
   sql::ObPlanCache *plan_cache = NULL;
   if (OB_INVALID_ID == static_cast<uint64_t>(operator_stat_array_idx_)) {
-    if (OB_UNLIKELY(NULL == pcm_)) {
-      ret = OB_NOT_INIT;
-      SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-    } else if (OB_UNLIKELY(NULL == (plan_cache = pcm_->get_plan_cache(tenant_id)))) {
-      operator_stat_array_idx_ = 0;
-      SERVER_LOG(WARN, "plan cache is null", K(ret));
+    plan_cache = MTL(ObPlanCache*);
+    ObGetAllOperatorStatOp operator_stat_op(&operator_stat_array_);
+    if (OB_FAIL(plan_cache->foreach_cache_obj(operator_stat_op))) {
+      SERVER_LOG(WARN, "fail to traverse id2stat_map");
     } else {
-      ObGetAllOperatorStatOp operator_stat_op(&operator_stat_array_);
-      if (OB_FAIL(plan_cache->foreach_cache_obj(operator_stat_op))) {
-        SERVER_LOG(WARN, "fail to traverse id2stat_map");
-      } else {
-        operator_stat_array_idx_ = 0;
-      }
-      plan_cache->dec_ref_count();
-      plan_cache = NULL;
+      operator_stat_array_idx_ = 0;
     }
   }
   if (OB_SUCC(ret)) {
@@ -327,17 +308,20 @@ int ObVirtualSqlPlanStatistics::inner_get_next_row(common::ObNewRow *&row)
       ret = OB_ITER_END;
       tenant_id_array_idx_ = 0;
     } else {
-      if (OB_FAIL(get_row_from_specified_tenant(tenant_id_array_.at(tenant_id_array_idx_),
-                                                is_sub_end))) {
-        SERVER_LOG(WARN,
-                   "fail to insert plan by tenant id",
-                   K(ret),
-                   "tenant id",
-                   tenant_id_array_.at(tenant_id_array_idx_),
-                   K(tenant_id_array_idx_));
-      } else {
-        if (is_sub_end) {
-          ++tenant_id_array_idx_;
+      uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
+      MTL_SWITCH(tenant_id) {
+        if (OB_FAIL(get_row_from_specified_tenant(tenant_id,
+                                                  is_sub_end))) {
+          SERVER_LOG(WARN,
+                     "fail to insert plan by tenant id",
+                     K(ret),
+                     "tenant id",
+                     tenant_id_array_.at(tenant_id_array_idx_),
+                     K(tenant_id_array_idx_));
+        } else {
+          if (is_sub_end) {
+            ++tenant_id_array_idx_;
+          }
         }
       }
     }

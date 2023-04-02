@@ -14,7 +14,9 @@
 #include "ob_storage_ha_dag.h"
 #include "observer/ob_server.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -230,9 +232,18 @@ ObStorageHADag::~ObStorageHADag()
 int ObStorageHADag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
   if (OB_ISNULL(ha_dag_net_ctx_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha dag do not init", K(ret), KP(ha_dag_net_ctx_));
+  } else if (ha_dag_net_ctx_->is_failed()) {
+    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->get_result(ret))) {
+      LOG_WARN("failed to get ha dag net ctx result", K(tmp_ret), KPC(ha_dag_net_ctx_));
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("set inner set status for retry failed", K(ret), KPC(ha_dag_net_ctx_));
+    }
   } else {
     LOG_INFO("start retry", KPC(this));
     result_mgr_.reuse();
@@ -317,7 +328,8 @@ int ObStorageHADag::check_is_in_retry(bool &is_in_retry)
 /******************ObStorageHADagUtils*********************/
 int ObStorageHADagUtils::deal_with_fo(
     const int err,
-    share::ObIDag *dag)
+    share::ObIDag *dag,
+    const bool allow_retry)
 {
   int ret = OB_SUCCESS;
   ObStorageHADag *ha_dag = nullptr;
@@ -332,7 +344,7 @@ int ObStorageHADagUtils::deal_with_fo(
   } else if (OB_ISNULL(ha_dag = static_cast<ObStorageHADag *>(dag))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ha dag should not be NULL", K(ret), KPC(ha_dag));
-  } else if (OB_FAIL(ha_dag->set_result(err))) {
+  } else if (OB_FAIL(ha_dag->set_result(err, allow_retry))) {
     LOG_WARN("failed to set result", K(ret), K(err));
   }
   return ret;
@@ -558,7 +570,7 @@ int ObStorageHATaskUtils::check_need_copy_sstable(
     if (OB_FAIL(check_minor_sstable_need_copy_(param, tablet_handle, need_copy))) {
       LOG_WARN("failed to check minor sstable need copy", K(ret), K(param), K(tablet_handle));
     }
-  } else if (param.table_key_.is_ddl_sstable()) {
+  } else if (param.table_key_.is_ddl_dump_sstable()) {
     if (OB_FAIL(check_ddl_sstable_need_copy_(param, tablet_handle, need_copy))) {
       LOG_WARN("failed to check ddl sstable need copy", K(ret), K(param), K(tablet_handle));
     }
@@ -639,7 +651,9 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
       } else if (table->get_key() == param.table_key_) {
         const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
         found = true;
-        need_copy = false;
+        need_copy = true;
+        //TODO(muwei.ym) Fix it in 4.1.
+        //Need copy should be false and reuse local minor sstable.
       }
     }
 
@@ -661,7 +675,7 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
   const ObSSTable *sstable = nullptr;
   ObTablesHandleArray tables_handle_array;
 
-  if (!param.table_key_.is_ddl_sstable()) {
+  if (!param.table_key_.is_ddl_dump_sstable()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check ddl sstable need copy get invalid argument", K(ret), K(param));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
@@ -678,10 +692,10 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
     } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, table_handle))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
     } else if (!table_handle.is_valid()) {
-      const int64_t start_log_ts = ddl_sstable_array.get_table(0)->get_start_log_ts();
-      const int64_t end_log_ts = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_log_ts();
-      if (param.table_key_.log_ts_range_.start_log_ts_ >= start_log_ts
-          && param.table_key_.log_ts_range_.end_log_ts_ <= end_log_ts) {
+      const SCN start_scn = ddl_sstable_array.get_table(0)->get_start_scn();
+      const SCN end_scn = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_scn();
+      if (param.table_key_.scn_range_.start_scn_ >= start_scn
+          && param.table_key_.scn_range_.end_scn_ <= end_scn) {
         need_copy = false;
       } else {
         need_copy = true;

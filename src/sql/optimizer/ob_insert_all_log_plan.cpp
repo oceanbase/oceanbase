@@ -30,7 +30,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql::log_op_def;
 
-int ObInsertAllLogPlan::generate_raw_plan()
+int ObInsertAllLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
@@ -61,13 +61,26 @@ int ObInsertAllLogPlan::generate_raw_plan()
       } else { /*do nothing*/ }
     }
 
+    // allocate subplan filter for "INSERT ALL when subquery then INTO xx VALUES((subquery1), ....)"
+    if (OB_SUCC(ret) && !insert_all_stmt->get_subquery_exprs().empty()) {
+      ObSEArray<ObRawExpr*, 4> all_values_vector;
+      ObSEArray<ObRawExpr*, 4> all_when_cond_exprs;
+      ObSEArray<ObRawExpr*, 4> all_relation_subquery_exprs;
+      if (OB_FAIL(insert_all_stmt->get_all_values_vector(all_values_vector))) {
+        LOG_WARN("failed to get all values vector", K(ret));
+      } else if (OB_FAIL(insert_all_stmt->get_all_when_cond_exprs(all_when_cond_exprs))) {
+        LOG_WARN("failed to get all when cond exprs", K(ret));
+      } else if (OB_FAIL(append(all_relation_subquery_exprs, all_values_vector)) ||
+                 OB_FAIL(append(all_relation_subquery_exprs, all_when_cond_exprs))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(candi_allocate_subplan_filter(all_relation_subquery_exprs))) {
+        LOG_WARN("failed to allocate subplan", K(ret));
+      } else { /*do nothing*/ }
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
-      } else if (!insert_all_stmt->get_subquery_exprs().empty()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support subquery in insert all", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "subquery in insert all");
       } else if (OB_FAIL(candi_allocate_insert_all())) {
         LOG_WARN("failed to allocate insert all operator", K(ret));
       } else {

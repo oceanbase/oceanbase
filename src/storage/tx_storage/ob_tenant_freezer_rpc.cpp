@@ -24,6 +24,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace rootserver;
 namespace obrpc
 {
@@ -121,18 +122,19 @@ int ObTenantFreezerP::do_major_freeze_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
-  int64_t frozen_scn = 0;
+  SCN frozen_scn;
 
   if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("get_frozen_scn failed", KR(ret));
   } else {
+    int64_t frozen_scn_val = frozen_scn.get_val_for_tx();
     bool need_major = true;
     ObTenantFreezer *freezer = MTL(ObTenantFreezer *);
     ObRetryMajorInfo retry_major_info = freezer->get_retry_major_info();
     retry_major_info.tenant_id_ = tenant_id;
     retry_major_info.frozen_scn_ = arg_.try_frozen_scn_;
     if (arg_.try_frozen_scn_ > 0) {
-      if (arg_.try_frozen_scn_ < frozen_scn) {
+      if (arg_.try_frozen_scn_ < frozen_scn_val) {
         need_major = false;
       } else {
         need_major = true;
@@ -143,7 +145,7 @@ int ObTenantFreezerP::do_major_freeze_()
     if (!need_major) {
       retry_major_info.reset();
     } else {
-      retry_major_info.frozen_scn_ = frozen_scn;
+      retry_major_info.frozen_scn_ = frozen_scn_val;
 
       ObMajorFreezeParam param;
       param.transport_ = GCTX.net_frame_->get_req_transport();

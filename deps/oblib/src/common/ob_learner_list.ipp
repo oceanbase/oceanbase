@@ -90,7 +90,7 @@ template <int64_t MAX_SIZE, typename T>
 T &BaseLearnerList<MAX_SIZE, T>::get_learner(const int64_t idx)
 {
   if (idx < 0) {
-    COMMON_LOG(ERROR, "get_index_by_addr failed", K(idx));
+    COMMON_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "get_index_by_addr failed", K(idx));
   }
   return learner_array_[idx];
 }
@@ -216,12 +216,24 @@ int BaseLearnerList<MAX_SIZE, T>::get_server_by_index(const int64_t idx, common:
 }
 
 template <int64_t MAX_SIZE, typename T>
+int BaseLearnerList<MAX_SIZE, T>::get_member_by_index(const int64_t idx, common::ObMember &member) const
+{
+  int ret = OB_SUCCESS;
+  T learner;
+  if (OB_FAIL(get_learner(idx, learner))) {
+  } else {
+    member = learner;
+  }
+  return ret;
+}
+
+template <int64_t MAX_SIZE, typename T>
 BaseLearnerList<MAX_SIZE, T> &BaseLearnerList<MAX_SIZE, T>::operator=(const BaseLearnerList<MAX_SIZE, T> &learner_list)
 {
   if (this != &learner_list) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = deep_copy(learner_list))) {
-      COMMON_LOG(ERROR, "deep_copy failed", K(tmp_ret));
+      COMMON_LOG_RET(ERROR, tmp_ret, "deep_copy failed", K(tmp_ret));
     }
   }
   return *this;

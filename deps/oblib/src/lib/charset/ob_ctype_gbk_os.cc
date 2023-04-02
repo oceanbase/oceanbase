@@ -3539,7 +3539,7 @@ size_t ob_varlen_encoding_gbk_for_memcmp(const struct ObCharsetInfo* cs,
   const uchar *sort_order= cs->sort_order;
   *is_valid_unicode = 1;
 
-  for (; dst < de && src < se && nweights; nweights--)
+  for (; *is_valid_unicode && dst < de && src < se && nweights; nweights--)
   {
     if (isgbkhead(*(src)) && (se)-(src)>1 && isgbktail(*((src)+1)))
     {
@@ -3591,7 +3591,7 @@ size_t ob_varlen_encoding_gbk_for_spacecmp(const struct ObCharsetInfo* cs,
 
   // trim
   while (*(se-1) == 0x20 && se>src) se--;
-  for (; dst < de && src < se && nweights; nweights--)
+  for (;*is_valid_unicode && dst < de && src < se && nweights; nweights--)
   {
     int16_t space_cnt = 0;
     uint16_t e = 0;

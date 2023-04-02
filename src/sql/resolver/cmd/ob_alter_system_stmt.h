@@ -31,15 +31,15 @@ public:
       freeze_all_(false),
       opt_server_list_(),
       opt_tenant_ids_(),
-      opt_tablet_id_()
-  {}
+      opt_tablet_id_(),
+      opt_ls_id_(share::ObLSID::INVALID_LS_ID) {}
   ObFreezeStmt(common::ObIAllocator *name_pool)
     : ObSystemCmdStmt(name_pool, stmt::T_FREEZE),
       major_freeze_(false),
       opt_server_list_(),
       opt_tenant_ids_(),
-      opt_tablet_id_()
-  {}
+      opt_tablet_id_(),
+      opt_ls_id_(share::ObLSID::INVALID_LS_ID) {}
   virtual ~ObFreezeStmt() {}
 
   bool is_major_freeze() const { return major_freeze_; }
@@ -51,12 +51,13 @@ public:
   inline common::ObSArray<uint64_t> &get_tenant_ids() { return opt_tenant_ids_; }
   inline common::ObZone &get_zone() { return opt_zone_; }
   inline common::ObTabletID &get_tablet_id() { return opt_tablet_id_; }
+  inline int64_t &get_ls_id() { return opt_ls_id_; }
   inline int push_server(const common::ObAddr& server) {
     return opt_server_list_.push_back(server);
   }
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze),
-               K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_));
+               K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_));
 private:
   bool major_freeze_;
   // for major_freeze, it is ignore server list
@@ -68,8 +69,10 @@ private:
   common::ObSArray<uint64_t> opt_tenant_ids_;
   // for minor_freeze only
   common::ObZone opt_zone_;
+
   // for minor_freeze only
   common::ObTabletID opt_tablet_id_;
+  int64_t opt_ls_id_;
 };
 
 class ObFlushCacheStmt : public ObSystemCmdStmt
@@ -381,6 +384,29 @@ private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
 };
 
+class ObAddArbitrationServiceStmt : public ObSystemCmdStmt
+{
+public:
+  ObAddArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_ADD_ARBITRATION_SERVICE) {}
+  virtual ~ObAddArbitrationServiceStmt() {}
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+};
+
+class ObRemoveArbitrationServiceStmt : public ObSystemCmdStmt
+{
+public:
+  ObRemoveArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_REMOVE_ARBITRATION_SERVICE) {}
+  virtual ~ObRemoveArbitrationServiceStmt() {}
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+};
+
+class ObReplaceArbitrationServiceStmt : public ObSystemCmdStmt
+{
+public:
+  ObReplaceArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_REPLACE_ARBITRATION_SERVICE) {}
+  virtual ~ObReplaceArbitrationServiceStmt() {}
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+};
 
 class ObClearLocationCacheStmt : public ObSystemCmdStmt
 {
@@ -1159,6 +1185,18 @@ public:
   common::ObAddr server_;
 };
 
+class ObRecoverTenantStmt : public ObSystemCmdStmt
+{
+public:
+  ObRecoverTenantStmt()
+    : ObSystemCmdStmt(stmt::T_RECOVER),
+      rpc_arg_() {}
+  virtual ~ObRecoverTenantStmt() {}
+
+  obrpc::ObRecoverTenantArg &get_rpc_arg() { return rpc_arg_; }
+private:
+  obrpc::ObRecoverTenantArg rpc_arg_;
+};
 
 } // end namespace sql
 } // end namespace oceanbase

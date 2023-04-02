@@ -210,7 +210,7 @@ int ObTableRpcImpl::aggregate_tablet_by_server(const ObIArray<ObTabletLocation> 
   if (OB_FAIL(server_tablet_map.foreach_refactored(free_idx_array_fn))) {
     LOG_WARN("failed to do foreach", K(ret));
   }
-  ret = OB_SUCCESS == tmp_ret ? ret : tmp_ret; 
+  ret = OB_SUCCESS == tmp_ret ? ret : tmp_ret;
   return ret;
 }
 
@@ -287,6 +287,7 @@ int ObTableRpcImpl::batch_execute(const ObTableBatchOperation &batch_operation, 
       request.returning_affected_rows_ = request_options.returning_affected_rows();
       request.returning_affected_entity_ = request_options.returning_affected_entity();
       request.returning_rowkey_ = request_options.returning_rowkey();
+      request.batch_operation_as_atomic_ = request_options.batch_operation_as_atomic();
       if (REACH_TIME_INTERVAL(10*1000*1000)) {
         // TODO: we can not print the tenat memory usage now.
         // ObTenantManager::get_instance().print_tenant_usage();
@@ -560,7 +561,7 @@ int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestO
       ObTableQuerySyncRequest request;
       request.query_ = query;
       request.table_name_ = table_name_;
-      request.table_id_ = table_id_; 
+      request.table_id_ = table_id_;
       request.tablet_id_ = tablet_id;
       request.credential_ = client_->get_credential();
       request.entity_type_ = this->entity_type_;
@@ -586,7 +587,7 @@ int ObTableRpcImpl::query_start(const ObTableQuery& query, const ObTableRequestO
       }
     }
   }
-  return ret; 
+  return ret;
 }
 
 int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) {
@@ -621,5 +622,5 @@ int ObTableRpcImpl::query_next(const ObTableRequestOptions &request_options, ObT
       LOG_WARN("failed to execute rpc call for query next", K(ret));
     }
   }
-  return ret; 
+  return ret;
 }

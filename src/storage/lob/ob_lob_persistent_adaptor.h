@@ -56,17 +56,17 @@ public:
   virtual int revert_scan_iter(common::ObNewRowIterator *iter) override;
   virtual int fetch_lob_id(const ObLobAccessParam& param, uint64_t &lob_id) override;
   // write meta tablet
-  int write_lob_meta_tablet(ObLobAccessParam &param, ObLobMetaInfo& row_info);
+  virtual int write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
   // write piece tablet
   int write_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // erase meta tablet item
-  int erase_lob_meta_tablet(ObLobAccessParam &param, ObLobMetaInfo& row_info);
+  virtual int erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
   // erase piece tablet item
   int erase_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // update piece tabliet item
   int update_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // update lob meta tablet item
-  int update_lob_meta_tablet(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row);
+  virtual int update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row) override;
 private:
   // get schema from schema service 
   int get_lob_tablet_schema(
@@ -114,10 +114,16 @@ private:
       const ObTabletHandle& data_tablet,
       const ObTabletHandle& lob_piece_tablet);
 
+  int prepare_lob_meta_dml(
+      ObLobAccessParam& param,
+      const uint64_t tenant_id,
+      const ObTabletHandle& data_tablet,
+      const ObTabletHandle& lob_meta_tablet);
+
   int build_lob_meta_table_dml(
       ObLobAccessParam& param,
       const uint64_t tenant_id,
-      ObTableDMLParam& dml_param,
+      ObTableDMLParam* dml_param,
       ObDMLBaseParam& dml_base_param,
       ObSEArray<uint64_t, 6>& column_ids,
       const ObTabletHandle& data_tablet,

@@ -204,6 +204,7 @@ private:
   bool is_opened_;
 };
 
+// TODO(@DanLing) remove ObTableStoreStatMgr
 class ObTableStoreStatMgr
 {
 public:

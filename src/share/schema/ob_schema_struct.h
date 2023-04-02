@@ -20,6 +20,7 @@
 #include "common/ob_range.h"
 #include "common/ob_tablet_id.h"
 #include "common/row/ob_row_util.h"
+#include "share/ob_arbitration_service_status.h" // for ObArbitrationServieStatus
 #include "share/ob_replica_info.h"
 #include "share/ob_duplicate_scope_define.h"
 #include "share/sequence/ob_sequence_option.h"
@@ -121,14 +122,18 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
 #define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)
 #define TABLE_PART_KEY_COLUMN_FLAG (INT64_C(1) << 34)
-#define LINK_TABLE_COLUMN_FLAG (INT64_C(1) << 35)
-#define TABLE_ALIAS_NAME_FLAG (INT64_C(1) << 36)
+#define TABLE_ALIAS_NAME_FLAG (INT64_C(1) << 35)
 /* create table t1(c1 int, c2 as (c1+1)) partition by hash(c2) partitions 2
    c1 and c2 has flag TABLE_PART_KEY_COLUMN_ORG_FLAG */
 #define TABLE_PART_KEY_COLUMN_ORG_FLAG (INT64_C(1) << 37) //column is part key, or column is depened by part key(gc col)
-
+#define SPATIAL_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 38) // for spatial index
+#define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
+
+// table_flags stored in __all_table.table_flag
+#define CASCADE_RLS_OBJECT_FLAG (INT64_C(1) << 0)
+
 //-------enum defenition
 enum ObTableLoadType
 {
@@ -171,6 +176,13 @@ enum ObPartitionFuncType
   PARTITION_FUNC_TYPE_LIST_COLUMNS,
   PARTITION_FUNC_TYPE_INTERVAL,
   PARTITION_FUNC_TYPE_MAX,
+};
+
+enum ObObjectStatus : int64_t
+{
+  INVALID = 0,
+  VALID = 1,
+  NA = 2, /*The use case is unknown*/
 };
 
 int get_part_type_str(const bool is_oracle_mode, ObPartitionFuncType type, common::ObString &str);
@@ -260,8 +272,13 @@ enum ObIndexType
    */
   INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE = 7,
   INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE = 8,
+  // INDEX_TYPE_MAX = 9 in 4.0
+  // new index types for gis
+  INDEX_TYPE_SPATIAL_LOCAL = 10,
+  INDEX_TYPE_SPATIAL_GLOBAL = 11,
+  INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE = 12,
 
-  INDEX_TYPE_MAX = 9,
+  INDEX_TYPE_MAX = 13,
 };
 
 // using type for index
@@ -485,7 +502,22 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_PRIMARY == index_type
-           || INDEX_TYPE_DOMAIN_CTXCAT == index_type;
+           || INDEX_TYPE_DOMAIN_CTXCAT == index_type
+           || INDEX_TYPE_SPATIAL_LOCAL == index_type
+           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
+inline bool index_has_tablet(const ObIndexType &index_type)
+{
+  return INDEX_TYPE_NORMAL_LOCAL == index_type
+        || INDEX_TYPE_UNIQUE_LOCAL == index_type
+        || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
+        || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
+        || INDEX_TYPE_NORMAL_GLOBAL == index_type
+        || INDEX_TYPE_UNIQUE_GLOBAL == index_type
+        || INDEX_TYPE_SPATIAL_LOCAL == index_type
+        || INDEX_TYPE_SPATIAL_GLOBAL == index_type
+        || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
 }
 
 struct ObTenantTableId
@@ -637,6 +669,9 @@ typedef enum {
   CONTEXT_SCHEMA = 33,
   VIEW_SCHEMA = 34,
   MOCK_FK_PARENT_TABLE_SHCEMA = 35,
+  RLS_POLICY_SCHEMA = 36,
+  RLS_GROUP_SCHEMA = 37,
+  RLS_CONTEXT_SCHEMA = 38,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -908,10 +943,10 @@ struct ObSchemaObjVersion
     }
     return ret_type;
   }
-  ObObjectType get_schema_object_type() const
+  static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
-    switch (object_type_) {
+    switch (object_type) {
       case DEPENDENCY_TABLE:
         ret_type = ObObjectType::TABLE;
         break;
@@ -1426,6 +1461,8 @@ public:
   inline int set_comment(const common::ObString &comment) { return deep_copy_str(comment, comment_); }
   inline int set_locality(const common::ObString &locality) { return deep_copy_str(locality, locality_str_); }
   inline int set_previous_locality(const common::ObString &previous_locality) { return deep_copy_str(previous_locality, previous_locality_str_); }
+  inline void set_arbitration_service_status(const ObArbitrationServiceStatus status) { arbitration_service_status_ = status; }
+  inline int set_arbitration_service_status_from_string(const common::ObString &status) { return arbitration_service_status_.parse_from_string(status); }
   inline void set_charset_type(const common::ObCharsetType type) { charset_type_ = type; }
   inline void set_collation_type(const common::ObCollationType type) { collation_type_ = type; }
   inline void set_name_case_mode(const common::ObNameCaseMode mode) { name_case_mode_ = mode; }
@@ -1457,6 +1494,9 @@ public:
   inline const common::ObString &get_comment_str() const { return comment_; }
   inline const common::ObString &get_locality_str() const { return locality_str_; }
   inline const common::ObString &get_previous_locality_str() const { return previous_locality_str_; }
+  inline const ObArbitrationServiceStatus &get_arbitration_service_status() const { return arbitration_service_status_; }
+  inline const char* get_arbitration_service_status_str() const { return arbitration_service_status_.get_status_str(); }
+
   inline common::ObCharsetType get_charset_type() const { return charset_type_; }
   inline common::ObCollationType get_collation_type() const { return collation_type_; }
   int get_primary_zone_score(
@@ -1517,7 +1557,7 @@ public:
                K_(read_only), K_(locality_str),
                K_(zone_replica_attr_array), K_(primary_zone_array), K_(previous_locality_str),
                K_(default_tablegroup_id), K_(default_tablegroup_name), K_(compatibility_mode), K_(drop_tenant_time),
-               K_(status), K_(in_recyclebin));
+               K_(status), K_(in_recyclebin), K_(arbitration_service_status));
 private:
   uint64_t tenant_id_;
   int64_t schema_version_;
@@ -1542,6 +1582,7 @@ private:
   int64_t drop_tenant_time_;
   ObTenantStatus status_;
   bool in_recyclebin_;
+  ObArbitrationServiceStatus arbitration_service_status_;
 };
 
 inline int ObTenantSchema::set_zone_list(const common::ObIArray<common::ObString> &zone_list)
@@ -1776,7 +1817,7 @@ public:
     if (common::OB_SUCCESS != ret_) {
       // failed before
     } else if (common::OB_SUCCESS != (ret_ = common::ObRowUtil::compare_row(left, right, cmp))) {
-      SHARE_SCHEMA_LOG(ERROR, "l or r is invalid", K(ret_));
+      SHARE_SCHEMA_LOG_RET(ERROR, ret_, "l or r is invalid", K(ret_));
     } else {
       bool_ret = (cmp < 0);
     }
@@ -1939,6 +1980,10 @@ public:
   PartitionType get_partition_type() const  { return partition_type_; }
   virtual bool is_normal_partition() const = 0;
   virtual bool is_hidden_partition() const { return share::schema::is_hidden_partition(partition_type_); }
+
+  // convert character set.
+  int convert_character_for_range_columns_part(const ObCollationType &to_collation);
+  int convert_character_for_list_columns_part(const ObCollationType &to_collation);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
                        K_(is_empty_partition_name), K_(tablet_id));
@@ -2233,7 +2278,6 @@ public:
   int try_init_partition_idx();
 
   int serialize_partitions(char *buf, const int64_t data_len, int64_t &pos) const;
-  int get_def_subpartitions_serialize_len();
   int serialize_def_subpartitions(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_partitions(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_def_subpartitions(const char *buf, const int64_t data_len, int64_t &pos);
@@ -2541,7 +2585,7 @@ public:
   virtual bool is_hidden_schema() const override { return false; }
   virtual bool is_normal_schema() const override { return !is_hidden_schema(); }
   virtual int check_if_oracle_compat_mode(bool &is_oracle_mode) const;
-
+  inline int64_t get_truncate_version() { return 0; }
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -3832,7 +3876,7 @@ public:
   inline int set_x509_issuer(const common::ObString &x509_issuer) { return deep_copy_str(x509_issuer, x509_issuer_); }
   inline int set_x509_subject(const char *x509_subject) { return deep_copy_str(x509_subject, x509_subject_); }
   inline int set_x509_subject(const common::ObString &x509_subject) { return deep_copy_str(x509_subject, x509_subject_); }
-  inline void set_type(const uint64_t type) { type_ = type; }
+  inline void set_type(const int32_t type) { type_ = type; }
   inline void set_profile_id(const uint64_t profile_id) { profile_id_ = profile_id; }
   inline void set_password_last_changed(int64_t ts) { password_last_changed_timestamp_ = ts; }
   inline void set_max_connections(uint64_t max_connections) { max_connections_ = max_connections; }
@@ -3861,8 +3905,7 @@ public:
   inline uint64_t get_max_user_connections() const { return max_user_connections_; }
   // role
   inline bool is_role() const { return OB_ROLE == type_; }
-  inline int get_grantee_count() const { return grantee_id_array_.count(); }
-  inline int get_role_count() const { return role_id_array_.count(); }
+  inline int64_t get_role_count() const { return role_id_array_.count(); }
   const common::ObSEArray<uint64_t, 8>& get_grantee_id_array() const { return grantee_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_array() const { return role_id_array_; }
   const common::ObSEArray<uint64_t, 8>& get_role_id_option_array() const { return role_id_option_array_; }
@@ -4930,10 +4973,29 @@ public:
   inline int set_tenant_name(const common::ObString &name) { return deep_copy_str(name, tenant_name_); }
   inline int set_user_name(const common::ObString &name) { return deep_copy_str(name, user_name_); }
   inline int set_password(const common::ObString &password) { return deep_copy_str(password, password_); }
+  inline int set_encrypted_password(const common::ObString &encrypted_password) { return deep_copy_str(encrypted_password, encrypted_password_); }
+  int do_encrypt_password();
+  int set_plain_password(const common::ObString &plain_password) { return deep_copy_str(plain_password, plain_password_); }
   inline void set_host_addr(const common::ObAddr &addr) { host_addr_ = addr; }
   int set_host_ip(const common::ObString &host_ip);
   inline void set_host_port(const int32_t host_port) { host_addr_.set_port(host_port); }
-
+  inline int set_reverse_cluster_name(const common::ObString &name) { return deep_copy_str(name, reverse_cluster_name_); }
+  inline int set_reverse_tenant_name(const common::ObString &name) { return deep_copy_str(name, reverse_tenant_name_); }
+  inline int set_reverse_user_name(const common::ObString &name) { return deep_copy_str(name, reverse_user_name_); }
+  inline int set_reverse_password(const common::ObString &password) { return deep_copy_str(password, reverse_password_); }
+  int do_encrypt_reverse_password();
+  inline int set_plain_reverse_password(const common::ObString &password) { return deep_copy_str(password, plain_reverse_password_); }
+  inline void set_reverse_host_addr(const common::ObAddr &addr) { reverse_host_addr_ = addr; }
+  inline int set_reverse_host_ip(const common::ObString &host_ip) { reverse_host_addr_.set_ip_addr(host_ip, 0); return common::OB_SUCCESS; }
+  inline void set_reverse_host_port(const int32_t host_port) { reverse_host_addr_.set_port(host_port); }
+  inline int set_authusr(const common::ObString &str) { return deep_copy_str(str, authusr_); }
+  inline int set_authpwd(const common::ObString &str) { return deep_copy_str(str, authpwd_); }
+  inline int set_passwordx(const common::ObString &str) { return deep_copy_str(str, passwordx_); }
+  inline int set_authpwdx(const common::ObString &str) { return deep_copy_str(str, authpwdx_); }
+  inline const common::ObString &get_authusr() const { return authusr_; }
+  inline const common::ObString &get_authpwd() const { return authpwd_; }
+  inline const common::ObString &get_passwordx() const { return passwordx_; }
+  inline const common::ObString &get_authpwdx() const { return authpwdx_; }
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_owner_id() const { return owner_id_; }
   inline uint64_t get_dblink_id() const { return dblink_id_; }
@@ -4943,22 +5005,27 @@ public:
   inline const common::ObString &get_tenant_name() const { return tenant_name_; }
   inline const common::ObString &get_user_name() const { return user_name_; }
   inline const common::ObString &get_password() const { return password_; }
+  inline const common::ObString &get_encrypted_password() const { return  encrypted_password_; }
+  int do_decrypt_password();
+  inline const common::ObString &get_plain_password() const { return plain_password_; }
   inline const common::ObAddr &get_host_addr() const { return host_addr_; }
   inline int32_t get_host_port() const { return host_addr_.get_port(); }
+  inline const common::ObString &get_reverse_cluster_name() const { return reverse_cluster_name_; }
+  inline const common::ObString &get_reverse_tenant_name() const { return reverse_tenant_name_; }
+  inline const common::ObString &get_reverse_user_name() const { return reverse_user_name_; }
+  inline const common::ObString &get_reverse_password() const { return reverse_password_; }
+  int do_decrypt_reverse_password();
+  inline const common::ObString &get_plain_reverse_password() const { return plain_reverse_password_; }
+  inline const common::ObAddr &get_reverse_host_addr() const { return reverse_host_addr_; }
+  inline int32_t get_reverse_host_port() const { return reverse_host_addr_.get_port(); }
+
+
   inline int64_t get_driver_proto() const { return driver_proto_; }
   inline void set_driver_proto(int64_t proto) { driver_proto_ = proto; }
   inline int64_t get_flag() const { return flag_; }
   inline void set_flag(int64_t flag) { flag_ = flag; }
-  inline const common::ObString &get_authusr() const { return authusr_; }
-  inline const common::ObString &get_authpwd() const { return authpwd_; }
-  inline const common::ObString &get_passwordx() const { return passwordx_; }
-  inline const common::ObString &get_authpwdx() const { return authpwdx_; }
   inline const common::ObString &get_service_name() const { return service_name_; }
   inline const common::ObString &get_conn_string() const { return conn_string_; }
-  inline int set_authusr(const common::ObString &str) { return deep_copy_str(str, authusr_); }
-  inline int set_authpwd(const common::ObString &str) { return deep_copy_str(str, authpwd_); }
-  inline int set_passwordx(const common::ObString &str) { return deep_copy_str(str, passwordx_); }
-  inline int set_authpwdx(const common::ObString &str) { return deep_copy_str(str, authpwdx_); }
   inline int set_service_name(const common::ObString &str) { return deep_copy_str(str, service_name_); }
   inline int set_conn_string(const common::ObString &str) { return deep_copy_str(str, conn_string_); }
   int get_ora_conn_string(common::ObString &conn_str);
@@ -4968,8 +5035,15 @@ public:
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(owner_id), K_(dblink_id), K_(dblink_name),
                        K_(cluster_name), K_(tenant_name), K_(user_name), K_(host_addr),
                        K_(driver_proto), K_(flag), K_(service_name), K_(conn_string),
-                       K_(authusr), K_(authpwd), K_(passwordx), K_(authpwdx));
-
+                       K_(authusr), K_(authpwd), K_(passwordx), K_(authpwdx),
+                       K_(password), K_(encrypted_password), K_(plain_password),
+                       K_(reverse_cluster_name),
+                       K_(reverse_tenant_name), K_(reverse_user_name),
+                       K_(reverse_password), K_(plain_reverse_password),
+                       K_(reverse_host_addr));
+private:
+  int dblink_encrypt(common::ObString &src, common::ObString &dst);
+  int dblink_decrypt(common::ObString &src, common::ObString &dst);
 protected:
   uint64_t tenant_id_;
   uint64_t owner_id_;
@@ -4989,6 +5063,14 @@ protected:
   common::ObString authpwd_; // 128
   common::ObString passwordx_; // 128
   common::ObString authpwdx_; //128
+  common::ObString plain_password_;
+  common::ObString encrypted_password_;
+  common::ObString reverse_cluster_name_;
+  common::ObString reverse_tenant_name_; // used for reverse dblink
+  common::ObString reverse_user_name_; // used for reverse dblink
+  common::ObString reverse_password_;  // used for reverse dblink
+  common::ObString plain_reverse_password_; // used for reverse dblink
+  common::ObAddr reverse_host_addr_;  // used for reverse dblink
 };
 
 struct ObTenantDbLinkId
@@ -5061,6 +5143,11 @@ public:
   ObDbLinkSchema(const ObDbLinkSchema &src_schema);
   virtual ~ObDbLinkSchema() {}
   ObDbLinkSchema &operator=(const ObDbLinkSchema &other);
+  int assign(const ObDbLinkSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator==(const ObDbLinkSchema &other) const;
 
   inline ObTenantDbLinkId get_tenant_dblink_id() const { return ObTenantDbLinkId(tenant_id_, dblink_id_); }
@@ -5077,7 +5164,14 @@ public:
          + authusr_.length() + 1
          + authpwd_.length() + 1
          + passwordx_.length() + 1
-         + authpwdx_.length() + 1;
+         + authpwdx_.length() + 1
+         + plain_password_.length() + 1
+         + encrypted_password_.length() + 1
+         + reverse_cluster_name_.length() + 1
+         + reverse_tenant_name_.length() + 1
+         + reverse_user_name_.length() + 1
+         + reverse_password_.length() + 1
+         + plain_reverse_password_.length() + 1;
   }
 };
 
@@ -5087,10 +5181,11 @@ class ObSynonymInfo: public ObSchema
 public:
   ObSynonymInfo();
   explicit ObSynonymInfo(common::ObIAllocator *allocator);
-  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_id), K_(schema_version));
+  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(database_id), K_(synonym_id), K_(schema_version), K_(status));
   virtual ~ObSynonymInfo();
   ObSynonymInfo &operator=(const ObSynonymInfo &src_schema);
   ObSynonymInfo(const ObSynonymInfo &src_schema);
+  int assign(const ObSynonymInfo &src_schema);
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
   inline void set_database_id(const uint64_t id) { database_id_ = id; }
   inline void set_object_database_id(const uint64_t id) { object_db_id_ = id; }
@@ -5114,6 +5209,9 @@ public:
   inline const char *get_version() const { return extract_str(version_); }
   inline const common::ObString &get_version_str() const { return version_; }
   inline uint64_t get_object_database_id() const { return object_db_id_; }
+  inline ObObjectStatus get_status() const { return status_; }
+  inline void set_status(const ObObjectStatus status) { status_ = status; }
+  inline void set_status(const int64_t status) { status_ = static_cast<ObObjectStatus> (status); }
   void reset();
 private:
   //void *alloc(int64_t size);
@@ -5126,6 +5224,7 @@ private:
   common::ObString version_;
   common::ObString object_name_;
   uint64_t object_db_id_;
+  ObObjectStatus status_;
   //common::ObArenaAllocator allocator_;
 };
 
@@ -6450,6 +6549,11 @@ public:
   virtual ~ObTablespaceSchema();
   ObTablespaceSchema &operator=(const ObTablespaceSchema &src_schema);
   ObTablespaceSchema(const ObTablespaceSchema &src_schema);
+  int assign(const ObTablespaceSchema &src_schema)
+  {
+    *this = src_schema;
+    return get_err_ret();
+  }
   int64_t get_convert_size() const;
 
   inline void set_schema_version(int64_t version) { schema_version_ = version; }
@@ -6647,6 +6751,19 @@ private:
 };
 
 common::ObIAllocator *&schema_stack_allocator();
+class ObSchemaStackAllocatorGuard
+{
+public:
+  ObSchemaStackAllocatorGuard() = delete;
+  explicit ObSchemaStackAllocatorGuard(ObIAllocator *allocator)
+  {
+    schema_stack_allocator() = allocator;
+  }
+  ~ObSchemaStackAllocatorGuard()
+  {
+    schema_stack_allocator() = NULL;
+  }
+};
 
 class ObLabelSePolicySchema : public ObSchema
 {//simple schema
@@ -6685,6 +6802,11 @@ public:
   ObLabelSePolicySchema(const ObLabelSePolicySchema &src_schema);
   virtual ~ObLabelSePolicySchema();
   ObLabelSePolicySchema &operator =(const ObLabelSePolicySchema &other);
+  int assign(const ObLabelSePolicySchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSePolicySchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_policy_id),
@@ -6741,6 +6863,11 @@ public:
   ObLabelSeComponentSchema(const ObLabelSeComponentSchema &src_schema);
   virtual ~ObLabelSeComponentSchema();
   ObLabelSeComponentSchema &operator =(const ObLabelSeComponentSchema &other);
+  int assign(const ObLabelSeComponentSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSeComponentSchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_policy_id),
@@ -6811,6 +6938,11 @@ public:
   ObLabelSeLabelSchema(const ObLabelSeLabelSchema &src_schema);
   virtual ~ObLabelSeLabelSchema();
   ObLabelSeLabelSchema &operator =(const ObLabelSeLabelSchema &other);
+  int assign(const ObLabelSeLabelSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSeLabelSchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_label_id),
@@ -6861,6 +6993,11 @@ public:
   ObLabelSeUserLevelSchema(const ObLabelSeUserLevelSchema &src_schema);
   virtual ~ObLabelSeUserLevelSchema();
   ObLabelSeUserLevelSchema &operator =(const ObLabelSeUserLevelSchema &other);
+  int assign(const ObLabelSeUserLevelSchema &other)
+  {
+    *this = other;
+    return get_err_ret();
+  }
   bool operator ==(const ObLabelSeUserLevelSchema &other) const;
   TO_STRING_KV(K_(tenant_id),
                K_(label_se_user_level_id),
@@ -7162,6 +7299,12 @@ public:
       in_failure_ = src_schema.in_failure_;
     }
     return *this;
+  }
+
+  int assign(const ObSAuditSchema &src_schema)
+  {
+    *this = src_schema;
+    return get_err_ret();
   }
   ObSAuditSchema(const ObSAuditSchema &src_schema) : ObSchema()
   {
@@ -7577,6 +7720,257 @@ private:
   common::ObArray<ObForeignKeyInfo> foreign_key_infos_;
   ObMockFKParentTableColumnArray column_array_;
   ObMockFKParentTableOperationType operation_type_;
+};
+
+class ObTenantRlsPolicyId : public ObTenantCommonSchemaId
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTenantRlsPolicyId() : ObTenantCommonSchemaId() {}
+  ObTenantRlsPolicyId(const uint64_t tenant_id, const uint64_t rls_policy_id)
+    : ObTenantCommonSchemaId(tenant_id, rls_policy_id) {}
+};
+
+class ObTenantRlsGroupId : public ObTenantCommonSchemaId
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTenantRlsGroupId() : ObTenantCommonSchemaId() {}
+  ObTenantRlsGroupId(const uint64_t tenant_id, const uint64_t rls_group_id)
+    : ObTenantCommonSchemaId(tenant_id, rls_group_id) {}
+};
+
+class ObTenantRlsContextId : public ObTenantCommonSchemaId
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTenantRlsContextId() : ObTenantCommonSchemaId() {}
+  ObTenantRlsContextId(const uint64_t tenant_id, const uint64_t rls_context_id)
+    : ObTenantCommonSchemaId(tenant_id, rls_context_id) {}
+};
+
+#define RLS_POLICY_SELECT_FLAG (1 << 0)
+#define RLS_POLICY_INSERT_FLAG (1 << 1)
+#define RLS_POLICY_UPDATE_FLAG (1 << 2)
+#define RLS_POLICY_DELETE_FLAG (1 << 3)
+#define RLS_POLICY_STATIC_FLAG (1 << 4)
+#define RLS_POLICY_SYNONYM_FLAG (1 << 5)
+#define RLS_POLICY_SHARE_STATIC_FLAG (1 << 6)
+#define RLS_POLICY_CONTEXT_FLAG (1 << 7)
+#define RLS_POLICY_SHARE_CONTEXT_FLAG (1 << 8)
+#define RLS_POLICY_LONG_PREDICATE_FLAG (1 << 9)
+#define RLS_POLICY_RELEVANT_COLUMN_FLAG (1 << 10)
+#define RLS_POLICY_INDEX_FLAG (1 << 11)
+#define RLS_POLICY_SEC_ALL_ROWS_FLAG (1 << 12)
+
+class ObRlsSecColumnSchema : public ObSchema
+{//simple schema
+  OB_UNIS_VERSION(1);
+public:
+  ObRlsSecColumnSchema();
+  explicit ObRlsSecColumnSchema(common::ObIAllocator *allocator);
+  ObRlsSecColumnSchema(const ObRlsSecColumnSchema &src_schema);
+  virtual ~ObRlsSecColumnSchema();
+  ObRlsSecColumnSchema &operator =(const ObRlsSecColumnSchema &other);
+  int assign(const ObRlsSecColumnSchema &other);
+  bool operator ==(const ObRlsSecColumnSchema &other) const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(rls_policy_id),
+               K_(column_id),
+               K_(schema_version));
+  virtual void reset();
+  bool is_valid() const;
+  int64_t get_convert_size() const;
+
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_rls_policy_id(const uint64_t rls_policy_id) { rls_policy_id_ = rls_policy_id; }
+  inline void set_column_id(const uint64_t column_id) { column_id_ = column_id; }
+  inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline uint64_t get_rls_policy_id() const { return rls_policy_id_; }
+  inline uint64_t get_column_id() const { return column_id_; }
+  inline int64_t get_schema_version() const { return schema_version_; }
+  inline uint64_t get_operation_table_id() const { return rls_policy_id_; }
+private:
+  uint64_t tenant_id_;
+  uint64_t rls_policy_id_;
+  uint64_t column_id_;
+  int64_t schema_version_;
+};
+
+class ObRlsPolicySchema : public ObSchema
+{//simple schema
+  OB_UNIS_VERSION(1);
+public:
+  ObRlsPolicySchema();
+  explicit ObRlsPolicySchema(common::ObIAllocator *allocator);
+  ObRlsPolicySchema(const ObRlsPolicySchema &src_schema);
+  virtual ~ObRlsPolicySchema();
+  ObRlsPolicySchema &operator =(const ObRlsPolicySchema &other);
+  int assign(const ObRlsPolicySchema &other);
+  bool operator ==(const ObRlsPolicySchema &other) const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(rls_policy_id),
+               K_(schema_version),
+               K_(table_id),
+               K_(rls_group_id),
+               K_(stmt_type),
+               K_(check_opt),
+               K_(enable_flag),
+               K_(policy_name),
+               K_(policy_function_schema),
+               K_(policy_package_name),
+               K_(policy_function_name),
+               "sec_columns", ObArrayWrap<ObRlsSecColumnSchema*>(sec_column_array_, column_cnt_));
+  virtual void reset();
+  bool is_valid() const;
+  int64_t get_convert_size() const;
+
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_rls_policy_id(const uint64_t rls_policy_id) { rls_policy_id_ = rls_policy_id; }
+  inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+  inline void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  inline void set_rls_group_id(const uint64_t rls_group_id) { rls_group_id_ = rls_group_id; }
+  inline void set_stmt_type(const int64_t stmt_type) { stmt_type_ = stmt_type; }
+  inline void set_check_opt(bool check_opt) { check_opt_ = check_opt; }
+  inline void set_enable_flag(bool enable_flag) { enable_flag_ = enable_flag; }
+  inline int set_policy_name(const common::ObString &policy_name) { return deep_copy_str(policy_name, policy_name_); }
+  inline int set_policy_function_schema(const common::ObString &policy_function_schema) { return deep_copy_str(policy_function_schema, policy_function_schema_); }
+  inline int set_policy_package_name(const common::ObString &policy_package_name) { return deep_copy_str(policy_package_name, policy_package_name_); }
+  inline int set_policy_function_name(const common::ObString &policy_function_name) { return deep_copy_str(policy_function_name, policy_function_name_); }
+  int add_sec_column(const ObRlsSecColumnSchema &sec_column);
+  int set_ids_cascade();
+  int rebuild_with_table_schema(const ObRlsPolicySchema &src_schema,
+                                const share::schema::ObTableSchema &table_schema);
+
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline uint64_t get_rls_policy_id() const { return rls_policy_id_; }
+  inline int64_t get_schema_version() const { return schema_version_; }
+  inline uint64_t get_table_id() const { return table_id_; }
+  inline uint64_t get_rls_group_id() const { return rls_group_id_; }
+  inline int64_t get_stmt_type() const { return stmt_type_; }
+  inline bool get_check_opt() const { return check_opt_; }
+  inline bool get_enable_flag() const { return enable_flag_; }
+  inline const common::ObString &get_policy_name() const { return policy_name_; }
+  inline const common::ObString &get_policy_function_schema() const { return policy_function_schema_; }
+  inline const common::ObString &get_policy_package_name() const { return policy_package_name_; }
+  inline const common::ObString &get_policy_function_name() const { return policy_function_name_; }
+  inline int64_t get_sec_column_count() const { return column_cnt_; }
+  const ObRlsSecColumnSchema* get_sec_column_by_idx(const int64_t idx) const;
+  inline ObTenantRlsPolicyId get_sort_key() const { return ObTenantRlsPolicyId(tenant_id_, rls_policy_id_); }
+  inline uint64_t get_operation_table_id() const { return rls_policy_id_; }
+  inline bool is_column_level_policy() const { return column_cnt_ > 0; }
+
+  inline bool is_context_sensitive() const
+  { return stmt_type_ & (RLS_POLICY_CONTEXT_FLAG | RLS_POLICY_SHARE_CONTEXT_FLAG); };
+  inline bool has_stmt_type_flag(const int64_t flag) const { return flag == (stmt_type_ & flag); };
+  inline void add_stmt_type_flag(const int64_t flag) { stmt_type_ |= flag; }
+  inline void del_stmt_type_flag(const int64_t flag) { stmt_type_ &= ~flag; }
+  inline bool has_partial_stmt_type_flag(const int64_t flag) const { return stmt_type_ & flag; };
+private:
+  static const int64_t DEFAULT_ARRAY_CAPACITY = 16;
+  uint64_t tenant_id_;
+  uint64_t rls_policy_id_;
+  int64_t schema_version_;
+  uint64_t table_id_;
+  uint64_t rls_group_id_;
+  int64_t stmt_type_;
+  bool check_opt_;
+  bool enable_flag_;
+  common::ObString policy_name_;
+  common::ObString policy_function_schema_;
+  common::ObString policy_package_name_;
+  common::ObString policy_function_name_;
+  ObRlsSecColumnSchema **sec_column_array_;
+  int64_t column_array_capacity_;
+  int64_t column_cnt_;
+};
+
+class ObRlsGroupSchema : public ObSchema
+{//simple schema
+  OB_UNIS_VERSION(1);
+public:
+  ObRlsGroupSchema();
+  explicit ObRlsGroupSchema(common::ObIAllocator *allocator);
+  ObRlsGroupSchema(const ObRlsGroupSchema &src_schema);
+  virtual ~ObRlsGroupSchema();
+  ObRlsGroupSchema &operator =(const ObRlsGroupSchema &other);
+  int assign(const ObRlsGroupSchema &other);
+  bool operator ==(const ObRlsGroupSchema &other) const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(rls_group_id),
+               K_(schema_version),
+               K_(table_id),
+               K_(policy_group_name));
+  virtual void reset();
+  bool is_valid() const;
+  int64_t get_convert_size() const;
+
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_rls_group_id(const uint64_t rls_group_id) { rls_group_id_ = rls_group_id; }
+  inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+  inline void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  inline int set_policy_group_name(const common::ObString &policy_group_name) { return deep_copy_str(policy_group_name, policy_group_name_); }
+
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline uint64_t get_rls_group_id() const { return rls_group_id_; }
+  inline int64_t get_schema_version() const { return schema_version_; }
+  inline uint64_t get_table_id() const { return table_id_; }
+  inline const common::ObString &get_policy_group_name() const { return policy_group_name_; }
+  inline ObTenantRlsGroupId get_sort_key() const { return ObTenantRlsGroupId(tenant_id_, rls_group_id_); }
+  inline uint64_t get_operation_table_id() const { return rls_group_id_; }
+private:
+  uint64_t tenant_id_;
+  uint64_t rls_group_id_;
+  int64_t schema_version_;
+  uint64_t table_id_;
+  common::ObString policy_group_name_;
+};
+
+class ObRlsContextSchema : public ObSchema
+{//simple schema
+  OB_UNIS_VERSION(1);
+public:
+  ObRlsContextSchema();
+  explicit ObRlsContextSchema(common::ObIAllocator *allocator);
+  ObRlsContextSchema(const ObRlsContextSchema &src_schema);
+  virtual ~ObRlsContextSchema();
+  ObRlsContextSchema &operator =(const ObRlsContextSchema &other);
+  int assign(const ObRlsContextSchema &other);
+  bool operator ==(const ObRlsContextSchema &other) const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(rls_context_id),
+               K_(schema_version),
+               K_(table_id),
+               K_(context_name),
+               K_(attribute));
+  virtual void reset();
+  bool is_valid() const;
+  int64_t get_convert_size() const;
+
+  inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_rls_context_id(const uint64_t rls_context_id) { rls_context_id_ = rls_context_id; }
+  inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
+  inline void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  inline int set_context_name(const common::ObString &context_name) { return deep_copy_str(context_name, context_name_); }
+  inline int set_attribute(const common::ObString &attribute) { return deep_copy_str(attribute, attribute_); }
+
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline uint64_t get_rls_context_id() const { return rls_context_id_; }
+  inline int64_t get_schema_version() const { return schema_version_; }
+  inline uint64_t get_table_id() const { return table_id_; }
+  inline const common::ObString &get_context_name() const { return context_name_; }
+  inline const common::ObString &get_attribute() const { return attribute_; }
+  inline ObTenantRlsContextId get_sort_key() const { return ObTenantRlsContextId(tenant_id_, rls_context_id_); }
+  inline uint64_t get_operation_table_id() const { return rls_context_id_; }
+private:
+  uint64_t tenant_id_;
+  uint64_t rls_context_id_;
+  int64_t schema_version_;
+  uint64_t table_id_;
+  common::ObString context_name_;
+  common::ObString attribute_;
 };
 
 }//namespace schema

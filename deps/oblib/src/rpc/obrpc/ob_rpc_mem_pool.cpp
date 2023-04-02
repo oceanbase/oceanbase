@@ -37,25 +37,49 @@ struct ObRpcMemPool::Page
   int64_t cur_;
   char base_[];
 };
-static void* rpc_mem_pool_direct_alloc(int64_t sz) { return common::ob_malloc(sz, common::ObModIds::OB_COMMON_NETWORK); }
+static void* rpc_mem_pool_direct_alloc(int64_t tenant_id, const char* label, int64_t sz) {
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    tenant_id = OB_SERVER_TENANT_ID;
+  }
+  ObMemAttr attr(tenant_id, label, common::ObCtxIds::RPC_CTX_ID);
+  auto* ret = common::ob_malloc(sz, attr);
+  if (OB_ISNULL(ret)
+      && OB_ISNULL(lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, common::ObCtxIds::RPC_CTX_ID))) {
+    attr.tenant_id_ = OB_SERVER_TENANT_ID;
+    ret = common::ob_malloc(sz, attr);
+  }
+  return ret;
+}
 static void rpc_mem_pool_direct_free(void* p) { common::ob_free(p); }
-static ObRpcMemPool::Page* rpc_mem_pool_create_page(int64_t sz) {
+static ObRpcMemPool::Page* rpc_mem_pool_create_page(int64_t tenant_id, const char* label, int64_t sz) {
   int64_t alloc_sz = std::max(sizeof(ObRpcMemPool::Page) + sz, (uint64_t)ObRpcMemPool::RPC_POOL_PAGE_SIZE);
-  ObRpcMemPool::Page* page = (typeof(page))rpc_mem_pool_direct_alloc(alloc_sz);
+  ObRpcMemPool::Page* page = (typeof(page))rpc_mem_pool_direct_alloc(tenant_id, label, alloc_sz);
   if (OB_ISNULL(page)) {
-    LOG_ERROR("rpc memory pool alloc memory failed", K(sz), K(alloc_sz));
+    LOG_WARN_RET(common::OB_ALLOCATE_MEMORY_FAILED, "rpc memory pool alloc memory failed", K(sz), K(alloc_sz));
   } else {
     new(page)ObRpcMemPool::Page(alloc_sz);
   }
   return page;
 }
+static void rpc_mem_pool_destroy_page(ObRpcMemPool::Page* page) {
+  if (OB_NOT_NULL(page)) {
+    page->ObRpcMemPool::Page::~Page();
+    common::ob_free(page);
+  }
+}
 
-ObRpcMemPool* ObRpcMemPool::create(int64_t req_sz)
+ObRpcMemPool* ObRpcMemPool::create(int64_t tenant_id, const char* label, int64_t req_sz)
 {
-  Page* page = rpc_mem_pool_create_page(req_sz + sizeof(ObRpcMemPool));
-  ObRpcMemPool* pool = (typeof(pool))page->alloc(sizeof(ObRpcMemPool));
-  new(pool)ObRpcMemPool(); // can not be null
-  pool->add_page(page);
+  Page* page = nullptr;
+  ObRpcMemPool* pool = nullptr;
+  if (OB_NOT_NULL(page = rpc_mem_pool_create_page(tenant_id, label, req_sz + sizeof(ObRpcMemPool)))) {
+    if (OB_NOT_NULL(pool = (typeof(pool))page->alloc(sizeof(ObRpcMemPool)))) {
+      new(pool)ObRpcMemPool(tenant_id, label); // can not be null
+      pool->add_page(page);
+    } else {
+      rpc_mem_pool_destroy_page(page);
+    }
+  }
   return pool;
 }
 
@@ -64,7 +88,7 @@ void* ObRpcMemPool::alloc(int64_t sz)
   void* ret = NULL;
   Page* page = NULL;
   if (NULL != last_ && NULL != (ret = last_->alloc(sz))) {
-  } else if (NULL == (page = rpc_mem_pool_create_page(sz))) {
+  } else if (NULL == (page = rpc_mem_pool_create_page(tenant_id_, mem_label_, sz))) {
   } else {
     ret = page->alloc(sz);
     add_page(page);

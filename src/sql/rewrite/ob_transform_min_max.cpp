@@ -57,12 +57,14 @@ int ObTransformMinMax::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &par
     LOG_WARN("invalid argument", K(ret), K(stmt), K(ctx_));
   } else if (!stmt->is_select_stmt()) {
     //do nothing
+    OPT_TRACE("not select stmt");
   } else if (OB_FAIL(check_transform_validity(static_cast<ObSelectStmt *>(stmt),
                                               aggr_expr,
                                               is_valid))) {
     LOG_WARN("failed to check transform validity", K(ret));
   } else if (!is_valid) {
     //do nothing
+    OPT_TRACE("can not transform");
   } else if (OB_FAIL(do_transform(static_cast<ObSelectStmt *>(stmt), aggr_expr))) {
     LOG_WARN("failed to transform column aggregate", K(ret));
   } else if (OB_FAIL(add_transform_hint(*stmt))) {
@@ -85,22 +87,28 @@ int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
   } else if (select_stmt->has_recusive_cte() || select_stmt->has_hierarchical_query()) {
     //do nothing
+    OPT_TRACE("stmt has recusive cte or hierarchical query");
   } else if (select_stmt->get_from_item_size() != 1
              || select_stmt->get_from_item(0).is_joined_
              || select_stmt->get_group_expr_size() > 0
              || select_stmt->has_rollup()
              || select_stmt->get_aggr_item_size() != 1) {
     //do nothing
-  } else if (OB_FAIL(is_valid_select_list(*select_stmt, select_expr, is_valid))) {
+    OPT_TRACE("not a simple query");
+  }  else if (OB_FAIL(is_valid_select_list(*select_stmt, select_expr, is_valid))) {
     LOG_WARN("failed to check is valid select list", K(ret));
   } else if (!is_valid) {
     //do nothing
+    OPT_TRACE("select expr is not single expr");
   } else if (OB_FAIL(is_valid_aggr_expr(select_stmt, select_expr, aggr_expr, is_valid))) {
     LOG_WARN("failed to check is valid expr", K(ret));
   } else if (!is_valid) {
     //do nothing
+    OPT_TRACE("select expr is not min/max expr");
   } else if (OB_FAIL(is_valid_having(select_stmt, aggr_expr, is_valid))) {
     LOG_WARN("fail to check is valid having", K(ret));
+  } else if (!is_valid) {
+    OPT_TRACE("having condition is invalid");
   } else {
     LOG_TRACE("Succeed to check transform validity", K(is_valid));
   }
@@ -298,8 +306,7 @@ int ObTransformMinMax::is_valid_index_column(const ObSelectStmt *stmt,
     LOG_WARN("table item is null", K(ret));
   } else if (!table_item->is_basic_table()) {
     /* do nothing */
-  } else if (OB_FAIL(const_cast<ObSelectStmt*>(stmt)->get_stmt_equal_sets(equal_sets, alloc,
-                                                          true, EQUAL_SET_SCOPE::SCOPE_WHERE))) {
+  } else if (OB_FAIL(const_cast<ObSelectStmt*>(stmt)->get_stmt_equal_sets(equal_sets, alloc, true))) {
     LOG_WARN("failed to get stmt equal sets", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
                                                           const_exprs))) {

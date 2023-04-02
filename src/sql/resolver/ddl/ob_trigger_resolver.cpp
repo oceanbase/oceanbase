@@ -18,6 +18,9 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "sql/resolver/ddl/ob_create_routine_resolver.h"
+#include "pl/parser/parse_stmt_item_type.h"
+#include "pl/ob_pl_package.h"
+#include "pl/ob_pl_compile.h"
 
 namespace oceanbase
 {
@@ -26,6 +29,7 @@ namespace sql
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
+using namespace pl;
 
 int ObTriggerResolver::resolve(const ParseNode &parse_tree)
 {
@@ -194,27 +198,28 @@ int ObTriggerResolver::resolve_alter_trigger_stmt(const ParseNode &parse_node,
   const ObTriggerInfo *old_tg_info = NULL;
   ObTriggerInfo new_tg_info;
   OV (parse_node.type_ == T_TG_ALTER, OB_ERR_UNEXPECTED, parse_node.type_);
-  OV (parse_node.num_child_ == 1, OB_ERR_UNEXPECTED, parse_node.num_child_);
+  OV (parse_node.num_child_ == 2, OB_ERR_UNEXPECTED, parse_node.num_child_);
   OV (OB_NOT_NULL(parse_node.children_));
   OV (OB_NOT_NULL(parse_node.children_[0]));  //trigger name.
+  OV (OB_NOT_NULL(parse_node.children_[1]));  //alter clause.
   OV (OB_NOT_NULL(session_info_) && OB_NOT_NULL(schema_checker_));
   OZ (resolve_schema_name(*parse_node.children_[0], trigger_db_name, trigger_name));
-  OZ (new_tg_info.set_trigger_name(trigger_name), trigger_name);
   OZ (schema_checker_->get_trigger_info(session_info_->get_effective_tenant_id(), trigger_db_name,
                                         trigger_name, old_tg_info));
-  if (OB_SUCC(ret) && OB_ISNULL(old_tg_info)) {
-    ret = OB_ERR_TRIGGER_NOT_EXIST;
-    LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_name.length(), trigger_name.ptr());
-  }
-  OX (new_tg_info.set_trigger_id(old_tg_info->get_trigger_id()));
-  OZ (resolve_alter_clause(parse_node, new_tg_info));
-  OZ (trigger_arg.trigger_infos_.push_back(new_tg_info));
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                            session_info_->get_priv_user_id(),
                                            trigger_db_name, stmt::T_ALTER_TRIGGER,
                                            session_info_->get_enable_role_array()));
   }
+  if (OB_SUCC(ret) && OB_ISNULL(old_tg_info)) {
+    ret = OB_ERR_TRIGGER_NOT_EXIST;
+    LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trigger_name.length(), trigger_name.ptr());
+  }
+  OZ (new_tg_info.deep_copy(*old_tg_info));
+  OZ (resolve_alter_clause(*parse_node.children_[1], new_tg_info, trigger_db_name,
+                           trigger_arg.is_set_status_, trigger_arg.is_alter_compile_));
+  OZ (trigger_arg.trigger_infos_.push_back(new_tg_info));
   return ret;
 }
 
@@ -271,18 +276,19 @@ int ObTriggerResolver::resolve_instead_dml_trigger(const ParseNode &parse_node,
   int ret = OB_SUCCESS;
   LOG_DEBUG("resolve instead of trigger");
   OV (T_TG_INSTEAD_DML == parse_node.type_, OB_ERR_UNEXPECTED, parse_node.type_);
-  OV (parse_node.num_child_ == 4, OB_ERR_UNEXPECTED, parse_node.num_child_);
+  OV (parse_node.num_child_ == 5, OB_ERR_UNEXPECTED, parse_node.num_child_);
   OV (OB_NOT_NULL(parse_node.children_));
   OV (OB_NOT_NULL(parse_node.children_[0]));    // dml event.
   // when-clause not supported in oracle
-  OV (OB_ISNULL(parse_node.children_[2]), OB_ERR_WHEN_CLAUSE_IN_TRI);
-  OV (OB_NOT_NULL(parse_node.children_[3]));    // trigger body.
+  OV (OB_ISNULL(parse_node.children_[3]), OB_ERR_WHEN_CLAUSE_IN_TRI);
+  OV (OB_NOT_NULL(parse_node.children_[4]));    // trigger body.
   OX (trigger_arg.trigger_info_.add_before_row()); // instead of trigger is always before row.
   OX (trigger_arg.trigger_info_.add_instead_row());
   OZ (resolve_dml_event_option(*parse_node.children_[0], trigger_arg));
   OZ (resolve_reference_names(parse_node.children_[1], trigger_arg));
   OZ (resolve_trigger_status(parse_node.int16_values_[1], trigger_arg));
-  OZ (resolve_trigger_body(*parse_node.children_[3], trigger_arg));
+  OZ (resolve_order_clause(parse_node.children_[2], trigger_arg));
+  OZ (resolve_trigger_body(*parse_node.children_[4], trigger_arg));
   OZ (fill_package_info(trigger_arg.trigger_info_));
   return ret;
 } 
@@ -293,10 +299,10 @@ int ObTriggerResolver::resolve_simple_dml_trigger(const ParseNode &parse_node,
   int ret = OB_SUCCESS;
   bool is_ora = lib::is_oracle_mode();
   OV (parse_node.type_ == T_TG_SIMPLE_DML, OB_ERR_UNEXPECTED, parse_node.type_);
-  OV (parse_node.num_child_ == (is_ora ? 4 : 3), OB_ERR_UNEXPECTED, parse_node.num_child_);
+  OV (parse_node.num_child_ == (is_ora ? 5 : 4), OB_ERR_UNEXPECTED, parse_node.num_child_);
   OV (OB_NOT_NULL(parse_node.children_));
   OV (OB_NOT_NULL(parse_node.children_[0]));    // dml event.
-  OV (OB_NOT_NULL(parse_node.children_[is_ora ? 3 : 2]));    // simple trigger body.
+  OV (OB_NOT_NULL(parse_node.children_[is_ora ? 4 : 3]));    // simple trigger body.
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (is_ora) {
@@ -306,10 +312,10 @@ int ObTriggerResolver::resolve_simple_dml_trigger(const ParseNode &parse_node,
     OZ (resolve_dml_event_option(*parse_node.children_[0], trigger_arg));
     OZ (resolve_reference_names(parse_node.children_[1], trigger_arg));
     OZ (resolve_trigger_status(parse_node.int16_values_[2], trigger_arg));
-    OZ (resolve_when_condition(parse_node.children_[2], trigger_arg));
+    OZ (resolve_when_condition(parse_node.children_[3], trigger_arg));
   } else {
     OX (LOG_DEBUG("TRIGGER", K(parse_node.int16_values_[0])));
-    OV (OB_NOT_NULL(parse_node.children_[1])); // msyql mode, trigger_name
+    OV (OB_NOT_NULL(parse_node.children_[1])); // mysql mode, trigger_name
     if (OB_SUCC(ret)) {
       if (T_BEFORE == parse_node.int16_values_[0]) {
         trigger_arg.trigger_info_.add_before_row();
@@ -346,7 +352,8 @@ int ObTriggerResolver::resolve_simple_dml_trigger(const ParseNode &parse_node,
                             trigger_arg.base_object_database_, trigger_arg.base_object_name_));
     OZ (resolve_base_object(trigger_arg, false));
   }
-  OZ (resolve_trigger_body(*parse_node.children_[is_ora ? 3 : 2], trigger_arg));
+  OZ (resolve_order_clause(parse_node.children_[2], trigger_arg));
+  OZ (resolve_trigger_body(*parse_node.children_[is_ora ? 4 : 3], trigger_arg));
   OZ (fill_package_info(trigger_arg.trigger_info_));
   return ret;
 }
@@ -356,13 +363,14 @@ int ObTriggerResolver::resolve_compound_dml_trigger(const ParseNode &parse_node,
 {
   int ret = OB_SUCCESS;
   OV (T_TG_COMPOUND_DML == parse_node.type_, OB_ERR_UNEXPECTED, parse_node.type_);
-  CK (OB_NOT_NULL(parse_node.children_[3]));
+  CK (OB_NOT_NULL(parse_node.children_[4]));
   OZ (resolve_dml_event_option(*parse_node.children_[0], trigger_arg));
   OZ (resolve_reference_names(parse_node.children_[1], trigger_arg));
-  OZ (resolve_when_condition(parse_node.children_[2], trigger_arg));
+  OZ (resolve_order_clause(parse_node.children_[2], trigger_arg));
+  OZ (resolve_when_condition(parse_node.children_[3], trigger_arg));
   OZ (resolve_trigger_status(static_cast<int16_t>(parse_node.value_), trigger_arg));
-  OZ (resolve_compound_timing_point(*parse_node.children_[3]->children_[1], trigger_arg));
-  OZ (resolve_compound_trigger_body(*parse_node.children_[3], trigger_arg));
+  OZ (resolve_compound_timing_point(*parse_node.children_[4]->children_[1], trigger_arg));
+  OZ (resolve_compound_trigger_body(*parse_node.children_[4], trigger_arg));
   OZ (fill_package_info(trigger_arg.trigger_info_));
   return ret;
 }
@@ -783,16 +791,28 @@ int ObTriggerResolver::resolve_schema_name(const ParseNode &parse_node,
 }
 
 int ObTriggerResolver::resolve_alter_clause(const ParseNode &alter_clause,
-                                            ObTriggerInfo &tg_info)
+                                            ObTriggerInfo &tg_info,
+                                            const ObString &db_name,
+                                            bool &is_set_status,
+                                            bool &is_alter_compile)
 {
   int ret = OB_SUCCESS;
-  if (T_ENABLE == static_cast<ObItemType>(alter_clause.value_)) {
-    tg_info.set_enable();
-  } else if (T_DISABLE == static_cast<ObItemType>(alter_clause.value_)) {
-    tg_info.set_disable();
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("alter clause must be ENABLE/DISABLE", K(ret));
+  CK (OB_LIKELY(OB_NOT_NULL(schema_checker_)));
+  CK (OB_LIKELY(OB_NOT_NULL(schema_checker_->get_schema_guard())));
+  CK (OB_LIKELY(OB_NOT_NULL(allocator_)));
+  CK (OB_LIKELY(T_TG_ALTER_OPTIONS == alter_clause.type_));
+  if (FAILEDx(TRIGGER_ALTER_IF_EDITIONABLE == alter_clause.int16_values_[0])) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter editionable is not supported yet!", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter editionable");
+  } else if (TRIGGER_ALTER_IF_ENABLE == alter_clause.int16_values_[0]) {
+    is_set_status = true;
+    is_alter_compile = false;
+    if (T_ENABLE == static_cast<ObItemType>(alter_clause.int16_values_[1])) {
+      tg_info.set_enable();
+    } else {
+      tg_info.set_disable();
+    }
   }
   return ret;
 }
@@ -905,13 +925,6 @@ int ObTriggerResolver::resolve_base_object(ObCreateTriggerArg &tg_arg,
         OX (trigger_id = trigger_list.at(i));
         OZ (schema_guard->get_trigger_info(tenant_id, trigger_id, trigger_info), trigger_id);
         OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_id);
-        if (OB_SUCC(ret)
-            && trigger_info->get_timing_points() == tg_arg.trigger_info_.get_timing_points()
-            && trigger_info->get_trigger_events() == tg_arg.trigger_info_.get_trigger_events()) {
-          ret = OB_ERR_TRIGGER_NOT_SUPPORT;
-          LOG_WARN("not support multiple triggers with the same timing points in mysql mode",
-                   K(trigger_id), K(trigger_info->get_trigger_name()), K(ret));
-        }
       }
     }
   }
@@ -922,6 +935,155 @@ int ObTriggerResolver::resolve_base_object(ObCreateTriggerArg &tg_arg,
   }
   return ret;
 }
+
+int ObTriggerResolver::resolve_order_clause(const ParseNode *parse_node, ObCreateTriggerArg &trigger_arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("resolve trigger order clause start", K(ret));
+  if (OB_NOT_NULL(parse_node)) {
+    bool is_oracle_mode = lib::is_oracle_mode();
+    ObTriggerInfo &trg_info = trigger_arg.trigger_info_;
+    OV (T_TG_ORDER == parse_node->type_ && 1 == parse_node->num_child_ && NULL != parse_node->children_[0]);
+    if (OB_SUCC(ret)) {
+      ObString ref_trg_db_name;
+      ObString ref_trg_name;
+      trg_info.set_order_type(static_cast<ObTriggerInfo::OrderType>(parse_node->value_));
+      if (OB_SUCC(ret) && trg_info.is_order_precedes() && is_oracle_mode) {
+        ret = OB_ERR_CANNOT_SPECIFY_PRECEDES_IN_TRG;
+        LOG_WARN("cannot specify PRECEDES clause", K(ret));
+      }
+      OZ (resolve_schema_name(*parse_node->children_[0], ref_trg_db_name, ref_trg_name), ref_trg_db_name, ref_trg_name);
+      OZ (trg_info.set_ref_trg_db_name(ref_trg_db_name));
+      OZ (trg_info.set_ref_trg_name(ref_trg_name));
+      if (OB_SUCC(ret) && !ref_trg_db_name.empty()) {
+        const ObTriggerInfo *ref_trg_info = NULL;
+        OV (OB_NOT_NULL(schema_checker_));
+        OV (!ref_trg_name.empty(), OB_ERR_UNEXPECTED, ref_trg_db_name, ref_trg_name);
+        if (OB_SUCC(ret) && is_oracle_mode) {
+          uint64_t ref_db_id = OB_INVALID_ID;
+          OZ (schema_checker_->get_database_id(trg_info.get_tenant_id(), ref_trg_db_name, ref_db_id));
+          if (OB_SUCC(ret) && (trg_info.get_database_id() == ref_db_id)
+              && (trg_info.get_trigger_name() == ref_trg_name)) {
+            ret = OB_ERR_REF_CYCLIC_IN_TRG;
+            LOG_WARN("ORA-25023: cyclic trigger dependency is not allowed", K(ret));
+          }
+        }
+        OZ (schema_checker_->get_trigger_info(trg_info.get_tenant_id(), ref_trg_db_name, ref_trg_name, ref_trg_info));
+        if (OB_FAIL(ret)) {
+        } else if (NULL == ref_trg_info) {
+          ret = OB_ERR_TRG_ORDER;
+          LOG_WARN("ref_trg_info is NULL", K(ref_trg_db_name), K(ref_trg_name), K(ret));
+          if (is_oracle_mode) {
+            // example: "WEBBER"."TRI"
+            ObString trg_full_name;
+            uint64_t buf_len = ref_trg_db_name.length() + ref_trg_name.length() + 6;
+            char buf[buf_len];
+            trg_full_name.assign_buffer(buf, buf_len);
+            trg_full_name.write("\"", 1);
+            trg_full_name.write(ref_trg_db_name.ptr(), ref_trg_db_name.length());
+            trg_full_name.write("\".\"", 3);
+            trg_full_name.write(ref_trg_name.ptr(), ref_trg_name.length());
+            trg_full_name.write("\"\0", 2);
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRG_ORDER, trg_full_name.ptr());
+          } else {
+            LOG_MYSQL_USER_ERROR(OB_ERR_TRG_ORDER, ref_trg_name.ptr());
+          }
+        } else {
+          if (is_oracle_mode) {
+            if (trg_info.get_base_object_id() != ref_trg_info->get_base_object_id()) {
+              ret = OB_ERR_REF_ANOTHER_TABLE_IN_TRG;
+              LOG_WARN("ORA-25021: cannot reference a trigger defined on another table", K(ret));
+            } else if (trg_info.is_simple_dml_type() && !ref_trg_info->is_compound_dml_type()) {
+              if (!(trg_info.is_row_level_before_trigger() && ref_trg_info->is_row_level_before_trigger())
+                  && !(trg_info.is_row_level_after_trigger() && ref_trg_info->is_row_level_after_trigger())
+                  && !(trg_info.is_stmt_level_before_trigger() && ref_trg_info->is_stmt_level_before_trigger())
+                  && !(trg_info.is_stmt_level_after_trigger() && ref_trg_info->is_stmt_level_after_trigger())) {
+                ret = OB_ERR_REF_TYPE_IN_TRG;
+                LOG_WARN("cannot reference a trigger of a different type", K(ref_trg_db_name), K(ref_trg_name), K(ret));
+              }
+            }
+          } else {
+            if (!ObTriggerInfo::is_same_timing_event(trg_info, *ref_trg_info)
+                || trg_info.get_base_object_id() != ref_trg_info->get_base_object_id()) {
+              ret = OB_ERR_TRG_ORDER;
+              LOG_WARN("trigger order invalid", K(ref_trg_db_name), K(ref_trg_name), K(ret));
+              LOG_MYSQL_USER_ERROR(OB_ERR_TRG_ORDER, ref_trg_name.ptr());
+            }
+          }
+        }
+      }
+    }
+  }
+  LOG_DEBUG("resolve trigger order clause end", K(ret));
+  return ret;
+}
+
+int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
+                                       ObSQLSessionInfo *session_info,
+                                       ObMySQLProxy *sql_proxy,
+                                       ObIAllocator &allocator,
+                                       const ObTriggerInfo &trigger_info,
+                                       const ObString &db_name,
+                                       ObIArray<ObDependencyInfo> &dep_infos,
+                                       bool is_alter_compile)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_LIKELY(OB_NOT_NULL(session_info)));
+  CK (OB_LIKELY(OB_NOT_NULL(sql_proxy)));
+  if (OB_SUCC(ret)) {
+    HEAP_VARS_2((ObPLPackageAST, package_spec_ast, allocator),
+                  (ObPLPackageAST, package_body_ast, allocator)) {
+      ObPLPackageGuard package_guard(PACKAGE_RESV_HANDLE);
+      const ObString &pkg_name = trigger_info.get_package_body_info().get_package_name();
+      ObString source;
+      ObPLCompiler compiler(allocator, *session_info, schema_guard, package_guard, *sql_proxy);
+      const ObPackageInfo &package_spec_info = trigger_info.get_package_spec_info();
+      OZ (package_spec_ast.init(db_name,
+                                package_spec_info.get_package_name(),
+                                PL_PACKAGE_SPEC,
+                                package_spec_info.get_database_id(),
+                                package_spec_info.get_package_id(),
+                                package_spec_info.get_schema_version(),
+                                NULL));
+      OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
+                                            trigger_info.get_trigger_spec_package_id(trigger_info.get_trigger_id()),
+                                            source, true, schema_guard, allocator));
+      OZ (compiler.analyze_package(source, NULL, package_spec_ast, true));
+      OZ (package_body_ast.init(db_name,
+                                pkg_name,
+                                PL_PACKAGE_BODY,
+                                trigger_info.get_package_body_info().get_database_id(),
+                                trigger_info.get_package_body_info().get_package_id(),
+                                trigger_info.get_package_body_info().get_schema_version(),
+                                &package_spec_ast));
+      OZ (ObTriggerInfo::gen_package_source(trigger_info.get_tenant_id(),
+                                            trigger_info.get_trigger_body_package_id(trigger_info.get_trigger_id()),
+                                            source, false, schema_guard, allocator));
+      OZ (compiler.analyze_package(source,
+                                   &(package_spec_ast.get_body()->get_namespace()),
+                                   package_body_ast,
+                                   true));
+      if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+        if (is_alter_compile) {
+          OZ (ObPLCompiler::update_schema_object_dep_info(package_body_ast,
+                                                          trigger_info.get_tenant_id(),
+                                                          trigger_info.get_trigger_id(),
+                                                          trigger_info.get_schema_version(),
+                                                          trigger_info.get_owner_id(),
+                                                          trigger_info.get_object_type()));
+        } else {
+          ObString dep_attr;
+          OZ (ObDependencyInfo::collect_dep_infos(package_body_ast.get_dependency_table(),
+                                                  dep_infos,
+                                                  trigger_info.get_object_type(),
+                                                  0, dep_attr, dep_attr));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 const ObString ObTriggerResolver::REF_OLD = "OLD";
 const ObString ObTriggerResolver::REF_NEW = "NEW";

@@ -16,6 +16,7 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/spm/ob_spm_define.h"
 #include "share/ob_rpc_struct.h"
+#include "sql/monitor/ob_exec_stat.h"
 
 namespace oceanbase
 {
@@ -33,13 +34,15 @@ public:
                                    ObPhysicalPlan* plan,
                                    bool& is_exists);
   static void get_next_baseline_outline(ObSpmCacheCtx& spm_ctx);
-  static int accept_new_plan_as_baseline(ObSpmCacheCtx& spm_ctx);
+  static int accept_new_plan_as_baseline(ObSpmCacheCtx& spm_ctx, const ObAuditRecordData &audit_record);
 
   static int update_evolution_task_result(EvolutionTaskResult& result);
 
   static int accept_plan_baseline_by_user(obrpc::ObModifyPlanBaselineArg& arg);
   static int cancel_evolve_task(obrpc::ObModifyPlanBaselineArg& arg);
   static int load_baseline(const obrpc::ObLoadPlanBaselineArg& arg, ObPhysicalPlan* plan);
+  static int deny_new_plan_as_baseline(ObSpmCacheCtx& spm_ctx);
+  static int64_t calc_spm_timeout_us(const int64_t normal_timeout, const int64_t baseline_exec_time);
 };
 
 } // namespace sql end

@@ -47,7 +47,7 @@ namespace oceanbase
 namespace common
 {
 class ObInnerTableBackupGuard;
-class ObMySQLTransaction;
+class ObMySQLTransactionaction;
 class ObMySQLProxy;
 class ObCommonConfig;
 class ObKVCacheHandle;
@@ -99,6 +99,9 @@ struct SchemaKey
     uint64_t directory_id_;
     uint64_t context_id_;
     uint64_t mock_fk_parent_table_id_;
+    uint64_t rls_policy_id_;
+    uint64_t rls_group_id_;
+    uint64_t rls_context_id_;
   };
   union {
     common::ObString table_name_;
@@ -147,7 +150,10 @@ struct SchemaKey
                K_(dblink_id),
                K_(directory_id),
                K_(context_id),
-               K_(mock_fk_parent_table_id));
+               K_(mock_fk_parent_table_id),
+               K_(rls_policy_id),
+               K_(rls_group_id),
+               K_(rls_context_id));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -290,6 +296,18 @@ struct SchemaKey
   {
     return ObMockFKParentTableKey(tenant_id_, mock_fk_parent_table_id_);
   }
+  ObTenantRlsPolicyId get_rls_policy_key() const
+  {
+    return ObTenantRlsPolicyId(tenant_id_, rls_policy_id_);
+  }
+  ObTenantRlsGroupId get_rls_group_key() const
+  {
+    return ObTenantRlsGroupId(tenant_id_, rls_group_id_);
+  }
+  ObTenantRlsContextId get_rls_context_key() const
+  {
+    return ObTenantRlsContextId(tenant_id_, rls_context_id_);
+  }
 };
 
 struct VersionHisKey
@@ -429,6 +447,9 @@ public:
   SCHEMA_KEY_FUNC(audit);
   SCHEMA_KEY_FUNC(dblink);
   SCHEMA_KEY_FUNC(directory);
+  SCHEMA_KEY_FUNC(rls_policy);
+  SCHEMA_KEY_FUNC(rls_group);
+  SCHEMA_KEY_FUNC(rls_context);
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
@@ -645,6 +666,9 @@ public:
   SCHEMA_KEYS_DEF(directory, DirectoryKeys);
   SCHEMA_KEYS_DEF(context, ContextKeys);
   SCHEMA_KEYS_DEF(mock_fk_parent_table, MockFKParentTableKeys);
+  SCHEMA_KEYS_DEF(rls_policy, RlsPolicyKeys);
+  SCHEMA_KEYS_DEF(rls_group, RlsGroupKeys);
+  SCHEMA_KEYS_DEF(rls_context, RlsContextKeys);
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       db_priv_hash_func, db_priv_equal_to> DBPrivKeys;
@@ -760,8 +784,23 @@ public:
     MockFKParentTableKeys new_mock_fk_parent_table_keys_;
     MockFKParentTableKeys del_mock_fk_parent_table_keys_;
 
+    // row_level_security
+    RlsPolicyKeys new_rls_policy_keys_;
+    RlsPolicyKeys del_rls_policy_keys_;
+    RlsGroupKeys new_rls_group_keys_;
+    RlsGroupKeys del_rls_group_keys_;
+    RlsContextKeys new_rls_context_keys_;
+    RlsContextKeys del_rls_context_keys_;
+
     void reset();
     int create(int64_t bucket_size);
+
+    bool need_fetch_schemas_for_data_dict() const {
+      return new_tenant_keys_.size() > 0
+             || alter_tenant_keys_.size() > 0
+             || new_table_keys_.size() > 0
+             || new_database_keys_.size() > 0;
+    }
   };
 
   struct AllSimpleIncrementSchema
@@ -797,6 +836,9 @@ public:
     common::ObArray<ObDirectorySchema> simple_directory_schemas_;
     common::ObArray<ObContextSchema> simple_context_schemas_;
     common::ObArray<ObSimpleMockFKParentTableSchema> simple_mock_fk_parent_table_schemas_;
+    common::ObArray<ObRlsPolicySchema> simple_rls_policy_schemas_;
+    common::ObArray<ObRlsGroupSchema> simple_rls_group_schemas_;
+    common::ObArray<ObRlsContextSchema> simple_rls_context_schemas_;
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArenaAllocator allocator_;
   };
@@ -833,6 +875,18 @@ public:
 
   int set_timeout_ctx(common::ObTimeoutCtx &ctx);
 
+  // Fetch increments schemas in DDL trans. This interface won't return the following increment schemas:
+  // 1. schema which is dropped in DDL trans.
+  // 2. changed inner tables.
+  int get_increment_schemas_for_data_dict(
+      common::ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const int64_t start_version,
+      common::ObIAllocator &allocator,
+      common::ObIArray<const ObTenantSchema *> &tenant_schemas,
+      common::ObIArray<const ObDatabaseSchema *> &database_schemas,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
+
 protected:
   bool check_inner_stat() const;
   int check_stop() const;
@@ -851,6 +905,12 @@ protected:
 
   int destroy_schema_struct(uint64_t tenant_id);
 
+  bool need_construct_aux_infos_(const ObTableSchema &table_schema);
+  int construct_aux_infos_(
+      common::ObISQLClient &sql_client,
+      const share::schema::ObRefreshSchemaStatus &schema_status,
+      const uint64_t tenant_id,
+      ObTableSchema &table_schema);
 private:
   virtual int destroy();
 
@@ -952,6 +1012,9 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(directory);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(context);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(mock_fk_parent_table);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_policy);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_group);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_context);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
@@ -991,6 +1054,9 @@ private:
   APPLY_SCHEMA_TO_CACHE(directory, ObDirectoryMgr);
   APPLY_SCHEMA_TO_CACHE(context, ObContextMgr);
   APPLY_SCHEMA_TO_CACHE(mock_fk_parent_table, ObMockFKParentTableMgr);
+  APPLY_SCHEMA_TO_CACHE(rls_policy, ObRlsPolicyMgr);
+  APPLY_SCHEMA_TO_CACHE(rls_group, ObRlsGroupMgr);
+  APPLY_SCHEMA_TO_CACHE(rls_context, ObRlsContextMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
   // replay log
@@ -1044,6 +1110,12 @@ private:
                                       const int64_t schema_version,
                                       bool &core_schema_change,
                                       bool &sys_schema_change);
+  int check_core_schema_change_(
+      ObISQLClient &sql_client,
+      const ObRefreshSchemaStatus &schema_status,
+      const int64_t core_schema_version,
+      bool &core_schema_change);
+
   virtual int check_sys_schema_change(common::ObISQLClient &sql_client,
                                       const ObRefreshSchemaStatus &schema_status,
                                       const int64_t schema_version,
@@ -1099,6 +1171,35 @@ protected:
                            AllSchemaKeys &schema_keys,
                            const bool new_flag);
 
+  /*-- data dict related --*/
+  int get_increment_schema_keys_for_data_dict_(
+      const ObSchemaService::SchemaOperationSetWithAlloc &schema_operations,
+      AllSchemaKeys &schema_keys);
+  int fetch_increment_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObTenantSchema *> &tenant_schemas,
+      common::ObIArray<const ObDatabaseSchema *> &database_schemas,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
+  int fetch_increment_tenant_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObTenantSchema *> &tenant_schemas);
+  int fetch_increment_database_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObDatabaseSchema *> &database_schemas);
+  int fetch_increment_table_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
 protected:
   // core table count
   const static int64_t MIN_TABLE_COUNT = 1;

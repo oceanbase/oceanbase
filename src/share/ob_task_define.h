@@ -55,6 +55,8 @@ public:
 
   void set_log_rate_limit(int64_t limit);
 
+  void set_diag_per_error_limit(int64_t cnt);
+
   static ObTaskController &get();
 
 private:

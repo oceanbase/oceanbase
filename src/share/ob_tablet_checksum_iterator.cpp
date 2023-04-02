@@ -55,7 +55,7 @@ void ObTabletChecksumIterator::reuse()
 {
   cur_idx_ = 0;
   checksum_items_.reuse();
-  snapshot_version_ = OB_INVALID_VERSION;
+  compaction_scn_.reset();
 }
 
 int ObTabletChecksumIterator::next(ObTabletChecksumItem &item)
@@ -109,9 +109,9 @@ int ObTabletChecksumIterator::fetch_next_batch()
     if (OB_SUCC(ret)) {
       checksum_items_.reuse();
       if (OB_FAIL(ObTabletChecksumOperator::load_tablet_checksum_items(*sql_proxy_, start_pair, 
-          BATCH_FETCH_COUNT, tenant_id_, snapshot_version_, checksum_items_))) {
+          BATCH_FETCH_COUNT, tenant_id_, compaction_scn_, checksum_items_))) {
         LOG_WARN("fail to load tablet checksums", KR(ret), K_(tenant_id), K(start_pair), 
-          K_(snapshot_version));
+          K_(compaction_scn));
       } else if (OB_UNLIKELY(0 == checksum_items_.count())) {
         ret = OB_ITER_END;
       }

@@ -47,7 +47,8 @@ ObMPStmtSendLongData::ObMPStmtSendLongData(const ObGlobalContext &gctx)
       stmt_id_(0),
       param_id_(-1),
       buffer_len_(0),
-      buffer_()
+      buffer_(),
+      need_disconnect_(false)
 {
   ctx_.exec_type_ = MpQuery;
 }
@@ -156,10 +157,34 @@ int ObMPStmtSendLongData::process()
       }
     }
 
+    if (!GCONF._enable_new_sql_nio) {
+      // if not open sql nio , replace all ret code to 4007
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("send long data need open SQL NIO. ", K(ret), K(stmt_id_), K(param_id_), K(need_disconnect_));
+    }
     if (OB_FAIL(ret)) {
-      send_error_packet(ret, NULL);
+      // send long data fail will not response packet, just print log
+      LOG_WARN("send long data error happend ", K(ret), K(stmt_id_), K(param_id_), K(need_disconnect_));
+
+      if (!need_disconnect_) {
+        ObPiece *piece = NULL;
+        ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(false));
+        if (OB_ISNULL(piece_cache)) {
+          need_disconnect_ = true;
+          LOG_WARN("piece cache is null.", K(ret), K(stmt_id_), K(param_id_));
+        } else if (OB_SUCCESS != piece_cache->get_piece(stmt_id_, param_id_, piece)) {
+          need_disconnect_ = true;
+          LOG_WARN("get piece fail", K(stmt_id_), K(param_id_), K(ret));
+        } else if (NULL == piece) {
+          need_disconnect_ = true;
+          LOG_WARN("get piece fail", K(stmt_id_), K(param_id_), K(ret));
+        } else {
+          piece->set_error_ret(ret);
+        }
+      }
+    }
+    if (need_disconnect_) {
       force_disconnect();
-      LOG_WARN("disconnect connection when send long data", K(ret));
     }
 
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
@@ -173,7 +198,6 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   bool need_response_error = true;
-  bool use_sess_trace = false;
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
   setup_wb(session);
@@ -192,7 +216,7 @@ int ObMPStmtSendLongData::process_send_long_data_stmt(ObSQLSessionInfo &session)
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, use_sess_trace, ctx_, false);
+  tmp_ret = do_after_process(session, ctx_, false);
   UNUSED(tmp_ret);
   return ret;
 }
@@ -258,16 +282,6 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
   }
 
-  //set read_only
-  if (OB_SUCC(ret)) {
-    session.set_has_exec_write_stmt(false);
-  } else {
-    bool is_partition_hit = session.partition_hit().get_bool();
-    int err = send_error_packet(ret, NULL, is_partition_hit);
-    if (OB_SUCCESS != err) {  // 发送error包
-      LOG_WARN("send error packet failed", K(ret), K(err));
-    }
-  }
   if (enable_sql_audit) {
     audit_record.status_ = ret;
     audit_record.client_addr_ = session.get_peer_addr();
@@ -292,7 +306,8 @@ int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
   ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache(true));
   if (OB_ISNULL(piece_cache)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("piece cache is null.", K(ret), K(stmt_id_));
+    need_disconnect_ = true;
+    LOG_WARN("piece cache is null.", K(ret), K(stmt_id_), K(param_id_));
   } else {
     ObPiece *piece = NULL;
     if (OB_FAIL(piece_cache->get_piece(stmt_id_, param_id_, piece))) {
@@ -302,17 +317,16 @@ int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
         LOG_WARN("make piece fail.", K(ret), K(stmt_id_));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (NULL == piece) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("piece is null.", K(ret), K(stmt_id_), K(param_id_));
-      } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, 
+    if (OB_FAIL(ret) || NULL == piece) {
+      ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
+      need_disconnect_ = true;
+      LOG_WARN("piece is null.", K(ret), K(piece), K(stmt_id_), K(param_id_));
+    } else if (OB_FAIL(piece_cache->add_piece_buffer(piece,
                                                       ObPieceMode::ObInvalidPiece, 
                                                       &buffer_))) {
-        LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
-      } else {
-        // send long data do not response.
-      }
+      LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
+    } else {
+      // send long data do not response.
     }
   }
   return ret;

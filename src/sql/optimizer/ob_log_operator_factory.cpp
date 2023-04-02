@@ -28,6 +28,7 @@
 #include "ob_log_distinct.h"
 #include "ob_log_expr_values.h"
 #include "ob_log_function_table.h"
+#include "ob_log_json_table.h"
 #include "ob_log_values.h"
 #include "ob_log_material.h"
 #include "ob_log_window_function.h"
@@ -38,10 +39,9 @@
 #include "ob_log_sequence.h"
 #include "ob_log_merge.h"
 #include "ob_log_granule_iterator.h"
-#include "ob_log_table_lookup.h"
 #include "ob_log_monitoring_dump.h"
 #include "ob_log_unpivot.h"
-#include "ob_log_link.h"
+#include "sql/optimizer/ob_log_link_scan.h"
 #include "ob_log_for_update.h"
 #include "ob_log_temp_table_insert.h"
 #include "ob_log_temp_table_access.h"
@@ -50,6 +50,8 @@
 #include "ob_log_err_log.h"
 #include "ob_log_stat_collector.h"
 #include "ob_del_upd_log_plan.h"
+#include "ob_log_link_dml.h"
+#include "ob_log_optimizer_stats_gathering.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::log_op_def;
@@ -243,13 +245,6 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     } else { /* do nothing */}
     break;
   }
-  case LOG_TABLE_LOOKUP: {
-    ptr = allocator_.alloc(sizeof(ObLogTableLookup));
-    if (NULL != ptr) {
-      ret_op = new (ptr) ObLogTableLookup(plan);
-    } else { /* do nothing */ }
-    break;
-  }
   case LOG_JOIN_FILTER: {
     ptr = allocator_.alloc(sizeof(ObLogJoinFilter));
     if (NULL != ptr) {
@@ -275,6 +270,13 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     ptr = allocator_.alloc(sizeof(ObLogFunctionTable));
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogFunctionTable(plan);
+    } else { /* do nothing */ }
+    break;
+  }
+  case LOG_JSON_TABLE: {
+    ptr = allocator_.alloc(sizeof(ObLogJsonTable));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogJsonTable(plan);
     } else { /* do nothing */ }
     break;
   }
@@ -306,10 +308,17 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     } else { /* do nothing */ }
     break;
   }
-  case LOG_LINK: {
-    ptr = allocator_.alloc(sizeof(ObLogLink));
+  case LOG_LINK_SCAN: {
+    ptr = allocator_.alloc(sizeof(ObLogLinkScan));
     if (NULL != ptr) {
-      ret_op = new (ptr) ObLogLink(plan);
+      ret_op = new (ptr) ObLogLinkScan(plan);
+    } else { /* do nothing */ }
+    break;
+  }
+  case LOG_LINK_DML: {
+    ptr = allocator_.alloc(sizeof(ObLogLinkDml));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogLinkDml(plan);
     } else { /* do nothing */ }
     break;
   }
@@ -339,6 +348,13 @@ ObLogicalOperator *ObLogOperatorFactory::allocate(ObLogPlan &plan, ObLogOpType t
     ptr = allocator_.alloc(sizeof(ObLogStatCollector));
     if (NULL != ptr) {
       ret_op = new (ptr) ObLogStatCollector(plan);
+    }
+    break;
+  }
+  case LOG_OPTIMIZER_STATS_GATHERING: {
+    ptr = allocator_.alloc(sizeof(ObLogOptimizerStatsGathering));
+    if (NULL != ptr) {
+      ret_op = new (ptr) ObLogOptimizerStatsGathering(plan);
     }
     break;
   }

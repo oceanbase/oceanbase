@@ -72,7 +72,7 @@ int ObSSTableRowMultiGetter::inner_open(
       LOG_WARN("fail to switch context for prefetcher, ", K(ret));
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(prefetcher_.prefetch())) {
+      if (OB_FAIL(prefetcher_.multi_prefetch())) {
         LOG_WARN("Fail to prefetch data", K(ret));
       } else {
         is_opened_ = true;
@@ -94,29 +94,26 @@ int ObSSTableRowMultiGetter::inner_get_next_row(const blocksstable::ObDatumRow *
     LOG_WARN("The ObSSTableRowMultiGetter has not been opened", K(ret), KP(this));
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(prefetcher_.prefetch())) {
-        LOG_WARN("Fail to prefetch micro block", K(ret));
-      } else if (prefetcher_.cur_range_fetch_idx_ >= prefetcher_.cur_range_prefetch_idx_) {
-        if (OB_LIKELY(prefetcher_.is_prefetch_end_)) {
+      if (OB_FAIL(prefetcher_.multi_prefetch())) {
+        LOG_WARN("Fail to prefetch micro block", K(ret), K_(prefetcher));
+      } else if (prefetcher_.fetch_rowkey_idx_ >= prefetcher_.prefetch_rowkey_idx_) {
+        if (OB_LIKELY(prefetcher_.is_prefetch_end())) {
           ret = OB_ITER_END;
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Current fetch handle idx exceed prefetching idx", K(ret), K_(prefetcher));
         }
-      } else if (!prefetcher_.is_prefetch_end_ &&
-                 prefetcher_.cur_range_fetch_idx_ >= prefetcher_.prefetching_range_idx() &&
-                 -1 == prefetcher_.current_read_handle().micro_begin_idx_) {
+      } else if (!prefetcher_.current_read_handle().cur_prefetch_end_) {
         continue;
       } else if (OB_FAIL(fetch_row(prefetcher_.current_read_handle(), store_row))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
-          if (prefetcher_.cur_range_fetch_idx_ < prefetcher_.prefetching_range_idx() || prefetcher_.is_prefetch_end_) {
-            ++prefetcher_.cur_range_fetch_idx_;
-          }
+          prefetcher_.mark_cur_rowkey_fetched(prefetcher_.current_read_handle());
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("Fail to fetch row", K(ret));
         }
       } else {
+        prefetcher_.mark_cur_rowkey_fetched(prefetcher_.current_read_handle());
         break;
       }
     }
@@ -145,19 +142,9 @@ int ObSSTableRowMultiGetter::fetch_row(ObSSTableReadHandle &read_handle, const b
     } else if (OB_FAIL(micro_getter_->init(*iter_param_, *access_ctx_, sstable_))) {
       LOG_WARN("Fail to init micro block row getter", K(ret));
     }
+    //switch context each row due to the cache will be disabled if too many rows getted
   } else if (OB_FAIL(micro_getter_->switch_context(*iter_param_, *access_ctx_, sstable_))) {
     STORAGE_LOG(WARN, "Fail to switch context", K(ret));
-  }
-  if (OB_SUCC(ret) && ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
-    if (-1 == read_handle.micro_begin_idx_) {
-      read_handle.row_state_ = ObSSTableRowState::NOT_EXIST;
-    } else if (read_handle.micro_begin_idx_ >= prefetcher_.micro_data_prefetch_idx_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected reader micro idx", K(ret), K(prefetcher_), K(read_handle));
-    } else {
-      prefetcher_.cur_micro_data_fetch_idx_ = read_handle.micro_begin_idx_;
-      read_handle.micro_handle_ = &prefetcher_.current_micro_handle();
-    }
   }
 
   if (OB_FAIL(ret)) {
@@ -166,8 +153,6 @@ int ObSSTableRowMultiGetter::fetch_row(ObSSTableReadHandle &read_handle, const b
               store_row,
               macro_block_reader_))) {
     LOG_WARN("Fail to get row", K(ret));
-  } else {
-    ++prefetcher_.cur_range_fetch_idx_;
   }
   return ret;
 }

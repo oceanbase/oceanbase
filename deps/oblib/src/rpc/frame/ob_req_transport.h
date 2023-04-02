@@ -63,7 +63,7 @@ public:
   virtual ~EasySPAlloc() {}
   void *alloc(int64_t size) const
   {
-    return easy_pool_alloc(pool_, size);
+    return easy_pool_alloc(pool_, static_cast<uint32_t>(size));
   }
 private:
   easy_pool_t *pool_;
@@ -80,6 +80,8 @@ public:
   }
 };
 
+easy_addr_t to_ez_addr(const common::ObAddr &addr);
+
 class ObReqTransport
 {
 public:
@@ -91,7 +93,7 @@ public:
   {
   public:
     AsyncCB(int pcode)
-        : dst_(), timeout_(0), tenant_id_(0),
+        : low_level_cb_(NULL), dst_(), timeout_(0), tenant_id_(0),
           err_(0), pcode_(pcode), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB() {}
@@ -107,7 +109,7 @@ public:
     virtual bool get_cloned() = 0;
 
     // invoke when get a valid packet on protocol level, but can't decode it.
-    virtual void on_invalid() { RPC_FRAME_LOG(ERROR, "invalid packet"); }
+    virtual void on_invalid() { RPC_FRAME_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid packet"); }
     // invoke when can't get a valid or completed packet.
     virtual void on_timeout() { RPC_FRAME_LOG(DEBUG, "packet timeout"); }
     virtual int on_error(int err);
@@ -122,6 +124,7 @@ public:
     void set_payload(const int64_t payload) { payload_ = payload; }
     int64_t get_payload() { return payload_; }
 
+    void* low_level_cb_;
   private:
     static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000; // 100ms
   protected:
@@ -242,7 +245,6 @@ private:
   int balance_assign(easy_session_t *s) const;
   ObPacket *send_session(easy_session_t *s) const;
   int post_session(easy_session_t *s) const;
-  easy_addr_t to_ez_addr(const ObAddr &addr) const;
 
 private:
   static const int32_t OB_RPC_CONNECTION_COUNT_PER_THREAD = 1;

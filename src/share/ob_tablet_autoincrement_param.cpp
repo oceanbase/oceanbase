@@ -40,6 +40,25 @@ int ObTabletCacheInterval::next_value(uint64_t &next_value)
   return ret;
 }
 
+int ObTabletCacheInterval::fetch(uint64_t count, ObTabletCacheInterval &dest)
+{
+  int ret = OB_SUCCESS;
+  uint64_t start = ATOMIC_LOAD(&next_value_);
+  uint64_t end = 0;
+  uint64_t old_start = start;
+  while ((end = start + count - 1) <= end_ &&
+         old_start != (start = ATOMIC_CAS(&next_value_, old_start, end + 1))) {
+    old_start = start;
+    PAUSE();
+  }
+  if (end > end_) {
+    ret = OB_EAGAIN;
+  } else {
+    dest.set(start, end);
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObTabletAutoincParam,
                     tenant_id_,
                     auto_increment_cache_size_);

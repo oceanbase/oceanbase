@@ -24,6 +24,27 @@ namespace oceanbase
 namespace common
 {
 
+#define TEST_SMART_CALL(func, addr)                                         \
+  ({                                                                        \
+    int ret = OB_SUCCESS;                                                   \
+      std::function<int()> f = [&]() {                                      \
+        int ret = OB_SUCCESS;                                               \
+        try {                                                               \
+          in_try_stmt = true;                                               \
+          ret = func;                                                       \
+          in_try_stmt = false;                                              \
+        } catch (OB_BASE_EXCEPTION &except) {                               \
+          ret = except.get_errno();                                         \
+          in_try_stmt = false;                                              \
+        }                                                                   \
+        return ret;                                                         \
+      };                                                                    \
+      int(*func_) (void*) = [](void *arg) { return (*(decltype(f)*)(arg))(); };\
+      void * arg_ = &f;                                                     \
+      ret = jump_call(arg_, func_, addr);                                   \
+    ret;                                                                    \
+  })
+
 int dec(int &i)
 {
   if (i <= 0) {
@@ -36,10 +57,13 @@ int dec(int &i)
 TEST(sc, usability)
 {
   int ret = OB_SUCCESS;
+  static constexpr int stack_size = 1024 * 1024 * 2;
+  char stack1[stack_size];
+  char stack2[stack_size];
   // global function
   {
     int i = 10;
-    ret = SMART_CALL(dec(i));
+    ret = TEST_SMART_CALL(dec(i), (char *)stack1 + stack_size);
     EXPECT_EQ(ret, OB_SUCCESS);
     EXPECT_EQ(i, 0);
   }
@@ -65,6 +89,22 @@ TEST(sc, usability)
 
   // lambda && error code
   EXPECT_EQ(OB_ERR_UNEXPECTED, SMART_CALL([]() { return OB_ERR_UNEXPECTED;}()));
+
+  // nested SMART_CALL
+  {
+    std::function<int(int &)> nested_dec = [&](int &i) {
+      int ret = OB_SUCCESS;
+      int backup = i;
+      ret = dec(i);
+      i = backup;
+      ret = TEST_SMART_CALL(dec(i), (char *)stack2 + stack_size);
+      return ret;
+    };
+    int i = 10;
+    ret = TEST_SMART_CALL(nested_dec(i), (char *)stack1 + stack_size);
+    EXPECT_EQ(ret, OB_SUCCESS);
+    EXPECT_EQ(i, 0);
+  }
 }
 
 void *cur_stack_addr = nullptr;
@@ -101,7 +141,7 @@ int test(int &i, int once_invoke_hold)
       ret = OB_SUCCESS;
     } else {
       char buf[once_invoke_hold];
-      MEMSET(buf, 0, once_invoke_hold);
+      memset(buf, reinterpret_cast<std::uintptr_t>(&buf[0]) & 0xFF, once_invoke_hold); // disable compiler optimize out
       ret = SMART_CALL(test(--i, once_invoke_hold));
       void *stack_addr_after = nullptr;
       size_t stack_size_after = 0;

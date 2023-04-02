@@ -40,7 +40,13 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/rc/ob_context.h"
-#include "sql/monitor/full_link_trace/ob_flt_extra_info.h"
+#include "sql/dblink/ob_dblink_utils.h"
+#include "share/resource_manager/ob_cgroup_ctrl.h"
+#include "sql/monitor/flt/ob_flt_extra_info.h"
+#include "sql/ob_optimizer_trace_impl.h"
+#include "sql/monitor/flt/ob_flt_span_mgr.h"
+#include "sql/monitor/ob_sql_plan_manager.h"
+#include "storage/tx/ob_tx_free_route.h"
 
 namespace oceanbase
 {
@@ -73,11 +79,11 @@ namespace sql
 class ObResultSet;
 class ObPlanCache;
 class ObPsCache;
-class ObPlanCacheManager;
 class ObPsSessionInfo;
 class ObPsStmtInfo;
 class ObStmt;
 class ObSQLSessionInfo;
+class ObPlanItemMgr;
 
 class SessionInfoKey
 {
@@ -192,12 +198,16 @@ private:
 };
 
 enum SessionSyncInfoType {
-  //SESSION_SYNC_SYS_VAR,   // for system variables
   //SESSION_SYNC_USER_VAR,  // for user variables
-  SESSION_SYNC_APPLICATION_INFO, // for application info
-  SESSION_SYNC_APPLICATION_CONTEXT, // for app ctx
-  SESSION_SYNC_CLIENT_ID, // for client identifier
-  SESSION_SYNC_CONTROL_INFO, // for full trace link control info
+  SESSION_SYNC_APPLICATION_INFO = 0, // for application info
+  SESSION_SYNC_APPLICATION_CONTEXT = 1, // for app ctx
+  SESSION_SYNC_CLIENT_ID = 2, // for client identifier
+  SESSION_SYNC_CONTROL_INFO = 3, // for full trace link control info
+  SESSION_SYNC_SYS_VAR = 4,   // for system variables
+  SESSION_SYNC_TXN_STATIC_INFO = 5,       // 5: basic txn info
+  SESSION_SYNC_TXN_DYNAMIC_INFO = 6,      // 6: txn dynamic info
+  SESSION_SYNC_TXN_PARTICIPANTS_INFO = 7, // 7: txn dynamic info
+  SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -211,15 +221,14 @@ public:
   bool is_changed_;
 };
 
-//class ObSysVarEncoder : public ObSessInfoEncoder {
-//public:
-//  ObSysVarEncoder():ObSessInfoEncoder() {}
-//  ~ObSysVarEncoder() {}
-//  int serialize(ObBasicSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
-//  int deserialize(ObBasicSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
-//  int64_t get_serialize_size(ObBasicSessionInfo& sess) const;
-//  // implements of other variables need to monitor
-//};
+class ObSysVarEncoder : public ObSessInfoEncoder {
+public:
+  ObSysVarEncoder():ObSessInfoEncoder() {}
+  ~ObSysVarEncoder() {}
+  int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
+  int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
+  int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+};
 
 class ObAppInfoEncoder : public ObSessInfoEncoder {
 public:
@@ -269,6 +278,20 @@ public:
   virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
   static const int16_t CONINFO_BY_SESS = 0xC078;
 };
+
+#define DEF_SESSION_TXN_ENCODER(CLS)                                    \
+class CLS final : public ObSessInfoEncoder {                            \
+public:                                                                 \
+  int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
+  int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override; \
+  int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;    \
+};
+DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
+DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);
+DEF_SESSION_TXN_ENCODER(ObTxnParticipantsInfoEncoder);
+DEF_SESSION_TXN_ENCODER(ObTxnExtraInfoEncoder);
+
+#undef DEF_SESSION_TXN_ENCODER
 
 typedef common::hash::ObHashMap<uint64_t, pl::ObPLPackageState *,
                                 common::hash::NoPthreadDefendMode> ObPackageStateMap;
@@ -464,8 +487,11 @@ public:
                                  enable_sql_extension_(false),
                                  saved_tenant_info_(0),
                                  enable_bloom_filter_(true),
+                                 px_join_skew_handling_(true),
+                                 px_join_skew_minfreq_(30),
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
+                                 print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
     {
@@ -478,6 +504,9 @@ public:
     bool get_enable_sql_extension() const { return enable_sql_extension_; }
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
+    int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
+    bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
+    int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -485,8 +514,12 @@ public:
     bool enable_sql_extension_;
     uint64_t saved_tenant_info_;
     bool enable_bloom_filter_;
+    bool px_join_skew_handling_;
+    int64_t px_join_skew_minfreq_;
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
+    // for record sys config print_sample_ppm
+    int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
     ObSQLSessionInfo *session_;
   };
@@ -514,13 +547,13 @@ public:
            const ObTZInfoMap *tz_info = NULL,
            int64_t sess_create_time = 0,
            uint64_t tenant_id = OB_INVALID_TENANT_ID);
+  void destroy_session_plan_mgr();
   //for test
   int test_init(uint32_t version, uint32_t sessid, uint64_t proxy_sessid,
            common::ObIAllocator *bucket_allocator);
   void destroy(bool skip_sys_var = false);
   void reset(bool skip_sys_var);
   void clean_status();
-  void set_plan_cache_manager(ObPlanCacheManager *pcm) { plan_cache_manager_ = pcm; }
   void set_plan_cache(ObPlanCache *cache) { plan_cache_ = cache; }
   void set_ps_cache(ObPsCache *cache) { ps_cache_ = cache; }
   const common::ObWarningBuffer &get_show_warnings_buffer() const { return show_warnings_buf_; }
@@ -531,14 +564,24 @@ public:
     warnings_buf_.reset();
     pl_exact_err_msg_.reset();
   }
-
+  void restore_auto_commit()
+  {
+    if (restore_auto_commit_) {
+      set_autocommit(true);
+      restore_auto_commit_ = false;
+    }
+  }
+  void set_restore_auto_commit() { restore_auto_commit_ = true; }
   void reset_show_warnings_buf() { show_warnings_buf_.reset(); }
   ObPrivSet get_user_priv_set() const { return user_priv_set_; }
   ObPrivSet get_db_priv_set() const { return db_priv_set_; }
   ObPlanCache *get_plan_cache();
+  ObPlanCache *get_plan_cache_directly() const { return plan_cache_; };
   ObPsCache *get_ps_cache();
-  ObPlanCacheManager *get_plan_cache_manager() { return plan_cache_manager_; }
   obmysql::ObMySQLRequestManager *get_request_manager();
+  sql::ObFLTSpanMgr *get_flt_span_manager();
+  ObPlanItemMgr *get_sql_plan_manager();
+  ObPlanItemMgr *get_plan_table_manager();
   void set_user_priv_set(const ObPrivSet priv_set) { user_priv_set_ = priv_set; }
   void set_db_priv_set(const ObPrivSet priv_set) { db_priv_set_ = priv_set; }
   void set_show_warnings_buf(int error_code);
@@ -547,6 +590,10 @@ public:
   {
     global_sessid_ = global_sessid;
   }
+  oceanbase::sql::ObDblinkCtxInSession &get_dblink_context() { return dblink_context_; }
+  void set_sql_request_level(int64_t sql_req_level) { sql_req_level_ = sql_req_level; }
+  int64_t get_sql_request_level() { return sql_req_level_; }
+  int64_t get_next_sql_request_level() { return sql_req_level_ + 1; }
   int64_t get_global_sessid() const { return global_sessid_; }
   void set_read_uncommited(bool read_uncommited) { read_uncommited_ = read_uncommited; }
   bool get_read_uncommited() const { return read_uncommited_; }
@@ -600,13 +647,7 @@ public:
   void get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
   void set_found_rows(const int64_t count) { found_rows_ = count; }
   int64_t get_found_rows() const { return found_rows_; }
-  void set_affected_rows(const int64_t count)
-  {
-    affected_rows_ = count;
-    if (affected_rows_ > 0) {
-      trans_flags_.set_has_hold_row_lock(true);
-    }
-  }
+  void set_affected_rows(const int64_t count) { affected_rows_ = count; }
   int64_t get_affected_rows() const { return affected_rows_; }
   bool has_user_super_privilege() const;
   bool has_user_process_privilege() const;
@@ -659,6 +700,10 @@ public:
 
   inline void set_ob20_protocol(bool is_20protocol) { is_ob20_protocol_ = is_20protocol; }
   inline bool is_ob20_protocol() { return is_ob20_protocol_; }
+
+  inline void set_session_var_sync(bool is_session_var_sync)
+              { is_session_var_sync_ = is_session_var_sync; }
+  inline bool is_session_var_sync() { return is_session_var_sync_; }
 
   int replace_user_variable(const common::ObString &name, const ObSessionVariable &value);
   int replace_user_variable(
@@ -840,7 +885,7 @@ public:
   void set_trace_enable(bool trace_enable) { trace_enable_ = trace_enable; }
   bool is_auto_flush_trace() {return auto_flush_trace_;}
   void set_auto_flush_trace(bool auto_flush_trace) { auto_flush_trace_ = auto_flush_trace; }
-  //ObSysVarEncoder& get_sys_var_encoder() { return sys_var_encoder_; }
+  ObSysVarEncoder& get_sys_var_encoder() { return sys_var_encoder_; }
   //ObUserVarEncoder& get_usr_var_encoder() { return usr_var_encoder_; }
   ObAppInfoEncoder& get_app_info_encoder() { return app_info_encoder_; }
   ObAppCtxInfoEncoder &get_app_ctx_encoder() { return app_ctx_info_encoder_; }
@@ -859,6 +904,10 @@ public:
   int close_ps_stmt(ObPsStmtId stmt_id);
 
   bool is_encrypt_tenant();
+  int64_t get_expect_group_id() const { return expect_group_id_; }
+  void set_expect_group_id(int64_t group_id) { expect_group_id_ = group_id; }
+	bool get_group_id_not_expected() const { return group_id_not_expected_; }
+  void set_group_id_not_expected(bool value) { group_id_not_expected_ = value; }
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -898,13 +947,24 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_bloom_filter();
   }
+  int64_t get_px_join_skew_minfreq()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_px_join_skew_minfreq();
+  }
+  bool get_px_join_skew_handling()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_px_join_skew_handling();
+  }
+
   bool is_enable_sql_extension()
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_sql_extension();
   }
-  bool is_registered_to_deadlock() const { return ATOMIC_LOAD(&is_registered_to_deadlock_); }
-  void set_registered_to_deadlock(bool state) { ATOMIC_SET(&is_registered_to_deadlock_, state); }
+  bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
+  void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
   int get_tenant_audit_trail_type(ObAuditTrailType &at_type)
   {
     cached_tenant_config_info_.refresh();
@@ -915,6 +975,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
+  }
+  int64_t get_tenant_print_sample_ppm()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_print_sample_ppm();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
@@ -935,16 +1000,9 @@ public:
   int on_user_connect(share::schema::ObSessionPrivInfo &priv_info, const ObUserInfo *user_info);
   int on_user_disconnect();
   virtual void reset_tx_variable();
+  ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
 public:
-  bool has_tx_level_temp_table() const {
-    return tx_level_temp_table_;
-  }
-  void set_tx_level_temp_table() {
-    tx_level_temp_table_ = true;
-  }
-  //for dblink
-  int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
-  int free_dblink_conn_pool();
+  bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
 private:
   int close_all_ps_stmt();
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
@@ -975,10 +1033,11 @@ private:
   transaction::ObTxClass trans_type_;
   const common::ObVersionProvider *version_provider_;
   const ObSQLConfigProvider *config_provider_;
-  ObPlanCacheManager *plan_cache_manager_;
   char tenant_buff_[sizeof(share::ObTenantSpaceFetcher)];
-  share::ObTenantSpaceFetcher* with_tenant_ctx_;
   obmysql::ObMySQLRequestManager *request_manager_;
+  sql::ObFLTSpanMgr *flt_span_mgr_;
+  ObPlanItemMgr *sql_plan_manager_;
+  ObPlanItemMgr *plan_table_manager_;
   ObPlanCache *plan_cache_;
   ObPsCache *ps_cache_;
   //记录select stmt中scan出来的结果集行数，供设置sql_calc_found_row时，found_row()使用；
@@ -1047,6 +1106,8 @@ private:
   bool pl_ps_protocol_; // send query result use this protocol
   bool is_ob20_protocol_; // mark as whether use oceanbase 2.0 protocol
 
+  bool is_session_var_sync_; //session var sync support flag.
+
   int64_t last_plan_id_; // 记录上一个计划的 plan_id，用于 show trace 中显示 sql 物理计划
 
   common::hash::ObHashSet<common::ObString> *pl_sync_pkg_vars_ = NULL;
@@ -1076,16 +1137,14 @@ private:
   bool is_table_name_hidden_;
   void *piece_cache_;
   bool is_load_data_exec_session_;
-  // 记录session是否注册过死锁检测的信息
-  bool is_registered_to_deadlock_;
   ObSqlString pl_exact_err_msg_;
+  bool is_ps_prepare_stage_;
   // Record whether this session has got connection resource, which means it increased connections count.
   // It's used for on_user_disconnect.
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
   // While only session got connection resource can release connection resource and decrease connections count.
   bool got_conn_res_;
   bool tx_level_temp_table_;
-  ObArray<common::sqlclient::ObCommonServerConnectionPool *> dblink_conn_pool_array_;  //for dblink to free connection when session drop.
   // get_session_allocator can only apply for fixed-length memory.
   // To customize the memory length, you need to use malloc_alloctor of mem_context
   lib::MemoryContext mem_context_;
@@ -1100,23 +1159,51 @@ private:
   bool coninfo_set_by_sess_ = false;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
-                            //&sys_var_encoder_
                             //&usr_var_encoder_,
                             &app_info_encoder_,
                             &app_ctx_info_encoder_,
                             &client_id_info_encoder_,
-                            &control_info_encoder_
+                            &control_info_encoder_,
+                            &sys_var_encoder_,
+                            &txn_static_info_encoder_,
+                            &txn_dynamic_info_encoder_,
+                            &txn_participants_info_encoder_,
+                            &txn_extra_info_encoder_
                             };
-  //ObSysVarEncoder sys_var_encoder_;
+  ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
   ObAppInfoEncoder app_info_encoder_;
   ObAppCtxInfoEncoder app_ctx_info_encoder_;
   ObClientIdInfoEncoder client_id_info_encoder_;
   ObControlInfoEncoder control_info_encoder_;
+  ObTxnStaticInfoEncoder txn_static_info_encoder_;
+  ObTxnDynamicInfoEncoder txn_dynamic_info_encoder_;
+  ObTxnParticipantsInfoEncoder txn_participants_info_encoder_;
+  ObTxnExtraInfoEncoder txn_extra_info_encoder_;
+public:
+  void post_sync_session_info();
+  void prep_txn_free_route_baseline(bool reset_audit = true);
+  void set_txn_free_route(bool txn_free_route);
+  int calc_txn_free_route();
+  bool can_txn_free_route() const;
+  virtual bool is_txn_free_route_temp() const { return tx_desc_ != NULL && txn_free_route_ctx_.is_temp(*tx_desc_); }
+  transaction::ObTxnFreeRouteCtx &get_txn_free_route_ctx() { return txn_free_route_ctx_; }
+  uint64_t get_txn_free_route_flag() const { return txn_free_route_ctx_.get_audit_record(); }
+  void check_txn_free_route_alive();
+private:
+  transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
   //and remove the record when the SQL execution ends
   //in order to access exec ctx through session during SQL execution
   ObExecContext *cur_exec_ctx_;
+  bool restore_auto_commit_; // for dblink xa transaction to restore the value of auto_commit
+  oceanbase::sql::ObDblinkCtxInSession dblink_context_;
+  int64_t sql_req_level_; // for sql request between cluster avoid dead lock, such as dblink dead lock
+  int64_t expect_group_id_;
+  // When try packet retry failed, set this flag true and retry at current thread.
+  // This situation is unexpected and will report a warning to user.
+  bool group_id_not_expected_;
+  ObOptimizerTraceImpl optimizer_tracer_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

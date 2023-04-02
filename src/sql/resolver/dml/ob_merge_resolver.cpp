@@ -49,6 +49,9 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObMergeStmt *merge_stmt = NULL;
+  int64_t insert_idx = INSERT_CLAUSE_NODE;
+  int64_t update_idx = UPDATE_CLAUSE_NODE;
+
   if (OB_UNLIKELY(T_MERGE != parse_tree.type_)
       || OB_UNLIKELY(MERGE_FILED_COUNT != parse_tree.num_child_)
       || OB_ISNULL(parse_tree.children_)) {
@@ -59,15 +62,28 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
     LOG_ERROR("create insert stmt failed", K(merge_stmt));
   } else if (OB_FAIL(resolve_outline_data_hints())) {
     LOG_WARN("resolve outline data hints failed", K(ret));
+  } else {
+    if (OB_NOT_NULL(parse_tree.children_[insert_idx]) &&
+          parse_tree.children_[insert_idx]->type_ != T_INSERT) {
+      insert_idx = UPDATE_CLAUSE_NODE;
+      update_idx = INSERT_CLAUSE_NODE;
+    } else {
+      insert_idx = INSERT_CLAUSE_NODE;
+      update_idx = UPDATE_CLAUSE_NODE;
+    }
+  }
+
+  if (OB_FAIL(ret)){
+
   } else if (OB_FAIL(resolve_target_relation(parse_tree.children_[TARGET_NODE]))) {
     LOG_WARN("fail to resolve target relation", K(ret));
   } else if (OB_FAIL(resolve_source_relation(parse_tree.children_[SOURCE_NODE]))) {
     LOG_WARN("fail to resolve target relation", K(ret));
   } else if (OB_FAIL(resolve_match_condition(parse_tree.children_[MATCH_COND_NODE]))) {
     LOG_WARN("fail to resolve match condition", K(ret));
-  } else if (OB_FAIL(resolve_insert_clause(parse_tree.children_[INSERT_CLAUSE_NODE]))) {
+  } else if (OB_FAIL(resolve_insert_clause(parse_tree.children_[insert_idx]))) {
     LOG_WARN("fail to resolve insert clause", K(ret));
-  } else if (OB_FAIL(resolve_update_clause(parse_tree.children_[UPDATE_CLAUSE_NODE]))) {
+  } else if (OB_FAIL(resolve_update_clause(parse_tree.children_[update_idx]))) {
     LOG_WARN("fail to resolve update clause", K(ret));
   } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
     LOG_WARN("resolve hints failed", K(ret));
@@ -235,8 +251,10 @@ int ObMergeResolver::resolve_target_relation(const ParseNode *target_node)
     } else {
       merge_stmt->set_target_table_id(table_item->table_id_);
     }
-  } else if (table_item->is_basic_table()) {
+  } else if (table_item->is_basic_table() || table_item->is_link_table()) {
     merge_stmt->set_target_table_id(table_item->table_id_);
+    const TableItem &base_table_item = table_item->get_base_table_item();
+    merge_stmt->get_merge_table_info().is_link_table_ = base_table_item.is_link_table();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table item type", K(table_item->type_), K(ret));
@@ -338,6 +356,14 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
           LOG_WARN("invalid argument", K(ret));
         }
         OZ (resolve_function_table_item(*table_node, table_item));
+        break;
+      }
+      case T_JSON_TABLE_EXPRESSION: {
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        }
+        OZ (resolve_json_table_item(*table_node, table_item));
         break;
       }
       default: {
@@ -548,19 +574,26 @@ int ObMergeResolver::resolve_update_clause(const ParseNode *update_node)
     } else {
       // 新引擎下，全部替换为update后的值，这样就不需要在计算delete condition时候，强制将expr的值弄成新值
       ObMergeTableInfo& merge_info = merge_stmt->get_merge_table_info();
+      ObRawExprCopier copier(*params_.expr_factory_);
       if (OB_INVALID_ID == merge_info.table_id_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid table assignment", K(merge_info.table_id_));
       } else {
-        for (uint64_t i = 0;
-            OB_SUCC(ret) && i < merge_stmt->get_delete_condition_exprs().count(); ++i) {
-          if (OB_FAIL(ObTableAssignment::expand_expr(merge_info.assignments_,
-                                          merge_stmt->get_delete_condition_exprs().at(i)))) {
-            LOG_WARN("expand generated column expr failed", K(ret));
+        for (int64_t i = 0; OB_SUCC(ret) && i < merge_info.assignments_.count(); ++i) {
+          if (OB_FAIL(copier.add_replaced_expr(merge_info.assignments_.at(i).column_expr_,
+                                               merge_info.assignments_.at(i).expr_))) {
+            LOG_WARN("failed to add replaced expr", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(copier.add_skipped_expr(merge_stmt->get_subquery_exprs(), false))) {
+            LOG_WARN("failed to add uncopy exprs", K(ret));
+          } else if (OB_FAIL(copier.copy_on_replace(merge_stmt->get_delete_condition_exprs(),
+                                                    merge_stmt->get_delete_condition_exprs()))) {
+            LOG_WARN("failed to copy on replace delete conditions", K(ret));
           }
         }
       }
-      
     }
     current_scope_ = T_NONE_SCOPE;
     column_namespace_checker_.disable_check_unique();

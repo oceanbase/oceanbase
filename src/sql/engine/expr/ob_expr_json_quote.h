@@ -8,7 +8,9 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for define of func json_quote
  */
+
 
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_QUOTE_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_QUOTE_H_
@@ -27,9 +29,9 @@ class ObExprJsonQuote : public ObFuncExprOperator
 public:
   explicit ObExprJsonQuote(common::ObIAllocator &alloc);
   virtual ~ObExprJsonQuote();
-  template <typename T>
-  static int calc(const T &data, ObObjType type, ObCollationType cs_type,
-                  ObJsonBuffer &j_buf, bool &is_null);
+
+  static int calc(ObEvalCtx &ctx, ObIAllocator &temp_allocator, const ObDatum &data,
+                  ObDatumMeta meta, bool has_lob_header, ObJsonBuffer &j_buf, bool &is_null);
   int calc_result_type1(ObExprResType &type,
                         ObExprResType &type1,
                         common::ObExprTypeCtx &type_ctx) const override;

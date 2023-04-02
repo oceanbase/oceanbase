@@ -56,9 +56,10 @@ public:
 
   //update schema version and max used_column_id
   int update_table_attribute(common::ObISQLClient &sql_client,
-                             ObTableSchema &new_table_schema,
+                             const ObTableSchema &new_table_schema,
                              const ObSchemaOperationType operation_type,
-                             const common::ObString *ddl_stmt_str = NULL);
+                             const bool update_object_status_ignore_version,
+                             const common::ObString *ddl_stmt_str = nullptr);
   int update_partition_option(common::ObISQLClient &sql_client,
                               ObTableSchema &table,
                               const common::ObString *ddl_stmt_str = NULL);
@@ -157,21 +158,30 @@ public:
       const ObTableSchema &ori_table,
       const ObTableSchema &inc_table,
       const int64_t schema_version,
+      bool is_truncate_partition,
       bool is_truncate_table);
   int drop_inc_subpart_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,
       const ObTableSchema &inc_table,
       const int64_t schema_version);
+  int drop_inc_partition_add_extra_str(const ObTableSchema &inc_table,
+                                       ObSqlString &sql,
+                                       ObSqlString &condition_str,
+                                       ObSqlString &dml_info_cond_str);
   int drop_inc_partition(common::ObISQLClient &sql_client,
                          const ObTableSchema &ori_table,
-                         const ObTableSchema &inc_table);
+                         const ObTableSchema &inc_table,
+                         bool is_truncate_table);
   int drop_inc_sub_partition(common::ObISQLClient &sql_client,
                              const ObTableSchema &ori_table,
                              const ObTableSchema &inc_table);
+  int drop_inc_all_sub_partition_add_extra_str(const ObTableSchema &inc_table,
+                                               ObSqlString &sql);
   int drop_inc_all_sub_partition(common::ObISQLClient &sql_client,
                              const ObTableSchema &ori_table,
-                             const ObTableSchema &inc_table);
+                             const ObTableSchema &inc_table,
+                             bool is_truncate_table);
   int truncate_part_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,
@@ -235,6 +245,7 @@ public:
 private:
 
   int add_table(common::ObISQLClient &sql_client, const ObTableSchema &table,
+                const bool update_object_status_ignore_version,
                 const bool only_history = false);
   int delete_from_all_table(common::ObISQLClient &sql_client,
                             const uint64_t tenant_id,
@@ -254,7 +265,8 @@ private:
   int delete_from_all_column(common::ObISQLClient &sql_client,
                              const uint64_t tenant_id,
                              const uint64_t table_id,
-      const int64_t column_count, bool check_affect_rows = true);
+                             const int64_t column_count,
+                             bool check_affect_rows = true);
   int delete_from_all_table_history(common::ObISQLClient &sql_client,
                                     const ObTableSchema &table_schema,
                                     const int64_t new_schema_version);
@@ -280,11 +292,12 @@ private:
                    const uint64_t table_id,
                    const uint64_t column_id,
                    const uint64_t auto_increment);
-  int add_transition_point_val(share::ObDMLSqlSplicer &dml, 
+  int add_transition_point_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
-  int add_interval_range_val(share::ObDMLSqlSplicer &dml, 
+  int add_interval_range_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
-  int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table, share::ObDMLSqlSplicer &dml);
+  int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
+                    const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);
   int gen_table_options_dml(const uint64_t exec_tenant_id, const ObTableSchema &table, share::ObDMLSqlSplicer &dml);
   int gen_column_dml(const uint64_t exec_tenant_id, const ObColumnSchemaV2 &column, share::ObDMLSqlSplicer &dml);
   int gen_constraint_dml(const uint64_t exec_tenant_id, const ObConstraint &constraint, share::ObDMLSqlSplicer &dml);
@@ -341,19 +354,8 @@ private:
                                    const uint64_t table_id);
   int delete_from_all_monitor_modified(ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
-                                       const uint64_t table_id);
-  int delete_from_all_table_stat_history(ObISQLClient &sql_client,
-                                         const uint64_t tenant_id,
-                                         const uint64_t table_id,
-                                         ObSqlString *extra_condition = NULL);
-  int delete_from_all_column_stat_history(ObISQLClient &sql_client,
-                                          const uint64_t tenant_id,
-                                          const uint64_t table_id,
-                                          ObSqlString *extra_condition = NULL);
-  int delete_from_all_histogram_stat_history(ObISQLClient &sql_client,
-                                             const uint64_t tenant_id,
-                                             const uint64_t table_id,
-                                             ObSqlString *extra_condition = NULL);
+                                       const uint64_t table_id,
+                                       const ObSqlString *extra_condition = NULL);
   int delete_from_all_optstat_user_prefs(ObISQLClient &sql_client,
                                          const uint64_t tenant_id,
                                          const uint64_t table_id);
@@ -411,6 +413,9 @@ public:
   int update_mock_fk_parent_table_schema_version(
       common::ObISQLClient *sql_client,
       ObMockFKParentTableSchema &mock_fk_parent_table_schema);
+  int update_view_columns(ObISQLClient &sql_client,
+                          const ObTableSchema &table);
+
 private:
   int update_foreign_key_in_mock_fk_parent_table(
       common::ObISQLClient *sql_client,

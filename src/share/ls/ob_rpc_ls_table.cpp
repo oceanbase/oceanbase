@@ -22,6 +22,7 @@
 #include "share/ob_srv_rpc_proxy.h"//ObSrvRpcProxy
 #include "lib/mysqlclient/ob_mysql_proxy.h"//ObMySQLProxy
 #include "share/ob_share_util.h" // ObShareUtil
+#include "share/resource_manager/ob_cgroup_ctrl.h" //CGID_DEF
 
 namespace oceanbase
 {
@@ -82,6 +83,7 @@ int ObRpcLSTable::get(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const ObLSTable::Mode mode,
     ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
@@ -90,9 +92,12 @@ int ObRpcLSTable::get(
     LOG_WARN("fail to init ls info", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (!is_sys_tenant(tenant_id) || !ls_id.is_sys_ls()) {
+  } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
+             || !ls_id.is_sys_ls()
+             || ObLSTable::INNER_TABLE_ONLY_MODE == mode)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument for sys tenant's sys ls", KR(ret), KT(tenant_id), K(ls_id));
+    LOG_WARN("invalid argument for sys tenant's sys ls",
+             KR(ret), KT(tenant_id), K(ls_id), K(mode));
   } else if (local_cluster_id == cluster_id) {
     if (OB_FAIL(get_ls_info_(ls_info))) {
       LOG_WARN("failed to get ls info", KR(ret));
@@ -117,12 +122,13 @@ int ObRpcLSTable::get_ls_info_(ObLSInfo &ls_info)
     ObArray<ObAddr> rs_list;
     bool need_retry = false;
     const ObLSReplica *leader = NULL;
+    const bool check_ls_service = true;
     /*
      * case 1: get rs from ObRsMgr
      * case 2: get rs_list from local configure
      * case 3: try get __all_core_table's member_list from ObLSService
      */
-    if (OB_FAIL(rs_mgr_->construct_initial_server_list(rs_list))) {
+    if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
       LOG_WARN("fail to construct initial server list", KR(ret));
     } else if (OB_FAIL(do_detect_master_rs_ls_(local_cluster_id, rs_list, ls_info))) {
       need_retry = true;
@@ -160,7 +166,9 @@ int ObRpcLSTable::get_ls_info_across_cluster_(const int64_t cluster_id, ObLSInfo
   return ret;
 }
 
-int ObRpcLSTable::update(const ObLSReplica &replica)
+int ObRpcLSTable::update(
+    const ObLSReplica &replica,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
   ObAddr rs_addr;
@@ -168,9 +176,10 @@ int ObRpcLSTable::update(const ObLSReplica &replica)
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!replica.is_valid()
       || !is_sys_tenant(replica.get_tenant_id())
-      || !replica.get_ls_id().is_sys_ls()) {
+      || !replica.get_ls_id().is_sys_ls()
+      || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(replica));
+    LOG_WARN("invalid argument", KR(ret), K(replica), K(inner_table_only));
   } else if(OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", KR(ret));
   } else {
@@ -231,7 +240,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
            && start_idx <= end_idx
            && end_idx < server_list.count()
            && OB_ISNULL(leader)) {
-      LOG_INFO("[RPC_LS] do detect master rs", K(cluster_id), K(start_idx), K(end_idx), K(server_list));
+      LOG_TRACE("[RPC_LS] do detect master rs", K(cluster_id), K(start_idx), K(end_idx), K(server_list));
       if (OB_FAIL(do_detect_master_rs_ls_(cluster_id, start_idx, end_idx,
                                                  server_list, ls_info))) {
         LOG_WARN("fail to detect master rs", KR(ret), K(cluster_id),
@@ -239,7 +248,7 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
       } else {
         int tmp_ret = ls_info.find_leader(leader);
         if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(leader)) {
-          LOG_INFO("[RPC_LS] get master rs", KR(ret), K(cluster_id), "addr", leader->get_server());
+          LOG_TRACE("[RPC_LS] get master rs", KR(ret), K(cluster_id), "addr", leader->get_server());
         }
         start_idx = end_idx + 1;
         end_idx = server_list.count() - 1;
@@ -279,13 +288,14 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
         // TODO: @wanhong.wwh: need check when addr is not valid
       } else if (OB_FAIL(arg.init(addr, cluster_id))) {
         LOG_WARN("fail to init arg", KR(ret), K(addr), K(cluster_id));
-      } else if (OB_SUCCESS != (tmp_ret = proxy.call(addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
+      } else if (OB_TMP_FAIL(proxy.call(addr, timeout, cluster_id,
+                 OB_SYS_TENANT_ID, share::OBCG_DETECT_RS, arg))) {
         LOG_WARN("fail to send rpc", KR(tmp_ret), K(cluster_id), K(addr), K(timeout), K(arg));
       }
     }
 
     ObArray<int> return_ret_array;
-    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) { // ignore ret
+    if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
@@ -367,7 +377,8 @@ int ObRpcLSTable::deal_with_result_ls_(
 int ObRpcLSTable::remove(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    const ObAddr &server)
+    const ObAddr &server,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
   ObAddr rs_addr;
@@ -375,14 +386,16 @@ int ObRpcLSTable::remove(
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
       || !ls_id.is_sys_ls()
-      || !server.is_valid())) {
+      || !server.is_valid())
+      || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(server));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id),
+             K(ls_id), K(server), K(inner_table_only));
   } else if(OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", KR(ret));
   } else {
     int64_t timeout_us = 0;
-	  obrpc::ObRemoveSysLsArg arg(server);
+    obrpc::ObRemoveSysLsArg arg(server);
     if (OB_FAIL(get_timeout_(timeout_us))) {
       LOG_WARN("get timeout failed", KR(ret));
     } else if (timeout_us <= 0) {

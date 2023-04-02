@@ -88,7 +88,7 @@ public:
   int32_t dec(Node* node) { return ATOMIC_AAF(&node->uref_, -1); }
 };
 
-// Doc: https://yuque.antfin-inc.com/ob/transaction/retire_station
+// Doc:
 // class Key must implement compare() and hash() function.
 // class Value must derived from LinkHashValue<Key>
 template<typename Key, typename Value, typename AllocHandle=AllocHandle<Key, Value>, typename RefHandle=RefHandle, int64_t SHRINK_THRESHOLD = 8>
@@ -324,7 +324,7 @@ public:
     abort_unless(magic_code_ == MAGIC_CODE);
 #else
     if (OB_UNLIKELY(node->host_ != this || magic_code_ != MAGIC_CODE)) {
-      COMMON_LOG(ERROR, "unexpected error", K(node->host_), K(this), K(magic_code_));
+      COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error", K(node->host_), K(this), K(magic_code_));
     }
 #endif
     if (OB_NOT_NULL(node)) {

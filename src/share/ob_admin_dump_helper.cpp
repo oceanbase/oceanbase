@@ -229,7 +229,6 @@ void ObAdminMutatorStringArg::reset()
   //pos_ = 0;
   //:w
   //:wtx_id_ = 0;
-  //log_ts_ = OB_INVALID_TIMESTAMP;
   writer_ptr_ = nullptr;
   filter_.reset();
   log_stat_ = NULL;
@@ -249,7 +248,6 @@ ObAdminMutatorStringArg &ObAdminMutatorStringArg::operator= (const ObAdminMutato
   pos_ = rhs.pos_;
   flag_ = rhs.flag_;
   //tx_id_ = rhs.tx_id_;
-  //log_ts_ = rhs.log_ts_;
   writer_ptr_ = rhs.writer_ptr_;
   filter_ = rhs.filter_;
   log_stat_ = rhs.log_stat_;

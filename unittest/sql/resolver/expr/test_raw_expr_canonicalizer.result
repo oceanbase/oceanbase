@@ -27,8 +27,6 @@ not (10 > 5 and 100 < 9)
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_OP_LE",
@@ -55,8 +53,6 @@ not (10 > 5 and 100 < 9)
         "CNT_CONST"
       ],
       "rel_id": [
-      ],
-      "expr_levels": [
       ],
       "children": [
          {
@@ -146,8 +142,6 @@ not (10 > 5 and 100 < 9)
         "CNT_CONST"
       ],
       "rel_id": [
-      ],
-      "expr_levels": [
       ],
       "children": [
          {
@@ -240,8 +234,6 @@ not not a > b
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_REF_COLUMN",
@@ -276,9 +268,6 @@ not not a > b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -289,7 +278,9 @@ not not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -324,9 +315,6 @@ not not a > b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -337,7 +325,9 @@ not not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     }
   ]
 }
@@ -367,8 +357,6 @@ not a > b
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_REF_COLUMN",
@@ -403,9 +391,6 @@ not a > b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -416,7 +401,9 @@ not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -451,9 +438,6 @@ not a > b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -464,7 +448,9 @@ not a > b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     }
   ]
 }
@@ -494,8 +480,6 @@ not a = b
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_REF_COLUMN",
@@ -530,9 +514,6 @@ not a = b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -543,7 +524,9 @@ not a = b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -578,9 +561,6 @@ not a = b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -591,7 +571,9 @@ not a = b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     }
   ]
 }
@@ -621,8 +603,6 @@ not a < b
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_REF_COLUMN",
@@ -657,9 +637,6 @@ not a < b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -670,7 +647,9 @@ not a < b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -705,9 +684,6 @@ not a < b
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -718,7 +694,9 @@ not a < b
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     }
   ]
 }
@@ -749,8 +727,6 @@ not a is true
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_REF_COLUMN",
@@ -785,9 +761,6 @@ not a is true
       "synonym_name":"",
       "synonym_db_name":"",
       "column_name":"",
-      "expr_level":-1,
-      "expr_levels": [
-      ],
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -798,7 +771,9 @@ not a is true
       "from_alias_table":false,
       "is_rowkey_column":false,
       "is_unique_key_column":false,
-      "is_mul_key_column":false
+      "is_mul_key_column":false,
+      "is_strict_json_column":0,
+      "srs_id":-1
     },
      {
       "item_type":"T_BOOL",
@@ -828,36 +803,6 @@ not a is true
       ],
       "value": {
         "TINYINT":1
-      }
-    },
-     {
-      "item_type":"T_BOOL",
-      "result_type": {
-        "meta": {
-          "type":"TINYINT",
-          "collation":"binary",
-          "coercibility":"NUMERIC"
-        },
-        "accuracy": {
-          "length":-1,
-          "precision":-1,
-          "scale":-1
-        },
-        "flag":0,
-        "calc_type": {
-          "type":"NULL",
-          "collation":"invalid_type",
-          "coercibility":"INVALID"
-        }
-      },
-      "expr_info": [
-        "IS_CONST",
-        "CNT_CONST"
-      ],
-      "rel_id": [
-      ],
-      "value": {
-        "TINYINT":0
       }
     }
   ]
@@ -891,8 +836,6 @@ not a between 1 and 100
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_OP_LT",
@@ -920,8 +863,6 @@ not a between 1 and 100
         "IS_RANGE_COND"
       ],
       "rel_id": [
-      ],
-      "expr_levels": [
       ],
       "children": [
          {
@@ -957,9 +898,6 @@ not a between 1 and 100
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -970,7 +908,9 @@ not a between 1 and 100
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -1031,8 +971,6 @@ not a between 1 and 100
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -1067,9 +1005,6 @@ not a between 1 and 100
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -1080,7 +1015,9 @@ not a between 1 and 100
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         },
          {
           "item_type":"T_INT",
@@ -1142,8 +1079,6 @@ not a between 1 and 100
     "CNT_CONST"
   ],
   "rel_id": [
-  ],
-  "expr_levels": [
   ],
   "children": [
      {
@@ -1324,8 +1259,6 @@ not a between 1 and 100
     "CNT_CONST"
   ],
   "rel_id": [
-  ],
-  "expr_levels": [
   ],
   "children": [
      {
@@ -1508,8 +1441,6 @@ not a between 1 and 100
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_INT",
@@ -1568,8 +1499,6 @@ not a between 1 and 100
         "CNT_OR"
       ],
       "rel_id": [
-      ],
-      "expr_levels": [
       ],
       "children": [
          {
@@ -1664,8 +1593,6 @@ not(not(a))
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_OP_NOT",
@@ -1694,8 +1621,6 @@ not(not(a))
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_OP_BOOL",
@@ -1722,8 +1647,6 @@ not(not(a))
             "IS_INNER_ADDED_EXPR"
           ],
           "rel_id": [
-          ],
-          "expr_levels": [
           ],
           "children": [
              {
@@ -1759,9 +1682,6 @@ not(not(a))
               "synonym_name":"",
               "synonym_db_name":"",
               "column_name":"",
-              "expr_level":-1,
-              "expr_levels": [
-              ],
               "column_flags":0,
               "enum_set_values": [
               ],
@@ -1772,7 +1692,9 @@ not(not(a))
               "from_alias_table":false,
               "is_rowkey_column":false,
               "is_unique_key_column":false,
-              "is_mul_key_column":false
+              "is_mul_key_column":false,
+              "is_strict_json_column":0,
+              "srs_id":-1
             }
           ]
         }
@@ -1808,8 +1730,6 @@ A or (A And B) or (A And C)
     "CNT_OR"
   ],
   "rel_id": [
-  ],
-  "expr_levels": [
   ],
   "children": [
      {
@@ -1868,8 +1788,6 @@ A or (A And B) or (A And C)
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -1904,9 +1822,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -1917,7 +1832,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     }
@@ -1949,8 +1866,6 @@ A or (A And B) or (A And C)
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_OP_BOOL",
@@ -1977,8 +1892,6 @@ A or (A And B) or (A And C)
         "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
-      ],
-      "expr_levels": [
       ],
       "children": [
          {
@@ -2014,9 +1927,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2027,7 +1937,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     },
@@ -2057,8 +1969,6 @@ A or (A And B) or (A And C)
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -2093,9 +2003,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2106,7 +2013,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     }
@@ -2138,8 +2047,6 @@ A or (A And B) or (A And C)
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_OP_BOOL",
@@ -2166,8 +2073,6 @@ A or (A And B) or (A And C)
         "IS_INNER_ADDED_EXPR"
       ],
       "rel_id": [
-      ],
-      "expr_levels": [
       ],
       "children": [
          {
@@ -2203,9 +2108,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2216,7 +2118,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     },
@@ -2246,8 +2150,6 @@ A or (A And B) or (A And C)
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -2282,9 +2184,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2295,7 +2194,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     }
@@ -2327,8 +2228,6 @@ A or (A And B) or (A And C)
   ],
   "rel_id": [
   ],
-  "expr_levels": [
-  ],
   "children": [
      {
       "item_type":"T_OP_BOOL",
@@ -2356,8 +2255,6 @@ A or (A And B) or (A And C)
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -2392,9 +2289,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2405,7 +2299,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     },
@@ -2435,8 +2331,6 @@ A or (A And B) or (A And C)
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -2471,9 +2365,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2484,7 +2375,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     },
@@ -2514,8 +2407,6 @@ A or (A And B) or (A And C)
       ],
       "rel_id": [
       ],
-      "expr_levels": [
-      ],
       "children": [
          {
           "item_type":"T_REF_COLUMN",
@@ -2550,9 +2441,6 @@ A or (A And B) or (A And C)
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"",
-          "expr_level":-1,
-          "expr_levels": [
-          ],
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2563,7 +2451,9 @@ A or (A And B) or (A And C)
           "from_alias_table":false,
           "is_rowkey_column":false,
           "is_unique_key_column":false,
-          "is_mul_key_column":false
+          "is_mul_key_column":false,
+          "is_strict_json_column":0,
+          "srs_id":-1
         }
       ]
     }

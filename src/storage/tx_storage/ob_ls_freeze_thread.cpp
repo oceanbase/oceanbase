@@ -24,13 +24,14 @@ namespace storage
 {
 
 using namespace checkpoint;
+using namespace share;
 
 void ObLSFreezeTask::set_task(ObLSFreezeThread *host,
                               ObDataCheckpoint *data_checkpoint,
-                              int64_t rec_log_ts)
+                              SCN rec_scn)
 {
   host_ = host;
-  rec_log_ts_ = rec_log_ts;
+  rec_scn_ = rec_scn;
   data_checkpoint_ = data_checkpoint;
 }
 
@@ -38,7 +39,7 @@ void ObLSFreezeTask::handle()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(data_checkpoint_)) {
-    data_checkpoint_->road_to_flush(rec_log_ts_);
+    data_checkpoint_->road_to_flush(rec_scn_);
   }
   if (OB_NOT_NULL(host_)) {
     if (OB_FAIL(host_->push_back_(this))) {
@@ -48,7 +49,7 @@ void ObLSFreezeTask::handle()
 }
 
 ObLSFreezeThread::ObLSFreezeThread()
-  : inited_(false), tg_id_(-1), available_index_(-1)
+    : inited_(false), tg_id_(-1), available_index_(-1), lock_(common::ObLatchIds::THREAD_POOL_LOCK)
 {
   for (int64_t i = 0; i < MAX_FREE_TASK_NUM; i++) {
     task_array_[i] = NULL;
@@ -109,7 +110,7 @@ int ObLSFreezeThread::init(int tg_id)
 }
 
 int ObLSFreezeThread::add_task(ObDataCheckpoint *data_checkpoint,
-                               int64_t rec_log_ts)
+                               SCN rec_scn)
 {
   int ret = OB_SUCCESS;
   ObLSFreezeTask *task = NULL;
@@ -124,7 +125,7 @@ int ObLSFreezeThread::add_task(ObDataCheckpoint *data_checkpoint,
     }
   }
   if (OB_SUCC(ret)) {
-    task->set_task(this, data_checkpoint, rec_log_ts);
+    task->set_task(this, data_checkpoint, rec_scn);
     if (OB_FAIL(TG_PUSH_TASK(tg_id_, task))) {
       STORAGE_LOG(WARN, "schedule timer task failed", K(ret));
     }
@@ -135,7 +136,7 @@ int ObLSFreezeThread::add_task(ObDataCheckpoint *data_checkpoint,
 void ObLSFreezeThread::handle(void *task)
 {
   if (NULL == task) {
-    STORAGE_LOG(WARN, "task is null", KP(task));
+    STORAGE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "task is null", KP(task));
   } else {
     ObLSFreezeTask *freeze_task = static_cast<ObLSFreezeTask *>(task);
     freeze_task->handle();

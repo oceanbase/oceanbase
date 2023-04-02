@@ -104,7 +104,7 @@ TEST_F(TestResolver, basic_test)
 
     std::ifstream if_sql(file_name[0]);
     if (!if_sql.is_open()){
-      _OB_LOG(ERROR,"file %s not exist!", file_name[0]);
+      _OB_LOG_RET(ERROR,OB_ERR_SYS, "file %s not exist!", file_name[0]);
       continue;
     }
     ASSERT_TRUE(if_sql.is_open());

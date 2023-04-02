@@ -56,6 +56,8 @@ public:
   void set_parallelism(int64_t parallelism) { parallelism_ = parallelism; }
   void set_worker_id(int64_t worker_id) { worker_id_ = worker_id; }
   int64_t get_worker_id() { return worker_id_; }
+  int64_t get_px_sequence_id() { return px_sequence_id_; }
+  void set_px_sequence_id(int64_t id) { px_sequence_id_ = id; }
   int add_table_location_keys(common::ObIArray<const ObTableScanSpec*> &tscs);
 private:
   int deep_copy_range(ObIAllocator *allocator, const ObNewRange &src, ObNewRange &dst);
@@ -69,6 +71,7 @@ public:
   ObGranulePump *pump_;
   //for partition pruning
   common::ObSEArray<uint64_t, 2> table_location_keys_;
+  int64_t px_sequence_id_;
 private:
   common::ObIAllocator *deserialize_allocator_;
 };
@@ -87,25 +90,19 @@ public:
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; }
   int64_t get_tablet_size() { return tablet_size_; }
 
-  bool partition_filter() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_USE_PARTITION_FILTER); }
-  bool pwj_gi() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_PARTITION_WISE); }
-  bool affinitize() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_AFFINITIZE); }
-  bool access_all() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ACCESS_ALL); }
-  bool with_param_down() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_NLJ_PARAM_DOWN); }
-  bool asc_order() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ASC_ORDER); }
-  bool desc_order() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_DESC_ORDER); }
-  bool force_partition_granule() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_FORCE_PARTITION_GRANULE); }
-  bool enable_partition_pruning() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ENABLE_PARTITION_PRUNING); }
+
 
   void set_gi_flags(uint64_t flags) {
     gi_attri_flag_ = flags;
-    affinitize_ = affinitize();
-    partition_wise_join_ = pwj_gi();
-    access_all_ = access_all();
-    nlj_with_param_down_ = with_param_down();
+    affinitize_ = ObGranuleUtil::affinitize(gi_attri_flag_);
+    partition_wise_join_ = ObGranuleUtil::pwj_gi(gi_attri_flag_);
+    access_all_ = ObGranuleUtil::access_all(gi_attri_flag_);
+    nlj_with_param_down_ = ObGranuleUtil::with_param_down(gi_attri_flag_);
   }
   uint64_t get_gi_flags() { return gi_attri_flag_; }
-  inline bool partition_wise() const { return partition_wise_join_ && !affinitize_; }
+  // pw_op_tscs_和pw_dml_tsc_ids_作用是相同的，前者在调度sqc时生成，后者是4.1新增的cg时生成的，为了兼容性，
+  // 目前同时保留了这两个结构，4.2上可以直接删除pw_op_tscs_和所有引用到的地方
+  inline bool full_partition_wise() const { return partition_wise_join_ && (!affinitize_ || pw_op_tscs_.count() > 1 || pw_dml_tsc_ids_.count() > 1); }
 public:
   uint64_t ref_table_id_;
   int64_t tablet_size_;
@@ -118,7 +115,9 @@ public:
   bool access_all_;
   // 是否是含有条件下降的nlj。
   bool nlj_with_param_down_;
+  // for compatibility now, to be removed on 4.2
   common::ObFixedArray<const ObTableScanSpec*, ObIAllocator> pw_op_tscs_;
+  common::ObFixedArray<int64_t, ObIAllocator> pw_dml_tsc_ids_;
   // 目前GI的所有属性都设置进了flag里面，使用的时候也尽量使用flag，而不是上面的
   // 几个单独的变量。目前来说因为兼容性的原因，无法删除上面的几个变量了，新加的
   // GI的属性都通过这个flag来进行判断。
@@ -130,6 +129,7 @@ public:
   ObHashFunc hash_func_;
   ObExpr *tablet_id_expr_;
   // end for partition join filter
+  int64_t repart_pruning_tsc_idx_;
 };
 
 class ObGranuleIteratorOp : public ObOperator
@@ -182,22 +182,37 @@ private:
   // 获得消费GI task的node：
   // 目前仅仅支持TSC或者Join
   int get_gi_task_consumer_node(ObOperator *cur, ObOperator *&child) const;
-  int try_pruning_partition(
+  // ---for nlj pkey
+  int try_pruning_repart_partition(
       const ObGITaskSet &taskset,
       int64_t &pos,
       bool &partition_pruned);
-  int do_join_filter_partition_pruning(const ObGranuleTaskInfo &gi_task_info, bool &partition_pruning);
-  int do_partition_pruning(const ObGranuleTaskInfo &gi_task_info,
+  bool repart_partition_pruned(const ObGranuleTaskInfo &info) {
+    return info.tablet_loc_->tablet_id_.id() != ctx_.get_gi_pruning_info().get_part_id();
+  }
+  // ---end
+  // for nlj/sbf param down, dynamic partition pruning
+  int do_dynamic_partition_pruning(const ObGranuleTaskInfo &gi_task_info,
       bool &partition_pruning);
-  int do_partition_pruning(const common::ObIArray<ObGranuleTaskInfo> &gi_task_infos,
+  int do_dynamic_partition_pruning(const common::ObIArray<ObGranuleTaskInfo> &gi_task_infos,
       bool &partition_pruning);
+  // ---end---
+
   int fetch_rescan_pw_task_infos(const common::ObIArray<int64_t> &op_ids,
       GIPrepareTaskMap *gi_prepare_map,
       common::ObIArray<ObGranuleTaskInfo> &gi_task_infos);
   int fetch_normal_pw_task_infos(const common::ObIArray<int64_t> &op_ids,
       GIPrepareTaskMap *gi_prepare_map,
       common::ObIArray<ObGranuleTaskInfo> &gi_task_infos);
-  int try_build_tablet2part_id_map(ObDASTabletLoc *loc);
+
+  //---for partition run time filter
+  bool enable_parallel_runtime_filter_pruning();
+  bool enable_single_runtime_filter_pruning();
+  int do_single_runtime_filter_pruning(const ObGranuleTaskInfo &gi_task_info, bool &partition_pruning);
+  int do_parallel_runtime_filter_pruning();
+  int do_join_filter_partition_pruning(int64_t tablet_id, bool &partition_pruning);
+  int try_build_tablet2part_id_map();
+  //---end----
 private:
   typedef common::hash::ObHashMap<int64_t, int64_t,
       common::hash::NoPthreadDefendMode> ObPxTablet2PartIdMap;
@@ -227,6 +242,7 @@ private:
   ObPxBloomFilter *bloom_filter_ptr_;
   ObPxTablet2PartIdMap tablet2part_id_map_;
   ObOperator *real_child_;
+  bool is_parallel_runtime_filtered_;
 };
 
 } // end namespace sql

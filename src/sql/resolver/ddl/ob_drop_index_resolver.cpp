@@ -62,13 +62,7 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
     // get table name in oracle mode
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       ParseNode *db_node = NULL;
-      /**
-       * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
-       * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
-       * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
-       */
-      int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ? 
-                  OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
+      int32_t max_database_name_length = OB_MAX_DATABASE_NAME_LENGTH;
       if (1 == parse_tree.num_child_) {
         index_node = parse_tree.children_[0];
       } else if (2 == parse_tree.num_child_) {
@@ -123,7 +117,7 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
                    index_table_schema->get_data_table_id(), data_table_schema))) {
           LOG_WARN("fail to get data table schema", K(ret), K(index_name));
         } else {
-          ObString table_name; // related issue : https://work.aone.alibaba-inc.com/issue/44979368
+          ObString table_name; // related issue :
           if (OB_FAIL(deep_copy_str(data_table_schema->get_table_name_str(), table_name))) {
             LOG_WARN("failed to deep copy new_db_name", K(ret));
           } else {

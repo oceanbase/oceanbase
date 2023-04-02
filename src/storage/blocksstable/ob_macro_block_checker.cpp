@@ -38,9 +38,13 @@ int ObSSTableMacroBlockChecker::check(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(macro_block_buf), K(macro_block_buf_size),
         K(check_level));
+  } else if (ObMacroBlockCheckLevel::CHECK_LEVEL_NONE == check_level) {
+    //do nothing
   } else if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
     STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(macro_block_buf),
         K(macro_block_buf_size), K(pos), K(common_header));
+  } else if (common_header.is_shared_macro_block()) {
+    // skip the check
   } else if (OB_FAIL(common_header.check_integrity())) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(ERROR, "Invalid common header", K(ret), K(common_header));
@@ -140,7 +144,7 @@ int ObSSTableMacroBlockChecker::check_logical_checksum(
       for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
         if (column_checksum_in_header[i] != column_checksum[i]) {
           ret = OB_PHYSIC_CHECKSUM_ERROR;
-          STORAGE_LOG(ERROR, "Column checksum error", K(ret), K(i),
+          LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg","Column checksum error", K(ret), K(i),
               K(column_checksum_in_header[i]), K(column_checksum[i]));
         }
       }
@@ -235,7 +239,7 @@ int ObSSTableMacroBlockChecker::check_physical_checksum(
           common_header.get_payload_size()));
       if (physical_checksum != common_header.get_payload_checksum()) {
         ret = OB_PHYSIC_CHECKSUM_ERROR;
-        STORAGE_LOG(ERROR, "Invalid physical checksum", K(ret), K(physical_checksum),
+        LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg", "Invalid physical checksum", K(ret), K(physical_checksum),
             K(common_header));
       }
     }

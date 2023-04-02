@@ -68,7 +68,9 @@ void TestPkeyRangeSliceCalc::SetUp()
       ObObjType::ObIntType,
       ObCmpNullPos::NULL_LAST,
       ObCollationType::CS_TYPE_BINARY,
-      false/*is_orace_mode*/);
+      SCALE_UNKNOWN_YET,
+      false/*is_orace_mode*/,
+      false);
   ASSERT_EQ(OB_SUCCESS, sort_cmp_funcs_.push_back(cmp_func));
   int_datum_.int_ = &tmp_int_;
   fake_calc_part_id_expr_ = reinterpret_cast<ObExpr *>(&tmp_int_);

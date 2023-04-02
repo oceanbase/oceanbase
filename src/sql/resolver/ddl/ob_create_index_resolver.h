@@ -40,6 +40,8 @@ protected:
       ObCreateIndexStmt *crt_idx_stmt);
   int resolve_index_column_node(
       ParseNode *index_column_node,
+      const int64_t index_keyname_value,
+      ParseNode *table_option_node,
       ObCreateIndexStmt *crt_idx_stmt,
       const share::schema::ObTableSchema *tbl_schema);
   int resolve_index_option_node(

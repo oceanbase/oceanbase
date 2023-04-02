@@ -43,6 +43,8 @@ int ObSwitchTenantResolver::resolve_switch_tenant(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObSwitchTenantStmt *stmt = create_stmt<ObSwitchTenantStmt>();
+  ObString tenant_name;
+  obrpc::ObSwitchTenantArg::OpType op_type = obrpc::ObSwitchTenantArg::OpType::INVALID;
   if (OB_UNLIKELY(T_SWITCHOVER != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse node, type is not T_SWITCHOVER", KR(ret), "type",
@@ -60,26 +62,80 @@ int ObSwitchTenantResolver::resolve_switch_tenant(const ParseNode &parse_tree)
     ParseNode *switch_node = parse_tree.children_[0];
     obrpc::ObSwitchTenantArg &arg = stmt->get_arg();
 
-    if (T_FAILOVER_TO_PRIMARY == switch_node->type_) {
-      arg.set_op_type(ObSwitchTenantArg::FAILOVER_TO_PRIMARY);
-
-      if (OB_FAIL(resolve_tenant_name(*stmt, switch_node->children_[0],
-                                      session_info_->get_effective_tenant_id()))) {
-        LOG_WARN("resolve_tenant_name", KR(ret), KP(stmt), KP(switch_node->children_[0]),
-                                        K(session_info_->get_effective_tenant_id()));
-      }
+    if (OB_FAIL(resolve_tenant_name(switch_node->children_[0],
+                                    session_info_->get_effective_tenant_id(), tenant_name))) {
+      LOG_WARN("resolve_tenant_name fail", KR(ret), KP(stmt), KP(switch_node->children_[0]),
+                                           K(session_info_->get_effective_tenant_id()));
     } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid switch node type", KR(ret), "type", get_type_name(switch_node->type_));
+      switch(switch_node->type_) {
+        case T_SWITCHOVER_TO_PRIMARY: {
+          op_type = ObSwitchTenantArg::SWITCH_TO_PRIMARY;
+          break;
+        }
+        case T_SWITCHOVER_TO_STANDBY: {
+          op_type = ObSwitchTenantArg::SWITCH_TO_STANDBY;
+          break;
+        }
+        case T_FAILOVER_TO_PRIMARY: {
+          op_type = ObSwitchTenantArg::FAILOVER_TO_PRIMARY;
+          break;
+        }
+        default: {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid switch node type", KR(ret), "type", get_type_name(switch_node->type_));
+          break;
+        }
+      }
     }
   }
 
   if (OB_SUCC(ret)) {
-    obrpc::ObSwitchTenantArg &arg = stmt->get_arg();
-    arg.set_exec_tenant_id(session_info_->get_effective_tenant_id());
-    stmt_ = stmt;
+    if (OB_FAIL(stmt->get_arg().init(session_info_->get_effective_tenant_id(), op_type, tenant_name))) {
+      LOG_WARN("fail to init arg", KR(ret), K(stmt->get_arg()),
+                K(session_info_->get_effective_tenant_id()), K(tenant_name), K(op_type));
+    } else {
+      stmt_ = stmt;
+    }
   }
 
+  return ret;
+}
+
+int resolve_tenant_name(
+    const ParseNode *node,
+    const uint64_t effective_tenant_id,
+    ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  tenant_name.reset();
+  if (OB_ISNULL(node)) {
+    if (OB_SYS_TENANT_ID == effective_tenant_id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant name, should specify tenant name");
+    }
+  } else if (OB_UNLIKELY(T_TENANT_NAME != node->type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(node->type_));
+  } else if (OB_UNLIKELY(node->num_child_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid num_child", "num_child", node->num_child_);
+  } else if (OB_ISNULL(node->children_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("node should not be null");
+  } else {
+    const ParseNode *tenant_name_node = node->children_[0];
+    if (OB_ISNULL(tenant_name_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant_name_node should not be null");
+    } else if (tenant_name_node->value_ <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("empty tenant string");
+    } else {
+      tenant_name.assign_ptr((char *)(tenant_name_node->str_value_),
+                            static_cast<int32_t>(tenant_name_node->str_len_));
+    }
+  }
   return ret;
 }
 

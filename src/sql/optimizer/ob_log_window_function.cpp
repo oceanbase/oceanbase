@@ -15,6 +15,61 @@
 #include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "common/ob_smart_call.h"
+#include "sql/optimizer/ob_log_exchange.h"
+
+#define PRINT_BOUND(bound_name, bound)                 \
+  if (OB_SUCC(ret)) {                                 \
+    if (OB_FAIL(BUF_PRINTF(#bound_name"("))) {        \
+      LOG_WARN("BUF_PRINTF fails", K(ret));           \
+    } else {                                          \
+      bool print_dir = false;                         \
+      if (BOUND_UNBOUNDED == bound.type_) {           \
+        print_dir = true;                             \
+        if (OB_FAIL(BUF_PRINTF("UNBOUNDED"))) {       \
+          LOG_WARN("BUF_PRINTF fails", K(ret));       \
+        }                                             \
+      } else if (BOUND_CURRENT_ROW == bound.type_) {  \
+        if (OB_FAIL(BUF_PRINTF("CURRENT ROW"))) {     \
+          LOG_WARN("BUF_PRINTF fails", K(ret));       \
+        }                                             \
+      } else if (BOUND_INTERVAL == bound.type_) {     \
+        print_dir = true;                             \
+        if (OB_FAIL(bound.interval_expr_->get_name(buf, buf_len, pos, type))) { \
+          LOG_WARN("print expr name failed", K(ret));  \
+        } else if (!bound.is_nmb_literal_) {           \
+          int64_t date_unit_type = DATE_UNIT_MAX;      \
+          ObConstRawExpr *con_expr = static_cast<ObConstRawExpr*>(bound.date_unit_expr_);  \
+          if (OB_ISNULL(con_expr)) {                   \
+            ret = OB_ERR_UNEXPECTED;                   \
+            LOG_WARN("con_expr should not be NULL", K(ret));  \
+          } else {                                     \
+            con_expr->get_value().get_int(date_unit_type);  \
+            const static char *date_unit =             \
+            ob_date_unit_type_str(static_cast<ObDateUnitType>(date_unit_type)); \
+            if (OB_FAIL(BUF_PRINTF(" %s", date_unit))) { \
+              LOG_WARN("BUF_PRINTF fails", K(ret));      \
+            }                                          \
+          }                                            \
+        }                                              \
+      }                                                \
+      if (OB_SUCC(ret) && print_dir) {                 \
+        if (bound.is_preceding_) {                     \
+          if (OB_FAIL(BUF_PRINTF(" PRECEDING"))) {     \
+            LOG_WARN("BUF_PRINTF fails", K(ret));      \
+          }                                            \
+        } else {                                       \
+          if (OB_FAIL(BUF_PRINTF(" FOLLOWING"))) {     \
+            LOG_WARN("BUF_PRINTF fails", K(ret));      \
+          }                                            \
+        }                                              \
+      }                                                \
+      if (OB_SUCC(ret)) {                              \
+        if (OB_FAIL(BUF_PRINTF(")"))) {                \
+          LOG_WARN("BUF_PRINTF fails", K(ret));        \
+        }                                              \
+      }                                                \
+    }                                                  \
+  }
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -23,11 +78,23 @@ using namespace oceanbase::sql::log_op_def;
 int ObLogWindowFunction::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
   int ret = OB_SUCCESS;
-  FOREACH_CNT_X(it, rd_sort_keys_, OB_SUCC(ret)) {
-    if (OB_FAIL(all_exprs.push_back(it->expr_))) {
+  if (OB_UNLIKELY(sort_keys_.count() < rd_sort_keys_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(sort_keys_.count()), K(rd_sort_keys_cnt_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rd_sort_keys_cnt_; i++) {
+      if (OB_FAIL(all_exprs.push_back(sort_keys_.at(i).expr_))) {
+        LOG_WARN("array push back failed", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL != wf_aggr_status_expr_) {
+    if (OB_FAIL(all_exprs.push_back(wf_aggr_status_expr_))) {
       LOG_WARN("array push back failed", K(ret));
     }
   }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(append(all_exprs, win_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
@@ -37,119 +104,84 @@ int ObLogWindowFunction::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   return ret;
 }
 
-int ObLogWindowFunction::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos,
-                                                  ExplainType type)
+int ObLogWindowFunction::get_explain_name_internal(char *buf,
+                                                   const int64_t buf_len,
+                                                   int64_t &pos)
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(BUF_PRINTF(", "))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+  int ret = BUF_PRINTF("%s", get_name());
+  if (OB_FAIL(ret)) {
+  } else if (WindowFunctionRoleType::CONSOLIDATOR == role_type_) {
+    ret = BUF_PRINTF(" CONSOLIDATOR");
+  }
+  if (OB_FAIL(ret)) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   }
+  return ret;
+}
+
+int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
+                                            ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(get_explain_name_internal(buf, buf_len, pos))) {
+      LOG_WARN("failed to get explain name", K(ret));
+    }
+    END_BUF_PRINT(plan_item.operation_, plan_item.operation_len_);
+  }
   if (OB_SUCC(ret)) {
+    BEGIN_BUF_PRINT;
     for (int64_t i = 0; i < win_exprs_.count() && OB_SUCC(ret); ++i) {
+      ObWinFunRawExpr *win_expr = win_exprs_.at(i);
       if (i != 0 && OB_FAIL(BUF_PRINTF("\n      "))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        EXPLAIN_PRINT_EXPR(win_expr, type);
       }
-      ObWinFunRawExpr *win_expr = win_exprs_.at(i);
-      EXPLAIN_PRINT_EXPR(win_expr, type);
       // partition by
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(BUF_PRINTF(", "))) {
-          LOG_WARN("BUF_PRINTF fails", K(ret));
-        } else {
-          const ObIArray<ObRawExpr *> &partition_by = win_expr->get_partition_exprs();
-          EXPLAIN_PRINT_EXPRS(partition_by, type);
-        }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        const ObIArray<ObRawExpr *> &partition_by = win_expr->get_partition_exprs();
+        EXPLAIN_PRINT_EXPRS(partition_by, type);
       }
       // order by
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(BUF_PRINTF(", "))) {
-          LOG_WARN("BUF_PRINTF fails", K(ret));
-        } else {
-          const ObIArray<OrderItem> &order_by = win_expr->get_order_items();
-          EXPLAIN_PRINT_SORT_ITEMS(order_by, type);
-        }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        const ObIArray<OrderItem> &order_by = win_expr->get_order_items();
+        EXPLAIN_PRINT_SORT_ITEMS(order_by, type);
       }
       // win_type
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(BUF_PRINTF(", "))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        const char *win_type_str = "MAX";
+        if (WINDOW_ROWS == win_expr->get_window_type()) {
+          win_type_str = "window_type(ROWS), ";
+        } else if (WINDOW_RANGE == win_expr->get_window_type()) {
+          win_type_str = "window_type(RANGE), ";
+        }
+        if (OB_FAIL(BUF_PRINTF("%s", win_type_str))) {
           LOG_WARN("BUF_PRINTF fails", K(ret));
         }
-        if (OB_SUCC(ret)) {
-          const char *win_type_str = "MAX";
-          if (WINDOW_ROWS == win_expr->get_window_type()) {
-            win_type_str = "window_type(ROWS), ";
-          } else if (WINDOW_RANGE == win_expr->get_window_type()) {
-            win_type_str = "window_type(RANGE), ";
-          }
-          if (OB_FAIL(BUF_PRINTF("%s", win_type_str))) {
-            LOG_WARN("BUF_PRINTF fails", K(ret));
-          }
-        }
-     #define PRINT_BOUND(bound_name, bound)                 \
-        if (OB_SUCC(ret)) {                                 \
-          if (OB_FAIL(BUF_PRINTF(#bound_name"("))) {        \
-            LOG_WARN("BUF_PRINTF fails", K(ret));           \
-          } else {                                          \
-            bool print_dir = false;                         \
-            if (BOUND_UNBOUNDED == bound.type_) {           \
-              print_dir = true;                             \
-              if (OB_FAIL(BUF_PRINTF("UNBOUNDED"))) {       \
-                LOG_WARN("BUF_PRINTF fails", K(ret));       \
-              }                                             \
-            } else if (BOUND_CURRENT_ROW == bound.type_) {  \
-              if (OB_FAIL(BUF_PRINTF("CURRENT ROW"))) {     \
-                LOG_WARN("BUF_PRINTF fails", K(ret));       \
-              }                                             \
-            } else if (BOUND_INTERVAL == bound.type_) {     \
-              print_dir = true;                             \
-              if (OB_FAIL(bound.interval_expr_->get_name(buf, buf_len, pos, type))) { \
-                LOG_WARN("print expr name failed", K(ret));  \
-              } else if (!bound.is_nmb_literal_) {           \
-                int64_t date_unit_type = DATE_UNIT_MAX;      \
-                ObConstRawExpr *con_expr = static_cast<ObConstRawExpr*>(bound.date_unit_expr_);  \
-                if (OB_ISNULL(con_expr)) {                   \
-                  ret = OB_ERR_UNEXPECTED;                   \
-                  LOG_WARN("con_expr should not be NULL", K(ret));  \
-                } else {                                     \
-                  con_expr->get_value().get_int(date_unit_type);  \
-                  const static char *date_unit =             \
-                  ob_date_unit_type_str(static_cast<ObDateUnitType>(date_unit_type)); \
-                  if (OB_FAIL(BUF_PRINTF(" %s", date_unit))) { \
-                    LOG_WARN("BUF_PRINTF fails", K(ret));      \
-                  }                                          \
-                }                                            \
-              }                                              \
-            }                                                \
-            if (OB_SUCC(ret) && print_dir) {                 \
-              if (bound.is_preceding_) {                     \
-                if (OB_FAIL(BUF_PRINTF(" PRECEDING"))) {     \
-                  LOG_WARN("BUF_PRINTF fails", K(ret));      \
-                }                                            \
-              } else {                                       \
-                if (OB_FAIL(BUF_PRINTF(" FOLLOWING"))) {     \
-                  LOG_WARN("BUF_PRINTF fails", K(ret));      \
-                }                                            \
-              }                                              \
-            }                                                \
-            if (OB_SUCC(ret)) {                              \
-              if (OB_FAIL(BUF_PRINTF(")"))) {                \
-                LOG_WARN("BUF_PRINTF fails", K(ret));        \
-              }                                              \
-            }                                                \
-          }                                                  \
-        }
-
         PRINT_BOUND(upper, win_expr->get_upper());
-        if (OB_FAIL(BUF_PRINTF(", "))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(BUF_PRINTF(", "))) {
           LOG_WARN("BUF_PRINTF fails", K(ret));
         }
         PRINT_BOUND(lower, win_expr->get_lower());
       }
     }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
-
   return ret;
 }
 
@@ -195,6 +227,13 @@ int ObLogWindowFunction::get_winfunc_output_exprs(ObIArray<ObRawExpr *> &output_
     LOG_WARN("failed to add into output exprs", K(ret));
   } else {/*do nothing*/}
   return ret;
+}
+
+uint64_t ObLogWindowFunction::hash(uint64_t seed) const
+{
+  seed = do_hash(role_type_, seed);
+  seed = ObLogicalOperator::hash(seed);
+  return seed;
 }
 
 int ObLogWindowFunction::est_cost()
@@ -303,11 +342,18 @@ int ObLogWindowFunction::get_win_partition_intersect_exprs(ObIArray<ObWinFunRawE
 int ObLogWindowFunction::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
   if (OB_FAIL(ObLogicalOperator::compute_op_ordering())) {
     LOG_WARN("failed to compute op ordering", K(ret));
+  } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first child is null", K(ret), K(child));
   } else if (!single_part_parallel_) {
-    is_local_order_ = (range_dist_parallel_ || is_fully_paratition_wise())
-        && !get_op_ordering().empty();
+    is_local_order_ = (range_dist_parallel_ || is_fully_paratition_wise()
+                       || (get_sort_keys().empty()
+                           && LOG_EXCHANGE == child->get_type()
+                           && child->get_is_local_order())
+                      ) && !get_op_ordering().empty();
   }
   return ret;
 }
@@ -337,7 +383,7 @@ bool ObLogWindowFunction::is_block_op() const
   ObWinFunRawExpr *win_expr = NULL;
   for (int64_t i = 0; i < win_exprs_.count(); ++i) {
     if (OB_ISNULL(win_expr = win_exprs_.at(i))) {
-      LOG_ERROR("win expr is null");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "win expr is null");
     } else if (win_expr->get_partition_exprs().count() > 0 ||
         win_expr->get_upper().type_ != BoundType::BOUND_UNBOUNDED ||
         win_expr->get_lower().type_ != BoundType::BOUND_UNBOUNDED ) {
@@ -348,28 +394,15 @@ bool ObLogWindowFunction::is_block_op() const
   return is_block_op;
 }
 
-int ObLogWindowFunction::print_outline(planText &plan_text)
+int ObLogWindowFunction::print_outline_data(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf;
-  int64_t &buf_len = plan_text.buf_len;
-  int64_t &pos = plan_text.pos;
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
-  } else if (USED_HINT == plan_text.outline_type_) {
-    auto win_dist = get_plan()->get_log_plan_hint().get_window_dist();
-    bool has_same_method = false;
-    if (NULL != win_dist && !win_dist->get_algos().empty()) {
-      if (is_array_equal(dist_hint_, win_dist->get_algos())) {
-        if (OB_FAIL(win_dist->print_hint(plan_text))) {
-          LOG_WARN("print hint failed", K(ret));
-        }
-      }
-    }
-  } else if (OUTLINE_DATA == plan_text.outline_type_) {
+  } else {
     if (!dist_hint_.empty()) {
       ObWindowDistHint win_dist;
       if (OB_FAIL(stmt->get_qb_name(qb_name))) {
@@ -387,15 +420,67 @@ int ObLogWindowFunction::print_outline(planText &plan_text)
   return ret;
 }
 
-int ObLogWindowFunction::inner_replace_generated_agg_expr(
-    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
-  FOREACH_X(key, rd_sort_keys_, OB_SUCC(ret)) {
-    if (OB_FAIL(replace_expr_action(to_replace_exprs, key->expr_))) {
-      LOG_WARN("replace expr failed", K(ret));
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
+  } else {
+    auto win_dist = get_plan()->get_log_plan_hint().get_window_dist();
+    if (NULL != win_dist && !win_dist->get_algos().empty()) {
+      if (is_array_equal(dist_hint_, win_dist->get_algos())) {
+        if (OB_FAIL(win_dist->print_hint(plan_text))) {
+          LOG_WARN("print hint failed", K(ret));
+        }
+      }
     }
   }
   return ret;
 }
 
+int ObLogWindowFunction::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  FOREACH_X(key, sort_keys_, OB_SUCC(ret)) {
+    if (OB_FAIL(replace_expr_action(to_replace_exprs, key->expr_))) {
+      LOG_WARN("replace expr failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < win_exprs_.count(); ++i) {
+    ObRawExpr *win_expr = win_exprs_.at(i);
+    ObWinFunRawExpr *new_expr = NULL;
+    if (OB_ISNULL(win_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("win expr is null", K(ret));
+    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, win_expr))) {
+      LOG_WARN("replace expr failed", K(ret));
+    } else if (win_expr == win_exprs_.at(i)) {
+      // do nothing
+    } else if (OB_ISNULL(new_expr = static_cast<ObWinFunRawExpr *>(win_expr))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new win expr is null", K(ret));
+    } else {
+      win_exprs_.at(i) = new_expr;
+    }
+  }
+  return ret;
+}
+
+int ObLogWindowFunction::get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_keys)
+{
+  int ret = OB_SUCCESS;
+  rd_sort_keys.reuse();
+  if (OB_UNLIKELY(sort_keys_.count() < rd_sort_keys_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(sort_keys_.count()), K(rd_sort_keys_cnt_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < rd_sort_keys_cnt_; i++) {
+      if (OB_FAIL(rd_sort_keys.push_back(sort_keys_.at(i)))) {
+        LOG_WARN("array push back failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}

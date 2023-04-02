@@ -67,8 +67,8 @@ struct dblink_param_ctx{
   uint16_t ncharset_id_; // this link expected national charset id for nvarchar
   DblinkPoolType pool_type_;
   dblink_param_ctx() :
-  charset_id_(873), //utf8
-  ncharset_id_(873), //utf8
+  charset_id_(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)), //utf8, deault value, don't modify it cause dblink pull meta need it
+  ncharset_id_(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)), //utf8, deault value, don't modify it cause dblink pull meta need it
   pool_type_(DBLINK_POOL_DEF)
   { }
   TO_STRING_KV(K_(charset_id), K_(ncharset_id), K_(pool_type));
@@ -102,10 +102,13 @@ public:
                          const common::ObString &conn_str,
                          const common::ObString &cluster_str,
                          const dblink_param_ctx &param_ctx) = 0;
-  virtual int acquire_dblink(uint64_t dblink_id, ObISQLConnection *&dblink_conn, uint32_t sessid = 0, int64_t timeout_sec = 0) = 0;
+  virtual int acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx,
+                             ObISQLConnection *&dblink_conn, uint32_t sessid,
+                             int64_t sql_request_level = 0) = 0;
   virtual int release_dblink(ObISQLConnection *dblink_conn, uint32_t sessid = 0) = 0;
-  virtual int do_acquire_dblink(uint64_t dblink_id, ObISQLConnection *&dblink_conn, uint32_t sessid) = 0;
-  virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t timeout_sec = 0) = 0;
+  virtual int do_acquire_dblink(uint64_t dblink_id, const dblink_param_ctx &param_ctx,
+                                ObISQLConnection *&dblink_conn, uint32_t sessid) = 0;
+  virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0) = 0;
 };
 
 } // end namespace sqlclient

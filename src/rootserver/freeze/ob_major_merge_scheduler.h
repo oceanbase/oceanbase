@@ -44,56 +44,6 @@ class ObZoneMergeManager;
 class ObFreezeInfoManager;
 class ObTenantMajorMergeStrategy;
 
-class ObMergeErrorCallback
-{
-public:
-  ObMergeErrorCallback() 
-    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), 
-      zone_merge_mgr_(nullptr)
-  {}
-  virtual ~ObMergeErrorCallback() {}
-
-  int init(const uint64_t tenant_id, ObZoneMergeManager &zone_merge_mgr);
-
-  int handle_merge_error(const int64_t error_type, const int64_t expected_epoch);
-
-private:
-  bool is_inited_;
-  uint64_t tenant_id_;
-  ObZoneMergeManager *zone_merge_mgr_;
-  DISALLOW_COPY_AND_ASSIGN(ObMergeErrorCallback);
-};
-
-class ObFullChecksumValidator
-{
-public:
-  ObFullChecksumValidator() 
-    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), last_check_time_(0),
-      tablet_validator_(), cross_cluster_validator_(), index_validator_(), 
-      merge_err_cb_()
-  {}
-  virtual ~ObFullChecksumValidator() {}
-
-  int init(const uint64_t tenant_id,
-           common::ObMySQLProxy &sql_proxy,
-           ObZoneMergeManager &zone_merge_mgr);
-
-  int execute_check(const share::ObSimpleFrozenStatus &frozen_status,
-                    const int64_t expected_epoch);
-
-  // sync tablet checksum data from __all_tablet_replica_checksum to __all_tablet_checksum
-  int sync_tablet_checksum();
-
-private:
-  bool is_inited_;
-  uint64_t tenant_id_;
-  int64_t last_check_time_;
-  ObTabletChecksumValidator tablet_validator_;
-  ObCrossClusterTableteChecksumValidator cross_cluster_validator_;
-  ObIndexChecksumValidator index_validator_;
-  ObMergeErrorCallback merge_err_cb_;
-};
-
 class ObMajorMergeIdling : public ObThreadIdling
 {
 public:
@@ -116,6 +66,7 @@ public:
   virtual ~ObMajorMergeScheduler() {}
 
   int init(const uint64_t tenant_id,
+           const bool is_primary_service,
            ObZoneMergeManager &zone_merge_mgr,
            ObFreezeInfoManager &freeze_info_mgr,
            share::schema::ObMultiVersionSchemaService &schema_service,
@@ -131,13 +82,16 @@ public:
   ObMajorMergeIdling &get_major_scheduler_idling() { return idling_; }
 
   int try_update_epoch_and_reload();
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
 
 protected:
-  virtual int try_idle(const int64_t ori_idle_time_us, const int work_ret) override;
+  virtual int try_idle(const int64_t ori_idle_time_us,
+                       const int work_ret) override;
 
 private:
   int do_work();
 
+  int do_before_major_merge(const int64_t expected_epoch);
   int do_one_round_major_merge(const int64_t expected_epoch);
 
   int generate_next_global_broadcast_scn(const int64_t expected_epoch);
@@ -147,10 +101,21 @@ private:
   int set_zone_merging(const ObZone &zone, const int64_t expected_epoch);
 
   int update_merge_status(const int64_t expected_epoch);
+  int handle_all_zone_merge(const share::ObAllZoneMergeProgress &all_progress,
+                            const share::SCN &global_broadcast_scn,
+                            const int64_t expected_epoch);
   int try_update_global_merged_scn(const int64_t expected_epoch);
   int update_global_merge_info_after_merge(const int64_t expected_epoch);
 
   int do_update_freeze_service_epoch(const int64_t latest_epoch);
+  int update_epoch_in_memory_and_reload();
+  int get_epoch_with_retry(int64_t &freeze_service_epoch);
+  int do_update_and_reload(const int64_t epoch);
+  bool is_primary_service() const { return is_primary_service_; }
+
+  // including tablets about can_not_read index and permanent offline server
+  int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val,
+                                    const int64_t expected_epoch);
 
   void check_merge_interval_time(const bool is_merging);
 
@@ -159,6 +124,7 @@ private:
   static const int64_t MAJOR_MERGE_SCHEDULER_THREAD_CNT = 1;
 
   bool is_inited_;
+  bool is_primary_service_;  // identify ObMajorFreezeServiceType::SERVICE_TYPE_PRIMARY
   int64_t fail_count_;
   int64_t first_check_merge_us_;
 
@@ -171,7 +137,6 @@ private:
   ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
   ObMajorMergeProgressChecker progress_checker_;
-  ObFullChecksumValidator checksum_validator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeScheduler);
 };

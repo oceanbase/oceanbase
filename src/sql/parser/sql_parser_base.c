@@ -52,14 +52,15 @@ int parse_terminate(ParseResult *p)
   return ret;
 }
 
-int parse_sql(ParseResult *p, const char *buf, size_t len)
+int parse_sql(ParseResult *p, const char *buf, size_t input_len)
 {
   int ret = OB_PARSER_ERR_PARSE_SQL;
   if (OB_UNLIKELY(NULL == p)) {
-  } else if (OB_UNLIKELY(NULL == buf || len <= 0)) {
+  } else if (OB_UNLIKELY(NULL == buf || input_len <= 0 || input_len > INT32_MAX)) {
     snprintf(p->error_msg_, MAX_ERROR_MSG, "Input SQL can not be empty");
     ret = OB_PARSER_ERR_EMPTY_QUERY;
   } else {
+    const int32_t len = (int32_t)input_len;
     p->input_sql_ = buf;
     p->input_sql_len_ = len;
     p->start_col_ = 1;
@@ -73,7 +74,7 @@ int parse_sql(ParseResult *p, const char *buf, size_t len)
     p->comment_cnt_ = 0;
     p->stop_add_comment_ = false;
 #endif
-    if (false == p->pl_parse_info_.is_pl_parse_) {//如果是PLParse调用的该接口，不去重置
+    if (false == p->pl_parse_info_.is_pl_parse_ && !p->is_for_udr_) {//如果是PLParse调用的该接口，不去重置
       p->question_mark_ctx_.count_ = 0;
     }
 

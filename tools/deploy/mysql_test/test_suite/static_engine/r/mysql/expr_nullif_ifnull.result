@@ -7319,17 +7319,17 @@ insert into t1 values('1901-01-01', 1901);
 explain_protocol: 2
 EXPLAIN select nullif(c1, c2) from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c1, t1.c2)]), filter(nil), rowset=256, 
+  0 - output([nullif(t1.c1, t1.c2)]), filter(nil), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c1, c2) from t1;
 +---------------------------+
 | nullif(c1, c2)            |
@@ -7338,17 +7338,17 @@ select nullif(c1, c2) from t1;
 +---------------------------+
 EXPLAIN select nullif(c2, c1) from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c2, t1.c1)]), filter(nil), rowset=256, 
+  0 - output([nullif(t1.c2, t1.c1)]), filter(nil), rowset=256
       access([t1.c2], [t1.c1]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c2, c1) from t1;
 +----------------+
 | nullif(c2, c1) |
@@ -7357,17 +7357,17 @@ select nullif(c2, c1) from t1;
 +----------------+
 EXPLAIN select nullif(c1, c1) from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c1, t1.c1)]), filter(nil), rowset=256, 
+  0 - output([nullif(t1.c1, t1.c1)]), filter(nil), rowset=256
       access([t1.c1]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c1, c1) from t1;
 +----------------+
 | nullif(c1, c1) |
@@ -7376,17 +7376,17 @@ select nullif(c1, c1) from t1;
 +----------------+
 EXPLAIN select nullif(c2, c2) from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([nullif(t1.c2, t1.c2)]), filter(nil), rowset=256, 
+  0 - output([nullif(t1.c2, t1.c2)]), filter(nil), rowset=256
       access([t1.c2]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select nullif(c2, c2) from t1;
 +----------------+
 | nullif(c2, c2) |
@@ -7562,7 +7562,7 @@ insert into t1 values('10:10:10');
 
 select nullif(z0_test0,'中文字符') from t1;
 +---------------------------------+
-| nullif(z0_test0,'中文字符') |
+| nullif(z0_test0,'中文字符')     |
 +---------------------------------+
 | NULL                            |
 | 123456                          |
@@ -7574,7 +7574,7 @@ select nullif(z0_test0,'中文字符') from t1;
 +---------------------------------+
 drop table t1;
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/37798920
+##bugfix:
 create table t1 (pk double) PARTITION BY key (pk) partitions 1;
 insert into t1 values( NULLIF( 100.2345, 1 ));
 select * from t1;
@@ -7603,7 +7603,7 @@ from
       ) as c3
   ) as subq_0;
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/28830638
+##bugfix:
 create table t1 (pk int);
 insert into t1 values (1);
 select pk, ( NULLIF( 14152561829011783680, INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) ) ) s , INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) s2 from t1;
@@ -7656,7 +7656,7 @@ select * from t2;
 +------+------+------+------+
 drop table t1,t2;
 
-## https://work.aone.alibaba-inc.com/issue/28471451
+##
 select collation(nullif('a', binary 'b'));
 +------------------------------------+
 | collation(nullif('a', binary 'b')) |
@@ -7685,7 +7685,7 @@ select d1, d2, nullif(d1, null), nullif(null, d1), nullif(d2, null), nullif(null
 +---------------------+---------------------+---------------------+------------------+---------------------+------------------+
 | d1                  | d2                  | nullif(d1, null)    | nullif(null, d1) | nullif(d2, null)    | nullif(null, d2) |
 +---------------------+---------------------+---------------------+------------------+---------------------+------------------+
-| 中文字符        | 中文字符        | 中文字符        | NULL             | 中文字符        | NULL             |
+| 中文字符            | 中文字符            | 中文字符            | NULL             | 中文字符            | NULL             |
 | 123456              | 123456              | 123456              | NULL             | 123456              | NULL             |
 | ABCabc              | ABCabc              | ABCabc              | NULL             | ABCabc              | NULL             |
 | 2020                | 2020                | 2020                | NULL             | 2020                | NULL             |
@@ -7701,9 +7701,9 @@ select d1, c1, nullif(d1, c1), nullif(c1, d1) from t1, t2 order by d1, c1;
 | NULL                |   NULL | NULL                |           NULL |
 | NULL                |      1 | NULL                |              1 |
 | NULL                | 123456 | NULL                |         123456 |
-| 中文字符        |   NULL | 中文字符        |           NULL |
-| 中文字符        |      1 | NULL                |           NULL |
-| 中文字符        | 123456 | 中文字符        |         123456 |
+| 中文字符            |   NULL | 中文字符            |           NULL |
+| 中文字符            |      1 | NULL                |           NULL |
+| 中文字符            | 123456 | 中文字符            |         123456 |
 | 123456              |   NULL | 123456              |           NULL |
 | 123456              |      1 | 123456              |              1 |
 | 123456              | 123456 | 123456              |         123456 |
@@ -7730,9 +7730,9 @@ select d1, c2, nullif(d1, c2), nullif(c2, d1) from t1, t2 order by d1, c1;
 | NULL                |   NULL | NULL                |           NULL |
 | NULL                |      2 | NULL                |              2 |
 | NULL                | 123456 | NULL                |         123456 |
-| 中文字符        |   NULL | 中文字符        |           NULL |
-| 中文字符        |      2 | 中文字符        |              2 |
-| 中文字符        | 123456 | 中文字符        |         123456 |
+| 中文字符            |   NULL | 中文字符            |           NULL |
+| 中文字符            |      2 | 中文字符            |              2 |
+| 中文字符            | 123456 | 中文字符            |         123456 |
 | 123456              |   NULL | 123456              |           NULL |
 | 123456              |      2 | NULL                |           NULL |
 | 123456              | 123456 | 123456              |         123456 |
@@ -7759,9 +7759,9 @@ select d1, c3, nullif(d1, c3), nullif(c3, d1) from t1, t2 order by d1, c1;
 | NULL                |   NULL | NULL                |           NULL |
 | NULL                |      3 | NULL                |              3 |
 | NULL                | 123456 | NULL                |         123456 |
-| 中文字符        |   NULL | 中文字符        |           NULL |
-| 中文字符        |      3 | 中文字符        |              3 |
-| 中文字符        | 123456 | 中文字符        |         123456 |
+| 中文字符            |   NULL | 中文字符            |           NULL |
+| 中文字符            |      3 | 中文字符            |              3 |
+| 中文字符            | 123456 | 中文字符            |         123456 |
 | 123456              |   NULL | 123456              |           NULL |
 | 123456              |      3 | 123456              |              3 |
 | 123456              | 123456 | 123456              |         123456 |
@@ -7788,9 +7788,9 @@ select d1, c4, nullif(d1, c4), nullif(c4, d1) from t1, t2 order by d1, c1;
 | NULL                | NULL       | NULL                | NULL           |
 | NULL                | 2020-10-10 | NULL                | 2020-10-10     |
 | NULL                | 2020-12-12 | NULL                | 2020-12-12     |
-| 中文字符        | NULL       | 中文字符        | NULL           |
-| 中文字符        | 2020-10-10 | 中文字符        | 2020-10-10     |
-| 中文字符        | 2020-12-12 | 中文字符        | 2020-12-12     |
+| 中文字符            | NULL       | 中文字符            | NULL           |
+| 中文字符            | 2020-10-10 | 中文字符            | 2020-10-10     |
+| 中文字符            | 2020-12-12 | 中文字符            | 2020-12-12     |
 | 123456              | NULL       | 123456              | NULL           |
 | 123456              | 2020-10-10 | 123456              | 2020-10-10     |
 | 123456              | 2020-12-12 | 123456              | 2020-12-12     |
@@ -7817,9 +7817,9 @@ select d1, c5, nullif(d1, c5), nullif(c5, d1) from t1, t2 order by d1, c1;
 | NULL                | NULL                | NULL                | NULL                |
 | NULL                | 2020-10-10 10:10:10 | NULL                | 2020-10-10 10:10:10 |
 | NULL                | 2020-12-12 10:10:10 | NULL                | 2020-12-12 10:10:10 |
-| 中文字符        | NULL                | 中文字符        | NULL                |
-| 中文字符        | 2020-10-10 10:10:10 | 中文字符        | 2020-10-10 10:10:10 |
-| 中文字符        | 2020-12-12 10:10:10 | 中文字符        | 2020-12-12 10:10:10 |
+| 中文字符            | NULL                | 中文字符            | NULL                |
+| 中文字符            | 2020-10-10 10:10:10 | 中文字符            | 2020-10-10 10:10:10 |
+| 中文字符            | 2020-12-12 10:10:10 | 中文字符            | 2020-12-12 10:10:10 |
 | 123456              | NULL                | 123456              | NULL                |
 | 123456              | 2020-10-10 10:10:10 | 123456              | 2020-10-10 10:10:10 |
 | 123456              | 2020-12-12 10:10:10 | 123456              | 2020-12-12 10:10:10 |
@@ -7846,9 +7846,9 @@ select d1, c6, nullif(d1, c6), nullif(c6, d1) from t1, t2 order by d1, c1;
 | NULL                | NULL     | NULL                | NULL           |
 | NULL                | 10:10:10 | NULL                | 10:10:10       |
 | NULL                | 12:12:12 | NULL                | 12:12:12       |
-| 中文字符        | NULL     | 中文字符        | NULL           |
-| 中文字符        | 10:10:10 | 中文字符        | 10:10:10       |
-| 中文字符        | 12:12:12 | 中文字符        | 12:12:12       |
+| 中文字符            | NULL     | 中文字符            | NULL           |
+| 中文字符            | 10:10:10 | 中文字符            | 10:10:10       |
+| 中文字符            | 12:12:12 | 中文字符            | 12:12:12       |
 | 123456              | NULL     | 123456              | NULL           |
 | 123456              | 10:10:10 | 123456              | 10:10:10       |
 | 123456              | 12:12:12 | 123456              | 12:12:12       |
@@ -7875,9 +7875,9 @@ select d1, c7, nullif(d1, c7), nullif(c7, d1) from t1, t2 order by d1, c1;
 | NULL                | NULL | NULL                |           NULL |
 | NULL                | 2020 | NULL                |           2020 |
 | NULL                | 2022 | NULL                |           2022 |
-| 中文字符        | NULL | 中文字符        |           NULL |
-| 中文字符        | 2020 | 中文字符        |           2020 |
-| 中文字符        | 2022 | 中文字符        |           2022 |
+| 中文字符            | NULL | 中文字符            |           NULL |
+| 中文字符            | 2020 | 中文字符            |           2020 |
+| 中文字符            | 2022 | 中文字符            |           2022 |
 | 123456              | NULL | 123456              |           NULL |
 | 123456              | 2020 | 123456              |           2020 |
 | 123456              | 2022 | 123456              |           2022 |
@@ -7902,28 +7902,28 @@ select d1, c8, nullif(d1, c8), nullif(c8, d1) from t1, t2 order by d1, c1;
 | d1                  | c8           | nullif(d1, c8)      | nullif(c8, d1) |
 +---------------------+--------------+---------------------+----------------+
 | NULL                | NULL         | NULL                | NULL           |
-| NULL                | 中文字符 | NULL                | 中文字符   |
+| NULL                | 中文字符     | NULL                | 中文字符       |
 | NULL                | ABCabc       | NULL                | ABCabc         |
-| 中文字符        | NULL         | 中文字符        | NULL           |
-| 中文字符        | 中文字符 | NULL                | NULL           |
-| 中文字符        | ABCabc       | 中文字符        | ABCabc         |
+| 中文字符            | NULL         | 中文字符            | NULL           |
+| 中文字符            | 中文字符     | NULL                | NULL           |
+| 中文字符            | ABCabc       | 中文字符            | ABCabc         |
 | 123456              | NULL         | 123456              | NULL           |
-| 123456              | 中文字符 | 123456              | 中文字符   |
+| 123456              | 中文字符     | 123456              | 中文字符       |
 | 123456              | ABCabc       | 123456              | ABCabc         |
 | ABCabc              | NULL         | ABCabc              | NULL           |
-| ABCabc              | 中文字符 | ABCabc              | 中文字符   |
+| ABCabc              | 中文字符     | ABCabc              | 中文字符       |
 | ABCabc              | ABCabc       | NULL                | NULL           |
 | 2020                | NULL         | 2020                | NULL           |
-| 2020                | 中文字符 | 2020                | 中文字符   |
+| 2020                | 中文字符     | 2020                | 中文字符       |
 | 2020                | ABCabc       | 2020                | ABCabc         |
 | 2020-10-10          | NULL         | 2020-10-10          | NULL           |
-| 2020-10-10          | 中文字符 | 2020-10-10          | 中文字符   |
+| 2020-10-10          | 中文字符     | 2020-10-10          | 中文字符       |
 | 2020-10-10          | ABCabc       | 2020-10-10          | ABCabc         |
 | 2020-10-10 10:10:10 | NULL         | 2020-10-10 10:10:10 | NULL           |
-| 2020-10-10 10:10:10 | 中文字符 | 2020-10-10 10:10:10 | 中文字符   |
+| 2020-10-10 10:10:10 | 中文字符     | 2020-10-10 10:10:10 | 中文字符       |
 | 2020-10-10 10:10:10 | ABCabc       | 2020-10-10 10:10:10 | ABCabc         |
 | 10:10:10            | NULL         | 10:10:10            | NULL           |
-| 10:10:10            | 中文字符 | 10:10:10            | 中文字符   |
+| 10:10:10            | 中文字符     | 10:10:10            | 中文字符       |
 | 10:10:10            | ABCabc       | 10:10:10            | ABCabc         |
 +---------------------+--------------+---------------------+----------------+
 
@@ -7934,9 +7934,9 @@ select d2, c1, nullif(d2, c1), nullif(c1, d2) from t1, t2 order by d2, c1;
 | NULL                |   NULL | NULL                |           NULL |
 | NULL                |      1 | NULL                |              1 |
 | NULL                | 123456 | NULL                |         123456 |
-| 中文字符        |   NULL | 中文字符        |           NULL |
-| 中文字符        |      1 | NULL                |           NULL |
-| 中文字符        | 123456 | 中文字符        |         123456 |
+| 中文字符            |   NULL | 中文字符            |           NULL |
+| 中文字符            |      1 | NULL                |           NULL |
+| 中文字符            | 123456 | 中文字符            |         123456 |
 | 123456              |   NULL | 123456              |           NULL |
 | 123456              |      1 | 123456              |              1 |
 | 123456              | 123456 | 123456              |         123456 |
@@ -7963,9 +7963,9 @@ select d2, c2, nullif(d2, c2), nullif(c2, d2) from t1, t2 order by d2, c1;
 | NULL                |   NULL | NULL                |           NULL |
 | NULL                |      2 | NULL                |              2 |
 | NULL                | 123456 | NULL                |         123456 |
-| 中文字符        |   NULL | 中文字符        |           NULL |
-| 中文字符        |      2 | 中文字符        |              2 |
-| 中文字符        | 123456 | 中文字符        |         123456 |
+| 中文字符            |   NULL | 中文字符            |           NULL |
+| 中文字符            |      2 | 中文字符            |              2 |
+| 中文字符            | 123456 | 中文字符            |         123456 |
 | 123456              |   NULL | 123456              |           NULL |
 | 123456              |      2 | NULL                |           NULL |
 | 123456              | 123456 | 123456              |         123456 |
@@ -7992,9 +7992,9 @@ select d2, c3, nullif(d2, c3), nullif(c3, d2) from t1, t2 order by d2, c1;
 | NULL                |   NULL | NULL                |           NULL |
 | NULL                |      3 | NULL                |              3 |
 | NULL                | 123456 | NULL                |         123456 |
-| 中文字符        |   NULL | 中文字符        |           NULL |
-| 中文字符        |      3 | 中文字符        |              3 |
-| 中文字符        | 123456 | 中文字符        |         123456 |
+| 中文字符            |   NULL | 中文字符            |           NULL |
+| 中文字符            |      3 | 中文字符            |              3 |
+| 中文字符            | 123456 | 中文字符            |         123456 |
 | 123456              |   NULL | 123456              |           NULL |
 | 123456              |      3 | 123456              |              3 |
 | 123456              | 123456 | 123456              |         123456 |
@@ -8021,9 +8021,9 @@ select d2, c4, nullif(d2, c4), nullif(c4, d2) from t1, t2 order by d2, c1;
 | NULL                | NULL       | NULL                | NULL           |
 | NULL                | 2020-10-10 | NULL                | 2020-10-10     |
 | NULL                | 2020-12-12 | NULL                | 2020-12-12     |
-| 中文字符        | NULL       | 中文字符        | NULL           |
-| 中文字符        | 2020-10-10 | 中文字符        | 2020-10-10     |
-| 中文字符        | 2020-12-12 | 中文字符        | 2020-12-12     |
+| 中文字符            | NULL       | 中文字符            | NULL           |
+| 中文字符            | 2020-10-10 | 中文字符            | 2020-10-10     |
+| 中文字符            | 2020-12-12 | 中文字符            | 2020-12-12     |
 | 123456              | NULL       | 123456              | NULL           |
 | 123456              | 2020-10-10 | 123456              | 2020-10-10     |
 | 123456              | 2020-12-12 | 123456              | 2020-12-12     |
@@ -8050,9 +8050,9 @@ select d2, c5, nullif(d2, c5), nullif(c5, d2) from t1, t2 order by d2, c1;
 | NULL                | NULL                | NULL                | NULL                |
 | NULL                | 2020-10-10 10:10:10 | NULL                | 2020-10-10 10:10:10 |
 | NULL                | 2020-12-12 10:10:10 | NULL                | 2020-12-12 10:10:10 |
-| 中文字符        | NULL                | 中文字符        | NULL                |
-| 中文字符        | 2020-10-10 10:10:10 | 中文字符        | 2020-10-10 10:10:10 |
-| 中文字符        | 2020-12-12 10:10:10 | 中文字符        | 2020-12-12 10:10:10 |
+| 中文字符            | NULL                | 中文字符            | NULL                |
+| 中文字符            | 2020-10-10 10:10:10 | 中文字符            | 2020-10-10 10:10:10 |
+| 中文字符            | 2020-12-12 10:10:10 | 中文字符            | 2020-12-12 10:10:10 |
 | 123456              | NULL                | 123456              | NULL                |
 | 123456              | 2020-10-10 10:10:10 | 123456              | 2020-10-10 10:10:10 |
 | 123456              | 2020-12-12 10:10:10 | 123456              | 2020-12-12 10:10:10 |
@@ -8079,9 +8079,9 @@ select d2, c6, nullif(d2, c6), nullif(c6, d2) from t1, t2 order by d2, c1;
 | NULL                | NULL     | NULL                | NULL           |
 | NULL                | 10:10:10 | NULL                | 10:10:10       |
 | NULL                | 12:12:12 | NULL                | 12:12:12       |
-| 中文字符        | NULL     | 中文字符        | NULL           |
-| 中文字符        | 10:10:10 | 中文字符        | 10:10:10       |
-| 中文字符        | 12:12:12 | 中文字符        | 12:12:12       |
+| 中文字符            | NULL     | 中文字符            | NULL           |
+| 中文字符            | 10:10:10 | 中文字符            | 10:10:10       |
+| 中文字符            | 12:12:12 | 中文字符            | 12:12:12       |
 | 123456              | NULL     | 123456              | NULL           |
 | 123456              | 10:10:10 | 123456              | 10:10:10       |
 | 123456              | 12:12:12 | 123456              | 12:12:12       |
@@ -8108,9 +8108,9 @@ select d2, c7, nullif(d2, c7), nullif(c7, d2) from t1, t2 order by d2, c1;
 | NULL                | NULL | NULL                |           NULL |
 | NULL                | 2020 | NULL                |           2020 |
 | NULL                | 2022 | NULL                |           2022 |
-| 中文字符        | NULL | 中文字符        |           NULL |
-| 中文字符        | 2020 | 中文字符        |           2020 |
-| 中文字符        | 2022 | 中文字符        |           2022 |
+| 中文字符            | NULL | 中文字符            |           NULL |
+| 中文字符            | 2020 | 中文字符            |           2020 |
+| 中文字符            | 2022 | 中文字符            |           2022 |
 | 123456              | NULL | 123456              |           NULL |
 | 123456              | 2020 | 123456              |           2020 |
 | 123456              | 2022 | 123456              |           2022 |
@@ -8135,27 +8135,27 @@ select d2, c8, nullif(d2, c8), nullif(c8, d2) from t1, t2 order by d2, c1;
 | d2                  | c8           | nullif(d2, c8)      | nullif(c8, d2) |
 +---------------------+--------------+---------------------+----------------+
 | NULL                | NULL         | NULL                | NULL           |
-| NULL                | 中文字符 | NULL                | 中文字符   |
+| NULL                | 中文字符     | NULL                | 中文字符       |
 | NULL                | ABCabc       | NULL                | ABCabc         |
-| 中文字符        | NULL         | 中文字符        | NULL           |
-| 中文字符        | 中文字符 | NULL                | NULL           |
-| 中文字符        | ABCabc       | 中文字符        | ABCabc         |
+| 中文字符            | NULL         | 中文字符            | NULL           |
+| 中文字符            | 中文字符     | NULL                | NULL           |
+| 中文字符            | ABCabc       | 中文字符            | ABCabc         |
 | 123456              | NULL         | 123456              | NULL           |
-| 123456              | 中文字符 | 123456              | 中文字符   |
+| 123456              | 中文字符     | 123456              | 中文字符       |
 | 123456              | ABCabc       | 123456              | ABCabc         |
 | ABCabc              | NULL         | ABCabc              | NULL           |
-| ABCabc              | 中文字符 | ABCabc              | 中文字符   |
+| ABCabc              | 中文字符     | ABCabc              | 中文字符       |
 | ABCabc              | ABCabc       | NULL                | NULL           |
 | 2020                | NULL         | 2020                | NULL           |
-| 2020                | 中文字符 | 2020                | 中文字符   |
+| 2020                | 中文字符     | 2020                | 中文字符       |
 | 2020                | ABCabc       | 2020                | ABCabc         |
 | 2020-10-10          | NULL         | 2020-10-10          | NULL           |
-| 2020-10-10          | 中文字符 | 2020-10-10          | 中文字符   |
+| 2020-10-10          | 中文字符     | 2020-10-10          | 中文字符       |
 | 2020-10-10          | ABCabc       | 2020-10-10          | ABCabc         |
 | 2020-10-10 10:10:10 | NULL         | 2020-10-10 10:10:10 | NULL           |
-| 2020-10-10 10:10:10 | 中文字符 | 2020-10-10 10:10:10 | 中文字符   |
+| 2020-10-10 10:10:10 | 中文字符     | 2020-10-10 10:10:10 | 中文字符       |
 | 2020-10-10 10:10:10 | ABCabc       | 2020-10-10 10:10:10 | ABCabc         |
 | 10:10:10            | NULL         | 10:10:10            | NULL           |
-| 10:10:10            | 中文字符 | 10:10:10            | 中文字符   |
+| 10:10:10            | 中文字符     | 10:10:10            | 中文字符       |
 | 10:10:10            | ABCabc       | 10:10:10            | ABCabc         |
 +---------------------+--------------+---------------------+----------------+

@@ -92,11 +92,11 @@ int ObDbmsStatsPreferences::get_prefs(ObExecContext &ctx,
   } else {/*do nothing*/}
   if (OB_SUCC(ret)) {
     bool got_result = false;
-    if (is_user_prefs && OB_FAIL(do_get_prefs(ctx, get_user_sql, got_result, result))) {
+    if (is_user_prefs && OB_FAIL(do_get_prefs(ctx, param.allocator_, get_user_sql, got_result, result))) {
       LOG_WARN("failed to do get prefs", K(ret));
     } else if (got_result) {
       /*do nothing*/
-    } else if OB_FAIL(do_get_prefs(ctx, get_global_sql, got_result, result)) {
+    } else if OB_FAIL(do_get_prefs(ctx, param.allocator_, get_global_sql, got_result, result)) {
       LOG_WARN("failed to do get prefs", K(ret));
     } else if (got_result) {
       /*do nothing*/
@@ -217,6 +217,7 @@ int ObDbmsStatsPreferences::delete_user_prefs(ObExecContext &ctx,
 }
 
 int ObDbmsStatsPreferences::do_get_prefs(ObExecContext &ctx,
+                                         ObIAllocator *allocator,
                                          const ObSqlString &raw_sql,
                                          bool &get_result,
                                          ObObj &result)
@@ -225,9 +226,11 @@ int ObDbmsStatsPreferences::do_get_prefs(ObExecContext &ctx,
   get_result = false;
   ObSQLSessionInfo *session = ctx.get_my_session();
   ObMySQLProxy *mysql_proxy = ctx.get_sql_proxy();
-  if (OB_ISNULL(mysql_proxy) || OB_ISNULL(session) || OB_UNLIKELY(raw_sql.empty())) {
+  if (OB_ISNULL(mysql_proxy) || OB_ISNULL(session) ||
+      OB_ISNULL(allocator) || OB_UNLIKELY(raw_sql.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy), K(session), K(raw_sql.empty()));
+    LOG_WARN("get unexpected error", K(ret), K(mysql_proxy), K(session),
+                                     K(allocator), K(raw_sql.empty()));
   } else {
     uint64_t tenant_id = session->get_effective_tenant_id();
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
@@ -248,7 +251,7 @@ int ObDbmsStatsPreferences::do_get_prefs(ObExecContext &ctx,
             LOG_WARN("get unexpected error", K(ret), K(result), K(raw_sql));
           } else if (OB_FAIL(client_result->get_obj(idx, tmp))) {
             LOG_WARN("failed to get object", K(ret));
-          } else if (OB_FAIL(ob_write_obj(ctx.get_allocator(), tmp, result))) {
+          } else if (OB_FAIL(ob_write_obj(*allocator, tmp, result))) {
             LOG_WARN("failed to write object", K(ret));
           } else {
             is_first = false;
@@ -529,7 +532,23 @@ int ObDbmsStatsPreferences::gen_init_global_prefs_sql(ObSqlString &raw_sql,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
                                        K(prefs.get_stat_pref_default_value()));
-    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s')",
+    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s'),",
+                                            prefs.get_stat_pref_name(),
+                                            null_str,
+                                            time_str,
+                                            prefs.get_stat_pref_default_value()))) {
+      LOG_WARN("failed to append", K(ret));
+    } else {
+      ++ total_rows;
+    }
+  }
+  if (OB_SUCC(ret)) {//init estimate_block
+    ObEstimateBlockPrefs prefs;
+    if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_default_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
+                                       K(prefs.get_stat_pref_default_value()));
+    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s');",
                                             prefs.get_stat_pref_name(),
                                             null_str,
                                             time_str,
@@ -603,7 +622,7 @@ int ObDbmsStatsPreferences::do_get_sys_perfs(ObExecContext &ctx,
         LOG_WARN("failed to execute sql", K(ret));
       } else {
         while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
-          if (OB_FAIL(decode_perfs_result(&ctx.get_allocator(), *client_result,
+          if (OB_FAIL(decode_perfs_result(param.allocator_, *client_result,
                                           need_acquired_prefs, param))) {
             LOG_WARN("failed to decode perfs result", K(ret));
           } else {/*do nothing*/}
@@ -1032,6 +1051,26 @@ int ObApproximateNdvPrefs::check_pref_value_validity(ObTableStatParam *param/*de
   return ret;
 }
 
+int ObEstimateBlockPrefs::check_pref_value_validity(ObTableStatParam *param/*default null*/)
+{
+  int ret = OB_SUCCESS;
+  if (pvalue_.empty() ||
+      0 == pvalue_.case_compare("TRUE")) {
+    if (param != NULL) {
+      param->need_estimate_block_ = true;
+    }
+  } else if (0 == pvalue_.case_compare("FALSE")) {
+    if (param != NULL) {
+      param->need_estimate_block_ = false;
+    }
+  } else {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("Illegal value for ESTIMATE_BLOCK", K(ret), K(pvalue_));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Illegal value for ESTIMATE_BLOCK: must be {TRUE, FALSE}");
+  }
+  return ret;
+}
+
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
 //compatible oracle, global prefs/schema prefs just only can set "for all columns...."
@@ -1046,11 +1085,11 @@ int ObMethodOptPrefs::check_global_method_opt_prefs_value_validity(ObString &met
   bool is_valid = false;
   while (i < val_len && ISSPACE(val_ptr[i])) { ++i; }
   if (i < val_len && 0 == strncasecmp(val_ptr + i, str1, strlen(str1))) {
-    i = i + strlen(str1);
+    i = i + static_cast<int32_t>(strlen(str1));
     if (i < val_len && ISSPACE(val_ptr[i++])) {
       while (i < val_len && ISSPACE(val_ptr[i])) { ++i; }
       if (i < val_len && 0 == strncasecmp(val_ptr + i, str2, strlen(str2))) {
-        i = i + strlen(str2);
+        i = i + static_cast<int32_t>(strlen(str2));
         if (i < val_len && ISSPACE(val_ptr[i])) {
           is_valid = true;
         }

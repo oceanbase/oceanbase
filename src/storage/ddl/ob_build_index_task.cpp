@@ -17,9 +17,9 @@
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_get_compat_mode.h"
+#include "share/ob_ddl_task_executor.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
-#include "storage/ob_long_ops_monitor.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ddl/ob_complement_data_task.h"
 #include "storage/ob_i_table.h"
@@ -37,10 +37,11 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::observer;
 using namespace oceanbase::omt;
+using namespace oceanbase::palf;
 
 ObUniqueIndexChecker::ObUniqueIndexChecker()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_id_(),
-    index_schema_(NULL), data_table_schema_(NULL), execution_id_(0), snapshot_version_(0), task_id_(0),
+    index_schema_(NULL), data_table_schema_(NULL), execution_id_(-1), snapshot_version_(0), task_id_(0),
     is_scan_index_(false)
 {
 }
@@ -53,7 +54,7 @@ int ObUniqueIndexChecker::init(
     const ObTableSchema *data_table_schema,
     const ObTableSchema *index_schema,
     const int64_t task_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -148,10 +149,11 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       ObQueryFlag query_flag(ObQueryFlag::Forward,
           true, /*is daily merge scan*/
           true, /*is read multiple macro block*/
-          true, /*sys task scan, read one macro block in single io*/
+          false, /*sys task scan, read one macro block in single io*/
           false, /*is full row scan?*/
           false,
           false);
+      query_flag.skip_read_lob_ = 1;
       ObDatumRange range;
       bool allow_not_ready = false;
       ObArray<bool> need_reshape;
@@ -165,16 +167,18 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, ls must not be nullptr", K(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(tablet_id_, param.snapshot_version_, iterator, allow_not_ready))) {
+      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(tablet_id_,
+                                                                               param.snapshot_version_,
+                                                                               iterator, allow_not_ready))) {
         if (OB_REPLICA_NOT_READABLE == ret) {
           ret = OB_EAGAIN;
         } else {
           LOG_WARN("snapshot version has been discarded", K(ret));
         }
       } else if (OB_FAIL(local_scan.init(*param.col_ids_, *param.org_col_ids_, *param.output_projector_,
-              param.data_table_schema_, param.snapshot_version_, trans_service, param.index_schema_, true/*output org cols only*/))) {
+              *param.data_table_schema_, param.snapshot_version_, trans_service, *param.index_schema_, true/*output org cols only*/))) {
         LOG_WARN("init local scan failed", K(ret));
-      } else if (OB_FAIL(local_scan.table_scan(ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
+      } else if (OB_FAIL(local_scan.table_scan(*param.data_table_schema_, ls_id_, tablet_id_, iterator, query_flag, range, nullptr))) {
         LOG_WARN("fail to table scan", K(ret));
       } else {
         const ObColDescIArray &out_cols = *param.org_col_ids_;
@@ -502,6 +506,7 @@ int ObUniqueIndexChecker::report_column_checksum(
 int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
 {
   int ret = OB_SUCCESS;
+  bool need_report_error_msg = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObUniqueIndexChecker has not been inited", K(ret));
@@ -529,8 +534,12 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
       LOG_WARN("switch to tenant guard failed", K(ret));
     }
   }
-  if (is_inited_) {
+  if (OB_SUCCESS != ret && share::ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    need_report_error_msg = false;
+  }
+  if (is_inited_ && need_report_error_msg) {
     int tmp_ret = OB_SUCCESS;
+    int report_ret_code = OB_SUCCESS;
     const ObAddr &self_addr = GCTX.self_addr();
     bool keep_report_err_msg = true;
     LOG_INFO("begin to report build index status & ddl error message", K(index_schema_->get_table_id()), K(*index_schema_), K(tablet_id_));
@@ -544,12 +553,26 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
           LOG_INFO("get task id failed, but retry to get it", K(ret), K(tmp_ret), KPC(index_schema_));
         }
       } else if (OB_SUCCESS != (tmp_ret = ObDDLErrorMessageTableOperator::generate_index_ddl_error_message(
-          ret, *index_schema_, task_id, tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0"))) {
+          ret, *index_schema_, task_id, tablet_id_.id(), self_addr, *GCTX.sql_proxy_, "\0", report_ret_code))) {
         LOG_WARN("fail to generate index ddl error message", K(ret), K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));
         ob_usleep(RETRY_INTERVAL);
         dag_yield();
       } else {
+        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && OB_ERR_DUPLICATED_UNIQUE_KEY == report_ret_code) {
+          //error message of OB_ERR_PRIMARY_KEY_DUPLICATE is not compatiable with oracle, so use a new error code
+          ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
+        }
         keep_report_err_msg = false;
+      }
+
+      if (OB_TMP_FAIL(tmp_ret) && keep_report_err_msg) {
+        bool is_tenant_dropped = false;
+        if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id_, is_tenant_dropped))) {
+          LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id_));
+        } else if (is_tenant_dropped) {
+          keep_report_err_msg = false;
+          LOG_INFO("break when tenant dropped", K(tmp_ret), KPC(index_schema_), K(tablet_id_), K(self_addr));
+        }
       }
     }
   }
@@ -590,7 +613,7 @@ int ObUniqueIndexChecker::wait_trans_end(ObIDag *dag)
 ObUniqueCheckingDag::ObUniqueCheckingDag()
   : ObIDag(ObDagType::DAG_TYPE_UNIQUE_CHECKING), is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), tablet_id_(), is_scan_index_(false),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_UNIQ_CHECK), index_schema_(nullptr), data_table_schema_(nullptr), callback_(nullptr),
-    execution_id_(0), snapshot_version_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
+    execution_id_(-1), snapshot_version_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
 {
 }
 
@@ -610,7 +633,7 @@ int ObUniqueCheckingDag::init(
     const uint64_t index_table_id,
     const int64_t schema_version,
     const int64_t task_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -738,7 +761,7 @@ int64_t ObUniqueCheckingDag::hash() const
   int64_t hash_val = 0;
   if (NULL == index_schema_) {
     tmp_ret = OB_ERR_SYS;
-    STORAGE_LOG(ERROR, "index schema must not be NULL", K(tmp_ret));
+    STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret));
   } else {
     hash_val = tablet_id_.hash() + index_schema_->get_table_id();
   }
@@ -790,7 +813,7 @@ bool ObUniqueCheckingDag::operator==(const ObIDag &other) const
     const ObUniqueCheckingDag &dag = static_cast<const ObUniqueCheckingDag &>(other);
     if (NULL == index_schema_ || NULL == dag.index_schema_) {
       tmp_ret = OB_ERR_SYS;
-      STORAGE_LOG(ERROR, "index schema must not be NULL", K(tmp_ret), KP(index_schema_),
+      STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret), KP(index_schema_),
           KP(dag.index_schema_));
     } else {
       is_equal = tablet_id_ == dag.tablet_id_
@@ -962,7 +985,7 @@ int ObGlobalUniqueIndexCallback::operator()(const int ret_code)
   arg.task_id_ = task_id_;
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
       LOG_INFO("report replica build status errsim", K(ret));
     }
 #endif

@@ -26,8 +26,12 @@ namespace obrpc
 
 RPC_F(OB_TABLE_LOCK_TASK, transaction::tablelock::ObTableLockTaskRequest,
         transaction::tablelock::ObTableLockTaskResult, ObTableLockProxy);
+RPC_F(OB_BATCH_TABLE_LOCK_TASK, transaction::tablelock::ObLockTaskBatchRequest,
+      transaction::tablelock::ObTableLockTaskResult, ObBatchLockProxy);
 RPC_F(OB_HIGH_PRIORITY_TABLE_LOCK_TASK, transaction::tablelock::ObTableLockTaskRequest,
         transaction::tablelock::ObTableLockTaskResult, ObHighPriorityTableLockProxy);
+RPC_F(OB_HIGH_PRIORITY_BATCH_TABLE_LOCK_TASK, transaction::tablelock::ObLockTaskBatchRequest,
+      transaction::tablelock::ObTableLockTaskResult, ObHighPriorityBatchLockProxy);
 
 class ObTableLockRpcProxy: public obrpc::ObRpcProxy
 {

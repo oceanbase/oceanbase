@@ -29,7 +29,6 @@ class ObRawExprWrapEnumSet: public ObRawExprVisitor
 public:
   ObRawExprWrapEnumSet(ObRawExprFactory &expr_factory, ObSQLSessionInfo *my_session)
     : ObRawExprVisitor(),
-      current_level_(-1),
       cur_stmt_(nullptr),
       expr_factory_(expr_factory),
       my_session_(my_session)
@@ -54,20 +53,17 @@ public:
   int visit(ObPlQueryRefRawExpr &expr);
   bool skip_child();
 private:
-  int32_t get_current_level() const {return current_level_;}
   int visit_left_expr(ObOpRawExpr &expr, int64_t row_dimension,
                       const common::ObIArray<ObExprCalcType> &cmp_types);
   int check_and_wrap_left(ObRawExpr &expr, int64_t idx,
                           const common::ObIArray<ObExprCalcType> &cmp_types,
                           int64_t row_dimension,
-                          int32_t expr_level,
                           ObSysFunRawExpr *&wrapped_expr) const;
   int visit_right_expr(ObRawExpr &expr, int64_t row_dimension,
                        const common::ObIArray<ObExprCalcType> &cmp_types,
                        const ObItemType &root_type);
   int wrap_type_to_str_if_necessary(ObRawExpr *expr,
                                     common::ObObjType calc_type,
-                                    int32_t expr_level,
                                     bool is_same_need,
                                     ObSysFunRawExpr *&wrapped_expr);
   int wrap_target_list(ObSelectStmt &stmt);
@@ -78,8 +74,8 @@ private:
   int visit_query_ref_expr(ObQueryRefRawExpr &expr,
                            const common::ObObjType dest_type,
                            const bool is_same_need);
+  int wrap_param_expr(ObIArray<ObRawExpr*> &param_exprs, ObObjType dest_typ);
 private:
-  int32_t current_level_;
   ObDMLStmt *cur_stmt_;
   ObRawExprFactory &expr_factory_;
   ObSQLSessionInfo *my_session_;

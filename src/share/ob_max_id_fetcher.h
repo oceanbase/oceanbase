@@ -41,6 +41,7 @@ enum ObMaxIdType
   OB_MAX_USED_LS_GROUP_ID_TYPE,
   OB_MAX_USED_SYS_PL_OBJECT_ID_TYPE, /* used for sys package object id */
   OB_MAX_USED_OBJECT_ID_TYPE,        /* used for all kinds of user schema objects */
+  OB_MAX_USED_REWRITE_RULE_VERSION_TYPE,
 
   /* the following ObMaxIdType will be changed to OB_MAX_USED_OBJECT_ID_TYPE and won't be persisted. */
   OB_MAX_USED_TABLE_ID_TYPE,
@@ -69,6 +70,9 @@ enum ObMaxIdType
   OB_MAX_USED_DIRECTORY_ID_TYPE,
   OB_MAX_USED_CONTEXT_ID_TYPE,
   OB_MAX_USED_PARTITION_ID_TYPE,
+  OB_MAX_USED_RLS_POLICY_ID_TYPE,
+  OB_MAX_USED_RLS_GROUP_ID_TYPE,
+  OB_MAX_USED_RLS_CONTEXT_ID_TYPE,
   OB_MAX_ID_TYPE,
 };
 
@@ -104,8 +108,10 @@ private:
   static const char *max_id_name_info_[OB_MAX_ID_TYPE][2];
   int convert_id_type(const ObMaxIdType &src, ObMaxIdType &dst);
 
+  static const int64_t MAX_TENANT_MUTEX_BUCKET_CNT = 4096;
 private:
   common::ObMySQLProxy &proxy_;
+  static lib::ObMutex mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
 
   DISALLOW_COPY_AND_ASSIGN(ObMaxIdFetcher);
 };

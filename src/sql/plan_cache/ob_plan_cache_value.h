@@ -261,6 +261,7 @@ public:
                                 common::ObIArray<PCVSchemaObj> &schema_array);
 
   int lift_tenant_schema_version(int64_t new_schema_version);
+  int check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains);
 private:
   //used for add plan
   //check table version, view table version, merged version
@@ -332,6 +333,15 @@ private:
 
   static int rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator);
 
+  int assign_udr_infos(ObPlanCacheCtx &pc_ctx);
+  void reset_tpl_sql_const_cons();
+  int check_tpl_sql_const_cons(const ObFastParserResult &fp_result,
+                               const TplSqlConstCons &tpl_cst_cons_list,
+                               bool &is_same);
+  int cmp_not_param_info(const NotParamInfoList &l_param_info_list,
+                         const NotParamInfoList &r_param_info_list,
+                         bool &is_equal);
+
   friend class ::test::TestPlanSet_basic_Test;
   friend class ::test::TestPlanCacheValue_basic_Test;
 private:
@@ -356,7 +366,6 @@ private:
   ObPCVSet *pcv_set_;
   common::ObIAllocator *pc_alloc_;
   common::ObIAllocator *pc_malloc_;
-  common::SpinRWLock rwlock_;
   //plan id
   int64_t last_plan_id_;
   // a list of plan sets with different param types combination
@@ -388,6 +397,35 @@ private:
   common::ObFixedArray<PCVSchemaObj *, common::ObIAllocator> stored_schema_objs_;
   common::ObBitSet<> must_be_positive_idx_;
   stmt::StmtType stmt_type_;
+  //***********  for user-defined rules **************
+  DynamicParamInfoArray dynamic_param_list_;
+  /**
+   * call dbms_udr.create_rule('select ?, 1 from dual', 'select ? + 1, 1 from dual');
+   * call dbms_udr.create_rule('select ?, 2 from dual', 'select ? + 2, 1 from dual');
+   *
+   * template SQL: select ?, ? from dual has the following two constant constraints:
+   * tpl_sql_const_cons_ : {{idx:1, raw_text:"1"}, {idx:1, raw_text:"2"}}
+   *
+   * The following constraints are generated when executing a SQL that does not hit any of the rules:
+   * SQL: select 4, 5 from dual;
+   * not_param_info_ : {}
+   * tpl_sql_const_cons_ : {{idx:1, raw_text:"1"}, {idx:1, raw_text:"2"}}
+   *
+   * When executing a SQL that hits a rule, the following constraints are generated:
+   * SQL: select 4, 1 from dual;
+   * not_param_info_ : {idx:1, raw_text:"1"}
+   * tpl_sql_const_cons_ : {{idx:1, raw_text:"1"}, {idx:1, raw_text:"2"}}
+   *
+   * So the constant constraint matching rules are as follows:
+   * 1、First match tpl_sql_const_cons_constraint list
+   *   2、If it hits, use the hit rule to compare it with not_param_info_, if it is the same
+   *     the match succeeds, otherwise it fails
+   *   3、If there is no hit, match not_param_info_. if the match is successful
+   *     the result is successful, otherwise it fails
+   */
+  TplSqlConstCons tpl_sql_const_cons_;
+  //***********  end user-defined rules **************
+
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };
 

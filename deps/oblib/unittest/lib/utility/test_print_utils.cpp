@@ -11,11 +11,14 @@
  */
 
 #include <gtest/gtest.h>
+#include <tuple>
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/string/ob_string.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
-
+/*
 TEST(print_utility, hex_print)
 {
   const int64_t data_size = 10;
@@ -54,6 +57,63 @@ TEST(print_utility, hex_print)
   pos = 0;
   ret = hex_print(data, -1, buff_h, 21, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
+}*/
+
+template <typename ...T>
+class ObTuple
+{
+public:
+  template <typename ...Args>
+  ObTuple(Args &&...args) : tuple_(std::forward<Args>(args)...) {}
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    print_<0>(buf, buf_len, pos);
+    return pos;
+  }
+  template <int N>
+  int64_t print_(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    if (N == 0) {
+      databuff_printf(buf, buf_len, pos, "{");
+    }
+    databuff_printf(buf, buf_len, pos, "%s,", to_cstring(std::get<N>(tuple_)));
+    print_<N+1>(buf, buf_len, pos);
+    return pos;
+  }
+  template <>
+  int64_t print_<sizeof...(T) - 1>(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    databuff_printf(buf, buf_len, pos, "%s}", to_cstring(std::get<sizeof...(T) - 1>(tuple_)));
+    return pos;
+  }
+private:
+  std::tuple<T...> tuple_;
+};
+TEST(print_utility, to_cstring)
+{
+  typedef ObTuple<ObString,int64_t> MyTuple;
+  const int size = 1300;
+  const int number = 10;
+  char data[size * number];
+  char *buffer = (char*)ob_malloc(sizeof(MyTuple) * number);
+  MyTuple *tuples[number];
+  for (int n = 0; n < number; ++n) {
+    memset(&data[n * size], 'a' + n, size - 1);
+    data[size * (n+1) - 1] = '\0';
+    tuples[n] = new (buffer + sizeof(MyTuple) * n) MyTuple(data + size * n, n);
+  }
+  // mutiply call to_cstring at the same time
+  _OB_LOG(INFO, "print tuple string, {%s}, {%s}, {%s}",
+               to_cstring(*tuples[0]), to_cstring(*tuples[1]), to_cstring(*tuples[2]));
+  _OB_LOG(INFO, "print tuple string, {%s}, {%s}, {%s}, {%s}, {%s}, {%s}, {%s}", to_cstring(*tuples[3]), to_cstring(*tuples[4]),
+               to_cstring(*tuples[5]), to_cstring(*tuples[6]), to_cstring(*tuples[7]), to_cstring(*tuples[8]), to_cstring(*tuples[9]));
+  // the performance of to_cstring when observer reach memory limit
+  EventItem item;
+  item.trigger_freq_ = 1;
+  item.error_code_ = OB_ALLOCATE_MEMORY_FAILED;
+  ::oceanbase::common::EventTable::instance().set_event(EventTable::EN_4, item);
+  _OB_LOG(INFO, "print tuple string, {%s}\n", to_cstring(*tuples[0]));
 }
 
 int main(int argc, char **argv)

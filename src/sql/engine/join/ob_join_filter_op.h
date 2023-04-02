@@ -50,7 +50,9 @@ public:
     : ObOpInput(ctx, spec),
       share_info_(),
       is_local_create_(true),
-      task_id_(0)
+      task_id_(0),
+      px_sequence_id_(OB_INVALID_ID),
+      bf_idx_at_sqc_proxy_(-1)
   {}
   virtual ~ObJoinFilterOpInput() {}
 
@@ -77,10 +79,18 @@ public:
   }
   int init_share_info(common::ObIAllocator &allocator, int64_t task_count);
   void set_task_id(int64_t task_id)  { task_id_ = task_id; }
+
+  inline void set_bf_idx_at_sqc_proxy(int64_t idx) { bf_idx_at_sqc_proxy_ = idx; }
+
+  inline int64_t get_bf_idx_at_sqc_proxy() { return bf_idx_at_sqc_proxy_; }
+  void set_px_sequence_id(int64_t id) { px_sequence_id_ = id; }
+  int64_t get_px_sequence_id() { return px_sequence_id_; }
 public:
   ObJoinFilterShareInfo share_info_; //bloom filter共享内存
   bool is_local_create_;  //用于标记create算子是否是local的.
   int64_t task_id_; //在pwj join场景中会用到此task_id作为bf_key
+  int64_t px_sequence_id_;
+  int64_t bf_idx_at_sqc_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObJoinFilterOpInput);
 };
 
@@ -143,6 +153,8 @@ public:
                           common::ObIArray<dtl::ObDtlChannel *> &channels);
 private:
   bool is_valid();
+  bool is_acceptable_filter();
+
   int destroy_filter();
   int send_filter();
   int send_local_filter();
@@ -155,6 +167,9 @@ private:
   int calc_hash_value(uint64_t &hash_value);
   int do_create_filter_rescan();
   int do_use_filter_rescan();
+private:
+  static const int64_t ADAPTIVE_BF_WINDOW_ORG_SIZE = 4096;
+  static constexpr double ACCEPTABLE_FILTER_RATE = 0.98;
 public:
   ObPXBloomFilterHashWrapper bf_key_;
   ObPxBloomFilter *filter_use_;

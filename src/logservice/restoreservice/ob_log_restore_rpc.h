@@ -26,6 +26,7 @@ public:
   ~ObLogResSvrRpc() {}
 
   int init(const rpc::frame::ObReqTransport *transport);
+  void destroy();
   int fetch_log(const ObAddr &server,
       const obrpc::ObRemoteFetchLogRequest &req,
       obrpc::ObRemoteFetchLogResponse &res);

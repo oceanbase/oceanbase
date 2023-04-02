@@ -33,96 +33,19 @@ namespace logservice
 using namespace oceanbase::palf;
 using namespace oceanbase::share;
 using namespace oceanbase::archive;
-
-// ===================================== RemoteDataBuffer ========================== //
-void RemoteDataBuffer::reset()
-{
-  data_ = NULL;
-  data_len_ = 0;
-  start_lsn_.reset();
-  cur_lsn_.reset();
-  end_lsn_.reset();
-}
-
-int RemoteDataBuffer::set(const LSN &start_lsn, char *data, const int64_t data_len)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! start_lsn.is_valid() || NULL == data || data_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    data_ = data;
-    data_len_ = data_len;
-    start_lsn_ = start_lsn;
-    cur_lsn_ = start_lsn;
-    end_lsn_ = start_lsn + data_len;
-    ret = set_iterator_();
-  }
-  return ret;
-}
-
-bool RemoteDataBuffer::is_valid() const
-{
-  return start_lsn_.is_valid()
-    && cur_lsn_.is_valid()
-    && end_lsn_.is_valid()
-    && end_lsn_ > start_lsn_
-    && NULL != data_
-    && data_len_ > 0;
-}
-
-bool RemoteDataBuffer::is_empty() const
-{
-  return cur_lsn_ == end_lsn_;
-}
-
-int RemoteDataBuffer::next(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size)
-{
-  int ret = OB_SUCCESS;
-  if (is_empty()) {
-    ret = OB_ITER_END;
-  } else if (OB_FAIL(iter_.next())) {
-    LOG_WARN("next failed", K(ret));
-  } else if (OB_FAIL(iter_.get_entry(entry, lsn))) {
-    LOG_WARN("get_entry failed", K(ret));
-  } else {
-    // 当前返回entry对应buff和长度
-    buf = data_ + (cur_lsn_ - start_lsn_);
-    buf_size = entry.get_serialize_size();
-    cur_lsn_ = cur_lsn_ + buf_size;
-  }
-  return ret;
-}
-
-int RemoteDataBuffer::set_iterator_()
-{
-  int ret = OB_SUCCESS;
-  auto get_file_size = [&]() -> LSN { return end_lsn_;};
-  if (OB_FAIL(mem_storage_.init(start_lsn_))) {
-    LOG_WARN("MemoryStorage init failed", K(ret), K(start_lsn_));
-  } else if (OB_FAIL(mem_storage_.append(data_, data_len_))) {
-    LOG_WARN("MemoryStorage append failed", K(ret));
-  } else if (OB_FAIL(iter_.init(start_lsn_, &mem_storage_, get_file_size))) {
-    LOG_WARN("MemPalfGroupBufferIterator init failed", K(ret));
-  } else {
-    LOG_INFO("MemPalfGroupBufferIterator init succ", K(start_lsn_), K(end_lsn_));
-  }
-  return ret;
-}
-
 // ============================ RemoteDataGenerator ============================ //
 RemoteDataGenerator::RemoteDataGenerator(const uint64_t tenant_id,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const int64_t end_log_ts) :
+    const SCN &end_scn) :
   tenant_id_(tenant_id),
   id_(id),
   start_lsn_(start_lsn),
   next_fetch_lsn_(start_lsn),
-  end_log_ts_(end_log_ts),
+  end_scn_(end_scn),
   end_lsn_(end_lsn),
-  to_end_(false),
-  max_consumed_lsn_(start_lsn)
+  to_end_(false)
 {}
 
 RemoteDataGenerator::~RemoteDataGenerator()
@@ -130,7 +53,6 @@ RemoteDataGenerator::~RemoteDataGenerator()
   tenant_id_ = OB_INVALID_TENANT_ID;
   id_.reset();
   start_lsn_.reset();
-  max_consumed_lsn_.reset();
   next_fetch_lsn_.reset();
   end_lsn_.reset();
 }
@@ -140,7 +62,7 @@ bool RemoteDataGenerator::is_valid() const
   return OB_INVALID_TENANT_ID != tenant_id_
     && id_.is_valid()
     && start_lsn_.is_valid()
-    && OB_INVALID_TIMESTAMP != end_log_ts_
+    && end_scn_.is_valid()
     && end_lsn_.is_valid()
     && end_lsn_ > start_lsn_;
 }
@@ -150,7 +72,7 @@ bool RemoteDataGenerator::is_fetch_to_end() const
   return next_fetch_lsn_ >= end_lsn_ || to_end_;
 }
 
-int RemoteDataGenerator::update_max_lsn(const palf::LSN &lsn)
+int RemoteDataGenerator::update_max_lsn_(const palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! lsn.is_valid()
@@ -183,9 +105,9 @@ ServiceDataGenerator::ServiceDataGenerator(const uint64_t tenant_id,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const int64_t end_log_ts,
+    const SCN &end_scn,
     const ObAddr &server) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_ts),
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn),
   server_(server),
   result_()
 {}
@@ -196,7 +118,7 @@ ServiceDataGenerator::~ServiceDataGenerator()
   result_.reset();
 }
 
-int ServiceDataGenerator::next_buffer(RemoteDataBuffer &buffer)
+int ServiceDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! is_valid())) {
@@ -207,10 +129,10 @@ int ServiceDataGenerator::next_buffer(RemoteDataBuffer &buffer)
     LOG_INFO("ServiceDataGenerator to end", K(ret), KPC(this));
   } else if (OB_FAIL(fetch_log_from_net_())) {
     LOG_WARN("fetch_log_from_net_ failed", K(ret), KPC(this));
-  } else if (OB_FAIL(buffer.set(start_lsn_, result_.data_, result_.data_len_))) {
-    LOG_INFO("buffer set failed", K(ret), KPC(this));
   } else {
-    max_consumed_lsn_ = next_fetch_lsn_;
+    lsn = start_lsn_;
+    buf = result_.data_;
+    buf_size = result_.data_len_;
   }
   return ret;
 }
@@ -307,7 +229,7 @@ static int extract_archive_file_header_(char *buf,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid file header", K(ret), K(pos), K(file_header));
   } else {
-    lsn = file_header.start_lsn_;
+    lsn = LSN(file_header.start_lsn_);
     LOG_INFO("extract_archive_file_header_ succ", K(pos), K(file_header));
   }
   return ret;
@@ -330,18 +252,21 @@ static int list_dir_files_(const ObString &base,
 }
 
 LocationDataGenerator::LocationDataGenerator(const uint64_t tenant_id,
-    const int64_t pre_log_ts,
+    const SCN &pre_scn,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const int64_t end_log_ts,
+    const SCN &end_scn,
     share::ObBackupDest *dest,
-    ObLogArchivePieceContext *piece_context) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_ts),
-  pre_log_ts_(pre_log_ts),
+    ObLogArchivePieceContext *piece_context,
+    char *buf,
+    const int64_t buf_size) :
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn),
+  pre_scn_(pre_scn),
   base_lsn_(),
   data_len_(0),
-  data_(),
+  buf_(buf),
+  buf_size_(buf_size),
   dest_(dest),
   piece_context_(piece_context),
   dest_id_(0),
@@ -353,17 +278,17 @@ LocationDataGenerator::LocationDataGenerator(const uint64_t tenant_id,
 
 LocationDataGenerator::~LocationDataGenerator()
 {
-  pre_log_ts_ = OB_INVALID_TIMESTAMP;
+  pre_scn_.reset();
   base_lsn_.reset();
   dest_ = NULL;
   piece_context_ = NULL;
+  buf_ = NULL;
+  buf_size_ = 0;
 }
 
-int LocationDataGenerator::next_buffer(RemoteDataBuffer &buffer)
+int LocationDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size)
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t buf_size = 0;
   if (OB_UNLIKELY(! is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("LocationDataGenerator is invalid", K(ret), KPC(this));
@@ -371,8 +296,8 @@ int LocationDataGenerator::next_buffer(RemoteDataBuffer &buffer)
     ret = OB_ITER_END;
   } else if (OB_FAIL(fetch_log_from_location_(buf, buf_size))) {
     LOG_WARN("fetch log from location failed", K(ret), KPC(this));
-  } else if (OB_FAIL(buffer.set(base_lsn_, buf, buf_size))) {
-    LOG_WARN("buffer set failed", K(ret), K(buf), K(buf_size), KPC(this));
+  } else {
+    lsn = base_lsn_;
   }
   return ret;
 }
@@ -380,10 +305,12 @@ int LocationDataGenerator::next_buffer(RemoteDataBuffer &buffer)
 int LocationDataGenerator::update_max_lsn(const palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(RemoteDataGenerator::update_max_lsn(lsn)) && NULL != piece_context_) {
+  if (OB_SUCC(RemoteDataGenerator::update_max_lsn_(lsn)) && NULL != piece_context_) {
     if (OB_FAIL(piece_context_->update_file_info(dest_id_, round_id_, piece_id_,
             max_file_id_, max_file_offset_, next_fetch_lsn_))) {
       LOG_WARN("piece context update file info failed", K(ret), KPC(this));
+    } else {
+      LOG_TRACE("update_file_info succ", KPC(piece_context_));
     }
   }
   return ret;
@@ -391,7 +318,7 @@ int LocationDataGenerator::update_max_lsn(const palf::LSN &lsn)
 
 bool LocationDataGenerator::is_valid() const
 {
-  return RemoteDataGenerator::is_valid() && NULL != dest_ && NULL != piece_context_;
+  return RemoteDataGenerator::is_valid() && NULL != dest_ && NULL != piece_context_ && NULL != buf_ && buf_size_ > 0;
 }
 
 int LocationDataGenerator::fetch_log_from_location_(char *&buf, int64_t &buf_size)
@@ -399,27 +326,27 @@ int LocationDataGenerator::fetch_log_from_location_(char *&buf, int64_t &buf_siz
   int ret = OB_SUCCESS;
   int64_t file_id = 0;
   int64_t file_offset = 0;
-  palf::LSN max_lsn_in_file = palf::LOG_INVALID_LSN_VAL;
+  palf::LSN max_lsn_in_file (palf::LOG_INVALID_LSN_VAL);
   share::ObBackupPath piece_path;
   if (OB_FAIL(get_precise_file_and_offset_(file_id, file_offset, max_lsn_in_file, piece_path))) {
     LOG_WARN("get precise file and offset failed", K(ret));
   } else if (OB_FAIL(read_file_(piece_path.get_ptr(), dest_->get_storage_info(), id_,
-          file_id, file_offset, data_, MAX_DATA_BUF_LEN, data_len_))) {
+          file_id, file_offset, buf_, buf_size_, data_len_))) {
     LOG_WARN("read file failed", K(ret));
   } else if (file_offset > 0) {
     // 非第一次读文件, 不必再解析file header
     base_lsn_ = max_lsn_in_file;
-    buf = data_;
+    buf = buf_;
     buf_size = data_len_;
-  } else if (OB_FAIL(extract_archive_file_header_(data_, data_len_, base_lsn_))) {
+  } else if (OB_FAIL(extract_archive_file_header_(buf_, data_len_, base_lsn_))) {
     LOG_WARN("extract archive file heaeder failed", K(ret), KPC(this));
   } else {
-    buf = data_ + ARCHIVE_FILE_HEADER_SIZE;
+    buf = buf_ + ARCHIVE_FILE_HEADER_SIZE;
     buf_size = data_len_ - ARCHIVE_FILE_HEADER_SIZE;
   }
 
-  if ((OB_SUCC(ret) && base_lsn_ > start_lsn_) || OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-    LOG_INFO("read file base_lsn bigger than start_lsn, reset locate info", K(base_lsn_), K(start_lsn_));
+  if ((OB_SUCC(ret) && base_lsn_ > next_fetch_lsn_) || OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+    LOG_INFO("read file base_lsn bigger than start_lsn, reset locate info", K(base_lsn_), K(next_fetch_lsn_));
     piece_context_->reset_locate_info();
     ret = OB_ITER_END;
   }
@@ -440,17 +367,18 @@ int LocationDataGenerator::get_precise_file_and_offset_(int64_t &file_id,
     share::ObBackupPath &piece_path)
 {
   int ret = OB_SUCCESS;
-  if (FALSE_IT(file_id = cal_lsn_to_file_id_(start_lsn_))) {
-  } else if (OB_FAIL(piece_context_->get_piece(pre_log_ts_, start_lsn_, dest_id_, round_id_, piece_id_,
-          file_id, file_offset, lsn))) {
+  if (FALSE_IT(file_id = cal_lsn_to_file_id_(next_fetch_lsn_))) {
+  } else if (OB_FAIL(piece_context_->get_piece(pre_scn_, next_fetch_lsn_,
+          dest_id_, round_id_, piece_id_, file_id, file_offset, lsn, to_end_))) {
     if (OB_ARCHIVE_LOG_TO_END == ret) {
       ret = OB_ITER_END;
     } else {
       LOG_WARN("get cur piece failed", K(ret), KPC(piece_context_));
     }
-  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(*dest_, dest_id_, round_id_, piece_id_, piece_path))) {
+  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(*dest_,
+          dest_id_, round_id_, piece_id_, piece_path))) {
     LOG_WARN("get piece dir path failed", K(ret));
-  } else if (lsn.is_valid() && lsn > start_lsn_) {
+  } else if (lsn.is_valid() && lsn > next_fetch_lsn_) {
     file_offset = 0;
   }
 
@@ -464,13 +392,14 @@ RawPathDataGenerator::RawPathDataGenerator(const uint64_t tenant_id,
     const LSN &start_lsn,
     const LSN &end_lsn,
     const DirArray &array,
-    const int64_t end_log_ts,
+    const SCN &end_scn,
     const int64_t piece_index,
     const int64_t min_file_id,
     const int64_t max_file_id) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_ts),
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn),
   array_(array),
   data_len_(0),
+  file_id_(0),
   base_lsn_(),
   index_(piece_index),
   min_file_id_(min_file_id),
@@ -486,7 +415,7 @@ RawPathDataGenerator::~RawPathDataGenerator()
   index_ = 0;
 }
 
-int RawPathDataGenerator::next_buffer(RemoteDataBuffer &buffer)
+int RawPathDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! is_valid())) {
@@ -496,8 +425,10 @@ int RawPathDataGenerator::next_buffer(RemoteDataBuffer &buffer)
     ret = OB_ITER_END;
   } else if (OB_FAIL(fetch_log_from_dest_())) {
     LOG_WARN("fetch log from dest failed", K(ret), KPC(this));
-  } else if (OB_FAIL(buffer.set(base_lsn_, data_ + ARCHIVE_FILE_HEADER_SIZE, data_len_ - ARCHIVE_FILE_HEADER_SIZE))) {
-    LOG_WARN("buffer set failed", K(ret), KPC(this));
+  } else {
+    lsn = base_lsn_;
+    buf = data_ + ARCHIVE_FILE_HEADER_SIZE;
+    buf_size = data_len_ - ARCHIVE_FILE_HEADER_SIZE;
   }
   return ret;
 }
@@ -585,7 +516,7 @@ int RawPathDataGenerator::extract_archive_file_header_()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid file header", K(ret), K(pos), K(file_header), KPC(this));
   } else {
-    base_lsn_ = file_header.start_lsn_;
+    base_lsn_ = LSN(file_header.start_lsn_);
     LOG_INFO("extract_archive_file_header_ succ", K(pos), K(file_header), KPC(this));
   }
   return ret;

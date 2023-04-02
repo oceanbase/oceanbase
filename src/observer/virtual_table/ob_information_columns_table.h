@@ -105,7 +105,8 @@ private:
    */
   int get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
       const common::ObIArray<ObString> &type_info,
-      const int16_t default_length_semantics, int64_t &pos);
+      const int16_t default_length_semantics, int64_t &pos,
+      const common::ObGeoType geo_type = common::ObGeoType::GEOMETRY);
   int fill_col_privs(
       ObSessionPrivInfo &session_priv,
       ObNeedPriv &need_priv, 
@@ -114,6 +115,7 @@ private:
       char* buf,
       const int64_t buf_len,
       int64_t &pos);
+  inline int init_mem_context();
 private:
   uint64_t tenant_id_;
   int64_t last_schema_idx_;
@@ -129,6 +131,8 @@ private:
   common::ObSEArray<const share::schema::ObDatabaseSchema *, 8> database_schema_array_;
   common::ObSEArray<const share::schema::ObTableSchema *, 16> filter_table_schema_array_;
   ObArenaAllocator view_resolve_alloc_;
+  lib::MemoryContext mem_context_;
+  int64_t iter_cnt_;
 };
 } // namespace observer
 } // namespace oceanbase

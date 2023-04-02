@@ -50,7 +50,7 @@ public:
   virtual bool is_oracle_mode() const override { return oracle_mode_; }
   // in some situation, it allows continuation of SQL execution after failure in transaction,
   // and last_error should be reset.
-  // https://work.aone.alibaba-inc.com/issue/27222857
+  //
   void reset_last_error() { errno_ = common::OB_SUCCESS; }
 
 protected:
@@ -73,7 +73,7 @@ inline bool ObSingleConnectionProxy::check_inner_stat() const
 {
   bool bret = (OB_SUCCESS == errno_ && NULL != pool_ && NULL != conn_);
   if (!bret) {
-    COMMON_MYSQLP_LOG(WARN, "invalid inner stat", "errno", errno_, K_(pool), K_(conn));
+    COMMON_MYSQLP_LOG_RET(WARN, errno_, "invalid inner stat", "errno", errno_, K_(pool), K_(conn));
   }
   return bret;
 }

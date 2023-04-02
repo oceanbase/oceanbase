@@ -190,7 +190,8 @@ int ObExprInterval::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
       // do not care NULL_FIRST or NULL_LAST, will ignore null in calc_interval_expr()
       rt_expr.inner_functions_[0] = reinterpret_cast<void*>(
           ObDatumFuncs::get_nullsafe_cmp_func(arg_type, arg_type, default_null_pos(),
-                                              CS_TYPE_BINARY, false));
+                                              CS_TYPE_BINARY, rt_expr.args_[0]->datum_meta_.scale_, false,
+                                              rt_expr.args_[0]->obj_meta_.has_lob_header()));
       if (OB_ISNULL(rt_expr.inner_functions_[0])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cmp_func is NULL", K(ret), K(arg_type));

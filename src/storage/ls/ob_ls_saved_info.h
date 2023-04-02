@@ -15,6 +15,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "logservice/palf/lsn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -31,12 +32,12 @@ public:
   void reset();
   bool is_empty() const;
 
-  TO_STRING_KV(K_(clog_checkpoint_ts), K_(clog_base_lsn), K_(replayable_point), K_(tablet_change_checkpoint_ts));
+  TO_STRING_KV(K_(clog_checkpoint_scn), K_(clog_base_lsn), K_(replayable_point), K_(tablet_change_checkpoint_scn));
 
-  int64_t clog_checkpoint_ts_;
+  share::SCN clog_checkpoint_scn_;
   palf::LSN clog_base_lsn_;
   int64_t replayable_point_;
-  int64_t tablet_change_checkpoint_ts_;
+  share::SCN tablet_change_checkpoint_scn_;
 };
 
 

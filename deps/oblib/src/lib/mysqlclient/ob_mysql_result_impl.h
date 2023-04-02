@@ -31,7 +31,7 @@ class ObMySQLResultImpl : public ObMySQLResult
 public:
   explicit ObMySQLResultImpl(ObMySQLStatement &stmt);
   ~ObMySQLResultImpl();
-  int init();
+  int init(bool enable_use_result = false);
   /*
    * close result
    */

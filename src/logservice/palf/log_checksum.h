@@ -27,10 +27,15 @@ public:
   virtual ~LogChecksum() {}
 public:
   int init(const int64_t id, const int64_t accum_checksum);
+  void destroy();
   virtual int acquire_accum_checksum(const int64_t data_checksum,
                                      int64_t &accum_checksum);
   virtual int verify_accum_checksum(const int64_t data_checksum,
                                     const int64_t accum_checksum);
+  static int verify_accum_checksum(const int64_t old_accum_checksum,
+                                   const int64_t data_checksum,
+                                   const int64_t expected_accum_checksum,
+                                   int64_t &new_accum_checksum);
   virtual void set_accum_checksum(const int64_t accum_checksum);
   virtual void set_verify_checksum(const int64_t verify_checksum);
   virtual int rollback_accum_checksum(const int64_t curr_accum_checksum);

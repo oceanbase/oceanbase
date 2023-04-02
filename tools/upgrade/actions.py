@@ -18,8 +18,16 @@ class SqlItem:
     self.action_sql = action_sql
     self.rollback_sql = rollback_sql
 
+current_cluster_version = "4.1.0.0"
+current_data_version = "4.1.0.0"
 g_succ_sql_list = []
 g_commit_sql_list = []
+
+def get_current_cluster_version():
+  return current_cluster_version
+
+def get_current_data_version():
+  return current_data_version
 
 def refresh_commit_sql_list():
   global g_succ_sql_list
@@ -97,15 +105,15 @@ def check_is_update_sql(sql):
         and word_list[1].lower().startswith('@') and ':=' == word_list[2].lower()):
       raise MyError('sql must be update, key_word="{0}", sql="{1}"'.format(key_word, sql))
 
-def set_parameter(cur, parameter, value):
+def set_parameter(cur, parameter, value, timeout = 0):
   sql = """alter system set {0} = '{1}'""".format(parameter, value)
   logging.info(sql)
   cur.execute(sql)
-  wait_parameter_sync(cur, parameter, value)
+  wait_parameter_sync(cur, False, parameter, value, timeout)
 
-def get_ori_enable_ddl(cur):
+def get_ori_enable_ddl(cur, timeout):
   ori_value_str = fetch_ori_enable_ddl(cur)
-  wait_parameter_sync(cur, 'enable_ddl', ori_value_str)
+  wait_parameter_sync(cur, False, 'enable_ddl', ori_value_str, timeout)
   ori_value = (ori_value_str == 'True')
   return ori_value
 
@@ -132,11 +140,65 @@ def fetch_ori_enable_ddl(cur):
     raise e
   return ori_value
 
-def wait_parameter_sync(cur, key, value):
-  sql = """select count(*) as cnt from oceanbase.__all_virtual_sys_parameter_stat
-           where name = '{0}' and value != '{1}'""".format(key, value)
-  times = 10
-  while times > 0:
+# print version like "x.x.x.x"
+def print_version(version):
+  version = int(version)
+  major = (version >> 32) & 0xffffffff
+  minor = (version >> 16) & 0xffff
+  major_patch = (version >> 8) & 0xff
+  minor_patch = version & 0xff
+  version_str = "{0}.{1}.{2}.{3}".format(major, minor, major_patch, minor_patch)
+
+# version str should like "x.x.x.x"
+def get_version(version_str):
+  versions = version_str.split(".")
+
+  if len(versions) != 4:
+    logging.exception("""version:{0} is invalid""".format(version_str))
+    raise e
+
+  major = int(versions[0])
+  minor = int(versions[1])
+  major_patch = int(versions[2])
+  minor_patch = int(versions[3])
+
+  if major > 0xffffffff or minor > 0xffff or major_patch > 0xff or minor_patch > 0xff:
+    logging.exception("""version:{0} is invalid""".format(version_str))
+    raise e
+
+  version = (major << 32) | (minor << 16) | (major_patch << 8) | (minor_patch)
+  return version
+
+def check_server_version_by_cluster(cur):
+  sql = """select distinct(substring_index(build_version, '_', 1)) from __all_server""";
+  logging.info(sql)
+  cur.execute(sql)
+  result = cur.fetchall()
+  if len(result) != 1:
+    raise MyError("servers build_version not match")
+  else:
+    logging.info("check server version success")
+
+def check_parameter(cur, is_tenant_config, key, value):
+  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+  sql = """select * from oceanbase.{0}
+           where name = '{1}' and value = '{2}'""".format(table_name, key, value)
+  logging.info(sql)
+  cur.execute(sql)
+  result = cur.fetchall()
+  bret = False
+  if len(result) > 0:
+    bret = True
+  else:
+    bret = False
+  return bret
+
+def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
+  table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
+  sql = """select count(*) as cnt from oceanbase.{0}
+           where name = '{1}' and value != '{2}'""".format(table_name, key, value)
+  times = (timeout if timeout > 0 else 60) / 5
+  while times >= 0:
     logging.info(sql)
     cur.execute(sql)
     result = cur.fetchall()
@@ -150,10 +212,76 @@ def wait_parameter_sync(cur, key, value):
       logging.info("""{0} is not sync, value should be {1}""".format(key, value))
 
     times -= 1
-    if times == 0:
+    if times == -1:
       logging.exception("""check {0}:{1} sync timeout""".format(key, value))
       raise e
     time.sleep(5)
+
+def do_begin_upgrade(cur, timeout):
+
+  if not check_parameter(cur, False, "enable_upgrade_mode", "True"):
+    action_sql = "alter system begin upgrade"
+    rollback_sql = "alter system end upgrade"
+    logging.info(action_sql)
+
+    cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
+
+  wait_parameter_sync(cur, False, "enable_upgrade_mode", "True", timeout)
+
+
+def do_begin_rolling_upgrade(cur, timeout):
+
+  if not check_parameter(cur, False, "_upgrade_stage", "DBUPGRADE"):
+    action_sql = "alter system begin rolling upgrade"
+    rollback_sql = "alter system end upgrade"
+
+    logging.info(action_sql)
+    cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
+
+  wait_parameter_sync(cur, False, "_upgrade_stage", "DBUPGRADE", timeout)
+
+
+def do_end_rolling_upgrade(cur, timeout):
+
+  # maybe in upgrade_post_check stage or never run begin upgrade
+  if check_parameter(cur, False, "enable_upgrade_mode", "False"):
+    return
+
+  current_cluster_version = get_current_cluster_version()
+  if not check_parameter(cur, False, "_upgrade_stage", "POSTUPGRADE") or not check_parameter(cur, False, "min_observer_version", current_cluster_version):
+    action_sql = "alter system end rolling upgrade"
+    rollback_sql = "alter system end upgrade"
+
+    logging.info(action_sql)
+    cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
+
+  wait_parameter_sync(cur, False, "min_observer_version", current_data_version, timeout)
+  wait_parameter_sync(cur, False, "_upgrade_stage", "POSTUPGRADE", timeout)
+
+
+def do_end_upgrade(cur, timeout):
+
+  if not check_parameter(cur, False, "enable_upgrade_mode", "False"):
+    action_sql = "alter system end upgrade"
+    rollback_sql = ""
+
+    logging.info(action_sql)
+    cur.execute(action_sql)
+
+    global g_succ_sql_list
+    g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
+
+  wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
+
 
 class Cursor:
   __cursor = None
@@ -269,14 +397,6 @@ class BaseEachTenantDMLAction():
     rollback_sql = self.get_each_tenant_rollback_sql(tenant_id)
     self.__dml_cursor.exec_update(action_sql)
     g_succ_sql_list.append(SqlItem(action_sql, rollback_sql))
-  def change_tenant(self, tenant_id):
-    self._cursor.exec_sql("alter system change tenant tenant_id = {0}".format(tenant_id))
-    (desc, results) = self._query_cursor.exec_query("select effective_tenant_id()")
-    if (1 != len(results) or 1 != len(results[0])):
-      raise MyError("results cnt not match")
-    elif (tenant_id != results[0][0]):
-      raise MyError("change tenant failed, effective_tenant_id:{0}, tenant_id:{1}"
-                    .format(results[0][0], tenant_id))
 
 class BaseEachTenantDDLAction():
   __dml_cursor = None
@@ -321,13 +441,16 @@ def reflect_action_cls_list(action_module, action_name_prefix):
   action_cls_list.sort(actions_cls_compare)
   return action_cls_list
 
-def fetch_observer_version(query_cur):
-  (desc, results) = query_cur.exec_query("""select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'""")
-  if len(results) != 1:
+def fetch_observer_version(cur):
+  sql = """select distinct value from __all_virtual_sys_parameter_stat where name='min_observer_version'"""
+  logging.info(sql)
+  cur.execute(sql)
+  result = cur.fetchall()
+  if len(result) != 1:
     raise MyError('query results count is not 1')
   else:
-    logging.info('get observer version success, version = {0}'.format(results[0][0]))
-  return results[0][0]
+    logging.info('get observer version success, version = {0}'.format(result[0][0]))
+  return result[0][0]
 
 def fetch_tenant_ids(query_cur):
   try:

@@ -141,14 +141,14 @@ void ObTenantMetaObjPool<T>::free_node_(typename BasePool::Node *ptr)
     ptr->next = NULL;
     if (BasePool::ALLOC_BY_INNER_ALLOCATOR == ptr->flag) {
       if (common::OB_SUCCESS != BasePool::free_list_.push(ptr)) {
-        _COMMON_LOG(ERROR, "free node to list fail, size=%ld ptr=%p", BasePool::free_list_.get_total(), ptr);
+        _COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "free node to list fail, size=%ld ptr=%p", BasePool::free_list_.get_total(), ptr);
       }
       (void)ATOMIC_AAF(&(BasePool::inner_used_num_), -1);
     } else if (BasePool::ALLOC_BY_OBMALLOC == ptr->flag) {
       ptr->~Node();
       common::ob_free(ptr);
     } else {
-      _COMMON_LOG(ERROR, "invalid flag=%lu ptr=%p", ptr->flag, ptr);
+      _COMMON_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid flag=%lu ptr=%p", ptr->flag, ptr);
     }
   }
 }

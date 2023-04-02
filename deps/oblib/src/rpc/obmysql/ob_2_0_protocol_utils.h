@@ -20,6 +20,7 @@
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/ob_request.h"
 #include "rpc/obmysql/obp20_extra_info.h"
+#include "rpc/obmysql/obsm_struct.h"
 
 namespace oceanbase
 {
@@ -66,11 +67,12 @@ public:
       tailer_len_(0), next_step_(START_TO_FILL_STEP),
       is_proto20_used_(false), is_checksum_off_(false),
       has_extra_info_(false), is_new_extra_info_(false),
-      curr_proto20_packet_start_pos_(0) {}
+      curr_proto20_packet_start_pos_(0), txn_free_route_(false) {}
   ~ObProto20Context() {}
 
   inline void reset() { MEMSET(this, 0, sizeof(ObProto20Context)); }
   inline bool is_proto20_used() const { return is_proto20_used_; }
+  inline bool txn_free_route() const { return txn_free_route_; }
    TO_STRING_KV(K_(comp_seq),
                 K_(request_id),
                 K_(proto20_seq),
@@ -81,6 +83,7 @@ public:
                 K_(is_checksum_off),
                 K_(has_extra_info),
                 K_(is_new_extra_info),
+                K_(txn_free_route),
                 K_(curr_proto20_packet_start_pos));
 
 public:
@@ -95,7 +98,7 @@ public:
   bool has_extra_info_;
   bool is_new_extra_info_;
   int64_t curr_proto20_packet_start_pos_;
-
+  bool txn_free_route_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20Context);
 };
@@ -118,6 +121,7 @@ public:
   int64_t large_pkt_buf_pos_;
   common::ObIArray<ObObjKV> *extra_info_kvs_;
   common::ObIArray<Obp20Encoder*> *extra_info_ecds_;
+  observer::ObSMConnection* conn_;
 
   const static int64_t MAX_PROTO20_PAYLOAD_LEN;
   const static int64_t PROTO20_SPLIT_LEN;
@@ -128,11 +132,11 @@ public:
       seri_size_(0), conn_id_(0), encode_ret_(common::OB_SUCCESS),
       need_flush_(false), is_last_(false), is_pkt_encoded_(false),
       large_pkt_buf_(NULL), large_pkt_buf_len_(0), large_pkt_buf_pos_(0),
-      extra_info_kvs_(NULL), extra_info_ecds_(NULL)
+      extra_info_kvs_(NULL), extra_info_ecds_(NULL), conn_(NULL)
   {}
 
   inline bool is_valid() const
-  { return (NULL != proto20_context_) && (NULL != ez_buf_) && (NULL != req_); }
+  { return (NULL != proto20_context_) && (NULL != ez_buf_) && (NULL != req_) && (NULL != conn_); }
 
   inline static void build_param(ObProtoEncodeParam &param, ObMySQLPacket *pkt,
       easy_buf_t &ez_buf, const uint32_t sessid, const bool is_last,
@@ -148,6 +152,10 @@ public:
     param.req_ = req;
     param.extra_info_kvs_ = extra_info;
     param.extra_info_ecds_ = extra_info_ecds;
+    if (NULL != param.req_) {
+      param.conn_ = reinterpret_cast<observer::ObSMConnection *>
+                                (SQL_REQ_OP.get_sql_session(param.req_));
+    }
   }
 
   inline int add_pos(const int64_t delta);
@@ -211,7 +219,7 @@ private:
   inline static int fill_proto20_header(ObProtoEncodeParam &param);
   inline static bool is_the_last_packet(const ObProtoEncodeParam &param);
   inline static bool has_extra_info(const ObProtoEncodeParam &param);
-
+  static int reset_extra_info(ObProtoEncodeParam &param);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20Utils);
 };

@@ -119,7 +119,6 @@ public:
     return Iterator(this, read_start, read_end);
   }
 private:
-  common::TCRWLock lock_;
   common::ObArray<ActiveSessionStat> list_;
   int64_t write_pos_; // where can write to when add an element
 };

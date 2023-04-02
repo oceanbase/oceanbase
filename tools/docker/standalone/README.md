@@ -1,17 +1,29 @@
-# How to use this image
+# How to deploy OceanBase with docker
 
-You can deploy OceanBase databases by using many methods. But Docker is the easiest method. This repository gives you an oceanbase-standalone image for deploying OceanBase database by using Docker. oceanbase-standalone is a standalone test image for OceanBase Database. By default, this image deploys an instance of the largest size according to the current container. You can also deploy a mini standalone instance through the environment variable MINI_MODE.
+OceanBase provide a standalone test image named [oceanbase-ce](https://hub.docker.com/r/oceanbase/oceanbase-ce) for OceanBase Database. By default, this image deploys a MINI_MODE OceanBase instance.
+
+**WARNING**
+
+- The oceanbase-ce docker image is just used for study or test;
+- Please use [oceanbase-operator](https://github.com/oceanbase/ob-operator) instead if you want to deploy oceanbase in k8s;
+- You should not deploy it with important data as it is not used in production environment.
+
+Reasons:
+
+1. The cluster contains only one instance, so there is no disaster tolerant ability;
+2. It is very difficult to recover after failure because docker container cannot started while the oceanbase instance cannot start success, which means you lost the container and the data with it;
+3. K8s can not restart a new pod because the container still exists after the observer process quit.
 
 ## Prerequisite
 
-Before you deploy oceanbase-standalone image, do a check of these:
+Before you deploy oceanbase-ce docker, do the following checks:
 
-- Make sure that your machine has at least 2 physical core and 10GB memory.
+- Make sure that your machine has enough resource that can execute at least 2 phycical core and 8GB memory.
 - Your machine has installed these applications:
 
-    Application | Recommended version | Documentation
-    ---     | ------  | -----
-    Docker | Latest | [Docker Documentation](https://docs.docker.com/get-docker/)
+    | Application | Recommended version | Documentation                                               |
+    | ----------- | ------------------- | ----------------------------------------------------------- |
+    | Docker      | Latest              | [Docker Documentation](https://docs.docker.com/get-docker/) |
 - You have started the Docker service on your machine.
 
 ## Start an OceanBase instance
@@ -19,80 +31,57 @@ Before you deploy oceanbase-standalone image, do a check of these:
 To start an OceanBase instance, run this command:
 
 ```bash
-# deploy an instance of the largest size according to the current container
-docker run -p 2881:2881 --name obstandalone -d oceanbase/oceanbase-ce-standalone
+# deploy mini instance
+docker run -p 2881:2881 --name oceanbase-ce -d oceanbase/oceanbase-ce
 
-# deploy mini standalone instance
-docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce-standalone
+# deploy an instance of the largest size according to the current container
+docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=0 -d oceanbase/oceanbase-ce
 ```
 
 Two to five minutes are necessary for the boot procedure. To make sure that the boot procedure is successful, run this command:
 
 ```bash
-$ docker logs obstandalone | tail -1
+$ docker logs oceanbase-ce | tail -1
 boot success!
 ```
 
-**WARNING:** the container will not exit while the process of observer exits.
+After started, there is an oceanbase instance. You can connect to the oceanbase by root user without password.
 
 ## Connect to an OceanBase instance
 
-oceanbase-standalone image contains obclient (OceanBase Database client) and the default connection script `ob-mysql`.
+oceanbase-ce image contains obclient (OceanBase Database client) and the default connection script `ob-mysql`.
 
 ```bash
-docker exec -it obstandalone ob-mysql sys # Connect to sys tenant
-docker exec -it obstandalone ob-mysql root # Connect to the root account of a general tenant
-docker exec -it obstandalone ob-mysql test # Connect to the test account of a general tenant
+docker exec -it oceanbase-ce ob-mysql sys # Connect to sys tenant
+docker exec -it oceanbase-ce ob-mysql root # Connect to the root account of a general tenant
+docker exec -it oceanbase-ce ob-mysql test # Connect to the test account of a general tenant
 ```
 
 Or you can run this command to connect to an OceanBase instance with your local obclient or MySQL client.
 
 ```bash
-$mysql -uroot -h127.1 -P2881
-```
-
-When you connect to an OceanBase instance successfully, the terminal returns this message:
-
-```mysql
-Welcome to the MariaDB monitor.  Commands end with ; or \g.
-Your MySQL connection id is 3221528373
-Server version: 5.7.25 OceanBase 2.2.77 (r20211015104618-3510dfdb38c6b8d9c7e27747f82ccae4c8d560ee) (Built Oct 15 2021 11:19:05)
-
-Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
-
-Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
-
-MySQL [(none)]>
+mysql -uroot -h127.1 -P2881
 ```
 
 ## Supported environment variables
 
-This table shows the supported environment variables of the current oceanbase-standalone mirror version:
+This table shows the supported environment variables of the current oceanbase-ce mirror version:
 
-Variable name | Default value | Description
-------- | ----- | ---
-MINI_MODE | false | If ture, will use mini mode to deploy OceanBase Database instance, it should be used only for research/study/evaluation.  DO NOT use it for production or performance testing.
-OB_HOME_PATH | /root/ob | Home path for an OceanBase Database instance.
-OB_MYSQL_PORT | 2881 | The MySQL protocol port for an OceanBase Database instance.
-OB_DATA_DIR | empty | The directory for data storage. The default value is $OB_HOME_PATH/store.
-OB_REDO_DIR | empty | The directory for clog, ilog, and slog. The default value is the same as the OB_DATA_DIR value.
-OB_RPC_PORT | 2882 | The RPC communication port for an OceanBase Database instance.
-OB_ROOT_PASSWORD | empty |  The password for the system tenant in an OceanBase Database instance.
-OB_CLUSTER_NAME | mini-ce | Instance name for OceanBase Database instance. OBD uses this value as its cluster name.
-OB_TENANT_NAME | test | The default initialized general tenant name for an OceanBase Database instance.
+| Variable name    | Default value | Description                                                  |
+| ---------------- | ------------- | ------------------------------------------------------------ |
+| MINI_MODE        | false         | If ture, will use mini mode to deploy OceanBase Database instance, it should be used only for research/study/evaluation.  DO NOT use it for production or performance testing. |
+| EXIT_WHILE_ERROR | true          | Whether quit the container while start observer failed. If start observer failed, you can not explore the logs as the container will exit. But if you set the EXIT_WHILE_ERROR=false, the container will not exit while observer starting fail and you can use docker exec to debug. |
 
 ## Run the Sysbench script
 
-oceanbase-standalone image installs the Sysbench tool by default. And the Sysbench tool is configured. You can run these commands in sequence to run the Sysbench script with the default configurations.
+oceanbase-ce image installs the Sysbench tool by default. And the Sysbench tool is configured. You can run these commands in sequence to run the Sysbench script with the default configurations.
 
 ```bash
-docker exec -it obstandalone obd test sysbench [OB_CLUSTER_NAME]
+docker exec -it oceanbase-ce obd test sysbench obcluster
 ```
 
 ## Mount Volumn
-You can use `-v /host/path:/container/path` parameter in docker `run` command to save data in host os if you want to persistence the data of a container.
-
-The docker image `oceanbase-ce` save the data to /root/ob directory default. You can not start a new docker image if you only bind the /root/ob directory, because the docker image oceanbase-ce use the [obd](https://github.com/oceanbase/obdeploy) to manage database clusters and there is no information about the database cluster after a new docker image started. So you should bind both the /root/ob and /root/.obd directory.
+You can use `-v /your/host/path:/container/path` parameter in docker `run` command to save data in host os if you want to persistence the data of a container.
 
 Below is an example.
 
@@ -101,5 +90,7 @@ docker run -d -p 2881:2881 -v $PWD/ob:/root/ob -v $PWD/obd:/root/.obd --name oce
 ```
 
 Note that you should use your own path.
+
+The docker image `oceanbase-ce` saves the data to /root/ob directory default. You should bind both the /root/ob and /root/.obd. You can not start new docker image if you only bind the /root/ob directory, because the docker image oceanbase-ce uses the [obd](https://github.com/oceanbase/obdeploy) to manage database clusters and there is no information about the database cluster in a new docker container.
 
 You can view more information about `docker -v` at [docker volumn](https://docs.docker.com/storage/volumes/).

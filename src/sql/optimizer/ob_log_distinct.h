@@ -34,7 +34,6 @@ public:
   { }
 
   const char *get_name() const;
-  int print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type);
   //this interface can be used for adding distinct expr
   inline ObIArray<ObRawExpr*>& get_distinct_exprs()
   { return distinct_exprs_; }
@@ -42,8 +41,8 @@ public:
   { return distinct_exprs_; }
   int set_distinct_exprs(const common::ObIArray<ObRawExpr*> &exprs)
   { return append(distinct_exprs_, exprs); }
-  virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs);
+  virtual int inner_replace_op_exprs(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>   >&to_replace_exprs) override;
   virtual uint64_t hash(uint64_t seed) const override;
 
   inline void set_hash_type() { algo_ = HASH_AGGREGATE; }
@@ -62,7 +61,6 @@ public:
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int compute_op_ordering() override;
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
   inline bool is_push_down() const { return is_push_down_; }
   inline void set_push_down(const bool is_push_down) { is_push_down_ = is_push_down; }
   inline double get_total_ndv() const { return total_ndv_; }
@@ -71,9 +69,11 @@ public:
   inline bool force_push_down() const { return force_push_down_; }
   inline void set_force_push_down(bool force_push_down) { force_push_down_ = force_push_down; }
   int get_distinct_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
-  virtual int print_outline(planText &plan) override;
-  int print_used_hint(planText &plan_text);
-  int print_outline_data(planText &plan_text);
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
+
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
   AggregateAlgo algo_;

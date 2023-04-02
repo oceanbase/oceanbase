@@ -31,6 +31,7 @@
 #include "sql/engine/ob_operator_factory.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/ob_truncated_string.h"
+#include "sql/spm/ob_spm_evolution_plan.h"
 
 namespace oceanbase
 {
@@ -93,6 +94,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     stat_(),
     op_stats_(),
     need_drive_dml_query_(false),
+    tx_id_(-1),
+    tm_sessid_(-1),
     is_returning_(false),
     is_late_materialized_(false),
     is_dep_base_table_(false),
@@ -108,6 +111,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     use_pdml_(false),
     use_temp_table_(false),
     has_link_table_(false),
+    has_link_sfd_(false),
     need_serial_exec_(false),
     temp_sql_can_prepare_(false),
     is_need_trans_(false),
@@ -115,10 +119,14 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     contain_pl_udf_or_trigger_(false),
     ddl_schema_version_(0),
     ddl_table_id_(0),
-    ddl_execution_id_(0),
+    ddl_execution_id_(-1),
     ddl_task_id_(0),
     is_packed_(false),
-    has_instead_of_trigger_(false)
+    has_instead_of_trigger_(false),
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    need_record_plan_info_(false),
+    enable_append_(false),
+    append_table_id_(0)
 {
 }
 
@@ -194,14 +202,20 @@ void ObPhysicalPlan::reset()
   use_pdml_ = false;
   use_temp_table_ = false;
   has_link_table_ = false;
+  has_link_sfd_ = false;
   encrypt_meta_array_.reset();
   need_serial_exec_ = false;
   batch_size_ = 0;
   contain_pl_udf_or_trigger_ = false;
   is_packed_ = false;
   has_instead_of_trigger_ = false;
+  enable_append_ = false;
+  append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
+  tx_id_ = -1;
+  tm_sessid_ = -1;
+  need_record_plan_info_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -228,6 +242,7 @@ int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)
   set_literal_stmt_type(src.get_literal_stmt_type());
   //copy plan_id/hint/privs
   object_id_ = src.object_id_;
+  min_cluster_version_ = src.min_cluster_version_;
   if (OB_FAIL(set_phy_plan_hint(src.get_phy_plan_hint()))) {
     LOG_WARN("Failed to copy query hint", K(ret));
   } else if (OB_FAIL(set_stmt_need_privs(src.get_stmt_need_privs()))) {
@@ -526,9 +541,10 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
     ATOMIC_STORE(&(stat_.last_active_time_), current_time);
     if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
       ATOMIC_INC(&(stat_.evolution_stat_.executions_));
-      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
-                 record.get_elapsed_time() - record.exec_record_.wait_time_end_
-                 - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
+      //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
+      //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
       ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
     }
     if (stat_.is_bind_sensitive_ && execute_count > 0) {
@@ -743,7 +759,11 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_plain_insert_,
                     ddl_execution_id_,
                     ddl_task_id_,
-                    stat_.plan_id_);
+                    stat_.plan_id_,
+                    min_cluster_version_,
+                    need_record_plan_info_,
+                    enable_append_,
+                    append_table_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -944,7 +964,7 @@ int64_t ObPhysicalPlan::get_pre_expr_ref_count() const
 void ObPhysicalPlan::inc_pre_expr_ref_count()
 {
   if (OB_ISNULL(stat_.pre_cal_expr_handler_)) {
-    LOG_WARN("pre-calcuable expression handler has not been initalized.");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "pre-calcuable expression handler has not been initalized.");
   } else {
      stat_.pre_cal_expr_handler_->inc_ref_cnt();
   }
@@ -1076,7 +1096,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.slow_count_ = 0;
     stat_.slowest_exec_time_ = 0;
     stat_.slowest_exec_usec_ = 0;
-    if (pc_ctx.is_ps_mode_) {
+    if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
       ObTruncatedString trunc_stmt(pc_ctx.raw_sql_, OB_MAX_SQL_LENGTH);
       if (OB_FAIL(ob_write_string(get_allocator(),
                                   trunc_stmt.string(),

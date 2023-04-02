@@ -13,9 +13,10 @@
 #ifndef OCEANBASE_STORAGE_OB_CHECKPOINT_EXECUTOR_H_
 #define OCEANBASE_STORAGE_OB_CHECKPOINT_EXECUTOR_H_
 
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -27,19 +28,19 @@ namespace checkpoint
 
 struct ObCheckpointVTInfo
 {
-  int64_t rec_log_ts;
+  share::SCN rec_scn;
   int service_type;
 
   TO_STRING_KV(
-    K(rec_log_ts),
+    K(rec_scn),
     K(service_type)
   );
 };
 
 struct CheckpointDiagnoseInfo
 {
-  int64_t checkpoint_;
-  int64_t min_rec_scn_;
+  share::SCN checkpoint_;
+  share::SCN min_rec_scn_;
   logservice::ObLogBaseType log_type_;
 
   TO_STRING_KV(K(checkpoint_),
@@ -67,15 +68,15 @@ public:
   int update_clog_checkpoint();
 
   // the service will flush and advance checkpoint
-  // after flush, checkpoint_log_ts will be equal or greater than recycle_ts
-  int advance_checkpoint_by_flush(int64_t recycle_ts = 0);
+  // after flush, checkpoint_scn will be equal or greater than recycle_scn
+  int advance_checkpoint_by_flush(share::SCN recycle_scn = share::SCN::invalid_scn());
 
   // for __all_virtual_checkpoint
   int get_checkpoint_info(ObIArray<ObCheckpointVTInfo> &checkpoint_array);
 
   int64_t get_cannot_recycle_log_size();
 
-  void get_min_rec_log_ts(int &log_type, int64_t &min_rec_log_ts) const;
+  void get_min_rec_scn(int &log_type, share::SCN &min_rec_scn) const;
 
   int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
 
@@ -88,7 +89,10 @@ private:
   // be used to avoid checkpoint concurrently,
   // no need to protect handlers_[] because ls won't be destroyed(hold lshandle)
   // when the public interfaces are invoked
-  mutable common::ObSpinLock lock_;
+  typedef common::SpinRWLock RWLock;
+  typedef common::SpinRLockGuard  RLockGuard;
+  typedef common::SpinWLockGuard  WLockGuard;
+  RWLock rwlock_;
 
   bool update_checkpoint_enabled_;
 };

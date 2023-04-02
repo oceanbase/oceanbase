@@ -32,7 +32,7 @@ class ObIAllocator;
 namespace palf
 {
 class LogIOTask;
-class PalfEnvImpl;
+class IPalfEnvImpl;
 
 struct LogIOWorkerConfig
 {
@@ -46,7 +46,7 @@ struct LogIOWorkerConfig
   }
   bool is_valid() const
   {
-    return 0 < io_worker_num_ && 0 < io_queue_capcity_ && 0 < batch_width_ && 0 < batch_depth_;
+    return 0 < io_worker_num_ && 0 < io_queue_capcity_ && 0 <= batch_width_ && 0 <= batch_depth_;
   }
   void reset()
   {
@@ -68,13 +68,15 @@ public:
   LogIOWorker();
   ~LogIOWorker();
   int init(const LogIOWorkerConfig &config,
+           const int64_t tenant_id,
            int cb_thread_pool_tg_id,
            ObIAllocator *allocaotr,
-           PalfEnvImpl *palf_env_impl);
+           IPalfEnvImpl *palf_env_impl);
   void destroy();
 
   void run1() override final;
   int submit_io_task(LogIOTask *io_task);
+  int64_t get_last_working_time() const { return ATOMIC_LOAD(&last_working_time_); }
   static constexpr int64_t MAX_THREAD_NUM = 1;
   TO_STRING_KV(K_(log_io_worker_num), K_(cb_thread_pool_tg_id));
 private:
@@ -94,7 +96,7 @@ private:
     int init(int64_t batch_width, int64_t batch_depth, ObIAllocator *allocator);
     void destroy();
     int insert(LogIOFlushLogTask *io_task);
-    int handle(const int64_t tg_id, PalfEnvImpl *palf_env_impl);
+    int handle(const int64_t tg_id, IPalfEnvImpl *palf_env_impl);
     bool empty();
     TO_STRING_KV(K_(batch_io_task_array), K_(usable_count), K_(batch_width));
   private:
@@ -115,9 +117,13 @@ private:
   // NB: at nowdays, the default 'log_io_worker_num_' is 1.
   int64_t log_io_worker_num_;
   int cb_thread_pool_tg_id_;
-  PalfEnvImpl *palf_env_impl_;
+  IPalfEnvImpl *palf_env_impl_;
   ObLightyQueue queue_;
   BatchLogIOFlushLogTaskMgr batch_io_task_mgr_;
+  int64_t do_task_used_ts_;
+  int64_t do_task_count_;
+  int64_t print_log_interval_;
+  int64_t last_working_time_;
   bool is_inited_;
 };
 } // end namespace palf

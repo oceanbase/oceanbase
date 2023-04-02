@@ -16,6 +16,7 @@
 #include "palf_env_impl.h"
 #include "palf_handle_impl.h"
 #include "rpc/frame/ob_req_transport.h"
+#include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "palf_handle.h"
 #include "palf_options.h"
@@ -38,7 +39,7 @@ PalfEnv::~PalfEnv()
 }
 
 int PalfEnv::create_palf_env(
-    const PalfDiskOptions &disk_options,
+    const PalfOptions &options,
     const char *base_dir,
     const common::ObAddr &self,
     rpc::frame::ObReqTransport *transport,
@@ -52,7 +53,8 @@ int PalfEnv::create_palf_env(
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(base_dir))) {
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
-  } else if (OB_FAIL(palf_env->palf_env_impl_.init(disk_options, base_dir, self, transport,
+  } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
+                                                   MTL_ID(), transport,
                                                    log_alloc_mgr, log_block_pool))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->start_())) {
@@ -70,7 +72,7 @@ int PalfEnv::create_palf_env(
 void PalfEnv::destroy_palf_env(PalfEnv *&palf_env)
 {
   MTL_DELETE(PalfEnv, "palf_env", palf_env);
-  PALF_LOG(WARN, "destroy_palf_env success", K(palf_env));
+  PALF_LOG_RET(WARN, OB_SUCCESS, "destroy_palf_env success", K(palf_env));
 }
 
 int PalfEnv::start_()
@@ -97,31 +99,12 @@ void PalfEnv::destroy_()
 
 int PalfEnv::create(const int64_t id,
                     const AccessMode &access_mode,
-                    PalfHandle &handle)
-{
-  int ret = OB_SUCCESS;
-  int64_t  palf_id(id);
-  palf::PalfHandleImpl *palf_handle_impl = NULL;
-  if (OB_FAIL(palf_env_impl_.create_palf_handle_impl(palf_id, access_mode, palf_handle_impl))) {
-    PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(palf_id));
-  } else if (FALSE_IT(handle.palf_handle_impl_ = palf_handle_impl)) {
-  } else {
-    PALF_LOG(INFO, "create palf handle success", K(id), K(handle));
-  }
-  if (OB_FAIL(ret)) {
-    handle.palf_handle_impl_ = NULL;
-  }
-  return ret;
-}
-
-int PalfEnv::create(const int64_t id,
-                    const AccessMode &access_mode,
                     const PalfBaseInfo &palf_base_info,
                     PalfHandle &handle)
 {
   int ret = OB_SUCCESS;
   int64_t  palf_id(id);
-  palf::PalfHandleImpl *palf_handle_impl = NULL;
+  palf::IPalfHandleImpl *palf_handle_impl = NULL;
   if (OB_FAIL(palf_env_impl_.create_palf_handle_impl(palf_id, access_mode, palf_base_info, palf_handle_impl))) {
     PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(palf_id));
   } else if (FALSE_IT(handle.palf_handle_impl_ = palf_handle_impl)) {
@@ -138,7 +121,7 @@ int PalfEnv::open(const int64_t id, PalfHandle &handle)
 {
   int ret = OB_SUCCESS;
   int64_t  palf_id(id);
-  palf::PalfHandleImpl *palf_handle_impl = NULL;
+  palf::IPalfHandleImpl *palf_handle_impl = NULL;
   if (OB_FAIL(palf_env_impl_.get_palf_handle_impl(palf_id, palf_handle_impl))) {
     PALF_LOG(TRACE, "get_palf_handle_impl failed", K(ret), K(palf_id));
   } else if (FALSE_IT(handle.palf_handle_impl_ = palf_handle_impl)) {
@@ -172,17 +155,16 @@ int PalfEnv::get_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
   return palf_env_impl_.get_disk_usage(used_size_byte, total_size_byte);
 }
 
-int PalfEnv::get_disk_options(PalfDiskOptions &options)
+int PalfEnv::get_options(PalfOptions &options)
 {
-  return palf_env_impl_.get_disk_options(options);
+  return palf_env_impl_.get_options(options);
 }
 
-int PalfEnv::update_disk_options(const PalfDiskOptions &disk_options)
+int PalfEnv::update_options(const PalfOptions &options)
 {
-  return palf_env_impl_.update_disk_options(disk_options);
+  return palf_env_impl_.update_options(options);
 }
 
-// @brief get current palf disk options
 bool PalfEnv::check_disk_space_enough()
 {
   return palf_env_impl_.check_disk_space_enough();
@@ -192,5 +174,17 @@ int PalfEnv::for_each(const ObFunction<int(const PalfHandle &)> &func)
 {
   return palf_env_impl_.for_each(func);
 }
+
+int PalfEnv::get_io_start_time(int64_t &last_working_time)
+{
+  return palf_env_impl_.get_io_start_time(last_working_time);
+}
+
+// should be removed in version 4.2.0.0
+int PalfEnv::update_replayable_point(const SCN &replayable_scn)
+{
+  return palf_env_impl_.update_replayable_point(replayable_scn);
+}
+
 } // end namespace palf
 } // end namespace oceanbase

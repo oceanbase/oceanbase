@@ -44,7 +44,7 @@ using namespace oceanbase::common;
   void object_name##Factory::free(object_name *object)  \
   {\
     if (OB_ISNULL(object)) {\
-      LOG_ERROR("object is null", KP(object));\
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "object is null", KP(object));\
     } else {\
       object->destroy();  \
       allocator_type##_FREE(object, LABEL);        \

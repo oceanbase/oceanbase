@@ -32,7 +32,7 @@ select '' regexp '^$';
 |              1 |
 +----------------+
 select 'a' regexp '';
-ERROR 42000: Got error 'empty (sub)expression' from regexp
+ERROR 42000: Got error from regexp
 select NULL regexp 'a';
 +-----------------+
 | NULL regexp 'a' |

@@ -18,6 +18,8 @@
 #include "ob_obj2str_helper.h"                    // ObObj2strHelper
 #include "ob_log_utils.h"                         // filter_non_user_column
 #include "ob_log_config.h"                        // TCONF
+#include "ob_log_meta_data_refresh_mode.h"        // RefreshMode
+#include "src/logservice/data_dictionary/ob_data_dict_struct.h" // ObDictTableMeta/ObDictColumnMeta
 
 #define SCHEMA_STAT_INFO(fmt, args...) LOG_INFO("[SCHEMA_CACHE_STAT] " fmt, args)
 #define SCHEMA_STAT_DEBUG(fmt, args...) LOG_DEBUG("[SCHEMA_CACHE_STAT] " fmt, args)
@@ -50,10 +52,11 @@ ColumnSchemaInfo::~ColumnSchemaInfo()
   destroy();
 }
 
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
 int ColumnSchemaInfo::init(
     const uint64_t column_id,
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObColumnSchemaV2 &column_table_schema,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_table_schema,
     const int16_t column_stored_idx,
     const bool is_usr_column,
     const int16_t usr_column_idx,
@@ -129,7 +132,7 @@ void ColumnSchemaInfo::reset()
   collation_type_ = ObCollationType::CS_TYPE_INVALID;
 
   if (NULL != orig_default_value_str_) {
-    LOG_ERROR("orig_default_value_str_ should be null", K(orig_default_value_str_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "orig_default_value_str_ should be null", K(orig_default_value_str_));
     orig_default_value_str_ = NULL;
   }
 
@@ -144,9 +147,10 @@ void ColumnSchemaInfo::get_extended_type_info(common::ObArrayHelper<common::ObSt
   str_array.init(extended_type_info_size_, extended_type_info_, extended_type_info_size_);
 }
 
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
 int ColumnSchemaInfo::get_column_ori_default_value_(
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObColumnSchemaV2 &column_table_schema,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_table_schema,
     const int16_t column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     ObObj2strHelper &obj2str_helper,
@@ -194,9 +198,10 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
   return ret;
 }
 
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
 int ColumnSchemaInfo::init_extended_type_info_(
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObColumnSchemaV2 &column_table_schema,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_table_schema,
     const int16_t column_idx,
     common::ObIAllocator &allocator)
 {
@@ -223,7 +228,7 @@ int ColumnSchemaInfo::init_extended_type_info_(
       extended_type_info_size_ = src_extended_type_info.count();
 
       for (int64_t idx = 0; OB_SUCC(ret) && idx < src_extended_type_info.count(); ++idx) {
-        ObString &str= extended_type_info_[idx];
+        ObString &str = extended_type_info_[idx];
 
         if (OB_FAIL(deep_copy_str(src_extended_type_info.at(idx), str, allocator))) {
           LOG_ERROR("deep_copy_str failed", KR(ret), K(idx), K(str),
@@ -285,7 +290,38 @@ ObLogRowkeyInfo::~ObLogRowkeyInfo()
   destroy();
 }
 
-int ObLogRowkeyInfo::init(common::ObIAllocator &allocator,
+int ObLogRowkeyInfo::init(
+    common::ObIAllocator &allocator,
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+
+  if (OB_FAIL(do_init_(allocator, rowkey_info.get_size()))) {
+    LOG_ERROR("init ObLogRowkeyInfo failed", KR(ret), K(rowkey_info), K(table_schema));
+  }
+
+  return ret;
+}
+
+int ObLogRowkeyInfo::init(
+    common::ObIAllocator &allocator,
+    const datadict::ObDictTableMeta &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObRowkeyInfo rowkey_info;
+
+  if (OB_FAIL(table_schema.get_rowkey_info(rowkey_info))) {
+    LOG_ERROR("get_rowkey_info from ObDictTableMeta failed", KR(ret), K(table_schema));
+  } else if (OB_FAIL(do_init_(allocator, rowkey_info.get_size()))) {
+    LOG_ERROR("init ObLogRowkeyInfo failed", KR(ret), K(rowkey_info), K(table_schema));
+  }
+
+  return ret;
+}
+
+int ObLogRowkeyInfo::do_init_(
+    common::ObIAllocator &allocator,
     const int64_t size)
 {
   int ret = OB_SUCCESS;
@@ -310,7 +346,7 @@ int ObLogRowkeyInfo::init(common::ObIAllocator &allocator,
 void ObLogRowkeyInfo::destroy()
 {
   if (OB_NOT_NULL(column_stored_idx_array_)) {
-    LOG_ERROR("column_id_array_ should be null", K(column_stored_idx_array_));
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "column_id_array_ should be null", K(column_stored_idx_array_));
     column_stored_idx_array_ = NULL;
   }
   size_ = 0;
@@ -404,7 +440,8 @@ TableSchemaInfo::~TableSchemaInfo()
   destroy();
 }
 
-int TableSchemaInfo::init(const share::schema::ObTableSchema *table_schema)
+template<class TABLE_SCHEMA>
+int TableSchemaInfo::init(const TABLE_SCHEMA *table_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -462,6 +499,8 @@ int TableSchemaInfo::init(const share::schema::ObTableSchema *table_schema)
 
   return ret;
 }
+template int TableSchemaInfo::init(const share::schema::ObTableSchema *table_schema);
+template int TableSchemaInfo::init(const datadict::ObDictTableMeta *table_schema);
 
 void TableSchemaInfo::destroy()
 {
@@ -479,23 +518,16 @@ void TableSchemaInfo::destroy()
   destroy_column_schema_array_();
 }
 
-int TableSchemaInfo::init_rowkey_info_(const share::schema::ObTableSchema *table_schema)
+template<class TABLE_SCHEMA>
+int TableSchemaInfo::init_rowkey_info_(const TABLE_SCHEMA *table_schema)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(table_schema));
-  } else {
-    const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
-    ObArray<uint64_t> column_ids;
-
-    if (OB_FAIL(rowkey_info.get_column_ids(column_ids))) {
-      LOG_ERROR("rowkey info get_column_ids fail", KR(ret), K(column_ids));
-    } else if (OB_FAIL(rowkey_info_.init(allocator_, rowkey_info.get_size()))) {
-      LOG_ERROR("rowkey info init fail", KR(ret), "size", rowkey_info.get_size());
-    } else {
-    }
+  } else if (OB_FAIL(rowkey_info_.init(allocator_, *table_schema))) {
+    LOG_ERROR("rowkey info init fail", KR(ret), K(table_schema));
   }
 
   return ret;
@@ -598,9 +630,10 @@ int TableSchemaInfo::set_column_schema_info_for_column_id_(
   return ret;
 }
 
+template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
 int TableSchemaInfo::init_column_schema_info(
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObColumnSchemaV2 &column_table_schema,
+    const TABLE_SCHEMA &table_schema,
+    const COLUMN_SCHEMA &column_table_schema,
     const int16_t column_stored_idx,
     const bool is_usr_column,
     const int16_t usr_column_idx,
@@ -667,7 +700,6 @@ int TableSchemaInfo::init_column_schema_info(
         "column_id", column_table_schema.get_column_id(),
         "column_name", column_table_schema.get_column_name(),
         "rowkey_pos", column_table_schema.get_rowkey_position(),
-        "order_in_rowkey", column_table_schema.get_order_in_rowkey(),
         K(column_stored_idx), K(is_heap_table_pk_increment_column),
         K(is_usr_column), K(usr_column_idx),
         "meta_type", column_table_schema.get_meta_type(),
@@ -676,6 +708,24 @@ int TableSchemaInfo::init_column_schema_info(
 
   return ret;
 }
+
+template int TableSchemaInfo::init_column_schema_info(
+    const ObTableSchema &table_schema,
+    const ObColumnSchemaV2 &column_table_schema,
+    const int16_t column_stored_idx,
+    const bool is_usr_column,
+    const int16_t usr_column_idx,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    ObObj2strHelper &obj2str_helper);
+
+ template int TableSchemaInfo::init_column_schema_info(
+    const datadict::ObDictTableMeta &table_schema,
+    const datadict::ObDictColumnMeta &column_table_schema,
+    const int16_t column_stored_idx,
+    const bool is_usr_column,
+    const int16_t usr_column_idx,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    ObObj2strHelper &obj2str_helper);
 
 int TableSchemaInfo::get_column_schema_info_of_column_id(
     const uint64_t column_id,

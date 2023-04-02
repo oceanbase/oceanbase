@@ -37,7 +37,7 @@ public:
 
   int next(ObTabletReplicaChecksumItem &item);
 
-  void set_snapshot_version(const int64_t snapshot_version) { snapshot_version_ = snapshot_version; }
+  void set_compaction_scn(const SCN &compaction_scn) { compaction_scn_ = compaction_scn; }
 
 protected:
   int fetch_next_batch();
@@ -47,7 +47,7 @@ private:
 
   bool is_inited_;
   uint64_t tenant_id_;
-  int64_t snapshot_version_;
+  SCN compaction_scn_;
   common::ObSEArray<ObTabletReplicaChecksumItem, BATCH_FETCH_COUNT> checksum_items_;
   int64_t cur_idx_;
   common::ObISQLClient *sql_proxy_;

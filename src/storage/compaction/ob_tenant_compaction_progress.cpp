@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sstable_struct.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -290,7 +291,9 @@ int ObTenantCompactionProgressMgr::update_progress(
     if (OB_FAIL(get_pos_(major_snapshot_version, pos))) {
       LOG_WARN("pos is invalid", K(ret), K(pos), K(major_snapshot_version), K(status));
     } else if (share::ObIDag::DAG_STATUS_FINISH != array_[pos].status_) {
-      array_[pos].status_ = status;
+      if (share::ObIDag::DAG_STATUS_FINISH != status) {
+        array_[pos].status_ = status;
+      }
       if (share::ObIDag::DAG_STATUS_FINISH == status && OB_FAIL(finish_progress_(array_[pos]))) {
         LOG_WARN("failed to finish progress", K(ret), K(pos), K(major_snapshot_version), K(status));
       } else {

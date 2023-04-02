@@ -18,6 +18,7 @@
 #include "share/object/ob_obj_cast.h"
 #include "lib/oblog/ob_log.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -311,7 +312,7 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
 {
   //If you feel tough to understand this func,
   //please feel free to refer here for more details :
-  //https://gw.alicdn.com/tfscom/TB1XAvqMpXXXXaVXpXXXXXXXXXX.jpg
+  //
   int ret = OB_SUCCESS;
   like_ctx.instr_info_.reuse();
   const ObCharsetInfo *cs = NULL;
@@ -558,15 +559,21 @@ int ObExprLike::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child is null", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]),
                               K(rt_expr.args_[2]));
+  } else if (OB_UNLIKELY(!((ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
+                            || ObLongTextType == rt_expr.args_[0]->datum_meta_.type_
+                            || ObNullType == rt_expr.args_[0]->datum_meta_.type_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[0]->datum_meta_));
+  } else if (OB_UNLIKELY(!(ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)
+                           || ObLongTextType == rt_expr.args_[1]->datum_meta_.type_
+                           || ObNullType == rt_expr.args_[1]->datum_meta_.type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[1]->datum_meta_));
+  } else if (OB_UNLIKELY(!(ObVarcharType == rt_expr.args_[2]->datum_meta_.type_
+              || ObNullType == rt_expr.args_[2]->datum_meta_.type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param type", K(ret), K(rt_expr.args_[2]->datum_meta_));
   } else {
-    OB_ASSERT(ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
-              || ObLongTextType == rt_expr.args_[0]->datum_meta_.type_
-              || ObNullType == rt_expr.args_[0]->datum_meta_.type_);
-    OB_ASSERT(ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)
-              || ObLongTextType == rt_expr.args_[1]->datum_meta_.type_
-              || ObNullType == rt_expr.args_[1]->datum_meta_.type_);
-    OB_ASSERT(ObVarcharType == rt_expr.args_[2]->datum_meta_.type_
-              || ObNullType == rt_expr.args_[2]->datum_meta_.type_);
     //Do optimization even if pattern_expr/escape is pushdown parameter, pattern and escape are 
     //checked whether the same as last time which is recorded in like_ctx for each row in execution.
     bool pattern_literal = pattern_expr->is_const_expr();
@@ -646,23 +653,15 @@ bool ObExprLike::checked_already(const ObExprLikeContext &like_ctx, bool null_pa
   return res;
 }
 
-
-int ObExprLike::like_varchar(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_datum)
+int ObExprLike::like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_datum,
+                                    ObDatum &text, ObDatum &pattern, ObDatum &escape)
 {
   int ret = OB_SUCCESS;
   const bool do_optimization = expr.extra_;
-  if (OB_FAIL(expr.eval_param_value(ctx))) {
-    LOG_WARN("eval param value failed", K(ret));
-  }
-  ObDatum &text = expr.locate_param_datum(ctx, 0);
-  ObDatum &pattern = expr.locate_param_datum(ctx, 1);
-  ObDatum &escape = expr.locate_param_datum(ctx, 2);
   uint64_t like_id = static_cast<uint64_t>(expr.expr_ctx_id_);
   const ObCollationType escape_coll = expr.args_[2]->datum_meta_.cs_type_;
   const ObCollationType coll_type = expr.args_[1]->datum_meta_.cs_type_;
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(check_pattern_valid<true>(pattern, escape, escape_coll, coll_type,
+  if (OB_FAIL(check_pattern_valid<true>(pattern, escape, escape_coll, coll_type,
                                         &ctx.exec_ctx_, like_id, do_optimization))) {
       LOG_WARN("fail to check pattern string", K(pattern), K(escape), K(coll_type));
   } else if (text.is_null() || pattern.is_null()) {
@@ -722,6 +721,52 @@ int ObExprLike::like_varchar(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_
   return ret;
 }
 
+int ObExprLike::like_varchar(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.eval_param_value(ctx))) {
+    LOG_WARN("eval param value failed", K(ret));
+  }
+  ObDatum &text = expr.locate_param_datum(ctx, 0);
+  ObDatum &pattern = expr.locate_param_datum(ctx, 1);
+  ObDatum &escape = expr.locate_param_datum(ctx, 2);
+  // the third arg escape must be varchar
+  if (OB_FAIL(ret)) {
+  } else if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)
+             && !ob_is_text_tc(expr.args_[1]->datum_meta_.type_)) {
+    ret = like_varchar_inner(expr, ctx, expr_datum, text, pattern, escape);
+  } else { // text tc
+    ObString text_val = text.get_string();
+    ObString pattern_val = pattern.get_string();
+    ObString escape_str = escape.get_string();
+    // Notice: should not change original datums
+    // ToDo: @gehao Streaming like interfaces
+    ObDatum text_inrow = text; // copy datum flags;
+    ObDatum pattern_inrow = pattern;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, text,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), text_val))) {
+      LOG_WARN("failed to read text", K(ret), K(text_val));
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, pattern,
+                       expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), pattern_val))) {
+      LOG_WARN("failed to read pattern", K(ret), K(pattern_val));
+    } else {
+      if (!text_inrow.is_null() && !text_inrow.is_nop()) {
+        text_inrow.set_string(text_val);
+      }
+      if (!pattern_inrow.is_null() && !pattern_inrow.is_nop()) {
+        pattern_inrow.set_string(pattern_val);
+      }
+      ret = like_varchar_inner(expr, ctx, expr_datum, text_inrow, pattern_inrow, escape);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to eval like varchar", K(ret));
+  }
+  return ret;
+}
+
 
 template <bool percent_sign_start, bool percent_sign_end>
 int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo instr_info)
@@ -752,7 +797,7 @@ int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo 
     text_len -= new_text != NULL ? new_text - text_ptr + instr_len[idx] : 0;
     if (OB_UNLIKELY(text_len < 0)) {
       match = false;
-      LOG_ERROR("unexpected result of memmem", K(text),
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected result of memmem", K(text),
                 K(ObString(instr_len[idx], instr_pos[idx])));
     } else {
       match = new_text != NULL;
@@ -804,6 +849,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
   ObDatum *res_datums = expr.locate_batch_datums(ctx);
   ObDatum *text_datums = expr.args_[0]->locate_batch_datums(ctx);
   const int64_t step_size = sizeof(uint16_t) * CHAR_BIT;
+  const ObObjType text_type = expr.args_[0]->datum_meta_.type_;
   // calc match result for each text
   for (int64_t i = 0; i < size && OB_SUCC(ret);) {
     const int64_t bit_vec_off = i / (CHAR_BIT * sizeof(uint16_t));
@@ -813,14 +859,35 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
       for (int64_t j = 0; OB_SUCC(ret) && j < step_size; i++, j++) {
         if (NullCheck && text_datums[i].is_null()) {
           res_datums[i].set_null();
-        } else if (UseInstrMode) {
-          int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
-                : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                (text_datums[i].get_string(), instr_info);
-          res_datums[i].set_int(res);
-        } else {
-          res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
-                                                        pattern_val, escape_wc));
+        } else if (!ob_is_text_tc(text_type)) {
+          if (UseInstrMode) {
+            int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
+                    : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
+                    (text_datums[i].get_string(), instr_info);
+            res_datums[i].set_int(res);
+          } else {
+            res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
+                                                          pattern_val, escape_wc));
+          }
+        } else { // text tc
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+          common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+          ObString text_val = text_datums[i].get_string();
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator,
+                                                                text_datums[i],
+                                                                expr.args_[0]->datum_meta_,
+                                                                expr.args_[0]->obj_meta_.has_lob_header(),
+                                                                text_val))) {
+            LOG_WARN("failed to read text", K(ret), K(text_val));
+          } else if (UseInstrMode) {
+            int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
+                  : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
+                  (text_val, instr_info);
+            res_datums[i].set_int(res);
+          } else {
+            res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
+                                                          pattern_val, escape_wc));
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -834,14 +901,37 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
         if (!(skip.at(i) || eval_flags.at(i))) {
           if (NullCheck && text_datums[i].is_null()) {
             res_datums[i].set_null();
-          } else if (UseInstrMode) {
+          } else if (!ob_is_text_tc(text_type)) {
+            if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                 : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
                 (text_datums[i].get_string(), instr_info);
-          res_datums[i].set_int(res);
-          } else {
-            res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
-                                                          pattern_val, escape_wc));
+              res_datums[i].set_int(res);
+            } else {
+              res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
+                                                            pattern_val, escape_wc));
+            }
+          } else { // text tc
+            ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+            common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+            ObString text_val = text_datums[i].get_string();
+            if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator,
+                                                                  text_datums[i],
+                                                                  expr.args_[0]->datum_meta_,
+                                                                  expr.args_[0]->obj_meta_.has_lob_header(),
+                                                                  text_val))) {
+              LOG_WARN("failed to read text", K(ret), K(text_val));
+            } else {
+              if (UseInstrMode) {
+                int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
+                    : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
+                    (text_val, instr_info);
+                res_datums[i].set_int(res);
+              } else {
+                res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
+                                                              pattern_val, escape_wc));
+              }
+            }
           }
           eval_flags.set(i);
         }
@@ -851,26 +941,18 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
   return ret;
 }
 
-// only text is vectorized, check pattern validation and mode first, then try to match each text.
-int ObExprLike::eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DECL)
+int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
+                                           const ObBitVector &skip, const int64_t size,
+                                           ObExpr &text, ObDatum *pattern_datum, ObDatum *escape_datum)
 {
   int ret = OB_SUCCESS;
-  ObExpr &text = *expr.args_[0];
-  ObExpr &pattern = *expr.args_[1];
-  ObExpr &escape = *expr.args_[2];
-  ObDatum *pattern_datum = NULL;
-  ObDatum *escape_datum = NULL;
   const bool do_optimization = true;
   uint64_t like_id = static_cast<uint64_t>(expr.expr_ctx_id_);
   const ObCollationType coll_type = expr.args_[0]->datum_meta_.cs_type_;
   const ObCollationType escape_coll = expr.args_[2]->datum_meta_.cs_type_;
-  if (OB_FAIL(pattern.eval(ctx, pattern_datum))) {
-    LOG_WARN("eval pattern failed", K(ret));
-  } else if (OB_FAIL(escape.eval(ctx, escape_datum))) {
-    LOG_WARN("eval escape failed", K(ret));
-  } else if (OB_FAIL(check_pattern_valid<true>(*pattern_datum, *escape_datum,
-                                          escape_coll, coll_type,
-                                          &ctx.exec_ctx_, like_id, do_optimization))) {
+  if (OB_FAIL(check_pattern_valid<true>(*pattern_datum, *escape_datum,
+                                        escape_coll, coll_type,
+                                        &ctx.exec_ctx_, like_id, do_optimization))) {
     LOG_WARN("check pattern valid failed", K(ret));
   } else if (OB_FAIL(text.eval_batch(ctx, skip, size))) {
     LOG_WARN("eval text batch failed", K(ret));
@@ -968,6 +1050,45 @@ int ObExprLike::eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DE
       #undef CALL_MATCH_TEXT_BATCH
     }
   }
+  return ret;
+}
+
+// only text is vectorized, check pattern validation and mode first, then try to match each text.
+int ObExprLike::eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ObExpr &text = *expr.args_[0];
+  ObExpr &pattern = *expr.args_[1];
+  ObExpr &escape = *expr.args_[2];
+  ObDatum *pattern_datum = NULL;
+  ObDatum *escape_datum = NULL;
+  if (OB_FAIL(pattern.eval(ctx, pattern_datum))) {
+    LOG_WARN("eval pattern failed", K(ret));
+  } else if (OB_FAIL(escape.eval(ctx, escape_datum))) {
+    LOG_WARN("eval escape failed", K(ret));
+  // the third arg escape must be varchar
+  } else if ((!ob_is_text_tc(text.datum_meta_.type_) && !ob_is_text_tc(pattern.datum_meta_.type_))) {
+    ret = like_text_vectorized_inner(expr, ctx, skip, size, text, pattern_datum, escape_datum);
+  } else {
+    ObDatum pattern_inrow;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    ObString pattern_val = pattern_datum->get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *pattern_datum,
+                expr.args_[1]->datum_meta_, expr.args_[1]->obj_meta_.has_lob_header(), pattern_val))) {
+      LOG_WARN("failed to read pattern", K(ret), K(pattern_val));
+    } else {
+      pattern_inrow = *pattern_datum;
+      if (!pattern_inrow.is_null() && !pattern_inrow.is_nop()) {
+        pattern_inrow.set_string(pattern_val);
+      }
+      ret = like_text_vectorized_inner(expr, ctx, skip, size, text, &pattern_inrow, escape_datum);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to eval_like_expr_batch_only_text_vectorized", K(ret));
+  }
+
   return ret;
 }
 

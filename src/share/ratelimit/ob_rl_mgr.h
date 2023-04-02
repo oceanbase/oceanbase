@@ -34,7 +34,7 @@ public:
     REGION_BW_MARGIN = 2 * 1000 * 1000, // 2MB
   };
   ObRatelimitMgr();
-  ~ObRatelimitMgr();
+  virtual ~ObRatelimitMgr();
   int init(common::ObAddr& self_addr, observer::ObSrvNetworkFrame *net_frame_, observer::ObGlobalContext *gctx);
   void destroy();
   int start();
@@ -63,7 +63,7 @@ private:
   int64_t pending_rpc_count_;
   SingleWaitCond swc_;
   int64_t stat_period_;
-  int self_server_idx_;
+  int64_t self_server_idx_;
   common::ObAddr   self_addr_;
   common::ObRegion self_region_;
   ObServerSEArray local_server_list_;

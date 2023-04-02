@@ -146,16 +146,16 @@ floor(-161)
 -161
 select ceil(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ceil(null)	5	23	0	Y	32768	0	63
+def					ceil(null)	5	17	0	Y	32768	0	63
 ceil(null)
 NULL
 select floor(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(null)	5	23	0	Y	32768	0	63
+def					floor(null)	5	17	0	Y	32768	0	63
 floor(null)
 NULL
 select floor(1+null*5);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					floor(1+null*5)	5	23	0	Y	32768	0	63
+def					floor(1+null*5)	5	17	0	Y	32768	0	63
 floor(1+null*5)
 NULL

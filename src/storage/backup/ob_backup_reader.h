@@ -26,6 +26,8 @@
 #include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ob_i_table.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
 namespace backup {
@@ -118,7 +120,7 @@ public:
   }
 
 private:
-  typedef common::hash::ObCuckooHashMap<common::ObLogicMacroBlockId, blocksstable::MacroBlockId> MacroBlockIdMap;
+  typedef common::hash::ObCuckooHashMap<blocksstable::ObLogicMacroBlockId, blocksstable::MacroBlockId> MacroBlockIdMap;
   typedef MacroBlockIdMap::const_iterator MacroBlockIDIterator;
   static const int64_t MACRO_BLOCK_BATCH_SIZE = 128;
 
@@ -140,17 +142,17 @@ class ObIMacroBlockBackupReader {
 public:
   ObIMacroBlockBackupReader();
   virtual ~ObIMacroBlockBackupReader();
-  virtual int init(const common::ObLogicMacroBlockId &logic_id, const blocksstable::MacroBlockId &macro_id) = 0;
+  virtual int init(const ObBackupMacroBlockId &macro_id) = 0;
   virtual int get_macro_block_data(
-      blocksstable::ObBufferReader &buffer_reader, common::ObLogicMacroBlockId &logic_id) = 0;
+      blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id) = 0;
   virtual void reset() = 0;
   virtual ObMacroBlockReaderType get_type() const = 0;
   TO_STRING_KV(K_(logic_id));
 
 protected:
   bool is_inited_;
-  common::ObLogicMacroBlockId logic_id_;
-  blocksstable::MacroBlockId macro_block_id_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
+  blocksstable::ObBlockInfo block_info_;
   DISALLOW_COPY_AND_ASSIGN(ObIMacroBlockBackupReader);
 };
 
@@ -158,19 +160,19 @@ class ObMacroBlockBackupReader : public ObIMacroBlockBackupReader {
 public:
   ObMacroBlockBackupReader();
   virtual ~ObMacroBlockBackupReader();
-  int init(const common::ObLogicMacroBlockId &logic_id, const blocksstable::MacroBlockId &macro_block_id);
+  int init(const ObBackupMacroBlockId &macro_id);
   virtual int get_macro_block_data(
-      blocksstable::ObBufferReader &buffer_reader, common::ObLogicMacroBlockId &logic_id) override;
+      blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id) override;
   virtual void reset() override;
   virtual ObMacroBlockReaderType get_type() const override
   {
     return LOCAL_MACRO_BLOCK_READER;
   }
-  TO_STRING_KV(K_(logic_id), K_(macro_block_id));
+  TO_STRING_KV(K_(logic_id), K_(block_info));
 
 private:
   int process_();
-  int get_macro_read_info_(const common::ObLogicMacroBlockId &logic_id, blocksstable::ObMacroBlockReadInfo &read_info);
+  int get_macro_read_info_(const blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::ObMacroBlockReadInfo &read_info);
   int get_macro_block_size_(const blocksstable::ObBufferReader &buffer, int64_t &size);
 
 private:
@@ -186,15 +188,15 @@ public:
   ObMultiMacroBlockBackupReader();
   virtual ~ObMultiMacroBlockBackupReader();
   int init(const ObMacroBlockReaderType &reader_type, const common::ObIArray<ObBackupMacroBlockId> &list);
-  int get_next_macro_block(blocksstable::ObBufferReader &data, common::ObLogicMacroBlockId &logic_id);
+  int get_next_macro_block(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id);
   void reset();
 
 private:
   int alloc_macro_block_reader_(const ObMacroBlockReaderType &reader_type, ObIMacroBlockBackupReader *&reader);
   int prepare_macro_block_reader_(const int64_t idx);
   void reset_prev_macro_block_reader_(const int64_t idx);
-  int fetch_macro_block_with_retry_(blocksstable::ObBufferReader &data, common::ObLogicMacroBlockId &logic_id);
-  int fetch_macro_block_(blocksstable::ObBufferReader &data, common::ObLogicMacroBlockId &logic_id);
+  int fetch_macro_block_with_retry_(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id);
+  int fetch_macro_block_(blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id);
 
 private:
   static const int64_t FETCH_MACRO_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;  // 1s

@@ -396,7 +396,7 @@ int ObAllVirtualSysStat::get_cache_size_(const int64_t tenant_id, ObStatEventSet
 {
   int ret = OB_SUCCESS;
   ObArray<ObKVCacheInstHandle> inst_handles;
-  if (OB_FAIL(ObKVGlobalCache::get_instance().get_tenant_cache_info(tenant_id, inst_handles))) {
+  if (OB_FAIL(ObKVGlobalCache::get_instance().get_cache_inst_info(tenant_id, inst_handles))) {
     SERVER_LOG(WARN, "Fail to get tenant cache infos, ", K(ret));
   } else {
     ObKVCacheInst * inst = NULL;

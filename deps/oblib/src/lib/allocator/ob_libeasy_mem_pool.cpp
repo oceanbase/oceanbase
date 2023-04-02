@@ -41,7 +41,7 @@ void *common::ob_easy_realloc(void *ptr, size_t size)
       ret = ob_realloc(ptr, size, attr);
     }
     if (ret == NULL) {
-      _OB_LOG(WARN, "ob_tc_realloc failed, ptr:%p, size:%lu", ptr, size);
+      _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ob_tc_realloc failed, ptr:%p, size:%lu", ptr, size);
     }
   } else if (ptr) {
     ob_free(ptr);

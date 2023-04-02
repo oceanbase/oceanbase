@@ -29,6 +29,27 @@ const int64_t MAX_TX_CTX_TABLE_VALUE_LENGTH = OB_MAX_USER_ROW_LENGTH -
   MAX_TX_CTX_TABLE_ID_LENGTH - MAX_TX_CTX_TABLE_META_LENGTH;
 static_assert(MAX_TX_CTX_TABLE_VALUE_LENGTH > 0, "MAX_TX_CTX_TABLE_VALUE_LENGTH is not enough");
 
+
+struct TxDataDefaultAllocator : public ObIAllocator {
+  void *alloc(const int64_t size) override {
+    common::ObMemAttr attr;
+    attr.tenant_id_ = MTL_ID();
+    attr.label_ = "TxData";
+    if (size <= 0) {
+      abort();
+    }
+    return ob_malloc(size, attr);
+  }
+  void* alloc(const int64_t size, const ObMemAttr &attr) override { return ob_malloc(size, attr); }
+  void free(void *ptr) override { ob_free(ptr); }
+  static TxDataDefaultAllocator &get_default_allocator() {
+    static TxDataDefaultAllocator default_allocator;
+    return default_allocator;
+  }
+};
+
+#define DEFAULT_TX_DATA_ALLOCATOR TxDataDefaultAllocator::get_default_allocator()
+
 struct ObTxCtxTableCommonHeader
 {
 public:
@@ -54,12 +75,12 @@ private:
   const static int64_t MAGIC_VERSION = MAGIC_NUM + UNIS_VERSION;
 public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos, ObTxDataTable &tx_data_table);
   int64_t get_serialize_size() const;
 
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize_(const char *buf, const int64_t buf_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize_(const char *buf, const int64_t buf_len, int64_t &pos, ObTxDataTable &tx_data_table);
   int64_t get_serialize_size_() const;
 
 public:
@@ -71,16 +92,16 @@ public:
     tx_id_.reset();
     ls_id_.reset();
     cluster_id_ = OB_INVALID_CLUSTER_ID;
-    state_info_.reset();
+    tx_data_guard_.reset();
     exec_info_.reset();
     table_lock_info_.reset();
   }
   void destroy() { reset(); }
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(state_info), K_(exec_info));
+  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard), K_(exec_info));
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t cluster_id_;
-  ObTxData state_info_;
+  ObTxDataGuard tx_data_guard_;
   transaction::ObTxExecInfo exec_info_;
   transaction::tablelock::ObTableLockInfo table_lock_info_;
 };
@@ -197,18 +218,18 @@ private:
 
 public:
   struct Node {
-    int64_t start_log_ts_;
-    int64_t commit_version_;
+    share::SCN start_scn_;
+    share::SCN commit_version_;
 
-    Node() : start_log_ts_(0), commit_version_(0) {}
+    Node() : start_scn_(), commit_version_() {}
 
-    Node(int64_t start_log_ts, int64_t commit_version)
-      : start_log_ts_(start_log_ts), commit_version_(commit_version) {}
+    Node(const share::SCN start_scn, const share::SCN commit_version)
+      : start_scn_(start_scn), commit_version_(commit_version) {}
 
     bool operator==(const Node &rhs) const 
     {
       bool is_equal = true;
-      if (this->start_log_ts_ != rhs.start_log_ts_
+      if (this->start_scn_ != rhs.start_scn_
           || this->commit_version_ != rhs.commit_version_) {
         is_equal = false;
       }
@@ -243,9 +264,9 @@ public:
       if (i % 3 == 0) {
         fprintf(stderr, "\n        ");
       }
-      fprintf(stderr, "(start_log_ts=%-20ld, commit_version=%-20ld) ",
-              commit_versions.array_.at(i).start_log_ts_,
-              commit_versions.array_.at(i).commit_version_);
+      fprintf(stderr, "(start_scn=%-20s, commit_version=%-20s) ",
+              to_cstring(commit_versions.array_.at(i).start_scn_),
+              to_cstring(commit_versions.array_.at(i).commit_version_));
     }
     fprintf(stderr, "\npre-process data end.\n");
   }
@@ -261,15 +282,19 @@ public:
   ObSEArray<Node, 128> array_;
 };
 
-class CalcUpperTransVersionCache
+class CalcUpperTransSCNCache
 {
 public:
-  CalcUpperTransVersionCache() : is_inited_(false), cache_version_(0), commit_versions_() {}
+  CalcUpperTransSCNCache()
+      : is_inited_(false),
+        cache_version_(),
+        lock_(common::ObLatchIds::TX_TABLE_LOCK),
+        commit_versions_() {}
 
   void reset()
   {
     is_inited_ = false;
-    cache_version_ = 0;
+    cache_version_.reset();
     commit_versions_.reset();
   }
 
@@ -278,8 +303,8 @@ public:
 public:
   bool is_inited_;
 
-  // The end_log_ts of the sstable will be used as the cache_version
-  int64_t cache_version_;
+  // The end_scn of the sstable will be used as the cache_version
+  share::SCN cache_version_;
   
   mutable common::TCRWLock lock_;
 

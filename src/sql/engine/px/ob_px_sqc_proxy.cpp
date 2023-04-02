@@ -25,6 +25,59 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
+#define BREAK_TASK_CNT(a) ((a) + 1)
+
+int ObBloomFilterSendCtx::generate_filter_indexes(
+    int64_t each_group_size,
+    int64_t channel_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(filter_data_) || channel_count <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("filter data is null", K(ret));
+  } else {
+    int64_t send_size = GCONF._send_bloom_filter_size * 125;
+    int64_t filter_len = filter_data_->filter_.get_bits_array_length();
+    int64_t count = ceil(filter_len / (double)send_size);
+    int64_t start_idx = 0, end_idx = 0;
+    int64_t group_channel_count = each_group_size > channel_count ?
+        channel_count : each_group_size;
+    BloomFilterIndex filter_index;
+    for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
+      start_idx = i * send_size;
+      end_idx = (i + 1) * send_size;
+      if (start_idx >= filter_len) {
+        start_idx = filter_len - 1;
+      }
+      if (end_idx >= filter_len) {
+        end_idx = filter_len - 1;
+      }
+      filter_index.begin_idx_ = start_idx;
+      filter_index.end_idx_ = end_idx;
+      int64_t group_count = ceil((double)channel_count / group_channel_count);
+      int64_t start_channel = ObRandom::rand(0, group_count - 1);
+      start_channel *= group_channel_count;
+      int pos = 0;
+      for (int j = start_channel; OB_SUCC(ret) &&
+          j < start_channel + channel_count;
+          j += group_channel_count) {
+        pos = (j >= channel_count ? j - channel_count : j);
+        pos = (pos / group_channel_count) * group_channel_count;
+        filter_index.channel_ids_.reset();
+        if (pos + group_channel_count > channel_count) {
+          filter_index.channel_id_ = (i % (channel_count - pos)) + pos;
+        } else {
+          filter_index.channel_id_ = (i % group_channel_count) + pos;
+        }
+        for (int k = pos; OB_SUCC(ret) && k < channel_count && k < pos + group_channel_count; ++k) {
+          OZ(filter_index.channel_ids_.push_back(k));
+        }
+        OZ(filter_indexes_.push_back(filter_index));
+      }
+    }
+  }
+  return ret;
+}
 
 ObPxSQCProxy::ObPxSQCProxy(ObSqcCtx &sqc_ctx,
                            ObPxRpcInitSqcArgs &arg)
@@ -32,15 +85,9 @@ ObPxSQCProxy::ObPxSQCProxy(ObSqcCtx &sqc_ctx,
     sqc_arg_(arg),
     leader_token_lock_(common::ObLatchIds::PX_WORKER_LEADER_LOCK),
     first_buffer_cache_(nullptr),
-    bloom_filter_ready_(false),
-    bloom_filter_channels_(),
-    bf_ch_set_(),
-    filter_data_(NULL),
-    filter_indexes_(),
-    per_channel_bf_count_(0),
-    filter_channel_idx_(0),
-    bf_compressor_type_(common::ObCompressorType::NONE_COMPRESSOR),
-    sample_msg_()
+    bf_send_ctx_array_(),
+    sample_msg_(),
+    init_channel_msg_()
 {
 }
 
@@ -60,6 +107,18 @@ int ObPxSQCProxy::init()
   return ret;
 }
 
+int ObPxSQCProxy::append_bf_send_ctx(int64_t &bf_send_ctx_idx)
+{
+  int ret = OB_SUCCESS;
+  bf_send_ctx_idx = -1;
+  if (OB_FAIL(bf_send_ctx_array_.push_back(ObBloomFilterSendCtx()))) {
+    LOG_WARN("failed to pre alloc ObBloomFilterSendCtx", K(ret));
+  } else {
+    bf_send_ctx_idx = bf_send_ctx_array_.count() - 1;
+  }
+  return ret;
+}
+
 int ObPxSQCProxy::link_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg)
 {
   int ret = OB_SUCCESS;
@@ -75,15 +134,18 @@ int ObPxSQCProxy::link_sqc_qc_channel(ObPxRpcInitSqcArgs &sqc_arg)
     const ObDtlBasicChannel *basic_channel = static_cast<ObDtlBasicChannel*>(sqc.get_sqc_channel());
     sqc_ctx_.msg_loop_.set_tenant_id(basic_channel->get_tenant_id());
     sqc_ctx_.msg_loop_.set_process_query_time(get_process_query_time());
+    sqc_ctx_.msg_loop_.set_query_timeout_ts(get_query_timeout_ts());
     LOG_TRACE("register sqc-qc channel", K(sqc));
   }
   return ret;
 }
 
-int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx) const
+int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sqc_ctx.receive_data_ch_provider_.init())) {
+  if (OB_FAIL(msg_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+    LOG_WARN("fail init cond", K(ret));
+  } else if (OB_FAIL(sqc_ctx.receive_data_ch_provider_.init())) {
     LOG_WARN("fail init receive ch provider", K(ret));
   } else if (OB_FAIL(sqc_ctx.transmit_data_ch_provider_.init())) {
     LOG_WARN("fail init transmit ch provider", K(ret));
@@ -99,6 +161,9 @@ int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx) const
         .register_processor(sqc_ctx.sample_whole_msg_proc_)
         .register_processor(sqc_ctx.rollup_key_whole_msg_proc_)
         .register_processor(sqc_ctx.rd_wf_whole_msg_proc_)
+        .register_processor(sqc_ctx.init_channel_whole_msg_proc_)
+        .register_processor(sqc_ctx.reporting_wf_piece_msg_proc_)
+        .register_processor(sqc_ctx.opt_stats_gather_whole_msg_proc_)
         .register_interrupt_processor(sqc_ctx.interrupt_proc_);
   }
   return ret;
@@ -109,14 +174,7 @@ void ObPxSQCProxy::destroy()
   int ret_unreg = OB_SUCCESS;
   if (OB_SUCCESS != (ret_unreg = sqc_ctx_.msg_loop_.unregister_all_channel())) {
     // the following unlink actions is not safe is any unregister failure happened
-    LOG_ERROR("fail unregister all channel from msg_loop", KR(ret_unreg));
-  }
-  if (bf_ch_set_.count() > 0) {
-    if (OB_SUCCESS != (ret_unreg = ObPxChannelUtil::unlink_ch_set(bf_ch_set_,
-          nullptr, false))) {
-      LOG_TRACE("fail to unlink bloom filter channel", K(ret_unreg));
-    }
-    bf_ch_set_.reset();
+    LOG_ERROR_RET(ret_unreg, "fail unregister all channel from msg_loop", KR(ret_unreg));
   }
   sample_msg_.reset();
 }
@@ -184,35 +242,37 @@ int ObPxSQCProxy::get_transmit_data_ch(
 {
   int ret = OB_SUCCESS;
   bool need_process_dtl = need_transmit_channel_map_via_dtl();
-  ObSqcLeaderTokenGuard guard(leader_token_lock_);
-  if (guard.hold_token()) {
-    do {
-      if (need_process_dtl) {
-        ret = process_dtl_msg(timeout_ts);
-      }
+  do {
+    ObSqcLeaderTokenGuard guard(leader_token_lock_, msg_ready_cond_);
+    if (guard.hold_token()) {
+      do {
+        if (need_process_dtl) {
+          ret = process_dtl_msg(timeout_ts);
+        }
 
-      // 当收完所有消息后，再关注做自己的任务
-      // 看看自己期望的 transmit channel map 是否已经收到
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sqc_ctx_.transmit_data_ch_provider_.get_data_ch_nonblock(
-                    sqc_id, task_id, timeout_ts, task_ch_set, ch_info,
-                    sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
-          if (OB_EAGAIN == ret) {
-            // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
-            if (!need_process_dtl) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("expect peek data channel succ", K(ret));
+        // 当收完所有消息后，再关注做自己的任务
+        // 看看自己期望的 transmit channel map 是否已经收到
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sqc_ctx_.transmit_data_ch_provider_.get_data_ch_nonblock(
+                      sqc_id, task_id, timeout_ts, task_ch_set, ch_info,
+                      sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
+            if (OB_EAGAIN == ret) {
+              // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
+              if (!need_process_dtl) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expect peek data channel succ", K(ret));
+              }
+            } else {
+              LOG_WARN("fail peek data channel from ch_provider", K(ret));
             }
-          } else {
-            LOG_WARN("fail peek data channel from ch_provider", K(ret));
           }
         }
-      }
-    } while (OB_EAGAIN == ret);
-  } else {
-    // follower
-    ret = sqc_ctx_.transmit_data_ch_provider_.get_data_ch(sqc_id, task_id, timeout_ts, task_ch_set, ch_info);
-  }
+      } while (OB_EAGAIN == ret);
+    } else {
+      // follower
+      ret = sqc_ctx_.transmit_data_ch_provider_.get_data_ch(sqc_id, task_id, timeout_ts, task_ch_set, ch_info);
+    }
+  } while (OB_EAGAIN == ret);
   return ret;
 }
 
@@ -227,42 +287,41 @@ int ObPxSQCProxy::get_receive_data_ch(int64_t child_dfo_id,
   bool need_process_dtl = need_receive_channel_map_via_dtl(child_dfo_id);
 
   LOG_TRACE("get_receive_data_ch", K(need_process_dtl), K(child_dfo_id));
+  do {
+    ObSqcLeaderTokenGuard guard(leader_token_lock_, msg_ready_cond_);
+    if (guard.hold_token()) {
+      do {
+        if (need_process_dtl) {
+          ret = process_dtl_msg(timeout_ts);
+        }
 
-  ObSqcLeaderTokenGuard guard(leader_token_lock_);
-  if (guard.hold_token()) {
-    do {
-      if (need_process_dtl) {
-        ret = process_dtl_msg(timeout_ts);
-      }
-
-      LOG_TRACE("process dtl msg done", K(ret));
-      // 当收完所有消息后，再关注做自己的任务
-      // 看看自己期望的 receive channel map 是否已经收到
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sqc_ctx_.receive_data_ch_provider_.get_data_ch_nonblock(
-                    child_dfo_id, sqc_id, task_id, timeout_ts, task_ch_set, ch_info,
-                    sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
-          if (OB_EAGAIN == ret) {
-            // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
-            if (!need_process_dtl) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("expect peek data channel succ", K(ret));
+        LOG_TRACE("process dtl msg done", K(ret));
+        // 当收完所有消息后，再关注做自己的任务
+        // 看看自己期望的 receive channel map 是否已经收到
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sqc_ctx_.receive_data_ch_provider_.get_data_ch_nonblock(
+                      child_dfo_id, sqc_id, task_id, timeout_ts, task_ch_set, ch_info,
+                      sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
+            if (OB_EAGAIN == ret) {
+              // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
+              if (!need_process_dtl) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expect peek data channel succ", K(ret));
+              }
+            } else {
+              LOG_WARN("fail peek data channel from ch_provider", K(ret));
             }
           } else {
-             LOG_WARN("fail peek data channel from ch_provider", K(ret));
+            LOG_TRACE("SUCC got nonblock receive channel", K(task_ch_set), K(child_dfo_id));
           }
-        } else {
-          LOG_TRACE("SUCC got nonblock receive channel", K(task_ch_set), K(child_dfo_id));
         }
-      }
-    } while (OB_EAGAIN == ret);
-  } else {
-    // follower
-    LOG_TRACE("ready to block wait get_data_ch", K(child_dfo_id));
-    ret = sqc_ctx_.receive_data_ch_provider_.get_data_ch(
-        child_dfo_id, sqc_id, task_id, timeout_ts, task_ch_set, ch_info);
-    LOG_TRACE("block wait get_data_ch done", K(child_dfo_id), K(ret));
-  }
+      } while (OB_EAGAIN == ret);
+    } else {
+      // follower
+      ret = sqc_ctx_.receive_data_ch_provider_.get_data_ch(
+          child_dfo_id, sqc_id, task_id, timeout_ts, task_ch_set, ch_info);
+    }
+  } while(OB_EAGAIN == ret);
   return ret;
 }
 
@@ -271,33 +330,35 @@ int ObPxSQCProxy::get_part_ch_map(ObPxPartChInfo &map, int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
   bool need_process_dtl = need_transmit_channel_map_via_dtl();
-  ObSqcLeaderTokenGuard guard(leader_token_lock_);
-  if (guard.hold_token()) {
-    do {
-      if (need_process_dtl) {
-        ret = process_dtl_msg(timeout_ts);
-      }
-      // 当收完所有消息后，再关注做自己的任务
-      // 看看自己期望的 transmit channel map 是否已经收到
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(sqc_ctx_.transmit_data_ch_provider_.get_part_ch_map_nonblock(
-                    map, timeout_ts, sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
-          if (OB_EAGAIN == ret) {
-            // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
-            if (!need_process_dtl) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("expect peek data channel succ", K(ret));
+  ObSqcLeaderTokenGuard guard(leader_token_lock_, msg_ready_cond_);
+  do {
+    if (guard.hold_token()) {
+      do {
+        if (need_process_dtl) {
+          ret = process_dtl_msg(timeout_ts);
+        }
+        // 当收完所有消息后，再关注做自己的任务
+        // 看看自己期望的 transmit channel map 是否已经收到
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sqc_ctx_.transmit_data_ch_provider_.get_part_ch_map_nonblock(
+                      map, timeout_ts, sqc_arg_.sqc_.get_qc_addr(), get_process_query_time()))) {
+            if (OB_EAGAIN == ret) {
+              // 如果 provider 里没有任何消息，同时又判定不需要通过 dtl 取数据，说明存在逻辑错误
+              if (!need_process_dtl) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expect peek data channel succ", K(ret));
+              }
+            } else {
+              LOG_WARN("fail peek data channel from ch_provider", K(ret));
             }
-          } else {
-             LOG_WARN("fail peek data channel from ch_provider", K(ret));
           }
         }
-      }
-    } while (OB_EAGAIN == ret);
-  } else {
-    // follower
-    ret = sqc_ctx_.transmit_data_ch_provider_.get_part_ch_map(map, timeout_ts);
-  }
+      } while (OB_EAGAIN == ret);
+    } else {
+      // follower
+      ret = sqc_ctx_.transmit_data_ch_provider_.get_part_ch_map(map, timeout_ts);
+    }
+  } while (OB_EAGAIN == ret);
   return ret;
 }
 
@@ -339,7 +400,7 @@ int ObPxSQCProxy::check_task_finish_status(int64_t timeout_ts)
         break;
       }
     }
-    ObSqcLeaderTokenGuard guard(leader_token_lock_);
+    ObSqcLeaderTokenGuard guard(leader_token_lock_, msg_ready_cond_);
     if (guard.hold_token()) {
       // 如果还有 task 没有完成，则尝试收取 dtl 消息
       // 要特别注意，此时可能并没有什么 DTL 消息要
@@ -508,7 +569,7 @@ int ObPxSQCProxy::get_bloom_filter_ch(
   int ret = OB_SUCCESS;
   int64_t wait_count = 0;
   do {
-    ObSqcLeaderTokenGuard guard(leader_token_lock_);
+    ObSqcLeaderTokenGuard guard(leader_token_lock_, msg_ready_cond_);
     if (guard.hold_token()) {
       ret = process_dtl_msg(timeout_ts);
       LOG_DEBUG("process dtl bf msg done", K(ret));
@@ -529,63 +590,11 @@ int ObPxSQCProxy::get_bloom_filter_ch(
   return ret;
 }
 
-int ObPxSQCProxy::get_whole_msg_provider(uint64_t op_id, ObPxDatahubDataProvider *&provider)
+int ObPxSQCProxy::get_whole_msg_provider(uint64_t op_id, ObDtlMsgType msg_type, ObPxDatahubDataProvider *&provider)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sqc_ctx_.get_whole_msg_provider(op_id, provider))) {
+  if (OB_FAIL(sqc_ctx_.get_whole_msg_provider(op_id, msg_type, provider))) {
     SQL_LOG(WARN, "fail get provider", K(ret));
-  }
-  return ret;
-}
-
-int ObPxSQCProxy::generate_filter_indexes(
-    int64_t each_group_size,
-    int64_t channel_count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(filter_data_) || channel_count <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("filter data is null", K(ret));
-  } else {
-    int64_t send_size = GCONF._send_bloom_filter_size * 125;
-    int64_t filter_len = filter_data_->filter_.get_bits_array_length();
-    int64_t count = ceil(filter_len / (double)send_size);
-    int64_t start_idx = 0, end_idx = 0;
-    int64_t group_channel_count = each_group_size > channel_count ?
-        channel_count : each_group_size;
-    BloomFilterIndex filter_index;
-    for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
-      start_idx = i * send_size;
-      end_idx = (i + 1) * send_size;
-      if (start_idx >= filter_len) {
-        start_idx = filter_len - 1;
-      }
-      if (end_idx >= filter_len) {
-        end_idx = filter_len - 1;
-      }
-      filter_index.begin_idx_ = start_idx;
-      filter_index.end_idx_ = end_idx;
-      int64_t group_count = ceil((double)channel_count / group_channel_count);
-      int64_t start_channel = ObRandom::rand(0, group_count - 1);
-      start_channel *= group_channel_count;
-      int pos = 0;
-      for (int j = start_channel; OB_SUCC(ret) &&
-          j < start_channel + channel_count;
-          j += group_channel_count) {
-        pos = (j >= channel_count ? j - channel_count : j);
-        pos = (pos / group_channel_count) * group_channel_count;
-        filter_index.channel_ids_.reset();
-        if (pos + group_channel_count > channel_count) {
-          filter_index.channel_id_ = (i % (channel_count - pos)) + pos;
-        } else {
-          filter_index.channel_id_ = (i % group_channel_count) + pos;
-        }
-        for (int k = pos; OB_SUCC(ret) && k < channel_count && k < pos + group_channel_count; ++k) {
-          OZ(filter_index.channel_ids_.push_back(k));
-        }
-        OZ(filter_indexes_.push_back(filter_index));
-      }
-    }
   }
   return ret;
 }
@@ -603,7 +612,8 @@ int ObPxSQCProxy::make_sqc_sample_piece_msg(ObDynamicSamplePieceMsg &msg, bool &
     LOG_WARN("fail to merge piece msg", K(ret));
   } else if (finish) {
     sample_msg_.expect_range_count_ = msg.expect_range_count_;
-    sample_msg_.dfo_id_ = msg.dfo_id_;
+    sample_msg_.source_dfo_id_ = msg.source_dfo_id_;
+    sample_msg_.target_dfo_id_ = msg.target_dfo_id_;
     sample_msg_.op_id_ = msg.op_id_;
     sample_msg_.sample_type_ = msg.sample_type_;
     OZ(sample_msg_.tablet_ids_.assign(msg.tablet_ids_));
@@ -618,4 +628,44 @@ int64_t ObPxSQCProxy::get_process_query_time()
     res = sqc_arg_.exec_ctx_->get_my_session()->get_process_query_time();
   }
   return res;
+}
+
+int64_t ObPxSQCProxy::get_query_timeout_ts()
+{
+  int64_t res = 0;
+  if (OB_NOT_NULL(sqc_arg_.exec_ctx_) && OB_NOT_NULL(sqc_arg_.exec_ctx_->get_physical_plan_ctx())) {
+    res = sqc_arg_.exec_ctx_->get_physical_plan_ctx()->get_timeout_timestamp();
+  }
+  return res;
+}
+
+int64_t ObPxSQCProxy::get_task_count() const { return sqc_ctx_.get_task_count(); }
+
+int ObPxSQCProxy::sync_wait_all(ObPxDatahubDataProvider &provider)
+{
+  int ret = OB_SUCCESS;
+  const int64_t task_cnt = get_task_count();
+  const int64_t idx = ATOMIC_AAF(&provider.dh_msg_cnt_, 1);
+  const int64_t curr_rescan_cnt = provider.rescan_cnt_ + 1;
+  int64_t loop_cnt = 0;
+  // The whole message should be reset in next rescan, we reset it after last piece msg
+  // firstly do sync wait until all piece threads are in loop
+  do {
+    ++loop_cnt;
+    if (task_cnt == idx % (BREAK_TASK_CNT(task_cnt))) { // last thread
+      provider.msg_set_ = false;
+      provider.reset(); // reset whole message
+      ATOMIC_AAF(&provider.rescan_cnt_, 1);
+      ATOMIC_AAF(&provider.dh_msg_cnt_, 1); // to break the loop
+    } else {
+      ob_usleep(1000);
+      if (0 == loop_cnt % 64) {
+        if (OB_FAIL(THIS_WORKER.check_status())) {
+          LOG_WARN("failed to sync wait", K(ret), K(task_cnt), K(provider.dh_msg_cnt_));
+        }
+      }
+    }
+  } while (OB_SUCC(ret) && provider.dh_msg_cnt_ < BREAK_TASK_CNT(task_cnt) * curr_rescan_cnt);
+
+  return ret;
 }

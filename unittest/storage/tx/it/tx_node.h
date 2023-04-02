@@ -14,8 +14,10 @@
 #define OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_
 #define private public
 #define protected public
+#include "lib/objectpool/ob_server_object_pool.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/tablelock/ob_lock_memtable.h"
@@ -26,6 +28,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_scond.h"
+#include "storage/tx_storage/ob_ls_map.h"
 
 #include "../mock_utils/msg_bus.h"
 #include "../mock_utils/basic_fake_define.h"
@@ -129,7 +132,7 @@ public:
   TO_STRING_KV(KP(this), K(addr_), K_(ls_id));
   ObTxDescGuard get_tx_guard();
   // the simple r/w interface
-  int read(ObTxDesc &tx, const int64_t key, int64_t &value);
+  int read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIsolationLevel iso = ObTxIsolationLevel::RC);
   int read(const ObTxReadSnapshot &snapshot,
            const int64_t key,
            int64_t &value);
@@ -138,7 +141,8 @@ public:
             const ObTxReadSnapshot &snapshot,
             const int64_t key,
             const int64_t value);
-
+  int atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
+                   const int64_t expire_ts, const ObTxParam &tx_param);
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);
 
   int write_begin(ObTxDesc &tx, const ObTxReadSnapshot &snapshot, ObStoreCtx& write_store_ctx);
@@ -164,8 +168,20 @@ public:
   DELEGATE_TENANT_WITH_RET(txs_, create_implicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, create_explicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, rollback_to_explicit_savepoint, int);
+  DELEGATE_TENANT_WITH_RET(txs_, release_explicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, rollback_to_implicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, interrupt, int);
+  // tx free route
+  DELEGATE_TENANT_WITH_RET(txs_, calc_txn_free_route, int);
+#define  DELEGATE_X__(t)                                                \
+  DELEGATE_TENANT_WITH_RET(txs_, txn_free_route__update_##t##_state, int); \
+  DELEGATE_TENANT_WITH_RET(txs_, txn_free_route__serialize_##t##_state, int); \
+  DELEGATE_TENANT_WITH_RET(txs_, txn_free_route__get_##t##_state_serialize_size, int64_t);
+#define  DELEGATE_X_(t) DELEGATE_X__(t)
+  LST_DO(DELEGATE_X_, (), static, dynamic, parts, extra);
+  DELEGATE_TENANT_WITH_RET(txs_, tx_free_route_check_alive, int);
+#undef DELEGATE_X_
+#undef DELEGATE_X__
 #undef DELEGATE_TENANT_WITH_RET
   int get_tx_ctx(const share::ObLSID &ls_id, const ObTransID &tx_id, ObPartTransCtx *&ctx) {
     return txs_.tx_ctx_mgr_.get_tx_ctx(ls_id, tx_id, false, ctx);
@@ -173,16 +189,22 @@ public:
   int revert_tx_ctx(ObPartTransCtx *ctx) { return txs_.tx_ctx_mgr_.revert_tx_ctx(ctx); }
 public:
   struct MsgPack : ObLink {
-    MsgPack(const ObAddr &addr, ObString &body)
-      : recv_time_(ObTimeUtility::current_time()), sender_(addr), body_(body){}
+    MsgPack(const ObAddr &addr, ObString &body, bool is_sync_msg = false)
+      : recv_time_(ObTimeUtility::current_time()), sender_(addr),
+        body_(body), is_sync_msg_(is_sync_msg), resp_ready_(false), resp_(), cond_() {}
     int64_t recv_time_;
     ObAddr sender_;
     ObString body_;
+    bool is_sync_msg_;
+    bool resp_ready_;
+    ObString resp_;
+    common::SimpleCond cond_; //used to synchronize process-thread and io-thread
   };
   int recv_msg(const ObAddr &sender, ObString &msg);
+  int sync_recv_msg(const ObAddr &sender, ObString &msg, ObString &resp);
   int handle_msg_(MsgPack *pkt);
 private:
-  memtable::ObMemtable *create_memtable_(const int64_t tablet_id);
+  int create_memtable_(const int64_t tablet_id, memtable::ObMemtable *& mt);
   int create_ls_(const ObLSID ls_id);
   int drop_ls_(const ObLSID ls_id);
   int recv_msg_callback_(TxMsgCallbackMsg &msg);
@@ -243,7 +265,9 @@ public:
   ObString name_; char name_buf_[32];
   ObAddr addr_;
   ObLSID ls_id_;
+  int64_t tenant_id_;
   ObTenantBase tenant_;
+  common::ObServerObjectPool<ObPartTransCtx> fake_part_trans_ctx_pool_;
   ObTransService txs_;
   memtable::ObMemtable *memtable_;
   ObSEArray<ObColDesc, 2> columns_;
@@ -270,8 +294,11 @@ public:
   ObTabletMemtableMgr fake_memtable_mgr_;
   storage::ObLS mock_ls_; // TODO mock required member on LS
   common::hash::ObHashSet<int16_t> drop_msg_type_set_;
+  ObLSMap fake_ls_map_;
+  std::function<int(int,void *)> extra_msg_handler_;
 };
 
 } // transaction
+
 } // oceanbase
 #endif //OCEANBASE_TRANSACTION_TEST_TX_NODE_DEFINE_

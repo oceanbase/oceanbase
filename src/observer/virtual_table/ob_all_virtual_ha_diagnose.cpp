@@ -165,7 +165,7 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         }
         break;
       case MAX_APPLIED_SCN: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(diagnose_info.apply_diagnose_info_.max_applied_scn_));
+        cur_row_.cells_[i].set_uint64(diagnose_info.apply_diagnose_info_.max_applied_scn_.get_val_for_inner_table_field());
         break;
       }
       case MAX_REPALYED_LSN: {
@@ -173,7 +173,7 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         break;
       }
       case MAX_REPLAYED_SCN: {
-        cur_row_.cells_[i].set_uint64(diagnose_info.replay_diagnose_info_.max_replayed_scn_);
+        cur_row_.cells_[i].set_uint64(diagnose_info.replay_diagnose_info_.max_replayed_scn_.get_val_for_inner_table_field());
         break;
       }
       case REPLAY_DIAGNOSE_INFO: {
@@ -203,11 +203,11 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         break;
       }
       case CHECKPOINT_SCN: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(diagnose_info.checkpoint_diagnose_info_.checkpoint_));
+        cur_row_.cells_[i].set_uint64(diagnose_info.checkpoint_diagnose_info_.checkpoint_.get_val_for_inner_table_field());
         break;
       }
       case MIN_REC_SCN: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(diagnose_info.checkpoint_diagnose_info_.min_rec_scn_));
+        cur_row_.cells_[i].set_uint64(diagnose_info.checkpoint_diagnose_info_.min_rec_scn_.get_val_for_inner_table_field());
         break;
       }
       case MIN_REC_SCN_LOG_TYPE: {

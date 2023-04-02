@@ -62,9 +62,9 @@ public:
     round.dest_id_ = DEST_ID;
     round.round_id_ = ROUND_ID;
     // round.state_
-    round.start_scn_ = 0;
-    round.checkpoint_scn_ = 0;
-    round.max_scn_ = 0;
+    round.start_scn_ = share::SCN::min_scn();
+    round.checkpoint_scn_ = share::SCN::min_scn();
+    round.max_scn_ = share::SCN::min_scn();
     // round.compatible_
     round.base_piece_id_ = 1;
     round.used_piece_id_ = 1;
@@ -93,9 +93,9 @@ public:
 
     uint64_t start_scn = convert_timestr_2_scn(start_time);
 
-    round.start_scn_ = start_scn;
-    round.checkpoint_scn_ = start_scn;
-    round.max_scn_ = start_scn;
+    round.start_scn_.convert_for_inner_table_field(start_scn);
+    round.checkpoint_scn_.convert_for_inner_table_field(start_scn);
+    round.max_scn_.convert_for_inner_table_field(start_scn);
 
     round.state_.set_beginning();
   }
@@ -117,8 +117,8 @@ public:
     fill_beginning_round(round, start_time);
 
     round.state_ = state;
-    round.checkpoint_scn_ = convert_timestr_2_scn(checkpoint_time);
-    round.max_scn_ = convert_timestr_2_scn(max_time);
+    round.checkpoint_scn_.convert_for_logservice(convert_timestr_2_scn(checkpoint_time));
+    round.max_scn_.convert_for_logservice(convert_timestr_2_scn(max_time));
     round.used_piece_id_ = used_piece_id;
 
     round.frozen_input_bytes_ = frozen_input_bytes;
@@ -146,8 +146,8 @@ public:
     new_round.deep_copy_from(old_round);
 
     new_round.state_ = state;
-    new_round.checkpoint_scn_ = convert_timestr_2_scn(checkpoint_time);
-    new_round.max_scn_ = convert_timestr_2_scn(max_time);
+    new_round.checkpoint_scn_.convert_for_logservice(convert_timestr_2_scn(checkpoint_time));
+    new_round.max_scn_.convert_for_logservice(convert_timestr_2_scn(max_time));
     new_round.used_piece_id_ = used_piece_id;
 
     new_round.frozen_input_bytes_ = frozen_input_bytes;
@@ -177,8 +177,8 @@ public:
     piece.dest_no_ = old_round.key_.dest_no_;
 
     ObTenantArchiveMgr::decide_piece_start_scn(old_round.start_scn_, old_round.base_piece_id_, old_round.piece_switch_interval_, piece_id, piece.start_scn_);
-    piece.checkpoint_scn_ = convert_timestr_2_scn(checkpoint_time);
-    piece.max_scn_ = convert_timestr_2_scn(max_time);
+    piece.checkpoint_scn_.convert_for_logservice(convert_timestr_2_scn(checkpoint_time));
+    piece.max_scn_.convert_for_logservice(convert_timestr_2_scn(max_time));
     ObTenantArchiveMgr::decide_piece_end_scn(old_round.start_scn_, old_round.base_piece_id_, old_round.piece_switch_interval_, piece_id, piece.end_scn_);
 
     piece.input_bytes_ = input_bytes;
@@ -226,8 +226,8 @@ public:
     piece_summary.incarnation_ = OB_START_INCARNATION;
     piece_summary.state_ = state;
 
-    piece_summary.start_scn_ = convert_timestr_2_scn(start_time);
-    piece_summary.checkpoint_scn_ = convert_timestr_2_scn(checkpoint_time);
+    piece_summary.start_scn_.convert_for_logservice(convert_timestr_2_scn(start_time));
+    piece_summary.checkpoint_scn_.convert_for_logservice(convert_timestr_2_scn(checkpoint_time));
     piece_summary.min_lsn_ = min_lsn;
     piece_summary.max_lsn_ = max_lsn;
     piece_summary.input_bytes_ = input_bytes;
@@ -245,8 +245,8 @@ public:
   {
     ObDestRoundCheckpointer::GeneratedLSPiece piece;
     piece.ls_id_ = ObLSID(ls_id);
-    piece.start_scn_ = convert_timestr_2_scn(start_time);
-    piece.checkpoint_scn_ = convert_timestr_2_scn(checkpoint_time);
+    piece.start_scn_.convert_for_logservice(convert_timestr_2_scn(start_time));
+    piece.checkpoint_scn_.convert_for_logservice(convert_timestr_2_scn(checkpoint_time));
     piece.min_lsn_ = min_lsn;
     piece.max_lsn_ = max_lsn;
     piece.input_bytes_ = input_bytes;
@@ -443,7 +443,9 @@ TEST_F(ArchiveCheckpointerTest, in_prepare)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, 1000);
+  share::SCN scn;
+  (void)scn.convert_for_logservice(1000);
+  ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = checkpointer.checkpoint(old_round, summary);
@@ -519,7 +521,8 @@ TEST_F(ArchiveCheckpointerTest, in_beginning_01)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:50");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:50"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -699,7 +702,8 @@ TEST_F(ArchiveCheckpointerTest, in_beginning_02)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:50");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:50"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -879,7 +883,8 @@ TEST_F(ArchiveCheckpointerTest, in_beginning_03)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:45");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:45"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1071,7 +1076,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_01)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:45");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:45"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1107,10 +1113,10 @@ TEST_F(ArchiveCheckpointerTest, in_doing_02)
   fill_archive_ls_piece(
     1001, 
     false, 
-    1,
+    1/* piece id */,
     ObArchiveRoundState::doing(),
-    "2022-01-01 00:00:00",
-    "2022-01-01 00:01:00",
+    "2022-01-01 00:00:00"/* start time */,
+    "2022-01-01 00:01:00"/* checkpoint time*/,
     0,
     2000,
     200,
@@ -1124,10 +1130,10 @@ TEST_F(ArchiveCheckpointerTest, in_doing_02)
   fill_archive_ls_piece(
     1002, 
     false, 
-    1,
+    1/* piece id */,
     ObArchiveRoundState::doing(),
-    "2022-01-01 00:00:00",
-    "2022-01-01 00:01:00",
+    "2022-01-01 00:00:00"/* start time */,
+    "2022-01-01 00:01:00"/* checkpoint time*/,
     0,
     1000,
     100,
@@ -1138,10 +1144,10 @@ TEST_F(ArchiveCheckpointerTest, in_doing_02)
   fill_archive_ls_piece(
     1002, 
     false, 
-    2,
+    2/* piece id */,
     ObArchiveRoundState::doing(),
-    "2022-01-01 00:01:00",
-    "2022-01-01 00:01:30",
+    "2022-01-01 00:01:00"/* start time */,
+    "2022-01-01 00:01:30"/* checkpoint time*/,
     1000,
     2000,
     100,
@@ -1325,7 +1331,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_02)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:50");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:50"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1661,7 +1668,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_03)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:03:00");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:03:00"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1750,7 +1758,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_04)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:50");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:45"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1942,7 +1951,8 @@ TEST_F(ArchiveCheckpointerTest, in_doing_05)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:40");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:40"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -2134,7 +2144,8 @@ TEST_F(ArchiveCheckpointerTest, in_stopping_01)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:02:00");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:02:00"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -2326,7 +2337,8 @@ TEST_F(ArchiveCheckpointerTest, in_stopping_02)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:02:00");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:02:00"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -2496,7 +2508,8 @@ TEST_F(ArchiveCheckpointerTest, in_stopping_03)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:02:00");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:02:00"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -2689,7 +2702,8 @@ TEST_F(ArchiveCheckpointerTest, in_stopping_04)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:00:40");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:40"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -2999,7 +3013,8 @@ TEST_F(ArchiveCheckpointerTest, some_ls_interrupt_01)
   g_call_cnt = 0;
   MockRoundHandler mock_handler;
   ObDestRoundCheckpointer checkpointer;
-  uint64_t limit_scn = convert_timestr_2_scn("2022-01-01 00:03:00");
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:03:00"));
   ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 

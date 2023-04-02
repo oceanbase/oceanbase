@@ -22,7 +22,7 @@ namespace common
 {
 
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
-ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(), is_init_(false)
+ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(ObLatchIds::LOCAL_DEVICE_LOCK), is_init_(false)
 {
 }
 
@@ -71,14 +71,14 @@ void ObDeviceManager::destroy()
     ret_handle = handle_map_.destroy();
     allocator_.~ObFIFOAllocator();
     if (OB_SUCCESS != ret_dev || OB_SUCCESS != ret_handle) {
-      OB_LOG(WARN, "fail to destroy device map", K(ret_dev), K(ret_handle));
+      OB_LOG_RET(WARN, ret_dev, "fail to destroy device map", K(ret_dev), K(ret_handle));
     }
     //free the arena
     allocator_.reset();
     fin_oss_env();
     is_init_ = false;
     device_count_ = 0;
-    OB_LOG(WARN, "release the init resource", K(ret_dev), K(ret_handle));
+    OB_LOG_RET(WARN, ret_dev, "release the init resource", K(ret_dev), K(ret_handle));
   }
   OB_LOG(INFO, "destroy device manager!");
 }

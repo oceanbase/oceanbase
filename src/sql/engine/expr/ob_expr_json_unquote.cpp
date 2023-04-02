@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implement of func json_unquote
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -57,12 +58,13 @@ int ObExprJsonUnquote::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-template <typename T>
-int ObExprJsonUnquote::calc(const T &data, ObObjType type, ObCollationType cs_type,
+int ObExprJsonUnquote::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, bool has_lob_header,
                             ObIAllocator *allocator, ObJsonBuffer &j_buf, bool &is_null)
 {
   INIT_SUCC(ret);
   ObIJsonBase *j_base = NULL;
+  ObObjType type = meta.type_;
+  ObCollationType cs_type = meta.cs_type_;
 
   if (type == ObIntType || type == ObDoubleType) {
     // special for mathematical function, consistent with mysql
@@ -83,9 +85,10 @@ int ObExprJsonUnquote::calc(const T &data, ObObjType type, ObCollationType cs_ty
   } else {
     ObIJsonBase *j_base = NULL;
     ObString j_str = data.get_string();
-    size_t len = j_str.length();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-    if (ob_is_string_type(type) && (len < 2 || j_str[0] != '"' || j_str[len - 1] != '"')) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (ob_is_string_type(type) && (j_str.length() < 2 || j_str[0] != '"' || j_str[j_str.length() - 1] != '"')) {
       if (OB_FAIL(j_buf.append(j_str))) {
         LOG_WARN("failed: copy original string", K(ret), K(j_str));
       }
@@ -113,27 +116,18 @@ int ObExprJsonUnquote::eval_json_unquote(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObDatum* json_datum = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  ObObjType val_type = arg->datum_meta_.type_;
-  ObCollationType cs_type = arg->datum_meta_.cs_type_;
   ObJsonBuffer j_buf(&temp_allocator);
   bool is_null = false;
 
   if (OB_FAIL(arg->eval(ctx, json_datum))) {
     ret = OB_ERR_INVALID_DATATYPE;
     LOG_WARN("error, eval json args datum failed", K(ret));
-  } else if (OB_FAIL(calc(*json_datum, val_type, cs_type, &temp_allocator, j_buf, is_null))) {
-    LOG_WARN("fail to calc json unquote result in new engine", K(ret), K(val_type));
+  } else if (OB_FAIL(calc(ctx, *json_datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &temp_allocator, j_buf, is_null))) {
+    LOG_WARN("fail to calc json unquote result in new engine", K(ret), K(arg->datum_meta_));
   } else if (is_null) {
     res.set_null();
-  } else {
-    char *buf = expr.get_str_res_mem(ctx, j_buf.length());
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory for json unquote result", K(ret), K(j_buf.length()));
-    } else {
-      MEMCPY(buf, j_buf.ptr(), j_buf.length());
-      res.set_string(buf, j_buf.length());
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, j_buf))) {
+    LOG_WARN("fail to pack json result", K(ret));
   }
   return ret;
 }

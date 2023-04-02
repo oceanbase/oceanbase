@@ -34,10 +34,10 @@ ObLSArchiveTask::ObLSArchiveTask() :
   id_(),
   tenant_id_(OB_INVALID_TENANT_ID),
   station_(),
-  round_start_ts_(OB_INVALID_TIMESTAMP),
+  round_start_scn_(),
   dest_(),
   allocator_(NULL),
-  rwlock_()
+  rwlock_(common::ObLatchIds::LS_ARCHIVE_TASK_LOCK)
 {}
 
 ObLSArchiveTask::~ObLSArchiveTask()
@@ -54,7 +54,7 @@ int ObLSArchiveTask::init(const StartArchiveHelper &helper, ObArchiveAllocator *
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(helper), K(allocator));
   } else {
     allocator_ = allocator;
-    update_unlock_(helper, allocator_);
+    ret = update_unlock_(helper, allocator_);
   }
   return ret;
 }
@@ -69,7 +69,7 @@ int ObLSArchiveTask::update_ls_task(const StartArchiveHelper &helper)
   } else if (OB_UNLIKELY(! is_task_stale_(helper.get_station()))) {
     ARCHIVE_LOG(INFO, "ls archive task exist, skip it", K(ret), K(helper));
   } else {
-    update_unlock_(helper, allocator_);
+    ret = update_unlock_(helper, allocator_);
   }
   return ret;
 }
@@ -77,7 +77,7 @@ int ObLSArchiveTask::update_ls_task(const StartArchiveHelper &helper)
 bool ObLSArchiveTask::check_task_valid(const ArchiveWorkStation &station)
 {
   RLockGuard guard(rwlock_);
-  return is_task_stale_(station);
+  return ! is_task_stale_(station);
 }
 
 void ObLSArchiveTask::destroy()
@@ -86,7 +86,7 @@ void ObLSArchiveTask::destroy()
   id_.reset();
   tenant_id_ = OB_INVALID_TENANT_ID;
   station_.reset();
-  round_start_ts_ = OB_INVALID_TIMESTAMP;
+  round_start_scn_.reset();
   dest_.destroy();
   allocator_ = NULL;
 }
@@ -146,7 +146,7 @@ int ObLSArchiveTask::push_fetch_log(ObArchiveLogFetchTask &task)
 
 int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
     LSN &offset,
-    int64_t &log_ts)
+    SCN &scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
@@ -161,7 +161,7 @@ int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
     LogFileTuple tuple;
     dest_.get_fetcher_progress(tuple);
     offset = tuple.get_lsn();
-    log_ts = tuple.get_log_ts();
+    scn= tuple.get_scn();
   }
   return ret;
 }
@@ -217,7 +217,7 @@ int ObLSArchiveTask::update_fetcher_progress(const ArchiveWorkStation &station,
   } else if (OB_UNLIKELY(is_task_stale_(station))) {
     ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
     ARCHIVE_LOG(WARN, "stale task, just skip", K(ret), K(station), KPC(this));
-  } else if (OB_FAIL(dest_.update_fetcher_progress(round_start_ts_, next_tuple))) {
+  } else if (OB_FAIL(dest_.update_fetcher_progress(round_start_scn_, next_tuple))) {
     ARCHIVE_LOG(WARN, "update fetch progress failed", K(ret), K(station), K(id_));
   } else {
     ARCHIVE_LOG(TRACE, "update_fetcher_progress succ", KPC(this));
@@ -266,7 +266,8 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
   RLockGuard guard(rwlock_);
   LSN piece_min_lsn;
   LSN lsn;
-  int64_t log_ts = OB_INVALID_TIMESTAMP;
+  SCN scn;
+  SCN lower_limit_scn;
   ObArchivePiece piece;
   int64_t file_id = 0;
   int64_t file_offset = 0;
@@ -275,14 +276,17 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
   if (OB_UNLIKELY(key != station_.get_round())) {
     ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
     ARCHIVE_LOG(WARN, "diff incarnation or round", K(ret), K(id_), K(key), K(station_));
-  } else if (FALSE_IT(dest_.get_max_archive_progress(piece_min_lsn, lsn, log_ts,
+  } else if (FALSE_IT(dest_.get_max_archive_progress(piece_min_lsn, lsn, scn,
           piece, file_id, file_offset, error_exist))) {
   } else if (OB_UNLIKELY(! piece.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "piece is not valid", K(ret), KPC(this));
+  } else if (OB_FAIL(piece.get_piece_lower_limit(lower_limit_scn))) {
+    ARCHIVE_LOG(WARN, "failed to get_piece_lower_limit", K(ret), K(piece), KPC(this));
   } else {
     const int64_t piece_id = piece.get_piece_id();
-    const int64_t piece_start_ts = std::max(piece.get_piece_lower_limit(), round_start_ts_);
+    const SCN piece_start_scn = (!round_start_scn_.is_valid() || (lower_limit_scn.is_valid() && lower_limit_scn > round_start_scn_))
+                                 ? lower_limit_scn : round_start_scn_;
     ObArchiveRoundState state;
     state.status_ = error_exist ?
       ObArchiveRoundState::Status::INTERRUPTED : ObArchiveRoundState::Status::DOING;
@@ -294,9 +298,9 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
     info.key_.piece_id_ = piece_id;
     info.key_.ls_id_ = id_;
     info.incarnation_ = key.incarnation_;
-    info.start_scn_ = piece_start_ts;
     info.start_lsn_ = piece_min_lsn.val_;
-    info.checkpoint_scn_ = std::max(log_ts, piece_start_ts);
+    info.start_scn_ = piece_start_scn;
+    info.checkpoint_scn_ = scn > piece_start_scn ? scn : piece_start_scn;
     info.lsn_ = lsn.val_;
     info.input_bytes_ = static_cast<int64_t>(info.lsn_ - info.start_lsn_);
     info.output_bytes_ = info.input_bytes_;
@@ -321,6 +325,19 @@ int ObLSArchiveTask::get_archive_progress(const ArchiveWorkStation &station,
     ARCHIVE_LOG(INFO, "stale task, just skip it", K(ret), K(station), K(station_), K(id_));
   } else {
     dest_.get_archive_progress(file_id, file_offset, tuple);
+  }
+  return ret;
+}
+
+int ObLSArchiveTask::get_send_task_count(const ArchiveWorkStation &station, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (OB_UNLIKELY(station != station_)) {
+    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    ARCHIVE_LOG(INFO, "stale task, just skip it", K(ret), K(station), K(station_), K(id_));
+  } else {
+    dest_.get_send_task_count(count);
   }
   return ret;
 }
@@ -351,9 +368,12 @@ int ObLSArchiveTask::update_archive_progress(const ArchiveWorkStation &station,
   } else if (OB_UNLIKELY(file_id <= 0 || file_offset <= 0 || ! tuple.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(file_id), K(file_offset), K(tuple));
-  } else if (OB_FAIL(dest_.update_archive_progress(round_start_ts_, file_id, file_offset, tuple))) {
+  } else if (OB_FAIL(dest_.update_archive_progress(round_start_scn_, file_id, file_offset, tuple))) {
     ARCHIVE_LOG(WARN, "update archive progress failed", K(ret),
         K(id_), K(station), K(tuple), K(file_id), K(file_offset));
+  } else {
+    ARCHIVE_LOG(INFO, "update archive progress succ", K(ret), K(id_),
+        K(station), K(tuple), K(file_id), K(file_offset));
   }
   return ret;
 }
@@ -362,7 +382,7 @@ int ObLSArchiveTask::print_self()
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
-  ARCHIVE_LOG(INFO, "print ls archive task", K_(id), K_(tenant_id), K_(station), K_(round_start_ts), K_(dest));
+  ARCHIVE_LOG(INFO, "print ls archive task", K_(id), K_(tenant_id), K_(station), K_(round_start_scn), K_(dest));
   return ret;
 }
 
@@ -402,17 +422,17 @@ void ObLSArchiveTask::stat(LSArchiveStat &ls_stat) const
   ls_stat.incarnation_ = station_.get_round().incarnation_;
   ls_stat.round_ = station_.get_round().round_;
   ls_stat.lease_id_ = 0;
-  ls_stat.round_start_ts_ = round_start_ts_;
+  ls_stat.round_start_scn_ = round_start_scn_;
   ls_stat.max_issued_log_lsn_ = static_cast<int64_t>(dest_.max_seq_log_offset_.val_);
   ls_stat.max_prepared_piece_id_ = dest_.max_fetch_info_.get_piece().get_piece_id();
   ls_stat.max_prepared_lsn_ = static_cast<int64_t>(dest_.max_fetch_info_.get_lsn().val_);
-  ls_stat.max_prepared_ts_ = dest_.max_fetch_info_.get_log_ts();
+  ls_stat.max_prepared_scn_ = dest_.max_fetch_info_.get_scn();
   ls_stat.issued_task_count_ = ls_stat.max_issued_log_lsn_ / MAX_ARCHIVE_FILE_SIZE - ls_stat.max_prepared_lsn_ / MAX_ARCHIVE_FILE_SIZE;
   ls_stat.issued_task_size_ = ls_stat.max_issued_log_lsn_ - ls_stat.max_prepared_lsn_;
   ls_stat.wait_send_task_count_ = dest_.wait_send_task_count_;
   ls_stat.archive_piece_id_ = dest_.max_archived_info_.get_piece().get_piece_id();
   ls_stat.archive_lsn_ = static_cast<int64_t>(dest_.max_archived_info_.get_lsn().val_);
-  ls_stat.archive_ts_ = dest_.max_archived_info_.get_log_ts();
+  ls_stat.archive_scn_ = dest_.max_archived_info_.get_scn();
   ls_stat.archive_file_id_ = dest_.archive_file_id_;
   ls_stat.archive_file_offset_ = dest_.archive_file_offset_;
 }
@@ -430,18 +450,20 @@ int ObLSArchiveTask::mark_error(const ArchiveKey &key)
   return ret;
 }
 
-void ObLSArchiveTask::update_unlock_(const StartArchiveHelper &helper,
+int ObLSArchiveTask::update_unlock_(const StartArchiveHelper &helper,
     ObArchiveAllocator *allocator)
 {
+  int ret = OB_SUCCESS;
   id_ = helper.get_ls_id();
   tenant_id_ = helper.get_tenant_id();
   station_ = helper.get_station();
-  round_start_ts_ = helper.get_round_start_ts();
-  dest_.init(helper.get_piece_min_lsn(), helper.get_offset(),
+  round_start_scn_ = helper.get_round_start_scn();
+  ret = dest_.init(helper.get_piece_min_lsn(), helper.get_offset(),
       helper.get_file_id(), helper.get_file_offset(),
-      helper.get_piece(), helper.get_max_archived_ts(),
+      helper.get_piece(), helper.get_max_archived_scn(),
       helper.is_log_gap_exist(), allocator);
   ARCHIVE_LOG(INFO, "update_unlock_", KPC(this), K(helper));
+  return ret;
 }
 
 bool ObLSArchiveTask::is_task_stale_(const ArchiveWorkStation &station) const
@@ -468,7 +490,6 @@ ObLSArchiveTask::ArchiveDest::ArchiveDest() :
   max_fetch_info_(),
   wait_send_task_array_(),
   wait_send_task_count_(0),
-  seq_no_(0),
   send_task_queue_(NULL),
   allocator_(NULL)
 {}
@@ -495,37 +516,46 @@ void ObLSArchiveTask::ArchiveDest::destroy()
   allocator_ = NULL;
 }
 
-void ObLSArchiveTask::ArchiveDest::init(const LSN &piece_min_lsn,
+int ObLSArchiveTask::ArchiveDest::init(const LSN &piece_min_lsn,
     const LSN &lsn,
     const int64_t file_id,
     const int64_t file_offset,
     const share::ObArchivePiece &piece,
-    const int64_t max_archived_ts,
+    const SCN &max_archived_scn,
     const bool is_log_gap_exist,
     ObArchiveAllocator *allocator)
 {
+  int ret = OB_SUCCESS;
   const ObArchivePiece &cur_piece = max_archived_info_.get_piece();
-  if (! cur_piece.is_valid() || piece != cur_piece) {
-    piece_min_lsn_ = piece_min_lsn;
-  }
-  LogFileTuple tmp_tuple(lsn, max_archived_ts, piece);
-  LogFileTuple tuple;
-  if (max_archived_info_.is_valid()) {
-    tuple = std::max(tuple, max_archived_info_);
+  LogFileTuple tmp_tuple(lsn, max_archived_scn, piece);
+  const bool renew_context = (!max_archived_info_.is_valid()) || max_archived_info_ < tmp_tuple;
+  if (renew_context) {
+    if (archive_file_id_ > file_id || (archive_file_id_ == file_id && archive_file_offset_ > file_offset)) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(ERROR, "local cache archive progress is old, but file info is bigger", K(piece_min_lsn),
+          K(tmp_tuple), K(piece), K(file_id), K(file_offset), KPC(this));
+    } else {
+      piece_min_lsn_ = piece_min_lsn;
+      max_archived_info_ = tmp_tuple;
+      archive_file_id_ = file_id;
+      archive_file_offset_ = file_offset;
+      has_encount_error_ = is_log_gap_exist;
+      max_seq_log_offset_ = lsn;
+      max_fetch_info_ = tmp_tuple;
+      ARCHIVE_LOG(INFO, "update archive dest with remote info", K(piece_min_lsn),
+          K(tmp_tuple), K(piece), K(file_id), K(file_offset), KPC(this));
+    }
   } else {
-    tuple = tmp_tuple;
+    max_seq_log_offset_ = max_archived_info_.get_lsn();
+    max_fetch_info_ = max_archived_info_;
+    ARCHIVE_LOG(INFO, "update archive dest with local archive progress", K(piece_min_lsn),
+        K(tmp_tuple), K(piece), K(file_id), K(file_offset), KPC(this));
   }
-  has_encount_error_ = is_log_gap_exist;
-  max_archived_info_ = tuple;
-  archive_file_id_ = file_id;
-  archive_file_offset_ = file_offset;
-  max_seq_log_offset_ = lsn;
-  max_fetch_info_ = tuple;
   wait_send_task_count_ = 0;
-  seq_no_ = 0;
   free_fetch_log_tasks_();
   free_send_task_status_();
   allocator_ = allocator;
+  return ret;
 }
 
 void ObLSArchiveTask::ArchiveDest::get_sequencer_progress(LSN &offset) const
@@ -567,11 +597,12 @@ int ObLSArchiveTask::ArchiveDest::get_top_fetch_log(ObArchiveLogFetchTask *&task
   return ret;
 }
 
-int ObLSArchiveTask::ArchiveDest::update_fetcher_progress(const int64_t round_start_ts, const LogFileTuple &tuple)
+int ObLSArchiveTask::ArchiveDest::update_fetcher_progress(const SCN &round_start_scn,
+                                                          const LogFileTuple &tuple)
 {
   int ret = OB_SUCCESS;
   ObArchivePiece piece = max_fetch_info_.get_piece();
-  if (OB_UNLIKELY((tuple.get_log_ts() > round_start_ts && ! (max_fetch_info_ < tuple)))) {
+  if (OB_UNLIKELY((tuple.get_scn() > round_start_scn && ! (max_fetch_info_ < tuple)))) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "fetcher progress rollback", K(ret), K(max_fetch_info_), K(tuple));
   } else {
@@ -620,8 +651,7 @@ int ObLSArchiveTask::ArchiveDest::compensate_piece(const int64_t piece_id)
 }
 
 void ObLSArchiveTask::ArchiveDest::get_max_archive_progress(LSN &piece_min_lsn,
-    LSN &lsn,
-    int64_t &log_ts,
+    LSN &lsn, SCN &scn,
     ObArchivePiece &piece,
     int64_t &file_id,
     int64_t &file_offset,
@@ -629,7 +659,7 @@ void ObLSArchiveTask::ArchiveDest::get_max_archive_progress(LSN &piece_min_lsn,
 {
   piece_min_lsn = piece_min_lsn_;
   lsn = max_archived_info_.get_lsn();
-  log_ts = max_archived_info_.get_log_ts();
+  scn = max_archived_info_.get_scn();
   piece = max_archived_info_.get_piece();
   file_id = archive_file_id_;
   file_offset = archive_file_offset_;
@@ -651,6 +681,7 @@ void ObLSArchiveTask::ArchiveDest::free_fetch_log_tasks_()
 // only free task_status if it is disacarded, or will be free after all send_tasks are handled
 void ObLSArchiveTask::ArchiveDest::free_send_task_status_()
 {
+  // send_tasks only free by sender, here decrease ref of task_status and free it if ref count is zero
   if (NULL != send_task_queue_) {
     bool is_discarded = false;
     send_task_queue_->free(is_discarded);
@@ -682,7 +713,7 @@ int ObLSArchiveTask::ArchiveDest::push_fetch_log(ObArchiveLogFetchTask &task)
 int ObLSArchiveTask::ArchiveDest::push_send_task(ObArchiveSendTask &task, ObArchiveWorker &worker)
 {
   int ret = OB_SUCCESS;
-  const ObLSID &id = task.get_ls_id();
+  const ObLSID id = task.get_ls_id();
   if (NULL == send_task_queue_) {
     if (OB_ISNULL(send_task_queue_ = allocator_->alloc_send_task_status(id))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -700,13 +731,15 @@ int ObLSArchiveTask::ArchiveDest::push_send_task(ObArchiveSendTask &task, ObArch
   return ret;
 }
 
-int ObLSArchiveTask::ArchiveDest::update_archive_progress(const int64_t round_start_ts,
+int ObLSArchiveTask::ArchiveDest::update_archive_progress(const SCN &round_start_scn,
     const int64_t file_id,
     const int64_t file_offset,
     const LogFileTuple &tuple)
 {
   int ret = OB_SUCCESS;
-  if ((tuple.get_log_ts() > round_start_ts && max_archived_info_.is_valid() && ! (max_archived_info_ < tuple))
+  if ((!tuple.is_valid()
+       || !round_start_scn.is_valid()
+       || (tuple.get_scn() > round_start_scn && max_archived_info_.is_valid() && ! (max_archived_info_ < tuple)))
       || file_id < archive_file_id_
       || (max_archived_info_.get_piece() == tuple.get_piece() && file_id == archive_file_id_ && file_offset <= archive_file_offset_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -720,7 +753,6 @@ int ObLSArchiveTask::ArchiveDest::update_archive_progress(const int64_t round_st
     archive_file_offset_ = file_offset;
     max_archived_info_ = tuple;
     piece_dir_exist_ = true;
-    ARCHIVE_LOG(TRACE, "update_archive_progress succ", KPC(this));
   }
   return ret;
 }
@@ -732,6 +764,14 @@ void ObLSArchiveTask::ArchiveDest::get_archive_progress(int64_t &file_id,
   file_id = archive_file_id_;
   file_offset = archive_file_offset_;
   tuple = max_archived_info_;
+}
+
+void ObLSArchiveTask::ArchiveDest::get_send_task_count(int64_t &count)
+{
+  count = 0;
+  if (NULL != send_task_queue_) {
+    count = send_task_queue_->count();
+  }
 }
 
 void ObLSArchiveTask::ArchiveDest::get_archive_send_arg(ObArchiveSendDestArg &arg)

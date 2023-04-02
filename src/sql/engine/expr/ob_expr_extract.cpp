@@ -93,45 +93,52 @@ template <typename T, bool with_date>
 inline int obj_to_time(const T &date, ObObjType type,
                               const ObTimeZoneInfo *tz_info, ObTime &ob_time,
                               const int64_t cur_ts_value,
-                              const ObDateSqlMode date_sql_mode);
+                              const ObDateSqlMode date_sql_mode,
+                              bool has_lob_header);
 template <>
 inline int obj_to_time<ObObj, true>(const ObObj &date, ObObjType type,
                                           const ObTimeZoneInfo *tz_info, ObTime& ob_time,
                                           const int64_t cur_ts_value,
-                                          const ObDateSqlMode date_sql_mode)
+                                          const ObDateSqlMode date_sql_mode,
+                                          bool has_lob_header)
 {
   UNUSED(type);
+  UNUSED(has_lob_header);
   return  ob_obj_to_ob_time_with_date(date, tz_info, ob_time, cur_ts_value, false, date_sql_mode);
 }
 template <>
 inline int obj_to_time<ObObj, false>(const ObObj &date, ObObjType type,
                                             const ObTimeZoneInfo *tz_info, ObTime &ob_time,
                                             const int64_t cur_ts_value,
-                                            const ObDateSqlMode date_sql_mode)
+                                            const ObDateSqlMode date_sql_mode,
+                                            bool has_lob_header)
 {
   UNUSED(type);
   UNUSED(cur_ts_value);
   UNUSED(date_sql_mode);
+  UNUSED(has_lob_header);
   return  ob_obj_to_ob_time_without_date(date, tz_info, ob_time);
 }
 template <>
 inline int obj_to_time<ObDatum, true>(const ObDatum &date, ObObjType type,
                                               const ObTimeZoneInfo *tz_info, ObTime &ob_time,
                                               const int64_t cur_ts_value,
-                                              const ObDateSqlMode date_sql_mode)
+                                              const ObDateSqlMode date_sql_mode,
+                                              bool has_lob_header)
 {
   return  ob_datum_to_ob_time_with_date(
-          date, type, tz_info, ob_time, cur_ts_value, false, date_sql_mode);
+          date, type, tz_info, ob_time, cur_ts_value, false, date_sql_mode, has_lob_header);
 }
 template <>
 inline int obj_to_time<ObDatum, false>(const ObDatum &date, ObObjType type,
                                               const ObTimeZoneInfo *tz_info, ObTime &ob_time,
                                               const int64_t cur_ts_value,
-                                              const ObDateSqlMode date_sql_mode)
+                                              const ObDateSqlMode date_sql_mode,
+                                              bool has_lob_header)
 {
   UNUSED(cur_ts_value);
   UNUSED(date_sql_mode);
-  return  ob_datum_to_ob_time_without_date(date, type, tz_info, ob_time);
+  return  ob_datum_to_ob_time_without_date(date, type, tz_info, ob_time, has_lob_header);
 }
 template <typename T>
 int ObExprExtract::calc(T &result,
@@ -141,7 +148,8 @@ int ObExprExtract::calc(T &result,
                         const ObCastMode cast_mode,
                         const ObTimeZoneInfo *tz_info,
                         const int64_t cur_ts_value,
-                        const ObDateSqlMode date_sql_mode)
+                        const ObDateSqlMode date_sql_mode,
+                        bool has_lob_header)
 {
   int ret = OB_SUCCESS;
   class ObTime ob_time;
@@ -149,7 +157,6 @@ int ObExprExtract::calc(T &result,
   if (date.is_null()) {
     result.set_null();
   } else {
-    int ret = OB_SUCCESS;
     int warning = OB_SUCCESS;
     int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
 
@@ -166,10 +173,10 @@ int ObExprExtract::calc(T &result,
       case DATE_UNIT_DAY_HOUR:
       case DATE_UNIT_YEAR_MONTH:
         cast_ret =  obj_to_time<T, true>(
-                    date, date_type, tz_info, ob_time, cur_ts_value, date_sql_mode);
+                    date, date_type, tz_info, ob_time, cur_ts_value, date_sql_mode, has_lob_header);
         break;
       default:
-        cast_ret =  obj_to_time<T, false>(date, date_type, tz_info, ob_time, cur_ts_value, 0);
+        cast_ret =  obj_to_time<T, false>(date, date_type, tz_info, ob_time, cur_ts_value, 0, has_lob_header);
      }
 
      if (OB_SUCC(ret)) {
@@ -474,7 +481,7 @@ int ObExprExtract::calc_extract_mysql(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
                               expr.args_[1]->datum_meta_.type_,
                               cast_mode, get_timezone_info(session),
                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
-                              date_sql_mode);
+                              date_sql_mode, expr.args_[1]->obj_meta_.has_lob_header());
   }
   return ret;
 }
@@ -540,11 +547,11 @@ int ObExprExtract::calc_extract_mysql_batch(
           if (is_with_date) {
             cast_ret = obj_to_time<ObDatum, true>(
                 datum_array[j], expr.args_[1]->datum_meta_.type_, tz_info, ob_time, cur_ts_value,
-                date_sql_mode);
+                date_sql_mode, expr.args_[1]->obj_meta_.has_lob_header());
           } else {
             cast_ret = obj_to_time<ObDatum, false>(
                 datum_array[j], expr.args_[1]->datum_meta_.type_, tz_info, ob_time, cur_ts_value,
-                date_sql_mode);
+                date_sql_mode, expr.args_[1]->obj_meta_.has_lob_header());
           }
           if (OB_SUCC(ret)) {
             if (OB_LIKELY(OB_SUCCESS == warning)){

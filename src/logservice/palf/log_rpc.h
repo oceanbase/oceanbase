@@ -17,7 +17,6 @@
 #include "lib/utility/ob_macro_utils.h"            // IS_NOT_INIT
 #include "lib/net/ob_addr.h"                       // ObAddr
 #include "rpc/obrpc/ob_rpc_packet.h"               // ObRpcPacketCode
-#include "share/rc/ob_tenant_base.h"               // MTL_ID
 #include "log_rpc_macros.h"                        // MACROS...
 #include "log_rpc_packet.h"                        // LogRpcPacketImpl
 #include "log_rpc_proxy.h"                         // LogRpcProxyV2
@@ -70,8 +69,13 @@ class LogRpc {
 public:
   LogRpc();
   ~LogRpc();
-  int init(const common::ObAddr &self, rpc::frame::ObReqTransport *transport);
+  int init(const common::ObAddr &self,
+           const int64_t cluster_id,
+           const int64_t tenant_id,
+           rpc::frame::ObReqTransport *transport);
   void destroy();
+  int update_transport_compress_options(const PalfTransportCompressOptions &compress_opt);
+  const PalfTransportCompressOptions& get_compress_opts() const;
   template<class ReqType>
   int post_request(const common::ObAddr &server,
                    const int64_t palf_id,
@@ -86,7 +90,8 @@ public:
       ret = OB_INVALID_ARGUMENT;
     } else {
       LogRpcPacketImpl<ReqType> packet(self_, palf_id, req);
-      ret = rpc_proxy_.post_packet(server, packet, MTL_ID());
+      ret = rpc_proxy_.post_packet(server, packet, tenant_id_, options_);
+      PALF_LOG(TRACE, "post_packet finished", K(ret), K(server), K(tenant_id_));
     }
     return ret;
   }
@@ -108,9 +113,9 @@ public:
     } else {
       LogRpcPacketImpl<ReqType> req_packet(self_, palf_id, req);
       LogRpcPacketImpl<RespType> resp_packet(server, palf_id, resp);
-      ret = rpc_proxy_.post_sync_packet(server, MTL_ID(), timeout_us, req_packet, resp_packet);
+      ret = rpc_proxy_.post_sync_packet(server, tenant_id_, options_, timeout_us, req_packet, resp_packet);
       resp = resp_packet.req_;
-      PALF_LOG(INFO, "post_sync_request", K(MTL_ID()), K(palf_id), K(req), K(resp));
+      PALF_LOG(TRACE, "post_sync_request", K(tenant_id_), K(palf_id), K(req), K(resp));
     }
     return ret;
   }
@@ -119,6 +124,9 @@ public:
 private:
   ObAddr self_;
   obrpc::LogRpcProxyV2 rpc_proxy_;
+  mutable ObSpinLock opt_lock_;
+  PalfTransportCompressOptions options_;
+  int64_t tenant_id_;
   bool is_inited_;
 };
 } // end namespace palf

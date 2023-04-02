@@ -46,6 +46,7 @@
 #include "sql/engine/expr/ob_expr_convert.h"
 #include "sql/engine/expr/ob_expr_coalesce.h"
 #include "sql/engine/expr/ob_expr_current_user.h"
+#include "sql/engine/expr/ob_expr_current_user_priv.h"
 #include "sql/engine/expr/ob_expr_nvl.h"
 #include "sql/engine/expr/ob_expr_concat.h"
 #include "sql/engine/expr/ob_expr_concat_ws.h"
@@ -332,12 +333,55 @@
 #include "sql/engine/expr/ob_expr_json_merge_patch.h"
 #include "sql/engine/expr/ob_expr_json_pretty.h"
 #include "sql/engine/expr/ob_expr_json_member_of.h"
+#include "sql/engine/expr/ob_expr_is_json.h"
+#include "sql/engine/expr/ob_expr_json_equal.h"
 #include "sql/engine/expr/ob_expr_sha.h"
 #include "sql/engine/expr/ob_expr_compress.h"
 #include "sql/engine/expr/ob_expr_statement_digest.h"
 #include "sql/engine/expr/ob_expr_timestamp_to_scn.h"
 #include "sql/engine/expr/ob_expr_scn_to_timestamp.h"
 #include "sql/engine/expr/ob_expr_errno.h"
+#include "sql/engine/expr/ob_expr_json_query.h"
+#include "sql/engine/expr/ob_expr_json_exists.h"
+#include "sql/engine/expr/ob_expr_treat.h"
+#include "sql/engine/expr/ob_expr_point.h"
+#include "sql/engine/expr/ob_expr_spatial_collection.h"
+#include "sql/engine/expr/ob_expr_st_geomfromtext.h"
+#include "sql/engine/expr/ob_expr_st_area.h"
+#include "sql/engine/expr/ob_expr_st_intersects.h"
+#include "sql/engine/expr/ob_expr_st_x.h"
+#include "sql/engine/expr/ob_expr_st_transform.h"
+#include "sql/engine/expr/ob_expr_priv_st_transform.h"
+#include "sql/engine/expr/ob_expr_st_covers.h"
+#include "sql/engine/expr/ob_expr_st_bestsrid.h"
+#include "sql/engine/expr/ob_expr_st_astext.h"
+#include "sql/engine/expr/ob_expr_st_buffer.h"
+#include "sql/engine/expr/ob_expr_spatial_cellid.h"
+#include "sql/engine/expr/ob_expr_spatial_mbr.h"
+#include "sql/engine/expr/ob_expr_st_geomfromewkb.h"
+#include "sql/engine/expr/ob_expr_st_geomfromwkb.h"
+#include "sql/engine/expr/ob_expr_st_geomfromewkt.h"
+#include "sql/engine/expr/ob_expr_priv_st_geogfromtext.h"
+#include "sql/engine/expr/ob_expr_priv_st_geographyfromtext.h"
+#include "sql/engine/expr/ob_expr_st_asewkt.h"
+#include "sql/engine/expr/ob_expr_st_srid.h"
+#include "sql/engine/expr/ob_expr_st_distance.h"
+#include "sql/engine/expr/ob_expr_st_geometryfromtext.h"
+#include "sql/engine/expr/ob_expr_priv_st_setsrid.h"
+#include "sql/engine/expr/ob_expr_priv_st_point.h"
+#include "sql/engine/expr/ob_expr_st_isvalid.h"
+#include "sql/engine/expr/ob_expr_st_dwithin.h"
+#include "sql/engine/expr/ob_expr_st_aswkb.h"
+#include "sql/engine/expr/ob_expr_st_distance_sphere.h"
+#include "sql/engine/expr/ob_expr_st_contains.h"
+#include "sql/engine/expr/ob_expr_st_within.h"
+#include "sql/engine/expr/ob_expr_priv_st_asewkb.h"
+#include "sql/engine/expr/ob_expr_name_const.h"
+#include "sql/engine/expr/ob_expr_format_bytes.h"
+#include "sql/engine/expr/ob_expr_format_pico_time.h"
+#include "sql/engine/expr/ob_expr_encrypt.h"
+#include "sql/engine/expr/ob_expr_icu_version.h"
+#include "sql/engine/expr/ob_expr_sql_mode_convert.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -352,7 +396,7 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
     [&]() {                                         \
       OpClass op(alloc);                            \
       if (OB_UNLIKELY(i >= EXPR_OP_NUM)) {          \
-        LOG_ERROR("out of the max expr");           \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");           \
       } else {                                      \
         NAME_TYPES[i].name_ = op.get_name();        \
         NAME_TYPES[i].type_ = op.get_type();        \
@@ -370,9 +414,9 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
   do {                                                                 \
     [&]() {                                                            \
       if (OB_UNLIKELY((idx_mysql) >= EXPR_OP_NUM)) {                   \
-        LOG_ERROR("out of the max expr");                              \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");                              \
       } else if (OB_ISNULL(OP_ALLOC[OriOpType])) {                     \
-        LOG_ERROR("OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
       } else {                                                         \
         NAME_TYPES[(idx_mysql)].name_ = NewOpName;                     \
         NAME_TYPES[(idx_mysql)].type_ = NewOpType;                     \
@@ -387,7 +431,7 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
     [&]() {                                         \
       OpClass op(alloc);                            \
       if (OB_UNLIKELY(j >= EXPR_OP_NUM)) {          \
-        LOG_ERROR("out of the max expr");           \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");           \
       } else {                                      \
         NAME_TYPES_ORCL[j].name_ = op.get_name();   \
         NAME_TYPES_ORCL[j].type_ = op.get_type();   \
@@ -403,9 +447,9 @@ static AllocFunc OP_ALLOC_ORCL[T_MAX_OP];
   do {                                                                     \
     [&]() {                                                                \
       if (OB_UNLIKELY((idx_oracle) >= EXPR_OP_NUM)) {                      \
-        LOG_ERROR("out of the max expr");                                  \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max expr");                                  \
       } else if (OB_ISNULL(OP_ALLOC_ORCL[OriOpType])) {                    \
-        LOG_ERROR("OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
+        LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "OriOp is not registered yet", K(OriOpType), K(NewOpType)); \
       } else {                                                             \
         NAME_TYPES_ORCL[(idx_oracle)].name_ = NewOpName;                   \
         NAME_TYPES_ORCL[(idx_oracle)].type_ = NewOpType;                   \
@@ -440,11 +484,16 @@ char *ObExprOperatorFactory::str_toupper(char *buff)
 ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
 {
   ObExprOperatorType type = T_INVALID;
+  ObString real_func_name;
+  get_function_alias_name(name, real_func_name);
+  if (real_func_name.empty()) {
+    real_func_name.assign_ptr(name.ptr(), name.length());
+  }
   if (lib::is_oracle_mode()) {
     char name_buf[OB_MAX_FUNC_EXPR_LENGTH];
     ObString func_name(N_ORA_DECODE);
-    if (name.case_compare("decode") != 0) {
-      func_name.assign_ptr(name.ptr(), name.length());
+    if (real_func_name.case_compare("decode") != 0) {
+      func_name.assign_ptr(real_func_name.ptr(), real_func_name.length());
     }
     for (uint32_t i = 0; i < ARRAYSIZEOF(NAME_TYPES_ORCL); i++) {
       if (NAME_TYPES_ORCL[i].type_ <= T_MIN_OP || NAME_TYPES_ORCL[i].type_ >= T_MAX_OP) {
@@ -466,8 +515,8 @@ ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
       if (NAME_TYPES[i].type_ <= T_MIN_OP || NAME_TYPES[i].type_ >= T_MAX_OP) {
         break;
       }
-      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == name.length()
-          && strncasecmp(NAME_TYPES[i].name_, name.ptr(), name.length()) == 0) {
+      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == real_func_name.length()
+          && strncasecmp(NAME_TYPES[i].name_, real_func_name.ptr(), real_func_name.length()) == 0) {
         type = NAME_TYPES[i].type_;
         break;
       }
@@ -479,11 +528,16 @@ ObExprOperatorType ObExprOperatorFactory::get_type_by_name(const ObString &name)
 void ObExprOperatorFactory::get_internal_info_by_name(const ObString &name, bool &exist, bool &is_internal)
 {
   exist = false;
+  ObString real_func_name;
+  get_function_alias_name(name, real_func_name);
+  if (real_func_name.empty()) {
+    real_func_name.assign_ptr(name.ptr(), name.length());
+  }
   if (lib::is_oracle_mode()) {
     char name_buf[OB_MAX_FUNC_EXPR_LENGTH];
     ObString func_name(N_ORA_DECODE);
-    if (name.case_compare("decode") != 0) {
-      func_name.assign_ptr(name.ptr(), name.length());
+    if (real_func_name.case_compare("decode") != 0) {
+      func_name.assign_ptr(real_func_name.ptr(), real_func_name.length());
     }
     for (uint32_t i = 0; i < ARRAYSIZEOF(NAME_TYPES_ORCL); i++) {
       if (NAME_TYPES_ORCL[i].type_ <= T_MIN_OP || NAME_TYPES_ORCL[i].type_ >= T_MAX_OP) {
@@ -506,8 +560,8 @@ void ObExprOperatorFactory::get_internal_info_by_name(const ObString &name, bool
       if (NAME_TYPES[i].type_ <= T_MIN_OP || NAME_TYPES[i].type_ >= T_MAX_OP) {
         break;
       }
-      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == name.length()
-          && strncasecmp(NAME_TYPES[i].name_, name.ptr(), name.length()) == 0) {
+      if (static_cast<int32_t>(strlen(NAME_TYPES[i].name_)) == real_func_name.length()
+          && strncasecmp(NAME_TYPES[i].name_, real_func_name.ptr(), real_func_name.length()) == 0) {
         exist = true;
         is_internal = NAME_TYPES[i].is_internal_;
         break;
@@ -548,6 +602,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprNvl);
     REG_OP(ObExprConcat);
     REG_OP(ObExprCurrentUser);
+    REG_OP(ObExprCurrentUserPriv);
     REG_OP(ObExprYear);
     REG_OP(ObExprOracleDecode);
     REG_OP(ObExprOracleTrunc);
@@ -850,12 +905,71 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprStatementDigestText);
     REG_OP(ObExprTimestampToScn);
     REG_OP(ObExprScnToTimestamp);
+    REG_OP(ObExprSqlModeConvert);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
 #endif
-  }();
+    REG_OP(ObExprPoint);
+    REG_OP(ObExprLineString);
+    REG_OP(ObExprMultiPoint);
+    REG_OP(ObExprMultiLineString);
+    REG_OP(ObExprPolygon);
+    REG_OP(ObExprMultiPolygon);
+    REG_OP(ObExprGeomCollection);
+    REG_OP(ObExprGeometryCollection);
+    REG_OP(ObExprSTGeomFromText);
+    REG_OP(ObExprSTArea);
+    REG_OP(ObExprSTIntersects);
+    REG_OP(ObExprSTX);
+    REG_OP(ObExprSTY);
+    REG_OP(ObExprSTLatitude);
+    REG_OP(ObExprSTLongitude);
+    REG_OP(ObExprSTTransform);
+    REG_OP(ObExprPrivSTTransform);
+    REG_OP(ObExprPrivSTCovers);
+    REG_OP(ObExprPrivSTBestsrid);
+    REG_OP(ObExprSTAsText);
+    REG_OP(ObExprSTAsWkt);
+    REG_OP(ObExprSTBufferStrategy);
+    REG_OP(ObExprSTBuffer);
+    REG_OP(ObExprSpatialCellid);
+    REG_OP(ObExprSpatialMbr);
+    REG_OP(ObExprPrivSTGeomFromEWKB);
+    REG_OP(ObExprSTGeomFromWKB);
+    REG_OP(ObExprSTGeometryFromWKB);
+    REG_OP(ObExprPrivSTGeomFromEwkt);
+    REG_OP(ObExprPrivSTAsEwkt);
+    REG_OP(ObExprSTSRID);
+    REG_OP(ObExprSTDistance);
+    REG_OP(ObExprPrivSTGeogFromText);
+    REG_OP(ObExprPrivSTGeographyFromText);
+    REG_OP(ObExprPrivSTSetSRID);
+    REG_OP(ObExprSTGeometryFromText);
+    REG_OP(ObExprPrivSTPoint);
+    REG_OP(ObExprSTIsValid);
+    REG_OP(ObExprPrivSTBuffer);
+    REG_OP(ObExprPrivSTDWithin);
+    REG_OP(ObExprSTAsWkb);
+    REG_OP(ObExprStPrivAsEwkb);
+    REG_OP(ObExprSTAsBinary);
+    REG_OP(ObExprSTDistanceSphere);
+    REG_OP(ObExprSTContains);
+    REG_OP(ObExprSTWithin);
+    REG_OP(ObExprFormatBytes);
+    REG_OP(ObExprFormatPicoTime);
+    REG_OP(ObExprUuid2bin);
+    REG_OP(ObExprIsUuid);
+    REG_OP(ObExprBin2uuid);
+    REG_OP(ObExprNameConst);
     REG_OP(ObExprDayName);
+    REG_OP(ObExprDesDecrypt);
+    REG_OP(ObExprDesEncrypt);
+    REG_OP(ObExprEncrypt);
+    REG_OP(ObExprEncode);
+    REG_OP(ObExprDecode);
+    REG_OP(ObExprICUVersion);
+  }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
@@ -1135,6 +1249,16 @@ void ObExprOperatorFactory::register_expr_operators()
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   REG_OP_ORCL(ObExprErrno);
 #endif
+  REG_OP_ORCL(ObExprJsonValue);
+  REG_OP_ORCL(ObExprIsJson);
+  REG_OP_ORCL(ObExprJsonEqual);
+  REG_OP_ORCL(ObExprJsonQuery);
+  REG_OP_ORCL(ObExprJsonMergePatch);
+  REG_OP_ORCL(ObExprJsonExists);
+  REG_OP_ORCL(ObExprJsonArray);
+  REG_OP_ORCL(ObExprJsonObject);
+  REG_OP_ORCL(ObExprTreat);
+
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)
@@ -1229,6 +1353,47 @@ int ObExprOperatorFactory::alloc(common::ObIAllocator &alloc, ObExprOperator *&e
   }
   return ret;
 }
+
+
+void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name, ObString &alias_name) {
+  if (is_mysql_mode()) {
+    //for synonyms in mysql mode
+    if (0 == origin_name.case_compare("bin")) {
+      // bin(N) is equivalent to CONV(N,10,2)
+      alias_name = ObString::make_string(N_CONV);
+    } else if (0 == origin_name.case_compare("oct")) {
+      // oct(N) is equivalent to CONV(N,10,8)
+      alias_name = ObString::make_string(N_CONV);
+    } else if (0 == origin_name.case_compare("lcase")) {
+      // lcase is synonym for lower
+      alias_name = ObString::make_string(N_LOWER);
+    } else if (0 == origin_name.case_compare("ucase")) {
+      // ucase is synonym for upper
+      alias_name = ObString::make_string(N_UPPER);
+    } else if (!lib::is_oracle_mode() && 0 == origin_name.case_compare("power")) {
+      // don't alias "power" to "pow" in oracle mode, because oracle has no
+      // "pow" function.
+      alias_name = ObString::make_string(N_POW);
+    } else if (0 == origin_name.case_compare("ws")) {
+      // ws is synonym for word_segment
+      alias_name = ObString::make_string(N_WORD_SEGMENT);
+    } else if (0 == origin_name.case_compare("inet_ntoa")) {
+      // inet_ntoa is synonym for int2ip
+      alias_name = ObString::make_string(N_INT2IP);
+    } else if (0 == origin_name.case_compare("octet_length")) {
+      // octet_length is synonym for length
+      alias_name = ObString::make_string(N_LENGTH);
+    } else if (0 == origin_name.case_compare("character_length")) {
+      // character_length is synonym for char_length
+      alias_name = ObString::make_string(N_CHAR_LENGTH);
+    } else {
+      //do nothing
+    }
+  } else {
+    //for synonyms in oracle mode
+  }
+}
+
 } //end sql
 } //end oceanbase 
 

@@ -140,7 +140,6 @@ static const int32_t DAYS_PER_YEAR[2]=
 #define EPOCH_WDAY    4       // 1970-1-1 is thursday.
 #define LEAP_YEAR_COUNT(y)  ((y) / 4 - (y) / 100 + (y) / 400)
 #define IS_LEAP_YEAR(y) ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)
-#define TIME_MAX_VAL (3020399 * 1000000LL)    // 838:59:59 .
 #define YEAR_MAX_YEAR 2155
 #define YEAR_MIN_YEAR 1901
 #define YEAR_BASE_YEAR 1900
@@ -394,7 +393,7 @@ int ObTimeConverter::str_to_datetime(const ObString &str, const ObTimeConvertCtx
   if (cvrt_ctx.is_timestamp_) {
     local_date_sql_mode.allow_invalid_dates_ = false;
   }
-  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, scale, false, local_date_sql_mode))) {
+  if (OB_FAIL(str_to_ob_time_with_date(str, ob_time, scale, false, local_date_sql_mode, cvrt_ctx.need_truncate_))) {
     LOG_WARN("failed to convert string to datetime", K(ret));
   } else if (!cvrt_ctx.is_timestamp_ && ob_time.is_tz_name_valid_) {
     //only enable time zone data type can has tz name and tz addr
@@ -793,22 +792,23 @@ int ObTimeConverter::str_to_date(const ObString &str, int32_t &value,
   return ret;
 }
 
-int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale)
+int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale,
+                                 const ObScale &time_scale, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_TIME);
-  if (OB_FAIL(str_to_ob_time_without_date(str, ob_time, scale))) {
+  if (OB_FAIL(str_to_ob_time_without_date(str, ob_time, scale, need_truncate))) {
     LOG_WARN("failed to convert string to time", K(ret), K(str));
     if (OB_ERR_TRUNCATED_WRONG_VALUE == ret) {
       value = ob_time_to_time(ob_time);
-      time_overflow_trunc(value);
+      time_overflow_trunc(value, time_scale);
       if (DT_MODE_NEG & ob_time.mode_) {
         value = -value;
       }
     }
   } else {
     value = ob_time_to_time(ob_time);
-    ret = time_overflow_trunc(value);
+    ret = time_overflow_trunc(value, time_scale);
     if (DT_MODE_NEG & ob_time.mode_) {
       value = -value;
     }
@@ -892,7 +892,11 @@ int ObTimeConverter::datetime_to_str(int64_t value, const ObTimeZoneInfo *tz_inf
     LOG_WARN("failed to convert seconds to ob time", K(ret));
   } else if (nls_format.empty()) {
     if (OB_FAIL(ob_time_to_str(ob_time, DT_TYPE_DATETIME, scale, buf, buf_len, pos, with_delim))) {
-      LOG_WARN("failed to convert ob time to string", K(ret));
+      if (OB_SIZE_OVERFLOW == ret) {
+        LOG_TRACE("failed to convert ob time to string", K(ret));
+      } else {
+        LOG_WARN("failed to convert ob time to string", K(ret));
+      }
     }
   } else {
     if (OB_FAIL(ob_time_to_str_oracle_dfm(ob_time, scale, nls_format, buf, buf_len, pos))) {
@@ -1710,39 +1714,45 @@ int ObTimeConverter::int_to_ob_time_with_date(int64_t int64, ObTime &ob_time, bo
   return ret;
 }
 
-int ObTimeConverter::int_to_ob_time_without_date(int64_t int64, ObTime &ob_time)
+int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob_time, int64_t nano_second)
 {
   int ret = OB_SUCCESS;
   int32_t *parts = ob_time.parts_;
   ObDTMode mode = DT_TYPE_TIME;
-  if (int64 < 0) {
+  if (time_second < 0) {
     ob_time.mode_ |= DT_MODE_NEG;
-    if (INT64_MIN == int64) {
-      int64 = INT64_MAX;
+    if (INT64_MIN == time_second) {
+      time_second = INT64_MAX;
     } else {
-      int64 = -int64;
+      time_second = -time_second;
     }
   }
-  if (int64 / power_of_10[4] < power_of_10[6]) {
+  if (time_second / power_of_10[4] < power_of_10[6]) {
     // [H]HHMMSS, like 123:45:56.
-    parts[DT_SEC]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MIN]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_HOUR] = static_cast<int32_t>(int64 % power_of_10[6]);
-    if (OB_FAIL(validate_time(ob_time))) {
-      LOG_WARN("time integer is invalid", K(ret), K(int64));
+    if(nano_second) {
+      parts[DT_USEC] = static_cast<int32_t>((nano_second + 500) / power_of_10[3]);
     }
-  } else if (int64 / power_of_10[6] < power_of_10[8]) {
+    parts[DT_SEC]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MIN]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_HOUR] = static_cast<int32_t>(time_second % power_of_10[6]);
+    if (OB_FAIL(validate_time(ob_time))) {
+      LOG_WARN("time integer is invalid", K(ret), K(time_second));
+    }
+  } else if (time_second / power_of_10[6] < power_of_10[8]) {
     // HHHHMMDDHHMMSS.
     mode = DT_TYPE_DATETIME;
-    parts[DT_SEC]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MIN]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_HOUR] = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MDAY]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MON]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_YEAR] = static_cast<int32_t>(int64 % power_of_10[4]);
+    if(nano_second) {
+      parts[DT_USEC] = static_cast<int32_t>((nano_second + 500) / power_of_10[3]);
+    }
+    parts[DT_SEC]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MIN]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_HOUR] = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MDAY]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MON]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_YEAR] = static_cast<int32_t>(time_second % power_of_10[4]);
     apply_date_year2_rule(parts[DT_YEAR]);
     if (OB_FAIL(validate_datetime(ob_time, false, 0))) {
-      LOG_WARN("datetime is invalid or out of range", K(ret), K(int64));
+      LOG_WARN("datetime is invalid or out of range", K(ret), K(time_second), K(nano_second));
     } else if (ZERO_DATE != parts[DT_DATE]) {
       parts[DT_DATE] = ob_time_to_date(ob_time);
     }
@@ -1810,7 +1820,7 @@ int ObTimeConverter::get_time_zone(const ObTimeDelims *delims, ObTime &ob_time, 
   return ret;
 }
 
-int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &ob_time)
+int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &ob_time, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0) || OB_ISNULL(digits)) {
@@ -1900,7 +1910,7 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
         //if HAS_TYPE_ORACLE, digits[DT_USEC] store nanosecond in fact
         const int64_t max_precision = (HAS_TYPE_ORACLE(ob_time.mode_) ? OB_MAX_TIMESTAMP_TZ_PRECISION: OB_MAX_DATETIME_PRECISION);
         const bool use_strict_check = HAS_TYPE_ORACLE(ob_time.mode_);
-        if (OB_FAIL(apply_usecond_delim_rule(delims[DT_SEC], digits[DT_USEC], max_precision, use_strict_check))) {
+        if (OB_FAIL(apply_usecond_delim_rule(delims[DT_SEC], digits[DT_USEC], max_precision, use_strict_check, need_truncate))) {
           LOG_WARN("failed to apply rule", K(use_strict_check), K(ret));
         } else if (!(DT_TYPE_DATE & ob_time.mode_) && (DT_TYPE_TIME & ob_time.mode_)) {
           if (OB_FAIL(apply_datetime_for_time_rule(ob_time, digits, delims))) {
@@ -1922,7 +1932,8 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
 //dayofmonth函数需要容忍月、日为0的错误
 int ObTimeConverter::str_to_ob_time_with_date(
     const ObString &str, ObTime &ob_time, int16_t *scale,
-    const bool is_dayofmonth, const ObDateSqlMode date_sql_mode)
+    const bool is_dayofmonth, const ObDateSqlMode date_sql_mode,
+    const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)) {
@@ -1930,7 +1941,7 @@ int ObTimeConverter::str_to_ob_time_with_date(
     LOG_WARN("datetime string is invalid", K(ret), K(str));
   } else {
     ObTimeDigits digits[DATETIME_PART_CNT];
-    if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time))) {
+    if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time, need_truncate))) {
       LOG_WARN("failed to get digits", K(ret), K(str));
     } else if (OB_FAIL(validate_datetime(ob_time, is_dayofmonth, date_sql_mode))) {
       // OK, it seems like a valid format, now we need check its value.
@@ -1974,7 +1985,7 @@ int ObTimeConverter::str_is_date_format(const ObString &str, bool &date_flag)
   return ret;
 }
 
-int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale)
+int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob_time, int16_t *scale, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)) {
@@ -2081,7 +2092,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
             // 7 is used for rounding to 6 digits.
             if (OB_FAIL(get_datetime_digits(pos, end, 7, digits))) {
               LOG_WARN("failed to get digits from datetime string", K(ret));
-            } else if (OB_FAIL(normalize_usecond_round(digits, OB_MAX_DATETIME_PRECISION))) {
+            } else if (OB_FAIL(normalize_usecond(digits, OB_MAX_DATETIME_PRECISION, false, need_truncate))) {
               LOG_WARN("failed to round usecond", K(ret));
             } else {
               ob_time.parts_[DT_USEC] = digits.value_;    // usecond.
@@ -5299,6 +5310,16 @@ int ObTimeConverter::check_dfm_deterministic(const ObString format,
   return ret;
 }
 
+int32_t ObTimeConverter::get_days_of_month(int32_t year, int32_t month)
+{
+  int32_t res = DT_PART_MAX[DT_MDAY];
+  if (OB_LIKELY(year >= DT_PART_MIN[DT_YEAR] && year <= DT_PART_MAX[DT_YEAR]
+                && month >= DT_PART_MIN[DT_MON] && month <= DT_PART_MAX[DT_MON])) {
+    res = DAYS_PER_MON[IS_LEAP_YEAR(year)][month];
+  }
+  return res;
+}
+
 int ObTimeConverter::set_ob_time_part_directly(ObTime &ob_time, int64_t &conflict_bitset, const int64_t part_offset, const int32_t part_value)
 {
   int ret = OB_SUCCESS;
@@ -5342,7 +5363,7 @@ int ObTimeConverter::set_ob_time_part_may_conflict(ObTime &ob_time, int64_t &con
 }
 
 // DT_YEAR的赋值没有用上面的接口，原因是year的冲突检查具有特殊性。
-// 具体原因：https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/3826268
+// 具体原因：
 int ObTimeConverter::set_ob_time_year_may_conflict(ObTime &ob_time, int32_t &julian_year_value,
                                                   int32_t check_year, int32_t set_year,
                                                   bool overwrite)
@@ -5362,10 +5383,11 @@ int ObTimeConverter::set_ob_time_year_may_conflict(ObTime &ob_time, int32_t &jul
   return ret;
 }
 
-int ObTimeConverter::time_overflow_trunc(int64_t &value)
+int ObTimeConverter::time_overflow_trunc(int64_t &value, const ObScale &time_scale)
 {
   int ret = OB_SUCCESS;
-  if (value > TIME_MAX_VAL) {
+  int64_t increment = (6 == time_scale) ? 999999 : 0;
+  if (value > (TIME_MAX_VAL + increment)) {
     // we need some ob error codes that map to ER_TRUNCATED_WRONG_VALUE,
     // so we get OB_INVALID_DATE_FORMAT / OB_INVALID_DATE_VALUE / OB_ERR_TRUNCATED_WRONG_VALUE.
     // another requirement comes from cast function in ob_obj_cast.cpp is this time object will be
@@ -5373,7 +5395,7 @@ int ObTimeConverter::time_overflow_trunc(int64_t &value)
     // so we get the ONLY one: OB_ERR_TRUNCATED_WRONG_VALUE, because the other two will direct to
     // ZERO_VAL of the temporal types, like cast 'abc' or '1998-76-54' to date.
     ret = OB_ERR_TRUNCATED_WRONG_VALUE;
-    value = TIME_MAX_VAL;
+    value = TIME_MAX_VAL + increment;
   }
   return ret;
 }
@@ -5568,8 +5590,8 @@ OB_INLINE bool ObTimeConverter::is_negative(const char *&str, const char *end)
   return ret;
 }
 
-OB_INLINE int ObTimeConverter::normalize_usecond_round(ObTimeDigits &digits, const int64_t max_precision,
-    const bool use_strict_check/*false*/)
+OB_INLINE int ObTimeConverter::normalize_usecond(ObTimeDigits &digits, const int64_t max_precision,
+    const bool use_strict_check/*false*/, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(digits.value_ < 0)
@@ -5590,7 +5612,7 @@ OB_INLINE int ObTimeConverter::normalize_usecond_round(ObTimeDigits &digits, con
       } else {
         // .1234567 will round to 123457.
         digits.value_ /= static_cast<int32_t>(power_of_10[digits.len_ - max_precision]);
-        if (digits.ptr_[max_precision] >= '5') {
+        if (!need_truncate && digits.ptr_[max_precision] >= '5') {
           ++digits.value_;
         }
       }
@@ -5653,11 +5675,11 @@ OB_INLINE void ObTimeConverter::apply_date_year2_rule(int64_t &year)
 }
 
 OB_INLINE int ObTimeConverter::apply_usecond_delim_rule(ObTimeDelims &second, ObTimeDigits &usecond,
-    const int64_t max_precision, const bool use_strict_check)
+    const int64_t max_precision, const bool use_strict_check, const bool &need_truncate)
 {
   int ret = OB_SUCCESS;
   if (is_single_dot(second) && usecond.value_ > 0) {
-    ret = normalize_usecond_round(usecond, max_precision, use_strict_check);
+    ret = normalize_usecond(usecond, max_precision, use_strict_check, need_truncate);
   } else {
     usecond.value_ = 0;
   }

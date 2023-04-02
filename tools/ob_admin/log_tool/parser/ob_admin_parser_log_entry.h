@@ -16,6 +16,7 @@
 #include "storage/tx/ob_tx_log.h"
 #include "logservice/ob_log_base_type.h"
 #include "../ob_admin_log_tool_executor.h"
+
 namespace oceanbase
 {
 namespace transaction
@@ -60,6 +61,9 @@ private:
   int parse_recovery_ls_service_log_();
   int parse_standby_timestamp_log_();
   int parse_gais_log_();
+  int parse_data_dict_log_();
+  int parse_reserved_snapshot_log_();
+  int parse_medium_log_();
 
   //log type belong to trans_service
   int parse_trans_redo_log_(transaction::ObTxLogBlock &tx_log_block,
@@ -76,7 +80,7 @@ private:
   const int64_t buf_len_;
   int64_t pos_;
 
-  int64_t log_ts_;
+  int64_t scn_val_;
   palf::block_id_t block_id_;
   palf::LSN lsn_;
   share::ObAdminMutatorStringArg str_arg_;

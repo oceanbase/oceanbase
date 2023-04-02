@@ -42,7 +42,7 @@ namespace storage
 class ObTxCtxMemtableMgr : public ObIMemtableMgr
 {
 public:
-  ObTxCtxMemtableMgr() {}
+  ObTxCtxMemtableMgr() : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_) {}
   ~ObTxCtxMemtableMgr() {}
   void reset();
 
@@ -57,7 +57,7 @@ public:
   virtual void destroy() override;
 
   // create_memtable is used for creating the only memtable for CheckpointMgr
-  virtual int create_memtable(const int64_t last_replay_log_ts,
+  virtual int create_memtable(const share::SCN last_replay_scn,
                               const int64_t schema_version,
                               const bool for_replay=false) override;
 
@@ -71,7 +71,7 @@ protected:
   int unregister_from_common_checkpoint_(const ObTxCtxMemtable *memtable);
 private:
   share::ObLSID ls_id_;
-
+  common::SpinRWLock lock_def_;
 };
 
 } // namespace storage

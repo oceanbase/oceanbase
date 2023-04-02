@@ -19,6 +19,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/charset/ob_charset.h"
 #include "sql/parser/ob_parser_utils.h"
+#include "sql/udr/ob_udr_struct.h"
 
 namespace oceanbase
 {
@@ -49,7 +50,8 @@ class ObParser
 {
 public:
   explicit ObParser(common::ObIAllocator &allocator, ObSQLMode mode,
-                    common::ObCollationType conn_collation = common::CS_TYPE_UTF8MB4_GENERAL_CI);
+                    common::ObCollationType conn_collation = common::CS_TYPE_UTF8MB4_GENERAL_CI,
+                    QuestionMarkDefNameCtx *ctx = nullptr);
   virtual ~ObParser();
   /// @param queries Note that all three members of ObString is valid, size() is the length
   ///                of the single statement, length() is the length of remainer statements
@@ -133,6 +135,8 @@ enum State {
   S_DEFINER,
   S_OF,
   S_EDITIONABLE,
+  S_SIGNAL,
+  S_RESIGNAL,
 
   S_EXPLAIN,
   S_EXPLAIN_FORMAT,
@@ -191,6 +195,7 @@ private:
   // we don't use it in parser now
   ObSQLMode sql_mode_;
   common::ObCollationType connection_collation_;
+  QuestionMarkDefNameCtx *def_name_ctx_;
 };
 
 } // end namespace sql

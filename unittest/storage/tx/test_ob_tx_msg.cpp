@@ -90,7 +90,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = epoch_;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = INT_MAX64;
+    msg.commit_version_ = share::SCN::max_scn();
     msg.ret_ = OB_SUCCESS;
   }
   void build_tx_abort_msg(ObTxAbortMsg &msg)
@@ -167,7 +167,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.prepare_version_ = INT_MAX64;
+    msg.prepare_version_ = share::SCN::max_scn();
     if (OB_FAIL(msg.prepare_info_array_.push_back(ObLSLogInfo()))) {
       TRANS_LOG(WARN, "push_back info fail", K(ret));
     }
@@ -185,7 +185,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = INT_MAX64;
+    msg.commit_version_ = share::SCN::max_scn();
   }
   void build_tx_2pc_pre_commit_resp_msg(Ob2pcPreCommitRespMsg &msg)
   {
@@ -199,7 +199,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = INT_MAX64;
+    msg.commit_version_ = share::SCN::max_scn();
   }
   int build_tx_2pc_commit_msg(Ob2pcCommitReqMsg &msg)
   {
@@ -214,7 +214,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = INT_MAX64;
+    msg.commit_version_ = share::SCN::max_scn();
     if (OB_FAIL(msg.prepare_info_array_.push_back(ObLSLogInfo()))) {
       TRANS_LOG(WARN, "push_back info fail", K(ret));
     }

@@ -17,6 +17,7 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_sstable_meta_info.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -56,16 +57,26 @@ public:
   }
   OB_INLINE int64_t get_upper_trans_version() const { return ATOMIC_LOAD(&upper_trans_version_); }
   OB_INLINE int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
-  OB_INLINE int64_t get_ddl_log_ts() const { return ddl_log_ts_; }
+  OB_INLINE share::SCN get_ddl_scn() const { return ddl_scn_; }
   OB_INLINE int64_t get_create_snapshot_version() const { return create_snapshot_version_; }
-  OB_INLINE int64_t get_filled_tx_log_ts() const { return filled_tx_log_ts_; }
+  OB_INLINE share::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
+  OB_INLINE int64_t get_recycle_version() const { return recycle_version_; }
+  int decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos);
 
   int set_upper_trans_version(const int64_t upper_trans_version);
-  int64_t get_recycle_version() const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size() const;
+private:
+  OB_INLINE bool is_latest_row_store_type_valid() const
+  {
+    // Before version 4.0, latest_row_store_type was not serialized in sstable meta, but it is
+    // required and added in version 4.1. For compatibility, when deserialize from older version
+    // data, latest_row_store_type_ is filled with DUMMY_ROW_STORE
+    return latest_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
+        || ObRowStoreType::DUMMY_ROW_STORE == latest_row_store_type_;
+  }
 public:
   TO_STRING_KV(K_(version), K_(length), K(row_count_), K(occupy_size_), K(original_size_),
       K(data_checksum_), K(index_type_), K(rowkey_column_count_), K(column_cnt_),
@@ -74,9 +85,10 @@ public:
       K(create_snapshot_version_), K(progressive_merge_round_),
       K(progressive_merge_step_), K(data_index_tree_height_), K(table_mode_),
       K(upper_trans_version_), K(max_merged_trans_version_), K_(recycle_version),
-      K(ddl_log_ts_), K(filled_tx_log_ts_),
-      K(contain_uncommitted_row_), K(status_), K_(row_store_type), K_(compressor_type),
-      K_(encrypt_id), K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
+      K(ddl_scn_), K(filled_tx_scn_),
+      K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
+      K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+      K_(latest_row_store_type));
 
 public:
   int32_t version_;
@@ -98,20 +110,22 @@ public:
   int64_t progressive_merge_round_;
   int64_t progressive_merge_step_;
   int64_t upper_trans_version_;
-  // major/buf minor: snapshot version; others: max commit version
+  // major/meta major: snapshot version; others: max commit version
   int64_t max_merged_trans_version_;
   // recycle_version only avaliable for minor sstable, recored recycled multi version start
   int64_t recycle_version_;
-  int64_t ddl_log_ts_; // only used in DDL SSTable, all MB in DDL SSTable should have the same log_ts(start_log_ts)
-  int64_t filled_tx_log_ts_; // only for rebuild
+  share::SCN ddl_scn_; // only used in DDL SSTable, all MB in DDL SSTable should have the same scn(start_scn)
+  share::SCN filled_tx_scn_; // only for rebuild
   int16_t data_index_tree_height_;
   share::schema::ObTableMode table_mode_;
   uint8_t status_;
   bool contain_uncommitted_row_;
-  common::ObRowStoreType row_store_type_;
+  common::ObRowStoreType root_row_store_type_;
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
+  int16_t sstable_logic_seq_;
+  common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   //Add new variable need consider ObSSTableMetaChecker
 };
@@ -125,7 +139,9 @@ public:
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool contain_uncommitted_row() const { return basic_meta_.contain_uncommitted_row_; }
-  OB_INLINE bool is_empty() const { return 0 == basic_meta_.data_macro_block_count_; }
+  OB_INLINE bool is_empty() const {
+    return 0 == basic_meta_.data_macro_block_count_;
+  }
   OB_INLINE ObSSTableBasicMeta &get_basic_meta() { return basic_meta_; }
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE const common::ObIArray<int64_t> &get_col_checksum() const { return column_checksums_; }
@@ -156,7 +172,8 @@ public:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-  TO_STRING_KV(K_(basic_meta), K_(column_checksums), K_(data_root_info), K_(macro_info), KP_(allocator));
+  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()),
+               K_(data_root_info), K_(macro_info), KP_(allocator), K_(column_checksums));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObIAllocator *allocator);
@@ -175,14 +192,13 @@ private:
   static const int64_t SSTABLE_META_VERSION = 1;
   typedef common::ObFixedArray<int64_t, common::ObIAllocator> ColChecksumArray;
 private:
+  bool is_inited_;
+  common::ObIAllocator *allocator_;
+  common::TCRWLock lock_;
   ObSSTableBasicMeta basic_meta_;
   ColChecksumArray column_checksums_;
   ObRootBlockInfo data_root_info_;
   ObSSTableMacroInfo macro_info_;
-  // The following fields don't to persist
-  common::ObIAllocator *allocator_;
-  common::TCRWLock lock_;
-  bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);
 };
 
@@ -194,7 +210,8 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObMigrationSSTableParam &param);
-  TO_STRING_KV(K_(basic_meta), K_(column_checksums), K_(column_default_checksums), K_(table_key));
+  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()), K(column_default_checksums_.count()),
+               K_(column_checksums), K_(column_default_checksums), K_(table_key));
 private:
   static const int64_t MIGRATION_SSTABLE_PARAM_VERSION = 1;
   typedef common::ObSEArray<int64_t, common::OB_ROW_DEFAULT_COLUMNS_COUNT> ColChecksumArray;
@@ -203,6 +220,7 @@ public:
   ColChecksumArray column_checksums_;
   storage::ObITable::TableKey table_key_;
   ColChecksumArray column_default_checksums_;
+  bool is_small_sstable_;
   OB_UNIS_VERSION(MIGRATION_SSTABLE_PARAM_VERSION);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSSTableParam);
@@ -211,6 +229,9 @@ private:
 class ObSSTableMetaChecker
 {
 public:
+  static int check_sstable_meta_strict_equality(
+      const ObSSTableMeta &old_sstable_meta,
+      const ObSSTableMeta &new_sstable_meta);
   static int check_sstable_meta(
       const ObSSTableMeta &old_sstable_meta,
       const ObSSTableMeta &new_sstable_meta);

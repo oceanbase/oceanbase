@@ -35,6 +35,26 @@ namespace observer
 {
 class ObService;
 class ObTabletTableUpdater;
+struct TSITabletTableUpdatStatistics
+{
+public:
+  TSITabletTableUpdatStatistics() { reset(); }
+  void reset();
+  void calc(int64_t succ_cnt,
+            int64_t fail_cnt,
+            int64_t remove_task_cnt,
+            int64_t update_task_cnt,
+            int64_t wait_us,
+            int64_t exec_us);
+  void dump();
+private:
+  int64_t suc_cnt_;
+  int64_t fail_cnt_;
+  int64_t remove_task_cnt_;
+  int64_t update_task_cnt_;
+  int64_t total_wait_us_;
+  int64_t total_exec_us_;
+};
 class ObTabletTableUpdateTask : public ObIUniqTaskQueueTask<ObTabletTableUpdateTask>
 {
 public:
@@ -44,7 +64,7 @@ public:
       : tenant_id_(OB_INVALID_TENANT_ID),
         ls_id_(),
         tablet_id_(),
-        add_timestamp_(OB_INVALID_TIMESTAMP) {}
+        add_timestamp_(OB_INVALID_TIMESTAMP){}
   explicit ObTabletTableUpdateTask(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -90,7 +110,7 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(add_timestamp));
 private:
-  const int64_t TABLET_CHECK_INTERVAL = 120l * 1000 * 1000; //2 minutes
+  const int64_t TABLET_CHECK_INTERVAL = 2 * 3600 * 1000L * 1000L; //2 hour
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;

@@ -98,24 +98,15 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
   ObColumnSchemaV2 *col_schema = NULL;
   bool is_oracle_mode = false;
   if (column.is_generated_column()) {
-    if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1471) {
-      // when 2.0liboblog fetch <1471 cluster, Parsing the column schema only needs to read orig_default_value
-      // Can not judge cur_default_value.is_null(), because the dependent column may have a default value
-      // cur_default_value is is_not_null, misjudgment
+    // If the dependent column of the generated column has a change column, the current default value
+    // should be used instead of orig vaule
+    if (column.get_cur_default_value().is_null()) {
       if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
         LOG_WARN("get orig default value failed", K(ret));
       }
     } else {
-      // If the dependent column of the generated column has a change column, the current default value 
-      // should be used instead of orig vaule
-      if (column.get_cur_default_value().is_null()) {
-        if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
-          LOG_WARN("get orig default value failed", K(ret));
-        }
-      } else {
-        if (OB_FAIL(column.get_cur_default_value().get_string(col_def))) {
-          LOG_WARN("get cur default value failed", K(ret));
-        }
+      if (OB_FAIL(column.get_cur_default_value().get_string(col_def))) {
+        LOG_WARN("get cur default value failed", K(ret));
       }
     }
 
@@ -132,6 +123,8 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
         LOG_WARN("get generated column expr failed", K(ret));
       } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
         column.add_column_flag(GENERATED_CTXCAT_CASCADE_FLAG);
+      } else if (T_FUN_SYS_SPATIAL_CELLID == root_expr_type || T_FUN_SYS_SPATIAL_MBR == root_expr_type) {
+        column.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
       } else {
         LOG_DEBUG("succ to resolve_generated_column_info", K(col_def), K(root_expr_type), K(columns_names), K(table_schema));
       }
@@ -201,6 +194,11 @@ bool ObSchemaUtils::is_default_expr_v2_column(uint64_t flag)
 bool ObSchemaUtils::is_fulltext_column(uint64_t flag)
 {
   return flag & GENERATED_CTXCAT_CASCADE_FLAG;
+}
+
+bool ObSchemaUtils::is_spatial_generated_column(uint64_t flag)
+{
+  return flag & SPATIAL_INDEX_GENERATED_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_label_se_column(uint64_t flag)

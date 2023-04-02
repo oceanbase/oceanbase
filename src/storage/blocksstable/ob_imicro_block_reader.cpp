@@ -19,6 +19,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+
 int ObIMicroBlockReader::locate_range(
     const ObDatumRange &range,
     const bool is_left_border,
@@ -158,8 +159,8 @@ int ObIMicroBlockReader::filter_white_filter(
         if (OB_UNLIKELY(ref_objs.count() != 1)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Invalid argument for comparison operator", K(ret), K(ref_objs));
-        } else if ((lib::is_mysql_mode() && obj.is_null())
-                    || (lib::is_oracle_mode() && obj.is_null_oracle())) {
+        } else if ((lib::is_mysql_mode() && (obj.is_null() || ref_objs.at(0).is_null()))
+                    || (lib::is_oracle_mode() && (obj.is_null_oracle() || ref_objs.at(0).is_null_oracle()))) {
           // Result of compare with null is null
         } else if (ObObjCmpFuncs::compare_oper_nullsafe(
                    obj,

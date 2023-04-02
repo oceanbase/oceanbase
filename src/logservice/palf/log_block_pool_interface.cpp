@@ -49,19 +49,11 @@ int remove_file_at(const char *dir, const char *path, ILogBlockPool *log_block_p
   if (-1 == fd) {
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "::open directory failed", K(ret), K(dir));
-    // if this block is used for palf, return it to LogBlockPool
-  } else if (OB_FAIL(is_block_used_for_palf(fd, path, result))) {
-    PALF_LOG(ERROR, "block_is_used_for_palf failed", K(ret));
-  } else if (true == result) {
-    if (OB_FAIL(reuse_block_at(fd, path))) {
-      PALF_LOG(ERROR, "reuse_block_at failed", K(ret), K(errno), K(path));
-    } else if (OB_FAIL(log_block_pool->remove_block_at(fd, path))) {
-      PALF_LOG(ERROR, "remove_block_at failed", K(ret));
-    }
+  } else if (OB_FAIL(log_block_pool->remove_block_at(fd, path))) {
+    PALF_LOG(ERROR, "remove_block_at failed", K(ret));
     // otherwise, unlink it.
   } else {
-    PALF_LOG(ERROR, "this block is not used for palf", K(ret), K(dir), K(path));
-    ::unlinkat(fd, path, 0);
+    PALF_LOG(INFO, "remove_file_at success", K(dir), K(path));
   }
 
   if (-1 != fd) {

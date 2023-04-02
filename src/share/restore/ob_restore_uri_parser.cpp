@@ -31,6 +31,7 @@ ObPhysicalRestoreOptionParser::ExtraArgsCb::Action ObPhysicalRestoreOptionParser
   {"locality",              ObPhysicalRestoreOptionParser::ExtraArgsCb::set_locality,             false},
   {"primary_zone",          ObPhysicalRestoreOptionParser::ExtraArgsCb::set_primary_zone,         false},
   {"kms_encrypt",           ObPhysicalRestoreOptionParser::ExtraArgsCb::set_kms_encrypt,          false},
+  {"concurrency",           ObPhysicalRestoreOptionParser::ExtraArgsCb::set_concurrency,          false},
 };
 
 ObPhysicalRestoreOptionParser::ExtraArgsCb::ExtraArgsCb(ObPhysicalRestoreJob &job)
@@ -181,7 +182,25 @@ int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_kms_encrypt(
   return ret;
 }
 
-
+int ObPhysicalRestoreOptionParser::ExtraArgsCb::set_concurrency(
+    ObPhysicalRestoreJob &job,
+    const char *val)
+{
+  int ret = OB_SUCCESS;
+  int64_t concurrency = 0;
+  if (OB_ISNULL(val)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(ob_atoll(val, concurrency))) {
+    LOG_WARN("failed to atoll", K(ret), K(val));
+  } else if (concurrency < 0 || concurrency > 100) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("concurrency is not valid", K(ret), K(concurrency));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "restore concurrency");
+  } else {
+    job.set_concurrency(concurrency);
+  }
+  return ret;
+}
 
 int ObPhysicalRestoreUriParser::parse(
     const common::ObString &multi_uri,

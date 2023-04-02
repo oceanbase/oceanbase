@@ -98,7 +98,9 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
   if (!handle.is_id_valid()) {
     COMMON_LOG(TRACE, "MTALLOC.first_alloc", KP(&handle.mt_));
     LockGuard guard(lock_);
-    if (!handle.is_id_valid()) {
+    if (handle.is_frozen()) {
+      COMMON_LOG(ERROR, "cannot alloc because allocator is frozen", K(ret), K(handle.mt_));
+    } else if (!handle.is_id_valid()) {
       handle.set_clock(arena_.retired());
       hlist_.set_active(handle);
     }

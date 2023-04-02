@@ -81,16 +81,25 @@ int ObInitSqcP::process()
     LOG_WARN("Failed to init sqc env", K(ret));
   } else if (OB_FAIL(sqc_handler->pre_acquire_px_worker(result_.reserved_thread_count_))) {
     LOG_WARN("Failed to pre acquire px worker", K(ret));
+  } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
+    LOG_WARN("pre setup op input failed", K(ret));
+  } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
+    LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
   } else if (result_.reserved_thread_count_ <= 0) {
     ret = OB_ERR_INSUFFICIENT_PX_WORKER;
     LOG_WARN("Worker thread res not enough", K_(result));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("Failed to link qc sqc channel", K(ret));
-  } else if (OB_FAIL(pre_setup_op_input(*sqc_handler))) {
-    LOG_WARN("pre setup op input failed", K(ret));
   } else {
     /*do nothing*/
   }
+
+#ifdef ERRSIM
+  if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_INIT_PROCESS_FAILED) OB_SUCCESS)) {
+    LOG_WARN("match sqc execute errism", K(ret));
+  }
+#endif
+
   if (OB_FAIL(ret) && OB_NOT_NULL(sqc_handler)) {
     if (unregister_interrupt_) {
       ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
@@ -101,7 +110,7 @@ int ObInitSqcP::process()
     arg_.sqc_handler_ = nullptr;
   }
 
-  // https://work.aone.alibaba-inc.com/issue/37723456
+  //
   if (OB_SUCCESS != ret && is_schema_error(ret)) {
     if (OB_NOT_NULL(sqc_handler)
         && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
@@ -124,8 +133,16 @@ int ObInitSqcP::pre_setup_op_input(ObPxSqcHandler &sqc_handler)
   ObPxSubCoord &sub_coord = sqc_handler.get_sub_coord();
   ObExecContext *ctx = sqc_handler.get_sqc_init_arg().exec_ctx_;
   ObOpSpec *root = sqc_handler.get_sqc_init_arg().op_spec_root_;
-  if (OB_FAIL(sub_coord.init_px_bloom_filter_advance(ctx, root))) {
-    LOG_WARN("init px bloom filter advance failed", K(ret));
+  ObPxSqcMeta &sqc = sqc_handler.get_sqc_init_arg().sqc_;
+  sub_coord.set_is_single_tsc_leaf_dfo(sqc.is_single_tsc_leaf_dfo());
+  CK(OB_NOT_NULL(ctx) && OB_NOT_NULL(root));
+  if (sqc.is_single_tsc_leaf_dfo() &&
+      OB_FAIL(sub_coord.rebuild_sqc_access_table_locations())) {
+    LOG_WARN("fail to rebuild sqc access location", K(ret));
+  } else if (OB_FAIL(sub_coord.pre_setup_op_input(*ctx, *root, sub_coord.get_sqc_ctx(),
+      sqc.get_access_table_locations(),
+      sqc.get_access_table_location_keys()))) {
+    LOG_WARN("pre_setup_op_input failed", K(ret));
   }
   return ret;
 }
@@ -255,15 +272,16 @@ void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterrupti
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
-    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS) {
+    if (sqc_->is_ignore_vtable_error() && err_ != OB_SUCCESS
+        && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(err_)) {
       // 当该SQC是虚拟表查询时, 调度RPC失败时需要忽略错误结果.
       // 并mock一个sqc finsh msg发送给正在轮询消息的PX算子
       // 此操作已确认是线程安全的.
       mock_sqc_finish_msg();
     } else {
       sqc_->set_need_report(false);
-      if (!sqc_alive_) {
-        sqc_->set_server_not_alive();
+      if (need_set_not_alive_) {
+        sqc_->set_server_not_alive(true);
       }
     }
   }
@@ -299,6 +317,8 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           buffer->set_data_msg(false);
           buffer->timeout_ts() = timeout_ts_;
           buffer->set_msg_type(dtl::ObDtlMsgType::FINISH_SQC_RESULT);
+          const bool is_first_buffer_cached = false;
+          const bool inc_recv_buf_cnt = false;
           if (OB_FAIL(common::serialization::encode(buf, size, pos, header))) {
             LOG_WARN("fail to encode buffer", K(ret));
           } else if (OB_FAIL(common::serialization::encode(buf, size, pos, finish_msg))) {
@@ -306,7 +326,7 @@ int ObFastInitSqcReportQCMessageCall::mock_sqc_finish_msg()
           } else if (FALSE_IT(buffer->size() = pos)) {
           } else if (FALSE_IT(pos = 0)) {
           } else if (FALSE_IT(buffer->tenant_id() = ch->get_tenant_id())) {
-          } else if (OB_FAIL(ch->attach(buffer))) {
+          } else if (OB_FAIL(ch->attach(buffer, is_first_buffer_cached, inc_recv_buf_cnt))) {
             LOG_WARN("fail to feedup buffer", K(ret));
           } else if (FALSE_IT(ch->free_buffer_count())) {
           } else {
@@ -368,7 +388,7 @@ int ObInitFastSqcP::process()
              || !sqc_handler->valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid sqc handler", K(ret), KPC(sqc_handler));
-  } else if (OB_FAIL(E(EventTable::EN_PX_SQC_EXECUTE_FAILED) OB_SUCCESS)) {
+  } else if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_EXECUTE_FAILED) OB_SUCCESS)) {
     LOG_WARN("match sqc execute errism", K(ret));
   } else if (OB_ISNULL(session = sqc_handler->get_exec_ctx().get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -378,7 +398,6 @@ int ObInitFastSqcP::process()
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     arg.sqc_.set_task_count(1);
-    arg.sqc_.set_rpc_worker(true);
     ObPxInterruptGuard px_int_guard(arg.sqc_.get_interrupt_id().px_interrupt_id_);
     lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
@@ -392,7 +411,7 @@ int ObInitFastSqcP::process()
     }
   }
 
-  // https://work.aone.alibaba-inc.com/issue/37723456
+  //
   if (OB_SUCCESS != ret && is_schema_error(ret)) {
     if (OB_NOT_NULL(sqc_handler)
         && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
@@ -455,7 +474,7 @@ void ObFastInitSqcCB::on_timeout()
 
 int ObFastInitSqcCB::process()
 {
-  // https://work.aone.alibaba-inc.com/issue/26171617
+  //
   int ret = rcode_.rcode_;
   if (OB_FAIL(ret)) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
@@ -476,10 +495,7 @@ int ObFastInitSqcCB::deal_with_rpc_timeout_err_safely()
 
 {
   int ret = OB_SUCCESS;
-  // only if it's sure init_sqc msg is not sent to sqc successfully, we can retry the query.
-  bool init_sqc_not_send_out = (get_error() == EASY_TIMEOUT_NOT_SENT_OUT
-      || get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
-  ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_, init_sqc_not_send_out);
+  ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_);
   call.ret_ = OB_TIMEOUT;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
@@ -495,7 +511,11 @@ void ObFastInitSqcCB::interrupt_qc(int err, bool is_timeout)
   int ret = OB_SUCCESS;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
-    ObFastInitSqcReportQCMessageCall call(sqc_, err, timeout_ts_, !is_timeout);
+    // if we are sure init_sqc msg is not sent to sqc successfully, we don't have to set sqc not alive.
+    bool init_sqc_not_send_out = (get_error() == EASY_TIMEOUT_NOT_SENT_OUT
+                                 || get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
+    const bool need_set_not_alive = is_timeout && !init_sqc_not_send_out;
+    ObFastInitSqcReportQCMessageCall call(sqc_, err, timeout_ts_, need_set_not_alive);
     if (OB_FAIL(manager->get_map().atomic_refactored(interrupt_id_, call))) {
       LOG_WARN("fail to set need report", K(interrupt_id_));
     } else if (!call.need_interrupt_) {
@@ -529,15 +549,10 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
         int a_ret = OB_SUCCESS;
         if (OB_UNLIKELY(OB_SUCCESS != (a_ret = retry_info_->add_invalid_server_distinctly(
                         addr_)))) {
-          LOG_WARN("fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
+          LOG_WARN_RET(a_ret, "fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
         }
       }
-      if (can_retry_) {
-        // return OB_RPC_CONNECT_ERROR to retry.
-        ret_ = OB_RPC_CONNECT_ERROR;
-      } else {
-        ret_ = OB_PACKET_STATUS_UNKNOWN;
-      }
+      ret_ = OB_RPC_CONNECT_ERROR;
     } else {
       LOG_DEBUG("rpc return OB_TIMEOUT, and it is actually timeout, "
                 "do not change error code", K(ret_),
@@ -573,18 +588,32 @@ int ObPxTenantTargetMonitorP::process()
   ObTimeGuard timeguard("px_target_request", 100000);
   const uint64_t tenant_id = arg_.get_tenant_id();
   const uint64_t follower_version = arg_.get_version();
+  // server id of the leader that the follower sync with previously.
+  const uint64_t prev_leader_server_id = ObPxTenantTargetMonitor::get_server_id(follower_version);
+  const uint64_t leader_server_id  = GCTX.server_id_;
   bool is_leader;
   uint64_t leader_version;
+  result_.set_tenant_id(tenant_id);
   if (OB_FAIL(OB_PX_TARGET_MGR.is_leader(tenant_id, is_leader))) {
-    LOG_WARN("get is_leader failed", K(ret), K(tenant_id));
+    LOG_ERROR("get is_leader failed", K(ret), K(tenant_id));
+  } else if (!is_leader) {
+    result_.set_status(MONITOR_NOT_MASTER);
+  } else if (arg_.need_refresh_all_ || prev_leader_server_id != leader_server_id) {
+    if (OB_FAIL(OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id))) {
+      LOG_ERROR("reset leader statistics failed", K(ret));
+    } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
+      LOG_WARN("get master_version failed", K(ret), K(tenant_id));
+    } else {
+      result_.set_status(MONITOR_VERSION_NOT_MATCH);
+      result_.set_version(leader_version);
+      LOG_INFO("need refresh all", K(tenant_id), K(arg_.need_refresh_all_),
+               K(follower_version), K(prev_leader_server_id), K(leader_server_id));
+    }
   } else if (OB_FAIL(OB_PX_TARGET_MGR.get_version(tenant_id, leader_version))) {
     LOG_WARN("get master_version failed", K(ret), K(tenant_id));
   } else {
-    result_.set_tenant_id(tenant_id);
     result_.set_version(leader_version);
-    if (!is_leader) {
-      result_.set_status(MONITOR_NOT_MASTER);
-    } else if (follower_version != leader_version) {
+    if (follower_version != leader_version) {
       result_.set_status(MONITOR_VERSION_NOT_MATCH);
     } else {
       result_.set_status(MONITOR_READY);
@@ -599,8 +628,10 @@ int ObPxTenantTargetMonitorP::process()
       // A simple and rude exception handling, re-statistics
       if (OB_FAIL(ret)) {
         int tem_ret = OB_SUCCESS;
-        if ((tem_ret = OB_PX_TARGET_MGR.reset_statistics(tenant_id, leader_version + 1)) != OB_SUCCESS) {
-          LOG_WARN("reset statistics failed", K(tem_ret));
+        if ((tem_ret = OB_PX_TARGET_MGR.reset_leader_statistics(tenant_id)) != OB_SUCCESS) {
+          LOG_ERROR("reset statistics failed", K(tem_ret), K(tenant_id), K(leader_version));
+        } else {
+          LOG_INFO("reset statistics succeed", K(tenant_id), K(leader_version));
         }
       } else {
         const hash::ObHashMap<ObAddr, ServerTargetUsage> *global_target_usage = NULL;

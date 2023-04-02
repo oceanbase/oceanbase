@@ -39,7 +39,7 @@ namespace storage
 ObStorageLogger::ObStorageLogger()
   : is_inited_(false), log_writer_(nullptr),
     tenant_log_writer_(), server_log_writer_(),
-    slogger_mgr_(nullptr), log_seq_(0),
+    slogger_mgr_(nullptr), log_seq_(0), build_log_mutex_(common::ObLatchIds::SLOG_PROCESSING_MUTEX),
     log_file_spec_(), is_start_(false)
 {
 }
@@ -181,25 +181,6 @@ int ObStorageLogger::start_log(const ObLogCursor &start_cursor)
     log_seq_ = start_cursor.log_id_;
     is_start_ = true;
   }
-  return ret;
-}
-
-
-int ObStorageLogger::is_logger_ok(bool &is_ok)
-{
-  int ret = OB_SUCCESS;
-  is_ok = true;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_REDO_LOG(WARN, "The ObStorageLogger has not been inited.", K(ret));
-  } else {
-    is_ok = log_writer_->is_ok();
-    if (!is_ok) {
-      STORAGE_REDO_LOG(WARN, "Storage log writer is not ok.");
-    }
-  }
-
   return ret;
 }
 

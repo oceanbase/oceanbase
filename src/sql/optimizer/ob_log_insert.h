@@ -30,6 +30,7 @@ public:
         is_replace_(false),
         insert_up_(false),
         is_insert_select_(false),
+        append_table_id_(0),
         constraint_infos_(NULL)
   {
   }
@@ -81,6 +82,11 @@ public:
   virtual int est_cost() override;
   virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
   int inner_est_cost(double child_card, double &op_cost);
+  inline void set_append_table_id(const uint64_t append_table_id)
+  {
+    append_table_id_ = append_table_id;
+  }
+  inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_constraint_infos(const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos)
   {
     constraint_infos_ = constraint_infos;
@@ -89,11 +95,11 @@ public:
   {
     return constraint_infos_;
   }
+  virtual int inner_replace_op_exprs(
+        const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item) override;
 protected:
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type);
   int get_constraint_info_exprs(ObIArray<ObRawExpr*> &all_exprs);
   virtual int generate_rowid_expr_for_trigger() override;
   virtual int generate_multi_part_partition_id_expr() override;
@@ -105,6 +111,7 @@ protected:
   bool insert_up_; // insert on duplicate update statement
   //for SPM Pruning
   bool is_insert_select_;
+  uint64_t append_table_id_;
   const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos_;
 };
 

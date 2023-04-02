@@ -50,7 +50,7 @@ protected:
 };
 
 TestKVCache::TestKVCache()
-  : tenant_id_(1234),
+  : tenant_id_(900),
     lower_mem_limit_(8 * 1024 * 1024),
     upper_mem_limit_(16 * 1024 * 1024)
 {
@@ -151,7 +151,7 @@ TEST(ObKVGlobalCache, normal)
   //invalid argument
   ret = ObKVGlobalCache::get_instance().init(&getter, -1);
   ASSERT_NE(OB_SUCCESS, ret);
-  uint64_t tenant_id_ = 1234;
+  uint64_t tenant_id_ = 900;
   int64_t washable_size = -1;
   ret = ObKVGlobalCache::get_instance().store_.get_washable_size(tenant_id_, washable_size, -10);
   ASSERT_NE(OB_SUCCESS, ret);
@@ -181,7 +181,7 @@ TEST(TestKVCacheValue, wash_stress)
   const int64_t bucket_num = 1024L * 1024L;
   const int64_t max_cache_size = 100L * 1024L * 1024L * 1024L;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
-  const uint64_t tenant_id = 1234;
+  const uint64_t tenant_id = 900;
   const int64_t lower_mem_limit = 40L * 1024L * 1024L * 1024L;
   const int64_t upper_mem_limit = 60L * 1024L * 1024L * 1024L;
   CHUNK_MGR.set_limit(upper_mem_limit * 3 / 2);
@@ -299,7 +299,7 @@ TEST_F(TestKVCache, test_func)
   GlobalHazardVersion &hazard_version = ObKVGlobalCache::get_instance().map_.global_hazard_version_;
   ObKVCacheStore &store = ObKVGlobalCache::get_instance().store_;
 
-  key.v_ = 1234;
+  key.v_ = 900;
   key.tenant_id_ = tenant_id_;
   value.v_ = 4321;
 
@@ -331,7 +331,7 @@ TEST_F(TestKVCache, test_func)
   ret = cache.set_priority(0);
   ASSERT_NE(OB_SUCCESS, ret);
   TestKey bad_key;
-  bad_key.v_ = 1234;
+  bad_key.v_ = 900;
   bad_key.tenant_id_ = OB_DEFAULT_TENANT_COUNT+1;
   ret = cache.put(bad_key, value);
   ASSERT_NE(OB_SUCCESS, ret);
@@ -415,7 +415,7 @@ TEST_F(TestKVCache, test_large_kv)
   const TestValue *pvalue = NULL;
   ObKVCacheHandle handle;
   ObKVCacheIterator iter;
-  key.v_ = 1234;
+  key.v_ = 900;
   key.tenant_id_ = tenant_id_;
   value.v_ = 4321;
 
@@ -458,7 +458,7 @@ TEST_F(TestKVCache, test_large_kv)
 
 
 //   COMMON_LOG(INFO, "********** Add tenant and put kv **********");
-//   for (int64_t t = 1234; t < 1244; ++t) {
+//   for (int64_t t = 900; t < 1244; ++t) {
 //     key.tenant_id_ = t;
 //     ret = ObTenantManager::get_instance().add_tenant(t);
 //     ASSERT_EQ(OB_SUCCESS, ret);
@@ -539,7 +539,7 @@ TEST_F(TestKVCache, test_wash)
 
 
   COMMON_LOG(INFO, "********** Start nonempty wash every tenant **********");
-  for (int64_t t = 1234; t < 1264; ++t) {
+  for (int64_t t = 900; t < 930; ++t) {
     key.tenant_id_ = t;
     ret = getter.add_tenant(t,
                             lower_mem_limit_,
@@ -556,7 +556,7 @@ TEST_F(TestKVCache, test_wash)
 
   COMMON_LOG(INFO, "********** Start nonempty wash all tenant **********");
   for (int64_t j = 0; j < 20; ++j) {
-    for (int64_t t = 1234; t < 1264; ++t) {
+    for (int64_t t = 900; t < 930; ++t) {
       key.tenant_id_ = t;
       ret = getter.add_tenant(t,
                               lower_mem_limit_,
@@ -598,7 +598,7 @@ TEST_F(TestKVCache, test_washable_size)
   TestValue value;
   ObKVCacheHandle handle;
   ObKVCacheIterator iter;
-  key.v_ = 1234;
+  key.v_ = 900;
   key.tenant_id_ = tenant_id_;
   value.v_ = 4321;
 
@@ -687,7 +687,7 @@ TEST_F(TestKVCache, test_hold_size)
 
   TestKey key;
   TestValue value;
-  key.v_ = 1234;
+  key.v_ = 900;
   key.tenant_id_ = tenant_id_;
   value.v_ = 4321;
   ASSERT_EQ(OB_SUCCESS, cache.put(key, value));
@@ -742,7 +742,7 @@ TEST_F(TestKVCache, test_hold_size)
 //   int ret = OB_SUCCESS;
 //   TestKey key;
 //   TestValue value;
-//   key.v_ = 1234;
+//   key.v_ = 900;
 //   key.tenant_id_ = tenant_id_;
 //   value.v_ = 4321;
 //   int64_t i = 0;
@@ -817,7 +817,7 @@ TEST_F(TestKVCache, cache_wash_self)
   int ret = OB_SUCCESS;
   TestKey key;
   TestValue value;
-  key.v_ = 1234;
+  key.v_ = 900;
   key.tenant_id_ = tenant_id_;
   value.v_ = 4321;
   int64_t i = 0;

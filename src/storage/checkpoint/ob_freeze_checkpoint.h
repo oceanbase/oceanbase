@@ -17,6 +17,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -60,21 +61,21 @@ int freeze_checkpoint_location_to_string(const ObFreezeCheckpointLocation locati
 struct ObFreezeCheckpointVTInfo
 {
   ObTabletID tablet_id;
-  int64_t rec_log_ts;
+  share::SCN rec_scn;
   ObFreezeCheckpointLocation location;
-  bool rec_log_ts_is_stable;
+  bool rec_scn_is_stable;
 
   TO_STRING_KV(
     K(tablet_id),
-    K(rec_log_ts),
+    K(rec_scn),
     K(location),
-    K(rec_log_ts_is_stable)
+    K(rec_scn_is_stable)
   );
 };
 
 // checkpoint unit like data_memtable and memtable that
 // 1. write TRANS_SERVICE_LOG_BASE_TYPE clog
-// 2. have freeze operation and rec_log_ts can become smaller
+// 2. have freeze operation and rec_scn can become smaller
 // inherit from ObFreezeCheckpoint
 // register into ObDataCheckpoint
 class ObFreezeCheckpoint : public common::ObDLinkBase<ObFreezeCheckpoint>
@@ -85,13 +86,14 @@ class ObFreezeCheckpoint : public common::ObDLinkBase<ObFreezeCheckpoint>
 public:
   ObFreezeCheckpoint() : location_(OUT), data_checkpoint_(nullptr) {}
   virtual ~ObFreezeCheckpoint() {}
-  virtual void remove_from_data_checkpoint(bool need_lock_data_checkpoint = true);
-  virtual int64_t get_rec_log_ts() = 0;
+  void reset();
+  virtual void remove_from_data_checkpoint();
+  virtual share::SCN get_rec_scn() = 0;
   virtual int flush(share::ObLSID ls_id) = 0;
-  // judge rec_log_ts of the checkpoint unit won't get smaller
-  // by comparing with max_consequent_callbacked_log_ts
-  // a unit will only be moved once by rec_log_ts_stable_
-  virtual bool rec_log_ts_is_stable() = 0;
+  // judge rec_scn of the checkpoint unit won't get smaller
+  // by comparing with max_consequent_callbacked_scn
+  // a unit will only be moved once by rec_scn_stable_
+  virtual bool rec_scn_is_stable() = 0;
   // Whether the dump conditions are met
   virtual bool ready_for_flush() = 0;
   // avoid active checkpoint block minor merge
@@ -104,7 +106,7 @@ public:
   int add_to_data_checkpoint(ObDataCheckpoint *data_checkpoint);
   bool is_in_prepare_list_of_data_checkpoint();
   // transfer to active_list in ObDataCheckpoint
-  // when the checkpoint unit rec_log_ts_is_stable
+  // when the checkpoint unit rec_scn_is_stable
   // @param[in] is_ls_freeze, whether the process is triggered by logstream_freeze
   int check_can_move_to_active(bool is_ls_freeze = false);
   // after checkpoint ready_for_flush

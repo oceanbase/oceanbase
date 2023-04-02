@@ -1,4 +1,5 @@
 /**
+
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -29,6 +30,7 @@
 #include "sql/engine/px/ob_px_exchange.h"
 #include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/basic/ob_ra_datum_store.h"
+#include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 
 namespace oceanbase
 {
@@ -71,6 +73,7 @@ class ObPxTransmitSpec : public ObTransmitSpec
 public:
   ObPxTransmitSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
   ~ObPxTransmitSpec() {}
+  virtual int register_to_datahub(ObExecContext &ctx) const override;
   ObPxSampleType sample_type_;  //for range/pkey range
   // for null aware anti join, broadcast first line && null join key
   bool need_null_aware_shuffle_;
@@ -82,6 +85,8 @@ public:
   // saving rows when sampling
   ExprFixedArray sampling_saving_row_;
   int64_t repartition_table_id_; // for pkey, target table location id
+  ObExpr *wf_hybrid_aggr_status_expr_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> wf_hybrid_pby_exprs_cnt_array_;
 };
 
 class ObPxTransmitOp : public ObTransmitOp
@@ -121,9 +126,8 @@ protected:
   {
     return is_vectorized() ? send_rows_in_batch(sc) : send_rows_one_by_one(sc);
   }
-
-  int send_rows_one_by_one(ObSliceIdxCalc &slice_calc);
-  int send_rows_in_batch(ObSliceIdxCalc &slice_calc);
+  int send_rows_one_by_one(ObSliceIdxCalc &sc);
+  int send_rows_in_batch(ObSliceIdxCalc &sc);
 
   int broadcast_rows(ObSliceIdxCalc &slice_calc);
 
@@ -148,14 +152,23 @@ private:
   int broadcast_eof_row();
   int next_row();
   int set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc);
-  bool is_dml_type_match_iter_end(bool need_drive_dml_query);
+  int set_wf_hybrid_slice_id_calc_type(ObSliceIdxCalc &slice_calc);
   int fetch_first_row();
   int set_expect_range_count();
-
+  int wait_channel_ready_msg();
   int64_t get_random_seq()
   {
     return nrand48(rand48_buf_) % INT16_MAX;
   }
+  /*should wait sync msg before send rows. but 3 exceptions:
+      1. already received the channel ready msg
+      2. first DFO under PX (which is adjoin to PX/rootdfo)
+      3. using single DFO scheduling policy (parallel = 1)*/
+  bool need_wait_sync_msg(const ObPxSQCProxy &proxy, const uint64_t curr_cluster_version) const { return ObInitChannelPieceMsgCtx::enable_dh_channel_sync(curr_cluster_version >= CLUSTER_VERSION_4_1_0_0)
+                                                                    && !receive_channel_ready_
+                                                                    && !proxy.adjoining_root_dfo()
+                                                                    && !proxy.get_transmit_use_interm_result(); }
+  int try_wait_channel();
 protected:
   ObArray<ObChunkDatumStore::Block *> ch_blocks_;
   ObArray<ObChunkDatumStore::BlockBufferWrap> blk_bufs_;
@@ -191,6 +204,7 @@ protected:
   bool batch_param_remain_;
 
   unsigned short rand48_buf_[3];
+  bool receive_channel_ready_;
 };
 
 inline void ObPxTransmitOp::update_row(const ObExpr *expr, int64_t tablet_id)

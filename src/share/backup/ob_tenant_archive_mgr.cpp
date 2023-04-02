@@ -71,10 +71,10 @@ int ObTenantArchiveMgr::is_archive_running(
 
 // piece op
 int ObTenantArchiveMgr::decide_piece_id(
-    const ARCHIVE_SCN_TYPE &piece_start_scn, 
+    const SCN &piece_start_scn,
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
-    const ARCHIVE_SCN_TYPE &scn, 
+    const SCN &scn,
     int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
@@ -88,42 +88,42 @@ int ObTenantArchiveMgr::decide_piece_id(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid start_piece_id", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(scn));
   } else {
-    piece_id = (scn - piece_start_scn) / (piece_switch_interval * 1000L) + start_piece_id;
+    piece_id = (scn.convert_to_ts() - piece_start_scn.convert_to_ts()) / piece_switch_interval + start_piece_id;
   }
 
   return ret;
 }
 
 int ObTenantArchiveMgr::decide_piece_start_scn(
-    const ARCHIVE_SCN_TYPE &piece_start_scn, 
+    const SCN &piece_start_scn,
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
     const int64_t piece_id, 
-    ARCHIVE_SCN_TYPE &start_scn)
+    SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (piece_id < start_piece_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid piece id", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
-  } else if (0 >= piece_start_scn) {
+  } else if (SCN::min_scn() >= piece_start_scn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid piece_start_scn", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
   } else if (0 >= piece_switch_interval) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid piece_switch_interval", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
-  }else {
-    start_scn = piece_start_scn + (piece_id - start_piece_id) * (piece_switch_interval * 1000L);
+  } else if (OB_FAIL(start_scn.convert_from_ts(piece_start_scn.convert_to_ts() + (piece_id - start_piece_id) * piece_switch_interval))) {
+    LOG_WARN("fail to set start scn", K(ret), K(piece_start_scn), K(piece_id), K(start_piece_id), K(piece_switch_interval));
   }
 
   return ret;
 }
 
 int ObTenantArchiveMgr::decide_piece_end_scn(
-    const ARCHIVE_SCN_TYPE &piece_start_scn, 
+    const SCN &piece_start_scn,
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
     const int64_t piece_id, 
-    ARCHIVE_SCN_TYPE &end_scn)
+    SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   // piece end scn is the start of next piece.
@@ -135,25 +135,23 @@ int ObTenantArchiveMgr::decide_piece_end_scn(
 }
 
 int ObTenantArchiveMgr::decide_first_piece_start_scn(
-  const ARCHIVE_SCN_TYPE &start_scn, 
-  const int64_t piece_switch_interval_us, 
-  ARCHIVE_SCN_TYPE &piece_start_scn)
+  const SCN &start_scn,
+  const int64_t piece_switch_interval,
+  SCN &piece_start_scn)
 {
   int ret = OB_SUCCESS;
 
-  const int64_t ONE_DAY = 24 * 3600 * 1000000000L; // ns
-  const int64_t ONE_HOUR = 3600 * 1000000000L; // ns
-  const int64_t ONE_MINUTE = 60 * 1000000000L; // ns
-  const int64_t TEN_SECONDS = 10 * 60 * 1000000000L; // ns
-
-  const int64_t piece_switch_interval = piece_switch_interval_us * 1000L;
+  const int64_t ONE_DAY = 24 * 3600 * 1000000L; // us
+  const int64_t ONE_HOUR = 3600 * 1000000L; // us
+  const int64_t ONE_MINUTE = 60 * 1000000L; // us
+  const int64_t TEN_SECONDS = 10 * 60 * 1000000L; // us
   // If 'piece_switch_interval' is equal or bigger than one day, then it must be an integer multiple of day.
   if (ONE_DAY <= piece_switch_interval) {
     if (0 != piece_switch_interval % ONE_DAY) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("piece switch interval must be an integer multiple of day", K(ret), K(start_scn), K(piece_switch_interval));
-    } else {
-      piece_start_scn = (start_scn / ONE_DAY) * ONE_DAY;
+    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / ONE_DAY) * ONE_DAY))) {
+      LOG_WARN("fail to set piece start scn", K(ret));
     }
   }
 
@@ -162,8 +160,8 @@ int ObTenantArchiveMgr::decide_first_piece_start_scn(
     if (0 != piece_switch_interval % ONE_HOUR) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("piece switch interval must be an integer multiple of hour", K(ret), K(start_scn), K(piece_switch_interval));
-    } else {
-      piece_start_scn = (start_scn / ONE_HOUR) * ONE_HOUR;
+    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / ONE_HOUR) * ONE_HOUR))) {
+      LOG_WARN("fail to set piece start scn", K(ret));
     }
   } 
 
@@ -172,8 +170,8 @@ int ObTenantArchiveMgr::decide_first_piece_start_scn(
     if (0 != piece_switch_interval % ONE_MINUTE) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("piece switch interval must be an integer multiple of minute", K(ret), K(start_scn), K(piece_switch_interval));
-    } else {
-      piece_start_scn = (start_scn / ONE_MINUTE) * ONE_MINUTE;
+    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / ONE_MINUTE) * ONE_MINUTE))) {
+      LOG_WARN("fail to set piece start scn", K(ret));
     }
   }
 
@@ -182,8 +180,8 @@ int ObTenantArchiveMgr::decide_first_piece_start_scn(
     if (0 != piece_switch_interval % TEN_SECONDS) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("piece switch interval must be an integer multiple of 10 seconds", K(ret), K(start_scn), K(piece_switch_interval));
-    } else {
-      piece_start_scn = (start_scn / TEN_SECONDS) * TEN_SECONDS;
+    } else if (OB_FAIL(piece_start_scn.convert_from_ts((start_scn.convert_to_ts() / TEN_SECONDS) * TEN_SECONDS))) {
+      LOG_WARN("fail to set piece start scn", K(ret));
     }
   }
   

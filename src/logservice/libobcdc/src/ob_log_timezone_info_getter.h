@@ -42,13 +42,15 @@ public:
   virtual void mark_stop_flag() = 0;
 
   // Init by ObLogTenant initialisation
-  virtual int init_tz_info_wrap(const uint64_t tenant_id,
+  virtual int init_tz_info_wrap(
+      const uint64_t tenant_id,
       int64_t &tz_info_map_version,
       common::ObTZInfoMap &tz_info_map,
       common::ObTimeZoneInfoWrap &tz_info_wrap) = 0;
 
   /// Refresh timezone info until successful (try refreshing several times)
-  virtual int fetch_tenant_timezone_info_util_succ(const uint64_t tenant_id,
+  virtual int fetch_tenant_timezone_info_util_succ(
+      const uint64_t tenant_id,
       common::ObTZInfoMap *tz_info_map) = 0;
 };
 
@@ -69,7 +71,8 @@ public:
   virtual ~ObLogTimeZoneInfoGetter();
 
 public:
-  int init(const char *timezone_str,
+  int init(
+      const char *timezone_str,
       common::ObMySQLProxy &mysql_proxy,
       IObLogSysTableHelper &systable_helper,
       IObLogTenantMgr &tenant_mgr,
@@ -82,16 +85,19 @@ public:
   virtual void mark_stop_flag() { ATOMIC_STORE(&stop_flag_, true); }
 
   // Init by ObLogTenant initialisation
-  virtual int init_tz_info_wrap(const uint64_t tenant_id,
+  virtual int init_tz_info_wrap(
+      const uint64_t tenant_id,
       int64_t &tz_info_map_version,
       common::ObTZInfoMap &tz_info_map,
       common::ObTimeZoneInfoWrap &tz_info_wrap);
 
-  virtual int fetch_tenant_timezone_info_util_succ(const uint64_t tenant_id,
+  virtual int fetch_tenant_timezone_info_util_succ(
+      const uint64_t tenant_id,
       common::ObTZInfoMap *tz_info_map);
 
   // for init interface OTTZ_MGR.tenant_tz_map_getter_
-  static int get_tenant_timezone_map(const uint64_t tenant_id,
+  static int get_tenant_timezone_map(
+      const uint64_t tenant_id,
       common::ObTZMapWrap &tz_map_wrap);
 
 private:
@@ -104,8 +110,9 @@ private:
   // otherwise not updated (updating timezone info involves multiple table joins)
   int query_timezone_info_version_and_update_();
 
-  bool need_fetch_timezone_info_by_tennat_() const;
+  OB_INLINE bool need_fetch_timezone_info_by_tennat_() const { return true; }
 
+  int refresh_tenant_timezone_info_(const uint64_t tenant_id);
   // 1. Check the version first, if the version has not changed, then do not refresh
   // 2. Refresh only if the version has changed
   //
@@ -114,19 +121,31 @@ private:
   // @retval other_error_code   Fail
   int refresh_tenant_timezone_info_based_on_version_(const uint64_t tenant_id);
 
+  // refresh tenant timezone_info from local timezone.info file.
+  int refresh_tenant_timezone_info_from_local_file_(
+      const uint64_t tenant_id,
+      common::ObTZInfoMap &tz_info_map);
+
   // 1. For versions below 226, there is one global copy of the timezone internal table and only one timezone_verison
   // 2. From version 226, the timezone internal table is split into tenants, each with a timezone_verison; if timezone_version is not available, the tenant has not imported a timezone table
   //
   // @retval OB_SUCCESS         Success
   // @retval OB_ENTRY_NOT_EXIST tenant not exist
   // @retval other_error_code   Fail
-  int query_timezone_info_version_(const uint64_t tenant_id,
+  int query_timezone_info_version_(
+      const uint64_t tenant_id,
       int64_t &timezone_info_version);
 
   // refresh timezone info
   int refresh_timezone_info_();
-  int refresh_tenant_timezone_info_(const uint64_t tenant_id, common::ObTZInfoMap *tz_info_map);
+  // fetch timezone info by SQL
+  int fetch_tenant_timezone_info_(const uint64_t tenant_id, common::ObTZInfoMap *tz_info_map);
   int refresh_all_tenant_timezone_info_();
+  // export timezone_info_map and demp to local file.
+  int export_timezone_info_(common::ObTZInfoMap &tz_info_map);
+  // import timezone_info from local file and convert to ObTZInfoMap
+  int import_timezone_info_(common::ObTZInfoMap &tz_info_map);
+  int load_tzinfo_from_file_(char *buf, const int64_t buf_len);
 
 private:
   bool                  inited_;

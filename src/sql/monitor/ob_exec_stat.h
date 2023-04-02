@@ -314,6 +314,7 @@ struct ObAuditRecordData {
     plan_hash_ = 0;
     trx_lock_for_read_elapse_ = 0;
     params_value_len_ = 0;
+    partition_hit_ = true;
   }
 
   int64_t get_elapsed_time() const
@@ -357,7 +358,7 @@ struct ObAuditRecordData {
     return sql_len_ + tenant_name_len_ + user_name_len_ + db_name_len_;
   }
 
-  int64_t get_snapshot_version() const
+  share::SCN get_snapshot_version() const
   {
     return snapshot_.version_;
   }
@@ -373,6 +374,7 @@ struct ObAuditRecordData {
   int64_t request_id_; //set by request_manager automatic when add record
   int64_t execution_id_;  //used to jion v$sql_plan_monitor
   uint64_t session_id_;
+  uint64_t proxy_session_id_;
   uint64_t qc_id_;  //px框架下id
   int64_t dfo_id_;
   int64_t sqc_id_;
@@ -422,12 +424,17 @@ struct ObAuditRecordData {
   int64_t trx_lock_for_read_elapse_;
   int64_t params_value_len_;
   char *params_value_;
+  char *rule_name_;
+  int64_t rule_name_len_;
   struct StmtSnapshot {
-    int64_t version_;      // snapshot version
+    share::SCN version_;      // snapshot version
     int64_t tx_id_;        // snapshot inner which txn
     int64_t scn_;          // snapshot's position in the txn
     char const* source_;   // snapshot's acquire source
   } snapshot_; // stmt's tx snapshot
+  uint64_t txn_free_route_flag_; // flag contains txn free route meta
+  uint64_t txn_free_route_version_; // the version of txn's state
+  bool partition_hit_;// flag for need das partition route or not
 };
 
 } //namespace sql

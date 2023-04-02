@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/ob_errno.h"
 #include "share/ob_occam_time_guard.h"
 #include "election_impl.h"
 #include "lib/ob_errno.h"
@@ -55,14 +56,15 @@ void DefaultRoleChangeCallBack::operator()(ElectionImpl *election,
   }
 }
 
-ElectionImpl::ElectionImpl() :
-proposer_(this),
-acceptor_(this),
-priority_(nullptr),
-msg_handler_(nullptr),
-is_inited_(false),
-is_running_(false),
-event_recorder_(id_, self_addr_, timer_)
+ElectionImpl::ElectionImpl()
+    : lock_(common::ObLatchIds::ELECTION_LOCK),
+      proposer_(this),
+      acceptor_(this),
+      priority_(nullptr),
+      msg_handler_(nullptr),
+      is_inited_(false),
+      is_running_(false),
+      event_recorder_(id_, self_addr_, timer_)
 {}
 
 ElectionImpl::~ElectionImpl()
@@ -80,6 +82,7 @@ int ElectionImpl::init_and_start(const int64_t id,
                                  common::ObOccamTimer *election_timer,
                                  ElectionMsgSender *msg_handler,
                                  const common::ObAddr &self_addr,
+                                 const uint64_t inner_priority_seed,/*smaller value has higher priority*/
                                  const int64_t restart_counter,
                                  const ObFunction<int(const int64_t, const ObAddr &)> &prepare_change_leader_cb,
                                  const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &role_change_cb)
@@ -103,11 +106,15 @@ int ElectionImpl::init_and_start(const int64_t id,
     id_ = id;
     msg_handler_ = msg_handler;
     self_addr_ = self_addr;
+    inner_priority_seed_ = inner_priority_seed;
     if (CLICK_FAIL(proposer_.start())) {
       LOG_INIT(ERROR, "proposer start failed");
     } else if (CLICK_FAIL(acceptor_.start())) {
       LOG_INIT(ERROR, "start acceptor failed");
     } else {
+      if (inner_priority_seed_ & static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT)) {
+        event_recorder_.set_need_report(false);
+      }
       is_inited_ = true;
       is_running_ = true;
       LOG_INIT(INFO, "election init and start");
@@ -232,13 +239,17 @@ int ElectionImpl::handle_message(const ElectionAcceptRequestMsg &msg)
 {
   const_cast<ElectionAcceptRequestMsg &>(msg).set_process_ts();
   ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER KR(ret), K(*this), K(msg), K(us_to_expired)
+  #define PRINT_WRAPPER KR(ret), K(msg), K(us_to_expired)
   int ret = common::OB_SUCCESS;
   int64_t us_to_expired = 0;
   {
     LockGuard lock_guard(lock_);
     msg_counter_.add_received_count(msg);
     CHECK_ELECTION_INIT_AND_START();
+    if (msg.get_ballot_number() > proposer_.ballot_number_) {
+      proposer_.advance_ballot_number_and_reset_related_states_(msg.get_ballot_number(),
+                                                                "receive bigger accept request");
+    }
     acceptor_.on_accept_request(msg, &us_to_expired);
   }
   if (OB_LIKELY(us_to_expired > 0)) {
@@ -301,7 +312,9 @@ void ElectionImpl::refresh_priority_()
 {
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(priority_)) {
+  if (inner_priority_seed_ & static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT)) {
+    // do nothing
+  } else if (OB_ISNULL(priority_)) {
     ELECT_LOG(INFO, "priority is null", K(*this));
   } else if (CLICK_FAIL(priority_->refresh())) {
     ELECT_LOG(WARN, "refresh priority failed", KR(ret), K(*this));
@@ -405,6 +418,52 @@ int ElectionImpl::revoke(const RoleChangeReason &reason)
   LockGuard lock_guard(lock_);
   CHECK_ELECTION_INIT();
   ret = proposer_.revoke(reason);
+  return ret;
+}
+
+int ElectionImpl::add_inner_priority_seed_bit(const PRIORITY_SEED_BIT new_bit)
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(new_bit)
+  int ret = OB_SUCCESS;
+  ELECT_TIME_GUARD(500_ms);
+  LockGuard lock_guard(lock_);
+  CLICK();
+  CHECK_ELECTION_INIT();
+  if (inner_priority_seed_ & static_cast<uint64_t>(new_bit)) {
+    ret = OB_ENTRY_EXIST;
+    LOG_NONE(WARN, "set inner priority seed with new bit failed, caus it already exist");
+  } else {
+    inner_priority_seed_ |= static_cast<uint64_t>(new_bit);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ElectionImpl::clear_inner_priority_seed_bit(const PRIORITY_SEED_BIT old_bit)
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(old_bit)
+  int ret = OB_SUCCESS;
+  ELECT_TIME_GUARD(500_ms);
+  LockGuard lock_guard(lock_);
+  CLICK();
+  CHECK_ELECTION_INIT();
+  if (!(inner_priority_seed_ | static_cast<uint64_t>(old_bit))) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_NONE(WARN, "clear inner priority seed with old bit failed, caus it not exist");
+  } else {
+    inner_priority_seed_ &= (~static_cast<uint64_t>(old_bit));
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ElectionImpl::set_inner_priority_seed(const uint64_t seed)
+{
+  int ret = OB_SUCCESS;
+  ELECT_TIME_GUARD(500_ms);
+  LockGuard lock_guard(lock_);
+  CLICK();
+  inner_priority_seed_ = seed;
   return ret;
 }
 

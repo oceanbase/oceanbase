@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -152,7 +153,7 @@ struct ObMacroBlockCopyInfo
   void reset();
   TO_STRING_KV(K_(logic_macro_block_id), K_(need_copy));
 
-  ObLogicMacroBlockId logic_macro_block_id_;
+  blocksstable::ObLogicMacroBlockId logic_macro_block_id_;
   bool need_copy_;
 };
 
@@ -164,7 +165,7 @@ struct ObMacroBlockCopyArgInfo
   void reset();
   TO_STRING_KV(K_(logic_macro_block_id));
 
-  ObLogicMacroBlockId logic_macro_block_id_;
+  blocksstable::ObLogicMacroBlockId logic_macro_block_id_;
 };
 
 struct ObCopyTabletStatus
@@ -258,8 +259,8 @@ public:
   TO_STRING_KV(K_(start_macro_block_id), K_(end_macro_block_id),
       K_(macro_block_count), K_(start_macro_block_end_key), K_(is_leader_restore));
 
-  ObLogicMacroBlockId start_macro_block_id_;
-  ObLogicMacroBlockId end_macro_block_id_;
+  blocksstable::ObLogicMacroBlockId start_macro_block_id_;
+  blocksstable::ObLogicMacroBlockId end_macro_block_id_;
   int64_t macro_block_count_;
   bool is_leader_restore_;
   blocksstable::ObStorageDatum datums_[OB_MAX_ROWKEY_COLUMN_NUMBER];

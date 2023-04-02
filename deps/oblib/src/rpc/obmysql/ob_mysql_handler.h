@@ -79,6 +79,17 @@ private:
   int write_data(int fd, char *buffer, size_t length) const;
   int read_data(int fd, char *buffer, size_t length) const;
 
+  inline bool check_kv_char(const char ch) {
+    return ((ch >= '0' && ch <= '9') ||
+            (ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            '_' == ch);
+  }
+  int parse_head_comment(const char *raw_sql, int64_t raw_sql_len);
+  int save_head_comment_kv(const char *key, int64_t key_len, const char *value, int64_t value_len);
+
+  int64_t get_sql_req_level_from_kv();
+
 protected:
   ObMysqlProtocolProcessor mysql_processor_;
   ObMysqlCompressProtocolProcessor compress_processor_;
@@ -86,6 +97,18 @@ protected:
 
 private:
   rpc::frame::ObReqDeliver &deliver_;
+  common::ObSEArray<ObStringKV, 8> head_comment_array_;
+private:
+  // head comment
+  static const char * comment_header_;
+  static int64_t comment_header_len_;
+  static const char * comment_tail_;
+  static const char comment_kv_sep_ = ';';
+  static const char comment_kv_equal_ = '=';
+
+  // sql request level key string
+  static const char * sql_req_level_key_;
+
 }; // end of class ObMySQLHandler
 
 } // end of namespace obmysql

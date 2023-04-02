@@ -19,6 +19,7 @@
 #include "share/rc/ob_tenant_base.h"                // MTL_*
 #include "observer/ob_server_struct.h"              // GCTX
 #include "logservice/palf/lsn.h"                    // LSN
+#include "share/scn.h"                    // LSN
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_debug_sync.h"
 
@@ -27,6 +28,7 @@ namespace oceanbase
 namespace archive
 {
 using namespace oceanbase::share;
+using namespace oceanbase::palf;
 ObArchiveService::ObArchiveService() :
   inited_(false),
   allocator_(),
@@ -36,6 +38,9 @@ ObArchiveService::ObArchiveService() :
   fetcher_(),
   sender_(),
   persist_mgr_(),
+  scheduler_(),
+  ls_meta_recorder_(),
+  timer_(),
   log_service_(NULL),
   ls_svr_(NULL),
   cond_()
@@ -87,6 +92,12 @@ int ObArchiveService::init(logservice::ObLogService *log_service,
   } else if (OB_FAIL(sequencer_.init(tenant_id, log_service, &fetcher_, &ls_mgr_,
                                      &archive_round_mgr_))) {
     ARCHIVE_LOG(WARN, "sequencer init failed", K(ret));
+  } else if (OB_FAIL(scheduler_.init(tenant_id, &fetcher_, &sender_, &allocator_))) {
+    ARCHIVE_LOG(WARN, "scheduler init failed", K(ret));
+  } else if (OB_FAIL(ls_meta_recorder_.init(&archive_round_mgr_))) {
+    ARCHIVE_LOG(WARN, "ls_meta_recorder init failed", K(ret));
+  } else if (OB_FAIL(timer_.init(tenant_id, &ls_meta_recorder_, &archive_round_mgr_))) {
+    ARCHIVE_LOG(WARN, "timer init failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
     inited_ = true;
@@ -110,6 +121,8 @@ int ObArchiveService::start()
     ARCHIVE_LOG(WARN, "archive fetcher start failed", K(ret));
   } else if (OB_FAIL(sender_.start())) {
     ARCHIVE_LOG(WARN, "archive sender start failed", K(ret));
+  } else if (OB_FAIL(timer_.start())) {
+    ARCHIVE_LOG(WARN, "archive timer start failed", K(ret));
   } else if (OB_FAIL(ObThreadPool::start())) {
     ARCHIVE_LOG(WARN, "archive service start failed", K(ret));
   } else {
@@ -124,6 +137,7 @@ void ObArchiveService::stop()
   sequencer_.stop();
   fetcher_.stop();
   sender_.stop();
+  timer_.stop();
   ObThreadPool::stop();
   ARCHIVE_LOG(INFO, "archive service stop succ", K_(tenant_id));
 }
@@ -134,6 +148,7 @@ void ObArchiveService::wait()
   sequencer_.wait();
   fetcher_.wait();
   sender_.wait();
+  timer_.wait();
   ObThreadPool::wait();
   ARCHIVE_LOG(INFO, "archive service wait succ", K_(tenant_id));
 }
@@ -144,23 +159,32 @@ void ObArchiveService::destroy()
   stop();
   wait();
   tenant_id_ = OB_INVALID_TENANT_ID;
-  allocator_.destroy();
   archive_round_mgr_.destroy();
   ls_mgr_.destroy();
   sequencer_.destroy();
   fetcher_.destroy();
   sender_.destroy();
   persist_mgr_.destroy();
+  scheduler_.destroy();
+  ls_meta_recorder_.destroy();
+  timer_.destroy();
+  allocator_.destroy();
   log_service_ = NULL;
   ls_svr_ = NULL;
 }
 
 int ObArchiveService::get_ls_archive_progress(const ObLSID &id,
     LSN &lsn,
+    SCN &scn,
     bool &force_wait,
     bool &ignore)
 {
-  return persist_mgr_.get_ls_archive_progress(id, lsn, force_wait, ignore);
+  return persist_mgr_.get_ls_archive_progress(id, lsn, scn, force_wait, ignore);
+}
+
+int ObArchiveService::check_tenant_in_archive(bool &in_archive)
+{
+  return persist_mgr_.check_tenant_in_archive(in_archive);
 }
 
 int ObArchiveService::get_ls_archive_speed(const ObLSID &id,
@@ -193,7 +217,7 @@ void ObArchiveService::run1()
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
-    ARCHIVE_LOG(ERROR, "archive service not init", K_(tenant_id));
+    ARCHIVE_LOG_RET(ERROR, OB_NOT_INIT, "archive service not init", K_(tenant_id));
   } else {
     while (! has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
@@ -210,12 +234,13 @@ void ObArchiveService::run1()
 
 void ObArchiveService::do_thread_task_()
 {
-  if (is_sys_tenant(tenant_id_) || is_meta_tenant(tenant_id_)) {
+  if (! is_user_tenant(tenant_id_)) {
   } else {
     do_check_switch_archive_();
     check_and_set_archive_stop_();
     print_archive_status_();
     persist_mgr_.persist_and_load();
+    scheduler_.schedule();
   }
 }
 
@@ -224,6 +249,7 @@ void ObArchiveService::do_check_switch_archive_()
   int ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr attr;
   ArchiveRoundOp op = ArchiveRoundOp::NONE;
+  ArchiveKey key;
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
@@ -239,6 +265,7 @@ void ObArchiveService::do_check_switch_archive_()
     ARCHIVE_LOG(ERROR, "round attr is not valid", K(ret), K(attr));
   } else if (OB_FAIL(check_if_need_switch_log_archive_(attr, op))) {
     ARCHIVE_LOG(WARN, "check if need switch log archive failed", K(ret), K(attr));
+  } else if (FALSE_IT(key = ArchiveKey(attr.incarnation_, attr.dest_id_, attr.round_id_))) {
   } else if (ArchiveRoundOp::START == op) {
     // 开启新一轮归档
     if (OB_FAIL(start_archive_(attr))) {
@@ -249,12 +276,17 @@ void ObArchiveService::do_check_switch_archive_()
     stop_archive_();
   } else if (ArchiveRoundOp::FORCE_STOP == op) {
     // 强制stop
-    archive_round_mgr_.set_archive_force_stop(ArchiveKey(attr.incarnation_, attr.dest_id_, attr.round_id_));
+    archive_round_mgr_.set_archive_force_stop(key);
     ARCHIVE_LOG(INFO, "force set log_archive_state STOPPED");
   } else if (ArchiveRoundOp::MARK_INTERRUPT == op) {
     // set archive round state interrupt
-    archive_round_mgr_.set_archive_interrupt(ArchiveKey(attr.incarnation_, attr.dest_id_, attr.round_id_));
+    archive_round_mgr_.set_archive_interrupt(key);
     ARCHIVE_LOG(INFO, "set log_archive_state INTERRUPTED");
+  } else if (ArchiveRoundOp::SUSPEND == op) {
+    if (OB_FAIL(suspend_archive_(attr))) {
+      ARCHIVE_LOG(WARN, "suspend archive failed", K(ret), K(attr));
+    }
+    ARCHIVE_LOG(INFO, "set log_archive_state SUSPEND");
   } else {
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
       ARCHIVE_LOG(INFO, "check_log_archive_state_, no switch round op", K(attr));
@@ -279,17 +311,26 @@ int ObArchiveService::load_archive_round_attr_(ObTenantArchiveRoundAttr &attr)
 //                   need_start
 // invalid / stop -----------------> start (tenant_state: beginning / doing)
 //
-//                      need_stop
-// doing / interrupt ----------------> stop (tenant_state: stopping / stop)
+//                                need_stop
+// doing / interrupt / suspend ----------------> stop (tenant_state: stopping / stop)
 //
-//                      need_stop
-// doing / interrupt ----------------> any (local round lag)
+//                                  need_stop
+// doing / interrupt / suspend ----------------> any (local round lag)
 //
 //                   force_stop
 // invalid / stop -----------------> stop (tenant_state: stopping / stop && local round lag)
 //
-//         mark_interrupt
-// doing ------------------> interrupt (tenant_state: interrupt)
+//                   mark_interrupt
+// doing / suspend ------------------> interrupt (tenant_state: interrupt)
+//
+//             need_start
+// suspend -------------------> start (tenant_state: beginning / doing && no round lag)
+//
+//         need_suspend
+// doing ------------------> suspend (tenant_state: suspending / suspend && no round lag)
+//
+//                  need_suspend
+// invalid / stop ------------------> suspend (tenant_state: suspending / suspend && local round lag)
 //
 int ObArchiveService::check_if_need_switch_log_archive_(
     const ObTenantArchiveRoundAttr &attr,
@@ -301,35 +342,53 @@ int ObArchiveService::check_if_need_switch_log_archive_(
   share::ObArchiveRoundState local_state;
   archive_round_mgr_.get_archive_round_info(local_key, local_state);
   share::ObArchiveRoundState tenant_state = attr.state_;
+  const bool local_round_lag = local_key != tenant_key;
   op = ArchiveRoundOp::NONE;
 
   if (local_state.is_stopping()) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
-      ARCHIVE_LOG(INFO, "stopping state, just wait", K(local_key), K(attr), K_(archive_round_mgr));
+      ARCHIVE_LOG(INFO, "stopping state, just wait", K(local_key),
+          K(local_state), K(attr), K_(archive_round_mgr));
     }
   } else if ((local_state.is_invalid() || local_state.is_stop())
       && (tenant_state.is_beginning() || tenant_state.is_doing())) {
     op = ArchiveRoundOp::START;
-    ARCHIVE_LOG(INFO, "need_start", K(local_key), K(attr), K_(archive_round_mgr));
-  } else if ((local_state.is_doing() || local_state.is_interrupted())
+    ARCHIVE_LOG(INFO, "need_start", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
+  } else if (local_state.is_suspend()
+      && (tenant_state.is_beginning() || tenant_state.is_doing())
+      && ! local_round_lag) {
+    op = ArchiveRoundOp::START;
+    ARCHIVE_LOG(INFO, "need_start", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
+  } else if ((local_state.is_doing() || local_state.is_interrupted() || local_state.is_suspend())
       && (tenant_state.is_stopping() || tenant_state.is_stop())) {
     op = ArchiveRoundOp::STOP;
-    ARCHIVE_LOG(INFO, "need_stop", K(local_key), K(attr), K_(archive_round_mgr));
-  } else if ((local_state.is_doing() || local_state.is_interrupted())
-      && local_key != tenant_key) {
+    ARCHIVE_LOG(INFO, "need_stop", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
+  } else if ((local_state.is_doing() || local_state.is_interrupted() || local_state.is_suspend())
+      && local_round_lag) {
     op = ArchiveRoundOp::STOP;
-    ARCHIVE_LOG(INFO, "round lag, need_stop first", K(local_key), K(attr), K_(archive_round_mgr));
+    ARCHIVE_LOG(INFO, "round lag, need_stop first", K(local_key),
+        K(local_state), K(attr), K_(archive_round_mgr));
+  } else if (local_state.is_doing()
+      && (tenant_state.is_suspend() || tenant_state.is_suspend())
+      && ! local_round_lag) {
+    op = ArchiveRoundOp::SUSPEND;
+    ARCHIVE_LOG(INFO, "need_suspend", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
+  } else if ((local_state.is_valid() || local_state.is_stop())
+      && (tenant_state.is_suspending() || tenant_state.is_suspend())
+      && local_round_lag) {
+    op = ArchiveRoundOp::SUSPEND;
+    ARCHIVE_LOG(INFO, "need_suspend", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
   } else if ((local_state.is_invalid() || local_state.is_stop())
       && (tenant_state.is_stopping() || tenant_state.is_stop())
-      && local_key != tenant_key) {
+      && local_round_lag) {
     op = ArchiveRoundOp::FORCE_STOP;
-    ARCHIVE_LOG(INFO, "need_force_stop", K(local_key), K(attr), K_(archive_round_mgr));
-  } else if (local_state.is_doing()
+    ARCHIVE_LOG(INFO, "need_force_stop", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
+  } else if ((local_state.is_doing() || local_state.is_suspend())
       && tenant_state.is_interrupted()
-      && local_key == tenant_key) {
+      && ! local_round_lag) {
     // 标记interrupt需谨慎, 只有当前round并且doing状态, 遇到租户interrupt, 才置本地为interrupt
     op = ArchiveRoundOp::MARK_INTERRUPT;
-    ARCHIVE_LOG(INFO, "need_mark_interrupt", K(local_key), K(attr), K_(archive_round_mgr));
+    ARCHIVE_LOG(INFO, "need_mark_interrupt", K(local_key), K(local_state), K(attr), K_(archive_round_mgr));
   } else {/*do nothing*/}
 
   return ret;
@@ -338,8 +397,21 @@ int ObArchiveService::check_if_need_switch_log_archive_(
 int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(set_log_archive_info_(attr))) {
+  ArchiveKey key(attr.incarnation_, attr.dest_id_, attr.round_id_);
+  ObBackupDest dest;
+  ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
+  if (OB_ISNULL(mysql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret));
+  } else if (OB_FAIL(set_log_archive_info_(attr))) {
     ARCHIVE_LOG(WARN, "set_log_archive_info_ fail", K(ret), K_(tenant_id), K(attr));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
+          *mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
+    ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));
+  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key, attr.start_scn_,
+          attr.piece_switch_interval_, attr.start_scn_, attr.base_piece_id_,
+          share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest))) {
+    ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));
   } else {
     notify_start_();
     ARCHIVE_LOG(INFO, "start archive succ", K_(tenant_id));
@@ -352,32 +424,35 @@ int ObArchiveService::set_log_archive_info_(const ObTenantArchiveRoundAttr &attr
   int ret = OB_SUCCESS;
   ArchiveKey key(attr.incarnation_, attr.dest_id_, attr.round_id_);
   const int64_t piece_interval = attr.piece_switch_interval_;
-  const int64_t genesis_ts = attr.start_scn_;
+  const SCN &genesis_scn = attr.start_scn_;
   const int64_t base_piece_id = attr.base_piece_id_;
   const int64_t unit_size = 100;
   const bool need_compress = false;
   ObCompressorType type = INVALID_COMPRESSOR;
   const bool need_encrypt = false;
-  const int64_t round_start_ts = attr.start_scn_;
-  ObBackupDest dest;
-  ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
-  if (OB_ISNULL(mysql_proxy)) {
-    ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret));
-  } else if (OB_FAIL(fetcher_.set_archive_info(piece_interval, genesis_ts, base_piece_id,
+  const SCN &round_start_scn = attr.start_scn_;
+  if (OB_FAIL(fetcher_.set_archive_info(piece_interval, genesis_scn, base_piece_id,
                                         unit_size, need_compress, type, need_encrypt))) {
     ARCHIVE_LOG(ERROR, "archive fetcher set archive info failed", K(ret));
-  } else if (OB_FAIL(ls_mgr_.set_archive_info(round_start_ts, piece_interval, genesis_ts, base_piece_id))) {
+  } else if (OB_FAIL(ls_mgr_.set_archive_info(round_start_scn, piece_interval, genesis_scn, base_piece_id))) {
     ARCHIVE_LOG(ERROR, "archive sequencer set archive info failed", K(ret));
-  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
-    ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));
-  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(key,
-          share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest))) {
-    ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));
   } else {
     ARCHIVE_LOG(INFO, "set log archive info succ", K_(tenant_id));
   }
 
+  return ret;
+}
+
+int ObArchiveService::suspend_archive_(const ObTenantArchiveRoundAttr &attr)
+{
+  int ret = OB_SUCCESS;
+  ArchiveKey key(attr.incarnation_, attr.dest_id_, attr.round_id_);
+  if (OB_FAIL(set_log_archive_info_(attr))) {
+    ARCHIVE_LOG(WARN, "set_log_archive_info_ fail", K(ret), K_(tenant_id), K(attr));
+  } else {
+    archive_round_mgr_.set_archive_suspend(key);
+    ARCHIVE_LOG(INFO, "suspend archive succ", K_(tenant_id));
+  }
   return ret;
 }
 
@@ -436,7 +511,8 @@ bool ObArchiveService::check_archive_task_empty_() const
   const int64_t log_fetch_task_count = fetcher_.get_log_fetch_task_count();
   const int64_t send_task_status_count = sender_.get_send_task_status_count();
 
-  if (0 == ls_task_count && 0 == log_fetch_task_count && 0 == send_task_status_count) {
+  // size of light_queue may be smaller than zero if queue is empty and a thread is pop
+  if (0 == ls_task_count && 0 >= log_fetch_task_count && 0 >= send_task_status_count) {
     bret = true;
     ARCHIVE_LOG(INFO, "pending task is clear", K_(tenant_id));
   } else {

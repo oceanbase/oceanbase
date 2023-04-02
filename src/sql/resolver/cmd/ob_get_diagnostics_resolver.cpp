@@ -116,7 +116,7 @@ int ObGetDiagnosticsResolver::resolve(const ParseNode &parse_tree)
           OB_ISNULL(var = item->children_[0]) || OB_ISNULL(val = item->children_[1])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("parser tree is wrong", K(ret));
-      } else if (NULL == session_info_->get_pl_context() && T_IDENT == var->type_) {
+      } else if (T_IDENT == var->type_) {
         ret = OB_ERR_SP_UNDECLARED_VAR;
         LOG_WARN("undeclared var", K(ret));
         LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, static_cast<int>(var->str_len_), var->str_value_);

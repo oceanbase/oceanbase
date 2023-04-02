@@ -28,8 +28,6 @@ public:
     {}
   virtual ~ObDelUpdLogPlan() {}
 
-  virtual int generate_raw_plan() override;
-
   inline virtual const ObDelUpdStmt *get_stmt() const override
   { return static_cast<const ObDelUpdStmt *>(stmt_); }
 
@@ -223,6 +221,12 @@ public:
                                 IndexDMLInfo*& index_dml_info) const;
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
+  int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
+
+protected:
+  virtual int generate_normal_raw_plan() override;
+  virtual int generate_dblink_raw_plan() override;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 

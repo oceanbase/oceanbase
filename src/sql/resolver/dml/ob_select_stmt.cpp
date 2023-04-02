@@ -114,7 +114,6 @@ int ObSelectStmt::add_window_func_expr(ObWinFunRawExpr *expr)
   } else if (OB_FAIL(win_func_exprs_.push_back(expr))) {
     LOG_WARN("failed to add expr", K(ret));
   } else {
-    expr->set_expr_level(current_level_);
     expr->set_explicited_reference();
   }
   return ret;
@@ -204,7 +203,6 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     view_ref_id_ = other.view_ref_id_;
     is_match_topk_ = other.is_match_topk_;
     is_nocycle_ = other.is_nocycle_;
-    is_parent_set_distinct_ = other.is_parent_set_distinct();
     is_set_distinct_ = other.is_set_distinct();
     show_stmt_ctx_.assign(other.show_stmt_ctx_);
     select_type_ = other.select_type_;
@@ -215,6 +213,7 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     is_order_siblings_ = other.is_order_siblings_;
     is_hierarchical_query_ = other.is_hierarchical_query_;
     has_prior_ = other.has_prior_;
+    has_reverse_link_ = other.has_reverse_link_;
   }
   return ret;
 }
@@ -289,7 +288,6 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_view_stmt_ = other.is_view_stmt_;
     view_ref_id_ = other.view_ref_id_;
     is_match_topk_ = other.is_match_topk_;
-    is_parent_set_distinct_ = other.is_parent_set_distinct_;
     is_set_distinct_ = other.is_set_distinct_;
     show_stmt_ctx_.assign(other.show_stmt_ctx_);
     select_type_ = other.select_type_;
@@ -300,6 +298,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_order_siblings_ = other.is_order_siblings_;
     is_hierarchical_query_ = other.is_hierarchical_query_;
     has_prior_ = other.has_prior_;
+    has_reverse_link_ = other.has_reverse_link_;
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -350,8 +349,6 @@ int ObSelectStmt::create_select_list_for_set_stmt(ObRawExprFactory &expr_factory
                  OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
-      } else {
-        new_select_item.expr_->set_expr_level(child_stmt->get_current_level());
       }
     }
   }
@@ -383,127 +380,92 @@ int ObSelectStmt::update_stmt_table_id(const ObSelectStmt &other)
   return ret;
 }
 
-int ObSelectStmt::replace_inner_stmt_expr(const ObIArray<ObRawExpr*> &other_exprs,
-                                          const ObIArray<ObRawExpr*> &new_exprs)
+int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::replace_inner_stmt_expr(other_exprs, new_exprs))) {
+  if (OB_FAIL(ObDMLStmt::iterate_stmt_expr(visitor))) {
     LOG_WARN("failed to replace inner stmt expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     group_exprs_))) {
-    LOG_WARN("failed to replace group exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     rollup_exprs_))) {
-    LOG_WARN("failed to replace rollup exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     having_exprs_))) {
-    LOG_WARN("failed to replace having exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     agg_items_))) {
-    LOG_WARN("failed to replace aggregation items", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     win_func_exprs_))) {
-    LOG_WARN("failed to replace window function exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     start_with_exprs_))) {
-    LOG_WARN("failed to replace start with exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     connect_by_exprs_))) {
-    LOG_WARN("failed to replace connect by exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     connect_by_prior_exprs_))) {
-    LOG_WARN("failed to replace connect by prior exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
-                                                     new_exprs,
-                                                     cte_exprs_))) {
-    LOG_WARN("failed to replace ctx exprs", K(ret));
-  } else if (OB_FAIL(replace_multi_rollup_items_expr(other_exprs,
-                                                     new_exprs,
-                                                     multi_rollup_items_))) {
-    LOG_WARN("failed to replace multi rollup items expr", K(ret));
-  } else {
-    // replace exprs of gs exprs.
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); i++) {
+    if (OB_FAIL(visitor.visit(select_items_.at(i).expr_, SCOPE_SELECT))) {
+      LOG_WARN("failed to visit select exprs", K(ret));
+    } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(visitor.visit(group_exprs_, SCOPE_GROUPBY))) {
+      LOG_WARN("failed to visit group exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(rollup_exprs_, SCOPE_GROUPBY))) {
+      LOG_WARN("failed to visit rollup exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(having_exprs_, SCOPE_HAVING))) {
+      LOG_WARN("failed to visit having exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(agg_items_, SCOPE_DICT_FIELDS))) {
+      LOG_WARN("failed to visit aggr items", K(ret));
+    } else if (OB_FAIL(iterate_rollup_items(multi_rollup_items_, visitor))) {
+      LOG_WARN("failed to iterate multi rollup items", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); i++) {
-      ObIArray<ObGroupbyExpr> &grouping_sets = grouping_sets_items_.at(i).grouping_sets_exprs_;
-      for (int64_t j = 0; OB_SUCC(ret) && j < grouping_sets.count(); j++) {
-        ObGroupbyExpr &groupby_item = grouping_sets.at(j);
-        for (int64_t k = 0; OB_SUCC(ret) && k < groupby_item.groupby_exprs_.count(); k++) {
-          if (OB_ISNULL(groupby_item.groupby_exprs_.at(k))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("null expr", K(ret));
-          } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                            new_exprs,
-                                                            groupby_item.groupby_exprs_.at(k)))) {
-            LOG_WARN("failed to replace column expr", K(ret));
-          } else { /* do nothing*/ }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(replace_multi_rollup_items_expr(
-                                                 other_exprs,
-                                                 new_exprs,
-                                                 grouping_sets_items_.at(i).multi_rollup_items_))) {
-          LOG_WARN("failed to replace multi rollup items expr", K(ret));
-        } else {/*do nothing*/}
+      if (OB_FAIL(iterate_group_items(grouping_sets_items_.at(i).grouping_sets_exprs_,
+                                      visitor))) {
+        LOG_WARN("failed to iterate grouping sets exprs", K(ret));
+      } else if (OB_FAIL(iterate_rollup_items(grouping_sets_items_.at(i).multi_rollup_items_,
+                                              visitor))) {
+        LOG_WARN("failed to iterate multi rollup items", K(ret));
       }
     }
-    // replace column exprs of search by item
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(visitor.visit(win_func_exprs_, SCOPE_DICT_FIELDS))) {
+      LOG_WARN("failed to visit winfunc exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(cte_exprs_, SCOPE_DICT_FIELDS))) {
+      LOG_WARN("failed to visit cte exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(start_with_exprs_, SCOPE_START_WITH))) {
+      LOG_WARN("failed to visit start with exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(connect_by_exprs_, SCOPE_CONNECT_BY))) {
+      LOG_WARN("failed to visit connect by exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(connect_by_prior_exprs_, SCOPE_DICT_FIELDS))) {
+      LOG_WARN("failed to visit connect by prior exprs", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < search_by_items_.count(); i++) {
-      if (OB_ISNULL(search_by_items_.at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                        new_exprs,
-                                                        search_by_items_.at(i).expr_))) {
-        LOG_WARN("failed to replace column expr", K(ret));
+      if (OB_FAIL(visitor.visit(search_by_items_.at(i).expr_, SCOPE_DICT_FIELDS))) {
+        LOG_WARN("failed to visit search by items", K(ret));
       } else { /* do nothing*/ }
     }
-    // replace columns exprs of select items
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); i++) {
-      if (OB_ISNULL(select_items_.at(i).expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                        new_exprs,
-                                                        select_items_.at(i).expr_))) {
-        LOG_WARN("failed to replace column expr", K(ret));
-      } else { /*do nothing*/ }
+  }
+  if (OB_SUCC(ret) && NULL != into_item_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < into_item_->pl_vars_.count(); ++i) {
+      if (OB_FAIL(visitor.visit(into_item_->pl_vars_.at(i), SCOPE_SELECT_INTO))) {
+        LOG_WARN("failed to visit select into", K(ret));
+      }
     }
   }
   return ret;
 }
 
-int ObSelectStmt::replace_multi_rollup_items_expr(const ObIArray<ObRawExpr*> &other_exprs,
-                                                  const ObIArray<ObRawExpr*> &new_exprs,
-                                                  ObIArray<ObMultiRollupItem> &multi_rollup_items)
+int ObSelectStmt::iterate_rollup_items(ObIArray<ObMultiRollupItem> &multi_rollup_items,
+                                             ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < multi_rollup_items.count(); i++) {
-    ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items.at(i).rollup_list_exprs_;
-    for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); j++) {
-      ObGroupbyExpr &groupby_item = rollup_list_exprs.at(j);
-      for (int64_t k = 0; OB_SUCC(ret) && k < groupby_item.groupby_exprs_.count(); k++) {
-        if (OB_ISNULL(groupby_item.groupby_exprs_.at(k))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null expr", K(ret));
-        } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
-                                                          new_exprs,
-                                                          groupby_item.groupby_exprs_.at(k)))) {
-          LOG_WARN("failed to replace column expr", K(ret));
-        } else { /* do nothing*/ }
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < multi_rollup_items.count(); ++i) {
+    if (OB_FAIL(iterate_group_items(multi_rollup_items.at(i).rollup_list_exprs_, visitor))) {
+      LOG_WARN("failed to visitor rollup list exprs", K(ret));
     }
   }
   return ret;
 }
+
+int ObSelectStmt::iterate_group_items(ObIArray<ObGroupbyExpr> &group_items,
+                                      ObStmtExprVisitor &visitor)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < group_items.count(); ++i) {
+    if (OB_FAIL(visitor.visit(group_items.at(i).groupby_exprs_, SCOPE_GROUPBY))) {
+      LOG_WARN("failed to visit groupby exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 
 ObSelectStmt::ObSelectStmt()
     : ObDMLStmt(stmt::T_SELECT)
@@ -512,7 +474,6 @@ ObSelectStmt::ObSelectStmt()
   limit_offset_expr_ = NULL;
   is_distinct_ = false;
   is_nocycle_ = false;
-  is_parent_set_distinct_ = false;
   is_set_distinct_ = false;
   set_op_ = NONE;
   is_recursive_cte_ = false;
@@ -529,6 +490,7 @@ ObSelectStmt::ObSelectStmt()
   is_order_siblings_ = false;
   is_hierarchical_query_ = false;
   has_prior_ = false;
+  has_reverse_link_ = false;
 }
 
 ObSelectStmt::~ObSelectStmt()
@@ -573,9 +535,6 @@ int ObSelectStmt::add_select_item(SelectItem &item)
 {
   int ret = OB_SUCCESS;
   if (item.expr_ != NULL) {
-    if (item.expr_->get_expr_level() < 0) {
-      item.expr_->set_expr_level(current_level_);
-    }
     if (item.is_real_alias_) {
       item.expr_->set_alias_column_name(item.alias_name_);
     }
@@ -721,12 +680,13 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
            N_STMT_HINT, stmt_hint_,
            N_USER_VARS, user_var_exprs_,
            N_QUERY_CTX, *query_ctx_,
-           K_(current_level),
            K_(pseudo_column_like_exprs),
            //K_(win_func_exprs),
            K(child_stmts),
            K_(is_hierarchical_query),
-           K_(check_option)
+           K_(check_option),
+           K_(dblink_id),
+           K_(is_reverse_link)
              );
     }
   } else {
@@ -738,7 +698,9 @@ int ObSelectStmt::do_to_string(char *buf, const int64_t buf_len, int64_t &pos) c
          N_ORDER_BY, order_items_,
          N_LIMIT, limit_count_expr_,
          N_SELECT, select_items_,
-         K(child_stmts));
+         K(child_stmts),
+         K_(dblink_id),
+         K_(is_reverse_link));
   }
   J_OBJ_END();
   return ret;
@@ -778,124 +740,6 @@ ObWinFunRawExpr *ObSelectStmt::get_same_win_func_item(const ObRawExpr *expr)
     }
   }
   return win_expr;
-}
-
-int ObSelectStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
-{
-  int ret = OB_SUCCESS;
-  // do not add agg expr and window function expr
-  if (!expr_checker.is_ignore(RelExprCheckerBase::FIELD_LIST_SCOPE)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); ++i) {
-      if (OB_FAIL(expr_checker.add_expr(select_items_.at(i).expr_))) {
-        LOG_WARN("failed to add exprs", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret) && !expr_checker.is_ignore(RelExprCheckerBase::GROUP_SCOPE)) {
-    if (OB_FAIL(expr_checker.add_exprs(group_exprs_))) {
-      LOG_WARN("failed to add group by exprs", K(ret));
-    } else if (OB_FAIL(expr_checker.add_exprs(rollup_exprs_))) {
-      LOG_WARN("failed to add rollup exprs", K(ret));
-    } else { /*do nothing*/ }
-    if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); i++) {
-        ObIArray<ObGroupbyExpr> &grouping_sets = grouping_sets_items_.at(i).grouping_sets_exprs_;
-        for (int64_t j = 0; OB_SUCC(ret) && j < grouping_sets.count(); j++) {
-          if (OB_FAIL(expr_checker.add_exprs(grouping_sets.at(j).groupby_exprs_))) {
-            LOG_WARN("failed to add expr to expr checker.", K(ret));
-          } else { /*do nothing.*/ }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(get_relation_exprs_from_multi_rollup_items(
-                                                 expr_checker,
-                                                 grouping_sets_items_.at(i).multi_rollup_items_))) {
-            LOG_WARN("failed to get relation exprs from multi rollup items.", K(ret));
-          } else {/*do nothing*/}
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(get_relation_exprs_from_multi_rollup_items(expr_checker,
-                                                               multi_rollup_items_))) {
-          LOG_WARN("failed to get relation exprs from multi rollup items.", K(ret));
-        } else {/*do nothing*/}
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) && !expr_checker.is_ignore(RelExprCheckerBase::HAVING_SCOPE)) {
-    if (OB_FAIL(expr_checker.add_exprs(having_exprs_))) {
-      LOG_WARN("failed to add exprs", K(ret));
-    } else { /*do nothing*/ }
-  }
-
-  if (OB_SUCC(ret) && !expr_checker.is_ignore(RelExprCheckerBase::START_WITH_SCOPE)) {
-    if (OB_FAIL(expr_checker.add_exprs(start_with_exprs_))) {
-       LOG_WARN("failed to add exprs", K(ret));
-     } else { /*do nothing*/ }
-  }
-
-  if (OB_SUCC(ret) && !expr_checker.is_ignore(RelExprCheckerBase::CONNECT_BY_SCOPE)) {
-    if (OB_FAIL(expr_checker.add_exprs(connect_by_exprs_))) {
-      LOG_WARN("failed to add exprs", K(ret));
-    } else { /*do nothing*/ }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObDMLStmt::inner_get_relation_exprs(expr_checker))) {
-      LOG_WARN("failed to add exprs", K(ret));
-    } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
-int ObSelectStmt::get_relation_exprs_from_multi_rollup_items(
-                                                    RelExprCheckerBase &expr_checker,
-                                                    ObIArray<ObMultiRollupItem> &multi_rollup_items)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < multi_rollup_items.count(); i++) {
-    ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items.at(i).rollup_list_exprs_;
-    for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); j++) {
-      if (OB_FAIL(expr_checker.add_exprs(rollup_list_exprs.at(j).groupby_exprs_))) {
-        LOG_WARN("faile dot add expr to expr checker.", K(ret));
-      } else { /*do nothing.*/ }
-    }
-  }
-  return ret;
-}
-
-int ObSelectStmt::adjust_view_parent_namespace_stmt(ObDMLStmt *new_parent)
-{
-  int ret = OB_SUCCESS;
-  int32_t subquery_level = (new_parent != NULL ? new_parent->get_current_level() + 1 : 0);
-  ObArray<ObSelectStmt *> view_stmts;
-  ObArray<ObSelectStmt *> subquery_stmts;
-  set_parent_namespace_stmt(new_parent);
-  set_current_level(subquery_level);
-  if (OB_FAIL(get_from_subquery_stmts(view_stmts))) {
-    LOG_WARN("get from subquery stmts failed", K(ret));
-  } else if (OB_FAIL(get_subquery_stmts(subquery_stmts))) {
-    LOG_WARN("get subquery stmts failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < view_stmts.count(); ++i) {
-    ObSelectStmt *view_stmt = view_stmts.at(i);
-    if (OB_ISNULL(view_stmt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_item is null", K(i));
-    } else if (OB_FAIL(view_stmt->adjust_view_parent_namespace_stmt(new_parent))) {
-      LOG_WARN("adjust view parent namespace stmt failed", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_stmts.count(); ++i) {
-    ObSelectStmt *subquery = subquery_stmts.at(i);
-    if (OB_ISNULL(subquery)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_item is null", K(i));
-    } else if (OB_FAIL(subquery->adjust_view_parent_namespace_stmt(this))) {
-      LOG_WARN("adjust subquery parent namespace stmt failed", K(ret));
-    }
-  }
-  return ret;
 }
 
 bool ObSelectStmt::has_for_update() const
@@ -1076,212 +920,18 @@ int ObSelectStmt::get_select_exprs_without_lob(ObIArray<ObRawExpr*> &select_expr
   return ret;
 }
 
-int ObSelectStmt::inner_get_share_exprs(ObIArray<ObRawExpr*> &candi_share_exprs) const
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 4> select_exprs;
-  ObSEArray<ObRawExpr *, 4> general_exprs;
-  /**
-   * 1. column, aggr, winfunc, query ref can be shared
-   * 2. select exprs, group by exprs, rollup exprs may be shared
-   */
-  if (OB_FAIL(ObDMLStmt::inner_get_share_exprs(candi_share_exprs))) {
-    LOG_WARN("failed to inner mark share exprs", K(ret));
-  } else if (OB_FAIL(get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(append(candi_share_exprs, get_aggr_items()))) {
-    LOG_WARN("failed to append aggreagate exprs", K(ret));
-  } else if (OB_FAIL(append(candi_share_exprs, get_window_func_exprs()))) {
-    LOG_WARN("failed to append window function exprs", K(ret));
-  } else if (OB_FAIL(append(general_exprs, select_exprs))) {
-    LOG_WARN("failed to append select exprs", K(ret));
-  } else if (OB_FAIL(append(general_exprs, get_group_exprs()))) {
-    LOG_WARN("failed to append group by exprs", K(ret));
-  } else if (OB_FAIL(append(general_exprs, get_rollup_exprs()))) {
-    LOG_WARN("failed to append roll up exprs", K(ret));
-  } else if (is_set_stmt()) {
-    // 对于 set stmt, 由于 select 中可能在 set expr 外添加 cast, 需要再添加 set expr
-    ObRawExpr *expr = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-      if (OB_ISNULL(expr = ObTransformUtils::get_expr_in_cast(select_exprs.at(i)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (expr != select_exprs.at(i) && OB_FAIL(candi_share_exprs.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      }
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < general_exprs.count(); ++i) {
-    ObRawExpr *expr = NULL;
-    if (OB_ISNULL(expr = general_exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("general expr is null", K(ret));
-    } else if (expr->has_flag(IS_DYNAMIC_PARAM)) {
-      // in static typing engine, exec param expr with different address will use different
-      // frame, event they have same unknown value.
-    } else if (OB_FAIL(candi_share_exprs.push_back(expr))) {
-      LOG_WARN("failed to push back general expr", K(ret));
-    }
-  }
-  return ret;
-}
-
-// remember to invoke formalize to generate expr_levels for all exprs
-int ObSelectStmt::pullup_stmt_level()
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt *, 4> child_stmts;
-  if (OB_UNLIKELY(current_level_ <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected stmt level", K(current_level_));
-  } else if (FALSE_IT(--current_level_)) {
-    // never reach
-  } else if (OB_FAIL(set_sharable_exprs_level(current_level_))) {
-    LOG_WARN("failed to set sharable exprs level", K(ret));
-  } else if (OB_FAIL(get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret));
-  }
-  // pullup stmt level for children
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-    if (OB_ISNULL(child_stmts.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("child stmt is null", K(ret));
-    } else if (child_stmts.at(i)->get_current_level() <= current_level_) {
-      // do nothing, this stmt may be just pushed down
-      // there is no need to adjust
-    } else if (OB_FAIL(child_stmts.at(i)->pullup_stmt_level())) {
-      LOG_WARN("failed to pull stmt level", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObSelectStmt::set_stmt_level(int32_t level)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt *, 4> child_stmts;
-  current_level_ = level;
-  if (OB_FAIL(set_sharable_exprs_level(current_level_))) {
-    LOG_WARN("failed to set sharable exprs level", K(ret));
-  }
-  const ObIArray<ObQueryRefRawExpr*> &subquery_exprs = get_subquery_exprs();
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); ++i) {
-    ObQueryRefRawExpr *query_ref = subquery_exprs.at(i);
-    if (OB_ISNULL(query_ref) || OB_ISNULL(query_ref->get_ref_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(query_ref), K(ret));
-    } else if (OB_FAIL(query_ref->get_ref_stmt()->set_stmt_level(level+1))) {
-      LOG_WARN("failed to adjust subquery parent namespace", K(ret));
-    } else { /*do nothing*/ }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_table_size(); ++i) {
-    TableItem *table_item = get_table_item(i);
-    if (OB_ISNULL(table_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table item is null", K(ret));
-    } else if (table_item->is_generated_table()) {
-      ObSelectStmt *view_stmt = NULL;
-      if (OB_ISNULL(view_stmt = table_item->ref_query_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("view_stmt is null", K(ret));
-      } else if (OB_FAIL(view_stmt->set_stmt_level(level))) {
-        LOG_WARN("adjust view parent namespace stmt failed", K(ret));
-      }
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < set_query_.count(); ++i) {
-    ObSelectStmt *view_stmt = set_query_.at(i);
-    if (OB_ISNULL(view_stmt)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("view_stmt is null", K(ret));
-    } else if (OB_FAIL(view_stmt->set_stmt_level(level))) {
-      LOG_WARN("adjust view parent namespace stmt failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObSelectStmt::set_sharable_exprs_level(int32_t level)
-{
-  int ret = OB_SUCCESS;
-  // for each columns
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    if (OB_ISNULL(column_items_.at(i).expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column expr is null", K(ret));
-    } else {
-      column_items_.at(i).expr_->set_expr_level(level);
-    }
-  }
-  // for each aggrs
-  for (int64_t i = 0; OB_SUCC(ret) && i < agg_items_.count(); ++i) {
-    if (OB_ISNULL(agg_items_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("aggr expr is null", K(ret));
-    } else {
-      agg_items_.at(i)->set_expr_level(level);
-    }
-  }
-  // for each window function
-  for (int64_t i = 0; OB_SUCC(ret) && i < win_func_exprs_.count(); ++i) {
-    if (OB_ISNULL(win_func_exprs_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      win_func_exprs_.at(i)->set_expr_level(level);
-      if (OB_NOT_NULL(win_func_exprs_.at(i)->get_agg_expr())) {
-        win_func_exprs_.at(i)->get_agg_expr()->set_expr_level(level);
-      }
-    }
-  }
-  // for each query ref
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs_.count(); ++i) {
-    ObQueryRefRawExpr *query_ref = NULL;
-    if (OB_ISNULL(query_ref = subquery_exprs_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("subquery expr is null", K(ret));
-    } else {
-      query_ref->set_expr_level(level);
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < query_ref->get_param_count(); ++j) {
-      ObExecParamRawExpr *exec_param = NULL;
-      if (OB_ISNULL(exec_param = query_ref->get_exec_param(j))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("exec param expr is null", K(ret));
-      } else {
-        exec_param->set_expr_level(level);
-      }
-    }
-  }
-  // for each set op
-  if (is_set_stmt()) {
-    ObRawExpr *expr = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_items_.count(); ++i) {
-      if (OB_ISNULL(expr = ObTransformUtils::get_expr_in_cast(select_items_.at(i).expr_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (expr->has_flag(IS_SET_OP)) {
-        expr->set_expr_level(level);
-      }
-    }
-  }
-  return ret;
-}
-
 int ObSelectStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
-                                          const bool is_strict,
-                                          const int check_scope) const
+                                           const bool is_strict,
+                                           const bool check_having) const
 {
   int ret = OB_SUCCESS;
-  bool check_having = check_scope & SCOPE_HAVING;
-  if (OB_FAIL(ObDMLStmt::get_equal_set_conditions(conditions, is_strict, check_scope))) {
+  if (!(check_having && has_rollup()) &&
+      OB_FAIL(ObDMLStmt::get_equal_set_conditions(conditions, is_strict, check_having))) {
     LOG_WARN("failed to get equal set cond", K(ret));
-  } else if (check_having) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < having_exprs_.count(); ++i) {
-      if (OB_FAIL(conditions.push_back(having_exprs_.at(i)))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      }
-    }
+  } else if (!check_having) {
+    // do nothing
+  } else if (OB_FAIL(append(conditions, having_exprs_))) {
+    LOG_WARN("failed to append having exprs", K(ret));
   } else { /* do nothing */ }
   return ret;
 }
@@ -1390,7 +1040,7 @@ bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
     const ObIArray<ObGroupbyExpr> &grouping_sets_exprs =
                                                     grouping_sets_items_.at(i).grouping_sets_exprs_;
     for (int64_t j = 0; !is_true && j < grouping_sets_exprs.count(); ++j) {
-      is_true = ObOptimizerUtil::find_equal_expr(grouping_sets_exprs.at(j).groupby_exprs_, expr);
+      is_true = ObOptimizerUtil::find_item(grouping_sets_exprs.at(j).groupby_exprs_, expr);
     }
     if (!is_true) {
       const ObIArray<ObMultiRollupItem> &multi_rollup_items =
@@ -1399,7 +1049,7 @@ bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
         const ObIArray<ObGroupbyExpr> &rollup_list_exprs =
                                                        multi_rollup_items.at(j).rollup_list_exprs_;
         for (int64_t k = 0; !is_true && k < rollup_list_exprs.count(); ++k) {
-          is_true = ObOptimizerUtil::find_equal_expr(rollup_list_exprs.at(k).groupby_exprs_, expr);
+          is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(k).groupby_exprs_, expr);
         }
       }
     }
@@ -1509,7 +1159,7 @@ bool ObSelectStmt::is_expr_in_multi_rollup_items(const ObRawExpr *expr) const
   for (int64_t i = 0; !is_true && i < multi_rollup_items_.count(); ++i) {
     const ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items_.at(i).rollup_list_exprs_;
     for (int64_t j = 0; !is_true && j < rollup_list_exprs.count(); ++j) {
-      is_true = ObOptimizerUtil::find_equal_expr(rollup_list_exprs.at(j).groupby_exprs_, expr);
+      is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(j).groupby_exprs_, expr);
     }
   }
   return is_true;

@@ -322,8 +322,13 @@ public:
   ObSelectStmt();
   virtual ~ObSelectStmt();
   int assign(const ObSelectStmt &other);
-  virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
-                                      const common::ObIArray<ObRawExpr *> &exprs) override;
+
+  virtual int iterate_stmt_expr(ObStmtExprVisitor &vistor) override;
+
+  int iterate_group_items(ObIArray<ObGroupbyExpr> &group_items,
+                          ObStmtExprVisitor &visitor);
+  int iterate_rollup_items(ObIArray<ObMultiRollupItem> &multi_rollup_items,
+                                 ObStmtExprVisitor &visitor);
   int update_stmt_table_id(const ObSelectStmt &other);
   int64_t get_select_item_size() const { return select_items_.count(); }
   int64_t get_group_expr_size() const { return group_exprs_.count(); }
@@ -340,16 +345,6 @@ public:
   void assign_set_op(SetOperator op) { set_op_ = op; }
   void assign_set_distinct() { is_set_distinct_ = true; }
   void assign_set_all() { is_set_distinct_ = false; }
-  void set_parent_set_distinct(const bool is_parent_set_distinct)
-    { is_parent_set_distinct_ = is_parent_set_distinct;}
-  void update_set_query_parent_set_distinct()
-  {
-    for (int64_t i = 0; i < set_query_.count(); ++i) {
-      if (OB_NOT_NULL(set_query_.at(i))) {
-        set_query_.at(i)->set_parent_set_distinct(is_set_distinct_);
-      }
-    }
-  }
   void set_is_from_show_stmt(bool is_from_show_stmt) { show_stmt_ctx_.is_from_show_stmt_ = is_from_show_stmt; }
   void set_global_scope(bool global_scope) { show_stmt_ctx_.global_scope_ = global_scope; }
   void set_tenant_id(uint64_t tenant_id) { show_stmt_ctx_.tenant_id_ = tenant_id; }
@@ -369,7 +364,6 @@ public:
   bool is_distinct() const { return is_distinct_; }
   bool is_recursive_union() const { return is_recursive_cte_;}
   bool is_breadth_search() const { return is_breadth_search_;}
-  bool is_parent_set_distinct() const { return is_parent_set_distinct_; }
   bool is_set_distinct() const { return is_set_distinct_; }
   bool is_from_show_stmt() const { return show_stmt_ctx_.is_from_show_stmt_; }
   // view
@@ -406,6 +400,8 @@ public:
   int contain_hierarchical_query(bool &contain_hie_query) const;
   void set_has_prior(bool has_prior) { has_prior_ = has_prior; }
   bool has_prior() const { return has_prior_; }
+  void set_has_reverse_link(bool has_reverse_link) { has_reverse_link_ = has_reverse_link; }
+  bool has_reverse_link() const { return has_reverse_link_; }
   // return single row
   inline bool is_single_set_query() const { return (get_aggr_item_size() > 0
                                              && group_exprs_.empty()
@@ -435,7 +431,6 @@ public:
   int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs, const bool is_for_outout = false);
   int get_select_exprs(ObIArray<ObRawExpr*> &select_exprs, const bool is_for_outout = false) const;
   int get_select_exprs_without_lob(ObIArray<ObRawExpr*> &select_exprs) const;
-  int inner_get_share_exprs(ObIArray<ObRawExpr *> &candi_share_exprs) const;
   const common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() const { return agg_items_; }
   common::ObIArray<ObAggFunRawExpr*> &get_aggr_items() { return agg_items_; }
   ObAggFunRawExpr *get_aggr_item(int64_t index) const { return agg_items_[index]; }
@@ -479,7 +474,6 @@ public:
   const common::ObIArray<ObOrderDirection> &get_rollup_dirs() const { return rollup_directions_; }
   common::ObIArray<ObOrderDirection> &get_rollup_dirs() { return rollup_directions_; }
   ObSelectIntoItem* get_select_into() const { return into_item_; }
-  int adjust_view_parent_namespace_stmt(ObDMLStmt *new_parent);
   int add_group_expr(ObRawExpr* expr) { return group_exprs_.push_back(expr); }
   int add_rollup_expr(ObRawExpr* expr) { return rollup_exprs_.push_back(expr); }
   int add_grouping_sets_item(ObGroupingSetsItem &grouping_sets_item)
@@ -494,7 +488,6 @@ public:
   int add_agg_item(ObAggFunRawExpr &agg_expr)
   {
     agg_expr.set_explicited_reference();
-    agg_expr.set_expr_level(current_level_);
     return agg_items_.push_back(&agg_expr);
   }
   int add_having_expr(ObRawExpr *expr) { return having_exprs_.push_back(expr); }
@@ -582,12 +575,9 @@ public:
   //  count(distinct c1)
   //  group_concat(c1 order by c2))
   bool has_distinct_or_concat_agg() const;
-  int pullup_stmt_level();
-  int set_stmt_level(int32_t level);
-  int set_sharable_exprs_level(int32_t level);
   virtual int get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
                                        const bool is_strict,
-                                       const int check_scope) const override;
+                                       const bool check_having = false) const override;
   int create_select_list_for_set_stmt(ObRawExprFactory &expr_factory);
 
   int deep_copy_stmt_struct(ObIAllocator &allocator,
@@ -611,21 +601,7 @@ public:
   share::schema::ViewCheckOption get_check_option() const { return check_option_; }
   void set_check_option(share::schema::ViewCheckOption check_option) { check_option_ = check_option; }
   // this function will only be called while resolving with clause.
-  int add_cte_definition(TableItem * table_item) { return cte_definitions_.push_back(table_item); }
-  int get_cte_definition_size() const { return cte_definitions_.count(); }
-  common::ObIArray<TableItem *>& get_cte_definitions() { return cte_definitions_; }
-  const common::ObIArray<TableItem *>& get_cte_definitions() const { return cte_definitions_; }
 
-
-private:
-  int replace_multi_rollup_items_expr(const ObIArray<ObRawExpr*> &other_exprs,
-                                      const ObIArray<ObRawExpr*> &new_exprs,
-                                      ObIArray<ObMultiRollupItem> &multi_rollup_items);
-  int get_relation_exprs_from_multi_rollup_items(RelExprCheckerBase &expr_checker,
-                                                 ObIArray<ObMultiRollupItem> &multi_rollup_items);
-protected:
-  //获取到stmt中所有查询相关的表达式(由查询语句中指定的属性生成的表达式)的root expr
-  virtual int inner_get_relation_exprs(RelExprCheckerBase &expr_checker);
 private:
   SetOperator set_op_;
   /* these var is only used for recursive union */
@@ -661,15 +637,9 @@ private:
   common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> for_update_columns_;
 
   /* These fields are only used by set select */
-  bool is_parent_set_distinct_; //indicate parent is set distinct
   bool is_set_distinct_;
   /* for set stmt child stmt*/
   common::ObSEArray<ObSelectStmt*, 2, common::ModulePageAllocator, true> set_query_;
-  /* 
-    keep all cte table defined in current level. Only used for print stmt. 
-    Needn't maintain it after resolver.
-  */
-  common::ObSEArray<TableItem*, 2, common::ModulePageAllocator, true> cte_definitions_;
 
   /* for show statment*/
   ObShowStmtCtx show_stmt_ctx_;
@@ -688,6 +658,7 @@ private:
   bool is_order_siblings_;
   bool is_hierarchical_query_;
   bool has_prior_;
+  bool has_reverse_link_;
 };
 }
 }

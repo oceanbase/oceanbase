@@ -211,6 +211,7 @@ public:
   // 4. If the RPC succeeds, you need to wait for the asynchronous callback to set the result
   int async_fetch_log(
       const palf::LSN &req_start_lsn,
+      const int64_t client_progress,
       const int64_t upper_limit,
       bool &rpc_send_succeed);
 
@@ -264,6 +265,7 @@ private:
       bool &need_dispatch_stream_task);
   int launch_async_rpc_(RpcRequest &request,
       const palf::LSN &req_start_lsn,
+      const int64_t progress,
       const int64_t upper_limit,
       const bool launch_by_cb,
       bool &rpc_send_succeed);
@@ -352,7 +354,8 @@ private:
     // Prepare the RPC request structure, set the final parameters, and immediately launch the RPC request next
     int prepare(
         const palf::LSN &req_start_lsn,
-        const int64_t upper_limit);
+        const int64_t upper_limit,
+        const int64_t progress);
 
     // Marking RPC run status
     void mark_flying_state(const bool rpc_is_flying);

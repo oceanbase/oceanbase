@@ -66,8 +66,8 @@ class ObTimer
 {
 public:
   friend class oceanbase::tests::blocksstable::FakeTabletManager;
-  ObTimer(): tasks_num_(0), wakeup_time_(0), is_inited_(false), is_stopped_(false),
-      is_destroyed_(false), has_running_task_(false), has_running_repeat_task_(false),
+  ObTimer(int64_t max_task_num = 32): tasks_num_(0), max_task_num_(max_task_num), wakeup_time_(0), is_inited_(false), is_stopped_(false),
+      is_destroyed_(false), tokens_(nullptr), has_running_task_(false), has_running_repeat_task_(false),
       thread_id_(-1), thread_name_(nullptr) {}
   ~ObTimer();
   int init(const char* thread_name = nullptr);
@@ -101,19 +101,20 @@ private:
     int64_t delay;
     ObTimerTask *task;
   };
-  static const int32_t MAX_TASK_NUM = 32;
   int insert_token(const Token &token);
   void run1() final;
   int schedule_task(ObTimerTask &task, const int64_t delay, const bool repeate, const bool is_scheduled_immediately);
   DISALLOW_COPY_AND_ASSIGN(ObTimer);
 private:
+  const static int64_t ELAPSED_TIME_LOG_THREASHOLD = 10 * 60 * 1000 * 1000; // 10 mins
   int32_t tasks_num_;
+  int64_t max_task_num_;
   int64_t wakeup_time_;
   bool is_inited_;
   bool is_stopped_;
   bool is_destroyed_;
   obutil::ObMonitor<obutil::Mutex> monitor_;
-  Token tokens_[MAX_TASK_NUM];
+  Token* tokens_;
   bool has_running_task_;
   bool has_running_repeat_task_;
   int64_t thread_id_;

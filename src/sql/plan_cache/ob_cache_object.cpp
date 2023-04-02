@@ -366,13 +366,17 @@ void ObPlanCacheObject::dump_deleted_log_info(const bool is_debug_log /* = true 
   if (is_sql_crsr()) {
     const ObPhysicalPlan *plan = dynamic_cast<const ObPhysicalPlan *>(this);
     if (OB_ISNULL(plan)) {
-      LOG_ERROR("the plan is null", K(plan), K(this));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "the plan is null", K(plan), K(this));
     } else {
       raw_sql = ObTruncatedString(plan->stat_.raw_sql_, OB_MAX_SQL_LENGTH).string();
     }
   } else if (is_anon()) {
     const pl::ObPLFunction *pl_func = dynamic_cast<const pl::ObPLFunction *>(this);
-    raw_sql = ObTruncatedString(pl_func->get_stat().raw_sql_, OB_MAX_SQL_LENGTH).string();
+    if (OB_ISNULL(pl_func)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "the pl_func is null", K(this));
+    } else {
+      raw_sql = ObTruncatedString(pl_func->get_stat().raw_sql_, OB_MAX_SQL_LENGTH).string();
+    }
   } else {
     // do nothing
   }

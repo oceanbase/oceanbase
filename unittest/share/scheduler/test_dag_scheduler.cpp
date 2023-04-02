@@ -377,7 +377,7 @@ class TestDag : public ObIDag
 {
 public:
   TestDag() :
-      ObIDag(ObDagType::DAG_TYPE_MINOR_MERGE), id_(0), expect_(-1), expect_ret_(0), running_(false), tester_(NULL) { }
+      ObIDag(ObDagType::DAG_TYPE_MERGE_EXECUTE), id_(0), expect_(-1), expect_ret_(0), running_(false), tester_(NULL) { }
   explicit TestDag(const ObDagType::ObDagTypeEnum type) :
       ObIDag(type), id_(0), expect_(-1), expect_ret_(0), running_(false), tester_(NULL) { }
   virtual ~TestDag()
@@ -391,7 +391,7 @@ public:
             if (NULL != tester_) {
               tester_->stop();
             }
-            COMMON_LOG(ERROR, "FATAL ERROR!!!", K_(expect), K(op_.value()), K_(expect_ret),
+            COMMON_LOG_RET(ERROR, OB_ERROR, "FATAL ERROR!!!", K_(expect), K(op_.value()), K_(expect_ret),
                 K(get_dag_ret()), K_(id));
             common::right_to_die_or_duty_to_live();
           }
@@ -407,7 +407,7 @@ public:
     tester_ = tester;
     ObAddr addr(1683068975,9999);
     if (OB_SUCCESS != (ObSysTaskStatMgr::get_instance().set_self_addr(addr))) {
-      COMMON_LOG(WARN, "failed to add sys task", K(addr));
+      COMMON_LOG_RET(WARN, OB_ERROR, "failed to add sys task", K(addr));
     }
     return OB_SUCCESS;
   }
@@ -469,7 +469,7 @@ private:
 class TestHPDag : public TestDag
 {
 public:
-  TestHPDag() : TestDag(ObDagType::DAG_TYPE_MINOR_MERGE) {}
+  TestHPDag() : TestDag(ObDagType::DAG_TYPE_MERGE_EXECUTE) {}
 private:
   DISALLOW_COPY_AND_ASSIGN(TestHPDag);
 };
@@ -485,7 +485,7 @@ private:
 class TestCompMidDag : public TestDag
 {
 public:
-  TestCompMidDag() : TestDag(ObDagType::DAG_TYPE_MINOR_MERGE) {}
+  TestCompMidDag() : TestDag(ObDagType::DAG_TYPE_MERGE_EXECUTE) {}
 private:
   DISALLOW_COPY_AND_ASSIGN(TestCompMidDag);
 };
@@ -1317,7 +1317,7 @@ TEST_F(TestDagScheduler, test_get_dag_count)
   int64_t counter = 1;
 
   EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAJOR_MERGE));
-  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MINOR_MERGE));
+  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MERGE_EXECUTE));
   EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_DDL));
   EXPECT_EQ(-1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAX));
 
@@ -1328,7 +1328,7 @@ TEST_F(TestDagScheduler, test_get_dag_count)
   EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
   sleep(1);
-  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MINOR_MERGE));
+  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MERGE_EXECUTE));
   EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAJOR_MERGE));
   EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_DDL));
   EXPECT_EQ(-1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAX));
@@ -1339,7 +1339,7 @@ TEST_F(TestDagScheduler, test_get_dag_count)
   EXPECT_EQ(OB_SUCCESS, mul_task->init(&counter));
   EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
-  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MINOR_MERGE));
+  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MERGE_EXECUTE));
   EXPECT_EQ(1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAJOR_MERGE));
   EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_DDL));
   EXPECT_EQ(-1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAX));
@@ -1349,7 +1349,7 @@ TEST_F(TestDagScheduler, test_get_dag_count)
   EXPECT_EQ(OB_SUCCESS, mul_task2->init(&counter));
   EXPECT_EQ(OB_SUCCESS, dag2->add_task(*mul_task2));
   EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag2));
-  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MINOR_MERGE));
+  EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_MERGE_EXECUTE));
   EXPECT_EQ(2, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAJOR_MERGE));
   EXPECT_EQ(0, scheduler->get_dag_count(ObDagType::DAG_TYPE_DDL));
   EXPECT_EQ(-1, scheduler->get_dag_count(ObDagType::DAG_TYPE_MAX));

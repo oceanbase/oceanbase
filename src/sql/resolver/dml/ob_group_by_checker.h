@@ -23,7 +23,9 @@ namespace sql
 class ObGroupByChecker: public ObRawExprVisitor
 {
 public:
-  ObGroupByChecker(ObIArray<ObRawExpr*> *group_by_exprs,
+// if param_store is not null, group by checker will extract plan cache const constraint
+  ObGroupByChecker(const ParamStore *param_store,
+                   ObIArray<ObRawExpr*> *group_by_exprs,
                    ObIArray<ObRawExpr*> *rollup_exprs = nullptr,
                    ObIArray<ObGroupbyExpr> *groupby_exprs = nullptr)
     : ObRawExprVisitor(),
@@ -37,7 +39,10 @@ public:
       query_ctx_(nullptr),
       has_nested_aggr_(false),
       is_check_order_by_(false),
-      dblink_groupby_expr_(NULL)
+      dblink_groupby_expr_(NULL),
+      only_need_contraints_(false),
+      param_store_(param_store)
+
   {}
   virtual ~ObGroupByChecker()
   {}
@@ -74,6 +79,9 @@ private:
   bool has_nested_aggr_;
   bool is_check_order_by_;
   common::ObIArray<ObRawExpr*> *dblink_groupby_expr_;
+  // if true, only add constraints for shared exprs which will be replaced in replace_stmt_expr_with_groupby_exprs
+  bool only_need_contraints_;
+  const ParamStore *param_store_;
 private:
   // Top select stmt 是指当前调用group by checker的select_stmt，不是select_stmt的level
   // 其他select_stmt会每进入一层，递增一层，同时检查结束退出，会递减一层
@@ -86,37 +94,40 @@ private:
   int add_abs_equal_constraint_in_grouping_sets(ObConstRawExpr &expr);
   bool check_obj_abs_equal(const ObObj &obj1, const ObObj &obj2);
   int belongs_to_check_stmt(ObRawExpr &expr, bool &belongs_to);
-  int colref_belongs_to_check_stmt(ObRawExpr &expr, bool &belongs_to);
+  int colref_belongs_to_check_stmt(ObColumnRefRawExpr &expr, bool &belongs_to);
   int check_select_stmt(const ObSelectStmt *ref_stmt);
   int add_pc_const_param_info(ObExprEqualCheckContext &check_context);
   void set_nested_aggr(bool has_nested_aggr) { has_nested_aggr_ = has_nested_aggr; }
   bool has_nested_aggr() { return has_nested_aggr_; }
   void set_check_order_by(bool check_order_by) { is_check_order_by_ = check_order_by; }
   void set_dblink_groupby_expr(common::ObIArray<ObRawExpr*> *dblink_groupby_array);
+  static int check_groupby_valid(ObRawExpr *expr);
+  static int check_scalar_groupby_valid(ObRawExpr *expr);
 // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGroupByChecker);
 public:
   void set_level(int64_t level) { level_ = level; }
   // all functions below should only called in resolver
-  static int check_group_by(ObSelectStmt *ref_stmt,
+  static int check_group_by(const ParamStore *param_store,
+                            ObSelectStmt *ref_stmt,
                             bool has_having_self_column,
-                            bool has_group_by_clause);
-  static int check_groupby_valid(ObRawExpr *expr);
-  static int check_by_expr(
-    const ObSelectStmt *ref_stmt,
-    common::ObIArray<ObRawExpr*> &group_by_exprs,
-    common::ObIArray<ObRawExpr*> &checked_exprs,
-    int err_code,
-    bool is_check_order_by = false);
+                            bool has_group_by_clause,
+                            bool only_need_constraints);
+  static int check_by_expr(const ParamStore *param_store,
+                           const ObSelectStmt *ref_stmt,
+                           common::ObIArray<ObRawExpr*> &group_by_exprs,
+                           common::ObIArray<ObRawExpr*> &checked_exprs,
+                           int err_code,
+                           bool is_check_order_by = false);
   static int dblink_check_groupby(
     const ObSelectStmt *ref_stmt,
     common::ObIArray<ObRawExpr*> &group_by_exprs,
     common::ObIArray<ObRawExpr*> &rollup_exprs,
     const common::ObIArray<ObRawExpr*> &checked_exprs);
-  static int check_analytic_function(ObSelectStmt *ref_stmt,
+  static int check_analytic_function(const ParamStore *param_store,
+                                     ObSelectStmt *ref_stmt,
                                      common::ObIArray<ObRawExpr *> &arg_exp_arr,        //等价于查询项中表达式
                                      common::ObIArray<ObRawExpr *> &partition_exp_arr); //等价于group by项
-  static int check_scalar_groupby_valid(ObRawExpr *expr);
 };
 
 }

@@ -186,7 +186,7 @@ int ObExprResultTypeUtil::get_round_result_type(ObObjType &type,
 
     if (OB_UNLIKELY(!ob_is_valid_obj_type(type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("unsupported type for round", K(ret), K(type1), K(lbt()));
+      LOG_WARN("unsupported type for round", K(ret), K(type), K(type1), K(lbt()));
     }
   } else {
     type = ROUND_RESULT_TYPE[type1];
@@ -717,6 +717,10 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
           length = static_cast<ObLength>(ObCharset::strlen_char(out.get_collation_type(),
                                                                 out.get_string_ptr(),
                                                                 out.get_string_len()));
+          if (!ObCharset::is_valid_collation(out.get_collation_type())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected const value cast result", K(ret), K(out), K(orig_obj), K(target_type), K(cast_mode));
+          }
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid length_semantics", K(length_semantics), K(ret));

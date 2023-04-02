@@ -44,6 +44,11 @@ public:
                                    ObIArray<ObRawExpr *> &target_exprs,
                                    ObIArray<ObRawExpr *> &aggr_bound_preds);
 
+  static bool find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
+                              const ObRawExpr *target,
+                              int64_t *idx = NULL,
+                              ObExprParamCheckContext *context = NULL);
+
   static int check_deduce_validity(ObRawExpr *expr, bool &is_valid);
 
   static inline bool is_simple_condition(const ObItemType type)
@@ -237,6 +242,8 @@ private:
                             ObRawExpr *left_expr,
                             ObRawExpr *right_expr,
                             bool &is_valid);
+
+  int check_cmp_metas_for_general_preds(ObRawExpr *left_pexr, ObRawExpr *pred,  bool &type_safe);
 
 private:
   ObObjMeta cmp_type_; // the compare meta used by all exprs in the graph

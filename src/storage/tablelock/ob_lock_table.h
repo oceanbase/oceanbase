@@ -76,7 +76,7 @@ public:
   int offline();
   int online();
   // create lock table tablet.
-  int create_tablet(const lib::Worker::CompatMode compat_mode, const int64_t create_scn);
+  int create_tablet(const lib::Worker::CompatMode compat_mode, const share::SCN &create_scn);
   // remove lock table tablet.
   int remove_tablet();
   // load lock for tablet.
@@ -117,6 +117,18 @@ public:
   // @param[out] iter, the iterator returned.
   int get_lock_op_iter(const ObLockID &lock_id,
                        ObLockOpIterator &iter);
+  // used by admin tool. remove lock records.
+  // @param[in] op_info, the lock/unlock op will be removed by admin.
+  int admin_remove_lock_op(const ObTableLockOp &op_info);
+  // used by admin tool. update lock op status.
+  // @param[in] op_info, the lock/unlock op will be update by admin.
+  // @param[in] commit_version, set the commit version.
+  // @param[in] commit_scn, set the commit logts.
+  // @param[in] status, the lock op status will be set.
+  int admin_update_lock_op(const ObTableLockOp &op_info,
+                           const share::SCN &commit_version,
+                           const share::SCN &commit_scn,
+                           const ObTableLockOpStatus status);
 private:
   // We use the method to recover the lock_table for reboot.
   int restore_lock_table_(storage::ObITable &sstable);

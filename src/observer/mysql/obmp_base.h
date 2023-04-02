@@ -74,7 +74,7 @@ protected:
 
   // send a ok packet to client
   int send_ok_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param, obmysql::ObMySQLPacket* pkt=NULL);
-  int send_eof_packet(const sql::ObSQLSessionInfo &session, const ObMySQLResultSet &result);
+  int send_eof_packet(const sql::ObSQLSessionInfo &session, const ObMySQLResultSet &result, ObOKPParam *ok_param = NULL);
 
   int send_null_packet(sql::ObSQLSessionInfo &session, ObOKPParam &ok_param);
 
@@ -89,12 +89,11 @@ protected:
   int clean_buffer();
   int init_process_var(sql::ObSqlCtx &ctx,
                        const sql::ObMultiStmtItem &multi_stmt_item,
-                       sql::ObSQLSessionInfo &session,
-                       bool &use_trace_log) const;
+                       sql::ObSQLSessionInfo &session) const;
   int do_after_process(sql::ObSQLSessionInfo &session,
-                       bool use_trace_log,
                        sql::ObSqlCtx &ctx,
                        bool async_resp_used) const;
+  int record_flt_trace(sql::ObSQLSessionInfo &session) const;
   // reset warning buffer err msg, for inner retry
   void setup_wb(sql::ObSQLSessionInfo &session);
   void clear_wb_content(sql::ObSQLSessionInfo &session);
@@ -118,7 +117,7 @@ protected:
   int setup_user_resource_group(
       ObSMConnection &conn,
       const uint64_t tenant_id,
-      const uint64_t user_id);
+      sql::ObSQLSessionInfo *session);
   int response_row(sql::ObSQLSessionInfo &session,
                    common::ObNewRow &row,
                    const ColumnsFieldIArray *fields);

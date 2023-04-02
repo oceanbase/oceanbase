@@ -21,6 +21,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "lib/list/ob_obj_store.h"
+#include "rpc/obrpc/ob_rpc_processor.h"
 namespace oceanbase
 {
 namespace common
@@ -34,6 +35,11 @@ class ObIDASTaskResult;
 class ObDASExtraData;
 class ObExprFrameInfo;
 class ObDASScanOp;
+class ObDASTaskFactory;
+class ObDasAggregatedTasks;
+
+typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
+typedef ObDList<DasTaskNode> DasTaskLinkedList;
 
 struct ObDASRemoteInfo
 {
@@ -78,8 +84,11 @@ public:
 class ObIDASTaskOp
 {
   friend class ObDataAccessService;
-  friend class ObDASSyncAccessP;
+  template<obrpc::ObRpcPacketCode pcode>
+  friend class ObDASBaseAccessP;
   friend class ObDASRef;
+  friend class ObRpcDasAsyncAccessCallBack;
+  friend class ObDataAccessService;
   OB_UNIS_VERSION_V(1);
 public:
   ObIDASTaskOp(common::ObIAllocator &op_alloc)
@@ -94,8 +103,14 @@ public:
       op_alloc_(op_alloc),
       related_ctdefs_(op_alloc),
       related_rtdefs_(op_alloc),
-      related_tablet_ids_(op_alloc)
+      related_tablet_ids_(op_alloc),
+      task_status_(ObDasTaskStatus::UNSTART),
+      das_task_node_(),
+      agg_tasks_(nullptr),
+      cur_agg_list_(nullptr),
+      op_result_(nullptr)
   {
+    das_task_node_.get_data() = this;
   }
   virtual ~ObIDASTaskOp() { }
 
@@ -104,18 +119,20 @@ public:
   void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
   const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   void set_task_id(const int64_t task_id) { task_id_ = task_id; }
-  int64_t get_task_id() { return task_id_; }
+  int64_t get_task_id() const { return task_id_; }
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   void set_tablet_loc(const ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
   const ObDASTabletLoc *get_tablet_loc() const { return tablet_loc_; }
+  inline int64_t get_ref_table_id() const { return tablet_loc_->loc_meta_->ref_table_id_; }
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
   //远程执行填充第一个RPC结果，并返回是否还有剩余的RPC结果
   virtual int fill_task_result(ObIDASTaskResult &task_result,
-                               bool &has_more)
+                               bool &has_more, int64_t &memory_limit)
   {
     UNUSED(task_result);
     UNUSED(has_more);
+    UNUSED(memory_limit);
     return OB_NOT_IMPLEMENT;
   }
   virtual int fill_extra_result()
@@ -131,6 +148,9 @@ public:
   DASRtDefFixedArray &get_related_rtdefs() { return related_rtdefs_; }
   ObTabletIDFixedArray &get_related_tablet_ids() { return related_tablet_ids_; }
   virtual int dump_data() const { return common::OB_SUCCESS; }
+  const DasTaskNode &get_node() const { return das_task_node_; };
+  DasTaskNode &get_node() { return das_task_node_; };
+  int get_errcode() const { return errcode_; };
   VIRTUAL_TO_STRING_KV(K_(tenant_id),
                        K_(task_id),
                        K_(op_type),
@@ -147,7 +167,9 @@ public:
                        KPC_(tablet_loc),
                        K_(related_ctdefs),
                        K_(related_rtdefs),
-                       K_(related_tablet_ids));
+                       K_(task_status),
+                       K_(related_tablet_ids),
+                       K_(das_task_node));
 public:
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
@@ -161,8 +183,23 @@ public:
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
-  void set_need_switch_param(bool v) { need_switch_param_ = v; }
-  bool need_switch_param() const { return need_switch_param_; }
+  void set_task_status(ObDasTaskStatus status);
+  ObDasTaskStatus get_task_status() const { return task_status_; };
+  const ObDasAggregatedTasks *get_agg_tasks() const { return agg_tasks_; };
+  ObDasAggregatedTasks *get_agg_tasks() { return agg_tasks_; };
+  void set_agg_tasks(ObDasAggregatedTasks *agg_tasks)
+  {
+    OB_ASSERT(agg_tasks != nullptr);
+    OB_ASSERT(agg_tasks_ == nullptr);
+    agg_tasks_ = agg_tasks;
+  };
+  // NOT THREAD SAFE. We only advance state on das controller.
+  int state_advance();
+  void set_cur_agg_list(DasTaskLinkedList *list) { cur_agg_list_ = list; };
+  DasTaskLinkedList *get_cur_agg_list() { return cur_agg_list_; };
+
+  ObIDASTaskResult *get_op_result() const { return op_result_; }
+  void set_op_result(ObIDASTaskResult *op_result) { op_result_ = op_result; }
 protected:
   int start_das_task();
   int end_das_task();
@@ -184,7 +221,7 @@ protected:
       uint16_t task_started_     : 1;
       uint16_t in_part_retry_    : 1;
       uint16_t in_stmt_retry_    : 1;
-      uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan
+      uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan, this parameter has been deprecated
       uint16_t status_reserved_  : 12;
     };
   };
@@ -199,6 +236,11 @@ protected:
   DASCtDefFixedArray related_ctdefs_;
   DASRtDefFixedArray related_rtdefs_;
   ObTabletIDFixedArray related_tablet_ids_;
+  ObDasTaskStatus task_status_;  // do not serialize
+  DasTaskNode das_task_node_;  // tasks's linked list node, do not serialize
+  ObDasAggregatedTasks *agg_tasks_;  // task's agg task, do not serialize
+  DasTaskLinkedList *cur_agg_list_;  // task's agg_list, do not serialize
+  ObIDASTaskResult *op_result_;
 
 public:
   const static uint32_t DAS_ROW_EXTEND_SIZE = 16;
@@ -212,7 +254,8 @@ class ObIDASTaskResult
 public:
   ObIDASTaskResult() : task_id_(0) { }
   virtual ~ObIDASTaskResult() { }
-  virtual int init(const ObIDASTaskOp &task_op) = 0;
+  virtual int init(const ObIDASTaskOp &task_op, common::ObIAllocator &alloc) = 0;
+  virtual int reuse() = 0;
   virtual int link_extra_result(ObDASExtraData &extra_result)
   {
     UNUSED(extra_result);
@@ -277,6 +320,8 @@ public:
 
   int add_task_op(ObIDASTaskOp *task_op);
   ObIDASTaskOp *get_task_op();
+  const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return task_ops_; };
+  common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() { return task_ops_; };
   void set_remote_info(ObDASRemoteInfo *remote_info) { remote_info_ = remote_info; }
   ObDASRemoteInfo *get_remote_info() { return remote_info_; }
   common::ObAddr &get_runner_svr() { return runner_svr_; }
@@ -304,7 +349,8 @@ class ObDASTaskResp
 public:
   ObDASTaskResp();
   int add_op_result(ObIDASTaskResult *op_result);
-  ObIDASTaskResult *get_op_result();
+  const common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() const { return op_results_; };
+  common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() { return op_results_; };
   void set_err_code(int err_code) { rcode_.rcode_ = err_code; }
   int get_err_code() const { return rcode_.rcode_; }
   const obrpc::ObRpcResultCode &get_rcode() const { return rcode_; }
@@ -315,8 +361,10 @@ public:
   bool has_more() const { return has_more_; }
   void set_ctrl_svr(const common::ObAddr &ctrl_svr) { ctrl_svr_ = ctrl_svr; }
   void set_runner_svr(const common::ObAddr &runner_svr) { runner_svr_ = runner_svr; }
-  common::ObAddr get_runner_svr() { return runner_svr_; }
+  common::ObAddr get_runner_svr() const { return runner_svr_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
+  const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
+  void set_das_factory(ObDASTaskFactory *das_factory) { das_factory_ = das_factory; };
   TO_STRING_KV(K_(has_more),
                K_(ctrl_svr),
                K_(runner_svr),
@@ -330,6 +378,7 @@ private:
   common::ObSEArray<ObIDASTaskResult*, 2> op_results_;  // 对应operation的结果信息，这是一个接口类，具体的定义由DML Service解析
   obrpc::ObRpcResultCode rcode_; //返回的错误信息
   transaction::ObTxExecResult trans_result_;
+  ObDASTaskFactory *das_factory_;  // no need to serialize
 };
 
 template <typename T>

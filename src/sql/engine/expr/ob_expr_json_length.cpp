@@ -8,15 +8,17 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_length.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "deps/oblib/src/lib/json_type/ob_json_path.h"
+#include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_length.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;
@@ -59,16 +61,17 @@ int ObExprJsonLength::calc_result_typeN(ObExprResType& type,
   return ret;
 }
 
-template <typename T>
-int ObExprJsonLength::calc(const T &data1, ObObjType type1, ObCollationType cs_type1, const T *data2, 
-                           ObObjType type2, ObIAllocator *allocator, T &res,
+int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta meta1, bool has_lob_header1,
+                           const ObDatum *data2, ObDatumMeta meta2, bool has_lob_header2,
+                           ObIAllocator *allocator, ObDatum &res,
                            ObJsonPathCache* path_cache)
 {
   INIT_SUCC(ret);
   bool is_null = false;
   uint32_t res_len = 0;
   ObIJsonBase *j_base = NULL;
-
+  ObObjType type1 = meta1.type_;
+  ObCollationType cs_type1 = meta1.cs_type_;
   // handle data1(json text)
   if (type1 == ObNullType || data1.is_null()) { // null should display "NULL"
     is_null = true;
@@ -83,6 +86,8 @@ int ObExprJsonLength::calc(const T &data1, ObObjType type1, ObCollationType cs_t
     if (j_doc.length() == 0) {
       ret = OB_ERR_INVALID_JSON_TEXT;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data1, meta1, has_lob_header1, j_doc))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_doc));
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_doc, j_in_type,
         j_in_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(type1), K(j_doc), K(j_in_type));
@@ -94,13 +99,16 @@ int ObExprJsonLength::calc(const T &data1, ObObjType type1, ObCollationType cs_t
     if (OB_ISNULL(data2)) { // have no path
       res_len = j_base->element_count();
     } else { // handle json path
+      ObObjType type2 = meta2.type_;
       if (type2 == ObNullType) { // null should display "NULL"
         is_null = true;
       } else { // ObLongTextType
         ObJsonBaseVector hit;
         ObString j_path_text = data2->get_string();
         ObJsonPath *j_path = NULL;
-        if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, false))) {
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, *data2, meta2, has_lob_header2, j_path_text))) {
+          LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, j_path_text, 1, false))) {
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
           LOG_WARN("fail to parse json path", K(ret), K(type2), K(j_path_text));
         } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, true, hit))) {
@@ -131,22 +139,22 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 {
   INIT_SUCC(ret);
   ObDatum *datum1 = NULL;
-  ObObjType type1 = ObMaxType;
+  ObDatumMeta meta1;
+  bool has_lob_header1 = false;
   ObDatum *datum0 = NULL;
   ObExpr *arg0 = expr.args_[0];
-  ObObjType type0 = arg0->datum_meta_.type_;
-  ObCollationType cs_type0 = arg0->datum_meta_.cs_type_;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
 
   if (OB_FAIL(arg0->eval(ctx, datum0))) { // json doc
-    LOG_WARN("fail to eval json arg", K(ret), K(type1));
+    LOG_WARN("fail to eval json arg", K(ret), K(arg0->datum_meta_));
   } else {
     if (expr.arg_cnt_ > 1) { // json path
       ObExpr *arg1 = expr.args_[1];
-      type1 = arg1->datum_meta_.type_;
+      meta1 = arg1->datum_meta_;
+      has_lob_header1 = arg1->obj_meta_.has_lob_header();
       if (OB_FAIL(arg1->eval(ctx, datum1))) {
-        LOG_WARN("fail to eval path arg", K(ret), K(type1));
+        LOG_WARN("fail to eval path arg", K(ret), K(meta1));
       }
     }
   }
@@ -156,7 +164,8 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObJsonPathCache* path_cache = ObJsonExprHelper::get_path_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
     path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
 
-    if (OB_FAIL(calc(*datum0, type0, cs_type0, datum1, type1, &tmp_allocator, res, path_cache))) {
+    if (OB_FAIL(calc(ctx, *datum0, arg0->datum_meta_, arg0->obj_meta_.has_lob_header(),
+                     datum1, meta1, has_lob_header1, &tmp_allocator, res, path_cache))) {
       LOG_WARN("fail to calc json length result", K(ret), K(datum0), K(expr.arg_cnt_));
     }
   }

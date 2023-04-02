@@ -15,6 +15,8 @@
 
 #include "share/io/ob_io_define.h"
 #include "lib/container/ob_heap.h"
+#include "lib/container/ob_array_iterator.h"
+#include "lib/container/ob_array_wrap.h"
 
 namespace oceanbase
 {
@@ -33,6 +35,7 @@ public:
   void destroy();
   bool is_inited() const;
   bool is_valid() const;
+  bool is_stop() const;
   int calc_phy_clock(const int64_t current_ts, const double iops_scale, const double weight_scale, ObPhyQueue *phy_queue);
   int dial_back_reservation_clock(const double iops_scale);
   int dial_back_proportion_clock(const int64_t delta_us);
@@ -47,31 +50,33 @@ private:
 };
 
 struct ObTenantIOConfig;
-class ObTenantIOClock : public ObIOClock
+class ObTenantIOClock
 {
 public:
   ObTenantIOClock();
   virtual ~ObTenantIOClock();
-  virtual int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage) override;
-  virtual void destroy() override;
+  int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage);
+  void destroy();
   int calc_phyqueue_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
-  virtual int sync_clocks(ObIArray<ObIOClock *> &io_clocks) override;
+  int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
   int sync_tenant_clock(ObTenantIOClock *ioclock);
   int adjust_reservation_clock(ObPhyQueue *phy_queue, const ObIORequest &req);
   int adjust_proportion_clock(const int64_t delta_us);
-  virtual int update_io_config(const ObTenantIOConfig &io_config) override;
+  int update_io_clocks(const ObTenantIOConfig &io_config);
+  int update_io_clock(const int64_t index, const ObTenantIOConfig &io_config, const int64_t all_group_num);
   int64_t get_min_proportion_ts();
-  TO_STRING_KV(K(is_inited_), "category_clocks", ObArrayWrap<ObMClock>(category_clocks_, static_cast<int>(ObIOCategory::MAX_CATEGORY)),
-      K_(other_clock), K_(unit_clock), K(io_config_), K(io_usage_));
+  void stop_clock(const uint64_t index);
+  TO_STRING_KV(K(is_inited_), "group_clocks", group_clocks_, "other_clock", other_group_clock_,
+      K_(unit_clock), K(io_config_), K(io_usage_));
 private:
-  ObMClock &get_mclock(const int category_index);
-  double get_weight_scale(const int category_index);
+  ObMClock &get_mclock(const int64_t queue_index);
+  double get_weight_scale(const int64_t queue_index);
   int64_t calc_iops(const int64_t iops, const int64_t percentage);
   int64_t calc_weight(const int64_t weight, const int64_t percentage);
 private:
   bool is_inited_;
-  ObMClock category_clocks_[static_cast<int>(ObIOCategory::MAX_CATEGORY)];
-  ObMClock other_clock_;
+  ObSEArray<ObMClock, GROUP_START_NUM> group_clocks_;
+  ObMClock other_group_clock_;
   ObAtomIOClock unit_clock_;
   ObTenantIOConfig io_config_;
   const ObIOUsage *io_usage_;

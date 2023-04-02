@@ -36,7 +36,7 @@ static ObThreadCache *&get_thread_cache(const int64_t thread_cache_idx)
   if (OB_ISNULL(g_thread_caches)) {
     g_thread_caches = reinterpret_cast<ObThreadCache **>(&g_thread_caches_buf[0]);
     if (0 != pthread_setspecific(ObObjFreeListList::objpool_key_, (void *)(g_thread_caches))) {
-      OB_LOG(ERROR, "failed to pthread_setspecific");
+      OB_LOG_RET(ERROR, OB_ERR_SYS, "failed to pthread_setspecific");
     }
   }
   return g_thread_caches[thread_cache_idx];
@@ -84,7 +84,7 @@ int64_t ObObjFreeList::get_chunk_item_magic_idx(
   idx = (reinterpret_cast<int64_t>(item) - reinterpret_cast<int64_t>((*chunk_info)->head_)) / type_size_;
   if (do_check && (idx >= obj_count_per_chunk_
       || (0 != (reinterpret_cast<int64_t>(item) - reinterpret_cast<int64_t>((*chunk_info)->head_)) % type_size_))) {
-    _OB_LOG(ERROR, "Invalid address:%p, chunk_addr:%p, type_size:%ld, obj_count:%ld, idx:%ld",
+    _OB_LOG_RET(ERROR, OB_ERROR, "Invalid address:%p, chunk_addr:%p, type_size:%ld, obj_count:%ld, idx:%ld",
              item, (*chunk_info)->head_, type_size_, obj_count_per_chunk_, idx);
   }
 
@@ -96,7 +96,7 @@ void ObObjFreeList::set_chunk_item_magic(ObChunkInfo *chunk_info, void *item)
   int64_t idx = 0;
   idx = get_chunk_item_magic_idx(item, &chunk_info);
   if (0 != chunk_info->item_magic_[idx]) {
-    OB_LOG(ERROR, "the chunk is free, but the magic is not zero", "magic", chunk_info->item_magic_[idx]);
+    OB_LOG_RET(ERROR, OB_ERROR, "the chunk is free, but the magic is not zero", "magic", chunk_info->item_magic_[idx]);
   }
   chunk_info->item_magic_[idx] = ITEM_MAGIC;
 }
@@ -106,7 +106,7 @@ void ObObjFreeList::clear_chunk_item_magic(ObChunkInfo *chunk_info, void *item)
   int64_t idx = 0;
   idx = get_chunk_item_magic_idx(item, &chunk_info, true);
   if (ITEM_MAGIC != chunk_info->item_magic_[idx]) {
-    OB_LOG(ERROR, "the chunk is used, but without the right magic",
+    OB_LOG_RET(ERROR, OB_ERROR, "the chunk is used, but without the right magic",
            "actual_magic", chunk_info->item_magic_[idx], "expected_magic", ITEM_MAGIC);
   }
   chunk_info->item_magic_[idx] = 0;
@@ -133,7 +133,7 @@ ObChunkInfo *ObObjFreeList::chunk_create(ObThreadCache *thread_cache)
   ObChunkInfo *chunk_info = NULL;
 
   if (NULL == (chunk_addr = ob_malloc_align(alignment_, chunk_byte_size_, label_))) {
-    OB_LOG(ERROR, "failed to allocate chunk", K_(chunk_byte_size));
+    OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "failed to allocate chunk", K_(chunk_byte_size));
   } else {
     chunk_info = new (reinterpret_cast<char *>(chunk_addr) + type_size_ * obj_count_per_chunk_) ObChunkInfo();
 #ifdef DOUBLE_FREE_CHECK
@@ -172,7 +172,7 @@ void ObObjFreeList::chunk_delete(ObThreadCache *thread_cache, ObChunkInfo *chunk
 {
   void *chunk_addr = chunk_info->head_;
   if (OB_UNLIKELY(0 != chunk_info->allocated_)) {
-    OB_LOG(ERROR, "the chunk allocated size isn't 0 when it deleting", K(chunk_info->allocated_));
+    OB_LOG_RET(ERROR, OB_ERROR, "the chunk allocated size isn't 0 when it deleting", K(chunk_info->allocated_));
   }
   thread_cache->nr_chunks_--;
   thread_cache->nr_total_ -= obj_count_per_chunk_;
@@ -369,7 +369,7 @@ int ObObjFreeList::init(const char *name, const int64_t obj_size,
     alignment_ = alignment;
     obj_count_base_ = (OP_GLOBAL == cache_type) ? 0 : obj_count;
     type_size_base_ = obj_size;
-    only_global_ = (OP_RECLAIM != cache_type);
+    only_global_ = (OP_GLOBAL == cache_type);
     name_ = name;
 
     // Make sure we align *all* the objects in the allocation,
@@ -434,7 +434,7 @@ void *ObObjFreeList::global_alloc()
   do {
     if (obj_free_list_.empty()) {
       if (NULL == (chunk_addr = ob_malloc_align(alignment_, chunk_byte_size_, label_))) {
-        OB_LOG(ERROR, "failed to allocate chunk", K_(chunk_byte_size));
+        OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "failed to allocate chunk", K_(chunk_byte_size));
         break_loop = true;
       } else {
         (void)ATOMIC_FAA(&allocated_, obj_count_per_chunk_);
@@ -505,7 +505,7 @@ int ObObjFreeList::destroy_cur_thread_cache()
   ObThreadCache *cur_thread_cache = NULL;
   void *item = NULL;
 
-  // unregister thread cahce
+  // unregister thread cache
   if (!OB_ISNULL(cur_thread_cache = get_thread_cache(thread_cache_idx_))) {
     if (OB_FAIL(mutex_acquire(&lock_))) {
       OB_LOG(WARN, "failed to lock of freelist", KCSTRING(name_));
@@ -631,22 +631,6 @@ void *ObObjFreeList::reclaim_alloc(ObThreadCache *thread_cache)
   return ret;
 }
 
-void *ObObjFreeList::tc_alloc(ObThreadCache *thread_cache)
-{
-  void *ret = NULL;
-  if (OB_LIKELY(NULL != thread_cache)){
-    if (NULL != (ret = thread_cache->inner_free_list_.pop())) {
-      thread_cache->nr_free_--;
-      thread_cache->nr_malloc_++;
-    } else if (only_global_) {
-      if (NULL != (ret = global_alloc())) {
-        thread_cache->nr_malloc_++;
-      }
-    }
-  }
-  return ret;
-}
-
 void *ObObjFreeList::alloc()
 {
   void *ret = NULL;
@@ -655,13 +639,15 @@ void *ObObjFreeList::alloc()
   // no thread cache, create it
   if (OB_ISNULL(thread_cache = get_thread_cache(thread_cache_idx_))) {
     if (OB_ISNULL(thread_cache = init_thread_cache())) {
-      OB_LOG(ERROR, "failed to init object free list thread cache");
+      OB_LOG_RET(ERROR, OB_ERROR, "failed to init object free list thread cache");
       ret = NULL; // allocate failed
     }
   }
 
   if (only_global_) {
-    ret = tc_alloc(thread_cache);
+    if (OB_NOT_NULL(ret = global_alloc())) {
+      thread_cache->nr_malloc_++;
+    }
   } else {
     ret = reclaim_alloc(thread_cache);
   }
@@ -691,36 +677,6 @@ void ObObjFreeList::reclaim_free(ObThreadCache *cur_thread_cache, void *item)
   rcu_read_unlock(cur_thread_cache);
 }
 
-void ObObjFreeList::tc_free(ObThreadCache *cur_thread_cache, void *item)
-{
-  if (obj_count_base_ > 0) {
-    // free all thread cache obj upto global free list if it's overflow
-    if (OB_UNLIKELY(cur_thread_cache->nr_free_ >= obj_count_base_)) {
-      void *next = NULL;
-      obj_free_list_.push(item);
-      // keep half of obj_count_base_
-      int64_t low_watermark = obj_count_base_ / 2;
-      while (cur_thread_cache->nr_free_ > low_watermark
-             && NULL != (next = cur_thread_cache->inner_free_list_.pop())) {
-        obj_free_list_.push(next);
-        cur_thread_cache->nr_free_--;
-      }
-    } else {
-      cur_thread_cache->inner_free_list_.push(reinterpret_cast<ObFreeObject *>(item));
-      cur_thread_cache->nr_free_++;
-    }
-  } else {
-    global_free(item);
-  }
-
-  /**
-   * For global allocate mode, maybe thread A allocates memory and thread B frees it.
-   * So when thread B frees, B's thread cache maybe NULL. The thread_cache->nr_malloc_
-   * isn't the actual malloc number of this thread, maybe it's negative.
-   */
-  cur_thread_cache->nr_malloc_--;
-}
-
 void ObObjFreeList::free(void *item)
 {
   ObThreadCache *thread_cache = NULL;
@@ -728,13 +684,14 @@ void ObObjFreeList::free(void *item)
     // no thread cache, create it
     if (OB_ISNULL(thread_cache = get_thread_cache(thread_cache_idx_))) {
       if (OB_ISNULL(thread_cache = init_thread_cache())) {
-        OB_LOG(ERROR, "failed to init object free list thread cache");
+        OB_LOG_RET(ERROR, OB_ERROR, "failed to init object free list thread cache");
       }
     }
 
     if (OB_LIKELY(NULL != thread_cache)) {
       if (only_global_) {
-        tc_free(thread_cache, item);
+        global_free(item);
+        thread_cache->nr_malloc_--;
       } else {
         reclaim_free(thread_cache, item);
       }

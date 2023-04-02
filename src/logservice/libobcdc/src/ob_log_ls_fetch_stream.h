@@ -134,6 +134,7 @@ private:
 
     FETCH_LOG_FAIL_ON_RPC        = 1,   // Rpc failure
     FETCH_LOG_FAIL_ON_SERVER     = 2,   // Server failure
+    FETCH_LOG_FAIL_IN_DIRECT_MODE = 3,  // Fetch log in direct mode failure
 
     // TODO Add misslog log reason
     MISSING_LOG_FETCH_FAIL       = 4,   // Fetch missing redo log failure
@@ -162,6 +163,7 @@ private:
   int dispatch_fetch_task_(LSFetchCtx &task,
       KickOutReason dispatch_reason);
   int check_need_fetch_log_(const int64_t limit, bool &need_fetch_log);
+  int check_need_fetch_log_with_upper_limit_(bool &need_fetch_log);
   int hibernate_();
   int async_fetch_log_(
       const palf::LSN &req_start_lsn,
@@ -186,11 +188,19 @@ private:
       bool &need_hibernate,
       bool &is_stream_valid);
   int handle_fetch_log_task_(volatile bool &stop_flag);
+  int handle_fetch_archive_task_(volatile bool &stop_flag);
   void update_fetch_stat_info_(
       FetchLogARpcResult &result,
       const int64_t handle_rpc_time,
       const int64_t read_log_time,
       const int64_t decode_log_entry_time,
+      const int64_t flush_time,
+      const TransStatInfo &tsi);
+  void update_fetch_stat_info_(
+      const int64_t fetch_log_cnt,
+      const int64_t fetch_log_size,
+      const int64_t fetch_and_read_time,
+      const int64_t fetch_log_time,
       const int64_t flush_time,
       const TransStatInfo &tsi);
   int handle_fetch_log_result_(FetchLogARpcResult &result,
@@ -213,6 +223,12 @@ private:
   int set_(KickOutInfo &kick_out_info,
       const TenantLSID &tls_id,
       KickOutReason kick_out_reason);
+  int read_group_entry_(
+      palf::LogGroupEntry &group_entry,
+      palf::LSN &group_start_lsn,
+      volatile bool &stop_flag,
+      KickOutInfo &kick_out_info,
+      TransStatInfo &tsi);
   int read_log_(
       const obrpc::ObCdcLSFetchLogResp &resp,
       volatile bool &stop_flag,
@@ -220,7 +236,28 @@ private:
       int64_t &read_log_time,
       int64_t &decode_log_entry_time,
       TransStatInfo &tsi);
+  int fetch_miss_log_direct_(
+      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+      const int64_t timeout,
+      FetchLogSRpc &fetch_log_srpc,
+      LSFetchCtx &ls_fetch_ctx);
+  int fetch_miss_log_(
+      FetchLogSRpc &fetch_srpc,
+      IObLogRpc &rpc,
+      LSFetchCtx &ctx,
+      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+      const common::ObAddr &svr,
+      const int64_t timeout);
   // handle if found misslog while read_log_
+  //
+  // @param [in] log_entry         LogEntry
+  // @param [in] org_missing_info  MissingLogInfo
+  // @param [in] tsi               TransStatInfo
+  // @param [out] fail_reason      KickOutReason
+  //
+  // @retval OB_SUCCESS                   success
+  // @retval OB_NEED_RETRY                RPC failed, need retry
+  // @retval other error code             fail
   int handle_log_miss_(
       palf::LogEntry &log_entry,
       IObCDCPartTransResolver::MissingLogInfo &org_missing_info,

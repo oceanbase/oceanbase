@@ -123,7 +123,7 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   bool bool_ret = false;
   if (IS_NOT_INIT) {
   } else if (!lsn.is_valid() || total_len <= 0) {
-    PALF_LOG(WARN, "invalid arguments", K(bool_ret), K(lsn), K(total_len));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len));
   } else {
     LSN fake_ref_lsn(LOG_MAX_LSN_VAL);
     bool_ret = can_handle_new_log(lsn, total_len, fake_ref_lsn);
@@ -143,12 +143,14 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   reuse_lsn = MIN(reuse_lsn, ref_reuse_lsn);
   if (IS_NOT_INIT) {
   } else if (!lsn.is_valid() || total_len <= 0 || !ref_reuse_lsn.is_valid()) {
-    PALF_LOG(WARN, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn));
   } else if (lsn < start_lsn) {
-    PALF_LOG(WARN, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
   } else if (end_lsn > reuse_lsn + get_available_buffer_size()) {
-    PALF_LOG(WARN, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
-        K(reuse_lsn), K_(available_buffer_size));
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      PALF_LOG_RET(WARN, OB_EAGAIN, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
+          K(reuse_lsn), K_(available_buffer_size));
+    }
   } else {
     bool_ret = true;
   }
@@ -185,31 +187,6 @@ int LogGroupBuffer::get_log_buf(const LSN &lsn, const int64_t total_len, LogWrit
     }
     PALF_LOG(TRACE, "get_log_buf finished", K(ret), K(lsn), K(start_pos), K(total_len), K(group_buf_tail_len), K(first_part_len),
         "second_part_len", total_len - first_part_len, K(log_buf));
-  }
-  return ret;
-}
-
-int LogGroupBuffer::wait(const LSN &lsn, const int64_t data_len)
-{
-  int ret = OB_SUCCESS;
-  const LSN end_lsn = lsn + data_len;
-  LSN start_lsn, reuse_lsn;
-  get_buffer_start_lsn_(start_lsn);
-  get_reuse_lsn_(reuse_lsn);
-  const int64_t buf_size = get_available_buffer_size();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || data_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(data_len));
-  } else if (lsn < start_lsn) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(WARN, "lsn is less than start_lsn", K(ret), K(lsn), K(start_lsn));
-  } else if (end_lsn > reuse_lsn + buf_size) {
-    ret = OB_EAGAIN;
-    PALF_LOG(WARN, "need retry", K(ret), K(lsn), K(data_len), K(end_lsn), K(reuse_lsn), K(start_lsn));
-  } else {
-    // wait success
   }
   return ret;
 }
@@ -258,12 +235,12 @@ int LogGroupBuffer::fill(const LSN &lsn,
   return ret;
 }
 
-int LogGroupBuffer::fill_padding(const LSN &lsn,
-                                 const int64_t padding_len)
+int LogGroupBuffer::fill_padding_body(const LSN &lsn,
+                                      const int64_t log_body_size)
 {
   int ret = OB_SUCCESS;
   int64_t start_pos = 0;
-  const LSN end_lsn = lsn + padding_len;
+  const LSN end_lsn = lsn + log_body_size;
   LSN start_lsn, reuse_lsn;
   get_buffer_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
@@ -271,9 +248,9 @@ int LogGroupBuffer::fill_padding(const LSN &lsn,
   const int64_t available_buf_size = get_available_buffer_size();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || padding_len <= 0) {
+  } else if (!lsn.is_valid() || log_body_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(padding_len));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_body_size));
   } else if (lsn < start_lsn) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "lsn is less than start_lsn", K(ret), K(lsn), K_(start_lsn));
@@ -290,26 +267,26 @@ int LogGroupBuffer::fill_padding(const LSN &lsn,
     PALF_LOG(WARN, "get_buffer_pos_ failed", K(ret), K(lsn));
   } else {
     const int64_t group_buf_tail_len = reserved_buf_size - start_pos;
-    int64_t first_part_len = min(group_buf_tail_len, padding_len);
-    memset(data_buf_ + start_pos, 0, first_part_len);
-    if (padding_len > first_part_len) {
+    int64_t first_part_len = min(group_buf_tail_len, log_body_size);
+    memset(data_buf_ + start_pos, PADDING_LOG_CONTENT_CHAR, first_part_len);
+    if (log_body_size > first_part_len) {
       // seeking to buffer's beginning
-      memset(data_buf_, 0, padding_len - first_part_len);
+      memset(data_buf_, PADDING_LOG_CONTENT_CHAR, log_body_size - first_part_len);
     }
-    PALF_LOG(INFO, "fill padding success", K(ret), K(lsn), K(padding_len), K(start_pos), K(group_buf_tail_len),
-        K(first_part_len), "second_part_len", padding_len - first_part_len);
+    PALF_LOG(INFO, "fill padding body success", K(ret), K(lsn), K(log_body_size), K(start_pos), K(group_buf_tail_len),
+        K(first_part_len), "second_part_len", log_body_size - first_part_len);
   }
   return ret;
 }
 
 void LogGroupBuffer::get_buffer_start_lsn_(LSN &start_lsn) const
 {
-  start_lsn = ATOMIC_LOAD(&start_lsn_.val_);
+  start_lsn.val_ = ATOMIC_LOAD(&start_lsn_.val_);
 }
 
 void LogGroupBuffer::get_reuse_lsn_(LSN &reuse_lsn) const
 {
-  reuse_lsn = ATOMIC_LOAD(&reuse_lsn_.val_);
+  reuse_lsn.val_ = ATOMIC_LOAD(&reuse_lsn_.val_);
 }
 
 int LogGroupBuffer::check_log_buf_wrapped(const LSN &lsn, const int64_t log_len, bool &is_buf_wrapped) const

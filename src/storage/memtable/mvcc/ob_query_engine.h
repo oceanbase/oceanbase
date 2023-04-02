@@ -56,7 +56,10 @@ public:
     INIT_TABLE_INDEX_COUNT = (1 << 10),
     MAX_SAMPLE_ROW_COUNT = 500
   };
-  typedef keybtree::ObKeyBtree KeyBtree;
+  typedef keybtree::ObKeyBtree<ObStoreRowkeyWrapper, ObMvccRow *> KeyBtree;
+  typedef keybtree::BtreeIterator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeIterator;
+  typedef keybtree::BtreeNodeAllocator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeNodeAllocator;
+  typedef keybtree::BtreeRawIterator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeRawIterator;
   typedef ObMtHash KeyHash;
 
   template <typename BtreeIterator>
@@ -86,10 +89,9 @@ public:
           TRANS_LOG(WARN, "get_next from keybtree fail", "ret", ret, "value", value_);
         }
       } else {
-        // IN_GAP & BIG_GAP_HINT
         key_.encode(key_wrapper.get_rowkey());
-        iter_flag_ = (uint8_t)((uint64_t)value_ & 3UL);
-        value_ = (ObMvccRow*)((uint64_t)value_ & ~3UL);
+        BTREE_ASSERT(((uint64_t)value_ & 7ULL) == 0);
+        iter_flag_ = 0;
         if (OB_ISNULL(value_)) {
           ret = common::OB_ITER_END;
         } else {
@@ -140,7 +142,7 @@ public:
   class TableIndex
   {
   public:
-    explicit TableIndex(keybtree::BtreeNodeAllocator &btree_allocator,
+    explicit TableIndex(BtreeNodeAllocator &btree_allocator,
                             common::ObIAllocator &memstore_allocator,
                             int64_t obj_cnt)
       : is_inited_(false),
@@ -151,6 +153,9 @@ public:
     ~TableIndex() { destroy(); }
     int init();
     void destroy();
+    void check_cleanout(bool &is_all_cleanout,
+                        bool &is_all_delay_cleanout,
+                        int64_t &count);
     void dump2text(FILE* fd);
     int dump_keyhash(FILE *fd) const;
     int dump_keybtree(FILE *fd);
@@ -181,7 +186,6 @@ public:
   int set(const ObMemtableKey *key, ObMvccRow *value);
   int get(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMemtableKey *returned_key);
   int ensure(const ObMemtableKey *key, ObMvccRow *value);
-  int skip_gap(const ObMemtableKey *start, const ObStoreRowkey *&end, int64_t version, bool is_reverse, int64_t& size);
   int check_and_purge(const ObMemtableKey *key, ObMvccRow *row, int64_t version, bool &purged);
   int purge(const ObMemtableKey *key, int64_t version);
   int scan(const ObMemtableKey *start_key, const bool start_exclude, const ObMemtableKey *end_key,
@@ -232,15 +236,18 @@ public:
                ? index->btree_alloc_memory() + btree_allocator_.get_allocated()
                : 0;
   }
+  void check_cleanout(bool &is_all_cleanout,
+                      bool &is_all_delay_cleanout,
+                      int64_t &count);
   void dump2text(FILE *fd);
   int get_table_index(TableIndex *&return_ptr) const;
   int set_table_index(const int64_t obj_cnt, TableIndex *&return_ptr);
   bool is_partition_memtable_empty(const uint64_t table_id) const;
 private:
-  int sample_rows(Iterator<keybtree::BtreeRawIterator> *iter, const ObMemtableKey *start_key,
+  int sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtableKey *start_key,
                   const int start_exclude, const ObMemtableKey *end_key, const int end_exclude,
                   int64_t &logical_row_count, int64_t &physical_row_count, double &ratio);
-  int init_raw_iter_for_estimate(Iterator<keybtree::BtreeRawIterator>*& iter,
+  int init_raw_iter_for_estimate(Iterator<BtreeRawIterator>*& iter,
                                  const ObMemtableKey *start_key,
                                  const ObMemtableKey *end_key);
   int set_table_index_(const int64_t obj_cnt, TableIndex *&return_ptr);
@@ -252,9 +259,9 @@ private:
   uint64_t tenant_id_;
   TableIndex *index_;
   ObIAllocator &memstore_allocator_;
-  keybtree::BtreeNodeAllocator btree_allocator_;
-  IteratorAlloc<keybtree::BtreeIterator> iter_alloc_;
-  IteratorAlloc<keybtree::BtreeRawIterator> raw_iter_alloc_;
+  BtreeNodeAllocator btree_allocator_;
+  IteratorAlloc<BtreeIterator> iter_alloc_;
+  IteratorAlloc<BtreeRawIterator> raw_iter_alloc_;
 };
 
 } // namespace memtable

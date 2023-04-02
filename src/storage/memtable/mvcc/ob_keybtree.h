@@ -14,7 +14,7 @@
 #define __OB_KEYBTREE_H__
 
 #include "lib/metrics/ob_counter.h"
-#include "storage/memtable/ob_memtable_key.h"
+#include "storage/memtable/mvcc/ob_keybtree_deps.h"
 
 namespace oceanbase
 {
@@ -26,31 +26,35 @@ class ObQSync;
 class HazardList;
 class ObIAllocator;
 }
-namespace memtable
-{
-class ObStoreRowkeyWrapper;
-struct ObMvccRow;
-}
 
 namespace keybtree
 {
+template<typename BtreeKey, typename BtreeVal>
 class BtreeNode;
 class HazardLessIterator;
+template<typename BtreeKey, typename BtreeVal>
 class Iterator;
+template<typename BtreeKey, typename BtreeVal>
 class ObKeyBtree;
-class ScanHandle;
+template<typename BtreeKey, typename BtreeVal>
+class WriteHandle;
+template<typename BtreeKey, typename BtreeVal>
+class GetHandle;
 
-using BtreeKey = memtable::ObStoreRowkeyWrapper;
-using BtreeVal = memtable::ObMvccRow *;
 
+template<typename BtreeKey, typename BtreeVal>
 struct BtreeKV
 {
   BtreeKey key_; // 8byte
   BtreeVal val_; // 8byte
 };
 
+template<typename BtreeKey, typename BtreeVal>
 struct BtreeNodeList
 {
+private:
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
+public:
   BtreeNodeList(): tail_(nullptr) {}
   void bulk_push(BtreeNode* first, BtreeNode* last);
   void push(BtreeNode* p) { bulk_push(p, p); }
@@ -59,11 +63,14 @@ struct BtreeNodeList
   BtreeNode* tail_;
 };
 
+template<typename BtreeKey, typename BtreeVal>
 class BtreeNodeAllocator
 {
 private:
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
+  typedef BtreeNodeList<BtreeKey, BtreeVal> BtreeNodeList;
   enum {
-    MAX_LIST_COUNT = common::MAX_CPU_NUM
+    MAX_LIST_COUNT = MAX_CPU_NUM
   };
 public:
   BtreeNodeAllocator(common::ObIAllocator &allocator) : allocator_(allocator), alloc_memory_(0) {}
@@ -96,7 +103,13 @@ private:
  * Interface of Iterator 
  * it will do batch_scan, so we can keep it without release for a long time.
  */
+
+template<typename BtreeKey, typename BtreeVal>
 class BtreeIterator {
+private:
+  typedef BtreeKV<BtreeKey, BtreeVal> BtreeKV;
+  typedef Iterator<BtreeKey, BtreeVal> Iterator;
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
   class KVQueue {
     enum {
       capacity = 225
@@ -133,6 +146,7 @@ public:
                     const BtreeKey max_key, const bool end_exclude, int64_t version);
   int get_next(BtreeKey &key, BtreeVal &val);
   bool is_reverse_scan() const { return scan_backward_; }
+  bool is_iter_end() const { return is_iter_end_; }
 private:
   int scan_batch();
 private:
@@ -144,16 +158,20 @@ private:
   bool end_exclude_; // 1byte
   bool is_iter_end_; // 1byte
   bool scan_backward_; // 1byte
-  KVQueue kv_queue_; // 3616 == 16 + 16 * n, n == 225
-  char buf_[376]; // sizeof(Iterator) == 376
+  KVQueue kv_queue_; // 16 + sizeof(BtreeKV) * n, n == 225, 3616 when sizeof(BtreeKV) is 16
+  char buf_[sizeof(Iterator)]; // 376 when sizeof(BtreeKV) is 16
 };
-// sizezof(BtreeIterator) == 4032, some extra memory for QueryEngine Iterator, do not larger than 4k.
+// sizezof(BtreeIterator) == 4032 when sizeof(BtreeKV) is 16, some extra memory for QueryEngine Iterator, do not larger than 4k.
 
 /*
  * Use for estimate row count.
  * DO NOT Keep for a long time, otherwise writing will be blocked.
  */
+template<typename BtreeKey, typename BtreeVal>
 class BtreeRawIterator {
+private:
+  typedef Iterator<BtreeKey, BtreeVal> Iterator;
+  typedef ObKeyBtree<BtreeKey, BtreeVal> ObKeyBtree;
 public:
   explicit BtreeRawIterator(): iter_(NULL) {}
   ~BtreeRawIterator() { reset(); }
@@ -168,14 +186,25 @@ public:
   bool is_reverse_scan() const;
 private:
   Iterator *iter_; // 8byte
-  char buf_[376]; // sizeof(Iterator) == 376
+  char buf_[sizeof(Iterator)]; // 376 when sizeof(BtreeKV) is 16
 };
 
+template<typename BtreeKey, typename BtreeVal>
 class ObKeyBtree
 {
-  friend class BtreeIterator;
-  friend class BtreeRawIterator;
-  friend class Iterator;
+private:
+  friend class BtreeIterator<BtreeKey, BtreeVal>;
+  friend class BtreeRawIterator<BtreeKey, BtreeVal>;
+  friend class Iterator<BtreeKey, BtreeVal>;
+  typedef BtreeIterator<BtreeKey, BtreeVal> BtreeIterator;
+  typedef BtreeRawIterator<BtreeKey, BtreeVal> BtreeRawIterator;
+  typedef Iterator<BtreeKey, BtreeVal> Iterator;
+  typedef BtreeNodeAllocator<BtreeKey, BtreeVal> BtreeNodeAllocator;
+  typedef BtreeNode<BtreeKey, BtreeVal> BtreeNode;
+  typedef WriteHandle<BtreeKey, BtreeVal> WriteHandle;
+  typedef ScanHandle<BtreeKey, BtreeVal> ScanHandle;
+  typedef GetHandle<BtreeKey, BtreeVal> GetHandle;
+
 public:
   ObKeyBtree(BtreeNodeAllocator &node_allocator)
     : split_info_(0),
@@ -191,7 +220,6 @@ public:
   int del(const BtreeKey key, BtreeVal &value, int64_t version);
   int re_insert(const BtreeKey key, BtreeVal value);
   int insert(const BtreeKey key, BtreeVal &value);
-  int skip_gap(const BtreeKey start, BtreeKey &end, int64_t version, bool reverse, int64_t &size);
   int get(const BtreeKey key, BtreeVal &value);
   int set_key_range(BtreeIterator &iter, const BtreeKey min_key, const bool start_exclude,
                     const BtreeKey max_key, const bool end_exclude, int64_t version);
@@ -222,5 +250,7 @@ private:
 
 }; // end namespace common
 }; // end namespace oceanbase
+
+#include "ob_keybtree.cpp"
 
 #endif /* __OB_KEYBTREE_H__ */

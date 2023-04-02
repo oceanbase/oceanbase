@@ -41,10 +41,11 @@ public:
 class ObPxTransmitChProvider
 {
 public:
-  ObPxTransmitChProvider() : msg_set_(false) {}
+  ObPxTransmitChProvider(ObThreadCond &msg_ready_cond) : msg_set_(false), msg_ready_cond_(msg_ready_cond) {}
   virtual ~ObPxTransmitChProvider() = default;
   int init();
-  int get_data_ch(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet &ch_set, dtl::ObDtlChTotalInfo **ch_info);
+  int get_data_ch(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts, ObPxTaskChSet &ch_set,
+                  dtl::ObDtlChTotalInfo **ch_info);
   int get_data_ch_nonblock(const int64_t sqc_id, const int64_t task_id, int64_t timeout_ts,
             ObPxTaskChSet &ch_set, dtl::ObDtlChTotalInfo **ch_info, const common::ObAddr &qc_addr,
             int64_t query_start_time);
@@ -58,13 +59,15 @@ private:
 private:
   bool msg_set_;
   ObPxTransmitDataChannelMsg msg_;
-  common::ObThreadCond msg_ready_cond_;
+  common::ObThreadCond &msg_ready_cond_;
 };
 
 class ObPxReceiveChProvider
 {
 public:
-  ObPxReceiveChProvider()
+  ObPxReceiveChProvider(ObThreadCond &msg_ready_cond)
+  : msg_ready_cond_(msg_ready_cond),
+    lock_(common::ObLatchIds::DTL_RECV_CHANNEL_PROVIDER_LOCK)
   {
   }
   virtual ~ObPxReceiveChProvider() = default;
@@ -94,7 +97,7 @@ private:
 private:
   /* variables */
   common::ObSEArray<ObPxReceiveDataChannelMsg, 2> msgs_;
-  common::ObThreadCond msg_ready_cond_;
+  common::ObThreadCond &msg_ready_cond_;
   common::ObArray<bool> msg_set_;
   common::ObSpinLock lock_;
   DISALLOW_COPY_AND_ASSIGN(ObPxReceiveChProvider);
@@ -131,7 +134,7 @@ private:
 class ObPxBloomfilterChProvider
 {
 public:
-  ObPxBloomfilterChProvider() : msg_set_(false) {}
+  ObPxBloomfilterChProvider(ObThreadCond &msg_ready_cond) : msg_set_(false), msg_ready_cond_(msg_ready_cond) {}
   virtual ~ObPxBloomfilterChProvider() = default;
   int init();
   int get_data_ch_nonblock(
@@ -146,7 +149,7 @@ public:
 private:
   bool msg_set_;
   ObPxCreateBloomFilterChannelMsg msg_;
-  common::ObThreadCond msg_ready_cond_;
+  common::ObThreadCond &msg_ready_cond_;
 };
 
 }

@@ -17,10 +17,13 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObQSyncLock;
+}
 namespace share
 {
 class ObTabletLSService;
-class ObQSyncLock;
 
 class ObTabletLSMap
 {
@@ -57,7 +60,7 @@ private:
   bool is_inited_;
   int64_t size_;
   ObTabletLSCache **ls_buckets_;
-  share::ObQSyncLock *buckets_lock_;
+  common::ObQSyncLock *buckets_lock_;
 };
 
 } // end namespace share

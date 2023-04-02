@@ -73,7 +73,7 @@ typedef ObDList<ObTimeWheelTask> TaskList;
 class TaskBucket
 {
 public:
-  TaskBucket() : lock_(ObLatchIds::TIME_WHEEL_BUCKET_LOCK) {}
+  TaskBucket() : lock_() {}
   ~TaskBucket() {}
 
   void lock() { (void)lock_.lock(); }
@@ -81,7 +81,7 @@ public:
 public:
   TaskList list_;
 private:
-  mutable common::ObSpinLock lock_;
+  mutable common::ObByteLock lock_;
 } CACHE_ALIGNED;
 
 class TimeWheelBase

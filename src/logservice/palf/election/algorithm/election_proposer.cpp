@@ -188,6 +188,7 @@ bool ElectionProposer::leader_takeover_if_lease_valid_(RoleChangeReason reason)
   int ret = common::OB_SUCCESS;
   if (role_ != ObRole::LEADER && check_leader()) {
     (p_election_->role_change_cb_)(p_election_, ObRole::FOLLOWER, ObRole::LEADER, reason);
+    highest_priority_cache_.reset();
     role_ = ObRole::LEADER;
     propose();
     ret_bool = true;
@@ -263,7 +264,7 @@ int ElectionProposer::register_renew_lease_task_()
 int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t delay_us)
 {
   ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER KR(ret), K(delay_us), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(delay_us)
   int ret = OB_SUCCESS;
   CLICK();
   if (delay_us < 0) {
@@ -280,7 +281,7 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
     int ret = OB_SUCCESS;
     LockGuard lock_guard(p_election_->lock_);
     if (check_leader()) {// Leader不应该靠定时任务主动做Prepare，只能被动触发Prepare
-      LOG_RENEW_LEASE(INFO, "leader not allow do prepare in timer task before lease expired, this log may printed when message delay too large");
+      LOG_RENEW_LEASE(INFO, "leader not allow do prepare in timer task before lease expired, this log may printed when message delay too large", K(*this));
     } else {
       if (role_ == ObRole::LEADER) {
         role_ = ObRole::FOLLOWER;
@@ -291,7 +292,6 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
   }))) {
     LOG_INIT(ERROR, "first time register devote task failed");
   }
-  LOG_NONE(DEBUG, "call reschedule_or_register_prepare_task_after_");
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -333,6 +333,8 @@ void ElectionProposer::prepare(const ObRole role)
   LogPhase phase = role == ObRole::LEADER ? LogPhase::RENEW_LEASE : LogPhase::ELECT_LEADER;
   if (memberlist_with_states_.get_member_list().get_addr_list().empty()) {
     LOG_PHASE(INFO, phase, "memberlist is empty, give up do prepare this time");
+  } else if (!is_self_in_memberlist_()) {
+    LOG_PHASE(INFO, phase, "self is not in memberlist, give up do prepare");
   } else if (role == ObRole::FOLLOWER && cur_ts - last_do_prepare_ts_ < CALCULATE_MAX_ELECT_COST_TIME() / 2) {// 若这是一个一乎动作，且距离上一次一呼百应的时间点过近，该次一乎调度无效
     LOG_PHASE(INFO, phase, "the prepare action just happened, need wait next time");
   } else {
@@ -352,14 +354,13 @@ void ElectionProposer::prepare(const ObRole role)
                                           p_election_->get_self_addr(),
                                           restart_counter_,
                                           ballot_number_,
+                                          p_election_->inner_priority_seed_,
                                           p_election_->get_membership_version_());
     (void) p_election_->refresh_priority_();
     if (CLICK_FAIL(prepare_req.set(p_election_->get_priority_(),
-                                role))) {
+                                   role))) {
       LOG_PHASE(ERROR, phase, "create prepare request failed");
     // 3. 广播消息
-    } else if (!is_self_in_memberlist_()) {
-      LOG_PHASE(INFO, phase, "self is not in memberlist, give up do prepare");
     } else if (CLICK_FAIL(p_election_->broadcast_(prepare_req,
                                               memberlist_with_states_.
                                               get_member_list().
@@ -392,6 +393,8 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
     } else {// 对于本轮次消息，需要过滤，否则无限循环
       LOG_ELECT_LEADER(INFO, "has been send prepare request in this ballot, give up this time");
     }
+  } else if (!is_self_in_memberlist_()) {
+    LOG_ELECT_LEADER(INFO, "self is not in memberlist, give up do prepare");
   } else {// 对于新的消息，推大本机选举轮次
     LOG_ELECT_LEADER(INFO, "receive bigger ballot prepare request");
     (void) advance_ballot_number_and_reset_related_states_(prepare_req.get_ballot_number(),
@@ -411,15 +414,14 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
                                                      p_election_->get_self_addr(),
                                                      restart_counter_,
                                                      ballot_number_,
+                                                     p_election_->inner_priority_seed_,
                                                      p_election_->get_membership_version_());
       if (CLICK_FAIL(prepare_followed_req.set(p_election_->get_priority_(),
                                               role_))) {
         LOG_ELECT_LEADER(ERROR, "create prepare request failed");
-      } else if (!is_self_in_memberlist_()) {
-        LOG_ELECT_LEADER(INFO, "self is not in memberlist, give up do prepare");
       } else if (CLICK_FAIL(p_election_->broadcast_(prepare_followed_req,
                                                     memberlist_with_states_.get_member_list()
-                                                                            .get_addr_list()))) {
+                                                                           .get_addr_list()))) {
         LOG_ELECT_LEADER(ERROR, "broadcast prepare request failed");
       } else {
         last_do_prepare_ts_ = ObClockGenerator::getCurrentTime();
@@ -553,9 +555,11 @@ void ElectionProposer::on_accept_response(const ElectionAcceptResponseMsg &accep
   }
   // 5. 检查follower的优先级是否高于Leader，尝试触发切主
   if (role_ == ObRole::LEADER && accept_res.get_sender() != p_election_->self_addr_) {
-    ObStringHolder reason;
+    ObStringHolder higher_than_leader_reason;
+    ObStringHolder higher_than_cached_msg_reason;
     (void) p_election_->refresh_priority_();
     ElectionAcceptResponseMsg mock_self_accept_response_msg(p_election_->self_addr_,
+                                                            p_election_->inner_priority_seed_,
                                                             p_election_->get_membership_version_(),
                                                             ElectionAcceptRequestMsg(p_election_->id_,
                                                                                      p_election_->self_addr_,
@@ -568,21 +572,51 @@ void ElectionProposer::on_accept_response(const ElectionAcceptResponseMsg &accep
       LOG_CHANGE_LEADER(ERROR, "construct mock acceptor response failed");
     } else if (p_election_->is_rhs_message_higher_(mock_self_accept_response_msg,
                                                    accept_res,
-                                                   reason,
+                                                   higher_than_leader_reason,
                                                    false,
-                                                   LogPhase::RENEW_LEASE)) {
-      if (!p_election_->prepare_change_leader_cb_.is_valid()) {
-        LOG_CHANGE_LEADER(ERROR, "prepare_change_leader_cb_ is not valid", K(reason));
-      } else {
-        p_election_->event_recorder_.report_prepare_change_leader_event(accept_res.get_sender(), reason);
-        if (CLICK_FAIL(p_election_->prepare_change_leader_cb_(p_election_->id_, accept_res.get_sender()))) {
-          LOG_CHANGE_LEADER(ERROR, "commit change leader task failed", K(reason));
-        } else {
-          LOG_CHANGE_LEADER(INFO, "commit change leader task success", K(reason));
+                                                   LogPhase::RENEW_LEASE)) {// 比Leader的优先级要高，此时不比较IP
+      highest_priority_cache_.check_expired();
+      if (!highest_priority_cache_.cached_msg_.is_valid()) {
+        highest_priority_cache_.set(accept_res, higher_than_leader_reason);
+        LOG_CHANGE_LEADER(INFO, "follower priority is higher than leader", K(higher_than_leader_reason));
+      } else if (p_election_->is_rhs_message_higher_(highest_priority_cache_.cached_msg_, accept_res, higher_than_cached_msg_reason, true, LogPhase::RENEW_LEASE)) {// 比缓存的最高消息的优先级要高， 此时比较IP
+        LOG_CHANGE_LEADER(INFO, "highest_priority_cache_ will be replaced", K(highest_priority_cache_), K(higher_than_cached_msg_reason), K(higher_than_leader_reason));
+        highest_priority_cache_.set(accept_res, higher_than_cached_msg_reason);
+      } else if (highest_priority_cache_.cached_msg_.get_sender() == accept_res.get_sender()) {// 缓存的最高优先级的消息的副本第二次响应Leader时触发切主
+        if (CLICK_FAIL(prepare_change_leader_to_(highest_priority_cache_.cached_msg_.get_sender(),
+                                                 higher_than_leader_reason))) {
+          LOG_CHANGE_LEADER(WARN, "fail to prepare change leader", K(highest_priority_cache_), K(higher_than_leader_reason));
         }
       }
     }
   }
+  #undef PRINT_WRAPPER
+}
+
+int ElectionProposer::prepare_change_leader_to_(const ObAddr &dest_addr, const ObStringHolder &reason)
+{
+  ELECT_TIME_GUARD(50_ms);
+  #define PRINT_WRAPPER KR(ret), K(dest_addr), K(reason), K(*this)
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(p_election_->priority_) && p_election_->priority_->has_fatal_failure()) {// FATAL failure的切主绕过RCS，不等上层做准备
+    const ObAddr &dest_addr = highest_priority_cache_.cached_msg_.get_sender();
+    p_election_->event_recorder_.report_directly_change_leader_event(dest_addr, reason);
+    if (CLICK_FAIL(change_leader_to(dest_addr))) {
+      LOG_CHANGE_LEADER(WARN, "call direct change leader failed when meet fatal failure", K(highest_priority_cache_), K(dest_addr));
+    } else {
+      LOG_CHANGE_LEADER(INFO, "call direct change leader success when meet fatal failure", K(highest_priority_cache_), K(dest_addr));
+    }
+  } else if (!p_election_->prepare_change_leader_cb_.is_valid()) {
+    LOG_CHANGE_LEADER(ERROR, "prepare_change_leader_cb_ is not valid", K(reason));
+  } else {
+    p_election_->event_recorder_.report_prepare_change_leader_event(dest_addr, reason);
+    if (CLICK_FAIL(p_election_->prepare_change_leader_cb_(p_election_->id_, dest_addr))) {
+      LOG_CHANGE_LEADER(ERROR, "commit change leader task failed", K(reason));
+    } else {
+      LOG_CHANGE_LEADER(INFO, "commit change leader task success", K(reason));
+    }
+  }
+  return ret;
   #undef PRINT_WRAPPER
 }
 
@@ -629,21 +663,21 @@ void ElectionProposer::on_change_leader(const ElectionChangeLeaderMsg &change_le
     if (change_leader_msg.get_ballot_number() == ballot_number_) {
       accept = true;
     } else {
-      LOG_CHANGE_LEADER(WARN, "change leader to self msg's ballot number not expected");
+      LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader to self msg's ballot number not expected");
     }
   } else {// 别人切给自己的
     if (change_leader_msg.get_ballot_number() > ballot_number_) {
       accept = true;
     } else {
-      LOG_CHANGE_LEADER(WARN, "change leader msg's ballot number is too small");
+      LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg's ballot number is too small");
     }
   }
   if (!accept) {
-    LOG_CHANGE_LEADER(WARN, "change leader msg not accepted");
+    LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg not accepted");
   } else if (change_leader_msg.get_membership_version() > memberlist_with_states_.
                                                      get_member_list().
                                                      get_membership_version()) {
-    LOG_CHANGE_LEADER(WARN, "change leader msg's membership version is larger than self");
+    LOG_CHANGE_LEADER_RET(WARN, OB_ERR_UNEXPECTED, "change leader msg's membership version is larger than self");
   } else {
     advance_ballot_number_and_reset_related_states_(change_leader_msg.get_ballot_number(),
                                                     "receive change leader message");
@@ -689,6 +723,7 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
     common::databuff_printf(buf, buf_len, pos, ", switch_source_leader_addr:%s",
                                                   to_cstring(switch_source_leader_addr_));
   }
+  common::databuff_printf(buf, buf_len, pos, ", priority_seed:0x%lx", (unsigned long)p_election_->inner_priority_seed_);
   common::databuff_printf(buf, buf_len, pos, ", restart_counter:%ld", restart_counter_);
   common::databuff_printf(buf, buf_len, pos, ", last_do_prepare_ts:%s", ObTime2Str::ob_timestamp_str_range<YEAR, USECOND>(last_do_prepare_ts_));
   if (OB_NOT_NULL(p_election_)) {

@@ -68,6 +68,7 @@ extern easy_atomic_t easy_debug_uuid;
 #define EASY_CONN_CONNECTING        1
 #define EASY_CONN_AUTO_CONN         2
 #define EASY_CONN_CLOSE             3
+#define EASY_CONN_CLOSE_BY_PEER     4
 
 #define EASY_CLIENT_DEFAULT_TIMEOUT 4000
 #define EASY_FIRST_MSGLEN           1024

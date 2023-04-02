@@ -69,6 +69,7 @@ private:
                                       ObOptColumnStat *&col_stat);
 
   static int fetch_histogram_stat_histroy(ObExecContext &ctx,
+                                          ObIAllocator &allocator,
                                           const int64_t specify_time,
                                           ObOptColumnStat &col_stat);
 

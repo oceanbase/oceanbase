@@ -30,7 +30,8 @@ OB_SERIALIZE_MEMBER(ObLSReplicaLocation,
     sql_port_,
     replica_type_,
     property_,
-    restore_status_);
+    restore_status_,
+    proposal_id_);
 
 OB_SERIALIZE_MEMBER(ObLSLocationCacheKey,
     cluster_id_,
@@ -65,7 +66,8 @@ ObLSReplicaLocation::ObLSReplicaLocation()
       sql_port_(OB_INVALID_INDEX),
       replica_type_(REPLICA_TYPE_FULL),
       property_(),
-      restore_status_()
+      restore_status_(),
+      proposal_id_(OB_INVALID_ID)
 {
 }
 
@@ -77,6 +79,7 @@ void ObLSReplicaLocation::reset()
   replica_type_ = REPLICA_TYPE_FULL;
   property_.reset();
   restore_status_ = ObLSRestoreStatus::Status::RESTORE_NONE;
+  proposal_id_ = OB_INVALID_ID;
 }
 
 bool ObLSReplicaLocation::is_valid() const
@@ -84,7 +87,8 @@ bool ObLSReplicaLocation::is_valid() const
   return server_.is_valid()
       && OB_INVALID_INDEX != sql_port_
       && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
-      && property_.is_valid();
+      && property_.is_valid()
+      && proposal_id_ >= 0;
 }
 
 bool ObLSReplicaLocation::operator==(const ObLSReplicaLocation &other) const
@@ -94,7 +98,8 @@ bool ObLSReplicaLocation::operator==(const ObLSReplicaLocation &other) const
       && sql_port_ == other.sql_port_
       && replica_type_ == other.replica_type_
       && property_ == other.property_
-      && restore_status_ == other.restore_status_;
+      && restore_status_ == other.restore_status_
+      && proposal_id_ == other.proposal_id_;
 }
 
 bool ObLSReplicaLocation::operator!=(const ObLSReplicaLocation &other) const
@@ -112,6 +117,7 @@ int ObLSReplicaLocation::assign(const ObLSReplicaLocation &other)
     replica_type_ = other.replica_type_;
     property_ = other.property_;
     restore_status_ = other.restore_status_;
+    proposal_id_ = other.proposal_id_;
   }
   return ret;
 }
@@ -122,16 +128,19 @@ int ObLSReplicaLocation::init(
     const int64_t &sql_port,
     const common::ObReplicaType &replica_type,
     const common::ObReplicaProperty &property,
-    const ObLSRestoreStatus &restore_status)
+    const ObLSRestoreStatus &restore_status,
+    const int64_t proposal_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!server.is_valid()
       || OB_INVALID_INDEX == sql_port
       || !ObReplicaTypeCheck::is_replica_type_valid(replica_type)
-      || !property.is_valid())) {
+      || !property.is_valid()
+      || proposal_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ObLSReplicaLocation init failed", KR(ret),
-        K(server), K(role), K(sql_port), K(replica_type), K(property), K(restore_status));
+             K(server), K(role), K(sql_port), K(replica_type), K(property),
+             K(restore_status), K(proposal_id));
   } else {
     server_ = server;
     role_ = role;
@@ -139,6 +148,7 @@ int ObLSReplicaLocation::init(
     replica_type_ = replica_type;
     property_ = property;
     restore_status_ = restore_status;
+    proposal_id_ = proposal_id;
   }
   return ret;
 }
@@ -149,7 +159,8 @@ int ObLSReplicaLocation::init_without_check(
     const int64_t &sql_port,
     const common::ObReplicaType &replica_type,
     const common::ObReplicaProperty &property,
-    const ObLSRestoreStatus &restore_status)
+    const ObLSRestoreStatus &restore_status,
+    const int64_t proposal_id)
 {
   int ret = OB_SUCCESS;
   server_ = server;
@@ -158,7 +169,57 @@ int ObLSReplicaLocation::init_without_check(
   replica_type_ = replica_type;
   property_ = property;
   restore_status_ = restore_status;
+  proposal_id_ = proposal_id;
   return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObLSLeaderLocation,
+    key_,
+    location_);
+
+int ObLSLeaderLocation::init(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    const ObLSID ls_id,
+    const common::ObAddr &server,
+    const common::ObRole &role,
+    const int64_t &sql_port,
+    const common::ObReplicaType &replica_type,
+    const common::ObReplicaProperty &property,
+    const ObLSRestoreStatus &restore_status,
+    const int64_t proposal_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(key_.init(cluster_id, tenant_id, ls_id))) {
+    LOG_WARN("fail to init key", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(location_.init(
+    server, role, sql_port, replica_type, property, restore_status, proposal_id))) {
+    LOG_WARN("fail to init key", KR(ret), K(server), K(role), K(sql_port),
+             K(replica_type), K(property), K(restore_status), K(proposal_id));
+  }
+  return ret;
+}
+
+int ObLSLeaderLocation::assign(const ObLSLeaderLocation &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(key_.assign(other.key_))) {
+    LOG_WARN("fail to assign key", KR(ret), K(other));
+  } else if (OB_FAIL(location_.assign(other.location_))) {
+    LOG_WARN("fail to assign location", KR(ret), K(other));
+  }
+  return ret;
+}
+
+void ObLSLeaderLocation::reset()
+{
+  key_.reset();
+  location_.reset();
+}
+
+bool ObLSLeaderLocation::is_valid() const
+{
+  return key_.is_valid() && location_.is_valid();
 }
 
 ObLSLocation::ObLSLocation()
@@ -243,7 +304,8 @@ int ObLSLocation::init_fake_location()
       VIRTUAL_PORT,
       REPLICA_TYPE_FULL,
       property,
-      restore_status))) {
+      restore_status,
+      0 /*proposal_id*/))) {
     LOG_WARN("fail to init replica location", KR(ret), K(server),
         K(FOLLOWER), K(VIRTUAL_PORT), K(REPLICA_TYPE_FULL), K(property), K(restore_status));
   } else if (OB_FAIL(replica_locations_.push_back(replica_location))) {
@@ -374,6 +436,68 @@ int ObLSLocation::add_replica_location(const ObLSReplicaLocation &replica_locati
   return ret;
 }
 
+int ObLSLocation::merge_leader_from(const ObLSLocation &new_location)
+{
+  int ret = OB_SUCCESS;
+  ObLSReplicaLocation new_leader;
+  int tmp_ret = new_location.get_leader(new_leader);
+  if (OB_LS_LOCATION_LEADER_NOT_EXIST != tmp_ret && OB_SUCCESS != tmp_ret) {
+    ret = tmp_ret;
+    LOG_WARN("fail to get leader from new location", KR(ret), K(new_location));
+  } else if (OB_LS_LOCATION_LEADER_NOT_EXIST == tmp_ret) {
+    // no valid leader exist, just skip
+  } else {
+    ObLSReplicaLocation *old_leader = NULL;
+    ObLSReplicaLocation *exist_replica = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < replica_locations_.count(); i++) {
+      ObLSReplicaLocation &replica = replica_locations_.at(i);
+      if (replica.is_strong_leader()) {
+        if (OB_NOT_NULL(old_leader)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("duplicate leader exist", KR(ret), K(replica), KPC(old_leader));
+        } else {
+          old_leader = &replica;
+        }
+      }
+      if (OB_SUCC(ret) && replica.get_server() == new_leader.get_server()) {
+        if (OB_NOT_NULL(exist_replica)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("duplidate replica exist", KR(ret), K(replica), KPC(exist_replica));
+        } else {
+          exist_replica = &replica;
+        }
+      }
+    } // end for
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(old_leader) || old_leader->get_proposal_id() < new_leader.get_proposal_id()) {
+      // megre leader when:
+      // 1. leader not exist
+      // 2. old leader has smaller proposal id
+      FLOG_INFO("[LS_LOCATION] leader will be changed",
+                K(new_leader), KPC(old_leader), KPC(exist_replica), "old_location", *this);
+      if (OB_ISNULL(exist_replica)) {
+        if (OB_FAIL(add_replica_location(new_leader))) {
+          LOG_WARN("fail to add replica", KR(ret), K(new_leader));
+        }
+      } else if (OB_FAIL(exist_replica->assign(new_leader))) {
+        LOG_WARN("fail to assign new leader", KR(ret), K(new_leader));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < replica_locations_.count(); i++) {
+        ObLSReplicaLocation &replica = replica_locations_.at(i);
+        if (replica.get_server() != new_leader.get_server()) {
+          replica.set_role(FOLLOWER);
+          replica.set_proposal_id(0);
+        }
+      } // end for
+      if (OB_SUCC(ret) && get_renew_time() < new_location.get_renew_time()) {
+        (void) set_renew_time(new_location.get_renew_time());
+      }
+    }
+  }
+  return ret;
+}
+
 ObTabletLocation::ObTabletLocation()
     : tenant_id_(OB_INVALID_TENANT_ID),
       tablet_id_(),
@@ -453,7 +577,7 @@ bool ObTabletLocation::operator==(const ObTabletLocation &other) const
   bool equal = true;
   if (!is_valid() || !other.is_valid()) {
     equal = false;
-    LOG_WARN("invalid argument", "self", *this, K(other));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
   } else if (replica_locations_.count() != other.replica_locations_.count()) {
     equal = false;
   } else {
@@ -676,6 +800,15 @@ int ObLSLocationCacheKey::init(
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
   }
+  return ret;
+}
+
+int ObLSLocationCacheKey::assign(const ObLSLocationCacheKey &other)
+{
+  int ret = OB_SUCCESS;
+  cluster_id_ = other.cluster_id_;
+  tenant_id_ = other.tenant_id_;
+  ls_id_ = other.ls_id_;
   return ret;
 }
 

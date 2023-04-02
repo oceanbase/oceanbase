@@ -293,6 +293,7 @@ public:
           // pass and retry until timeout
           // check slide condition and execute sliding_cb before inc begin_sn
         } else if (!cond(curr_begin, &(array_[idx]))) {
+          ret = cond.ret_;
           break;
         } else {
           // begin_sn_ and end_sn_ locate in same index and ref count == 0,
@@ -330,7 +331,7 @@ public:
           break;
         }
       }
-      PALF_LOG(TRACE, "slide end", K(begin_sn_), K(end_sn_));
+      PALF_LOG(TRACE, "slide end", K(ret), K(begin_sn_), K(end_sn_));
     }
 
     return ret;

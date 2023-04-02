@@ -37,9 +37,9 @@ char *ObVirtualRpcProtocolProcessor::easy_alloc(easy_pool_t *pool, int64_t size)
 {
   char *buf = NULL;
   if (size > UINT32_MAX || size < 0) {
-    LOG_WARN("invalid size", K(size));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid size", K(size));
   } else if (OB_ISNULL(pool)) {
-    LOG_ERROR("Easy pool is NULL");
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Easy pool is NULL");
   } else {
     buf = static_cast<char*>(easy_pool_alloc(pool, static_cast<uint32_t>(size)));
   }
@@ -339,7 +339,7 @@ int ObVirtualRpcProtocolProcessor::encode_raw_rpc_packet(ObTimeGuard &timeguard,
       }
       timeguard.click();
       //ERRSIM: 10 injections and one error
-      ret = E(EventTable::EN_RPC_ENCODE_RAW_DATA_ERR) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_RPC_ENCODE_RAW_DATA_ERR) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         if (REACH_TIME_INTERVAL(1000000)) {
           LOG_ERROR("ERRSIM: fake encode raw packet err", K(ret));
@@ -503,7 +503,7 @@ int ObVirtualRpcProtocolProcessor::decode_compressed_packet_data(ObTimeGuard &ti
       }
 
       //ERRSIM: 10 injections once is the best
-      ret = E(EventTable::EN_RPC_DECODE_COMPRESS_DATA_ERR) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_RPC_DECODE_COMPRESS_DATA_ERR) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         if (REACH_TIME_INTERVAL(1000000)) {
           LOG_ERROR("ERRSIM: fake decode compress packet err", K(ret));
@@ -640,7 +640,7 @@ int ObVirtualRpcProtocolProcessor::decode_raw_net_rpc_packet(common::ObTimeGuard
             in_data += full_demanded_len;
 
             //ERRSIM: 10 injections once is the best
-            ret = E(EventTable::EN_RPC_ENCODE_RAW_DATA_ERR) OB_SUCCESS;
+            ret = OB_E(EventTable::EN_RPC_ENCODE_RAW_DATA_ERR) OB_SUCCESS;
             if (OB_FAIL(ret)) {
               if (REACH_TIME_INTERVAL(1000000)) {
                 LOG_ERROR("ERRSIM: fake decode raw packet err", K(ret));
@@ -790,7 +790,7 @@ int ObVirtualRpcProtocolProcessor::encode_segment(easy_request_t *req,
       total_data_size_before_compress += segment_size;
 
       //ERRSIM: 10 injections once is the best
-      ret = E(EventTable::EN_RPC_ENCODE_SEGMENT_DATA_ERR) OB_SUCCESS;
+      ret = OB_E(EventTable::EN_RPC_ENCODE_SEGMENT_DATA_ERR) OB_SUCCESS;
       if (OB_FAIL(ret)) {
         if (REACH_TIME_INTERVAL(1000000)) {
           LOG_ERROR("ERRSIM: fake encode segment err", K(ret));

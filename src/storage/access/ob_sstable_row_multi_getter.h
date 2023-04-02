@@ -51,7 +51,7 @@ protected:
   ObSSTable *sstable_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
-  ObIndexTreeMultiPassPrefetcher prefetcher_;
+  ObIndexTreeMultiPrefetcher prefetcher_;
   ObMacroBlockReader macro_block_reader_;
 private:
   bool is_opened_;

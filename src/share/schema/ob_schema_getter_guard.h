@@ -171,12 +171,13 @@ public:
    */
 	int get_can_read_index_array(
       const uint64_t tenant_id,
-			const uint64_t table_id,
-			uint64_t *index_tid_array,
-			int64_t &size,
-			bool with_mv,
-			bool with_global_index = true,
-      bool with_domain_index = true);
+      const uint64_t table_id,
+      uint64_t *index_tid_array,
+      int64_t &size,
+      bool with_mv,
+      bool with_global_index = true,
+      bool with_domain_index = true,
+      bool with_spatial_index = true);
   int check_has_local_unique_index(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -202,6 +203,8 @@ public:
       bool is_hidden = false);
 	int get_table_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
+  int get_database_schemas_in_tenant(const uint64_t tenant_id,
+      common::ObIArray<const ObSimpleDatabaseSchema *> &database_schemas);
 	int get_tablegroup_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObTablegroupSchema*> &tablegroup_schemas);
 
@@ -213,6 +216,8 @@ public:
 			common::ObIArray<const ObSimpleTablegroupSchema*> &tablegroup_schemas);
 	int get_table_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObTableSchema *> &table_schemas);
+  int get_view_schemas_in_tenant(const uint64_t tenant_id,
+      common::ObIArray<const ObTableSchema *> &table_schemas);
 	int get_outline_infos_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObOutlineInfo *> &outline_infos);
 	int get_package_infos_in_tenant(const uint64_t tenant_id,
@@ -464,8 +469,7 @@ public:
                                 bool only_global = false);
 
   // for readonly
-  int verify_read_only(const uint64_t tenant_id,
-                       const ObStmtNeedPrivs &stmt_need_privs);
+  int verify_read_only(const uint64_t tenant_id, const ObStmtNeedPrivs &stmt_need_privs);
   int check_user_access(const ObUserLoginInfo &login_info,
                         ObSessionPrivInfo &s_priv,
                         SSL *ssl_st,
@@ -727,7 +731,8 @@ public:
                               uint64_t &synonym_id,
                               common::ObString &obj_table_name,
                               bool &do_exist,
-                              bool search_public_schema = true) const;
+                              bool search_public_schema = true,
+                              bool *is_public = NULL) const;
   int get_outline_info_with_sql_id(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &sql_id,
@@ -735,7 +740,8 @@ public:
   //about user define function
   int check_udf_exist_with_name(const uint64_t tenant_id,
                                 const common::ObString &name,
-                                bool &exist);
+                                bool &exist,
+                                uint64_t &udf_id);
   int get_udf_info(const uint64_t tenant_id,
                    const common::ObString &name,
                    const ObUDF *&udf_info,
@@ -902,7 +908,9 @@ public:
                             const common::ObString &table_name,
                             common::ObIAllocator &allocator,
                             ObTableSchema *&table_schema,
-                            uint32_t sessid);
+                            sql::ObSQLSessionInfo *session_info,
+                            const ObString &dblink_name,
+                            bool is_reverse_link);
   // dblink function end
 
   // directory function begin
@@ -915,6 +923,45 @@ public:
   int get_directory_schemas_in_tenant(const uint64_t tenant_id,
                                       common::ObIArray<const ObDirectorySchema *> &directory_schemas);
   // directory function end
+
+  // rls function begin
+  int get_rls_policy_schema_by_name(const uint64_t tenant_id,
+                                    const uint64_t table_id,
+                                    const uint64_t rls_group_id,
+                                    const common::ObString &name,
+                                    const ObRlsPolicySchema *&schema);
+  int get_rls_policy_schema_by_id(const uint64_t tenant_id,
+                                  const uint64_t rls_policy_id,
+                                  const ObRlsPolicySchema *&schema);
+  int get_rls_policy_schemas_in_group(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      const uint64_t rls_group_id,
+                                      common::ObIArray<const ObRlsPolicySchema *> &schemas);
+  int get_rls_policy_schemas_in_table(const uint64_t tenant_id,
+                                      const uint64_t table_id,
+                                      common::ObIArray<const ObRlsPolicySchema *> &schemas);
+  int get_rls_group_schema_by_name(const uint64_t tenant_id,
+                                   const uint64_t table_id,
+                                   const common::ObString &name,
+                                   const ObRlsGroupSchema *&schema);
+  int get_rls_group_schema_by_id(const uint64_t tenant_id,
+                                 const uint64_t rls_group_id,
+                                 const ObRlsGroupSchema *&schema);
+  int get_rls_group_schemas_in_table(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     common::ObIArray<const ObRlsGroupSchema *> &schemas);
+  int get_rls_context_schema_by_name(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const common::ObString &name,
+                                     const common::ObString &attribute,
+                                     const ObRlsContextSchema *&schema);
+  int get_rls_context_schema_by_id(const uint64_t tenant_id,
+                                   const uint64_t rls_context_id,
+                                   const ObRlsContextSchema *&schema);
+  int get_rls_context_schemas_in_table(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       common::ObIArray<const ObRlsContextSchema *> &schemas);
+  // rls function end
 
   int check_user_exist(const uint64_t tenant_id,
                        const common::ObString &user_name,
@@ -1100,6 +1147,9 @@ private:
                            const uint64_t tenant_id,
                            const uint64_t user_id,
                            bool& pass);
+  int get_table_schemas_in_tenant_(const uint64_t tenant_id,
+                                   const bool only_view_schema,
+                                   common::ObIArray<const ObTableSchema *> &table_schemas);
 private:
   common::ObArenaAllocator local_allocator_;
   ObMultiVersionSchemaService *schema_service_;
@@ -1109,7 +1159,7 @@ private:
                         // it's use to control if table is visable in some sessions
 
   static const int MAX_ID_SCHEMAS = 32;
-
+  const static int64_t FULL_SCHEMA_MEM_THREHOLD = 100 * 1024 * 1024L;//100M
   // tenant_id_ is valid means it's tenant schema guard
   uint64_t tenant_id_;
   SchemaMgrInfos schema_mgr_infos_;
@@ -1121,6 +1171,7 @@ private:
   bool is_standby_cluster_;
   bool restore_tenant_exist_;
   bool is_inited_;
+  int64_t pin_cache_size_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSchemaGetterGuard);
 };

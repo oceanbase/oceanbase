@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "lib/allocator/page_arena.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 
 namespace oceanbase
@@ -28,6 +29,10 @@ class ObArenaAllocator;
 namespace rpc
 {
 class ObRequest;
+}
+namespace observer
+{
+class ObSMConnection;
 }
 
 namespace obmysql
@@ -132,7 +137,7 @@ private:
 class ObProto20PktContext
 {
 public:
-  ObProto20PktContext() { reset(); }
+  ObProto20PktContext() : arena_(common::ObModIds::LIB_MULTI_PACKETS){ reset(); }
   ~ObProto20PktContext() { }
   void reset()
   {
@@ -140,18 +145,25 @@ public:
     is_multi_pkt_ = false;
     proto20_last_request_id_ = 0;
     proto20_last_pkt_seq_ = 0;
+    extra_info_.reset();
+    arena_.reset(); //fast free memory
   }
 
   TO_STRING_KV(K_(comp_last_pkt_seq),
                K_(is_multi_pkt),
                K_(proto20_last_request_id),
-               K_(proto20_last_pkt_seq));
+               K_(proto20_last_pkt_seq),
+               K_(extra_info),
+               "used", arena_.used(),
+               "total", arena_.total());
 
 public:
   uint8_t comp_last_pkt_seq_;
   bool is_multi_pkt_;
   uint32_t proto20_last_request_id_;
   uint8_t proto20_last_pkt_seq_;
+  Ob20ExtraInfo extra_info_;
+  common::ObArenaAllocator arena_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObProto20PktContext);
@@ -281,6 +293,7 @@ public:
   easy_buf_t *send_buf_;
   char *last_pkt_pos_;//proxy last pkt(error+ok, eof+ok, ok)'s pos in orig_ezbuf, default is null
   uint32_t sessid_;
+  observer::ObSMConnection *conn_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCompressionContext);

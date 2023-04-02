@@ -175,7 +175,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
     length = -1;
-    if (is_string_or_lob_locator_type() || is_enum_or_set() || is_enumset_inner_type() || is_json()) {
+    if (is_string_or_lob_locator_type() || is_enum_or_set() || is_enumset_inner_type() || is_json() || is_geometry()) {
       if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
                                                        get_accuracy(),
                                                        get_collation_type(),
@@ -210,7 +210,8 @@ public:
   }
 
   OB_INLINE bool is_column() const { return !is_literal(); }
-  OB_INLINE bool is_literal() const { return get_param().get_type() == get_type(); }
+  OB_INLINE bool is_literal() const { return get_param().get_type() == get_type()
+                                             && get_param().get_collation_type() == get_collation_type(); }
   OB_INLINE bool is_null() const { return common::ObNullType == get_type(); }
   OB_INLINE bool is_mysql_question_mark_type() const
   { return is_varbinary() && 0 == get_length(); }

@@ -181,7 +181,23 @@ protected:
         }
         if (OB_SUCC(ret)) {
           int64_t start_ts = ObTimeUtility::current_time();
-          if (OB_FAIL(leader_process())) {
+          bool with_ddl_lock = false;
+          if (is_ddl_like_) {
+            if (obrpc::OB_TRUNCATE_TABLE_V2 == pcode) {
+              if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
+                RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
+              }
+            } else {
+              if (OB_FAIL(root_service_.get_ddl_service().ddl_wlock())) {
+                RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
+              }
+            }
+            if (OB_SUCC(ret)) {
+              with_ddl_lock = true;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(leader_process())) {
             RS_LOG(WARN, "process failed", K(ret));
             if (!root_service_.in_service()) {
               RS_LOG(WARN, "root service stoped, overwrite return code",
@@ -191,6 +207,15 @@ protected:
             EVENT_ADD(RS_RPC_FAIL_COUNT, 1);
           } else {
             EVENT_ADD(RS_RPC_SUCC_COUNT, 1);
+          }
+          if (with_ddl_lock) {
+            int tmp_ret = root_service_.get_ddl_service().ddl_unlock();
+            if (tmp_ret != OB_SUCCESS) {
+              RS_LOG(WARN, "root service ddl unlock fail", K(tmp_ret), K(ddl_arg_));
+              if (OB_SUCC(ret)) {
+                ret = tmp_ret;
+              }
+            }
           }
           RS_LOG(INFO, "[DDL] execute ddl like stmt", K(ret),
                  "cost", ObTimeUtility::current_time() - start_ts, KPC_(ddl_arg));
@@ -207,7 +232,7 @@ protected:
   virtual int leader_process() = 0;
   virtual int follower_process()
   {
-    RS_LOG(WARN, "not master rootserver");
+    RS_LOG_RET(WARN, common::OB_RS_NOT_MASTER, "not master rootserver");
     return common::OB_RS_NOT_MASTER;
   }
 protected:
@@ -252,7 +277,8 @@ protected:
     explicit pname(ObRootService &rs)                                                         \
       : ObRootServerRPCProcessor<pcode>(rs, full_service, major_freeze_done, is_ddl_like, arg) {}               \
   protected:                                                                                  \
-    virtual int leader_process() { return root_service_.stmt; }                               \
+    virtual int leader_process() {                   \
+      return root_service_.stmt; }                   \
   };
 
 // RPC need rs in full service status (RS restart task success)
@@ -283,8 +309,14 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_DS_ACTION, ObBroadcastDSActionP, bro
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_FETCH_LOCATION, ObRpcFetchLocationP, fetch_location(arg_, result_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_SET_CONFIG, ObRpcAdminSetConfigP, admin_set_config(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_FLUSH_BALANCE_INFO, ObRpcAdminFlushBalanceInfoP, admin_clear_balance_task(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_COPY_TABLE_DEPENDENTS, ObRpcCopyTableDependentsP, copy_table_dependents(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_FINISH_REDEF_TABLE, ObRpcFinishRedefTableP, finish_redef_table(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ABORT_REDEF_TABLE, ObRpcAbortRedefTableP, abort_redef_table(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_UPDATE_DDL_TASK_ACTIVE_TIME, ObRpcUpdateDDLTaskActiveTimeP, update_ddl_task_active_time(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_START_REDEF_TABLE, ObRpcStartRedefTableP, start_redef_table(arg_, result_));
 
 // ddl rpc processors
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_HIDDEN_TABLE, ObRpcCreateHiddenTableP, create_hidden_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY, ObRpcCommitAlterTenantLocalityP, commit_alter_tenant_locality(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TENANT, ObRpcCreateTenantP, create_tenant(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TENANT_END, ObRpcCreateTenantEndP, create_tenant_end(arg_));
@@ -304,6 +336,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_table
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE, ObRpcTruncateTableP, truncate_table(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, truncate_table_v2(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_INDEX, ObRpcCreateIndexP, create_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_INDEX, ObRpcDropIndexP, drop_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TABLE_LIKE, ObRpcCreateTableLikeP, create_table_like(arg_));
@@ -370,8 +403,8 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_OUTLINE, ObRpcDropOutlineP, drop_outl
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CREATE_RESTORE_POINT, ObRpcCreateRestorePointP, create_restore_point(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DROP_RESTORE_POINT, ObRpcDropRestorePointP, drop_restore_point(arg_));
-
 //routine ddl
+
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_ROUTINE, ObRpcCreateRoutineP, create_routine(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_ROUTINE, ObRpcDropRoutineP, drop_routine(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_ROUTINE, ObRpcAlterRoutineP, alter_routine(arg_));
@@ -486,6 +519,14 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_DIRECTORY, ObRpcDropDirectoryP, drop_
 
 // context object
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DO_CONTEXT_DDL, ObRpcDoContextDDLP, do_context_ddl(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RECOMPILE_ALL_VIEWS_BATCH, ObRpcRecompileAllViewsBatchP, recompile_all_views_batch(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRY_ADD_DEP_INFOS_FOR_SYNONYM_BATCH, ObRpcTryAddDepInfosForSynonymBatchP,try_add_dep_infos_for_synonym_batch(arg_));
+
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_SYNC_REWRITE_RULES, ObRpcAdminSyncRewriteRulesP, admin_sync_rewrite_rules(arg_));
+// row level security ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_POLICY_DDL, ObRpcHandleRlsPolicyDDLP, handle_rls_policy_ddl(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_GROUP_DDL, ObRpcHandleRlsGroupDDLP, handle_rls_group_ddl(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_CONTEXT_DDL, ObRpcHandleRlsContextDDLP, handle_rls_context_ddl(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

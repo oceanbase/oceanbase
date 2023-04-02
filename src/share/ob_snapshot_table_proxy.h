@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"
 #include "lib/lock/ob_mutex.h"
 #include "share/ob_define.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -42,19 +43,22 @@ struct ObSnapshotInfo
 {
 public:
   ObSnapShotType snapshot_type_;
-  int64_t snapshot_ts_;
+  SCN snapshot_scn_;
   int64_t schema_version_;
   uint64_t tenant_id_; //tenant_id=OB_INVALID_ID represent all tenants
   uint64_t tablet_id_; //tablet_id=OB_INVALID_ID represent all tablets of tenant
   const char* comment_;
   ObSnapshotInfo();
   ~ObSnapshotInfo() {}
+  int init(const uint64_t tenant_id, const uint64_t tablet_id,
+           const ObSnapShotType &snapshot_type, const SCN &snapshot_scn,
+           const int64_t schema_version, const char* comment);
   void reset();
   bool is_valid() const;
   const char * get_snapshot_type_str() const;
   static const char *ObSnapShotTypeStr[];
   TO_STRING_KV(K_(snapshot_type),
-               K_(snapshot_ts),
+               K_(snapshot_scn),
                K_(schema_version),
                K_(tenant_id),
                K_(tablet_id),
@@ -66,21 +70,21 @@ struct TenantSnapshot
 {
 public:
   uint64_t tenant_id_;
-  int64_t snapshot_ts_;
+  SCN snapshot_scn_;
   TenantSnapshot() {}
-  TenantSnapshot(const uint64_t tenant_id, const int64_t snapshot_ts)
-      : tenant_id_(tenant_id), snapshot_ts_(snapshot_ts) {}
+  TenantSnapshot(const uint64_t tenant_id, const SCN &snapshot_scn)
+      : tenant_id_(tenant_id), snapshot_scn_(snapshot_scn) {}
   ~TenantSnapshot() {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(snapshot_ts));
+  TO_STRING_KV(K_(tenant_id), K_(snapshot_scn));
 };
 
 class ObSnapshotTableProxy
 {
   static const int64_t BATCH_OP_SIZE = 256;
 public:
-  ObSnapshotTableProxy() : lock_(), last_event_ts_(0) {}
+  ObSnapshotTableProxy() : lock_(ObLatchIds::DEFAULT_MUTEX), last_event_ts_(0) {}
   virtual ~ObSnapshotTableProxy() {}
 
   int add_snapshot(
@@ -92,7 +96,7 @@ public:
       const share::ObSnapShotType snapshot_type,
       const uint64_t tenant_id,
       const int64_t schema_version,
-      const int64_t snapshot_version,
+      const SCN &snapshot_scn,
       const char *comment,
       const common::ObIArray<ObTabletID> &tablet_id_array);
 
@@ -106,7 +110,7 @@ public:
                              share::ObSnapShotType snapshot_type,
                              const uint64_t tenant_id,
                              const int64_t schema_version,
-                             const int64_t snapshot_version,
+                             const SCN &snapshot_scn,
                              const common::ObIArray<ObTabletID> &tablet_ids);
   int get_all_snapshots(common::ObISQLClient &proxy,
                         const uint64_t tenant_id,
@@ -123,7 +127,7 @@ public:
   int get_snapshot(common::ObISQLClient &proxy,
                    const uint64_t tenant_id,
                    const ObSnapShotType snapshot_type,
-                   const int64_t snapshot_ts,
+                   const SCN &snapshot_scn,
                    ObSnapshotInfo &snapshot_info);
 
   int get_max_snapshot_info(common::ObISQLClient &proxy,
@@ -144,7 +148,7 @@ public:
                          int64_t &count);
 private:
   int gen_event_ts(int64_t &event_ts);
-  int check_snapshot_valid(const int64_t snapshot_gc_scn,
+  int check_snapshot_valid(const SCN &snapshot_gc_scn,
                            const ObSnapshotInfo &info,
                            bool &is_valid) const;
   int fill_snapshot_item(const ObSnapshotInfo &info,

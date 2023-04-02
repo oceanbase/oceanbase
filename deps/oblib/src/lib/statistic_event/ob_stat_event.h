@@ -121,6 +121,8 @@ STAT_EVENT_ADD_DEF(HA_GTS_CACHE_MISS_COUNT, "ha gts cache miss count", ObStatCla
 STAT_EVENT_ADD_DEF(TRANS_ELR_ENABLE_COUNT, "trans early lock release enable count", ObStatClassIds::TRANS, "trans early lock releaes enable count", 30077, true, true)
 STAT_EVENT_ADD_DEF(TRANS_ELR_UNABLE_COUNT, "trans early lock release unable count", ObStatClassIds::TRANS, "trans early lock releaes unable count", 30078, true, true)
 STAT_EVENT_ADD_DEF(READ_ELR_ROW_COUNT, "read elr row count", ObStatClassIds::TRANS, "read elr row count", 30079, true, true)
+STAT_EVENT_ADD_DEF(TRANS_LOCAL_TOTAL_USED_TIME, "local trans total used time", ObStatClassIds::TRANS, "local trans total used time", 30080, true, true)
+STAT_EVENT_ADD_DEF(TRANS_DIST_TOTAL_USED_TIME, "distributed trans total used time", ObStatClassIds::TRANS, "distributed trans total used time", 30081, true, true)
 
 // SQL
 //STAT_EVENT_ADD_DEF(PLAN_CACHE_HIT, "PLAN_CACHE_HIT", SQL, "PLAN_CACHE_HIT")
@@ -147,11 +149,8 @@ STAT_EVENT_ADD_DEF(SQL_OPEN_CURSORS_CURRENT, "opened cursors current", ObStatCla
 STAT_EVENT_ADD_DEF(SQL_OPEN_CURSORS_CUMULATIVE, "opened cursors cumulative", ObStatClassIds::SQL, "opened cursors cumulative", 40031, true, true)
 
 STAT_EVENT_ADD_DEF(SQL_LOCAL_COUNT, "sql local count", ObStatClassIds::SQL, "sql local count", 40010, true, true)
-//STAT_EVENT_ADD_DEF(SQL_LOCAL_TIME, "SQL_LOCAL_TIME", SQL, "SQL_LOCAL_TIME")
 STAT_EVENT_ADD_DEF(SQL_REMOTE_COUNT, "sql remote count", ObStatClassIds::SQL, "sql remote count", 40011, true, true)
-//STAT_EVENT_ADD_DEF(SQL_REMOTE_TIME, "SQL_REMOTE_TIME", SQL, "SQL_REMOTE_TIME")
 STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_COUNT, "sql distributed count", ObStatClassIds::SQL, "sql distributed count", 40012, true, true)
-//STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_TIME, "SQL_DISTRIBUTED_TIME", SQL, "SQL_DISTRIBUTED_TIME")
 STAT_EVENT_ADD_DEF(ACTIVE_SESSIONS, "active sessions", ObStatClassIds::SQL, "active sessions", 40013, false, true)
 STAT_EVENT_ADD_DEF(SQL_SINGLE_QUERY_COUNT, "single query count", ObStatClassIds::SQL, "single query count", 40014, true, true)
 STAT_EVENT_ADD_DEF(SQL_MULTI_QUERY_COUNT, "multiple query count", ObStatClassIds::SQL, "multiple query count", 40015, true, true)
@@ -173,6 +172,10 @@ STAT_EVENT_ADD_DEF(SQL_USER_LOGONS_CUMULATIVE, "user logons cumulative", ObStatC
 STAT_EVENT_ADD_DEF(SQL_USER_LOGOUTS_CUMULATIVE, "user logouts cumulative", ObStatClassIds::SQL, "user logouts cumulative", 40113, true, true)
 STAT_EVENT_ADD_DEF(SQL_USER_LOGONS_FAILED_CUMULATIVE, "user logons failed cumulative", ObStatClassIds::SQL, "user logons failed cumulative", 40114, true, true)
 STAT_EVENT_ADD_DEF(SQL_USER_LOGONS_COST_TIME_CUMULATIVE, "user logons time cumulative", ObStatClassIds::SQL, "user logons time cumulative", 40115, true, true)
+STAT_EVENT_ADD_DEF(SQL_LOCAL_TIME, "sql local execute time", ObStatClassIds::SQL, "sql local execute time", 40116, true, true)
+STAT_EVENT_ADD_DEF(SQL_REMOTE_TIME, "sql remote execute time", ObStatClassIds::SQL, "sql remote execute time", 40117, true, true)
+STAT_EVENT_ADD_DEF(SQL_DISTRIBUTED_TIME, "sql distributed execute time", ObStatClassIds::SQL, "sql distributed execute time", 40118, true, true)
+
 // CACHE
 STAT_EVENT_ADD_DEF(ROW_CACHE_HIT, "row cache hit", ObStatClassIds::CACHE, "row cache hit", 50000, true, true)
 STAT_EVENT_ADD_DEF(ROW_CACHE_MISS, "row cache miss", ObStatClassIds::CACHE, "row cache miss", 50001, true, true)
@@ -196,10 +199,10 @@ STAT_EVENT_ADD_DEF(LOCATION_CACHE_NONBLOCK_MISS, "location nonblock get miss", O
 STAT_EVENT_ADD_DEF(LOCATION_CACHE_RPC_CHECK, "location cache rpc renew count", ObStatClassIds::CACHE, "location cache rpc renew count", 50021, true, true)
 STAT_EVENT_ADD_DEF(LOCATION_CACHE_RENEW, "location cache renew", ObStatClassIds::CACHE, "location cache renew", 50022, true, true)
 STAT_EVENT_ADD_DEF(LOCATION_CACHE_RENEW_IGNORED, "location cache renew ignored", ObStatClassIds::CACHE, "location cache renew ignored", 50023, true, true)
-STAT_EVENT_ADD_DEF(MMAP_COUNT, "mmap count", ObStatClassIds::CACHE, "mmap count", 50024, true, true)
-STAT_EVENT_ADD_DEF(MUNMAP_COUNT, "munmap count", ObStatClassIds::CACHE, "munmap count", 50025, true, true)
-STAT_EVENT_ADD_DEF(MMAP_SIZE, "mmap size", ObStatClassIds::CACHE, "mmap size", 50026, true, true)
-STAT_EVENT_ADD_DEF(MUNMAP_SIZE, "munmap size", ObStatClassIds::CACHE, "munmap size", 50027, true, true)
+//STAT_EVENT_ADD_DEF(MMAP_COUNT, "mmap count", ObStatClassIds::CACHE, "mmap count", 50024, true, true)
+//STAT_EVENT_ADD_DEF(MUNMAP_COUNT, "munmap count", ObStatClassIds::CACHE, "munmap count", 50025, true, true)
+//STAT_EVENT_ADD_DEF(MMAP_SIZE, "mmap size", ObStatClassIds::CACHE, "mmap size", 50026, true, true)
+//STAT_EVENT_ADD_DEF(MUNMAP_SIZE, "munmap size", ObStatClassIds::CACHE, "munmap size", 50027, true, true)
 STAT_EVENT_ADD_DEF(KVCACHE_SYNC_WASH_TIME, "kvcache sync wash time", ObStatClassIds::CACHE, "kvcache sync wash time", 50028, true, true)
 STAT_EVENT_ADD_DEF(KVCACHE_SYNC_WASH_COUNT, "kvcache sync wash count", ObStatClassIds::CACHE, "kvcache sync wash count", 50029, true, true)
 STAT_EVENT_ADD_DEF(LOCATION_CACHE_RPC_RENEW_FAIL, "location cache rpc renew fail count", ObStatClassIds::CACHE, "location cache rpc renew fail count", 50030, true, true)
@@ -602,6 +605,9 @@ STAT_EVENT_ADD_DEF(TABLEAPI_TSC_VIOLATE_COUNT, "table api OB_TRANSACTION_SET_VIO
 STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_COUNT, "query count", ObStatClassIds::TABLEAPI, "query count", 190901, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_TIME, "query time", ObStatClassIds::TABLEAPI, "query time", 190902, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_ROW, "query row count", ObStatClassIds::TABLEAPI, "query row count", 190903, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_AND_MUTATE_COUNT, "query_and_mutate count", ObStatClassIds::TABLEAPI, "query_and_mutate count", 190904, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_AND_MUTATE_TIME, "query_and_mutate time", ObStatClassIds::TABLEAPI, "query_and_mutate time", 190905, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_QUERY_AND_MUTATE_ROW, "query_and_mutate row count", ObStatClassIds::TABLEAPI, "query_and_mutate row count", 190906, true, true)
 // -- hbase api 1910xx
 STAT_EVENT_ADD_DEF(HBASEAPI_SCAN_COUNT, "hbase scan count", ObStatClassIds::TABLEAPI, "scan count", 191001, true, true)
 STAT_EVENT_ADD_DEF(HBASEAPI_SCAN_TIME, "hbase scan time", ObStatClassIds::TABLEAPI, "scan time", 191002, true, true)

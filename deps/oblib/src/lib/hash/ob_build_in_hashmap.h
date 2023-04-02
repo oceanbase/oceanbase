@@ -113,7 +113,7 @@ public:
           if (NULL != (bucket_ = BucketChain::next(bucket_))) { // found non-empty next bucket.
             value_ = bucket_->chain_.head_;
             if (OB_ISNULL(value_)) {
-              OB_LOG(ERROR, "NULL value", KP_(value)); // if bucket is in chain, must be non-empty.
+              OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "NULL value", KP_(value)); // if bucket is in chain, must be non-empty.
             }
           }
         }

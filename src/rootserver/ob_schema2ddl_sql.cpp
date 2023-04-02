@@ -266,6 +266,10 @@ int ObSchema2DDLSql::type2str(
           n = snprintf(str_buf, buf_size, "json");
           break;
         }
+        case ObGeometryType: {
+          n = snprintf(str_buf, buf_size, "geometry");
+          break;
+        }
         default: {
           break;
         }

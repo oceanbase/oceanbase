@@ -27,9 +27,12 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace transaction;
 using namespace common;
 using namespace blocksstable;
+using namespace palf;
+
 namespace memtable
 {
 
@@ -41,10 +44,10 @@ ObMultiVersionValueIterator::ObMultiVersionValueIterator()
       version_iter_(NULL),
       multi_version_iter_(NULL),
       max_committed_trans_version_(-1),
-      cur_trans_version_(0),
+      cur_trans_version_(SCN::min_scn()),
       is_node_compacted_(false),
       has_multi_commit_trans_(false),
-      merge_log_ts_(INT64_MAX)
+      merge_scn_(SCN::max_scn())
 {
 }
 
@@ -87,18 +90,22 @@ int ObMultiVersionValueIterator::init_multi_version_iter()
     iter = iter->prev_;
   }
 
-  max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_ : -1;
-  cur_trans_version_ = max_committed_trans_version_;
+  max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_.get_val_for_tx() : -1;
+  // NB: It will assign -1 to cur_trans_version_, while it will not
+  // cause any wrong logic, but take care of it
   multi_version_iter_ = iter;
-  if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
+  if (OB_FAIL(cur_trans_version_.convert_for_tx(max_committed_trans_version_))) {
+    TRANS_LOG(ERROR, "failed to convert scn", K(ret), K_(max_committed_trans_version));
+  } else if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
     //如果多版本的开始版本大于等于当前以提交的最大版本
     //则只迭代出所有trans node compact结果
   } else {
     while (OB_SUCC(ret) && NULL != iter && max_committed_trans_version_ > 0) {
-      if (iter->trans_version_ < max_committed_trans_version_) {
+      // TODO: we need handle INT64_MAX and -1
+      if (iter->trans_version_.get_val_for_tx() < max_committed_trans_version_) {
         has_multi_commit_trans_ = true;
         break;
-      } else if (iter->trans_version_ > max_committed_trans_version_) {
+      } else if (iter->trans_version_.get_val_for_tx() > max_committed_trans_version_) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), K_(max_committed_trans_version),
             KPC(iter));
@@ -117,7 +124,7 @@ void ObMultiVersionValueIterator::print_cur_status()
 {
   ObMvccTransNode *node = value_->get_list_head();
   while (OB_NOT_NULL(node)) {
-    TRANS_LOG(ERROR, "print_cur_status", KPC(node));
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "print_cur_status", KPC(node));
     node = node->prev_;
   }
 }
@@ -125,7 +132,7 @@ void ObMultiVersionValueIterator::print_cur_status()
 int ObMultiVersionValueIterator::get_next_uncommitted_node(
     const void *&tnode,
     transaction::ObTransID &trans_id,
-    int64_t &trans_version,
+    SCN &trans_version,
     int64_t &sql_sequence)
 {
   int ret = OB_SUCCESS;
@@ -139,32 +146,32 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
     while (OB_SUCC(ret) && OB_ISNULL(tnode)) {
       if (OB_ISNULL(version_iter_)) {
         ret = OB_ITER_END;
-      } else if (INT64_MAX == version_iter_->log_timestamp_) {
+      } else if (SCN::max_scn() == version_iter_->scn_) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "current trans node has not submit clog yet", K(ret), KPC_(version_iter));
       } else if (NDT_COMPACT == version_iter_->type_) { // ignore compact node
         version_iter_ = version_iter_->prev_;
       } else {
-        bool need_get_state = version_iter_->get_tx_end_log_ts() > merge_log_ts_;
+        bool need_get_state = version_iter_->get_tx_end_scn() > merge_scn_;
         if (need_get_state) {
           if (OB_FAIL(get_state_of_curr_trans_node(trans_id, state, cluster_version))) {
-            TRANS_LOG(WARN, "failed to get status of curr trans node", K(ret), K(merge_log_ts_));
+            TRANS_LOG(WARN, "failed to get status of curr trans node", K(ret), K(merge_scn_));
           }
         }
-        // If trans is running, tx_end_log_ts must be INT64_MAX
+        // If trans is running, tx_end_scn must be INT64_MAX
         // and trans state has been gotten from tx_table before
-        // so need to check tx_end_log_ts <= memtable_end_log_ts
+        // so need to check tx_end_scn <= memtable_end_scn
         if (ObTxData::RUNNING == state) { // return this node
           if (!trans_id.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
-            TRANS_LOG(WARN, "trans_id is invalid", K(ret), K(trans_id), KPC(version_iter_), K(merge_log_ts_));
+            TRANS_LOG(WARN, "trans_id is invalid", K(ret), K(trans_id), KPC(version_iter_), K(merge_scn_));
           } else {
             tnode = static_cast<const void *>(version_iter_);
-            trans_version = INT64_MAX;
+            trans_version = SCN::max_scn();
             sql_sequence = version_iter_->seq_no_;
             version_iter_ = version_iter_->prev_;
           }
-        // when tx_end_log_ts <= memtable_end_log_ts, trans is end
+        // when tx_end_scn <= memtable_end_scn, trans is end
         // so need to get trans state from trans node
         // otherwise get trans state from tx_table
         } else if ((!need_get_state && version_iter_->is_aborted())
@@ -212,7 +219,7 @@ int ObMultiVersionValueIterator::check_next_sql_sequence(
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
-          TRANS_LOG(WARN, "failed to get status of curr trans node", K(ret), K(merge_log_ts_));
+          TRANS_LOG(WARN, "failed to get status of curr trans node", K(ret), K(merge_scn_));
         }
       } else if (ObTxData::RUNNING == state) { // return this node
         if (input_trans_id == trans_id) {
@@ -243,7 +250,7 @@ int ObMultiVersionValueIterator::get_state_of_curr_trans_node(
       state = ObTxData::ABORT;
     } else if (OB_FAIL(get_trans_status(trans_id, state, cluster_version))) {
       TRANS_LOG(WARN, "failed to get trans status in running status",
-                K(ret), K(trans_id), K(sql_sequence), K(merge_log_ts_));
+                K(ret), K(trans_id), K(sql_sequence), K(merge_scn_));
     }
   }
   return ret;
@@ -256,14 +263,14 @@ int ObMultiVersionValueIterator::get_trans_status(
 {
   UNUSED(cluster_version);
   int ret = OB_SUCCESS;
-  int64_t trans_version = INT64_MAX;
+  SCN trans_version = SCN::max_scn();
   ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
   int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
   if (OB_ISNULL(tx_table)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "tx_table_ is null", K(ret), KPC_(ctx), K(merge_log_ts_), K(trans_id));
-  } else if (OB_FAIL(tx_table->get_tx_state_with_log_ts(trans_id,
-                                                        merge_log_ts_,
+    TRANS_LOG(WARN, "tx_table_ is null", K(ret), KPC_(ctx), K(merge_scn_), K(trans_id));
+  } else if (OB_FAIL(tx_table->get_tx_state_with_scn(trans_id,
+                                                        merge_scn_,
                                                         read_epoch,
                                                         state,
                                                         trans_version))) {
@@ -280,7 +287,7 @@ int ObMultiVersionValueIterator::get_next_node(const void *&tnode)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
   } else if (OB_ISNULL(version_iter_)
-      || version_iter_->trans_version_ <= version_range_.base_version_) {
+      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
     version_iter_ = NULL;
     ret = OB_ITER_END;
   } else {
@@ -312,7 +319,7 @@ int ObMultiVersionValueIterator::get_next_node_for_compact(const void *&tnode)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
   } else if ((OB_NOT_NULL(version_iter_)
-              && version_iter_->trans_version_ <= version_range_.base_version_) ||
+              && version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) ||
       OB_ISNULL(version_iter_)) {
     version_iter_ = nullptr;
     ret = OB_ITER_END;
@@ -349,14 +356,14 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
   } else if (OB_ISNULL(multi_version_iter_)) {
     ret = OB_ITER_END;
   } else {
-    const int64_t cur_trans_version = multi_version_iter_->trans_version_;
+    const SCN cur_trans_version = multi_version_iter_->trans_version_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
-      if (multi_version_iter_->trans_version_ <= version_range_.base_version_) {
+      if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
         multi_version_iter_ = NULL;
         break;
       } else if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
-        if (multi_version_iter_->trans_version_ > version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
           // ignore compact node
           is_compacted = true;
         } else { // multi_version_iter_->trans_version_ <= multi_version_start
@@ -366,7 +373,7 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
           break;
         }
       } else { // not compacted node
-        if (multi_version_iter_->trans_version_ <= version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.multi_version_start_) {
           is_node_compacted_ = true;
         }
         record_node = multi_version_iter_;
@@ -428,7 +435,7 @@ void ObMultiVersionValueIterator::reset()
   version_iter_ = NULL;
   multi_version_iter_ = NULL;
   max_committed_trans_version_ = -1;
-  cur_trans_version_ = 0;
+  cur_trans_version_ = SCN::min_scn();
   is_node_compacted_ = false;
   has_multi_commit_trans_ = false;
   ctx_ = NULL;
@@ -438,7 +445,7 @@ void ObMultiVersionValueIterator::reset()
 bool ObMultiVersionValueIterator::is_multi_version_iter_end() const
 {
   return OB_ISNULL(multi_version_iter_)
-      || multi_version_iter_->trans_version_ <= version_range_.base_version_;
+      || multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
 }
 
 bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
@@ -449,7 +456,7 @@ bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
 bool ObMultiVersionValueIterator::is_compact_iter_end() const
 {
   return OB_ISNULL(version_iter_)
-      || version_iter_->trans_version_ <= version_range_.base_version_;
+      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
 }
 
 DEF_TO_STRING(ObMultiVersionValueIterator) {
@@ -457,7 +464,7 @@ DEF_TO_STRING(ObMultiVersionValueIterator) {
   J_OBJ_START();
   J_KV(K_(value), KPC_(version_iter), KPC_(multi_version_iter),
       K_(max_committed_trans_version), K_(cur_trans_version), K_(is_node_compacted),
-      K_(ctx), K_(merge_log_ts), K_(version_range), K_(has_multi_commit_trans));
+      K_(ctx), K_(merge_scn), K_(version_range), K_(has_multi_commit_trans));
   J_OBJ_END();
   return pos;
 }
@@ -493,12 +500,12 @@ int ObMultiVersionRowIterator::init(
   if (OB_FAIL(query_engine.scan(
       range.start_key_,  !range.border_flag_.inclusive_start(),
       range.end_key_,    !range.border_flag_.inclusive_end(),
-      ctx.snapshot_.version_,
+      ctx.snapshot_.version_.get_val_for_tx(),
       query_engine_iter_))) {
     TRANS_LOG(WARN, "query engine scan fail", K(ret));
   } else {
     query_engine_ = &query_engine;
-    query_engine_iter_->set_version(ctx.snapshot_.version_);
+    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_tx());
     ctx_ = &ctx;
     version_range_ = version_range;
     is_inited_ = true;

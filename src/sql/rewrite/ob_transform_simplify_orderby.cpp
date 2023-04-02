@@ -58,6 +58,10 @@ int ObTransformSimplifyOrderby::transform_one_stmt(common::ObIArray<ObParentDMLS
     LOG_WARN("failed to remove order by duplicates", K(ret));
   } else {
     trans_happened = (subquery_happened || view_happened || remove_duplicates || set_happened);
+    OPT_TRACE("remove order by for subquery:", subquery_happened);
+    OPT_TRACE("remove order by for view:", view_happened);
+    OPT_TRACE("remove order by duplicates:", remove_duplicates);
+    OPT_TRACE("remove order by for set stmt:", set_happened);
   }
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
@@ -198,7 +202,8 @@ int ObTransformSimplifyOrderby::remove_order_by_duplicates(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null pointer passed to transform", K(ret));
-  } else if (!stmt->is_sel_del_upd()) {
+  } else if (!stmt->is_sel_del_upd() ||
+             (stmt->is_select_stmt() && (static_cast<ObSelectStmt*>(stmt)->has_rollup()))) {
     //do nothing
   } else {
     ObIArray<OrderItem> &order_items = stmt->get_order_items();

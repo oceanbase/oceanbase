@@ -50,6 +50,7 @@ int ObLogTempTableInsert::compute_sharding_info()
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();
   } else if (child->is_single()) {
     strong_sharding_ = child->get_sharding();
+    inherit_sharding_index_ = ObLogicalOperator::first_child;
   } else {
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   }
@@ -92,6 +93,22 @@ int ObLogTempTableInsert::est_cost()
     set_op_cost(op_cost);
     set_cost(child->get_cost() + op_cost);
     set_card(child->get_card());
+  }
+  return ret;
+}
+
+int ObLogTempTableInsert::get_plan_item_info(PlanText &plan_text,
+                                             ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else {
+    ObString &name = get_table_name();
+    BUF_PRINT_OB_STR(name.ptr(),
+                     name.length(),
+                     plan_item.object_alias_,
+                     plan_item.object_alias_len_);
   }
   return ret;
 }

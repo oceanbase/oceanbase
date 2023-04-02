@@ -26,6 +26,7 @@
 #include "ob_log_part_trans_task.h"                 // PartTransTask
 #include "ob_log_trans_redo_dispatcher.h"           // ObLogRedoDispatcher
 #include "ob_log_trans_msg_sorter.h"                // ObLogTransMsgSorter
+#include "ob_log_schema_incremental_replay.h"       // ObLogSchemaIncReplay
 
 namespace oceanbase
 {
@@ -120,7 +121,8 @@ public:
   int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
 
 public:
-  int init(const int64_t thread_num,
+  int init(
+      const int64_t thread_num,
       const int64_t queue_size,
       IObLogTransCtxMgr &trans_ctx_mgr,
       IObLogTransStatMgr &trans_stat_mgr,
@@ -165,6 +167,14 @@ private:
   // need sort_partition = 1. TODO: consider always sort participants
   int handle_ddl_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, volatile bool &stop_flag);
   int handle_multi_data_source_info_(ObLogTenant &tenant, TransCtx &trans_ctx, volatile bool &stop_flag);
+  int handle_ddl_multi_data_source_info_(
+      PartTransTask &part_trans_task,
+      ObLogTenant &tenant,
+      TransCtx &trans_ctx);
+  // wait reader/parser module empty
+  int wait_until_parser_done_(volatile bool &stop_flag);
+  // wait reader/parser/formatter module empty
+  int wait_until_formatter_done_(volatile bool &stop_flag);
   int recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant);
   int push_task_into_br_sorter_(TransCtx &trans_ctx, volatile bool &stop_flag);
   int push_task_into_redo_dispatcher_(TransCtx &trans_ctx, volatile bool &stop_flag);
@@ -172,8 +182,10 @@ private:
       const int64_t task_count,
       volatile bool &stop_flag,
       ObLogTenant *tenant);
-  void do_stat_for_part_trans_task_count_(PartTransTask &part_trans_task,
-      const int64_t task_count);
+  void do_stat_for_part_trans_task_count_(
+      PartTransTask &part_trans_task,
+      const int64_t task_count,
+      const bool is_sub_stat);
 
   // TODO add
   // 1. statistics on transaction tps and rps (rps before and after Formatter filtering)
@@ -191,6 +203,7 @@ private:
   IObLogTransRedoDispatcher *redo_dispatcher_;
   IObLogTransMsgSorter      *msg_sorter_;
   IObLogErrHandler          *err_handler_;
+  ObLogSchemaIncReplay      schema_inc_replay_;
 
   int64_t                   global_checkpoint_ CACHE_ALIGNED;
   int64_t                   last_global_checkpoint_ CACHE_ALIGNED;

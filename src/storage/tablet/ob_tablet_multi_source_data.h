@@ -19,6 +19,7 @@
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_status.h"
 #include "storage/tx/ob_trans_define.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,7 @@ public:
   virtual bool is_valid() const override;
   virtual int64_t get_data_size() const override;
   virtual memtable::MultiSourceDataUnitType type() const override;
-  virtual int set_log_ts(const int64_t log_ts) override;
+  virtual int set_scn(const share::SCN &scn) override;
 public:
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
@@ -49,7 +50,7 @@ public:
   int32_t version_;
   mutable int32_t length_; // length is assigned when serializing
   transaction::ObTransID tx_id_;
-  int64_t tx_log_ts_;
+  share::SCN tx_scn_;
   ObTabletStatus tablet_status_;
 private:
   static const int32_t TX_DATA_VERSION = 1;

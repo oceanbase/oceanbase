@@ -15,6 +15,7 @@
 #include "observer/virtual_table/ob_all_virtual_proxy_schema.h"
 #include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
 #include "observer/ob_server_struct.h" // GCTX
+#include "observer/ob_inner_sql_result.h"
 #include "share/ob_errno.h" // KR(ret)
 #include "share/schema/ob_part_mgr_util.h" // ObPartitionIterator
 #include "share/schema/ob_schema_mgr.h" // ObSimpleDatabaseSchema
@@ -57,13 +58,15 @@ int ObAllVirtualProxySchema::ObTenantServer::set_location(
 ObAllVirtualProxySchema::ObAllVirtualProxySchema()
     : ObVirtualTableIterator(),
       is_inited_(false),
+      inner_alloc_("ProxySchemSQL"),
+      convert_alloc_("ConvertAlloc"),
       force_sql_refresh_(false),
       next_table_idx_(0),
       next_replica_idx_(0),
       next_server_idx_(-1),
       input_tenant_name_(),
       input_db_name_(),
-      input_table_name_(),
+      input_table_names_(),
       level1_decoded_db_name_(),
       level1_decoded_table_name_(),
       level2_decoded_db_name_(),
@@ -72,6 +75,7 @@ ObAllVirtualProxySchema::ObAllVirtualProxySchema()
       table_schemas_(),
       tablet_ids_(),
       tenant_servers_(),
+      sql_res_(NULL),
       location_(),
       schema_guard_(share::schema::ObSchemaMgrItem::MOD_VIRTUAL_TABLE),
       schema_service_(NULL),
@@ -83,6 +87,10 @@ ObAllVirtualProxySchema::ObAllVirtualProxySchema()
 
 ObAllVirtualProxySchema::~ObAllVirtualProxySchema()
 {
+  if (sql_res_ != NULL) {
+    sql_res_->~ReadResult();
+    sql_res_ = NULL;
+  }
 }
 
 int ObAllVirtualProxySchema::init(
@@ -114,7 +122,7 @@ int ObAllVirtualProxySchema::init(
     next_server_idx_ = -1;
     input_tenant_name_.reset();
     input_db_name_.reset();
-    input_table_name_.reset();
+    input_table_names_.reset();
     level1_decoded_db_name_.reset();
     level1_decoded_table_name_.reset();
     level2_decoded_db_name_.reset();
@@ -129,6 +137,82 @@ int ObAllVirtualProxySchema::init(
   return ret;
 }
 
+int ObAllVirtualProxySchema::init_convert_ctx()
+{
+  int ret = OB_SUCCESS;
+  const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session_);
+  ObCastCtx cast_ctx(&convert_alloc_, &dtc_params, CM_NONE, table_schema_->get_collation_type());
+  cast_ctx_ = cast_ctx;
+
+  ObObj *cells = NULL;
+  void *tmp_ptr = NULL;
+  if (OB_UNLIKELY(NULL == allocator_ || NULL == table_schema_ || NULL == session_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("data member is not init", K(ret), K(allocator_));
+  } else if (OB_ISNULL(tmp_ptr = allocator_->alloc(
+      reserved_column_cnt_ <= 0 ? 1 * sizeof(ObObj): reserved_column_cnt_ * sizeof(ObObj)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc cells", K(ret), K(reserved_column_cnt_));
+  } else if (OB_ISNULL(cells = new (tmp_ptr) ObObj[reserved_column_cnt_ <= 0 ? 1 : reserved_column_cnt_])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to new cell array", K(ret), K(reserved_column_cnt_));
+  } else {
+    convert_row_.cells_ = cells;
+    convert_row_.count_ = reserved_column_cnt_;
+  }
+  return ret;
+}
+
+int ObAllVirtualProxySchema::convert_output_row(ObNewRow *&cur_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cur_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current row is NULL", K(ret));
+  } else {
+    convert_alloc_.reuse();
+    const ObTableSchema *table_schema = NULL;
+    if (OB_FAIL(schema_guard_.get_table_schema(OB_SYS_TENANT_ID,
+                                               OB_ALL_VIRTUAL_PROXY_SCHEMA_TID,
+                                               table_schema))) {
+      LOG_WARN("get table schema failed", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
+      const uint64_t column_id = output_column_ids_.at(i);
+      const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(column_id);
+      if (cur_row->get_cell(i).is_null() ||
+          (cur_row->get_cell(i).is_string_type() && 0 == cur_row->get_cell(i).get_data_length())) {
+        convert_row_.cells_[i].set_null();
+      } else if (OB_FAIL(ObObjCaster::to_type(col_schema->get_data_type(),
+                                              col_schema->get_collation_type(),
+                                              cast_ctx_,
+                                              cur_row->get_cell(i),
+                                              convert_row_.cells_[i]))) {
+        LOG_WARN("failed to cast obj in oracle mode", K(ret), K(column_id));
+      }
+    }
+    cur_row = &convert_row_;
+  }
+  return ret;
+}
+
+int ObAllVirtualProxySchema::gen_column_value(char *&buf, int64_t len,
+                                              const ObString &str, const bool is_oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  lib::CompatModeGuard guard(is_oracle_mode ? lib::Worker::CompatMode::ORACLE :
+                             lib::Worker::CompatMode::MYSQL);
+  ObObj col_obj;
+  col_obj.set_varchar(str);
+  int64_t pos = 0;
+  ObObjPrintParams print_params;
+  if (OB_FAIL(col_obj.print_sql_literal(buf, len, pos, print_params))) {
+    LOG_WARN("failed to print column value", K(ret), K(col_obj));
+  }
+  return ret;
+}
+
+
 int ObAllVirtualProxySchema::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -140,9 +224,11 @@ int ObAllVirtualProxySchema::inner_open()
     LOG_WARN("fail to get schema guard", KR(ret));
   } else {
     const int64_t ROW_KEY_COUNT = 6;
+    int64_t exec_tenant_id = OB_INVALID_ID;
     ObRowkey start_key;
     ObRowkey end_key;
     ObString tenant_name;
+    bool is_oracle_tenant = false;
     ObString database_name;
     ObString table_name;
     const ObObj *start_key_obj_ptr = NULL;
@@ -201,9 +287,6 @@ int ObAllVirtualProxySchema::inner_open()
           } else {
             tablet_id = start_key_obj_ptr[3].get_int(); // int64_t to uint64_t
           }
-          if (FAILEDx(tablet_ids_.push_back(ObTabletID(tablet_id)))) {
-            LOG_WARN("fail to push back partition_ids", KR(ret), K(tablet_id));
-          }
         }
 
         if (OB_SUCC(ret)) { // check tenant_name
@@ -217,12 +300,15 @@ int ObAllVirtualProxySchema::inner_open()
             LOG_TRACE("tenant not exist", K(tenant_name)); // skip
           } else {
             tenant_id = tenant_schema->get_tenant_id();
+            is_oracle_tenant = tenant_schema->is_oracle_tenant();
             if (OB_UNLIKELY(!is_valid_tenant_id(effective_tenant_id_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("invalid effective_tenant_id", KR(ret), K_(effective_tenant_id));
             } else if (!is_sys_tenant(effective_tenant_id_) && (tenant_id != effective_tenant_id_)) {
               LOG_TRACE("unprivileged tenant", K(tenant_name), K(tenant_id), K_(effective_tenant_id)); // skip
               tenant_id = OB_INVALID_TENANT_ID;  // vtable return nothing
+            } else if (is_sys_tenant(effective_tenant_id_) && (tenant_id != effective_tenant_id_)) {
+              exec_tenant_id = tenant_id;
             } else {
               // correct input tenant_name, do nothing. (all tenant's table is visible in sys tenant)
             }
@@ -230,11 +316,17 @@ int ObAllVirtualProxySchema::inner_open()
         }
       }
 
+      if (OB_SUCC(ret)) { // check database_name
+        if (OB_UNLIKELY(!input_db_name_.empty() && (0 != input_db_name_.case_compare(database_name)))) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "different database_names in a batch query");
+        }
+      }
+
       if (OB_SUCC(ret)) {
         table_schema = NULL;
         input_tenant_name_ = tenant_name;
         input_db_name_ = database_name;
-        input_table_name_ = table_name;
 
         //1. try default
         if (!is_valid_tenant_id(tenant_id)) {
@@ -244,150 +336,300 @@ int ObAllVirtualProxySchema::inner_open()
         } else if (OB_INVALID_ID == database_id) {
           // unknown db, return succ
           ret = OB_SUCCESS;
-        } else if (OB_FAIL(schema_guard_.get_table_schema(
-            tenant_id,
-            database_id,
-            table_name,
-            false,
-            table_schema))) {
-          LOG_WARN("get table schema failed", KR(ret), K(tenant_name), K(database_name), K(table_name));
-        } else if (OB_ISNULL(table_schema)) {
-          if (OB_FAIL(schema_guard_.get_table_schema(
-              tenant_id,
-              database_id,
-              table_name,
-              true,
-              table_schema))) {
-            LOG_WARN("get table schema failed", KR(ret), K(tenant_name), K(database_name), K(table_name));
-          } else if (OB_ISNULL(table_schema)) {
-            LOG_TRACE("table does not exist", KR(ret), K(tenant_name), K(database_name), K(table_name));
-          } // unknown table, return succ
-        }
-
-        //2. try synonym
-        if (OB_SUCC(ret)
-            && OB_ISNULL(table_schema)
-            && is_valid_tenant_id(tenant_id)
-            && OB_INVALID_ID != database_id) {
-          LOG_TRACE("try synonym", K(tenant_name), K(database_name), K(table_name));
-          uint64_t object_database_id = OB_INVALID_ID;
-          uint64_t synonym_id = OB_INVALID_ID;
-          ObString object_table_name;
-          const ObSimpleDatabaseSchema *database_schema = NULL;
-          bool exist = false;
-          if (OB_FAIL(schema_guard_.get_object_with_synonym(
-              tenant_id,
-              database_id,
-              table_name,
-              object_database_id,
-              synonym_id,
-              object_table_name,
-              exist))) {
-            LOG_WARN("get_object_with_synonym failed", KR(ret), K(tenant_id), K(database_id), K(table_name));
-          } else if (!exist) {
-            //break
-          } else if (OB_FAIL(ob_write_string(*allocator_, object_table_name, level1_decoded_table_name_))) {
-            LOG_WARN("ob_write_string failed", KR(ret), K(object_table_name));
-          } else if (OB_FAIL(schema_guard_.get_database_schema(tenant_id, object_database_id, database_schema))) {
-            LOG_WARN("get_database_schema failed", KR(ret), K(tenant_id), K(object_database_id));
-          } else if (OB_ISNULL(database_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("database schema is null", KR(ret), K(object_database_id));
-          } else if (OB_FAIL(ob_write_string(
-              *allocator_,
-              database_schema->get_database_name_str(),
-              level1_decoded_db_name_))) {
-            LOG_WARN("ob_write_string failed", KR(ret), K(database_schema->get_database_name_str()));
-          } else if (OB_FAIL(schema_guard_.get_table_schema(
-              tenant_id,
-              object_database_id,
-              object_table_name,
-              false,
-              table_schema))) {
-            LOG_WARN("get table schema failed", KR(ret),
-                K(tenant_name), K(object_database_id), K(object_table_name));
-          } else if (OB_ISNULL(table_schema)) {
-            if (OB_FAIL(schema_guard_.get_table_schema(
-                tenant_id,
-                object_database_id,
-                object_table_name,
-                true,
-                table_schema))) {
-              LOG_WARN("get table schema failed", KR(ret),
-                  K(tenant_name), K(object_database_id), K(object_table_name));
-            } else if (OB_ISNULL(table_schema)) {
-              // unknown table, return succ
-              LOG_TRACE("table does not exist", K(tenant_name), K(object_database_id), K(object_table_name));
-            } else {
-              complex_table_type_ = CT_SYNONYM;
-            }
-          } else {
-            complex_table_type_ = CT_SYNONYM;
-          }
-        }
-
-        //3. try view
-        if (OB_SUCC(ret) && OB_NOT_NULL(table_schema) && table_schema->is_view_table()) {
-          LOG_TRACE("try view", K(tenant_name), K(database_name), K(table_name), K_(complex_table_type),
-              K_(level1_decoded_db_name), K_(level1_decoded_table_name), KPC(table_schema));
-          const common::ObString &view_definition = table_schema->get_view_schema().get_view_definition_str();
-          const ObTableSchema *new_table_schema = NULL;
-          bool is_oracle_mode = false;
-          if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
-            LOG_WARN("fail to check oracle mode", KR(ret), KPC(table_schema));
-          } else if (OB_FAIL(get_view_decoded_schema_(
-              tenant_id,
-              tenant_name,
-              view_definition,
-              is_oracle_mode,
-              new_table_schema))) {
-            LOG_WARN("get_view_decoded_schema failed", KR(ret));
-          } else if (OB_NOT_NULL(new_table_schema)) {
-            table_schema = new_table_schema;
-          }
-        }
-
-        // if table schema doesn't exist, must confirm current schema manager's version
-        // greater than received_broadcast_version
-        if (OB_SUCC(ret)
-            && OB_ISNULL(table_schema)
-            && is_valid_tenant_id(tenant_id)
-            && OB_INVALID_ID != database_id) {
-          int64_t received_broadcast_version = OB_INVALID_VERSION;
-          int64_t refreshed_version = OB_INVALID_VERSION;
-          if (OB_FAIL(schema_service_->get_tenant_received_broadcast_version(
-              tenant_id,
-              received_broadcast_version))) {
-            LOG_WARN("fail to get tenant received broadcast version", KR(ret), K(tenant_id));
-          } else if (OB_FAIL(schema_guard_.get_schema_version(tenant_id, refreshed_version))) {
-            LOG_WARN("fail to get schema guard version", KR(ret), K(tenant_id));
-          } else if (OB_CORE_SCHEMA_VERSION >= received_broadcast_version
-              || refreshed_version < received_broadcast_version) {
-            ret = OB_SCHEMA_ERROR;
-            LOG_WARN("schema not exist, need retry", KR(ret), K(tenant_id),
-                K(received_broadcast_version), K(refreshed_version));
-          } else {
-            // do noting
-          }
-        }
-
-        if ((OB_SUCC(ret)) && OB_NOT_NULL(table_schema)) {
-          LOG_TRACE("succ to get table_schema", K(tenant_name), K(database_name), K(table_name),
-              K_(level1_decoded_db_name), K_(level1_decoded_table_name), K_(level2_decoded_db_name),
-              K_(level2_decoded_table_name), KPC(table_schema));
-          if (OB_FAIL(table_schemas_.push_back(table_schema))) {
-            LOG_WARN("fail to push back table_schema", K(table_schema), KR(ret));
-          }
+        } else if (OB_FAIL(input_table_names_.push_back(table_name))) {
+          LOG_WARN("fail to push back table name", KR(ret), K(table_name));
+        } else if (OB_FAIL(tablet_ids_.push_back(ObTabletID(tablet_id)))) {
+          LOG_WARN("fail to push back partition_ids", KR(ret), K(tablet_id));
         }
       }
     } // end for key_ranges_
+
+    if (OB_FAIL(ret)) {
+    } else if (0 == input_table_names_.count()) {
+      // do-nothing
+    } else if (OB_INVALID_ID == exec_tenant_id) {
+      ret = init_data();
+    } else {
+      ObSEArray<ObString, 16> column_names;
+      for (int col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
+        int64_t column_id = output_column_ids_.at(col_idx);
+        ObString column_name;
+        bool is_column_exist = false;
+        table_schema_->get_column_name_by_column_id(column_id, column_name, is_column_exist);
+        if (!is_column_exist) {
+          ret = OB_ERR_COLUMN_NOT_FOUND;
+          LOG_WARN("get column name failed", KR(ret));
+        } else if (OB_FAIL(column_names.push_back(column_name))) {
+          LOG_WARN("add column name failed", KR(ret));
+        }
+      }
+      ObSqlString sql;
+      for (int col_idx = 0; OB_SUCC(ret) && col_idx < column_names.count(); ++col_idx) {
+        if (0 == col_idx) {
+          if (OB_FAIL(sql.append_fmt("SELECT %.*s", column_names[col_idx].length(), column_names[col_idx].ptr()))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          }
+        } else {
+          if (OB_FAIL(sql.append_fmt(", %.*s", column_names[col_idx].length(), column_names[col_idx].ptr()))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sql.append_fmt(" FROM %s.%s WHERE",
+          is_oracle_tenant ? OB_ORA_SYS_SCHEMA_NAME : OB_SYS_DATABASE_NAME,
+          is_oracle_tenant ? OB_ALL_VIRTUAL_PROXY_SCHEMA_ORA_TNAME : OB_ALL_VIRTUAL_PROXY_SCHEMA_TNAME))) {
+        LOG_WARN("fail to append_fmt", K(ret));
+      }
+      char *value_buf = NULL;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(value_buf = (char*)inner_alloc_.alloc(OB_MAX_SQL_LENGTH))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < input_table_names_.count(); ++i) {
+        const ObString &table_name = input_table_names_.at(i);
+        const ObTabletID &tablet_id = tablet_ids_.at(i);
+        if (i != 0) {
+          if (OB_FAIL(sql.append_fmt(" OR"))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (tablet_id.is_valid()) {
+          if (OB_FAIL(sql.append_fmt(" (TENANT_NAME, DATABASE_NAME, TABLE_NAME, TABLET_ID) = ('%.*s'",
+                                     input_tenant_name_.length(), input_tenant_name_.ptr()))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          } else if (OB_FAIL(gen_column_value(value_buf, OB_MAX_SQL_LENGTH, input_db_name_,
+                                              is_oracle_tenant))) {
+            LOG_WARN("fail to gen_column_value", K(ret));
+          } else if (OB_FAIL(sql.append_fmt(", %s", value_buf))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          } else if (OB_FAIL(gen_column_value(value_buf, OB_MAX_SQL_LENGTH, table_name,
+                                              is_oracle_tenant))) {
+            LOG_WARN("fail to gen_column_value", K(ret));
+          } else if (OB_FAIL(sql.append_fmt(", %s", value_buf))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          } else if (OB_FAIL(sql.append_fmt(", %lu)", tablet_id.id()))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          }
+        } else {
+          if (OB_FAIL(sql.append_fmt(" (TENANT_NAME, DATABASE_NAME, TABLE_NAME) = ('%.*s'",
+                                     input_tenant_name_.length(), input_tenant_name_.ptr()))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          } else if (OB_FAIL(gen_column_value(value_buf, OB_MAX_SQL_LENGTH, input_db_name_,
+                                              is_oracle_tenant))) {
+            LOG_WARN("fail to gen_column_value", K(ret));
+          } else if (OB_FAIL(sql.append_fmt(", %s", value_buf))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          } else if (OB_FAIL(gen_column_value(value_buf, OB_MAX_SQL_LENGTH, table_name,
+                                              is_oracle_tenant))) {
+            LOG_WARN("fail to gen_column_value", K(ret));
+          } else if (OB_FAIL(sql.append_fmt(", %s)", value_buf))) {
+            LOG_WARN("fail to append_fmt", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        common::ObCommonSqlProxy *user_sql_proxy = NULL;
+        common::ObOracleSqlProxy oracle_sql_proxy;
+        common::ObMySQLProxy::MySQLResult *sql_res = NULL;
+        if (OB_FAIL(oracle_sql_proxy.init(GCTX.sql_proxy_->get_pool()))) {
+          LOG_WARN("fail to init oracle sql proxy", K(ret));
+        } else if (FALSE_IT(user_sql_proxy = is_oracle_tenant ?
+                            (common::ObCommonSqlProxy*)&oracle_sql_proxy : GCTX.sql_proxy_)) {
+        } else if (OB_ISNULL(sql_res = OB_NEWx(ObMySQLProxy::MySQLResult, (&inner_alloc_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate result failed", K(ret));
+        } else if (OB_FAIL(user_sql_proxy->read(*sql_res, exec_tenant_id, sql.ptr()))) {
+          LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql));
+        } else if (OB_ISNULL(sql_res->get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL sql executing result", KR(ret), K(exec_tenant_id), K(sql));
+        } else {
+          sql_res_ = sql_res;
+        }
+        if (OB_FAIL(ret) && sql_res != NULL) {
+          sql_res->~ReadResult();
+          sql_res = NULL;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(init_convert_ctx())) {
+        LOG_WARN("fail to init convert context", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualProxySchema::init_data()
+{
+  int ret = OB_SUCCESS;
+
+  const ObString &tenant_name = input_tenant_name_;
+  const ObString &database_name = input_db_name_;
+  uint64_t tenant_id = OB_INVALID_ID;
+  uint64_t database_id = OB_INVALID_ID;
+  const ObTenantSchema *tenant_schema = NULL;
+  const ObTableSchema *table_schema = NULL;
+  if (OB_FAIL(schema_guard_.get_tenant_info(tenant_name, tenant_schema))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K(tenant_name));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant not exists", KR(ret), K(tenant_name));
+  } else if (FALSE_IT(tenant_id = tenant_schema->get_tenant_id())) {
+  } else if (OB_FAIL(schema_guard_.get_database_id(tenant_id, database_name, database_id))) {
+    LOG_WARN("fail to get database id", KR(ret), K(tenant_name), K(database_name));
+  } else if (OB_INVALID_ID == database_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database not exist", KR(ret), K(tenant_name), K(database_name));
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < input_table_names_.count(); i++) {
+    const ObString &table_name = input_table_names_.at(i);
+    if (OB_FAIL(schema_guard_.get_table_schema(
+                                               tenant_id,
+                                               database_id,
+                                               table_name,
+                                               false,
+                                               table_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(tenant_name), K(database_name), K(table_name));
+    } else if (OB_ISNULL(table_schema)) {
+      if (OB_FAIL(schema_guard_.get_table_schema(
+                                                 tenant_id,
+                                                 database_id,
+                                                 table_name,
+                                                 true,
+                                                 table_schema))) {
+        LOG_WARN("get table schema failed", KR(ret), K(tenant_name), K(database_name), K(table_name));
+      } else if (OB_ISNULL(table_schema)) {
+        LOG_TRACE("table does not exist", KR(ret), K(tenant_name), K(database_name), K(table_name));
+      } // unknown table, return succ
+    }
+
+    //2. try synonym
+    if (OB_SUCC(ret)
+        && OB_ISNULL(table_schema)
+        && is_valid_tenant_id(tenant_id)
+        && OB_INVALID_ID != database_id) {
+      LOG_TRACE("try synonym", K(tenant_name), K(database_name), K(table_name));
+      uint64_t object_database_id = OB_INVALID_ID;
+      uint64_t synonym_id = OB_INVALID_ID;
+      ObString object_table_name;
+      const ObSimpleDatabaseSchema *database_schema = NULL;
+      bool exist = false;
+      if (OB_FAIL(schema_guard_.get_object_with_synonym(
+                                                        tenant_id,
+                                                        database_id,
+                                                        table_name,
+                                                        object_database_id,
+                                                        synonym_id,
+                                                        object_table_name,
+                                                        exist))) {
+        LOG_WARN("get_object_with_synonym failed", KR(ret), K(tenant_id), K(database_id), K(table_name));
+      } else if (!exist) {
+        //break
+      } else if (OB_FAIL(ob_write_string(*allocator_, object_table_name, level1_decoded_table_name_))) {
+        LOG_WARN("ob_write_string failed", KR(ret), K(object_table_name));
+      } else if (OB_FAIL(schema_guard_.get_database_schema(tenant_id, object_database_id, database_schema))) {
+        LOG_WARN("get_database_schema failed", KR(ret), K(tenant_id), K(object_database_id));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database schema is null", KR(ret), K(object_database_id));
+      } else if (OB_FAIL(ob_write_string(
+                                         *allocator_,
+                                         database_schema->get_database_name_str(),
+                                         level1_decoded_db_name_))) {
+        LOG_WARN("ob_write_string failed", KR(ret), K(database_schema->get_database_name_str()));
+      } else if (OB_FAIL(schema_guard_.get_table_schema(
+                                                        tenant_id,
+                                                        object_database_id,
+                                                        object_table_name,
+                                                        false,
+                                                        table_schema))) {
+        LOG_WARN("get table schema failed", KR(ret),
+                 K(tenant_name), K(object_database_id), K(object_table_name));
+      } else if (OB_ISNULL(table_schema)) {
+        if (OB_FAIL(schema_guard_.get_table_schema(
+                                                   tenant_id,
+                                                   object_database_id,
+                                                   object_table_name,
+                                                   true,
+                                                   table_schema))) {
+          LOG_WARN("get table schema failed", KR(ret),
+                   K(tenant_name), K(object_database_id), K(object_table_name));
+        } else if (OB_ISNULL(table_schema)) {
+          // unknown table, return succ
+          LOG_TRACE("table does not exist", K(tenant_name), K(object_database_id), K(object_table_name));
+        } else {
+          complex_table_type_ = CT_SYNONYM;
+        }
+      } else {
+        complex_table_type_ = CT_SYNONYM;
+      }
+    }
+
+    //3. try view
+    if (OB_SUCC(ret) && OB_NOT_NULL(table_schema) && table_schema->is_view_table()) {
+      LOG_TRACE("try view", K(tenant_name), K(database_name), K(table_name), K_(complex_table_type),
+                K_(level1_decoded_db_name), K_(level1_decoded_table_name), KPC(table_schema));
+      const common::ObString &view_definition = table_schema->get_view_schema().get_view_definition_str();
+      const ObTableSchema *new_table_schema = NULL;
+      bool is_oracle_mode = false;
+      if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("fail to check oracle mode", KR(ret), KPC(table_schema));
+      } else if (OB_FAIL(get_view_decoded_schema_(
+                                                  tenant_id,
+                                                  tenant_name,
+                                                  view_definition,
+                                                  is_oracle_mode,
+                                                  new_table_schema))) {
+        LOG_WARN("get_view_decoded_schema failed", KR(ret));
+      } else if (OB_NOT_NULL(new_table_schema)) {
+        table_schema = new_table_schema;
+      }
+    }
+
+    // if table schema doesn't exist, must confirm current schema manager's version
+    // greater than received_broadcast_version
+    if (OB_SUCC(ret)
+        && OB_ISNULL(table_schema)
+        && is_valid_tenant_id(tenant_id)
+        && OB_INVALID_ID != database_id) {
+      int64_t received_broadcast_version = OB_INVALID_VERSION;
+      int64_t refreshed_version = OB_INVALID_VERSION;
+      if (OB_FAIL(schema_service_->get_tenant_received_broadcast_version(
+                                                                         tenant_id,
+                                                                         received_broadcast_version))) {
+        LOG_WARN("fail to get tenant received broadcast version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard_.get_schema_version(tenant_id, refreshed_version))) {
+        LOG_WARN("fail to get schema guard version", KR(ret), K(tenant_id));
+      } else if (OB_CORE_SCHEMA_VERSION >= received_broadcast_version
+                 || refreshed_version < received_broadcast_version) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("schema not exist, need retry", KR(ret), K(tenant_id),
+                 K(received_broadcast_version), K(refreshed_version));
+      } else {
+        // do noting
+      }
+    }
+
+    if ((OB_SUCC(ret)) && OB_NOT_NULL(table_schema)) {
+      LOG_TRACE("succ to get table_schema", K(tenant_name), K(database_name), K(table_name),
+                K_(level1_decoded_db_name), K_(level1_decoded_table_name), K_(level2_decoded_db_name),
+                K_(level2_decoded_table_name), KPC(table_schema));
+      if (OB_FAIL(table_schemas_.push_back(table_schema))) {
+        LOG_WARN("fail to push back table_schema", K(table_schema), KR(ret));
+      }
+    }
   }
   return ret;
 }
 
 int ObAllVirtualProxySchema::get_view_decoded_schema_(
     const uint64_t tenant_id,
-    common::ObString &tenant_name,
+    const common::ObString &tenant_name,
     const common::ObString &view_definition,
     const bool is_oracle_mode,
     const ObTableSchema *&new_table_schema)
@@ -532,38 +774,59 @@ int ObAllVirtualProxySchema::inner_get_next_row(ObNewRow *&row)
 int ObAllVirtualProxySchema::inner_get_next_row_()
 {
   int ret = OB_SUCCESS;
-  int64_t replica_count = 0;
-  const ObTableSchema *table_schema = NULL;
-  ObTabletID tablet_id;
-  DupReplicaType dup_replica_type = DupReplicaType::NON_DUP_REPLICA;
-  if (OB_UNLIKELY(next_table_idx_ < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("next_table_idx_ can't be smaller than 0", KR(ret), K_(next_table_idx));
-  } else if (next_table_idx_ >= table_schemas_.count()) {
-    ret = OB_ITER_END;
-  } else if (OB_ISNULL(table_schema = table_schemas_.at(next_table_idx_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is NULL", KR(ret), K_(next_table_idx));
-  } else {
-    tablet_id = tablet_ids_.at(next_table_idx_);
-    // we need get tenant servers, only all the following conditions are met
-    // 1. tablet id was not specified_
-    // 2. this is __all_dummy table
-    if (!tablet_id.is_valid()
-        && ObString::make_string(OB_ALL_DUMMY_TNAME) == table_schema->get_table_name_str()) {
-      if (OB_FAIL(get_next_tenant_server_(table_schema))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next tenant server", KR(ret), KPC(table_schema));
+  if (NULL == sql_res_) {
+    int64_t replica_count = 0;
+    const ObTableSchema *table_schema = NULL;
+    ObString table_name;
+    ObTabletID tablet_id;
+    DupReplicaType dup_replica_type = DupReplicaType::NON_DUP_REPLICA;
+    if (OB_UNLIKELY(next_table_idx_ < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("next_table_idx_ can't be smaller than 0", KR(ret), K_(next_table_idx));
+    } else if (next_table_idx_ >= table_schemas_.count()) {
+      ret = OB_ITER_END;
+    } else if (OB_ISNULL(table_schema = table_schemas_.at(next_table_idx_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is NULL", KR(ret), K_(next_table_idx));
+    } else {
+      table_name = input_table_names_.at(next_table_idx_);
+      tablet_id = tablet_ids_.at(next_table_idx_);
+      // we need get tenant servers, only all the following conditions are met
+      // 1. tablet id was not specified_
+      // 2. this is __all_dummy table
+      if (!tablet_id.is_valid()
+          && ObString::make_string(OB_ALL_DUMMY_TNAME) == table_schema->get_table_name_str()) {
+        if (OB_FAIL(get_next_tenant_server_(table_name, table_schema))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("fail to get next tenant server", KR(ret), KPC(table_schema));
+          }
         }
+      } else if (OB_FAIL(get_next_tablet_location_(table_name, table_schema, tablet_id))) {
+        LOG_WARN("fail to get next tablet location", KR(ret), KPC(table_schema), K(tablet_id));
       }
-    } else if (OB_FAIL(get_next_tablet_location_(table_schema, tablet_id))) {
-      LOG_WARN("fail to get next tablet location", KR(ret), KPC(table_schema), K(tablet_id));
+    }
+  } else {
+    ObInnerSQLResult *inner_sql_res =
+      static_cast<ObInnerSQLResult *>(sql_res_->get_result());
+    if (OB_FAIL(inner_sql_res->next())) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("next failed", K(ret));
+      }
+    } else {
+      cur_row_ = *inner_sql_res->get_row();
+      ObNewRow *row = &cur_row_;
+      if (OB_FAIL(convert_output_row(row))) {
+        LOG_WARN("failed to convert row", K(ret));
+      } else {
+        cur_row_ = *row;
+      }
     }
   }
   return ret;
 }
 
 int ObAllVirtualProxySchema::get_next_tablet_location_(
+    const common::ObString &table_name,
     const share::schema::ObTableSchema *table_schema,
     const common::ObTabletID &tablet_id)
 {
@@ -585,6 +848,7 @@ int ObAllVirtualProxySchema::get_next_tablet_location_(
       const ObLSReplicaLocation &replica = location_.get_replica_locations().at(next_replica_idx_);
       if (OB_FAIL(fill_row_(
           schema_guard_,
+          table_name,
           *table_schema,
           replica,
           tablet_id,
@@ -606,6 +870,7 @@ int ObAllVirtualProxySchema::get_next_tablet_location_(
 }
 
 int ObAllVirtualProxySchema::get_next_tenant_server_(
+    const common::ObString &table_name,
     const share::schema::ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
@@ -627,6 +892,7 @@ int ObAllVirtualProxySchema::get_next_tenant_server_(
       const ObTenantServer &server = tenant_servers_[next_server_idx_];
       if (OB_FAIL(fill_row_(
           schema_guard_,
+          table_name,
           *table_schema,
           server.get_location(),
           server.get_virtual_tablet_id(),
@@ -683,7 +949,8 @@ int ObAllVirtualProxySchema::fill_tenant_servers_(
         sql_port,
         replica_type,
         property,
-        restore_status))) {
+        restore_status,
+        0 /*proposal_id*/))) {
       LOG_WARN("fail to init replica location", KR(ret), K(server), K(sql_port), K(replica_type));
     } else if (OB_FAIL(tenant_server.set_location(replica_location))) {
       LOG_WARN("fail to init tenant_server", KR(ret), K(replica_location));
@@ -832,6 +1099,7 @@ int ObAllVirtualProxySchema::get_tenant_servers_(const uint64_t tenant_id)
 
 int ObAllVirtualProxySchema::fill_row_(
     share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &table_name,
     const share::schema::ObTableSchema &table_schema,
     const share::ObLSReplicaLocation &replica,
     const common::ObTabletID &tablet_id,
@@ -841,7 +1109,6 @@ int ObAllVirtualProxySchema::fill_row_(
   ObObj *cells = NULL;
   const int64_t col_count = output_column_ids_.count();
   int64_t paxos_replica_num = OB_INVALID_COUNT;
-  const ObString table_name = table_schema.get_table_name_str();
   ObCollationType coll_type = ObCharset::get_default_collation(ObCharset::get_default_charset());
   if (OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -896,7 +1163,7 @@ int ObAllVirtualProxySchema::fill_row_(
           break;
         }
         case TABLE_NAME: {
-          cells[cell_idx].set_varchar(input_table_name_);
+          cells[cell_idx].set_varchar(table_name);
           cells[cell_idx].set_collation_type(coll_type);
           break;
         }
@@ -1015,6 +1282,10 @@ int ObAllVirtualProxySchema::fill_row_(
       }
 
       if (OB_SUCC(ret)) {
+        ObObj &cell = cells[cell_idx];
+        if (cell.is_string_type() && 0 == cell.get_data_length()) {
+          cell.set_null();
+        }
         cell_idx++;
       }
     }

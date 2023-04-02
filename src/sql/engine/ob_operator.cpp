@@ -17,6 +17,7 @@
 #include "ob_operator_factory.h"
 #include "sql/engine/ob_exec_context.h"
 #include "common/ob_smart_call.h"
+#include "sql/monitor/ob_sql_plan_manager.h"
 
 namespace oceanbase
 {
@@ -552,6 +553,49 @@ int ObOperator::check_stack_once()
   return ret;
 }
 
+int ObOperator::output_expr_sanity_check()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec_.output_.count(); ++i) {
+    ObDatum *datum = NULL;
+    const ObExpr *expr = spec_.output_[i];
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+      LOG_WARN("evaluate expression failed", K(ret));
+    } else {
+      SANITY_CHECK_RANGE(datum->ptr_, datum->len_);
+    }
+  }
+  return ret;
+}
+
+int ObOperator::output_expr_sanity_check_batch()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec_.output_.count(); ++i) {
+    const ObExpr *expr = spec_.output_[i];
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (OB_FAIL(expr->eval_batch(eval_ctx_, *brs_.skip_, brs_.size_))) {
+      LOG_WARN("evaluate expression failed", K(ret));
+    } else if (!expr->is_batch_result()){
+      const ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
+      SANITY_CHECK_RANGE(datum.ptr_, datum.len_);
+    } else {
+      const ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
+      for (int64_t j = 0; j < brs_.size_; j++) {
+        if (!brs_.skip_->at(j)) {
+          SANITY_CHECK_RANGE(datums[j].ptr_, datums[j].len_);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // copy from ob_phy_operator.cpp
 int ObOperator::open()
 {
@@ -581,7 +625,7 @@ int ObOperator::open()
       eval_ctx_.set_batch_size(1);
       eval_ctx_.set_batch_idx(0);
     }
-    if (ctx_.get_my_session()->is_user_session()) {
+    if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(0);
     }
     while (OB_SUCC(ret) && open_order != OPEN_EXIT) {
@@ -875,7 +919,7 @@ int ObOperator::submit_op_monitor_node()
   if (GCONF.enable_sql_audit) {
     // Record monitor info in sql_plan_monitor
     // Some records that meets the conditions needs to be archived
-    // Reference document: https://yuque.antfin.com/baixian.zr/brtfzn/ppx26a
+    // Reference document:
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
     if (list && spec_.plan_) {
@@ -898,6 +942,18 @@ int ObOperator::submit_op_monitor_node()
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
     }
+    // ObSqlPlanMgr *sql_plan_mgr = MTL(ObSqlPlanMgr*);
+    // ObPlanRealInfoMgr *plan_info = NULL;
+    // if (NULL != sql_plan_mgr) {
+    //   plan_info = sql_plan_mgr->get_plan_real_info_mgr();
+    // }
+    // if (plan_info && spec_.plan_ && spec_.plan_->need_record_plan_info()) {
+    //   IGNORE_RETURN plan_info->handle_plan_info(spec_.id_,
+    //                                             spec_.plan_->get_sql_id_string(),
+    //                                             spec_.plan_->get_plan_id(),
+    //                                             spec_.plan_->get_plan_hash_value(),
+    //                                             op_monitor_info_);
+    // }
   }
   IGNORE_RETURN try_deregister_rt_monitor_node();
   return ret;
@@ -906,11 +962,12 @@ int ObOperator::submit_op_monitor_node()
 int ObOperator::get_next_row()
 {
   int ret = OB_SUCCESS;
+  begin_cpu_time_counting();
+  begin_ash_line_id_reg();
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recusive", K(ret));
   } else {
-    begin_cpu_time_counting();
-    if (ctx_.get_my_session()->is_user_session()) {
+    if (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_) {
       IGNORE_RETURN try_register_rt_monitor_node(1);
     }
     if (row_reach_end_) {
@@ -918,9 +975,11 @@ int ObOperator::get_next_row()
     } else if (OB_UNLIKELY(get_spec().is_vectorized())) {
       // Operator itself supports vectorization, while parent operator does NOT.
       // Use vectorize method to get next row.
+      end_cpu_time_counting();
       if (OB_FAIL(get_next_row_vectorizely())) {
         // do nothing
       }
+      begin_cpu_time_counting();
     } else {
       if (OB_UNLIKELY(!startup_passed_)) {
         bool filtered = false;
@@ -942,8 +1001,8 @@ int ObOperator::get_next_row()
               "op_id", spec_.id_);
           }
         } else {
+          bool filtered = false;
           if (!spec_.filters_.empty()) {
-            bool filtered = false;
             if (OB_FAIL(filter_row(filtered))) {
               LOG_WARN("filter row failed", K(ret), "type", spec_.type_, "op", op_name());
             } else {
@@ -952,6 +1011,13 @@ int ObOperator::get_next_row()
               }
             }
           }
+#ifdef ENABLE_SANITY
+          if (OB_SUCC(ret) && !filtered) {
+            if (OB_FAIL(output_expr_sanity_check())) {
+              LOG_WARN("output expr sanity check failed", K(ret));
+            }
+          }
+#endif
         }
         break;
       }
@@ -987,18 +1053,21 @@ int ObOperator::get_next_row()
         }
       }
     }
-    end_cpu_time_counting();
   }
+  end_ash_line_id_reg();
+  end_cpu_time_counting();
   return ret;
 }
 
 int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&batch_rows)
 {
   int ret = OB_SUCCESS;
+  begin_cpu_time_counting();
+  begin_ash_line_id_reg();
+
   if (OB_FAIL(check_stack_once())) {
     LOG_WARN("too deep recusive", K(ret));
   } else {
-    begin_cpu_time_counting();
     if (OB_UNLIKELY(spec_.need_check_output_datum_ && brs_checker_)) {
       if (OB_FAIL(brs_checker_->check_datum_modified())) {
         LOG_WARN("check output datum failed", K(ret), "id", spec_.get_id(), "op_name", op_name());
@@ -1045,14 +1114,14 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
             continue;
           }
         }
-        if (OB_SUCC(ret) && ctx_.get_my_session()->is_user_session()) {
+        if (OB_SUCC(ret) && (ctx_.get_my_session()->is_user_session() || spec_.plan_->get_phy_plan_hint().monitor_)) {
           IGNORE_RETURN try_register_rt_monitor_node(brs_.size_);
         }
+        bool all_filtered = false;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(try_check_status_by_rows(brs_.size_))) {
           LOG_WARN("check status failed", K(ret));
         } else if (!spec_.filters_.empty()) {
-          bool all_filtered = false;
           if (OB_FAIL(filter_batch_rows(spec_.filters_,
                                         *brs_.skip_,
                                         brs_.size_,
@@ -1065,6 +1134,13 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
             continue;
           }
         }
+#ifdef ENABLE_SANITY
+        if (OB_SUCC(ret) && !all_filtered) {
+          if (OB_FAIL(output_expr_sanity_check_batch())) {
+            LOG_WARN("output expr sanity check batch failed", K(ret));
+          }
+        }
+#endif
         break;
       }
 
@@ -1085,6 +1161,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           // if no data in batch, end iterate immediately, otherwise wait for next iterate
           brs_.end_ = !brs_.size_;
         }
+        skipped_rows_count = brs_.skip_->accumulate_bit_cnt(brs_.size_);
         op_monitor_info_.output_row_count_ += brs_.size_ - skipped_rows_count;
         op_monitor_info_.skipped_rows_count_ += skipped_rows_count; // for batch
         ++op_monitor_info_.output_batches_; // for batch
@@ -1101,11 +1178,13 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         }
       }
     } else {
+      end_cpu_time_counting();
       // Operator does NOT support vectorization, while its parent does. Return
       // the batch with only 1 row
       if (OB_FAIL(get_next_batch_with_onlyone_row())) {
         // do nothing
       }
+      begin_cpu_time_counting();
     }
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(spec_.need_check_output_datum_) && brs_checker_ && !brs_.end_ && brs_.size_ > 0) {
@@ -1113,8 +1192,10 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
       }
       LOG_DEBUG("get next batch", "id", spec_.get_id(), "op_name", op_name(), K(brs_));
     }
-    end_cpu_time_counting();
   }
+
+  end_ash_line_id_reg();
+  end_cpu_time_counting();
   return ret;
 }
 

@@ -49,6 +49,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_logstrema_group_id", "max used log stream group id"},
   { "ob_max_used_sys_pl_object_id", "max used sys pl object id"},
   { "ob_max_used_object_id", "max used object id"},
+  { "ob_max_used_rewrite_rule_version", "max used rewrite rule version"},
   /* the following id_type will be changed to ob_max_used_object_id and won't be persisted. */
   { "ob_max_used_table_id", "max used table id"},
   { "ob_max_used_database_id", "max used database id"},
@@ -76,7 +77,12 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_directory_id", "max used directory id"},
   { "ob_max_used_context_id", "max used context id" },
   { "ob_max_used_partition_id", "max used partition_id" },
+  { "ob_max_used_rls_policy_id", "max used ddl rls policy id"},
+  { "ob_max_used_rls_group_id", "max used ddl rls group id"},
+  { "ob_max_used_rls_context_id", "max used ddl rls context id"},
 };
+
+lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
 
 ObMaxIdFetcher::ObMaxIdFetcher(ObMySQLProxy &proxy)
   : proxy_(proxy)
@@ -105,7 +111,8 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_LS_ID_TYPE:
     case OB_MAX_USED_LS_GROUP_ID_TYPE:
     case OB_MAX_USED_SYS_PL_OBJECT_ID_TYPE:
-    case OB_MAX_USED_OBJECT_ID_TYPE: {
+    case OB_MAX_USED_OBJECT_ID_TYPE:
+    case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE: {
       dst = src;
       break;
     }
@@ -134,7 +141,10 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_DBLINK_ID_TYPE:
     case OB_MAX_USED_DIRECTORY_ID_TYPE:
     case OB_MAX_USED_CONTEXT_ID_TYPE:
-    case OB_MAX_USED_PARTITION_ID_TYPE: {
+    case OB_MAX_USED_PARTITION_ID_TYPE:
+    case OB_MAX_USED_RLS_POLICY_ID_TYPE:
+    case OB_MAX_USED_RLS_GROUP_ID_TYPE:
+    case OB_MAX_USED_RLS_CONTEXT_ID_TYPE: {
       dst = OB_MAX_USED_OBJECT_ID_TYPE;
       break;
     }
@@ -157,7 +167,11 @@ int ObMaxIdFetcher::fetch_new_max_ids(const uint64_t tenant_id,
   uint64_t fetch_id;
   uint64_t pure_fetch_id;
   ObMySQLTransaction trans;
-  if (OB_INVALID_ID == tenant_id) {
+  // for ddl parallel use ObLatch make conflict trans serial
+  lib::ObMutexGuard guard(mutex_bucket_[tenant_id % MAX_TENANT_MUTEX_BUCKET_CNT]);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("fail to lock", K(ret), K(tenant_id));
+  } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type));
   } else if (OB_MAX_USED_NORMAL_ROWID_TABLE_TABLET_ID_TYPE != max_id_type
@@ -286,7 +300,8 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_DDL_TASK_ID_TYPE:
         case OB_MAX_USED_UNIT_GROUP_ID_TYPE:
         case OB_MAX_USED_LS_ID_TYPE:
-        case OB_MAX_USED_LS_GROUP_ID_TYPE: {
+        case OB_MAX_USED_LS_GROUP_ID_TYPE:
+        case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE: {
           // won't check other id
           break;
         }
@@ -516,7 +531,7 @@ const char *ObMaxIdFetcher::get_max_id_name(const ObMaxIdType max_id_type)
 {
   const char *name = NULL;
   if (max_id_type < 0 || max_id_type >= ARRAYSIZEOF(max_id_name_info_)) {
-    LOG_WARN("invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
   } else {
     name = max_id_name_info_[max_id_type][0];
   }
@@ -527,7 +542,7 @@ const char *ObMaxIdFetcher::get_max_id_info(const ObMaxIdType max_id_type)
 {
   const char *info = NULL;
   if (max_id_type < 0 || max_id_type >= ARRAYSIZEOF(max_id_name_info_)) {
-    LOG_WARN("invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", K(max_id_type), "array size", ARRAYSIZEOF(max_id_name_info_));
   } else {
     info = max_id_name_info_[max_id_type][1];
   }

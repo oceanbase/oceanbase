@@ -20,6 +20,7 @@
 #include "ob_archive_define.h"                 // ArchiveWorkStation LogFileTuple
 #include "share/ob_ls_id.h"                    // ObLSID
 #include "logservice/palf/lsn.h"               // LSN
+#include "share/scn.h"               // SCN
 #include "lib/utility/ob_print_utils.h"        // print
 #include <cstdint>
 
@@ -96,7 +97,7 @@ public:
   // 获取fetch进度
   int get_fetcher_progress(const ArchiveWorkStation &station,
                          palf::LSN &offset,
-                         int64_t &log_ts);
+                         share::SCN &scn);
 
   int compensate_piece(const ArchiveWorkStation &station,
                        const int64_t next_compensate_piece_id);
@@ -111,6 +112,11 @@ public:
                            int64_t &file_id,
                            int64_t &file_offset,
                            LogFileTuple &tuple);
+
+  // get send task count in send_task_status
+  // @param[in] station, the archive work station of ls
+  // @param[out] count, the count of send_tasks in task_status
+  int get_send_task_count(const ArchiveWorkStation &station, int64_t &count);
 
   // 获取归档参数
   int get_archive_send_arg(const ArchiveWorkStation &station,
@@ -128,7 +134,7 @@ public:
   void mock_init(const ObLSID &id, ObArchiveAllocator *allocotr);
   TO_STRING_KV(K_(id),
                K_(station),
-               K_(round_start_ts),
+               K_(round_start_scn),
                K_(dest));
 
 private:
@@ -144,24 +150,25 @@ private:
     ~ArchiveDest();
 
   public:
-    void init(const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
+    int init(const LSN &piece_min_lsn, const LSN &lsn, const int64_t file_id,
         const int64_t file_offset, const share::ObArchivePiece &piece,
-        const int64_t max_archived_ts, const bool is_log_gap_exist,
+        const share::SCN &max_archived_scn, const bool is_log_gap_exist,
         ObArchiveAllocator *allocator);
     void destroy();
     void get_sequencer_progress(LSN &offset) const;
     int update_sequencer_progress(const int64_t size, const LSN &offset);
     void get_fetcher_progress(LogFileTuple &tuple) const;
-    int update_fetcher_progress(const int64_t round_start_ts, const LogFileTuple &tuple);
+    int update_fetcher_progress(const share::SCN &round_start_scn, const LogFileTuple &tuple);
     int push_fetch_log(ObArchiveLogFetchTask &task);
     int push_send_task(ObArchiveSendTask &task, ObArchiveWorker &worker);
     int get_top_fetch_log(ObArchiveLogFetchTask *&task);
     int pop_fetch_log(ObArchiveLogFetchTask *&task);
     int compensate_piece(const int64_t piece_id);
-    void get_max_archive_progress(LSN &piece_min_lsn, LSN &lsn, int64_t &log_ts, ObArchivePiece &piece,
+    void get_max_archive_progress(LSN &piece_min_lsn, LSN &lsn, share::SCN &scn, ObArchivePiece &piece,
         int64_t &file_id, int64_t &file_offset, bool &error_exist);
-    int update_archive_progress(const int64_t round_start_ts, const int64_t file_id, const int64_t file_offset, const LogFileTuple &tuple);
+    int update_archive_progress(const share::SCN &round_start_scn, const int64_t file_id, const int64_t file_offset, const LogFileTuple &tuple);
     void get_archive_progress(int64_t &file_id, int64_t &file_offset, LogFileTuple &tuple);
+    void get_send_task_count(int64_t &count);
     void get_archive_send_arg(ObArchiveSendDestArg &arg);
     void mark_error();
     void print_tasks_();
@@ -185,7 +192,6 @@ private:
     LogFileTuple       max_fetch_info_;
     ObArchiveLogFetchTask *wait_send_task_array_[MAX_FETCH_TASK_NUM];
     int64_t             wait_send_task_count_;
-    int64_t            seq_no_;
     ObArchiveTaskStatus *send_task_queue_;
 
     ObArchiveAllocator *allocator_;
@@ -196,13 +202,13 @@ private:
 
 private:
   bool is_task_stale_(const ArchiveWorkStation &station) const;
-  void update_unlock_(const StartArchiveHelper &helper, ObArchiveAllocator *allocator);
+  int update_unlock_(const StartArchiveHelper &helper, ObArchiveAllocator *allocator);
 
 private:
   ObLSID id_;
   uint64_t tenant_id_;
   ArchiveWorkStation station_;
-  int64_t round_start_ts_;
+  share::SCN round_start_scn_;
   ArchiveDest dest_;
   ObArchiveAllocator *allocator_;
   mutable RWLock rwlock_;
@@ -217,24 +223,24 @@ struct LSArchiveStat
   int64_t round_;
   // dest_type dest_value
   int64_t lease_id_;
-  int64_t round_start_ts_;
+  share::SCN round_start_scn_;
   int64_t max_issued_log_lsn_;
   int64_t issued_task_count_;
   int64_t issued_task_size_;
   int64_t max_prepared_piece_id_;
   int64_t max_prepared_lsn_;
-  int64_t max_prepared_ts_;
+  share::SCN max_prepared_scn_;
   int64_t wait_send_task_count_;
   int64_t archive_piece_id_;
   int64_t archive_lsn_;
-  int64_t archive_ts_;
+  share::SCN archive_scn_;
   int64_t archive_file_id_;
   int64_t archive_file_offset_;
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(dest_id), K_(incarnation), K_(round),
-      K_(lease_id), K_(round_start_ts), K_(max_issued_log_lsn), K_(issued_task_count),
+      K_(lease_id), K_(round_start_scn), K_(max_issued_log_lsn), K_(issued_task_count),
       K_(issued_task_size), K_(max_prepared_piece_id), K_(max_prepared_lsn),
-      K_(max_prepared_ts), K_(wait_send_task_count), K_(archive_piece_id), K_(archive_lsn),
-      K_(archive_ts), K_(archive_file_id), K_(archive_file_offset));
+      K_(max_prepared_scn), K_(wait_send_task_count), K_(archive_piece_id), K_(archive_lsn),
+      K_(archive_scn), K_(archive_file_id), K_(archive_file_offset));
 };
 
 class ObArchiveLSGuard final

@@ -18,17 +18,25 @@ namespace oceanbase
 {
 namespace sql
 {
-class ObExprJoinFilter : public ObExprOperator 
+
+class ObExprJoinFilter : public ObExprOperator
 {
 public:
   class ObExprJoinFilterContext : public ObExprOperatorCtx
   {
     public:
-      ObExprJoinFilterContext() : ObExprOperatorCtx(), 
+      ObExprJoinFilterContext() : ObExprOperatorCtx(),
           bloom_filter_ptr_(NULL), bf_key_(), filter_count_(0), total_count_(0), check_count_(0),
-          n_times_(0), ready_ts_(0), is_ready_(false), wait_ready_(false) {}
-      virtual ~ObExprJoinFilterContext() {} 
+          n_times_(0), ready_ts_(0), next_check_start_pos_(0), window_cnt_(0), window_size_(0),
+          partial_filter_count_(0), partial_total_count_(0),
+          cur_pos_(total_count_), flag_(0) {}
+      virtual ~ObExprJoinFilterContext() {}
+    public:
+      bool is_ready() { return is_ready_; }
+      bool need_wait_ready() { return need_wait_bf_; }
+      bool dynamic_disable() {  return dynamic_disable_; }
       void reset_monitor_info();
+    public:
       ObPxBloomFilter *bloom_filter_ptr_;
       ObPXBloomFilterHashWrapper bf_key_;
       int64_t filter_count_;
@@ -36,15 +44,30 @@ public:
       int64_t check_count_;
       int64_t n_times_;
       int64_t ready_ts_;
-      bool is_ready_;
-      bool wait_ready_;
+
+      // for adaptive bloom filter
+      int64_t next_check_start_pos_;
+      int64_t window_cnt_;
+      int64_t window_size_;
+      int64_t partial_filter_count_;
+      int64_t partial_total_count_;
+      int64_t &cur_pos_;
+      union {
+        uint64_t flag_;
+        struct {
+          bool need_wait_bf_:1;
+          bool is_ready_:1;
+          bool dynamic_disable_:1;
+          uint64_t reserved_:61;
+        };
+      };
   };
   ObExprJoinFilter();
   explicit ObExprJoinFilter(common::ObIAllocator& alloc);
   virtual ~ObExprJoinFilter();
   virtual int calc_result_typeN(ObExprResType& type,
                                 ObExprResType* types,
-                                int64_t param_num, 
+                                int64_t param_num,
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
   static int eval_bloom_filter(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
@@ -55,6 +78,15 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
   // hard code seed, 32 bit max prime number
   static const int64_t JOIN_FILTER_SEED = 4294967279;
+private:
+  static int check_bf_ready(
+    ObExecContext &exec_ctx,
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
+  static int collect_sample_info(
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx,
+    bool is_match);
+  static int check_need_dynamic_diable_bf(
+      ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
 private:
   static const int64_t CHECK_TIMES = 127;
   DISALLOW_COPY_AND_ASSIGN(ObExprJoinFilter);

@@ -44,6 +44,14 @@ SQL_MONITOR_STATNAME_DEF(MEMORY_DUMP, sql_monitor_statname::CAPACITY, "memory du
 // GI
 SQL_MONITOR_STATNAME_DEF(FILTERED_GRANULE_COUNT, sql_monitor_statname::INT, "filtered granule count", "filtered granule count in GI op")
 SQL_MONITOR_STATNAME_DEF(TOTAL_GRANULE_COUNT, sql_monitor_statname::INT, "total granule count", "total granule count in GI op")
+// sort
+SQL_MONITOR_STATNAME_DEF(SORT_SORTED_ROW_COUNT, sql_monitor_statname::INT, "sorted row count", "sorted row count in sort op")
+SQL_MONITOR_STATNAME_DEF(SORT_MERGE_SORT_ROUND, sql_monitor_statname::INT, "merge sort round", "merge sort round in sort op")
+SQL_MONITOR_STATNAME_DEF(SORT_INMEM_SORT_TIME, sql_monitor_statname::INT, "in memory sort time", "time taken by in memory sort")
+SQL_MONITOR_STATNAME_DEF(SORT_DUMP_DATA_TIME, sql_monitor_statname::INT, "sort dump data time", "time taken by dump data")
+// SSTABLE INSERT
+SQL_MONITOR_STATNAME_DEF(DDL_TASK_ID, sql_monitor_statname::INT, "ddl task id", "sort ddl task id")
+SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_ROW_COUNT, sql_monitor_statname::INT, "sstable insert row count", "sstable insert row count")
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, sql_monitor_statname::INVALID, "monitor end", "monitor stat name end")
 #endif

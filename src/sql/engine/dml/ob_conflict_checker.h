@@ -74,12 +74,12 @@ public:
   ObConflictRowMapCtx()
     : conflict_map_(),
       rowkey_(NULL),
-      allocator_(CURRENT_CONTEXT->get_arena_allocator())
+      allocator_(nullptr)
   {
   }
   ~ObConflictRowMapCtx() {};
 
-  int init_conflict_map(int64_t bucket_num, int64_t obj_cnt);
+  int init_conflict_map(int64_t bucket_num, int64_t obj_cnt, common::ObIAllocator *allocator);
   int reuse();
   int destroy();
 
@@ -87,7 +87,7 @@ public:
   static const int64_t MAX_ROW_BATCH_SIZE = 500;
   ObConflictRowMap conflict_map_;
   ObRowkey *rowkey_; // 临时的ObRowkey,用于map的compare，循环使用
-  common::ObIAllocator &allocator_; // allocator用来创建hash map
+  common::ObIAllocator *allocator_; // allocator用来创建hash map
 };
 
 typedef common::ObFixedArray<ObRowkeyCstCtdef *, common::ObIAllocator> ObRowkeyCstCtdefArray;

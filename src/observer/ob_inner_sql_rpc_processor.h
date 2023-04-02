@@ -18,6 +18,7 @@
 #include "observer/ob_inner_sql_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,15 @@ public:
 public:
   virtual int process();
 private:
+  int create_tmp_session(
+      uint64_t tenant_id,
+      sql::ObSQLSessionInfo *&tmp_session,
+      sql::ObFreeSessionCtx &free_session_ctx,
+      const bool is_oracle_mode);
+  void cleanup_tmp_session(
+      sql::ObSQLSessionInfo *tmp_session,
+      sql::ObFreeSessionCtx &free_session_ctx);
+
   int process_start_transaction(
       sqlclient::ObISQLConnection *conn,
       const ObSqlString &start_trans_sql,
@@ -63,8 +73,24 @@ private:
       const ObInnerSQLTransmitArg &transmit_arg);
   int process_lock_table(sqlclient::ObISQLConnection *con,
                          const ObInnerSQLTransmitArg &arg);
+  int process_unlock_table(sqlclient::ObISQLConnection *con,
+                           const ObInnerSQLTransmitArg &arg);
+  int process_lock_partition(sqlclient::ObISQLConnection *con,
+                             const ObInnerSQLTransmitArg &arg);
+  int process_unlock_partition(sqlclient::ObISQLConnection *con,
+                               const ObInnerSQLTransmitArg &arg);
+  int process_lock_subpartition(sqlclient::ObISQLConnection *con,
+                                const ObInnerSQLTransmitArg &arg);
+  int process_unlock_subpartition(sqlclient::ObISQLConnection *con,
+                                  const ObInnerSQLTransmitArg &arg);
   int process_lock_tablet(sqlclient::ObISQLConnection *con,
                           const ObInnerSQLTransmitArg &arg);
+  int process_unlock_tablet(sqlclient::ObISQLConnection *con,
+                            const ObInnerSQLTransmitArg &arg);
+  int process_lock_obj(sqlclient::ObISQLConnection *con,
+                       const ObInnerSQLTransmitArg &arg);
+  int process_unlock_obj(sqlclient::ObISQLConnection *con,
+                         const ObInnerSQLTransmitArg &arg);
   const observer::ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObInnerSqlRpcP);
 };

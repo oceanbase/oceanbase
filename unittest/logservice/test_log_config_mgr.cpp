@@ -21,6 +21,7 @@
 #include "mock_logservice_container/mock_log_sliding_window.h"
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_log_mode_mgr.h"
+#include "mock_logservice_container/mock_log_reconfirm.h"
 #undef private
 namespace oceanbase
 {
@@ -42,6 +43,8 @@ const ObAddr addr9(ObAddr::IPV4, "127.0.0.9", 1000);
 ObRegion region1("BEIJING");
 ObRegion region2("SHANGHAI");
 ObRegion default_region(DEFAULT_REGION_NAME);
+const int64_t INIT_ELE_EPOCH = 1;
+const int64_t INIT_PROPOSAL_ID = 1;
 
 class TestLogConfigMgr : public ::testing::Test
 {
@@ -53,6 +56,7 @@ public:
     mock_sw_ = OB_NEW(MockLogSlidingWindow, "TestLog");
     mock_log_engine_ = OB_NEW(MockLogEngine, "TestLog");
     mock_mode_mgr_ = OB_NEW(MockLogModeMgr, "TestLog");
+    mock_reconfirm_ = OB_NEW(MockLogReconfirm, "TestLog");
   }
   ~TestLogConfigMgr()
   {
@@ -61,6 +65,7 @@ public:
     OB_DELETE(MockLogSlidingWindow, "TestLog", mock_sw_);
     OB_DELETE(MockLogEngine, "TestLog", mock_log_engine_);
     OB_DELETE(MockLogModeMgr, "TestLog", mock_mode_mgr_);
+    OB_DELETE(MockLogReconfirm, "TestLog", mock_reconfirm_);
   }
   void init_test_log_config_env(const common::ObAddr &self,
                                 const LogConfigInfo &config_info,
@@ -71,19 +76,24 @@ public:
     mock_state_mgr_->role_ = role;
     mock_state_mgr_->state_ = state;
     mock_state_mgr_->leader_ = (LEADER == role)? self: ObAddr();
+    mock_election_->role_ = role;
+    mock_election_->leader_epoch_ = INIT_ELE_EPOCH;
+    mock_sw_->mock_last_submit_lsn_ = LSN(PALF_INITIAL_LSN_VAL);
+    mock_sw_->mock_last_submit_pid_ = INIT_PROPOSAL_ID;
     EXPECT_TRUE(config_info.is_valid());
     PALF_LOG(INFO, "init_test_log_config_env", K(role), K(state), K(mock_state_mgr_->leader_), K(mock_state_mgr_->role_));
     mock_log_engine_->reset_register_parent_resp_ret();
     common::GlobalLearnerList learner_list;
-    const int64_t init_pid = 1;
+    const int64_t init_pid = INIT_PROPOSAL_ID;
     LogConfigMeta config_meta;
-    EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, config_info, config_info));
-    EXPECT_EQ(OB_SUCCESS, cm.init(1, self, config_meta, mock_log_engine_, mock_sw_, mock_state_mgr_, mock_election_, mock_mode_mgr_));
+    EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, config_info, config_info, 1, LSN(0), 1));
+    EXPECT_EQ(OB_SUCCESS, cm.init(1, self, config_meta, mock_log_engine_, mock_sw_, mock_state_mgr_, mock_election_,
+        mock_mode_mgr_, mock_reconfirm_));
     LogMemberRegionMap region_map;
     EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
-    for (int i = 0; i < cm.paxos_memberlist_.get_member_number(); ++i) {
+    for (int i = 0; i < cm.alive_paxos_memberlist_.get_member_number(); ++i) {
       ObAddr server;
-      cm.paxos_memberlist_.get_server_by_index(i, server);
+      cm.alive_paxos_memberlist_.get_server_by_index(i, server);
       region_map.insert(server, default_region);
     }
     EXPECT_EQ(OB_SUCCESS, cm.set_paxos_member_region_map(region_map));
@@ -94,6 +104,7 @@ public:
   palf::MockLogSlidingWindow *mock_sw_;
   palf::MockLogEngine *mock_log_engine_;
   palf::MockLogModeMgr *mock_mode_mgr_;
+  palf::MockLogReconfirm *mock_reconfirm_;
 };
 
 TEST_F(TestLogConfigMgr, test_remove_child_is_not_learner)
@@ -102,8 +113,8 @@ TEST_F(TestLogConfigMgr, test_remove_child_is_not_learner)
   LogLearnerList removed_children;
   LogLearnerList retire_children;
   LogLearnerList target_children;
-  EXPECT_EQ(OB_SUCCESS, cm.all_learnerlist_.add_learner(ObMember(addr1, 1)));
-  EXPECT_EQ(OB_SUCCESS, cm.all_learnerlist_.add_learner(ObMember(addr4, 1)));
+  EXPECT_EQ(OB_SUCCESS, cm.all_learnerlist_.add_learner(ObMember(addr1, -1)));
+  EXPECT_EQ(OB_SUCCESS, cm.all_learnerlist_.add_learner(ObMember(addr4, -1)));
   EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr1, 1)));
   EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr2, 1)));
   EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr3, 1)));
@@ -178,9 +189,9 @@ TEST_F(TestLogConfigMgr, test_set_paxos_member_region_map)
   LogConfigMgr cm;
   cm.is_inited_ = true;
   EXPECT_EQ(OB_SUCCESS, cm.paxos_member_region_map_.init("testmap", OB_MAX_MEMBER_NUMBER));
-  cm.paxos_memberlist_.add_server(addr1);
-  cm.paxos_memberlist_.add_server(addr2);
-  cm.paxos_memberlist_.add_server(addr3);
+  cm.alive_paxos_memberlist_.add_server(addr1);
+  cm.alive_paxos_memberlist_.add_server(addr2);
+  cm.alive_paxos_memberlist_.add_server(addr3);
   LogMemberRegionMap region_map;
   EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
   region_map.insert(addr1, region1);
@@ -218,15 +229,18 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   init_config_version.generate(1, 1);
   GlobalLearnerList learner_list;
   LogConfigInfo default_config_info, one_f_one_a_config_info,
-      two_f_one_a_config_info, four_f_one_a_config_info, five_f_config_info;
+      two_f_one_a_config_info, four_f_one_a_config_info, five_f_config_info,
+      four_f_config_info, two_f_config_info;
   EXPECT_EQ(OB_SUCCESS, default_config_info.generate(init_member_list, 3, learner_list, init_config_version));
 
   EXPECT_EQ(OB_SUCCESS, one_f_one_a_config_info.generate(one_f_member_list, 1, learner_list, init_config_version));
-  one_f_one_a_config_info.arbitration_member_ = ObMember(addr2, 1);
+  one_f_one_a_config_info.arbitration_member_ = ObMember(addr2, -1);
   EXPECT_EQ(OB_SUCCESS, two_f_one_a_config_info.generate(two_f_member_list, 2, learner_list, init_config_version));
-  two_f_one_a_config_info.arbitration_member_ = ObMember(addr3, 1);
+  two_f_one_a_config_info.arbitration_member_ = ObMember(addr3, -1);
+  EXPECT_EQ(OB_SUCCESS, two_f_config_info.generate(two_f_member_list, 2, learner_list, init_config_version));
   EXPECT_EQ(OB_SUCCESS, four_f_one_a_config_info.generate(four_f_member_list, 4, learner_list, init_config_version));
-  four_f_one_a_config_info.arbitration_member_ = ObMember(addr5, 1);
+  four_f_one_a_config_info.arbitration_member_ = ObMember(addr5, -1);
+  EXPECT_EQ(OB_SUCCESS, four_f_config_info.generate(four_f_member_list, 4, learner_list, init_config_version));
   EXPECT_EQ(OB_SUCCESS, five_f_config_info.generate(five_f_member_list, 5, learner_list, init_config_version));
 
   std::vector<LogConfigInfo> config_info_list;
@@ -244,182 +258,185 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   expect_member_list.push_back(init_member_list);
   // 2. self is added member
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr1, 1), 3, ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr1, -1), 3, ADD_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(true);
   expect_member_list.push_back(init_member_list);
   // 3. normal add member
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 4, ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 4, ADD_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   expect_member_list.back().add_server(addr4);
   // 4. already_in
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 3, ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 3, ADD_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(true);
   expect_member_list.push_back(init_member_list);
   // 5. can not reach majority
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 3, ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 3, ADD_MEMBER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 6. can not reach majority
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 4, REMOVE_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 4, REMOVE_MEMBER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 7. normal remove member
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 2, REMOVE_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 2, REMOVE_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   expect_member_list.back().remove_server(addr3);
   // 8. already removed
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 3, REMOVE_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 3, REMOVE_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(true);
   expect_member_list.push_back(init_member_list);
   // 9. add and num
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 0, ADD_MEMBER_AND_NUM));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, ADD_MEMBER_AND_NUM));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   expect_member_list.back().add_server(addr4);
   // 10. remove and num
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, REMOVE_MEMBER_AND_NUM));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, REMOVE_MEMBER_AND_NUM));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   expect_member_list.back().remove_server(addr3);
   // 11. add learner
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 0, ADD_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, ADD_LEARNER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 12. add learenr which already in member_list
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, ADD_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, ADD_LEARNER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 13. remove learner in member_list
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, REMOVE_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, REMOVE_LEARNER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 14. acceptor -> learner
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, SWITCH_ACCEPTOR_TO_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, SWITCH_ACCEPTOR_TO_LEARNER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   expect_member_list.back().remove_server(addr3);
   // 15. 3F, add_arb_member, replica_num 3
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 3, palf::ADD_ARB_MEMBER));
-  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
-  expect_finished_list.push_back(false);
-  expect_member_list.push_back(init_member_list);
-  // 16. 3F, add_arb_member, replica_num 4
-  config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 4, palf::ADD_ARB_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 3, palf::ADD_ARB_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
-  expect_member_list.back().add_member(ObMember(addr4, 1));
+  expect_member_list.back().add_member(ObMember(addr4, -1));
+  // 16. 3F, add_arb_member, replica_num 4
+  config_info_list.push_back(default_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 4, palf::ADD_ARB_MEMBER));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().add_member(ObMember(addr4, -1));
   // 17. 2F1A, add_arb_member again
   config_info_list.push_back(two_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 4, palf::ADD_ARB_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 4, palf::ADD_ARB_MEMBER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(two_f_member_list);
-  expect_member_list.back().add_member(ObMember(addr3, 1));
-  // 18. 2F1A, replace_arb_member
+  expect_member_list.back().add_member(ObMember(addr3, -1));
+  // 18. 2F1A, remove arb member
   config_info_list.push_back(two_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, palf::REMOVE_ARB_MEMBER_AND_NUM));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, palf::REMOVE_ARB_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(two_f_member_list);
   // 19. 3F, degrade
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, palf::DEGRADE_ACCEPTOR_TO_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, palf::DEGRADE_ACCEPTOR_TO_LEARNER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 20. 2F1A, degrade
   config_info_list.push_back(two_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr2, 1), 0, palf::DEGRADE_ACCEPTOR_TO_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr2, -1), 0, palf::DEGRADE_ACCEPTOR_TO_LEARNER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   expect_member_list.back().remove_server(addr2);
+  // in degrade scenario, new member_list will not take effect after calling append_config_meta_,
+  // so the expect_member_list is init_member_list
   // 21. 3F, upgrade a normal learner
   config_info_list.push_back(default_config_info);
-  config_info_list.back().learnerlist_.add_learner(ObMember(addr4, 1));
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 0, palf::UPGRADE_LEARNER_TO_ACCEPTOR));
+  config_info_list.back().learnerlist_.add_learner(ObMember(addr4, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, palf::UPGRADE_LEARNER_TO_ACCEPTOR));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 22. 3F, upgrade an acceptor, already finish
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 0, palf::UPGRADE_LEARNER_TO_ACCEPTOR));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, palf::UPGRADE_LEARNER_TO_ACCEPTOR));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(true);
   expect_member_list.push_back(init_member_list);
   // 23. 3F, upgrade a degraded learner
   config_info_list.push_back(default_config_info);
-  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr4, 1));
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 0, palf::UPGRADE_LEARNER_TO_ACCEPTOR));
+  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr4, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, palf::UPGRADE_LEARNER_TO_ACCEPTOR));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
-  expect_member_list.back().add_member(ObMember(addr4, 1));
+  expect_member_list.back().add_server(addr4);
   // 24. 2F, add_member(C, 5)
   config_info_list.push_back(two_f_one_a_config_info);
   config_info_list.back().arbitration_member_.reset();
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 5, palf::ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 5, palf::ADD_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(two_f_member_list);
-  expect_member_list.back().add_member(ObMember(addr3, 1));
+  expect_member_list.back().add_member(ObMember(addr3, -1));
   // 25. 1F1A, add_member(C, 5)
   config_info_list.push_back(one_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, 1), 5, palf::ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 5, palf::ADD_MEMBER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(one_f_member_list);
-  expect_member_list.back().add_member(ObMember(addr2, 1));
+  expect_member_list.back().add_member(ObMember(addr2, -1));
   // 26. 2F1A, add_learner
   config_info_list.push_back(two_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 0, palf::ADD_LEARNER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, palf::ADD_LEARNER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
   // 27. 2F1A, add_member
   config_info_list.push_back(two_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 4, palf::ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 4, palf::ADD_MEMBER));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
-  expect_member_list.back().add_member(ObMember(addr4, 1));
+  expect_member_list.back().add_member(ObMember(addr4, -1));
   // 28. 2F1A, add_member_num
   config_info_list.push_back(two_f_one_a_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, 1), 0, palf::ADD_MEMBER_AND_NUM));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, palf::ADD_MEMBER_AND_NUM));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
-  expect_member_list.back().add_member(ObMember(addr4, 1));
+  expect_member_list.back().add_member(ObMember(addr4, -1));
   // 29. 3F, change_replica_num, invalid
   config_info_list.push_back(default_config_info);
   arg_list.push_back(LogConfigChangeArgs(
@@ -457,19 +474,20 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(five_f_member_list);
-  // 33. 3F1A replica_num 5, change_replica_num, 5->4
+  // 33. 3F1A replica_num 5, change_replica_num, 4->3
   EXPECT_EQ(OB_SUCCESS, three_f_num5_config_info.generate(init_member_list, 4, learner_list, init_config_version));
-  three_f_num5_config_info.arbitration_member_ = ObMember(addr4, 1);
+  three_f_num5_config_info.arbitration_member_ = ObMember(addr4, -1);
   config_info_list.push_back(three_f_num5_config_info);
   arg_list.push_back(LogConfigChangeArgs(
-      four_f_member_list,
-      5, 4, palf::CHANGE_REPLICA_NUM));
+      init_member_list,
+      4, 3, palf::CHANGE_REPLICA_NUM));
   expect_ret_list.push_back(OB_SUCCESS);
   expect_finished_list.push_back(false);
-  expect_member_list.push_back(four_f_member_list);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().add_member(ObMember(addr4, -1));
   // 34. 3F1A replica_num 5, change_replica_num, 5->3
   EXPECT_EQ(OB_SUCCESS, three_f_num5_config_info.generate(init_member_list, 4, learner_list, init_config_version));
-  three_f_num5_config_info.arbitration_member_ = ObMember(addr4, 1);
+  three_f_num5_config_info.arbitration_member_ = ObMember(addr4, -1);
   config_info_list.push_back(three_f_num5_config_info);
   arg_list.push_back(LogConfigChangeArgs(
       four_f_member_list,
@@ -477,13 +495,72 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(four_f_member_list);
-  // 26. self is added member, but replica num don't match
+  // 35. self is added member, but replica num don't match
   config_info_list.push_back(default_config_info);
-  arg_list.push_back(LogConfigChangeArgs(ObMember(addr1, 1), 4, ADD_MEMBER));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr1, -1), 4, ADD_MEMBER));
   expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
-
+  // 36. add_arb_member based on 2F
+  config_info_list.push_back(two_f_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 2, palf::ADD_ARB_MEMBER));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(two_f_member_list);
+  expect_member_list.back().add_member(ObMember(addr3, -1));
+  // 37. add_arb_member based on 4F
+  config_info_list.push_back(four_f_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr5, -1), 4, palf::ADD_ARB_MEMBER));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(four_f_member_list);
+  expect_member_list.back().add_member(ObMember(addr5, -1));
+  // 38. 2F1A - abc, degrade b, migrate b to d: add d.
+  config_info_list.push_back(one_f_one_a_config_info);
+  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr3, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, palf::ADD_MEMBER_AND_NUM));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().remove_server(addr3);
+  expect_member_list.back().add_server(addr4);
+  // 39. 2F1A - abc, degrade b, migrate b to d: add d, remove degraded b.
+  config_info_list.push_back(two_f_one_a_config_info);
+  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr4, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, palf::REMOVE_MEMBER_AND_NUM));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 40. 2F1A - abc, degrade b, RS wants to remove b when permanent offline occurs.
+  config_info_list.push_back(one_f_one_a_config_info);
+  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr3, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 2, palf::REMOVE_MEMBER));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().remove_server(addr3);
+  // 41. 2F1A - abc, degrade b, RS wants to switch b to acceptor
+  config_info_list.push_back(one_f_one_a_config_info);
+  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr3, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 3, palf::SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().remove_server(addr3);
+  // 42. 2F1A - abc, degrade b, RS wants to switch b to acceptor
+  config_info_list.push_back(one_f_one_a_config_info);
+  config_info_list.back().degraded_learnerlist_.add_learner(ObMember(addr3, -1));
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 2, palf::SWITCH_ACCEPTOR_TO_LEARNER));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().remove_server(addr3);
+  // 43. leader remove itself
+  config_info_list.push_back(default_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr1, -1), 3, REMOVE_MEMBER));
+  expect_ret_list.push_back(OB_NOT_ALLOW_REMOVING_LEADER);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
   for (int i = 0; i < arg_list.size(); ++i) {
     PALF_LOG(INFO, "test_check_config_change_args begin case", K(i));
     LogConfigMgr cm;
@@ -496,12 +573,13 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     int tmp_ret = OB_SUCCESS;
     LSN prev_lsn;
     prev_lsn.val_ = PALF_INITIAL_LSN_VAL;
-    tmp_ret = cm.apply_config_meta_(1, arg_list[i], already_finished);
+    tmp_ret = cm.append_config_meta_(1, arg_list[i], already_finished);
     config_version = cm.log_ms_meta_.curr_.config_version_;
     EXPECT_EQ(tmp_ret, expect_ret_list[i]) << "ret failed case: " << (i+1);
     EXPECT_EQ(already_finished, expect_finished_list[i]) << "finished failed case:" << (i+1);
-    bool member_equal = (cm.paxos_memberlist_.member_addr_equal(expect_member_list[i]));
-    EXPECT_TRUE(member_equal);
+    // memberlist will not be applied right now when there is arb member, so use alive_paxos_memberlist_
+    bool member_equal = (cm.alive_paxos_memberlist_.member_addr_equal(expect_member_list[i]));
+    EXPECT_TRUE(member_equal) << "ret failed case: " << (i+1);
     if (tmp_ret == OB_SUCCESS) {
       if (already_finished) {
         EXPECT_EQ(config_version, init_config_version) << i;
@@ -521,19 +599,22 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
     LSN prev_lsn;
     prev_lsn.val_ = PALF_INITIAL_LSN_VAL;
     // remove(D, 5)
-    LogConfigChangeArgs remove_d_arg(ObMember(addr4, 1), 5, palf::REMOVE_MEMBER);
-    tmp_ret = cm.apply_config_meta_(1, remove_d_arg, already_finished);
+    LogConfigChangeArgs remove_d_arg(ObMember(addr4, -1), 5, palf::REMOVE_MEMBER);
+    tmp_ret = cm.append_config_meta_(1, remove_d_arg, already_finished);
     EXPECT_EQ(tmp_ret, OB_SUCCESS) << "remove(D, 5)";
     EXPECT_EQ(already_finished, false) << "remove(D, 5)";
     ObMemberList expect_member_list = four_f_member_list;
     expect_member_list.remove_server(addr4);
     expect_member_list.add_server(addr5);
-    bool member_equal = (cm.paxos_memberlist_.member_addr_equal(expect_member_list));
+    // memberlist will not be applied right now when there is arb member, so use alive_paxos_memberlist_
+    bool member_equal = (cm.alive_paxos_memberlist_.member_addr_equal(expect_member_list));
     EXPECT_TRUE(member_equal);
+    // apply config meta
+    cm.config_meta_ = cm.log_ms_meta_;
     // remove(C, 5)
     cm.reset_status();
-    LogConfigChangeArgs remove_c_arg(ObMember(addr3, 1), 5, palf::REMOVE_MEMBER);
-    tmp_ret = cm.apply_config_meta_(1, remove_c_arg, already_finished);
+    LogConfigChangeArgs remove_c_arg(ObMember(addr3, -1), 5, palf::REMOVE_MEMBER);
+    tmp_ret = cm.append_config_meta_(1, remove_c_arg, already_finished);
     EXPECT_EQ(tmp_ret, OB_INVALID_ARGUMENT) << "remove(C, 5)";
     PALF_LOG(INFO, "test_check_config_change_args end case 26");
   }
@@ -552,17 +633,19 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
   {
     LogConfigMgr cm;
     LogConfigInfo config_info;
+    LogConfigVersion sw_config_version;
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr1, config_info, cm, FOLLOWER);
     PALF_LOG(INFO, "curr_leader", "leader", cm.state_mgr_->get_leader());
-    EXPECT_EQ(OB_NOT_MASTER, cm.confirm_start_working_log());
+    EXPECT_EQ(OB_NOT_MASTER, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
   }
   {
     LogConfigMgr cm;
     LogConfigInfo config_info;
+    LogConfigVersion sw_config_version;
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr1, config_info, cm, LEADER, RECONFIRM);
-    EXPECT_EQ(OB_SUCCESS, cm.log_ms_meta_.curr_.learnerlist_.add_learner(ObMember(addr4, 1)));
+    EXPECT_EQ(OB_SUCCESS, cm.log_ms_meta_.curr_.learnerlist_.add_learner(ObMember(addr4, -1)));
     LSN prev_lsn;
     prev_lsn.val_ = PALF_INITIAL_LSN_VAL;
     int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
@@ -575,12 +658,12 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = prev_mode_pid;
     LogConfigVersion config_version, expect_config_version;
     EXPECT_EQ(OB_SUCCESS, expect_config_version.generate(1, 2));
-    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log());
+    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     config_version = cm.log_ms_meta_.curr_.config_version_;
     EXPECT_EQ(config_version, expect_config_version);
     // invoke resend ms log
-    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log());
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     // ack defensive code
     EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 2, expect_config_version));
     EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 1, LogConfigVersion()));
@@ -588,23 +671,23 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr4, 1, expect_config_version));
     EXPECT_EQ(0, cm.ms_ack_list_.get_count());
     EXPECT_EQ(2, cm.resend_log_list_.get_member_number());
-    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log());
+    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     // receive ack from member
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, 1, expect_config_version));
     EXPECT_EQ(1, cm.ms_ack_list_.get_count());
     EXPECT_EQ(2, cm.resend_log_list_.get_member_number());
-    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log());
+    EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr2, 1, expect_config_version));
     EXPECT_EQ(2, cm.ms_ack_list_.get_count());
     EXPECT_EQ(1, cm.resend_log_list_.get_member_number());
     // check if config log is committed
-    EXPECT_EQ(OB_SUCCESS, cm.confirm_start_working_log());
+    EXPECT_EQ(OB_SUCCESS, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     EXPECT_EQ(0, cm.state_);
     EXPECT_EQ(0, cm.ms_ack_list_.get_count());
     EXPECT_EQ(expect_config_version, cm.resend_config_version_);
     EXPECT_EQ(1, cm.resend_log_list_.get_member_number());
     // resend config log
-    cm.last_submit_config_log_ts_ns_ = 0;
+    cm.last_submit_config_log_time_us_ = 0;
     EXPECT_EQ(OB_SUCCESS, cm.try_resend_config_log_(1));
     // receive ack from last member
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, 1, expect_config_version));
@@ -630,16 +713,16 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     LogConfigMgr cm;
     init_test_log_config_env(addr1, config_info, cm, LEADER);
     int64_t proposal_id = INVALID_PROPOSAL_ID;
-    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(proposal_id, 1, LSN(0), 1, cm.log_ms_meta_));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(1, 1, LSN(), 1, cm.log_ms_meta_));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(1, 1, LSN(0), INVALID_PROPOSAL_ID, cm.log_ms_meta_));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(1, 1, LSN(0), 1, LogConfigMeta()));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, 1, LSN(0), 1, cm.log_ms_meta_));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, 1, 1, LSN(), 1, cm.log_ms_meta_));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, 1, 1, LSN(0), INVALID_PROPOSAL_ID, cm.log_ms_meta_));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, 1, 1, LSN(0), 1, LogConfigMeta()));
     proposal_id = 1;
     mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 1;
-    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, INVALID_PROPOSAL_ID, LSN(0), 1, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, INVALID_PROPOSAL_ID, LSN(0), 1, cm.log_ms_meta_));
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
   }
   {
     // submit config log when no mode has been flushed
@@ -652,7 +735,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     const int64_t prev_pid = 0;
     LogConfigChangeArgs args;
     args.type_ = palf::ADD_MEMBER_AND_NUM;
-    args.server_ = common::ObMember(addr4, 1);
+    args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = INVALID_PROPOSAL_ID;
@@ -660,15 +743,15 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = INVALID_PROPOSAL_ID;
-    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
-    EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(proposal_id, 1, prev_lsn, 2, cm.log_ms_meta_));
-    EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(proposal_id, 0, prev_lsn, 2, cm.log_ms_meta_));
+    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
+    EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, 1, prev_lsn, 2, cm.log_ms_meta_));
+    EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, 0, prev_lsn, 2, cm.log_ms_meta_));
     EXPECT_EQ(cm.state_, 1);
-    EXPECT_EQ(cm.last_submit_config_log_ts_ns_, OB_INVALID_TIMESTAMP);
+    EXPECT_EQ(cm.last_submit_config_log_time_us_, OB_INVALID_TIMESTAMP);
     mock_sw_->mock_max_flushed_log_pid_ = 1;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 2;
-    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, 1, prev_lsn, 2, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, 1, prev_lsn, 2, cm.log_ms_meta_));
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
   }
   {
     // submit config log when no logs
@@ -681,7 +764,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     const int64_t prev_pid = 0;
     LogConfigChangeArgs args;
     args.type_ = palf::ADD_MEMBER_AND_NUM;
-    args.server_ = common::ObMember(addr4, 1);
+    args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = INVALID_PROPOSAL_ID;
@@ -689,9 +772,9 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 0;
-    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
-    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     EXPECT_EQ(cm.state_, 1);
   }
   {
@@ -706,7 +789,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     const int64_t prev_pid = 1;
     LogConfigChangeArgs args;
     args.type_ = palf::ADD_MEMBER_AND_NUM;
-    args.server_ = common::ObMember(addr4, 1);
+    args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_pid;
@@ -714,13 +797,13 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_max_flushed_lsn_.val_ = 1000;
     mock_sw_->mock_max_flushed_log_pid_ = 1;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 3;
-    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
-    EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_EQ(cm.last_submit_config_log_ts_ns_, OB_INVALID_TIMESTAMP);
+    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
+    EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
+    EXPECT_EQ(cm.last_submit_config_log_time_us_, OB_INVALID_TIMESTAMP);
     EXPECT_EQ(cm.state_, 1);
     mock_sw_->mock_max_flushed_lsn_.val_ = 20000;
-    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     EXPECT_EQ(cm.state_, 1);
   }
   {
@@ -736,7 +819,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     const int64_t prev_pid = 1;
     LogConfigChangeArgs args;
     args.type_ = palf::ADD_MEMBER_AND_NUM;
-    args.server_ = common::ObMember(addr4, 1);
+    args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_pid;
@@ -744,9 +827,9 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_max_flushed_lsn_.val_ = 11000;
     mock_sw_->mock_max_flushed_log_pid_ = 2;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 3;
-    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
-    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_EQ(OB_EAGAIN, cm.change_config_(args, proposal_id, INIT_ELE_EPOCH, config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(cm.log_ms_meta_.curr_.log_sync_memberlist_, proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     EXPECT_EQ(cm.state_, 1);
   }
   PALF_LOG(INFO, "test_submit_config_log end case");
@@ -770,15 +853,88 @@ TEST_F(TestLogConfigMgr, test_after_flush_config_log)
   EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
   init_test_log_config_env(addr1, config_info, cm);
   cm.parent_ = addr2;
-  cm.register_ts_ns_ = 555;
+  cm.register_time_us_ = 555;
   EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr3, 1)));
   EXPECT_EQ(OB_SUCCESS, cm.after_flush_config_log(cm.log_ms_meta_.curr_.config_version_));
-  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.register_ts_ns_);
-  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.parent_keepalive_ts_ns_);
-  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_ts_ns_);
+  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.register_time_us_);
+  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.parent_keepalive_time_us_);
+  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_time_us_);
   EXPECT_FALSE(cm.parent_.is_valid());
   EXPECT_EQ(0, cm.children_.get_member_number());
   PALF_LOG(INFO, "test_after_flush_config_log end case");
+}
+
+TEST_F(TestLogConfigMgr, test_degrade__upgrade_scenario)
+{
+  PALF_LOG(INFO, "test_degrade_upgrade_scenario begin case");
+  ObMemberList init_member_list;
+  init_member_list.add_server(addr1);
+  init_member_list.add_server(addr2);
+  GlobalLearnerList learner_list;
+  LogConfigVersion init_config_version;
+  init_config_version.generate(1, 1);
+  {
+    LogConfigMgr cm;
+    LogConfigInfo config_info;
+    EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 2, learner_list, init_config_version));
+    config_info.arbitration_member_ = ObMember(addr3, 1);
+    init_test_log_config_env(addr1, config_info, cm, LEADER, ACTIVE);
+    LSN prev_lsn(PALF_INITIAL_LSN_VAL);
+    int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
+    int64_t prev_mode_pid = 1;
+    mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_pid_ = prev_log_proposal_id;
+    mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_mode_pid;
+    mock_sw_->mock_max_flushed_lsn_ = prev_lsn;
+    mock_sw_->mock_max_flushed_log_pid_ = prev_log_proposal_id;
+    mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = prev_mode_pid;
+
+    // degrade
+    LogConfigChangeArgs args(ObMember(addr2, OB_INVALID_TIMESTAMP), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+    LogConfigVersion de_config_version;
+    EXPECT_EQ(OB_EAGAIN, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
+    EXPECT_EQ(1, cm.state_);
+    // member_list will not take effect after append_config_meta_
+    EXPECT_FALSE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_TRUE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    // self ack config log
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
+    // reach majority - 1
+    EXPECT_EQ(OB_EAGAIN, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
+    EXPECT_EQ(1, cm.state_);
+    EXPECT_FALSE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_TRUE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    // ack config log
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
+    // degrade success, switch to INIT state
+    EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
+    EXPECT_EQ(0, cm.state_);
+    EXPECT_FALSE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_FALSE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
+
+    // upgrade
+    LogConfigChangeArgs up_args(ObMember(addr2, OB_INVALID_TIMESTAMP), 0, UPGRADE_LEARNER_TO_ACCEPTOR);
+    LogConfigVersion up_config_version;
+    EXPECT_EQ(OB_EAGAIN, cm.change_config(up_args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
+    EXPECT_EQ(1, cm.state_);
+    // member_list will not take effect after append_config_meta_
+    EXPECT_TRUE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_FALSE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    // self ack config log
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
+    // reach majority - 1
+    EXPECT_EQ(OB_EAGAIN, cm.change_config(up_args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
+    EXPECT_TRUE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_FALSE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_EQ(1, cm.state_);
+    // ack config log
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_version_));
+    // degrade success, switch to INIT state
+    EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
+    EXPECT_EQ(0, cm.state_);
+    EXPECT_TRUE(cm.log_ms_meta_.curr_.log_sync_memberlist_.contains(addr2));
+    EXPECT_TRUE(cm.config_meta_.curr_.log_sync_memberlist_.contains(addr2));
+  }
 }
 
 TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
@@ -809,8 +965,8 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     init_test_log_config_env(addr1, config_info, cm);
     LogLearner child(addr4, 1);
     EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(child));
-    cm.all_learnerlist_.add_learner(ObMember(addr4, 1));
-    child.register_ts_ns_ = 1;
+    cm.all_learnerlist_.add_learner(ObMember(addr4, -1));
+    child.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child, true));
     EXPECT_EQ(RegisterReturn::REGISTER_DONE, mock_log_engine_->reg_ret_);
   }
@@ -824,9 +980,9 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     LogLearner exist_child(addr5, region1, 1);
     EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(child1));
     EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(exist_child));
-    cm.all_learnerlist_.add_learner(ObMember(child1.get_server(), 1));
-    cm.all_learnerlist_.add_learner(ObMember(exist_child.get_server(), 1));
-    child1.register_ts_ns_ = 1;
+    cm.all_learnerlist_.add_learner(ObMember(child1.get_server(), -1));
+    cm.all_learnerlist_.add_learner(ObMember(exist_child.get_server(), -1));
+    child1.register_time_us_ = 1;
     child1.region_ = region1;
     cm.paxos_member_region_map_.update(addr2, region1);
     // child1 register
@@ -839,13 +995,13 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     mock_log_engine_->reset_register_parent_resp_ret();
     // child2 register, child2' region is in a new region
     LogLearner child2(addr6, region2, 1);
-    child2.register_ts_ns_ = 1;
-    cm.all_learnerlist_.add_learner(ObMember(child2.get_server(), 1));
+    child2.register_time_us_ = 1;
+    cm.all_learnerlist_.add_learner(ObMember(child2.get_server(), -1));
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child2, true));
     EXPECT_EQ(RegisterReturn::REGISTER_DONE, mock_log_engine_->reg_ret_);
     EXPECT_TRUE(cm.children_.contains(child2));
     EXPECT_EQ(cm.self_, mock_log_engine_->parent_itself_.server_);
-    EXPECT_EQ(child2.register_ts_ns_, mock_log_engine_->parent_itself_.register_ts_ns_);
+    EXPECT_EQ(child2.register_time_us_, mock_log_engine_->parent_itself_.register_time_us_);
   }
   {
     // register to follower
@@ -855,13 +1011,13 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     init_test_log_config_env(addr1, config_info, cm);
     // diff region
     LogLearner child1(addr4, region1, 1);
-    child1.register_ts_ns_ = 1;
+    child1.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child1, false));
     EXPECT_EQ(REGISTER_DIFF_REGION, mock_log_engine_->reg_ret_);
     mock_log_engine_->reset_register_parent_resp_ret();
     // register success
     LogLearner child2(addr4, 1);
-    child2.register_ts_ns_ = 1;
+    child2.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child2, false));
     EXPECT_EQ(REGISTER_DONE, mock_log_engine_->reg_ret_);
     EXPECT_TRUE(cm.children_.contains(addr4));
@@ -872,7 +1028,7 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     cm.children_.add_learner(LogLearner(addr7, 1));
     cm.children_.add_learner(LogLearner(addr8, 1));
     LogLearner child9(addr9, 1);
-    child9.register_ts_ns_ = 1;
+    child9.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child9, false));
     EXPECT_EQ(REGISTER_CONTINUE, mock_log_engine_->reg_ret_);
     PALF_LOG(INFO, "trace", K(cm.children_), K(mock_log_engine_->candidate_list_));
@@ -898,12 +1054,12 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_resp)
     init_test_log_config_env(addr1, config_info, cm, FOLLOWER);
     EXPECT_EQ(OB_STATE_NOT_MATCH, cm.handle_register_parent_resp(LogLearner(addr4, 1), LogCandidateList(), REGISTER_DONE));
     // register done
-    cm.register_ts_ns_ = 1;
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.register_time_us_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     LogLearner parent(addr4, 1);
-    parent.register_ts_ns_ = 1;
+    parent.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, LogCandidateList(), REGISTER_DONE));
-    EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_ts_ns_);
+    EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_time_us_);
   }
   {
     // register continue
@@ -911,18 +1067,18 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_resp)
     LogConfigInfo config_info;
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr1, config_info, cm, FOLLOWER);
-    cm.register_ts_ns_ = 1;
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.register_time_us_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     LogLearner parent(addr4, 1);
-    parent.register_ts_ns_ = 1;
+    parent.register_time_us_ = 1;
     // cnadidate list is empty
     EXPECT_EQ(OB_ERR_UNEXPECTED, cm.handle_register_parent_resp(parent, LogCandidateList(), REGISTER_CONTINUE));
     LogCandidateList candidate_list;
-    candidate_list.add_learner(common::ObMember(addr2, 1));
+    candidate_list.add_learner(common::ObMember(addr2, -1));
     // register continue
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, candidate_list, REGISTER_CONTINUE));
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
-    EXPECT_EQ(1, cm.register_ts_ns_);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
+    EXPECT_EQ(1, cm.register_time_us_);
   }
   {
     // register not master
@@ -931,19 +1087,19 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_resp)
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr4, config_info, cm, FOLLOWER);
     mock_state_mgr_->leader_ = addr1;
-    cm.register_ts_ns_ = 1;
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.register_time_us_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     LogLearner parent(addr4, 1);
-    parent.register_ts_ns_ = 1;
+    parent.register_time_us_ = 1;
     LogCandidateList candidate_list;
-    candidate_list.add_learner(common::ObMember(addr2, 1));
+    candidate_list.add_learner(common::ObMember(addr2, -1));
     // register continue
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, candidate_list, REGISTER_NOT_MASTER));
-    EXPECT_EQ(cm.last_submit_register_req_ts_ns_, 1);
-    EXPECT_EQ(cm.register_ts_ns_, 1);
+    EXPECT_EQ(cm.last_submit_register_req_time_us_, 1);
+    EXPECT_EQ(cm.register_time_us_, 1);
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, candidate_list, REGISTER_DIFF_REGION));
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
-    EXPECT_GT(cm.register_ts_ns_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
   }
   PALF_LOG(INFO, "test_handle_register_parent_resp end case");
 }
@@ -963,15 +1119,15 @@ TEST_F(TestLogConfigMgr, test_region_changed)
   EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
   init_test_log_config_env(addr5, config_info, cm, FOLLOWER);
   cm.parent_ = addr4;
-  cm.register_ts_ns_ = 1;
-  cm.parent_keepalive_ts_ns_ = 5;
+  cm.register_time_us_ = 1;
+  cm.parent_keepalive_time_us_ = 5;
   mock_state_mgr_->leader_ = addr1;
   EXPECT_EQ(OB_SUCCESS, cm.set_region(region1));
   EXPECT_EQ(region1, cm.region_);
   EXPECT_FALSE(cm.parent_.is_valid());
-  EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
-  EXPECT_GT(cm.register_ts_ns_, 1);
-  EXPECT_EQ(cm.parent_keepalive_ts_ns_, OB_INVALID_TIMESTAMP);
+  EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
+  EXPECT_GT(cm.register_time_us_, 1);
+  EXPECT_EQ(cm.parent_keepalive_time_us_, OB_INVALID_TIMESTAMP);
   PALF_LOG(INFO, "test_region_changed end case");
 }
 
@@ -1042,11 +1198,11 @@ TEST_F(TestLogConfigMgr, test_check_parent_health)
     LogConfigInfo config_info;
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr2, config_info, cm, FOLLOWER);
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     mock_state_mgr_->leader_ = addr1;
     EXPECT_EQ(OB_SUCCESS, cm.check_parent_health());
-    EXPECT_GT(cm.register_ts_ns_, 1);
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
   }
   {
     // first registration
@@ -1056,8 +1212,8 @@ TEST_F(TestLogConfigMgr, test_check_parent_health)
     init_test_log_config_env(addr2, config_info, cm, FOLLOWER);
     mock_state_mgr_->leader_ = addr1;
     EXPECT_EQ(OB_SUCCESS, cm.check_parent_health());
-    EXPECT_GT(cm.register_ts_ns_, 1);
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
   }
   {
     // parent timeout
@@ -1068,8 +1224,8 @@ TEST_F(TestLogConfigMgr, test_check_parent_health)
     mock_state_mgr_->leader_ = addr1;
     cm.parent_ = addr4;
     EXPECT_EQ(OB_SUCCESS, cm.check_parent_health());
-    EXPECT_GT(cm.register_ts_ns_, 1);
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
     EXPECT_FALSE(cm.parent_.is_valid());
   }
   PALF_LOG(INFO, "test_check_parent_health end case");
@@ -1092,10 +1248,10 @@ TEST_F(TestLogConfigMgr, test_handle_retire_msg)
     init_test_log_config_env(addr4, config_info, cm, FOLLOWER);
     mock_state_mgr_->leader_ = addr1;
     cm.parent_ = addr2;
-    cm.register_ts_ns_ = 100;
+    cm.register_time_us_ = 100;
     LogLearner parent(addr2, 100);
     EXPECT_EQ(OB_SUCCESS, cm.handle_retire_child(parent));
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 0);
     EXPECT_FALSE(cm.parent_.is_valid());
   }
   {
@@ -1107,12 +1263,12 @@ TEST_F(TestLogConfigMgr, test_handle_retire_msg)
     EXPECT_EQ(0, cm.children_.get_member_number());
   }
   {
-    // different register_ts_ns
+    // different register_time_us
     LogConfigMgr cm;
     init_test_log_config_env(addr2, config_info, cm, FOLLOWER);
     LogLearner child = LogLearner(addr4, 100);
     cm.children_.add_learner(child);
-    child.register_ts_ns_ = 200;
+    child.register_time_us_ = 200;
     EXPECT_EQ(OB_SUCCESS, cm.handle_learner_keepalive_resp(child));
     EXPECT_EQ(child.keepalive_ts_, OB_INVALID_TIMESTAMP);
   }
@@ -1140,5 +1296,6 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level("INFO");
   PALF_LOG(INFO, "begin unittest::test_log_config_mgr");
   ::testing::InitGoogleTest(&argc, argv);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

@@ -17,6 +17,7 @@
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
+#include "observer/table/ob_table_cache.h"
 
 #define USING_LOG_PREFIX SQL_PC
 
@@ -41,7 +42,7 @@ const char *ObLibCacheRegister::NAME_TYPES[NS_MAX] = { };
 do {                                                                 \
   [&]() {                                                            \
     if (OB_UNLIKELY(NS >= NS_MAX)) {                                 \
-      LOG_ERROR("out of the max type");                              \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max type");                              \
     } else {                                                         \
       NAME_TYPES[NS] = NS_NAME;                                      \
       LC_NS_TYPE_LABELS[NS] = LABEL;                                 \
@@ -54,7 +55,7 @@ do {                                                                 \
 do {                                                                 \
   [&]() {                                                            \
     if (OB_UNLIKELY(NS >= NS_MAX)) {                                 \
-      LOG_ERROR("out of the max type");                              \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max type");                              \
     } else {                                                         \
       LC_CN_ALLOC[NS] = ObLCNodeFactory::create<CN_CLASS>;           \
     }                                                                \
@@ -65,7 +66,7 @@ do {                                                                 \
 do {                                                                 \
   [&]() {                                                            \
     if (OB_UNLIKELY(NS >= NS_MAX)) {                                 \
-      LOG_ERROR("out of the max type");                              \
+      LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "out of the max type");                              \
     } else {                                                         \
       LC_CK_ALLOC[NS] = OBLCKeyCreator::create<CK_CLASS>;            \
     }                                                                \
@@ -97,25 +98,25 @@ void ObLibCacheRegister::register_lc_obj()
 memset(NS_TYPE_LABELS, 0, sizeof(NS_TYPE_LABELS));
 memset(CO_ALLOC, 0, sizeof(CO_ALLOC));
 memset(NAME_TYPES, 0, sizeof(NAME_TYPES));
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_OBJ(ns, ns_name, co_class, label);
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_OBJ(ns, ns_name, co_class, label);
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 }
 
 void ObLibCacheRegister::register_lc_key()
 {
 memset(CK_ALLOC, 0, sizeof(CK_ALLOC));
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_KEY(ns, ck_class);
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_KEY(ns, ck_class);
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 }
 
 void ObLibCacheRegister::register_lc_node()
 {
 memset(CN_ALLOC, 0, sizeof(CN_ALLOC));
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_NODE(ns, cn_class);
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_NODE(ns, cn_class);
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 }
 
 } // namespace common

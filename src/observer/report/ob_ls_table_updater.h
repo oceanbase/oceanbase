@@ -26,18 +26,22 @@ public:
   ObLSTableUpdateTask()
       : tenant_id_(OB_INVALID_TENANT_ID),
         ls_id_(),
+        inner_table_only_(false),
         add_timestamp_(OB_INVALID_TIMESTAMP) {}
   explicit ObLSTableUpdateTask(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
+      const bool inner_table_only,
       const int64_t add_timestamp)
       : tenant_id_(tenant_id),
         ls_id_(ls_id),
+        inner_table_only_(inner_table_only),
         add_timestamp_(add_timestamp) {}
   virtual ~ObLSTableUpdateTask() {}
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
+      const bool inner_table_only,
       const int64_t add_timestamp);
   int assign(const ObLSTableUpdateTask &other);
   virtual void reset();
@@ -54,10 +58,14 @@ public:
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline share::ObLSID get_ls_id() const { return ls_id_; }
   inline int64_t get_add_timestamp() const { return add_timestamp_; }
+  inline bool is_inner_table_only() const { return inner_table_only_; }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(add_timestamp));
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  // 1. For sys tenant, when inner_table_only_ = true, task will be add to meta_tenant_queue_. Otherwise, task will be add to sys_tenant_queue_.
+  // 2. For other tenants, inner_table_only_ is useless.
+  bool inner_table_only_;
   int64_t add_timestamp_;
 };
 

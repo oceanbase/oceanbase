@@ -8,7 +8,9 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file is for implementation of func json_merge
  */
+
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_merge.h"
@@ -28,7 +30,6 @@ ObExprJsonMerge::ObExprJsonMerge(ObIAllocator &alloc)
       MORE_THAN_ONE,
       NOT_ROW_DIMENSION)
 {
-  ;
 }
 
 ObExprJsonMerge::~ObExprJsonMerge()

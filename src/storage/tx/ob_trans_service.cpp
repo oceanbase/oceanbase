@@ -305,7 +305,7 @@ void ObTransService::destroy()
 }
 
 int ObTransService::get_gts_(
-    int64_t &snapshot_version,
+    SCN &snapshot_version,
     MonotonicTs &receive_gts_ts,
     const int64_t trans_expired_time,
     const int64_t stmt_expire_time,
@@ -316,7 +316,7 @@ int ObTransService::get_gts_(
   // and only get gts once during transaction lifecyle
   const MonotonicTs request_ts = MonotonicTs::current_time();
   const int64_t WAIT_GTS_US = 500;
-  int64_t gts = OB_INVALID_TIMESTAMP;
+  SCN gts;
   MonotonicTs tmp_receive_gts_ts;
   if (OB_ISNULL(ts_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -335,12 +335,12 @@ int ObTransService::get_gts_(
         } else {
           ob_usleep(WAIT_GTS_US);
         }
-      } else if (0 >= gts) {
+      } else if (!gts.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid gts, unexpected error", KR(ret), K(gts));
       } else {
-        const int64_t max_commit_ts = tx_version_mgr_.get_max_commit_ts(true);
-        snapshot_version = max(max_commit_ts, gts);
+        const SCN max_commit_ts = tx_version_mgr_.get_max_commit_ts(true);
+        snapshot_version = SCN::max(max_commit_ts, gts);
         receive_gts_ts = tmp_receive_gts_ts;
       }
     } while (OB_EAGAIN == ret);
@@ -511,7 +511,7 @@ void ObTransService::handle(void *task)
   UNUSED(ret); //make compiler happy
 }
 
-int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, int64_t &min_prepare_version)
+int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -526,7 +526,7 @@ int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, int
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(tx_ctx_mgr_.get_ls_min_uncommit_tx_prepare_version(ls_id, min_prepare_version))) {
     TRANS_LOG(WARN, "ObPartTransCtxMgr set memstore version error", KR(ret), K(ls_id));
-  } else if (min_prepare_version <= 0) {
+  } else if (!min_prepare_version.is_valid()) {
     TRANS_LOG(ERROR, "invalid min prepare version, unexpected error", K(ls_id), K(min_prepare_version));
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -535,7 +535,7 @@ int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, int
   return ret;
 }
 
-int ObTransService::get_min_undecided_log_ts(const ObLSID &ls_id, int64_t &log_ts)
+int ObTransService::get_min_undecided_log_ts(const ObLSID &ls_id, SCN &log_ts)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -547,8 +547,33 @@ int ObTransService::get_min_undecided_log_ts(const ObLSID &ls_id, int64_t &log_t
   } else if (!ls_id.is_valid()) {
     TRANS_LOG(WARN, "invalid argument", K(ls_id));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(tx_ctx_mgr_.get_min_undecided_log_ts(ls_id, log_ts))) {
+  } else if (OB_FAIL(tx_ctx_mgr_.get_min_undecided_scn(ls_id, log_ts))) {
     TRANS_LOG(WARN, "get min undecided log ts failed", KR(ret), K(ls_id), K(log_ts));
+  }
+  return ret;
+}
+
+int ObTransService::get_max_decided_scn(const share::ObLSID &ls_id, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+
+  ObLSTxCtxMgr *ls_tx_mgr_ptr = nullptr;
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (!ls_id.is_valid()) {
+    TRANS_LOG(WARN, "invalid argument", K(ls_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_mgr_ptr))) {
+    TRANS_LOG(WARN, "get ls tx ctx mgr failed", K(ret));
+  } else {
+    if (OB_FAIL(ls_tx_mgr_ptr->get_max_decided_scn(scn))) {
+    TRANS_LOG(WARN, "get max decided scn failed", K(ret));
+    }
+    tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_mgr_ptr);
   }
   return ret;
 }
@@ -597,7 +622,7 @@ int ObTransService::remove_callback_for_uncommited_txn(memtable::ObMemtable* mt)
  * @pkey : not NULL if this is a single local partition stmt,
  *         will try local publish version
  */
-int ObTransService::get_weak_read_snapshot(const uint64_t tenant_id, int64_t &snapshot_version)
+int ObTransService::get_weak_read_snapshot(const uint64_t tenant_id, SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObIWeakReadService *wrs = GCTX.weak_read_service_;
@@ -814,6 +839,8 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
   ObStoreCtx store_ctx;
   ObTxReadSnapshot snapshot;
   snapshot.init_none_read();
+  concurrent_control::ObWriteFlag write_flag;
+  write_flag.set_is_mds();
   if (OB_UNLIKELY(!tx_desc.is_valid() ||
                   !ls_id.is_valid() ||
                   OB_ISNULL(buf) ||
@@ -821,7 +848,7 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_desc), K(ls_id), KP(buf), K(buf_len));
   } else if (FALSE_IT(store_ctx.ls_id_ = ls_id)) {
-  } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, store_ctx))) {
+  } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, write_flag, store_ctx))) {
     TRANS_LOG(WARN, "get store ctx failed", KR(ret), K(tx_desc), K(ls_id));
   } else {
     do {
@@ -847,7 +874,7 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
   return ret;
 }
 
-int ObTransService::get_max_commit_version(int64_t &commit_version) const
+int ObTransService::get_max_commit_version(SCN &commit_version) const
 {
  int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

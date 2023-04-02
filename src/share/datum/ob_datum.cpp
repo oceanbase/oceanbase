@@ -72,12 +72,13 @@ ObObjDatumMapType ObDatum::get_obj_datum_map_type(const ObObjType type)
     OBJ_DATUM_STRING,         // ObURowID
     OBJ_DATUM_STRING,         // ObLobType
     OBJ_DATUM_STRING,         // ObJsonType
+    OBJ_DATUM_STRING,         // ObGeometryType
   };
   static_assert(sizeof(maps) / sizeof(maps[0]) == ObMaxType,
       "new added type should extend this map");
   ObObjDatumMapType t = OBJ_DATUM_MAPPING_MAX;
   if (type < 0 || type >= ObMaxType) {
-    LOG_ERROR("invalid obj type", K(type));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid obj type", K(type));
   } else {
     t = maps[type];
   }
@@ -105,7 +106,7 @@ uint32_t ObDatum::get_reserved_size(const ObObjDatumMapType type)
 
   uint32_t res_size = 0;
   if (type >= OBJ_DATUM_MAPPING_MAX) {
-    LOG_ERROR("invalid obj type", K(type));
+    LOG_ERROR_RET(common::OB_INVALID_ARGUMENT, "invalid obj type", K(type));
   } else {
     res_size = OBOBJ_DATUM_MAP_TYPE_TO_RES_SIZE_MAP[type];
   }

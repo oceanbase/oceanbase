@@ -18,6 +18,7 @@
 #include "logservice/palf/palf_iterator.h"          //PalfBufferIterator
 #include "ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
+#include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 
 namespace oceanbase
 {
@@ -36,6 +37,7 @@ namespace share
 class ObLSTableOperator;
 struct ObLSAttr;
 struct ObLSRecoveryStat;
+class SCN;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -65,34 +67,40 @@ public:
   ObRecoveryLSService() : inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL) {}
   virtual ~ObRecoveryLSService() {}
-  static int mtl_init(ObRecoveryLSService *&ka);
   int init();
   void destroy();
   virtual void do_work() override;
+  DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
  //get log iterator by start_scn
- int seek_log_iterator_(const int64_t sync_scn,
+ int seek_log_iterator_(const share::SCN &syn_scn,
                         palf::PalfBufferIterator &iterator);
- int process_ls_log_(const int64_t start_scn ,palf::PalfBufferIterator &iterator);
+ int process_ls_log_(const ObAllTenantInfo &tenant_info,
+                     share::SCN &start_scn,
+                     palf::PalfBufferIterator &iterator);
+ int process_upgrade_log_(const transaction::ObTxBufferNode &node);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
-                     const int64_t sync_ts);
+                     const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
-                        const int64_t sync_ts);
+                        const share::SCN &syn_scn);
  int process_ls_operator_(const share::ObLSAttr &ls_attr,
-                          const int64_t sync_ts);
+                          const share::SCN &syn_scn);
  int create_new_ls_(const share::ObLSAttr &ls_attr,
-                    const int64_t sync_ts,
+                    const share::SCN &syn_scn,
                     common::ObMySQLTransaction &trans);
  int process_recovery_ls_manager();
- int construct_ls_recovery_stat(const int64_t sync_ts,
+ int construct_ls_recovery_stat(const share::SCN &syn_scn,
                                 share::ObLSRecoveryStat &ls_stat);
  //wait other ls is larger than sycn ts
- int check_valid_to_operator_ls_(const int64_t sync_scn);
- int check_can_do_recovery_();
- //check restore finish and update sync scn to recovery_unitl_scn
- int update_sys_ls_restore_finish_();
+ int check_valid_to_operator_ls_(const share::ObLSAttr &ls_attr,
+                                 const share::SCN &syn_scn);
+ int check_can_do_recovery_(const ObAllTenantInfo &tenant_info);
  //readable scn need report
- int report_sys_ls_recovery_stat_(const int64_t sync_scn);
+ int report_sys_ls_recovery_stat_(const share::SCN &sync_scn);
+ void try_tenant_upgrade_end_();
+ int get_min_data_version_(uint64_t &compatible);
+ int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
+     const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
 private:
   bool inited_;
   uint64_t tenant_id_;

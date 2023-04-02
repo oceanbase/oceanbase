@@ -29,8 +29,6 @@ public:
                             ObRawExprCopier &expr_copier,
                             const ObDMLStmt &other) override;
   int assign(const ObMergeStmt &other);
-  virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
-                                      const common::ObIArray<ObRawExpr*> &new_exprs) override;
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
   ObMergeTableInfo &get_merge_table_info() { return table_info_; }
   const ObMergeTableInfo &get_merge_table_info() const { return table_info_; }
@@ -91,8 +89,7 @@ public:
   int part_key_has_subquery(bool &has) const ;
   int part_key_has_auto_inc(bool &has) const;
   DECLARE_VIRTUAL_TO_STRING;
-protected:
-  virtual int inner_get_relation_exprs(RelExprCheckerBase &expr_checker);
+
 private:
   ObMergeTableInfo table_info_;
 

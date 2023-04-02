@@ -86,7 +86,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
     if (replace_ctdef != nullptr) {
       OB_UNIS_ADD_LEN(*replace_ctdef);
     } else {
-      LOG_WARN("replace_ctdef is null unexpected");
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "replace_ctdef is null unexpected");
     }
   }
   OB_UNIS_ADD_LEN(only_one_unique_key_);
@@ -94,6 +94,26 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   return len;
 }
 
+int ObTableReplaceOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    ObReplaceCtDef *replace_ctdef = MY_SPEC.replace_ctdefs_.at(0);
+    const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
+    const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
+    if (OB_NOT_NULL(ins_ctdef) || OB_NOT_NULL(del_ctdef)) {
+      if (has_before_row_trigger(*ins_ctdef) || has_after_row_trigger(*ins_ctdef)
+          || has_before_row_trigger(*del_ctdef) || has_after_row_trigger(*del_ctdef)) {
+        execute_single_row_ = true;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ins_ctdef or del_ctdef of primary table is nullptr", K(ret));
+    }
+  }
+  return ret;
+}
 
 int ObTableReplaceOp::inner_open()
 {
@@ -253,7 +273,10 @@ OB_INLINE int ObTableReplaceOp::load_all_replace_row(bool &is_iter_end)
   int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
                                   simulate_batch_row_cnt : DEFAULT_REPLACE_BATCH_ROW_COUNT;
   LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));
-  while (OB_SUCC(ret) &&  ++row_cnt < default_row_batch_cnt) {
+  if (execute_single_row_) {
+    default_row_batch_cnt = 1;
+  }
+  while (OB_SUCC(ret) &&  ++row_cnt <= default_row_batch_cnt) {
     // todo @kaizhan.dkz @wangbo.wb 增加行前trigger逻辑在这里
     // 新行的外键检查也在这里做
     if (OB_FAIL(get_next_row_from_child())) {
@@ -287,6 +310,7 @@ int ObTableReplaceOp::insert_row_to_das(bool need_do_trigger)
     ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(i);
     ObInsRtDef &ins_rtdef = replace_rtdef.ins_rtdef_;
     ObDASTabletLoc *tablet_loc = nullptr;
+    ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
     ++ins_rtdef.cur_row_num_;
     if (need_do_trigger &&
         OB_FAIL(ObDMLService::init_heap_table_pk_for_ins(ins_ctdef, eval_ctx_))) {
@@ -302,15 +326,11 @@ int ObTableReplaceOp::insert_row_to_das(bool need_do_trigger)
     } else if (need_do_trigger &&
         OB_FAIL(ObDMLService::set_heap_table_hidden_pk(ins_ctdef, tablet_loc->tablet_id_, eval_ctx_))) {
       LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc), K(ins_ctdef));
-    } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_))) {
+    } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, modify_row.new_row_))) {
       LOG_WARN("insert row with das failed", K(ret));
     // TODO(yikang): fix trigger related for heap table
-    } else if (need_do_trigger && ins_ctdef.is_primary_index_
-               && OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                             ins_ctdef.trig_ctdef_,
-                                                             ins_rtdef.trig_rtdef_,
-                                                             ObTriggerEvents::get_insert_event()))) {
-      LOG_WARN("failed to handle before trigger", K(ret));
+    } else if (need_do_trigger && need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
     } else {
       LOG_DEBUG("insert one row", KPC(tablet_loc), "ins row",
                 ROWEXPR2STR(eval_ctx_, ins_ctdef.new_row_));
@@ -330,6 +350,7 @@ int ObTableReplaceOp::delete_row_to_das(bool need_do_trigger)
     const ObDelCtDef &del_ctdef = *(replace_ctdef.del_ctdef_);
     ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(i);
     ObDelRtDef &del_rtdef = replace_rtdef.del_rtdef_;
+    ObChunkDatumStore::StoredRow *stored_row = nullptr;
     if (need_do_trigger &&
         OB_FAIL(ObDMLService::process_delete_row(del_ctdef, del_rtdef, is_skipped, *this))) {
       LOG_WARN("process delete row failed", K(ret));
@@ -339,7 +360,7 @@ int ObTableReplaceOp::delete_row_to_das(bool need_do_trigger)
       break;
     } else if (OB_FAIL(calc_delete_tablet_loc(del_ctdef, del_rtdef, tablet_loc))) {
       LOG_WARN("calc partition key failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef, del_rtdef, tablet_loc, dml_rtctx_))) {
+    } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef, del_rtdef, tablet_loc, dml_rtctx_, stored_row))) {
       LOG_WARN("insert row with das failed", K(ret));
     } else {
       LOG_DEBUG("delete one row", KPC(tablet_loc), "del row",
@@ -402,8 +423,8 @@ int ObTableReplaceOp::get_next_conflict_rowkey(DASTaskIter &task_iter)
     } else if (OB_ISNULL(stored_row = ssr.get_store_row())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("stored row is null", K(ret));
-    } else if (OB_FAIL(stored_row->to_expr_skip_const(
-            conflict_checker_.checker_ctdef_.data_table_rowkey_expr_, conflict_checker_.eval_ctx_))) {
+    } else if (OB_FAIL(stored_row->to_expr(
+            conflict_checker_.checker_ctdef_.data_table_rowkey_expr_,conflict_checker_.eval_ctx_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next row from result iterator failed", K(ret));
       }
@@ -441,6 +462,8 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task())) {
       LOG_WARN("fail to post all das task", K(ret));
+    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
+      LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       LOG_DEBUG("try insert is not duplicated", K(ret));
     } else if (OB_FAIL(fetch_conflict_rowkey())) {
@@ -460,6 +483,8 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to prepare final das task", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task())) {
       LOG_WARN("do insert rows post process failed", K(ret));
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
+      LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
 
     if (OB_SUCC(ret) && !is_iter_end) {
@@ -499,56 +524,78 @@ int ObTableReplaceOp::replace_conflict_row_cache()
   ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(0);
   ObInsRtDef &ins_rtdef = replace_rtdef.ins_rtdef_;
   ObDelRtDef &del_rtdef = replace_rtdef.del_rtdef_;
+  const ObChunkDatumStore::StoredRow *replace_row = NULL;
 
   NG_TRACE_TIMES(2, replace_start_shuff);
-  OZ(replace_row_store_.begin(replace_row_iter));
-  const ObChunkDatumStore::StoredRow *replace_row = NULL;
+  if (OB_FAIL(replace_row_store_.begin(replace_row_iter))) {
+    LOG_WARN("begin replace_row_store failed", K(ret), K(replace_row_store_.get_row_cnt()));
+  }
   // 构建冲突的hash map的时候也使用的是column_ref， 回表也是使用的column_ref expr来读取scan的结果
   // 因为constarain_info中使用的column_ref expr，所以此处需要使用table_column_old_exprs (column_ref exprs)
-  while (OB_SUCC(ret) && OB_SUCC(replace_row_iter.get_next_row(get_primary_table_new_row(),
-                                                               eval_ctx_,
-                                                               &replace_row))) {
+  while (OB_SUCC(ret) && OB_SUCC(replace_row_iter.get_next_row(replace_row))) {
     constraint_values.reuse();
     ObChunkDatumStore::StoredRow *insert_new_row = NULL;
-    OZ(conflict_checker_.check_duplicate_rowkey(replace_row,
-                                                constraint_values,
-                                                false));
+    if (OB_ISNULL(replace_row)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replace_row is null", K(ret));
+    } else if (OB_FAIL(conflict_checker_.check_duplicate_rowkey(replace_row,
+                                                                constraint_values,
+                                                                false))) {
+      LOG_WARN("check rowkey from conflict_checker failed", K(ret), KPC(replace_row));
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < constraint_values.count(); ++i) {
       //delete duplicated row
       const ObChunkDatumStore::StoredRow *delete_row = constraint_values.at(i).current_datum_row_;
+      ObDMLModifyRowNode modify_row(this, &del_ctdef, &del_rtdef, ObDmlEventType::DE_DELETING);
       bool same_row = false;
-      CK(OB_NOT_NULL(delete_row));
-      // dup checker依赖table column exprs
-      OZ(delete_row->to_expr_skip_const(get_primary_table_old_row(), eval_ctx_));
-
-      // 外键的检查已经下方到dml_service逻辑中了
-      OZ(ObDMLService::process_delete_row(del_ctdef, del_rtdef, skip_delete, *this));
-      OZ(conflict_checker_.delete_old_row(delete_row, ObNewRowSource::FROM_INSERT));
-      if (OB_SUCC(ret) && OB_LIKELY(MY_SPEC.only_one_unique_key_)) {
-        OZ(check_values(same_row, replace_row, delete_row));
+      if (OB_ISNULL(delete_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("delete row failed", K(ret));
+      } else if (OB_FAIL(delete_row->to_expr(get_primary_table_old_row(), eval_ctx_))) {
+        // dup checker依赖table column exprs
+        LOG_WARN("flush delete_row to old_row failed", K(ret), KPC(delete_row), K(get_primary_table_old_row()));
+      } else if (OB_FAIL(ObDMLService::process_delete_row(del_ctdef, del_rtdef, skip_delete, *this))) {
+        LOG_WARN("process delete row failed", K(ret), KPC(delete_row), K(get_primary_table_old_row()));
+      } else if (OB_FAIL(conflict_checker_.delete_old_row(delete_row, ObNewRowSource::FROM_INSERT))) {
+        LOG_WARN("delete old_row from conflict checker failed", K(ret), KPC(delete_row));
+      } else if (MY_SPEC.only_one_unique_key_) {
+        if (OB_FAIL(check_values(same_row, replace_row, delete_row))) {
+          LOG_WARN("check value failed", K(ret), KPC(replace_row), KPC(delete_row));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        modify_row.old_row_ = const_cast<ObChunkDatumStore::StoredRow *>(delete_row);
+        if (need_after_row_process(del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+          LOG_WARN("failed to push dml modify row to modified row list", K(ret));
+        }
       }
       if (OB_SUCC(ret) && !same_row) {
         delete_rows_++;
       }
     }
 
-    OZ(replace_row->to_expr_skip_const(get_primary_table_new_row(), eval_ctx_));
-    OZ(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped));
-    // TODO(yikang): fix trigger related for heap table
-    if (OB_SUCC(ret) && ins_ctdef.is_primary_index_ && OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                                   ins_ctdef.trig_ctdef_,
-                                                                   ins_rtdef.trig_rtdef_,
-                                                                   ObTriggerEvents::get_insert_event()))) {
-      LOG_WARN("failed to handle before trigger", K(ret));
-    }
-    if (OB_SUCC(ret) && OB_UNLIKELY(is_skipped)) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(replace_row->to_expr(get_primary_table_new_row(), eval_ctx_))) {
+      LOG_WARN("flush replace_row to exprs failed", K(ret), KPC(replace_row));
+    } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
+      LOG_WARN("convert exprs to stored_row failed", K(ret), KPC(insert_new_row));
+    } else if (OB_UNLIKELY(is_skipped)) {
       continue;
+    } else if (OB_FAIL(conflict_checker_.convert_exprs_to_stored_row(get_primary_table_new_row(),
+                                                                     insert_new_row))) {
+      LOG_WARN("convert exprs to stored_row failed", K(ret), KPC(insert_new_row));
+    } else if (OB_FAIL(conflict_checker_.insert_new_row(insert_new_row, ObNewRowSource::FROM_INSERT))) {
+      LOG_WARN("insert new to conflict_checker failed", K(ret), KPC(insert_new_row));
     }
-    OZ(conflict_checker_.convert_exprs_to_stored_row(get_primary_table_new_row(),
-                                                     insert_new_row));
-    // add new row to conflict_checker map
-    // 在insert_new_row 函数内部，会把replace_row to_expr到table_column_exprs<column_ref type>中
-    OZ(conflict_checker_.insert_new_row(insert_new_row, ObNewRowSource::FROM_INSERT));
+    if (OB_SUCC(ret)) {
+      ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
+      modify_row.new_row_ = insert_new_row;
+      if (need_after_row_process(del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
+      }
+    }
   } // while row store end
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   return ret;
@@ -577,7 +624,7 @@ int ObTableReplaceOp::do_delete(ObConflictRowMap *primary_map)
     LOG_DEBUG("get one constraint_value from primary hash map", K(constraint_value));
     if (NULL != constraint_value.baseline_datum_row_) {
       //baseline row is not empty, delete it
-      if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr_skip_const(
+      if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr(
           get_primary_table_old_row(), eval_ctx_))) {
         LOG_WARN("stored row to expr faild", K(ret));
       } else if (OB_FAIL(delete_row_to_das(false))) {
@@ -601,7 +648,7 @@ int ObTableReplaceOp::do_insert(ObConflictRowMap *primary_map)
     ObConflictValue &constraint_value = start_row_iter->second;
     if (OB_SUCC(ret) && NULL != constraint_value.current_datum_row_) {
       //current row is not empty, insert new row
-      if (OB_FAIL(constraint_value.current_datum_row_->to_expr_skip_const(
+      if (OB_FAIL(constraint_value.current_datum_row_->to_expr(
           get_primary_table_new_row(), eval_ctx_))) {
         LOG_WARN("stored row to expr faild", K(ret));
       } else if (OB_FAIL(insert_row_to_das(false))) {
@@ -702,6 +749,7 @@ int ObTableReplaceOp::reset_das_env()
     LOG_WARN("close all das task failed", K(ret));
   } else {
     dml_rtctx_.das_ref_.reuse();
+    dml_modify_rows_.clear();
   }
 
   // 因为第二次插入不需要fetch conflict result了，如果有conflict
@@ -729,6 +777,7 @@ int ObTableReplaceOp::reuse()
     if (OB_FAIL(conflict_checker_.reuse())) {
       LOG_WARN("fail to reuse conflict checker", K(ret));
     } else {
+      dml_modify_rows_.clear();
       replace_row_store_.reset();
     }
   }

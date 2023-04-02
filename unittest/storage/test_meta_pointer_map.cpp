@@ -30,6 +30,11 @@ using namespace share;
 namespace storage
 {
 
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+
 template<>
 int ObMetaPointerMap<ObTabletMapKey, ObTablet>::load_meta_obj(
     const ObTabletMapKey &key,
@@ -54,7 +59,7 @@ public:
   void FakeLs(ObLS &ls);
 
 private:
-  static constexpr uint64_t TEST_TENANT_ID = 500;
+  static constexpr uint64_t TEST_TENANT_ID = OB_SERVER_TENANT_ID;
   ObMetaPointerMap<ObTabletMapKey, ObTablet> tablet_map_;
   ObTenantBase tenant_base_;
 };
@@ -67,7 +72,8 @@ TestMetaPointerMap::TestMetaPointerMap()
 
 void TestMetaPointerMap::SetUp()
 {
-  int ret = tablet_map_.init(100000000L, "TabletMap", 15 * 1024L * 1024L * 1024L, 8 * 1024L * 1024L,
+  int ret = tablet_map_.init(1000L, OB_SERVER_TENANT_ID,
+      "TabletMap", 15 * 1024L * 1024L * 1024L, 8 * 1024L * 1024L,
           common::OB_MALLOC_NORMAL_BLOCK_SIZE);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 

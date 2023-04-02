@@ -31,6 +31,7 @@
 #include "lib/utility/serialization.h"
 #include "lib/utility/utility.h"
 #include "rpc/frame/ob_net_easy.h"
+#include "rpc/frame/ob_req_transport.h"
 #include "io/easy_negotiation.h"
 
 using namespace oceanbase::common;
@@ -84,6 +85,41 @@ public:
   int32_t data_len_;
 };
 
+int ObNetKeepAliveData::encode(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (pos >= buf_len) {
+    ret = OB_SIZE_OVERFLOW;
+  } else if (FALSE_IT(pos += 1)) { // dummy for compatible
+    // not reach
+  }
+  OB_UNIS_ENCODE(rs_server_status_);
+  OB_UNIS_ENCODE(start_service_time_);
+  return ret;
+}
+
+int ObNetKeepAliveData::decode(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (pos >= data_len) {
+    ret  = OB_DESERIALIZE_ERROR;
+  } else if (FALSE_IT(pos += 1)) { // dummy for compatible
+    // not reach
+  }
+  OB_UNIS_DECODE(rs_server_status_);
+  OB_UNIS_DECODE(start_service_time_);
+  return ret;
+}
+
+int32_t ObNetKeepAliveData::get_encoded_size() const
+{
+  int32_t len = 0;
+  len += 1; // dummy for compatible
+  OB_UNIS_ADD_LEN(rs_server_status_);
+  OB_UNIS_ADD_LEN(start_service_time_);
+  return len;
+}
+
 enum {
   UNCONNECT = 0,
   CONNECTING,
@@ -109,6 +145,16 @@ struct server
 
 typedef ObNetKeepAlive::client client;
 typedef ObNetKeepAlive::rpc_server rpc_server;
+
+void __attribute__((weak)) keepalive_init_data(ObNetKeepAliveData &ka_data)
+{
+  // do-nothing
+}
+
+void __attribute__((weak)) keepalive_make_data(ObNetKeepAliveData &ka_data)
+{
+  // do-nothing
+}
 
 rpc_server *client2rs(client *c)
 {
@@ -187,28 +233,54 @@ int ObNetKeepAlive::set_pipefd_listen(int pipefd)
   return ret;
 }
 
-const char *addr_to_string(easy_addr_t &addr)
+const char *addr_to_string(const easy_addr_t &addr)
 {
-  static __thread char buf[128];
-  easy_inet_addr_to_str(&addr, buf, sizeof buf);
-  return buf;
+  ObAddr ob_addr;
+  ez2ob_addr(ob_addr, const_cast<easy_addr_t&>(addr));
+  return to_cstring(ob_addr);
 }
 
-bool ObNetKeepAlive::in_black(easy_addr_t &addr)
+int ObNetKeepAlive::in_black(const easy_addr_t &ez_addr, bool &in_black, ObNetKeepAliveData *ka_data)
 {
-  bool in_black = false;
-  rpc_server *rs = regist_rs_if_need(addr);
+  int ret = OB_SUCCESS;
+  in_black = false;
+  if (ka_data != nullptr) {
+    keepalive_init_data(*ka_data);
+  }
+
+  rpc_server *rs = regist_rs_if_need(ez_addr);
   if (rs != NULL) {
     int64_t last_wts = ATOMIC_LOAD(&rs->last_write_ts_);
     if (get_usec() - last_wts < MAX_CREDIBLE_WINDOW) {
       in_black = rs->in_black_;
+      if (ka_data != nullptr) {
+        memcpy(ka_data, &rs->ka_data_, sizeof(rs->ka_data_));
+      }
     } else {
+      ret = OB_ERR_UNEXPECTED;
       if (REACH_TIME_INTERVAL(1000000)) {
-        _LOG_WARN("keepalive thread maybe not work, last_write_ts: %ld", last_wts);
+        _LOG_WARN_RET(OB_ERR_UNEXPECTED, "keepalive thread maybe not work, last_write_ts: %ld", last_wts);
       }
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
   }
-  return in_black;
+  return ret;
+}
+
+int ObNetKeepAlive::in_black(const common::ObAddr &addr, bool &in_blacklist, ObNetKeepAliveData *ka_data)
+{
+  easy_addr_t ez_addr = to_ez_addr(addr);
+  return in_black(ez_addr, in_blacklist, ka_data);
+}
+
+bool ObNetKeepAlive::in_black(const easy_addr_t &addr)
+{
+  bool in_blacklist = false;
+  if (OB_SUCCESS != in_black(addr, in_blacklist, NULL)) {
+    in_blacklist = false;
+  }
+  return in_blacklist;
 }
 
 void ObNetKeepAlive::mark_white_black()
@@ -255,7 +327,7 @@ void ObNetKeepAlive::mark_white_black()
       rs->in_black_ = 0;
     } else {
       if (!rs->in_black_) {
-        _LOG_WARN("mark black, addr: %s", addr_to_string(rs->svr_addr_));
+        _LOG_INFO("mark black, addr: %s", addr_to_string(rs->svr_addr_));
         rs->in_black_ts_ = now;
       }
       rs->in_black_ = 1;
@@ -263,7 +335,7 @@ void ObNetKeepAlive::mark_white_black()
   }
 }
 
-rpc_server *get_rpc_server(easy_addr_t *addr, rpc_server **rss, int32_t n_rs)
+rpc_server *get_rpc_server(const easy_addr_t *addr, rpc_server **rss, int32_t n_rs)
 {
   rpc_server *ret = NULL;
 
@@ -273,11 +345,12 @@ rpc_server *get_rpc_server(easy_addr_t *addr, rpc_server **rss, int32_t n_rs)
       if (!rs) {
         rpc_server *s = (rpc_server*)ob_malloc(sizeof(rpc_server), "rpc_server");
         if (NULL == s) {
-          _LOG_WARN("alloc memory failed");
+          _LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
           break;
         }
         bzero(s, sizeof(rpc_server));
         s->svr_addr_ = *addr;
+        keepalive_init_data(s->ka_data_);
         rpc_server *ns = ATOMIC_VCAS(&rs, NULL, s);
         if (ns != NULL) {
           ob_free(s);
@@ -299,7 +372,7 @@ rpc_server *get_rpc_server(easy_addr_t *addr, rpc_server **rss, int32_t n_rs)
   return ret;
 }
 
-rpc_server *ObNetKeepAlive::regist_rs_if_need(easy_addr_t &addr)
+rpc_server *ObNetKeepAlive::regist_rs_if_need(const easy_addr_t &addr)
 {
   return get_rpc_server(&addr, rss_, MAX_RS_COUNT);
 }
@@ -426,14 +499,15 @@ void ObNetKeepAlive::do_server_loop()
           if (n <= 0) break;
           char buf[128];
           const int64_t buf_len = sizeof buf;
-          int32_t data_len = 1;
-          Header header(data_len);
+          ObNetKeepAliveData ka_data;
+          keepalive_make_data(ka_data);
+          Header header(ka_data.get_encoded_size());
           int tmp_ret = OB_SUCCESS;
           int64_t pos = 0;
           if (OB_SUCCESS != (tmp_ret = header.encode(buf, buf_len, pos))) {
-            _LOG_WARN("encode failed, ret: %d, pos: %ld", tmp_ret, pos);
-          } else if (FALSE_IT(pos += data_len)/*TODO: encode data*/) {
-            _LOG_WARN("encode data failed: %d", data_len);
+            _LOG_WARN("encode header failed, ret: %d, pos: %ld", tmp_ret, pos);
+          } else if (OB_SUCCESS != (tmp_ret = ka_data.encode(buf, buf_len, pos))) {
+            _LOG_WARN("encode ka_data failed, ret: %d, pos: %ld", tmp_ret, pos);
           } else {
             while ((n = write(ev_fd, buf, pos)) < 0 && errno == EINTR);
             need_disconn = n < pos;
@@ -523,6 +597,7 @@ void ObNetKeepAlive::do_client_loop()
             ssize_t n = -1;
             char buf[128];
             Header header;
+            ObNetKeepAliveData ka_data;
             int32_t read_len = header.get_encoded_size();
             while ((n = read(ev_fd, buf, read_len)) < 0 && errno == EINTR);
             if (n <= 0) break;
@@ -537,9 +612,17 @@ void ObNetKeepAlive::do_client_loop()
                 _LOG_WARN("data buf not enough: %d", header.data_len_);
               } else {
                 while ((n = read(ev_fd, data, header.data_len_)) < 0 && errno == EINTR);
+                pos = 0;
+                if (OB_SUCCESS != (tmp_ret = ka_data.decode(data, header.data_len_, pos))) {
+                  _LOG_WARN("decode failed, ret: %d, pos: %ld", tmp_ret, pos);
+                }
               }
             }
-            do_rpin(client2rs(c));
+            if (OB_SUCCESS == tmp_ret) {
+              memcpy(&rs->ka_data_, &ka_data, sizeof(ka_data));
+            }
+            // ignore decode error, make keepalive avaliable
+            do_rpin(rs);
           }
         }
         if (events[i].events & (EPOLLERR | EPOLLRDHUP | EPOLLHUP)) {

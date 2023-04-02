@@ -20,6 +20,7 @@
 #include "lib/lock/mutex.h"
 #include "lib/rc/ob_rc.h"
 #include "lib/hash/ob_hashset.h"
+#include "sql/resolver/ob_stmt_type.h"
 
 namespace oceanbase
 {
@@ -44,9 +45,11 @@ public:
                        int64_t req_cnt, int64_t &admit_cnt);
   static int enter_query_admission(sql::ObSQLSessionInfo &session,
                                    sql::ObExecContext &exec_ctx,
+                                   sql::stmt::StmtType stmt_type,
                                    sql::ObPhysicalPlan &plan);
   static void exit_query_admission(sql::ObSQLSessionInfo &session,
                                    sql::ObExecContext &exec_ctx,
+                                   sql::stmt::StmtType stmt_type,
                                    sql::ObPhysicalPlan &plan);
 private:
   static int get_parallel_session_target(sql::ObSQLSessionInfo &session,

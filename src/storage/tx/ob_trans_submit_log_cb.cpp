@@ -29,23 +29,23 @@ namespace transaction
 void ObTxBaseLogCb::reset()
 {
   AppendCb::reset();
-  log_ts_ = 0;
+  log_ts_.reset();
   lsn_.reset();
   submit_ts_ = 0;
 }
 
 void ObTxBaseLogCb::reuse()
 {
-  log_ts_ = 0;
+  log_ts_.reset();
   lsn_.reset();
   submit_ts_ = 0;
 }
 
-int ObTxBaseLogCb::set_log_ts(const int64_t log_ts)
+int ObTxBaseLogCb::set_log_ts(const SCN &log_ts)
 {
   int ret = OB_SUCCESS;
 
-  if (log_ts <= 0) {
+  if (!log_ts.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(log_ts));
   } else {
@@ -83,7 +83,7 @@ int ObTxLogCb::init(const ObLSID &key,
     ls_id_ = key;
     trans_id_ = trans_id;
     ctx_ = ctx;
-    tx_data_ = nullptr;
+    tx_data_guard_.reset();
     is_callbacked_ = false;
   }
 
@@ -98,22 +98,24 @@ void ObTxLogCb::reset()
   ls_id_.reset();
   trans_id_.reset();
   ctx_ = NULL;
-  tx_data_ = nullptr;
+  tx_data_guard_.reset();
   callbacks_.reset();
   is_callbacked_ = false;
   cb_arg_array_.reset();
   mds_range_.reset();
   //is_callbacking_ = false;
+  first_part_scn_.invalid_scn();
 }
 
 void ObTxLogCb::reuse()
 {
   ObTxBaseLogCb::reuse();
-  tx_data_ = nullptr;
+  tx_data_guard_.reset();
   callbacks_.reset();
   is_callbacked_ = false;
   cb_arg_array_.reset();
   mds_range_.reset();
+  first_part_scn_.invalid_scn();
 }
 
 ObTxLogType ObTxLogCb::get_last_log_type() const
@@ -132,9 +134,9 @@ bool ObTxLogCb::is_valid() const
 
 void ObTxLogCb::check_warn_() const
 {
-  const int64_t used_time = ObClockGenerator::getRealClock() - get_log_ts();
+  const int64_t used_time = ObClockGenerator::getRealClock() - get_submit_ts();
   if (used_time >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
-    TRANS_LOG(WARN, "transaction log sync use too much time", K(*this), K(used_time));
+    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", K(*this), K(used_time));
   }
 }
 

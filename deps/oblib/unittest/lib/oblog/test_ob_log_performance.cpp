@@ -61,6 +61,7 @@ ObLoggerTest::ObLoggerTest()
 
 void ObLogTestThread::run1()
 {
+  int ret = 0;
   OB_LOG(ERROR, "error log would print lbt");
   SET_OB_LOG_TRACE_MODE();
   PRINT_OB_LOG_TRACE_BUF(COMMON, INFO);
@@ -71,7 +72,7 @@ void ObLogTestThread::run1()
     _OB_LOG(WARN, "oblog test %ld", i);
     OB_LOG(ERROR, "trace error log also would print lbt");
   }
-  PRINT_OB_LOG_TRACE_BUF(OBTRACE, INFO);
+  PRINT_OB_LOG_TRACE_BUF(FLT, INFO);
   CANCLE_OB_LOG_TRACE_MODE();
   int64_t e_time = ::oceanbase::common::ObTimeUtility::current_time();
   OB_LOG(WARN, "yangze one thread time","u_time", e_time - b_time);
@@ -80,6 +81,7 @@ void ObLogTestThread::run1()
 
 void ObLogTestThreadT::run1()
 {
+  int ret = 0;
   int64_t b_time = ::oceanbase::common::ObTimeUtility::current_time();
   {
     ObString str("Our destiny offers not the cup of despair, but the chalice of opportunity. So let us seize it, not in fear, but in gladness.");
@@ -95,6 +97,7 @@ void ObLogTestThreadT::run1()
 
 void ObLoggerTest::run_test()
 {
+  int ret = 0;
   system("rm -rf s_log.log*");
   OB_LOGGER.set_log_level("TRACE", "WARN");
   OB_LOGGER.set_enable_async_log(false);
@@ -112,6 +115,7 @@ void ObLoggerTest::run_test()
 
 void ObLoggerTest::run_test_t()
 {
+  int ret = 0;
   system("rm -rf t_log.log*");
   OB_LOGGER.set_log_level("TRACE", "WARN");
   OB_LOGGER.set_enable_async_log(false);
@@ -128,6 +132,7 @@ void ObLoggerTest::run_test_t()
 
 void ObLoggerTest::run_test_async()
 {
+  int ret = 0;
   system("rm -rf async_log.log*");
   OB_LOGGER.set_log_level("TRACE", "WARN");
   //OB_LOGGER.set_max_file_size(BIG_LOG_FILE_SIZE);
@@ -135,7 +140,7 @@ void ObLoggerTest::run_test_async()
   OB_LOGGER.set_enable_async_log(true);
   OB_LOGGER.set_use_multi_flush(false);
   ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg);
+  OB_LOGGER.init(log_cfg, false);
   // OB_LOGGER.set_max_file_size(64 << 20);
   thread_pool_.set_thread_count(20);
 
@@ -148,6 +153,7 @@ void ObLoggerTest::run_test_async()
 
 void ObLoggerTest::run_test_async_multi()
 {
+  int ret = 0;
   system("rm -rf async_multi_log.log*");
   OB_LOGGER.set_log_level("TRACE", "WARN");
   //OB_LOGGER.set_max_file_size(BIG_LOG_FILE_SIZE);
@@ -155,7 +161,7 @@ void ObLoggerTest::run_test_async_multi()
   OB_LOGGER.set_enable_async_log(true);
   OB_LOGGER.set_use_multi_flush(true);
   ObPLogWriterCfg log_cfg;
-  OB_LOGGER.init(log_cfg);
+  OB_LOGGER.init(log_cfg, false);
 
   // OB_LOGGER.set_max_file_size(64 << 20);
   thread_pool_.set_thread_count(20);
@@ -169,6 +175,7 @@ void ObLoggerTest::run_test_async_multi()
 
 void ObLoggerTest::run_test_t_async()
 {
+  int ret = 0;
   system("rm -rf t_async_log.log*");
   OB_LOGGER.set_log_level("TRACE", "WARN");
   OB_LOGGER.set_enable_async_log(true);
@@ -186,6 +193,7 @@ void ObLoggerTest::run_test_t_async()
 
 void ObLoggerTest::run_test_t_async_multi()
 {
+  int ret = 0;
   system("rm -rf t_async_multi_log.log*");
   OB_LOGGER.set_log_level("TRACE", "WARN");
   OB_LOGGER.set_enable_async_log(true);

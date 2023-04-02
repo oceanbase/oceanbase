@@ -29,8 +29,8 @@ void* ObPocSqlRequestOperator::get_sql_session(ObRequest* req)
 
 SSL* ObPocSqlRequestOperator::get_sql_ssl_st(ObRequest* req)
 {
-  UNUSED(req);
-  SSL *ssl_st = NULL;
+  ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
+  SSL *ssl_st = sess->get_ssl_st();
   return ssl_st;
 }
 
@@ -38,12 +38,6 @@ char* ObPocSqlRequestOperator::alloc_sql_response_buffer(ObRequest* req, int64_t
 {
   ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
   return (char*)sess->alloc(size);
-}
-
-void ObPocSqlRequestOperator::free_sql_response_buffer(ObRequest* req, void *buf)
-{
-  (void)req;
-  (void)buf;
 }
 
 char *ObPocSqlRequestOperator::sql_reusable_alloc(ObRequest* req, int64_t size)

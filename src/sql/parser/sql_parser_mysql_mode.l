@@ -112,6 +112,7 @@ _UTF8                         { REPUT_TOKEN_NEG_SIGN(_UTF8); }
 _UTF8MB4                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB4); }
 _GBK                          { REPUT_TOKEN_NEG_SIGN(_GBK); }
 _GB18030                      { REPUT_TOKEN_NEG_SIGN(_GB18030); }
+_LATIN1                       { REPUT_TOKEN_NEG_SIGN(_LATIN1); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
 NOT {
@@ -243,6 +244,16 @@ TRUE {
   }
 }
 
+<hint>TRUE {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  yylval->node->value_ = 1;
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  return BOOL_VALUE;
+}
+
 FALSE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
@@ -255,6 +266,16 @@ FALSE {
   } else {
     return BOOL_VALUE;
   }
+}
+
+<hint>FALSE {
+  check_value(yylval);
+  ParseResult *p = (ParseResult *)yyextra;
+  malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  yylval->node->value_ = 0;
+  COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
+  yylval->node->text_len_ = yyleng;
+  return BOOL_VALUE;
 }
 
 {sqbegin} {
@@ -881,6 +902,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_INDEX { return NO_INDEX_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }
 <hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
+<hint>INDEX_SS { return INDEX_SS_HINT; }
+<hint>INDEX_SS_ASC { return INDEX_SS_ASC_HINT; }
+<hint>INDEX_SS_DESC { return INDEX_SS_DESC_HINT; }
 <hint>USE_NL { return USE_NL; }
 <hint>NO_USE_NL { return NO_USE_NL; }
 <hint>USE_NL_MATERIALIZATION { return USE_NL_MATERIALIZATION; }
@@ -912,6 +936,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
     }
   }
 }
+<hint>NO_GATHER_OPTIMIZER_STATISTICS  { return NO_GATHER_OPTIMIZER_STATISTICS; }
+<hint>GATHER_OPTIMIZER_STATISTICS  { return GATHER_OPTIMIZER_STATISTICS; }
+<hint>DBMS_STATS  { return DBMS_STATS; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
@@ -924,10 +951,14 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>USE_PLAN_CACHE  { return USE_PLAN_CACHE; }
 <hint>USE_HASH_AGGREGATION  { return USE_HASH_AGGREGATION; }
 <hint>NO_USE_HASH_AGGREGATION  { return NO_USE_HASH_AGGREGATION; }
+<hint>PARTITION_SORT  { return PARTITION_SORT; }
+<hint>NO_PARTITION_SORT  { return NO_PARTITION_SORT; }
 <hint>USE_LATE_MATERIALIZATION  { return USE_LATE_MATERIALIZATION; }
 <hint>NO_USE_LATE_MATERIALIZATION  { return NO_USE_LATE_MATERIALIZATION; }
 <hint>TRACE_LOG { return TRACE_LOG; }
 <hint>LOAD_BATCH_SIZE { return LOAD_BATCH_SIZE; }
+<hint>DIRECT { return DIRECT; }
+<hint>APPEND { return APPEND; }
 <hint>TRACING { return TRACING; }
 <hint>DOP { return DOP; }
 <hint>FORCE_REFRESH_LOCATION_CACHE { return FORCE_REFRESH_LOCATION_CACHE; }
@@ -1348,6 +1379,31 @@ BEGIN(in_c_comment);
     return QUESTIONMARK;
   }
 }
+":"{identifier} {
+  ParseResult *p = (ParseResult *)yyextra;
+  check_value(yylval);
+  malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+  if (p->question_mark_ctx_.by_defined_name_) {
+    yylval->node->value_ = get_question_mark_by_defined_name(&p->question_mark_ctx_, yytext);
+    if (yylval->node->value_ < 0) {
+      YY_UNEXPECTED_ERROR("Invalid question mark idx\n");
+    }
+  } else {
+    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+  }
+  p->question_mark_ctx_.by_name_ = true;
+  if (OB_UNLIKELY(p->question_mark_ctx_.by_ordinal_)) {
+    YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
+  }
+  if (IS_FAST_PARAMETERIZE) {
+    yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+    check_malloc(yylval->node->raw_text_);
+    STORE_PARAM_NODE();
+  } else {
+    yylval->node->pos_ = yylloc->first_column - 1;
+    return QUESTIONMARK;
+  }
+}
 
 ":"{identifier}"."{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
@@ -1382,7 +1438,7 @@ BEGIN(in_c_comment);
     if (NULL != node->str_value_
     		&& *(yytext + 2) == *(yytext + 1 + node->str_len_)
     		&& (*(yytext + 2) == '`')) {
-      // bugfix: https://work.aone.alibaba-inc.com/issue/36863983
+      // bugfix:
       // support "select @@`xxx`;" as "select @@xxx;"
 			node->str_value_ += 1;
 			node->str_len_ -= 2;

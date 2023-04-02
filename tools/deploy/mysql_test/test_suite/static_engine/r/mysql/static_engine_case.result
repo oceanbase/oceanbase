@@ -10,17 +10,15 @@ set @@ob_enable_plan_cache = 0;
 // 所有带参数的case表达式都被转为不带参数的case表达式
 EXPLAIN select case 1 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN 1 = 1 THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN 1 = 1 THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END})
-
 select case 1 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
 +-----------------------------------------------------+
 | case 1 when 1 then 'a' when 2 then 'b' else 'c' end |
@@ -30,17 +28,15 @@ select case 1 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
 // 应该命中else expr
 EXPLAIN select case 100 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN 100 = 1 THEN 'a' WHEN 100 = 2 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN 100 = 1 THEN 'a' WHEN 100 = 2 THEN 'b' ELSE 'c' END})
-
 select case 100 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
 +-------------------------------------------------------+
 | case 100 when 1 then 'a' when 2 then 'b' else 'c' end |
@@ -52,17 +48,15 @@ select case 100 when 1 then 'a' when 2 then 'b' else 'c' end from dual;
 // 1和'1'的类型不一致，会被加上cast，都被转为decimal再进行比较,返回'a'
 EXPLAIN select case 1 when '1' then 'a' when 2 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 1 = 2 THEN 'b' ELSE 'c' END})
-
 select case 1 when '1' then 'a' when 2 then 'b' else 'c' end from dual;
 +-------------------------------------------------------+
 | case 1 when '1' then 'a' when 2 then 'b' else 'c' end |
@@ -72,17 +66,15 @@ select case 1 when '1' then 'a' when 2 then 'b' else 'c' end from dual;
 // 第二个then 应该要加cast，返回'a'
 EXPLAIN select case 1 when 1 then 'a' when 2 then 'b' else 3 end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN 1 = 1 THEN 'a' WHEN 1 = 2 THEN 'b' ELSE cast(3, VARCHAR(1048576)) END]), filter(nil)
       values({CASE WHEN 1 = 1 THEN 'a' WHEN 1 = 2 THEN 'b' ELSE cast(3, VARCHAR(1048576)) END})
-
 select case 1 when 1 then 'a' when 2 then 'b' else 3 end from dual;
 +---------------------------------------------------+
 | case 1 when 1 then 'a' when 2 then 'b' else 3 end |
@@ -95,17 +87,15 @@ select case 1 when 1 then 'a' when 2 then 'b' else 3 end from dual;
 // 应该返回'a'
 EXPLAIN select case when 1=1 then 'a' when 2 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN 1 = 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN 1 = 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END})
-
 select case when 1=1 then 'a' when 2 then 'b' else 'c' end from dual;
 +-----------------------------------------------------+
 | case when 1=1 then 'a' when 2 then 'b' else 'c' end |
@@ -115,17 +105,15 @@ select case when 1=1 then 'a' when 2 then 'b' else 'c' end from dual;
 // 应该返回'c'
 EXPLAIN select case when 0=1 then 'a' when 0.0 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN 0 = 1 THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN 0 = 1 THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END})
-
 select case when 0=1 then 'a' when 0.0 then 'b' else 'c' end from dual;
 +-------------------------------------------------------+
 | case when 0=1 then 'a' when 0.0 then 'b' else 'c' end |
@@ -136,17 +124,15 @@ select case when 0=1 then 'a' when 0.0 then 'b' else 'c' end from dual;
 // 应该返回'a'，且0='1'中要加cast
 EXPLAIN select case when 1='1' then 'a' when 2 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN cast(1, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 2 THEN 'b' ELSE 'c' END})
-
 select case when 1='1' then 'a' when 2 then 'b' else 'c' end from dual;
 +-------------------------------------------------------+
 | case when 1='1' then 'a' when 2 then 'b' else 'c' end |
@@ -156,17 +142,15 @@ select case when 1='1' then 'a' when 2 then 'b' else 'c' end from dual;
 // 应该返回'c'，且0='1'中要加cast
 EXPLAIN select case when 0='1' then 'a' when 0.0 then 'b' else 'c' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN cast(0, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END]), filter(nil)
       values({CASE WHEN cast(0, DECIMAL(1, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN 0.0 THEN 'b' ELSE 'c' END})
-
 select case when 0='1' then 'a' when 0.0 then 'b' else 'c' end from dual;
 +---------------------------------------------------------+
 | case when 0='1' then 'a' when 0.0 then 'b' else 'c' end |
@@ -186,17 +170,17 @@ alter system flush plan cache global;
 // 测试int的normal case，应该返回'a'
 EXPLAIN select case col_int when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN t1.col_int = 1 THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN t1.col_int = 1 THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256
       access([t1.col_int]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case col_int when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 +-----------------------------------------------------------+
 | case col_int when 1 then 'a' when 2 then 'b' else 'c' end |
@@ -206,17 +190,18 @@ select case col_int when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 // 测试int需要加cast的情况，第一个when需要加cast, 第二个when不需要
 EXPLAIN select case col_int when '1' then 'a' when 2 then 'b' else 'c' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(t1.col_int, DECIMAL(11, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN cast(t1.col_int, DECIMAL(11, 0)) = cast('1', DECIMAL(1, -1)) THEN 'a' WHEN t1.col_int = 2 THEN 'b' ELSE 'c' END]), filter(nil),
+rowset=256
       access([t1.col_int]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case col_int when '1' then 'a' when 2 then 'b' else 'c' end from t1;
 +-------------------------------------------------------------+
 | case col_int when '1' then 'a' when 2 then 'b' else 'c' end |
@@ -226,17 +211,17 @@ select case col_int when '1' then 'a' when 2 then 'b' else 'c' end from t1;
 // 测试null的情况，应该返回'c'，而且没有cast出现
 EXPLAIN select case col_null when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN t1.col_null = 1 THEN 'a' WHEN t1.col_null = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN t1.col_null = 1 THEN 'a' WHEN t1.col_null = 2 THEN 'b' ELSE 'c' END]), filter(nil), rowset=256
       access([t1.col_null]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case col_null when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 +------------------------------------------------------------+
 | case col_null when 1 then 'a' when 2 then 'b' else 'c' end |
@@ -248,17 +233,15 @@ select case col_null when 1 then 'a' when 2 then 'b' else 'c' end from t1;
 // 应该返回1, MySQL没有把空串看成NULL
 EXPLAIN select case '' when '' then 1 when 'here' then 2 else 'hh' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN '' = '' THEN cast(1, VARCHAR(1048576)) WHEN '' = 'here' THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END]), filter(nil)
       values({CASE WHEN '' = '' THEN cast(1, VARCHAR(1048576)) WHEN '' = 'here' THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END})
-
 select case '' when '' then 1 when 'here' then 2 else 'hh' end from dual;
 +---------------------------------------------------------+
 | case '' when '' then 1 when 'here' then 2 else 'hh' end |
@@ -268,17 +251,16 @@ select case '' when '' then 1 when 'here' then 2 else 'hh' end from dual;
 // 应该返回'hh'
 EXPLAIN select case NULL when NULL then 1 when 'here' then 2 else 'hh' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN NULL = NULL THEN cast(1, VARCHAR(1048576)) WHEN cast(NULL, VARCHAR(1048576)) = 'here' THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END]), filter(nil)
+  0 - output([CASE WHEN NULL = NULL THEN cast(1, VARCHAR(1048576)) WHEN cast(NULL, VARCHAR(1048576)) = 'here' THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END]),
+filter(nil)
       values({CASE WHEN NULL = NULL THEN cast(1, VARCHAR(1048576)) WHEN cast(NULL, VARCHAR(1048576)) = 'here' THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END})
-
 select case NULL when NULL then 1 when 'here' then 2 else 'hh' end from dual;
 +-------------------------------------------------------------+
 | case NULL when NULL then 1 when 'here' then 2 else 'hh' end |
@@ -288,17 +270,15 @@ select case NULL when NULL then 1 when 'here' then 2 else 'hh' end from dual;
 // 应该返回1, MySQL没有把空串看成NULL
 EXPLAIN select case when '' = '' then 1 when 'here' then 2 else 'hh' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN '' = '' THEN cast(1, VARCHAR(1048576)) WHEN cast('here', DOUBLE(-1, -1)) THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END]), filter(nil)
       values({CASE WHEN '' = '' THEN cast(1, VARCHAR(1048576)) WHEN cast('here', DOUBLE(-1, -1)) THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END})
-
 select case when '' = '' then 1 when 'here' then 2 else 'hh' end from dual;
 +-----------------------------------------------------------+
 | case when '' = '' then 1 when 'here' then 2 else 'hh' end |
@@ -308,17 +288,15 @@ select case when '' = '' then 1 when 'here' then 2 else 'hh' end from dual;
 // 应该返回'hh', 因为'here'cast为double会失败,返回值应该是0
 EXPLAIN select case when NULL=NULL then 1 when 'here' then 2 else 'hh' end from dual;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |EXPRESSION|    |1        |1   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN NULL = NULL THEN cast(1, VARCHAR(1048576)) WHEN cast('here', DOUBLE(-1, -1)) THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END]), filter(nil)
       values({CASE WHEN NULL = NULL THEN cast(1, VARCHAR(1048576)) WHEN cast('here', DOUBLE(-1, -1)) THEN cast(2, VARCHAR(1048576)) ELSE 'hh' END})
-
 select case when NULL=NULL then 1 when 'here' then 2 else 'hh' end from dual;
 +-------------------------------------------------------------+
 | case when NULL=NULL then 1 when 'here' then 2 else 'hh' end |
@@ -333,37 +311,37 @@ drop table t1;
 create table t1 (a varchar(100) collate utf8_general_ci, cond1 varchar(100) collate utf8_bin, cond2 varchar(100) collate utf8_general_ci);
 EXPLAIN insert into t1 values('cond', 'COND', 'COND');
 Query Plan
-===========================================
-|ID|OPERATOR          |NAME|EST. ROWS|COST|
--------------------------------------------
-|0 |DISTRIBUTED INSERT|    |1        |13  |
-|1 | EXPRESSION       |    |1        |1   |
-===========================================
-
-Outputs & filters: 
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |DISTRIBUTED INSERT|    |1       |13          |
+|1 | EXPRESSION       |    |1       |1           |
+==================================================
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.cond1, t1.cond2)})}]), 
-      column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:100,NULL,__values.a)], [column_conv(VARCHAR,utf8mb4_bin,length:100,NULL,__values.cond1)], [column_conv(VARCHAR,utf8mb4_general_ci,length:100,NULL,__values.cond2)])
+      column_values([T_HIDDEN_PK], [column_conv(VARCHAR,utf8mb4_general_ci,length:100,NULL,__values.a)], [column_conv(VARCHAR,utf8mb4_bin,length:100,NULL,__values.cond1)],
+[column_conv(VARCHAR,utf8mb4_general_ci,length:100,NULL,__values.cond2)])
   1 - output([__values.a], [__values.cond1], [__values.cond2]), filter(nil)
       values({'cond', 'COND', 'COND'})
-
 insert into t1 values('cond', 'COND', 'COND');
 explain_protocol: 2
 // 返回Null，a和cond1以及a和cond2比较都会使用utf8_bin作为collation type(因为有aggregate collation的过程)
 EXPLAIN select case a when cond1 then '1' when cond2 then '2' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(t1.a, VARCHAR(1048576)) = t1.cond1 THEN '1' WHEN cast(t1.a, VARCHAR(1048576)) = cast(t1.cond2, VARCHAR(1048576)) THEN '2' ELSE NULL END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN cast(t1.a, VARCHAR(1048576)) = t1.cond1 THEN '1' WHEN cast(t1.a, VARCHAR(1048576)) = cast(t1.cond2, VARCHAR(1048576)) THEN '2' ELSE
+NULL END]), filter(nil), rowset=256
       access([t1.a], [t1.cond1], [t1.cond2]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case a when cond1 then '1' when cond2 then '2' end from t1;
 +----------------------------------------------------+
 | case a when cond1 then '1' when cond2 then '2' end |
@@ -373,17 +351,17 @@ select case a when cond1 then '1' when cond2 then '2' end from t1;
 // 返回'neq', a和cond1比较使用的是utf8_bin
 EXPLAIN select case a when cond1 then 'eq' else 'neq' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN cast(t1.a, VARCHAR(1048576)) = t1.cond1 THEN 'eq' ELSE 'neq' END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN cast(t1.a, VARCHAR(1048576)) = t1.cond1 THEN 'eq' ELSE 'neq' END]), filter(nil), rowset=256
       access([t1.a], [t1.cond1]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case a when cond1 then 'eq' else 'neq' end from t1;
 +--------------------------------------------+
 | case a when cond1 then 'eq' else 'neq' end |
@@ -393,17 +371,17 @@ select case a when cond1 then 'eq' else 'neq' end from t1;
 // 返回'eq', a和cond1比较使用的是utf8_general_ci
 EXPLAIN select case a when cond2 then 'eq' else 'neq' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN t1.a = t1.cond2 THEN 'eq' ELSE 'neq' END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN t1.a = t1.cond2 THEN 'eq' ELSE 'neq' END]), filter(nil), rowset=256
       access([t1.a], [t1.cond2]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case a when cond2 then 'eq' else 'neq' end from t1;
 +--------------------------------------------+
 | case a when cond2 then 'eq' else 'neq' end |
@@ -413,17 +391,17 @@ select case a when cond2 then 'eq' else 'neq' end from t1;
 // arg case子节点也是arg case的情况测试，应该都被改为case expr(应该返回'ok')
 EXPLAIN select case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end from t1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t1  |1        |2   |
-===================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |TABLE SCAN|t1  |1       |2           |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output([CASE WHEN CASE WHEN t1.a = 'cond' THEN 'eq' ELSE 'neq' END = 'eq' THEN 'ok' ELSE 'not ok' END]), filter(nil), rowset=256, 
+  0 - output([CASE WHEN CASE WHEN t1.a = 'cond' THEN 'eq' ELSE 'neq' END = 'eq' THEN 'ok' ELSE 'not ok' END]), filter(nil), rowset=256
       access([t1.a]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end from t1;
 +----------------------------------------------------------------------------------------+
 | case case a when 'cond' then 'eq' else 'neq' end when 'eq' then 'ok' else 'not ok' end |
@@ -463,7 +441,7 @@ t2	CREATE TABLE `t2` (
 drop table t1;
 drop table t2;
 
-## bugfix#https://work.aone.alibaba-inc.com/issue/37018706
+## bugfix#
 SELECT CASE 'A' WHEN 0 THEN 0 ELSE 1 END VAL;
 +-----+
 | VAL |

@@ -49,7 +49,11 @@ public:
   DECLARE_TO_STRING;
 public:
   static const int32_t UPDATE_INTERVAL = 2 * 1000 * 1000; // 2 second
-  static const int32_t NORMAL_UPDATE_PARAM = 120;
+  static const int32_t NORMAL_UPDATE_PARAM = 300;
+  static const int32_t DEFAULT_ROW_CNT_PER_MACRO_BLOCK = 1000;
+  static const int32_t DEFAULT_INCREMENT_ROW_FACTOR = 10;
+  static const int64_t MAX_ESTIMATE_SPEND_TIME = 24 * 60 * 60 * 1000 * 1000l; // 24 hours
+  static const int64_t PRINT_ESTIMATE_WARN_INTERVAL = 5 * 60 * 1000 * 1000; // 1 min
 protected:
   int estimate(ObTabletMergeCtx *ctx);
   void update_estimated_finish_time_();

@@ -30,7 +30,7 @@ int Obp20TraceInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
                         trace_info_.ptr(), trace_info_.length(), type_))) {
     OB_LOG(WARN, "failed to store extra info id", K(type_), K(trace_info_), K(buf));
   } else {
-    // do nothing
+    is_serial_ = true;
   }
   return ret;
 }
@@ -68,8 +68,6 @@ int Obp20SessInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
   if (pos + 6 > len) {
     ret = OB_SIZE_OVERFLOW;
     OB_LOG(WARN,"buffer size overflow", K(ret), K(pos), K(len));
-  } else {
-    MEMSET(buf+pos, 0x00, len-pos);
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -77,8 +75,9 @@ int Obp20SessInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
                         sess_info_.ptr(), sess_info_.length(), type_))) {
     OB_LOG(WARN, "failed to store extra info id", K(type_), K(sess_info_), K(buf));
   } else {
-    // do nothing
+    is_serial_ = true;
   }
+  OB_LOG(DEBUG, "serialize session info", K(ret));
   return ret;
 }
 
@@ -117,6 +116,8 @@ int Obp20FullTrcEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
     if (OB_FAIL(ObProtoTransUtil::store_str(buf, len, pos,
                           full_trc_.ptr(), full_trc_.length(), type_))) {
       OB_LOG(WARN, "failed to store extra info id", K(type_), K(full_trc_), K(buf));
+    } else {
+      is_serial_ = true;
     }
   }
   return ret;

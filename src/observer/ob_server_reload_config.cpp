@@ -15,6 +15,7 @@
 #include "ob_server_reload_config.h"
 #include "lib/alloc/alloc_func.h"
 #include "lib/alloc/ob_malloc_allocator.h"
+#include "lib/alloc/ob_malloc_sample_struct.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "share/scheduler/ob_dag_scheduler.h"
@@ -87,6 +88,7 @@ int ObServerReloadConfig::operator()()
 {
   int ret = OB_SUCCESS;
   int real_ret = ret;
+
   if (!gctx_.is_inited()) {
     real_ret = ret = OB_INNER_STAT_ERROR;
     LOG_WARN("gctx not init", "gctx inited", gctx_.is_inited(), K(ret));
@@ -124,10 +126,20 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("reload config for ratelimit manager fail", K(ret));
     }
+    if (OB_FAIL(ObTdeEncryptEngineLoader::get_instance().reload_config())) {
+      real_ret = ret;
+      LOG_WARN("reload config for tde encrypt engine fail", K(ret));
+    }
   }
   {
     GMEMCONF.reload_config(GCONF);
     const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
+    OB_LOGGER.set_info_as_wdiag(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0);
+    // reload log config again after get MIN_CLUSTER_VERSION
+    if (OB_FAIL(ObReloadConfig::operator()())) {
+      real_ret = ret;
+      LOG_WARN("ObReloadConfig operator() failed", K(ret));
+    }
     const int64_t reserved_memory = GCONF.cache_wash_threshold;
     const int64_t reserved_urgent_memory = GCONF.memory_reserved;
     LOG_INFO("set limit memory", K(limit_memory));
@@ -139,7 +151,10 @@ int ObServerReloadConfig::operator()()
 #ifdef OB_USE_ASAN
     __MemoryContext__::set_enable_asan_allocator(GCONF.enable_asan_for_memory_context);
 #endif
-
+#if defined(__x86_64__)
+    ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
+                                     GCONF._min_malloc_sample_interval);
+#endif
     ObIOConfig io_config;
     int64_t cpu_cnt = GCONF.cpu_count;
     if (cpu_cnt <= 0) {
@@ -207,6 +222,8 @@ int ObServerReloadConfig::operator()()
 #else
   {
     sanity_set_whitelist(GCONF.sanity_whitelist.str());
+    ObMallocAllocator::get_instance()->enable_tenant_leak_memory_protection_ =
+      GCONF._enable_tenant_leak_memory_protection;
   }
 #endif
   {
@@ -245,15 +262,11 @@ int ObServerReloadConfig::operator()()
   // syslog bandwidth limitation
   share::ObTaskController::get().set_log_rate_limit(
       GCONF.syslog_io_bandwidth_limit.get_value());
+  share::ObTaskController::get().set_diag_per_error_limit(
+      GCONF.diag_syslog_per_error_limit.get_value());
 
-  if (nullptr != GCTX.omt_) {
-    GCTX.omt_->set_workers_per_cpu(GCONF.workers_per_cpu_quota.get_value());
-  }
+  lib::g_runtime_enabled = true;
 
-  get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2100) {
-    lib::g_runtime_enabled = true;
-  }
   common::ObKVGlobalCache::get_instance().reload_wash_interval();
   {
     int tmp_ret = OB_SUCCESS;
@@ -271,6 +284,10 @@ int ObServerReloadConfig::operator()()
       LOG_WARN("fail to resize file", KR(tmp_ret),
           K(data_disk_size), K(data_disk_percentage), K(reserved_size));
     }
+  }
+
+  {
+    ObSysVariables::set_value("datadir", GCONF.data_dir);
   }
   return real_ret;
 }

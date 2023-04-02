@@ -26,6 +26,7 @@ class ObMySQLProxy;
 namespace share
 {
 class ObLSID;
+class SCN;
 }
 namespace storage
 {
@@ -33,6 +34,7 @@ class ObLS;
 }
 namespace rootserver
 {
+
 /*description:
  * Collect the information of each log stream under the user tenant: the minimum
  * standby machine-readable timestamp of the majority, the minimum standby
@@ -44,8 +46,6 @@ public:
  ObTenantRecoveryReportor()
      : is_inited_(false),
        tenant_id_(common::OB_INVALID_TENANT_ID),
-       lock_(),
-       tenant_info_(),
        sql_proxy_(nullptr) {}
  ~ObTenantRecoveryReportor() {}
  static int mtl_init(ObTenantRecoveryReportor *&ka);
@@ -62,27 +62,24 @@ public:
  //description: update ls recovery
  static int update_ls_recovery(storage::ObLS *ls, common::ObMySQLProxy *sql_proxy);
 
- int get_tenant_info(share::ObAllTenantInfo &tenant_info);
- static int get_readable_scn(const share::ObLSID &id, int64_t &read_scn);
+ int get_tenant_readable_scn(share::SCN &readable_scn);
+ static int get_readable_scn(const share::ObLSID &id, share::SCN &read_scn);
 private:
-  int load_tenant_info_();
-  static int get_sync_point_(const share::ObLSID &id, int64_t &sync_scn, int64_t &read_scn);
+  static int get_sync_point_(const share::ObLSID &id, share::SCN &scn, share::SCN &read_scn);
   int update_ls_recovery_stat_();
 
 public:
- static constexpr int64_t IDLE_TIME_US = 100 * 1000;
- TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(tenant_info));
+ TO_STRING_KV(K_(is_inited), K_(tenant_id));
 private:
   bool is_inited_;
   uint64_t tenant_id_;
-  common::SpinRWLock lock_;
-  share::ObAllTenantInfo tenant_info_;
   common::ObMySQLProxy *sql_proxy_;
 private:
   //更新受控回放到replayservice
   int update_replayable_point_();
   int update_replayable_point_from_tenant_info_();
   int update_replayable_point_from_meta_();
+  int submit_tenant_refresh_schema_task_();
   DISALLOW_COPY_AND_ASSIGN(ObTenantRecoveryReportor);
 };
 

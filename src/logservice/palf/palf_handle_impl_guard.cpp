@@ -11,70 +11,39 @@
  */
 
 #include "palf_handle_impl_guard.h"
+#include "palf_env_impl.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace palf
 {
-PalfHandleImplGuard::PalfHandleImplGuard() : palf_id_(),
-                                             palf_handle_impl_(NULL),
-                                             palf_handle_impl_map_(NULL)
+
+IPalfHandleImplGuard::IPalfHandleImplGuard() : palf_id_(),
+                                               palf_handle_impl_(NULL),
+                                               palf_env_impl_(NULL)
 {
 }
 
-PalfHandleImplGuard::~PalfHandleImplGuard()
+IPalfHandleImplGuard::~IPalfHandleImplGuard()
 {
-  if (NULL != palf_handle_impl_ && NULL != palf_handle_impl_map_) {
-    palf_handle_impl_map_->revert(palf_handle_impl_);
+  reset();
+}
+
+bool IPalfHandleImplGuard::is_valid() const
+{
+  return true == is_valid_palf_id(palf_id_) && NULL != palf_handle_impl_ && NULL != palf_env_impl_;
+}
+
+void IPalfHandleImplGuard::reset()
+{
+  if (NULL != palf_handle_impl_ && NULL != palf_env_impl_) {
+    palf_env_impl_->revert_palf_handle_impl(palf_handle_impl_);
   }
-}
-
-int PalfHandleImplGuard::set_palf_handle_impl(const int64_t palf_id,
-                                              PalfHandleImplMap *palf_handle_impl_map)
-{
-  int ret = OB_SUCCESS;
-  PalfHandleImpl *palf_handle_impl = NULL;
-  LSKey hash_map_key(palf_id);
-  if (false == is_valid_palf_id(palf_id)
-      || OB_ISNULL(palf_handle_impl_map)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), KP(palf_handle_impl_map));
-  } else if (OB_FAIL(palf_handle_impl_map->get(hash_map_key, palf_handle_impl))) {
-    PALF_LOG(WARN, "PalfHandleImplGuard set_palf_handle_impl_ failed", K(ret),
-        K(palf_id), K(palf_handle_impl), KP(palf_handle_impl_map));
-  } else {
-    palf_id_ = palf_id;
-    palf_handle_impl_ = palf_handle_impl;
-    palf_handle_impl_map_ = palf_handle_impl_map;
-    PALF_LOG(INFO, "set_palf_handle_impl success", K(ret), K(palf_id));
-  }
-  return ret;
-}
-
-int PalfHandleImplGuard::set_palf_handle_impl(const int64_t palf_id,
-                                     PalfHandleImpl *palf_handle_impl,
-                                     PalfHandleImplMap *palf_handle_impl_map)
-{
-  int ret = OB_SUCCESS;
-  if (false == is_valid_palf_id(palf_id)
-      || OB_ISNULL(palf_handle_impl)
-      || OB_ISNULL(palf_handle_impl_map)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id),
-        KP(palf_handle_impl), KP(palf_handle_impl_map));
-  } else {
-    palf_id_ = palf_id;
-    palf_handle_impl_ = palf_handle_impl;
-    palf_handle_impl_map_ = palf_handle_impl_map;
-  }
-  return ret;
-}
-
-bool PalfHandleImplGuard::is_valid() const
-{
-  return true == is_valid_palf_id(palf_id_) && NULL != palf_handle_impl_ && NULL != palf_handle_impl_map_;
-}
+  palf_handle_impl_ = NULL;
+  palf_env_impl_ = NULL;
+  palf_id_ = -1;
+};
 
 } // end namespace palf
 } // end namespace oceanbase

@@ -24,7 +24,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::json;
 using namespace oceanbase::sql::log_op_def;
 
-int ObHelpLogPlan::generate_raw_plan()
+int ObHelpLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *top = NULL;

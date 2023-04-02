@@ -26,6 +26,7 @@ public:
   virtual void run1() = 0;
   bool has_set_stop() const
   {
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     return ATOMIC_LOAD(&stop_);
   }
   void set_stop(bool stop)

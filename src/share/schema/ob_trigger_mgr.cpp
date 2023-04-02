@@ -261,7 +261,7 @@ int ObTriggerMgr::add_trigger(const ObSimpleTriggerSchema &trigger_schema)
                              equal_trigger, replaced_trigger), trigger_schema);
   // 以下是错误注入
   DEBUG_SYNC(ADD_TRIGGER_BEFORE_MAP);
-  int skip_map = E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
+  int skip_map = OB_E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
   if (OB_SUCC(ret) && skip_map == 0) {
     if (OB_NOT_NULL(replaced_trigger)) {
       OX (name_wrapper.set_tenant_id(replaced_trigger->get_tenant_id()));
@@ -293,7 +293,7 @@ int ObTriggerMgr::del_trigger(const ObTenantTriggerId &tenant_trigger_id)
   OV (OB_NOT_NULL(deleted_trigger), OB_ERR_UNEXPECTED, tenant_trigger_id);
   // 以下是错误注入
   DEBUG_SYNC(DEL_TRIGGER_BEFORE_MAP);
-  int skip_map = E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
+  int skip_map = OB_E(EventTable::EN_ADD_TRIGGER_SKIP_MAP) 0;
   if (OB_SUCC(ret) && skip_map == 0) {
     ObTriggerNameHashWrapper name_wrapper(deleted_trigger->get_tenant_id(),
                                           deleted_trigger->get_database_id(),
@@ -315,7 +315,7 @@ int ObTriggerMgr::try_rebuild_trigger_hashmap()
              K(trigger_infos_.count()),
              K(trigger_id_map_.item_count()),
              K(trigger_name_map_.item_count()));
-    int over_write = 1;
+    int over_write = 0;
     ObTriggerNameHashWrapper name_wrapper;
     OV (is_inited_, OB_NOT_INIT);
     OX (trigger_id_map_.clear());
@@ -329,13 +329,32 @@ int ObTriggerMgr::try_rebuild_trigger_hashmap()
       OX (name_wrapper.set_trigger_name(trigger_info->get_trigger_name()));
       OZ (trigger_id_map_.set_refactored(trigger_info->get_trigger_id(), trigger_info, over_write),
           trigger_info);
-      OZ (trigger_name_map_.set_refactored(name_wrapper, trigger_info, over_write),
-          trigger_info);
+      if (OB_SUCC(ret)) {
+        int hash_ret = trigger_name_map_.set_refactored(name_wrapper, trigger_info, over_write);
+        if (OB_SUCCESS != hash_ret) {
+          ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : hash_ret;
+          LOG_ERROR("build trigger name map failed", KR(ret), KR(hash_ret),
+                    "exist_tenant_id", trigger_info->get_tenant_id(),
+                    "exist_database_id", trigger_info->get_database_id(),
+                    "exist_trigger_name", trigger_info->get_trigger_name());
+        }
+
+      }
       OX (LOG_INFO("rebuild", K(*trigger_info)));
     }
-    if (trigger_infos_.count() != trigger_id_map_.item_count() ||
-        trigger_infos_.count() != trigger_name_map_.item_count()) {
-      LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", K(ret));
+    if (OB_SUCC(ret)
+        && (trigger_infos_.count() != trigger_id_map_.item_count()
+            || trigger_infos_.count() != trigger_name_map_.item_count())) {
+      ret = OB_DUPLICATE_OBJECT_NAME_EXIST;
+      LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", KR(ret),
+                "trigger_info_cnt", trigger_infos_.count(),
+                "trigger_id_cnt", trigger_id_map_.item_count(),
+                "trigger_name_cnt", trigger_name_map_.item_count());
+      LOG_DBA_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST,
+                    "msg", "duplicate trigger name exist",
+                    "trigger_info_cnt", trigger_infos_.count(),
+                    "trigger_id_cnt", trigger_id_map_.item_count(),
+                    "trigger_name_cnt", trigger_name_map_.item_count());
       right_to_die_or_duty_to_live();
     }
   }

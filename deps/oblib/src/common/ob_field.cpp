@@ -276,6 +276,7 @@ int ObField::update_field_mb_length()
     case ObYearTC:
     case ObNullTC:
     case ObJsonTC:
+    case ObGeometryTC:
       break; // do nothing
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -342,6 +343,7 @@ int ObField::get_field_mb_length(const ObObjType type,
     case ObTextTC: // TODO@hanhui texttc share with the stringtc temporarily
     case ObLobTC:
     case ObJsonTC:
+    case ObGeometryTC:
     case ObStringTC: {
       // This if branch is a patch because the generation process of Operators such as CAST and CONV is not standardized.
       // As a result, length, collation, etc. are not set correctly

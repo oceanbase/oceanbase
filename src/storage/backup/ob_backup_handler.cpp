@@ -26,7 +26,7 @@ namespace backup {
 
 int ObBackupHandler::schedule_backup_meta_dag(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-    const int64_t turn_id, const int64_t retry_id, const share::ObBackupSCN &start_scn)
+    const int64_t turn_id, const int64_t retry_id, const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -38,7 +38,7 @@ int ObBackupHandler::schedule_backup_meta_dag(const ObBackupJobDesc &job_desc, c
   ObTenantDagScheduler *dag_scheduler = NULL;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy) || !job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
-      !backup_set_desc.is_valid() || !ls_id.is_valid() || turn_id <= 0 || retry_id < 0 || start_scn < 0) {
+      !backup_set_desc.is_valid() || !ls_id.is_valid() || turn_id <= 0 || retry_id < 0 || !start_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args",
         K(ret),
@@ -184,7 +184,7 @@ int ObBackupHandler::schedule_build_tenant_level_index_dag(const ObBackupJobDesc
 
 int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &job_desc,
     const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc,
-    const share::ObLSID &ls_id, const share::ObBackupSCN &start_scn, const share::ObBackupSCN &end_scn)
+    const share::ObLSID &ls_id, const SCN &start_scn, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -197,7 +197,7 @@ int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &j
   ObTenantDagScheduler *dag_scheduler = NULL;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy) ||!job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
-      !backup_set_desc.is_valid() || !ls_id.is_valid() || start_scn <= 0 || end_scn <= 0) {
+      !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid() || !end_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args",
         K(ret),

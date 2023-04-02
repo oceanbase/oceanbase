@@ -25,43 +25,48 @@ namespace transaction
 class ObTxVersionMgr
 {
 public:
-  ObTxVersionMgr() : max_commit_ts_(100), max_elr_commit_ts_(100), max_read_ts_(100) {}
+  ObTxVersionMgr()
+  {
+    max_commit_ts_.set_base();
+    max_elr_commit_ts_.set_base();
+    max_read_ts_.set_base();
+  }
   ~ObTxVersionMgr() {}
 public:
-  void update_max_commit_ts(const int64_t ts, const bool elr)
+  void update_max_commit_ts(const share::SCN &ts, const bool elr)
   {
     if (!elr) {
-      (void)inc_update(&max_commit_ts_, ts);
+      max_commit_ts_.inc_update(ts);
     } else {
-      (void)inc_update(&max_elr_commit_ts_, ts);
+      max_elr_commit_ts_.inc_update(ts);
     }
     TRANS_LOG(TRACE, "update max commit ts", K(ts), K(elr));
   }
-  void update_max_read_ts(const int64_t ts)
+  void update_max_read_ts(const share::SCN &ts)
   {
-    (void)inc_update(&max_read_ts_, ts);
+    max_read_ts_.inc_update(ts);
     TRANS_LOG(TRACE, "update max read ts", K(ts));
   }
-  int64_t get_max_commit_ts(const bool elr) const
+  share::SCN get_max_commit_ts(const bool elr) const
   {
-    int64_t max_commit_ts = ATOMIC_LOAD(&max_commit_ts_);
+    share::SCN max_commit_ts = max_commit_ts_.atomic_get();
     if (elr) {
-      const int64_t max_elr_commit_ts = ATOMIC_LOAD(&max_elr_commit_ts_);
-      max_commit_ts = max(max_commit_ts, max_elr_commit_ts);
+      const share::SCN max_elr_commit_ts = max_elr_commit_ts_.atomic_get();
+      max_commit_ts = share::SCN::max(max_commit_ts, max_elr_commit_ts);
     }
     TRANS_LOG(TRACE, "get max commit ts", K(max_commit_ts), K(elr));
     return max_commit_ts;
   }
-  int64_t get_max_read_ts() const
+  share::SCN get_max_read_ts() const
   {
-    const int64_t max_read_ts = ATOMIC_LOAD(&max_read_ts_) + 1;
+    const share::SCN max_read_ts = share::SCN::scn_inc(max_read_ts_);
     TRANS_LOG(TRACE, "get max read ts", K(max_read_ts));
     return max_read_ts;
   }
 private:
-  int64_t max_commit_ts_ CACHE_ALIGNED;
-  int64_t max_elr_commit_ts_ CACHE_ALIGNED;
-  int64_t max_read_ts_ CACHE_ALIGNED;
+  share::SCN max_commit_ts_ CACHE_ALIGNED;
+  share::SCN max_elr_commit_ts_ CACHE_ALIGNED;
+  share::SCN max_read_ts_ CACHE_ALIGNED;
 };
 
 }

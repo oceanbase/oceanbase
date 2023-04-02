@@ -52,7 +52,8 @@ public:
         local_worker_factory_(gctx, allocator_),
         thread_worker_factory_(gctx, allocator_),
         first_buffer_cache_(allocator_),
-        bf_key_()
+        bf_key_(),
+        is_single_tsc_leaf_dfo_(false)
   {}
   virtual ~ObPxSubCoord() = default;
   int pre_process();
@@ -68,7 +69,7 @@ public:
   int report_sqc_finish(int end_ret) {
     return sqc_ctx_.sqc_proxy_.report(end_ret);
   }
-  int init_first_buffer_cache(bool is_rpc_worker, int64_t dop);
+  int init_first_buffer_cache(int64_t dop);
   void destroy_first_buffer_cache();
   void destroy_bloom_filter();
 
@@ -79,15 +80,25 @@ public:
   int end_ddl(const bool need_commit);
   int64_t get_ddl_context_id() const { return ddl_ctrl_.context_id_; }
 
-  int init_px_bloom_filter_advance(ObExecContext *ctx, ObOpSpec *root);
+  int pre_setup_op_input(ObExecContext &ctx,
+      ObOpSpec &root,
+      ObSqcCtx &sqc_ctx,
+      const DASTabletLocIArray &tsc_locations,
+      const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+  int rebuild_sqc_access_table_locations();
+  void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
 private:
   int setup_loop_proc(ObSqcCtx &sqc_ctx) const;
   int setup_op_input(ObExecContext &ctx,
                      ObOpSpec &root,
                      ObSqcCtx &sqc_ctx,
                      const DASTabletLocIArray &tsc_locations,
-                     const ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
-                     ObIArray<const ObTableScanSpec*> &all_scan_op);
+                     const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
+  int setup_gi_op_input(ObExecContext &ctx,
+                        ObOpSpec &root,
+                        ObSqcCtx &sqc_ctx,
+                        const DASTabletLocIArray &tsc_locations,
+                        const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
   int get_tsc_or_dml_op_tablets(ObOpSpec &root,
                                 const DASTabletLocIArray &tsc_locations,
                                 const common::ObIArray<ObSqcTableLocationKey> &tsc_location_keys,
@@ -120,8 +131,6 @@ private:
   int get_participants(ObPxSqcMeta &sqc,
                        const int64_t table_id,
                        ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids) const;
-
-  int rebuild_sqc_access_table_locations();
   void try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op);
 private:
   const observer::ObGlobalContext &gctx_;
@@ -135,6 +144,7 @@ private:
   int64_t reserved_thread_count_;
   dtl::ObDtlLocalFirstBufferCache first_buffer_cache_;
   ObPXBloomFilterHashWrapper bf_key_; // for bloom_filter_use op
+  bool is_single_tsc_leaf_dfo_;
   DISALLOW_COPY_AND_ASSIGN(ObPxSubCoord);
 };
 }

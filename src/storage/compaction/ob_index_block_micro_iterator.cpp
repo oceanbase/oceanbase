@@ -154,7 +154,8 @@ int ObIndexBlockMicroIterator::init(
     const blocksstable::MacroBlockId &macro_id,
     const common::ObIArray<blocksstable::ObMicroIndexInfo> &micro_block_infos,
     const common::ObIArray<blocksstable::ObDatumRowkey> &endkeys,
-    const ObRowStoreType row_store_type)
+    const ObRowStoreType row_store_type,
+    const ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -170,9 +171,8 @@ int ObIndexBlockMicroIterator::init(
     ObMacroBlockReadInfo read_info;
     const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
     read_info.macro_block_id_ = macro_id;
-    read_info.offset_ = 0;
-    read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
+    read_info.offset_ = sstable->get_macro_offset();
+    read_info.size_ = sstable->get_macro_read_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle_))) {
       LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_id));

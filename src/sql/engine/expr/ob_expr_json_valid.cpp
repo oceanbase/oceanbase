@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_valid.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -66,11 +67,12 @@ int ObExprJsonValid::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-template <typename T>
-int ObExprJsonValid::calc(const T &data, ObObjType type, ObCollationType cs_type,
-                          ObIAllocator *allocator, T &res)
+int ObExprJsonValid::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
+                          bool has_lob_header, ObIAllocator *allocator, ObDatum &res)
 {
   INIT_SUCC(ret);
+  ObObjType type = meta.type_;
+  ObCollationType cs_type = meta.cs_type_;
   bool is_null = false;
   bool is_empty_text = false;
   bool is_invalid = false;
@@ -83,7 +85,9 @@ int ObExprJsonValid::calc(const T &data, ObObjType type, ObCollationType cs_type
     is_invalid = true;
   } else {
     common::ObString j_str = data.get_string();
-    if (OB_UNLIKELY(j_str == "")) {
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (OB_UNLIKELY(j_str == "")) {
       if (type == ObJsonType) {
         is_null = true;
       } else {
@@ -124,15 +128,14 @@ int ObExprJsonValid::eval_json_valid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   INIT_SUCC(ret);
   ObDatum *datum = NULL;
   ObExpr *arg = expr.args_[0];
-  ObCollationType cs_type = arg->datum_meta_.cs_type_;
 
   if (OB_FAIL(arg->eval(ctx, datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
-    if (OB_FAIL(calc(*datum, arg->datum_meta_.type_, cs_type, &tmp_allocator, res))) {
-      LOG_WARN("fail to calc json valid result", K(ret), K(arg->datum_meta_.type_));
+    if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, res))) {
+      LOG_WARN("fail to calc json valid result", K(ret), K(arg->datum_meta_));
     }
   } 
 

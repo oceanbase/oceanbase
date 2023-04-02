@@ -31,10 +31,10 @@ ObPool<BlockAllocatorT, LockT>::ObPool(int64_t obj_size, int64_t block_size,
       lock_()
 {
   if (OB_UNLIKELY(obj_size_ < static_cast<int64_t>(sizeof(FreeNode)))) {
-    LIB_LOG(ERROR, "obj_size_ < size of FreeNode");
+    LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj_size_ < size of FreeNode");
   } else {}
   if (block_size_ < (obj_size_ + static_cast<int64_t>(sizeof(BlockHeader)))) {
-    LIB_LOG(WARN, "obj size larger than block size", K(obj_size_), K(block_size_));
+    LIB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "obj size larger than block size", K(obj_size_), K(block_size_));
     block_size_ = obj_size_ + sizeof(BlockHeader);
   } else {}
 }
@@ -50,6 +50,9 @@ void ObPool<BlockAllocatorT, LockT>::reset()
 {
   BlockHeader *curr = blocklist_;
   BlockHeader *next = NULL;
+  //if (in_use_count_ != 0) {
+  //  LIB_LOG(ERROR, "there was memory leak", K(in_use_count_), K(free_count_), K(total_count_));
+  //}
   while (NULL != curr) {
     next = curr->next_;
     block_allocator_.free(curr);
@@ -145,7 +148,7 @@ void ObPool<BlockAllocatorT, LockT>::freelist_push(void *obj)
   if (NULL != obj) {
     FreeNode *node = static_cast<FreeNode *>(obj);
     if (OB_ISNULL(node)) {
-      LIB_LOG(ERROR, "node is NULL");
+      LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "node is NULL");
     } else {
       node->next_ = freelist_;
       freelist_ = node;

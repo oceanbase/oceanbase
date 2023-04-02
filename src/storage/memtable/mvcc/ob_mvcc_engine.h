@@ -68,7 +68,8 @@ public:
   // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
   // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
   int mvcc_write(ObIMemtableCtx &ctx,
-                 const int64_t snapshot_version,
+                 const concurrent_control::ObWriteFlag write_flag,
+                 const transaction::ObTxSnapshot &snapshot,
                  ObMvccRow &value,
                  const ObTxNodeArg &arg,
                  ObMvccWriteResult &res);
@@ -78,7 +79,7 @@ public:
   void mvcc_undo(ObMvccRow *value);
 
   // mvcc_replay builds the ObMvccTransNode according to the arg and replay
-  // into the ascending ordering of the value based on the log_ts recorded in ctx.
+  // into the ascending ordering of the value based on the scn recorded in ctx.
   int mvcc_replay(ObIMemtableCtx &ctx,
                   const ObMemtableKey *stored_key,
                   ObMvccRow &value,
@@ -115,7 +116,7 @@ public:
   int estimate_scan_row_count(const ObMvccScanRange &range,
                               storage::ObPartitionEst &part_est) const;
 private:
-  int try_compact_row_when_mvcc_read_(const int64_t &snapshot_info,
+  int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version,
                                       ObMvccRow &row);
 
   int build_tx_node_(ObIMemtableCtx &ctx,

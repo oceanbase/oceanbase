@@ -65,7 +65,7 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
       }
     }
   }
-  if (MAJOR_MERGE == merge_info.merge_type_
+  if (is_major_merge_type(merge_info.merge_type_)
       && merge_info.macro_block_count_ >= MACRO_CNT_PARAM) {
     if (1 == merge_info.concurrent_cnt_) {
       ADD_COMPACTION_INFO_PARAM(buf, buf_len,

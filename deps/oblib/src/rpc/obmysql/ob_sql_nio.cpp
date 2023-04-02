@@ -28,6 +28,7 @@
 #include <sys/eventfd.h>
 #include <arpa/inet.h>
 #include <linux/futex.h>
+#include <netinet/tcp.h>
 #include "rpc/obrpc/ob_listener.h"
 
 using namespace oceanbase::common;
@@ -91,10 +92,9 @@ struct ReadyFlag
   int32_t pending_ CACHE_ALIGNED;
 };
 
-#define futex(...) syscall(SYS_futex,__VA_ARGS__)
 static int futex_wake(volatile int *p, int val)
 {
-  return static_cast<int>(futex((int *)p, FUTEX_WAKE_PRIVATE, val, NULL, NULL, 0));
+  return futex((uint *)p, FUTEX_WAKE_PRIVATE, val, NULL);
 }
 
 struct SingleWaitCond
@@ -220,9 +220,22 @@ private:
   }
   int do_read_fd(int64_t sz) {
     int ret = OB_SUCCESS;
+    const int MAX_SSL_REQ_PKT_SIZE = 36;
     while(remain() < sz && OB_SUCCESS == ret) {
       int64_t rbytes = 0;
-      if ((rbytes = read(fd_, data_end_, buf_end_ - data_end_)) > 0) {
+      size_t read_size = 0;
+      if (OB_UNLIKELY(0 == consume_sz_)) {
+        /*
+          set read size for ssl, when client want to open ssl, it will send a 36 bytes
+          incomplete Login Request packet and then do SSL_connect, the data flow will be
+          like this |Login Request (36 bytes)|SSL handshake message|.To avoid read the SSL
+          handshake message by us, we read 36 bytes for the first packet.
+        */
+        read_size = MAX_SSL_REQ_PKT_SIZE;
+      } else {
+        read_size = buf_end_ - data_end_;
+      }
+      if ((rbytes = ob_read_regard_ssl(fd_, data_end_, read_size)) > 0) {
         data_end_ += rbytes;
       } else if (0 == rbytes) {
         LOG_INFO("read fd return EOF", K_(fd));
@@ -292,10 +305,11 @@ private:
     int64_t pos = 0;
     while(pos < sz && OB_SUCCESS == ret) {
       int64_t wbytes = 0;
-      if ((wbytes = write(fd, buf + pos, sz - pos)) >= 0) {
+      if ((wbytes = ob_write_regard_ssl(fd, buf + pos, sz - pos)) >= 0) {
         pos += wbytes;
       } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
-        LOG_INFO("write return EAGAIN");
+        LOG_INFO("write return EAGAIN", K(fd));
+        ret = OB_EAGAIN;
       } else if (EINTR == errno) {
         // pass
       } else {
@@ -303,8 +317,9 @@ private:
         LOG_WARN("write data error", K(errno));
       }
     }
-    if (OB_SUCCESS == ret) {
+    if (OB_SUCCESS == ret || OB_EAGAIN == ret) {
       consume_bytes = pos;
+      ret = OB_SUCCESS;
     }
     return ret;
   }
@@ -316,7 +331,7 @@ private:
 class ObSqlSock: public ObLink
 {
 public:
-  ObSqlSock(ObSqlNioImpl& nio, int fd): nio_impl_(nio), fd_(fd), err_(0), read_buffer_(fd), 
+  ObSqlSock(ObSqlNioImpl *nio, int fd): nio_impl_(nio), fd_(fd), err_(0), read_buffer_(fd),
             need_epoll_trigger_write_(false), may_handling_(true), handler_close_flag_(false),
             need_shutdown_(false), last_decode_time_(0), last_write_time_(0), sql_session_info_(NULL) {
     memset(sess_, 0, sizeof(sess_));
@@ -325,12 +340,14 @@ public:
   int64_t get_remain_sz() const { return read_buffer_.get_remain_sz(); }
   TO_STRING_KV(KP(this), K_(fd), K_(err), K(last_decode_time_), K(last_write_time_),
               K(read_buffer_.get_consume_sz()), K(get_pending_flag()), KPC(get_trace_id()));
-  ObSqlNioImpl& get_nio_impl() { return nio_impl_; }
+  ObSqlNioImpl *get_nio_impl() { return nio_impl_; }
+  void set_nio_impl(ObSqlNioImpl *impl) { nio_impl_ = impl; }
   bool set_error(int err) { return 0 == ATOMIC_TAS(&err_, err); }
   bool has_error() const { return ATOMIC_LOAD(&err_) != 0; }
 
   void do_close() {
     if (fd_ >= 0) {
+      ob_fd_disable_ssl(fd_);
       close(fd_);
       read_buffer_.set_fd(-1);
       fd_ = -1;
@@ -368,7 +385,7 @@ public:
     int64_t pos = 0;
     while(pos < sz && OB_SUCCESS == ret) {
       int64_t wbytes = 0;
-      if ((wbytes = write(fd_, buf + pos, sz - pos)) >= 0) {
+      if ((wbytes = ob_write_regard_ssl(fd_, buf + pos, sz - pos)) >= 0) {
         pos += wbytes;
         LOG_DEBUG("write fd", K(wbytes));
       } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
@@ -384,6 +401,7 @@ public:
     last_write_time_ = ObTimeUtility::current_time();
     return ret;
   }
+
   const rpc::TraceId* get_trace_id() const {
     ObSqlSockSession* sess = (ObSqlSockSession *)sess_;
     return &(sess->sql_req_.get_trace_id());
@@ -410,18 +428,21 @@ public:
   void set_handler_close_been_called() { handler_close_flag_ = true; }
   void remove_fd_from_epoll(int epfd) {
     if (epoll_ctl(epfd, EPOLL_CTL_DEL, fd_, nullptr) < 0) {
-      LOG_WARN("remove sock fd from epoll failed", K(fd_), K(epfd));
+      LOG_WARN_RET(common::OB_ERR_SYS, "remove sock fd from epoll failed", K(fd_), K(epfd));
     }
   }
   void set_shutdown() { ATOMIC_STORE(&need_shutdown_, true); }
   bool need_shutdown() const { return ATOMIC_LOAD(&need_shutdown_); }
   void shutdown() { ::shutdown(fd_, SHUT_RD); }
+  int set_ssl_enabled();
+  SSL* get_ssl_st();
+  int write_handshake_packet(const char* buf, int64_t sz);
 public:
   ObDLink dlink_;
   ObDLink all_list_link_;
   ObLink write_task_link_;
 private:
-  ObSqlNioImpl& nio_impl_;
+  ObSqlNioImpl *nio_impl_;
   int fd_;
   int err_;
   ReadBuffer read_buffer_;
@@ -439,6 +460,46 @@ public:
   char sess_[3000] __attribute__((aligned(16)));
 };
 
+static ObSqlSock *sess2sock(void *sess)
+{
+  return CONTAINER_OF(sess, ObSqlSock, sess_);
+}
+
+int ObSqlSock::set_ssl_enabled()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_fd_enable_ssl_for_server(fd_, OB_SSL_CTX_ID_SQL_NIO))) {
+    LOG_WARN("sqlnio enable ssl for server failed", K(ret), K(fd_));
+  }
+  return ret;
+}
+
+SSL* ObSqlSock::get_ssl_st()
+{
+  return ob_fd_get_ssl_st(fd_);
+}
+
+int ObSqlSock::write_handshake_packet(const char* buf, int64_t sz) {
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  while(pos < sz && OB_SUCCESS == ret) {
+    int64_t wbytes = 0;
+    if ((wbytes = write(fd_, buf + pos, sz - pos)) >= 0) {
+      pos += wbytes;
+    } else if (EINTR == errno) {
+      //continue
+    } else {
+      //when send handshake packet, only process EINTR as normal, other errno
+      //will be treated as error
+      IGNORE_RETURN(set_error(EIO));
+      ret = OB_IO_ERROR;
+      LOG_WARN("write data error", K_(fd), K(errno));
+    }
+  }
+  last_write_time_ = ObTimeUtility::current_time();
+  return ret;
+}
+
 static struct epoll_event *__make_epoll_event(struct epoll_event *event, uint32_t event_flag, void* val) {
   event->events = event_flag;
   event->data.ptr = val;
@@ -450,7 +511,7 @@ static int epoll_regist(int epfd, int fd, uint32_t eflag, void* s) {
   struct epoll_event event;
   if (0 != epoll_ctl(epfd, EPOLL_CTL_ADD, fd, __make_epoll_event(&event, eflag, s))) {
     err = -EIO;
-    LOG_ERROR("add fd to epoll failed", K(fd), K(epfd), K(errno));
+    LOG_ERROR_RET(common::OB_ERR_SYS, "add fd to epoll failed", K(fd), K(epfd), K(errno));
   }
   return err;
 }
@@ -465,19 +526,19 @@ static int listen_create(int port) {
   int fd = 0;
   struct sockaddr_in sin;
   if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0)) < 0) {
-    LOG_ERROR("sql nio create socket for listen failed", K(errno));
+    LOG_ERROR_RET(common::OB_ERR_SYS, "sql nio create socket for listen failed", K(errno));
     err = errno;
   } else if (socket_set_opt(fd, SO_REUSEPORT, 1) < 0) {
-    LOG_ERROR("sql nio set sock opt SO_REUSEPORT failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt SO_REUSEPORT failed", K(errno), K(fd));
     err = errno;
   } else if (socket_set_opt(fd, SO_REUSEADDR, 1) < 0) {
-    LOG_ERROR("sql nio set sock opt SO_REUSEADDR failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio set sock opt SO_REUSEADDR failed", K(errno), K(fd));
     err = errno;
   } else if (bind(fd, (sockaddr*)obrpc::make_unix_sockaddr(&sin, 0, port), sizeof(sin))) {
-    LOG_ERROR("sql nio bind listen fd failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio bind listen fd failed", K(errno), K(fd));
     err = errno;
   } else if (listen(fd, 1024) < 0) {
-    LOG_ERROR("sql nio listen failed", K(errno), K(fd));
+    LOG_ERROR_RET(OB_ERR_SYS, "sql nio listen failed", K(errno), K(fd));
     err = errno;
   }
   if (0 != err) {
@@ -549,24 +610,59 @@ private:
 class ObSqlNioImpl
 {
 public:
-  ObSqlNioImpl(ObISqlSockHandler& handler): handler_(handler), epfd_(-1), lfd_(-1) {}
-  ~ObSqlNioImpl() {}
+  ObSqlNioImpl(ObISqlSockHandler& handler):
+    handler_(handler), epfd_(-1), lfd_(-1), tcp_keepalive_enabled_(0),
+    tcp_keepidle_(0), tcp_keepintvl_(0), tcp_keepcnt_(0) {}
+  ~ObSqlNioImpl() {
+    destroy();
+  }
+  void destroy() {
+    ObDLink *head = all_list_.head();
+    ObLink *cur = head->next_;
+    while (cur != head) {
+      ObSqlSock *s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
+      cur = cur->next_;
+      free_sql_sock(s);
+    }
+  }
   int init(int port) {
+    int ret = OB_SUCCESS;
+    if (port == -1) {
+      ret = init_io();
+    } else {
+      ret = init_listen(port);
+    }
+    return ret;
+  }
+  int init_io() {
+    int ret = OB_SUCCESS;
+    uint32_t epflag = EPOLLIN;
+    if ((epfd_ = epoll_create1(EPOLL_CLOEXEC)) < 0) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("epoll_create fail", K(ret), K(errno));
+    } else if (OB_FAIL(evfd_.create(epfd_))) {
+      LOG_WARN("evfd create fail", K(ret));
+    } else {
+      LOG_INFO("sql_nio init io succ");
+    }
+    return ret;
+  }
+  int init_listen(int port) {
     int ret = OB_SUCCESS;
     uint32_t epflag = EPOLLIN;
     if ((epfd_ = epoll_create1(EPOLL_CLOEXEC)) < 0) {
       ret = OB_IO_ERROR;
       LOG_WARN("epoll_create fail", K(ret), K(errno));
     } else if ((lfd_ = listen_create(port)) < 0) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("listen create fail", K(port), K(errno));
+      ret = OB_SERVER_LISTEN_ERROR;
+      LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
     } else if (0 != epoll_regist(epfd_, lfd_, epflag, NULL)) {
       ret = OB_IO_ERROR;
       LOG_WARN("regist listen fd fail", K(ret));
     } else if (OB_FAIL(evfd_.create(epfd_))) {
       LOG_WARN("evfd create fail", K(ret));
     } else {
-      LOG_INFO("sql_nio listen succ", K(port));
+      LOG_INFO("sql_nio init listen succ", K(port));
     }
     return ret;
   }
@@ -581,14 +677,34 @@ public:
     handle_write_req_queue();
     handle_close_req_queue();
     handle_pending_destroy_list();
+    update_tcp_keepalive_parameters();
     print_session_info();
+  }
+  int regist_sess(void *sess) {
+    int err = 0;
+    ObSqlSock *sock = sess2sock(sess);
+    int fd = sock->get_fd();
+    uint32_t epflag = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLET | EPOLLRDHUP;
+    ObSqlNioImpl *nio_impl = sock->get_nio_impl();
+    sock->remove_fd_from_epoll(nio_impl->get_epfd());
+    nio_impl->remove_session_info(sock);
+    record_session_info(sock);
+    sock->set_nio_impl(this);
+    if (0 != (err = epoll_regist(epfd_, fd, epflag, sock))) {
+      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
+    }
+    if (0 != err && NULL != sock) {
+      ObSqlSockSession *sess = (ObSqlSockSession *)sock->sess_;
+      sess->destroy_sock();
+    }
+    return err;
   }
   void push_close_req(ObSqlSock* s) {
     if (s->set_error(EIO)) {
-      LOG_WARN("close sql sock by user req", K(*s));
+      LOG_WARN_RET(OB_ERR_SYS, "close sql sock by user req", K(*s));
       close_req_queue_.push(s);
     } else {
-      LOG_WARN("user req close, and epoll thread already set error", K(*s));
+      LOG_WARN_RET(OB_ERR_SYS, "user req close, and epoll thread already set error", K(*s));
     }
   }
   void push_write_req(ObSqlSock* s) {
@@ -613,7 +729,26 @@ public:
       }
     }
   }
-
+  void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt) {
+    tcp_keepalive_enabled_ = keepalive_enabled;
+    tcp_keepidle_ = tcp_keepidle;
+    tcp_keepintvl_ = tcp_keepintvl;
+    tcp_keepcnt_ = tcp_keepcnt;
+  }
+  void close_all_fd() {
+    if (lfd_ > 0) {
+      IGNORE_RETURN epoll_ctl(epfd_, EPOLL_CTL_DEL, lfd_, NULL);
+      close(lfd_);
+      lfd_ = -1;
+    }
+    ObDLink* head = all_list_.head();
+    ObLink* cur = head->next_;
+    while (cur != head) {
+      ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
+      cur = cur->next_;
+      s->do_close();
+    }
+  }
 private:
   void handle_epoll_event() {
     const int maxevents = 512;
@@ -638,7 +773,7 @@ private:
     }
   }
   void prepare_destroy(ObSqlSock* s) {
-    LOG_WARN("prepare destroy", K(*s));
+    LOG_TRACE("prepare destroy", K(*s));
     s->remove_fd_from_epoll(epfd_);
     s->on_disconnect();
     pending_destroy_list_.add(&s->dlink_);
@@ -653,14 +788,14 @@ private:
       bool need_destroy = false;
       if (false == s->handler_close_been_called()) {
         if (false == s->get_may_handling_flag()) {
-          LOG_WARN("can close safely, do destroy", K(*s));
+          LOG_INFO("can close safely, do destroy", K(*s));
           need_destroy = true;
         } else {
           if (s->wait_handling()) {
-            LOG_WARN("sock ref clean, do destroy", K(*s));
+            LOG_INFO("sock ref clean, do destroy", K(*s));
             need_destroy = true;
           } else {
-            LOG_WARN("wait handling done...", K(*s));
+            LOG_TRACE("wait handling done...", K(*s));
           }
         }
         if (need_destroy) {
@@ -670,7 +805,6 @@ private:
       } else {
         if (true == s->sql_session_info_is_null()) {
           pending_destroy_list_.del(&s->dlink_);
-          remove_session_info(s);
           s->do_close();
           free_sql_sock(s);
         }
@@ -681,10 +815,10 @@ private:
     if (OB_UNLIKELY((EPOLLERR & mask) || (EPOLLHUP & mask) || (EPOLLRDHUP & mask))) {
 
       if (s->set_error(EIO)) {
-        LOG_WARN("sock error detect by epoll", K(mask), K(*s));
+        LOG_WARN_RET(OB_ERR_SYS, "sock error detect by epoll", K(mask), K(*s));
         prepare_destroy(s);
       } else {
-        LOG_WARN("sock error detect by epoll, and worker thread alread set error", K(*s));
+        LOG_WARN_RET(OB_ERR_SYS, "sock error detect by epoll, and worker thread alread set error", K(*s));
       }
     } else {
       int err = 0;
@@ -738,49 +872,66 @@ private:
         if (EAGAIN == errno || EWOULDBLOCK == errno) {
           break;
         } else {
-          LOG_ERROR("accept4 fail", K(lfd_), K(errno));
+          LOG_ERROR_RET(OB_ERR_SYS, "accept4 fail", K(lfd_), K(errno));
           break;
         }
       } else {
-        int err = 0;
-        if (0 != (err = do_accept_one(fd))) {
-          LOG_ERROR("do_accept_one fail", K(fd), K(err));
-          close(fd);
-        }
+        do_accept_one(fd);
       }
     }
   }
-  int do_accept_one(int fd) {
+  void do_accept_one(int fd) {
     int err = 0;
     ObSqlSock* s = NULL;
+    int enable_tcp_nodelay = 1;
     uint32_t epflag = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLET | EPOLLRDHUP;
-    if (NULL == (s = alloc_sql_sock(fd))) {
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&enable_tcp_nodelay, sizeof(enable_tcp_nodelay)) < 0) {
+      err = errno;
+      LOG_WARN_RET(OB_ERR_SYS, "set TCP_NODELAY failed", K(fd), KERRNOMSG(errno));
+    } else if (NULL == (s = alloc_sql_sock(fd))) {
       err = -ENOMEM;
-      LOG_WARN("alloc_sql_sock fail", K(fd), K(err));
-    } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
-      LOG_WARN("epoll_regist fail", K(fd), K(err));
+      LOG_WARN_RET(OB_ERR_SYS, "alloc_sql_sock fail", K(fd), K(err));
     } else if (0 != (err = handler_.on_connect(s->sess_, fd))) {
-      LOG_WARN("on_connect fail", K(err));
+      LOG_WARN_RET(OB_ERR_SYS, "on_connect fail", K(err));
+    } else if (0 != (err = epoll_regist(epfd_, fd, epflag, s))) {
+      LOG_WARN_RET(OB_ERR_SYS, "epoll_regist fail", K(fd), K(err));
     } else {
       LOG_INFO("accept one succ", K(*s));
     }
-    if (0 != err && NULL != s) {
-      ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
-      sess->destroy_sock();
+    if (0 != err) {
+      if (NULL != s) {
+        ObSqlSockSession* sess = (ObSqlSockSession *)s->sess_;
+        remove_session_info(s);
+        if (sess->is_inited()) {
+          /*
+           * if ObSqlSockSession is inited, ObSMConnection and ObSqlSockSession
+           * may also been inited, we need on_disconnect and destroy procedure
+           * to clear related struct
+          */
+          s->on_disconnect();
+          sess->destroy();
+          s->do_close();
+        } else {
+          close(fd);
+        }
+        free_sql_sock(s);
+      } else {
+        close(fd);
+      }
     }
-    return err;
   }
 private:
   ObSqlSock* alloc_sql_sock(int fd) {
     ObSqlSock* s = NULL;
     if (NULL != (s = (ObSqlSock*)direct_alloc(sizeof(*s)))) {
-      new(s)ObSqlSock(*this, fd);
+      new (s) ObSqlSock(this, fd);
       record_session_info(s);
     }
     return s;
   }
   void free_sql_sock(ObSqlSock* s) {
     if (NULL != s) {
+      remove_session_info(s);
       s->~ObSqlSock();
       direct_free(s);
     }
@@ -790,6 +941,29 @@ private:
   }
   void remove_session_info(ObSqlSock *& s) {
     all_list_.del(&s->all_list_link_);
+  }
+
+  void update_tcp_keepalive_parameters() {
+    if (TC_REACH_TIME_INTERVAL(5*1000*1000L)) {
+      if (1 == tcp_keepalive_enabled_) {
+        ObDLink* head = all_list_.head();
+        ObLink* cur = head->next_;
+        while (cur != head) {
+          ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
+          cur = cur->next_;
+          int fd = s->get_fd();
+          if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_keepalive_enabled_, sizeof(tcp_keepalive_enabled_)) < 0) {
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt SO_KEEPALIVE failed", K(fd), KERRNOMSG(errno));
+          } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, (const void *)&tcp_keepidle_, sizeof(tcp_keepidle_)) < 0) {
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt TCP_KEEPIDLE failed", K(fd), KERRNOMSG(errno));
+          } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, (const void *)&tcp_keepintvl_, sizeof(tcp_keepintvl_)) < 0) {
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt TCP_KEEPINTVL failed", K(fd), KERRNOMSG(errno));
+          } else if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, (const void *)&tcp_keepcnt_, sizeof(tcp_keepcnt_)) < 0) {
+            LOG_WARN_RET(OB_ERR_SYS, "setsockopt TCP_KEEPCNT failed", K(fd), KERRNOMSG(errno));
+          }
+        }
+      }
+    }
   }
 
   void print_session_info() {
@@ -812,6 +986,7 @@ private:
   static void* direct_alloc(int64_t sz) { return common::ob_malloc(sz, common::ObModIds::OB_COMMON_NETWORK); }
   static void direct_free(void* p) { common::ob_free(p); }
 
+  int get_epfd(){return epfd_;}
 private:
   ObISqlSockHandler& handler_;
   int epfd_;
@@ -821,23 +996,34 @@ private:
   ObSpScLinkQueue write_req_queue_;
   ObDList pending_destroy_list_;
   ObDList all_list_;
+  int tcp_keepalive_enabled_;
+  uint32_t tcp_keepidle_;
+  uint32_t tcp_keepintvl_;
+  uint32_t tcp_keepcnt_;
 };
 
-int ObSqlNio::start(int port, ObISqlSockHandler* handler, int n_thread)
+int ObSqlNio::start(int port, ObISqlSockHandler *handler, int n_thread,
+                    const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (NULL == (impl_ = (typeof(impl_))ob_malloc(sizeof(ObSqlNioImpl) * n_thread, "SqlNio"))) {
+  port_ = port;
+  handler_ = handler;
+  tenant_id_ = tenant_id;
+  if (n_thread > MAX_THREAD_CNT) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (NULL == (impl_ = (typeof(impl_))ob_malloc(
+                          sizeof(ObSqlNioImpl) * MAX_THREAD_CNT, "SqlNio"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc sql nio fail", K(ret));
   } else {
-    for(int i = 0; OB_SUCCESS == ret && i < n_thread; i++) {
-      new(impl_ + i)ObSqlNioImpl(*handler);
+    for (int i = 0; OB_SUCCESS == ret && i < n_thread; i++) {
+      new (impl_ + i) ObSqlNioImpl(*handler);
       if (OB_FAIL(impl_[i].init(port))) {
         LOG_WARN("impl init fail", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      set_thread_count(n_thread);
+      lib::Threads::set_thread_count(n_thread);
       lib::Threads::start();
     }
   }
@@ -856,34 +1042,41 @@ void ObSqlNio::wait()
 
 void ObSqlNio::destroy()
 {
-}
-
-void ObSqlNio::run(int64_t idx)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != impl_) {
-    lib::set_thread_name("sql_nio", idx);
-    while(!has_set_stop()) {
-      impl_[idx].do_work();
-    }
+  for (int i = 0; i < get_thread_count(); i++) {
+    impl_[i].destroy();
   }
 }
 
-static ObSqlSock* sess2sock(void* sess)
+int __attribute__((weak)) sql_nio_add_cgroup(const uint64_t tenant_id)
 {
-  return CONTAINER_OF(sess, ObSqlSock, sess_);
+  return 0;
+}
+void ObSqlNio::run(int64_t idx)
+{
+  if (NULL != impl_) {
+    lib::set_thread_name("sql_nio", idx);
+    // if (tenant_id_ != common::OB_INVALID_ID) {
+    //   obmysql::sql_nio_add_cgroup(tenant_id_);
+    // }
+    while(!has_set_stop() && !(OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
+      impl_[idx].do_work();
+    }
+    if (has_set_stop()) {
+      impl_[idx].close_all_fd();
+    }
+  }
 }
 
 void ObSqlNio::destroy_sock(void* sess)
 {
   ObSqlSock* sock = sess2sock(sess);
-  sock->get_nio_impl().push_close_req(sock);
+  sock->get_nio_impl()->push_close_req(sock);
 }
 
 void ObSqlNio::revert_sock(void* sess)
 {
   ObSqlSock* sock = sess2sock(sess);
-  sock->get_nio_impl().revert_sock(sock);
+  sock->get_nio_impl()->revert_sock(sock);
 }
 
 void ObSqlNio::set_shutdown(void* sess)
@@ -939,8 +1132,73 @@ void ObSqlNio::async_write_data(void* sess, const char* buf, int64_t sz)
 {
   ObSqlSock* sock = sess2sock(sess);
   sock->init_write_task(buf, sz);
-  sock->get_nio_impl().push_write_req(sock);
+  sock->get_nio_impl()->push_write_req(sock);
 }
 
+int ObSqlNio::set_ssl_enabled(void* sess)
+{
+  ObSqlSock* sock = sess2sock(sess);
+  return sock->set_ssl_enabled();
+}
+
+SSL* ObSqlNio::get_ssl_st(void* sess)
+{
+  ObSqlSock* sock = sess2sock(sess);
+  return sock->get_ssl_st();
+}
+
+int ObSqlNio::set_thread_count(const int n_thread)
+{
+  int ret = OB_SUCCESS;
+  int cur_thread = get_thread_count();
+  if (n_thread > MAX_THREAD_CNT) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (n_thread == cur_thread) {
+    // do nothing
+  } else {
+    if (n_thread > cur_thread) {
+      for (int i = cur_thread; OB_SUCCESS == ret && i < n_thread; i++) {
+        new (impl_ + i) ObSqlNioImpl(*handler_);
+        if (OB_FAIL(impl_[i].init(port_))) {
+          LOG_WARN("impl init fail");
+        }
+      }
+      if (OB_SUCC(ret)) {
+        lib::Threads::set_thread_count(n_thread);
+      }
+    } else {
+      LOG_WARN("decrease thread count not allowed", K(cur_thread),
+               K(n_thread));
+    }
+  }
+  return ret;
+}
+
+int ObSqlNio::regist_sess(void *sess)
+{
+  int err = 0;
+  ((ObSqlSockSession *)sess)->nio_ = this;
+  if (0 != (err = impl_[get_dispatch_idx()].regist_sess(sess))) {
+    LOG_ERROR_RET(OB_ERR_SYS, "regist sess fd fail", K(err));
+  }
+  return err;
+}
+
+void ObSqlNio::update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt)
+{
+  int thread_count = get_thread_count();
+  if (NULL != impl_) {
+    for (int index = 0; index < thread_count; index++) {
+      impl_[index].update_tcp_keepalive_params(keepalive_enabled, tcp_keepidle, tcp_keepintvl, tcp_keepcnt);
+    }
+  } else {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "sql nio impl_ is nullptr", KP(impl_));
+  }
+}
+
+int ObSqlNio::write_handshake_packet(void* sess, const char* buf, int64_t sz)
+{
+  return sess2sock(sess)->write_handshake_packet(buf, sz);
+}
 }; // end namespace obmysql
 }; // end namespace oceanbase

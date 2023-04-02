@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -208,7 +209,7 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
   return ret;
 }
 
-int ObExprFrameInfo::pre_alloc_exec_memory(ObExecContext &exec_ctx) const
+int ObExprFrameInfo::pre_alloc_exec_memory(ObExecContext &exec_ctx, ObIAllocator *allocator) const
 {
   int ret = OB_SUCCESS;
   uint64_t frame_cnt = 0;
@@ -217,7 +218,7 @@ int ObExprFrameInfo::pre_alloc_exec_memory(ObExecContext &exec_ctx) const
   if (NULL == (phy_ctx = exec_ctx.get_physical_plan_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(phy_ctx), K(ret));
-  } else if (OB_FAIL(alloc_frame(exec_ctx.get_allocator(),
+  } else if (OB_FAIL(alloc_frame(allocator != NULL ? *allocator : exec_ctx.get_allocator(),
                                  phy_ctx->get_param_frame_ptrs(),
                                  frame_cnt,
                                  frames))) {
@@ -283,7 +284,7 @@ int ObExprFrameInfo::alloc_frame(ObIAllocator &exec_allocator,
     int64_t begin_idx = frame_idx;
     const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     ALLOC_FRAME_MEM(dynamic_frame_);
-    //for subquery core https://work.aone.alibaba-inc.com/issue/31403714
+    //for subquery core
     //提前将frame中的datum置为null
     for (int64_t i = 0; OB_SUCC(ret) && i < dynamic_frame_.count(); ++i) {
       char *cur_frame = frames[begin_idx + i];
@@ -483,6 +484,9 @@ OB_INLINE int ObPreCalcExprFrameInfo::do_normal_eval(ObExecContext &exec_ctx,
     } else {
       datum_param.set_datum(*res_datum);
       datum_param.set_meta(rt_expr->datum_meta_);
+      if (rt_expr->obj_meta_.has_lob_header()) {
+        datum_param.set_result_flag(HAS_LOB_HEADER_FLAG);
+      }
       if (OB_FAIL(res_datum_params.push_back(datum_param))) {
         LOG_WARN("failed to push back obj param", K(ret));
       }
@@ -650,6 +654,10 @@ int ObTempExpr::row_to_frame(const ObNewRow &row, ObTempExprCtx &temp_expr_ctx) 
       LOG_WARN("obj type miss match", K(ret), K(v), K(idx_col), K(row));
     } else if (OB_FAIL(expr_datum.from_obj(v, expr.obj_datum_map_))) {
       LOG_WARN("fail to from obj", K(v), K(idx_col), K(row), K(ret));
+    } else if (is_lob_storage(v.get_type()) &&
+               OB_FAIL(ob_adjust_lob_datum(v, expr.obj_meta_, expr.obj_datum_map_,
+                                           temp_expr_ctx.exec_ctx_.get_allocator(), expr_datum))) {
+      LOG_WARN("adjust lob datum failed", K(ret), K(v.get_meta()), K(expr.obj_meta_));
     }
   }
 

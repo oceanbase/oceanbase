@@ -53,18 +53,51 @@ public:
   ObIDDLTaskType get_type() const { return type_; }
   static bool in_ddl_retry_white_list(const int ret_code)
   {
-    return common::OB_TIMEOUT == ret_code || common::OB_STATE_NOT_MATCH == ret_code || common::OB_SERVER_IS_STOPPING == ret_code
-      || common::OB_SERVER_IS_INIT == ret_code || common::OB_EAGAIN == ret_code || common::OB_NOT_MASTER == ret_code
-      || common::OB_TRANS_STMT_TIMEOUT == ret_code || common::OB_RS_NOT_MASTER == ret_code || OB_TRANS_NEED_ROLLBACK == ret_code
-      || common::OB_SCHEMA_EAGAIN == ret_code || common::OB_GTS_NOT_READY == ret_code || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code
-      || common::OB_PARTITION_NOT_EXIST == ret_code || common::OB_PG_IS_REMOVED == ret_code || common::OB_TENANT_NOT_EXIST == ret_code
-      || common::OB_RPC_SEND_ERROR == ret_code || common::OB_RPC_CONNECT_ERROR == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code
-      || OB_TRANS_ROLLBACKED == ret_code || OB_TRANS_TIMEOUT == ret_code || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code
+    return is_not_master(ret_code)
+      || is_stop_state(ret_code)
+      || is_not_exist(ret_code)
+      || is_retry(ret_code)
+      || is_timeout(ret_code)
       || is_location_service_renew_error(ret_code);
   }
   static bool in_ddl_retry_black_list(const int ret_code)
   {
     return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code;
+  }
+  static bool is_ddl_force_no_more_process(const int ret_code)
+  {
+    return common::OB_STANDBY_READ_ONLY == ret_code;
+  }
+private:
+  static bool is_timeout(const int ret_code) {
+    return common::OB_TIMEOUT == ret_code || common::OB_TRANS_STMT_TIMEOUT == ret_code || common::OB_CONNECT_ERROR == ret_code
+        || common::OB_WAITQUEUE_TIMEOUT == ret_code || common::OB_SESSION_NOT_FOUND == ret_code || common::OB_TRANS_TIMEOUT == ret_code
+        || common::OB_TRANS_UNKNOWN == ret_code || common::OB_GET_LOCATION_TIME_OUT == ret_code || common::OB_PACKET_STATUS_UNKNOWN == ret_code
+        || common::OB_TRANS_NEED_ROLLBACK == ret_code || common::OB_RPC_SEND_ERROR == ret_code || common::OB_RPC_CONNECT_ERROR == ret_code
+        || common::OB_RPC_POST_ERROR == ret_code || common::OB_TRANS_ROLLBACKED == ret_code || common::OB_TRANS_KILLED == ret_code
+        || common::OB_GET_LOCATION_TIME_OUT == ret_code || common::OB_TRANS_RPC_TIMEOUT == ret_code || common::OB_LIBEASY_ERROR == ret_code
+        || common::OB_TRANS_CTX_NOT_EXIST == ret_code;
+  }
+  static bool is_retry(const int ret_code) {
+    return common::OB_EAGAIN == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code || common::OB_TASK_EXPIRED == ret_code
+        || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code || common::OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code || common::OB_SCHEMA_EAGAIN == ret_code
+        || common::OB_ERR_REMOTE_SCHEMA_NOT_FULL == ret_code || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret_code || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret_code
+        || common::OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == ret_code || common::OB_TRANS_STMT_NEED_RETRY == ret_code || common::OB_SCHEMA_NOT_UPTODATE == ret_code
+        || common::OB_TRANSACTION_SET_VIOLATION == ret_code || common::OB_TRANS_CANNOT_SERIALIZE == ret_code || common::OB_GTI_NOT_READY == ret_code
+        || common::OB_TRANS_WEAK_READ_VERSION_NOT_READY == ret_code || common::OB_REPLICA_NOT_READABLE == ret_code || common::OB_ERR_INSUFFICIENT_PX_WORKER == ret_code
+        || common::OB_EXCEED_MEM_LIMIT == ret_code || common::OB_INACTIVE_SQL_CLIENT == ret_code || common::OB_INACTIVE_RPC_PROXY == ret_code;
+  }
+  static bool is_not_exist(const int ret_code) {
+    return common::OB_LS_NOT_EXIST == ret_code || common::OB_TABLET_NOT_EXIST == ret_code || common::OB_TENANT_NOT_EXIST == ret_code
+        || common::OB_TENANT_NOT_IN_SERVER == ret_code;
+  }
+  static bool is_stop_state(const int ret_code) {
+    return common::OB_IN_STOP_STATE == ret_code || common::OB_SERVER_IS_INIT == ret_code || common::OB_SERVER_IS_STOPPING == ret_code
+        || common::OB_RS_SHUTDOWN == ret_code || common::OB_PARTITION_IS_STOPPED == ret_code;
+  }
+  static bool is_not_master(const int ret_code) {
+    return common::OB_STATE_NOT_MATCH == ret_code || common::OB_NOT_MASTER == ret_code || OB_RS_NOT_MASTER == ret_code
+        || common::OB_GTS_NOT_READY == ret_code;
   }
 protected:
   typedef common::ObCurTraceId::TraceId TaskId;

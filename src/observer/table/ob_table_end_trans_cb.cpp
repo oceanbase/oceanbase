@@ -60,7 +60,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
   if (OB_FAIL(response_sender_.response(cb_param))) {
     LOG_WARN("failed to send response", K(ret), K(cb_param));
   } else {
-    LOG_DEBUG("yzfdebug async send execute response", K(cb_param));
+    LOG_INFO("async send execute response", K(cb_param));
   }
   this->destroy_cb_if_no_ref();
 }

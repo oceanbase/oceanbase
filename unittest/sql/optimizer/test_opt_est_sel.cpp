@@ -210,7 +210,7 @@ void TestOptEstSel::before_process(const char *sql_str, ObDMLStmt *&dml_stmt, Ob
   ObStmt *stmt = NULL;
   // resolver does not generate questionmark expr, selectivity changes.
   // ONLY affect UT, observer is okay. Tracked by separated isssue
-  // https://work.aone.alibaba-inc.com/issue/37275937
+  //
   do_resolve(sql_str, stmt, false, JSON_FORMAT, OB_SUCCESS, false);
 
   dml_stmt = static_cast<ObDMLStmt *>(stmt);
@@ -680,7 +680,7 @@ TEST_F(TestOptEstSel, histogram)
     num_elements.push_back(infos[i][2]);
   }
 
-  init_histogram(ObHistType::FREQUENCY, 100, 0.0025,
+  init_histogram(allocator_, ObHistType::FREQUENCY, 100, 0.0025,
                  repeat_count, value, num_elements, opt_stat_.get_histogram());
 
   run_test(test_file, result_file, tmp_file, 10);

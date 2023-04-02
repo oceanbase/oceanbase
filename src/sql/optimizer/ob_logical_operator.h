@@ -29,32 +29,27 @@
 #include "sql/engine/px/ob_px_op_size_factor.h"
 #include "sql/ob_sql_context.h"
 #include "sql/optimizer/ob_fd_item.h"
-#include "sql/dblink/ob_spell_link_stmt.h"
-
+#include "sql/monitor/ob_sql_plan.h"
+#include "sql/monitor/ob_sql_plan_manager.h"
 namespace oceanbase
 {
 namespace sql
 {
-class planText;
 struct JoinFilterInfo;
 struct EstimateCostInfo;
+struct ObSqlPlanItem;
+struct PlanText;
 struct partition_location
 {
   int64_t partition_id;
   // server id
   TO_STRING_KV(K(partition_id));
 };
-static const char ID[] = "ID";
-static const char OPERATOR[] = "OPERATOR";
-static const char NAME[] = "NAME";
-static const char ROWS[] = "EST.ROWS";
-static const char COST[] = "COST";
-static const char OPCOST[] = "OP_COST";
 
 /**
  *  Print log info with expressions
  */
-#define EXPLAIN_PRINT_EXPRS(exprs, type)                                                        \
+#define EXPLAIN_PRINT_EXPRS(exprs, type)                                                    \
 {                                                                                           \
   int64_t N = -1;                                                                           \
   if (OB_FAIL(ret)) { /* Do nothing */                                                      \
@@ -68,7 +63,7 @@ static const char OPCOST[] = "OP_COST";
       } else if (OB_ISNULL(exprs.at(i))) {                                                  \
         ret = OB_ERR_UNEXPECTED;                                                            \
       } else if (OB_FAIL(exprs.at(i)                                                        \
-                         ->get_name(buf, buf_len, pos, type))) { /*Do nothing */                         \
+                         ->get_name(buf, buf_len, pos, type))) { /*Do nothing */            \
       } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */                               \
       } else if (i < N - 1) {                                                               \
         ret = BUF_PRINTF(", ");                                                             \
@@ -80,7 +75,7 @@ static const char OPCOST[] = "OP_COST";
   } else { /* Do nothing */ }                                                               \
 }
 
-#define EXPLAIN_PRINT_EXPR(expr, type)                                                          \
+#define EXPLAIN_PRINT_EXPR(expr, type)                                                      \
 {                                                                                           \
   if (OB_FAIL(ret)) { /* Do nothing */                                                      \
   } else if (OB_FAIL(BUF_PRINTF(#expr"("))) { /* Do nothing */                              \
@@ -89,39 +84,6 @@ static const char OPCOST[] = "OP_COST";
   } else if (OB_FAIL(expr->get_name(buf, buf_len, pos, type))) {                            \
     LOG_WARN("print expr name failed", K(ret));                                             \
   } else { /*Do nothing*/ }                                                                 \
-  if (OB_SUCC(ret)) { /* Do nothing */                                                      \
-    ret = BUF_PRINTF(")");                                                                  \
-  } else { /* Do nothing */ }                                                               \
-}
-
-/**
- *  Print log info with expressions
- */
-#define EXPLAIN_PRINT_SORT_KEYS(exprs, type)                                                    \
-{                                                                                           \
-  int64_t N = -1;                                                                           \
-  if (OB_FAIL(ret)) { /* Do nothing */                                                      \
-  } else if (OB_FAIL(BUF_PRINTF(#exprs"("))) { /* Do nothing */                             \
-  } else if (FALSE_IT(N = exprs.count())) {                                                 \
-  } else if (N == 0) {                                                                      \
-    BUF_PRINTF("nil");                                                                      \
-  } else {                                                                                  \
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {                                       \
-      if (OB_FAIL(BUF_PRINTF("["))) { /* Do nothing */                                      \
-      } else if (OB_ISNULL(exprs.at(i).expr_)) {                                            \
-        ret = common::OB_ERR_UNEXPECTED;                                                    \
-      } else if (OB_FAIL(exprs.at(i).expr_                                                  \
-                         ->get_name(buf, buf_len, pos, type))) { /* Do nothing */                        \
-      } else if (exprs.at(i).is_descending()) {                         \
-        ret = BUF_PRINTF(", DESC");                                                         \
-      } else { /* Do nothing */ }                                                           \
-      if (OB_FAIL(ret)) { /* Do nothing */                                                  \
-      } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */                               \
-      } else if (i < N - 1) {                                                               \
-        ret = BUF_PRINTF(", ");                                                             \
-      } else { /* Do nothing */ }                                                           \
-    }                                                                                       \
-  }                                                                                         \
   if (OB_SUCC(ret)) { /* Do nothing */                                                      \
     ret = BUF_PRINTF(")");                                                                  \
   } else { /* Do nothing */ }                                                               \
@@ -159,40 +121,11 @@ static const char OPCOST[] = "OP_COST";
 }
 
 /**
- *  Print log info with exec params
- */
-#define EXPLAIN_PRINT_EXEC_PARAMS(exec_params, type)                            \
-{                                                                           \
-  int64_t N = -1;                                                           \
-  if (OB_FAIL(ret)) { /* Do nothing */                                      \
-  } else if (OB_FAIL(BUF_PRINTF(#exec_params"("))) { /* Do nothing */       \
-  } else if (FALSE_IT(N = exec_params.count())) { /* Do nothing */          \
-  } else if (N == 0) {                                                      \
-    ret = BUF_PRINTF("nil");                                                \
-  } else {                                                                  \
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {                       \
-      if (OB_FAIL(BUF_PRINTF("["))) { /* Do nothing */                      \
-      } else if (OB_ISNULL(exec_params.at(i).second)) {                     \
-        ret = OB_ERR_UNEXPECTED;                                            \
-      } else if (OB_FAIL(exec_params.at(i).second                           \
-                         ->get_name(buf, buf_len, pos, type))) {                         \
-      } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */               \
-      } else if (i < N - 1) {                                               \
-        ret = BUF_PRINTF(", ");                                             \
-      } else { /* Do nothing */ }                                           \
-    }                                                                       \
-  }                                                                         \
-  if (OB_SUCC(ret)) {                                                       \
-    ret = BUF_PRINTF(")");                                                  \
-  } else { /* Do nothing */ }                                               \
-}
-
-/**
  *  Print log info with idxs
  */
-#define EXPLAIN_PRINT_IDXS(idxs)                                                   \
+#define EXPLAIN_PRINT_IDXS(idxs)                                                \
 {                                                                               \
-  ObSEArray<int64_t, 4, common::ModulePageAllocator, true> arr;                                                    \
+  ObSEArray<int64_t, 4, common::ModulePageAllocator, true> arr;                 \
   int64_t N = -1;                                                               \
   if (OB_FAIL(ret)) { /* Do nothing */                                          \
   } else if (OB_FAIL(BUF_PRINTF(#idxs"("))) { /* Do nothing */                  \
@@ -201,14 +134,14 @@ static const char OPCOST[] = "OP_COST";
   } else if (N == 0) {                                                          \
     ret = BUF_PRINTF("nil");                                                    \
   } else {                                                                      \
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {                            \
-      if (OB_FAIL(BUF_PRINTF("["))) { /* Do nothing */                           \
-      } else if (OB_FAIL(BUF_PRINTF("%lu", arr.at(i)))) { /* Do nothing */       \
-      } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */                    \
-      } else if (i < N - 1) {                                                    \
-        ret = BUF_PRINTF(", ");                                                  \
-      } else { /* Do nothing */ }                                                \
-    }                                                                            \
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {                           \
+      if (OB_FAIL(BUF_PRINTF("["))) { /* Do nothing */                          \
+      } else if (OB_FAIL(BUF_PRINTF("%lu", arr.at(i)))) { /* Do nothing */      \
+      } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */                   \
+      } else if (i < N - 1) {                                                   \
+        ret = BUF_PRINTF(", ");                                                 \
+      } else { /* Do nothing */ }                                               \
+    }                                                                           \
   }                                                                             \
   if (OB_SUCC(ret)) { /* Do nothing */                                          \
     ret = BUF_PRINTF(")");                                                      \
@@ -218,7 +151,7 @@ static const char OPCOST[] = "OP_COST";
 /**
  *  Print log info with expressions
  */
-#define EXPLAIN_PRINT_MERGE_DIRECTIONS(directions)                                  \
+#define EXPLAIN_PRINT_MERGE_DIRECTIONS(directions)                                \
 {                                                                                 \
   int64_t N = -1;                                                                 \
   if (OB_FAIL(ret)) { /* Do nothing */                                            \
@@ -248,11 +181,11 @@ static const char OPCOST[] = "OP_COST";
 /**
  *  Print log info with expressions
  */
-#define EXPLAIN_PRINT_SORT_ITEMS(sort_keys, type)                           \
+#define EXPLAIN_PRINT_SORT_ITEMS(sort_keys, type)                         \
 {                                                                         \
   int64_t N = -1;                                                         \
   if (OB_FAIL(ret)) { /* Do nothing */                                    \
-  } else if (OB_FAIL(BUF_PRINTF(#sort_keys"("))) { /* Do nothing */        \
+  } else if (OB_FAIL(BUF_PRINTF(#sort_keys"("))) { /* Do nothing */       \
   } else if (FALSE_IT(N = sort_keys.count())) { /* Do nothing */          \
   } else if (0 == N) {                                                    \
     ret = BUF_PRINTF("nil");                                              \
@@ -262,7 +195,7 @@ static const char OPCOST[] = "OP_COST";
       } else if(OB_ISNULL(sort_keys.at(i).expr_)) {                       \
         ret = OB_ERR_UNEXPECTED;                                          \
       } else if (OB_FAIL(sort_keys.at(i).expr_                            \
-                         ->get_name(buf, buf_len, pos, type))) {                       \
+                         ->get_name(buf, buf_len, pos, type))) {          \
         LOG_WARN("fail to get name", K(i), K(ret));                       \
       } else if (OB_FAIL(BUF_PRINTF(", "))) { /* Do nothing */            \
       } else if (is_ascending_direction(sort_keys.at(i).order_type_)) {   \
@@ -283,11 +216,43 @@ static const char OPCOST[] = "OP_COST";
 }
 
 /**
+ *  Print log info with expressions
+ */
+#define EXPLAIN_PRINT_POPULAR_VALUES(popular_values)                      \
+{                                                                         \
+  int64_t N = -1;                                                         \
+  if (OB_FAIL(ret)) { /* Do nothing */                                    \
+  } else if (OB_FAIL(BUF_PRINTF("popular_values("))) { /* Do nothing */   \
+  } else if (FALSE_IT(N = popular_values.count())) { /* Do nothing */     \
+  } else if (0 == N) {                                                    \
+    ret = BUF_PRINTF("nil");                                              \
+  } else {                                                                \
+    if (OB_FAIL(BUF_PRINTF("["))) { /* Do nothing */                      \
+    }                                                                     \
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {                     \
+      if (OB_FAIL(popular_values.at(i).print_sql_literal(                 \
+                  buf, buf_len, pos))) {                                  \
+        LOG_WARN("fail to get name", K(i), K(ret));                       \
+      }                                                                   \
+      if (OB_FAIL(ret)) { /* Do nothing */                                \
+      } else if(i < N - 1) {                                              \
+        ret = BUF_PRINTF(",");                                            \
+      } else { /* Do nothing */ }                                         \
+    }                                                                     \
+    if (OB_FAIL(ret)) { /* Do nothing */                                  \
+    } else if (OB_FAIL(BUF_PRINTF("]"))) { /* Do nothing */               \
+    }                                                                     \
+  }                                                                       \
+  if (OB_SUCC(ret)) {                                                     \
+    ret = BUF_PRINTF(")");                                                \
+  } else { /* Do nothing */ }                                             \
+}
+
+/**
  * these operator never generate expr
  */
 
 #define IS_EXPR_PASSBY_OPER(type) (log_op_def::LOG_GRANULE_ITERATOR == (type)    \
-                                   || log_op_def::LOG_LINK == (type)             \
                                    || log_op_def::LOG_MONITORING_DUMP == (type)) \
 
 
@@ -326,6 +291,7 @@ public:
     GIS_IN_PARTITION_WISE,
     GIS_PARTITION_WITH_AFFINITY,
     GIS_PARTITION,
+    GIS_AFFINITY,
   };
 public:
   explicit AllocGIContext() :
@@ -338,8 +304,7 @@ public:
 		partition_count_(0),
     hash_part_(false),
     slave_mapping_type_(SM_NONE),
-    is_valid_for_gi_(false),
-    enable_gi_partition_pruning_(false)
+    is_valid_for_gi_(false)
   {
   }
   ~AllocGIContext()
@@ -350,10 +315,11 @@ public:
   bool is_in_pw_affinity_state();
   bool is_partition_gi() { return GIS_PARTITION == state_; };
   void set_in_partition_wise_state(ObLogicalOperator *op_ptr);
+  bool is_in_affinity_state();
+  void set_in_affinity_state(ObLogicalOperator *op_ptr);
   bool try_set_out_partition_wise_state(ObLogicalOperator *op_ptr);
   bool is_op_set_pw(ObLogicalOperator *op_ptr);
   int set_pw_affinity_state();
-  void enable_gi_partition_pruning() { enable_gi_partition_pruning_ = true; }
   void reset_info();
   GIState get_state();
   void add_exchange_op_count() { exchange_op_above_count_++; }
@@ -387,7 +353,6 @@ public:
   bool hash_part_;
   SlaveMappingType slave_mapping_type_;
   bool is_valid_for_gi_;
-  bool enable_gi_partition_pruning_;
 };
 
 class ObAllocGIInfo
@@ -396,8 +361,7 @@ public:
   ObAllocGIInfo () :
     state_(AllocGIContext::GIS_NORMAL),
     pw_op_ptr_(nullptr),
-    multi_child_op_above_count_in_dfo_(0),
-    enable_gi_partition_pruning_(false)
+    multi_child_op_above_count_in_dfo_(0)
   {
   }
   TO_STRING_KV(K(state_),
@@ -408,19 +372,16 @@ public:
     state_ = ctx.state_;
     pw_op_ptr_ = ctx.pw_op_ptr_;
     multi_child_op_above_count_in_dfo_ = ctx.multi_child_op_above_count_in_dfo_;
-    enable_gi_partition_pruning_ = ctx.enable_gi_partition_pruning_;
   }
   void get_info(AllocGIContext &ctx)
   {
     ctx.state_ = state_;
     ctx.pw_op_ptr_ = pw_op_ptr_;
     ctx.multi_child_op_above_count_in_dfo_ = multi_child_op_above_count_in_dfo_;
-    ctx.enable_gi_partition_pruning_ = enable_gi_partition_pruning_;
   }
   AllocGIContext::GIState state_;
   ObLogicalOperator *pw_op_ptr_;
   int64_t multi_child_op_above_count_in_dfo_;
-  bool enable_gi_partition_pruning_;
 };
 
 class AllocMDContext
@@ -473,6 +434,7 @@ struct ObExchangeInfo
     repartition_func_exprs_(),
     calc_part_id_expr_(NULL),
     hash_dist_exprs_(),
+    popular_values_(),
     dist_method_(ObPQDistributeMethod::LOCAL), // pull to local
     unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
     null_row_dist_method_(ObNullDistributeMethod::NONE),
@@ -481,6 +443,9 @@ struct ObExchangeInfo
     weak_sharding_(),
     need_null_aware_shuffle_(false),
     is_rollup_hybrid_(false),
+    is_wf_hybrid_(false),
+    wf_hybrid_aggr_status_expr_(NULL),
+    wf_hybrid_pby_exprs_cnt_array_(),
     may_add_interval_part_(MayAddIntervalPart::NO),
     sample_type_(NOT_INIT_SAMPLE_TYPE)
   {
@@ -521,6 +486,8 @@ struct ObExchangeInfo
   common::ObSEArray<ObRawExpr*, 4> repartition_func_exprs_;
   ObRawExpr *calc_part_id_expr_;
   common::ObSEArray<HashExpr, 4> hash_dist_exprs_;
+  // for hybrid hash distr
+  common::ObSEArray<ObObj, 20> popular_values_;
   ObPQDistributeMethod::Type dist_method_;
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
   ObNullDistributeMethod::Type null_row_dist_method_;
@@ -533,6 +500,10 @@ struct ObExchangeInfo
   // for null aware anti join
   bool need_null_aware_shuffle_;
   bool is_rollup_hybrid_;
+  bool is_wf_hybrid_;
+  ObRawExpr *wf_hybrid_aggr_status_expr_;
+  // pby exprs cnt of every wf for wf hybrid dist
+  common::ObSEArray<int64_t, 4> wf_hybrid_pby_exprs_cnt_array_;
   MayAddIntervalPart may_add_interval_part_;
   // sample type for range distribution or partition range distribution
   ObPxSampleType sample_type_;
@@ -556,6 +527,8 @@ struct ObExchangeInfo
                K_(slave_mapping_type),
                K_(need_null_aware_shuffle),
                K_(is_rollup_hybrid),
+               K_(is_wf_hybrid),
+               K_(wf_hybrid_pby_exprs_cnt_array),
                K_(may_add_interval_part),
                K_(sample_type));
 private:
@@ -614,10 +587,6 @@ public:
     is_shared_ = other.is_shared_;
     return *this;
   }
-  bool not_produced() const
-  {
-    return common::OB_INVALID_ID == producer_branch_;
-  }
   TO_STRING_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), K(is_shared_), K(expr_), KPC_(expr));
 
   ObRawExpr *expr_;
@@ -640,7 +609,7 @@ public:
   //   而 producer id 则延迟到后面的算子去生成（后面一定能遇到一个有能力生成这个表达式的算子）
   //
   // 表达式生成的过程非常绕，这里有一篇文档帮助你入门：
-  //  - https://yuque.antfin-inc.com/ob/sql/xest97
+  //  -
   // 如果看完还不明白，请直接 @溪峰
   uint64_t consumer_id_;
   uint64_t producer_id_;
@@ -660,11 +629,11 @@ struct ObAllocExprContext
   int add(const ExprProducer &producer);
 
   int add_flattern_expr(const ObRawExpr* expr);
- 
+
   int get_expr_ref_cnt(const ObRawExpr* expr, int64_t &ref_cnt);
 
   DISALLOW_COPY_AND_ASSIGN(ObAllocExprContext);
-  
+
   // record producers expr index to search producer by expr quickly
   //  {key => ExprProducer.expr_ , value => index of expr_producers_}
   hash::ObHashMap<uint64_t, int64_t> expr_map_;
@@ -726,6 +695,35 @@ private:
   common::ObArray<OpCtx *> op_ctxs_;
 };
 
+struct ObBatchExecParamCtx
+{
+  struct ExecParam
+  {
+    ExecParam() : expr_(NULL), branch_id_(0) {}
+
+    ExecParam(ObRawExpr *expr, uint64_t branch_id)
+      : expr_(expr), branch_id_(branch_id) {}
+
+    ExecParam(const ExecParam &other)
+      : expr_(other.expr_),
+      branch_id_(other.branch_id_) {}
+
+    ExecParam &operator=(const ExecParam &other)
+    {
+      expr_ = other.expr_;
+      branch_id_ = other.branch_id_;
+      return *this;
+    }
+
+    ObRawExpr *expr_;
+    uint64_t branch_id_;
+
+    TO_STRING_KV(K_(expr), K_(branch_id));
+  };
+  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> params_idx_;
+  common::ObSEArray<ExecParam, 8, common::ModulePageAllocator, true> exec_params_;
+};
+
 struct ObErrLogDefine
 {
   ObErrLogDefine() :
@@ -769,7 +767,6 @@ public:
   static const int64_t second_child = 1;
   static const int64_t third_child = 2;
   static const int64_t fourth_child = 3;
-  static const int64_t SEQUENTIAL_EXECUTION_THRESHOLD = 1000;
 
   ObLogicalOperator(ObLogPlan &plan);
   virtual ~ObLogicalOperator();
@@ -1065,6 +1062,15 @@ public:
     return op_ordering_;
   }
 
+  inline common::ObIArray<common::ObAddr> &get_server_list()
+  {
+    return server_list_;
+  }
+  inline const common::ObIArray<common::ObAddr> &get_server_list() const
+  {
+    return server_list_;
+  }
+
   inline const ObFdItemSet& get_fd_item_set() const
   {
     return NULL == fd_item_set_ ? empty_fd_item_set_ : *fd_item_set_;
@@ -1136,37 +1142,6 @@ public:
   inline int64_t get_interesting_order_info() const { return interesting_order_info_; }
   inline void set_interesting_order_info(int64_t info) { interesting_order_info_ = info; }
   inline bool has_any_interesting_order_info_flag() const { return interesting_order_info_ > 0; }
-  /**
-   *  Do explain collect width operation(pre)
-   */
-  int explain_collect_width_pre(void *ctx);
-
-  /**
-   *  Do explain collect width operation(post)
-   */
-  int explain_collect_width_post(void *ctx);
-
-  /**
-   *  Do explain write buffer operation(pre)
-   */
-  int explain_write_buffer_pre(void *ctx);
-
-  int explain_index_selection_info_pre(void *ctx);
-
-  /**
-   *  Do explain write buffer operation(pre)
-   */
-  int explain_write_buffer_post(void *ctx);
-
-  /**
-   *  Do explain write buffer with output & filter exprs
-   */
-  int explain_write_buffer_output_pre(void *ctx);
-
-  /**
-   *  Do explain write buffer with outline
-   */
-  int explain_write_buffer_outline_pre(void *ctx);
 
   /**
    *  Do pre-child-traverse operation
@@ -1179,26 +1154,11 @@ public:
   int do_post_traverse_operation(const TraverseOp &op, void *ctx);
 
   /**
-   *  Rerturn a JSON object of the operator
-   *
-   *  'buf' is used when calling 'to_string()' internally.
-   */
-  virtual int to_json(char *buf, const int64_t buf_len, int64_t &pos, json::Value *&ret_val);
-
-  /**
    *  Get predefined operator name
    */
   virtual const char *get_name() const
   {
     return log_op_def::get_op_name(type_);
-  }
-
-  /**
-   * Get the length of the operator name
-   */
-  inline virtual int32_t get_explain_name_length() const
-  {
-    return ((int32_t) strlen(get_name()));
   }
 
   virtual int get_explain_name_internal(char *buf, const int64_t buf_len, int64_t &pos)
@@ -1215,16 +1175,6 @@ public:
     return common::OB_SUCCESS;
   }
 
-  virtual int explain_index_selection_info(char *buf,
-                                           int64_t &buf_len,
-                                           int64_t &pos)
-  {
-    int ret = common::OB_SUCCESS;
-    UNUSED(buf);
-    UNUSED(buf_len);
-    UNUSED(pos);
-    return ret;
-  }
   virtual int allocate_expr_pre(ObAllocExprContext &ctx);
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs);
@@ -1245,6 +1195,8 @@ public:
 
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
+  int force_pushdown_exprs(ObAllocExprContext &ctx);
+  int get_pushdown_producer_id(uint64_t &producer_id);
 
   int extract_shared_exprs(const ObIArray<ObRawExpr*> &exprs,
                            ObAllocExprContext &ctx,
@@ -1409,16 +1361,8 @@ public:
   virtual int px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx);
   virtual int has_block_parent_for_shj(bool &has_shj);
 
-  virtual int allocate_link_post();
   virtual int allocate_startup_expr_post();
-  int allocate_startup_expr_post(int64_t child_idx);
-  int allocate_link_node_above(int64_t child_idx);
-  virtual int copy_part_expr_pre(CopyPartExprCtx &ctx);
-  int copy_part_expr(CopyPartExprCtx &ctx, ObRawExpr* &calc_part_id_expr);
-  int check_is_on_null_side(ObLogicalOperator *op, bool &is_on_null_side);
-
-  virtual int collect_link_sql_context_pre(GenLinkStmtPostContext &link_ctx);
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx);
+  virtual int allocate_startup_expr_post(int64_t child_idx);
   /**
    *  Start plan tree traverse
    *
@@ -1480,7 +1424,7 @@ public:
   inline const ObShardingInfo *get_strong_sharding() const { return strong_sharding_; }
   inline void set_strong_sharding(ObShardingInfo* strong_sharding) { strong_sharding_ = strong_sharding; }
 
-  bool check_stmt_can_be_packed(const ObDMLStmt *stmt);
+  int check_stmt_can_be_packed(const ObDMLStmt *stmt, bool &need_pack);
   inline ObIArray<ObShardingInfo*> &get_weak_sharding() { return weak_sharding_; }
 
   inline const ObIArray<ObShardingInfo*> &get_weak_sharding() const { return weak_sharding_; }
@@ -1503,7 +1447,7 @@ public:
     contain_pw_merge_op_ = contain_pw_merge_op;
   }
   inline bool get_contains_match_all_fake_cte() const { return contain_match_all_fake_cte_; }
-  inline void set_contains_match_all_fake_cte(bool contain_match_all_fake_cte) 
+  inline void set_contains_match_all_fake_cte(bool contain_match_all_fake_cte)
   {
     contain_match_all_fake_cte_ = contain_match_all_fake_cte;
   }
@@ -1512,6 +1456,19 @@ public:
   {
     contain_das_op_ = contain_das_op;
   }
+
+  inline int64_t get_inherit_sharding_index() const { return inherit_sharding_index_; }
+  inline void set_inherit_sharding_index(int64_t inherit_sharding_index)
+  {
+    inherit_sharding_index_ = inherit_sharding_index;
+  }
+
+  inline bool get_allocated_osg() const { return allocated_osg_; }
+  inline void set_allocated_osg(bool allocated_osg)
+  {
+    allocated_osg_ = allocated_osg;
+  }
+
   bool is_dml_operator() const
   {
     return (log_op_def::LOG_UPDATE == type_
@@ -1524,10 +1481,14 @@ public:
   {
     return (log_op_def::LOG_EXPR_VALUES == type_ || log_op_def::LOG_VALUES == type_);
   }
+  bool is_osg_operator() const
+  {
+    return log_op_def::LOG_OPTIMIZER_STATS_GATHERING == type_;
+  }
   /*
-   * replace agg expr generated by group by push down during allocating exchange
+   * replace exprs which will be returned by get_op_exprs during allocating expr
    */
-  int replace_generated_agg_expr(
+  int replace_op_exprs(
       const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>  >&to_replace_exprs);
 
   // check if this operator is some kind of table scan.
@@ -1547,8 +1508,6 @@ public:
   // the operator use these interfaces to allocate gi
   int pw_allocate_granule_pre(AllocGIContext &ctx);
   int pw_allocate_granule_post(AllocGIContext &ctx);
-
-  int print_operator_for_use_join_filter(planText &plan_text);
 
   // dblink
   void set_dblink_id(uint64_t dblink_id) { dblink_id_ = dblink_id; }
@@ -1613,9 +1572,56 @@ public:
   int has_window_function_below(bool &has_win_func) const;
   int get_pushdown_op(log_op_def::ObLogOpType op_type, const ObLogicalOperator *&op) const;
 
+  virtual int get_plan_item_info(PlanText &plan_text,
+                                ObSqlPlanItem &plan_item);
+
+  virtual int print_outline_data(PlanText &plan_text);
+
+  virtual int print_used_hint(PlanText &plan_text);
+
+  int print_outline_table(PlanText &plan_text, const TableItem *table_item) const;
+  /**
+   * pure partition wise:
+   *   match multiple children and all children meet strict partition wise
+   *   e.g, original pw join and pw set(not union all)
+   *
+   * affinite partition wise:
+   *   match multiple children and all children meet partition wise with affinity
+   *   e.g, union all with the same data distribution node for all children
+   *
+   * extended partition wise:
+   *   match multiple children and all children have already with hash-hash distribution
+   *   and no need additional exchange allocated
+   *   e.g, union all hash-hash and none-none hash join
+   */
+  inline bool is_pure_partition_wise()
+  {
+    return is_partition_wise_ && !exchange_allocated_ &&
+           NULL != get_sharding() &&
+           get_sharding()->is_distributed_with_table_location_and_partitioning();
+  }
+  inline bool is_affinite_partition_wise()
+  {
+    return is_partition_wise_ && exchange_allocated_ &&
+           NULL != get_sharding() &&
+           get_sharding()->is_distributed_with_table_location_and_partitioning();
+  }
+  inline bool is_extended_partition_wise()
+  {
+    return is_partition_wise_ && exchange_allocated_ &&
+           NULL != get_sharding() &&
+           get_sharding()->is_distributed_without_table_location_with_partitioning();
+  }
+  int collect_batch_exec_param_pre(void* ctx);
+  int collect_batch_exec_param_post(void* ctx);
+  int collect_batch_exec_param(void* ctx,
+                               const ObIArray<ObExecParamRawExpr*> &exec_params,
+                               ObIArray<ObExecParamRawExpr *> &left_above_params,
+                               ObIArray<ObExecParamRawExpr *> &right_above_params);
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
+  ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> const_param_constraints_;
   ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
 protected:
   enum TraverseType
@@ -1634,65 +1640,12 @@ protected:
     BUSHY
   };
 
-  /**
-   *  Check if all expresionss are produced by some operator.
-   */
-  bool is_all_expr_produced(const common::ObIArray<ExprProducer> &ctx);
-
-  /**
-   *  Print the footer of the explain plan table
-   */
-  int print_plan_annotation(char *buf,
-                            int64_t &buf_len,
-                            int64_t &pos,
-                            ExplainType type);
-
-  /**
-   *  Interface for operators to print their specific info in the plan table footer
-   */
-  virtual int print_my_plan_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type)
-  {
-    int ret = common::OB_SUCCESS;
-    UNUSED(buf);
-    UNUSED(buf_len);
-    UNUSED(pos);
-    UNUSED(type);
-    return ret;
-  }
-
-  /**
-   *  Interface for operators to print their specific info in the plan table footer
-   */
-  virtual int print_plan_head_annotation(char *buf,
-                                       int64_t &buf_len,
-                                       int64_t &pos,
-                                       ExplainType type)
-  {
-    int ret = common::OB_SUCCESS;
-    UNUSED(buf);
-    UNUSED(buf_len);
-    UNUSED(pos);
-    UNUSED(type);
-    return ret;
-  }
-
-  virtual int print_outline(planText &plan)
-  {
-    int ret = common::OB_SUCCESS;
-    UNUSED(plan);
-    return ret;
-  }
-
-
   int project_pruning_pre();
   virtual int check_output_dependance(common::ObIArray<ObRawExpr *> &child_output, PPDeps &deps);
   void do_project_pruning(common::ObIArray<ObRawExpr *> &exprs,
                           PPDeps &deps);
   int try_add_remove_const_exprs();
-  virtual int inner_replace_generated_agg_expr(
+  virtual int inner_replace_op_exprs(
       const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*> >&to_replace_exprs);
   int replace_exprs_action(const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*> >&to_replace_exprs,
                            common::ObIArray<ObRawExpr*> &dest_exprs);
@@ -1794,7 +1747,10 @@ private:
   int find_px_for_batch_rescan(const log_op_def::ObLogOpType, int64_t op_id, bool &find);
   int find_nested_dis_rescan(bool &find, bool nested);
   int add_op_exprs(ObRawExpr* expr);
+  // alloc mat for sync in output
   int need_alloc_material_for_shared_hj(ObLogicalOperator &curr_op, bool &need_alloc);
+  // alloc mat for sync in intput
+  int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator
@@ -1827,7 +1783,7 @@ protected:
   bool contain_fake_cte_;
   bool contain_pw_merge_op_;
   bool contain_das_op_;
-  bool contain_match_all_fake_cte_; 
+  bool contain_match_all_fake_cte_;
   common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> dup_table_pos_; // for duplicated table
   ObShardingInfo *strong_sharding_;
   common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;
@@ -1843,9 +1799,14 @@ protected:
   int64_t interesting_order_info_;  // 记录算子的序在stmt中的哪些地方用到 e.g. join, group by, order by
   int64_t parallel_;
   int64_t server_cnt_;
+  ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
   bool need_late_materialization_;
   // all non_const exprs for this op, generated by allocate_expr_pre and used by project pruning
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> op_exprs_;
+  // Used to indicate which child node the current sharding inherits from
+  int64_t inherit_sharding_index_;
+  // wether has allocated a osg_gather.
+  bool allocated_osg_;
 };
 
 template <typename Allocator>

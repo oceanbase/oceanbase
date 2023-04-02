@@ -152,7 +152,9 @@ public:
     explicit WRLockGuard(const common::SpinRWLock &rwlock);
     ~WRLockGuard() {}
   private:
+#ifdef ENABLE_DEBUG_LOG
     common::ObSimpleTimeGuard time_guard_; // print log and lbt, if the lock is held too much time.
+#endif
     common::SpinWLockGuard lock_guard_;
   };
   class RDLockGuard
@@ -161,7 +163,9 @@ public:
     explicit RDLockGuard(const common::SpinRWLock &rwlock);
     ~RDLockGuard() {}
   private:
+#ifdef ENABLE_DEBUG_LOG
     common::ObSimpleTimeGuard time_guard_; // print log and lbt, if the lock is held too much time.
+#endif
     common::SpinRLockGuard lock_guard_;
   };
 
@@ -202,14 +206,14 @@ public:
   void print_callbacks();
   void elr_trans_preparing();
   int trans_end(const bool commit);
-  int replay_fail(const int64_t log_timestamp);
-  int replay_succ(const int64_t log_timestamp);
+  int replay_fail(const share::SCN scn);
+  int replay_succ(const share::SCN scn);
   int rollback_to(const int64_t seq_no,
                   const int64_t from_seq_no);
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(bool &has_remove);
-  int remove_callback_for_uncommited_txn(memtable::ObIMemtable *memtable);
+  int remove_callback_for_uncommited_txn(memtable::ObIMemtable *memtable, const share::SCN max_applied_scn);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
   void acquire_callback_list();
   void revert_callback_list();
@@ -220,11 +224,11 @@ public:
 private:
   void wakeup_waiting_txns_();
 public:
-  int calc_checksum_before_log_ts(const int64_t log_ts,
-                                  uint64_t &checksum,
-                                  int64_t &checksum_log_ts);
+  int calc_checksum_before_scn(const share::SCN scn,
+                               uint64_t &checksum,
+                               share::SCN &checksum_scn);
   void update_checksum(const uint64_t checksum,
-                       const int64_t checksum_log_ts);
+                       const share::SCN checksum_scn);
   int clean_unlog_callbacks(int64_t &removed_cnt);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
@@ -233,9 +237,23 @@ public:
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
   int64_t get_pending_log_size() { return ATOMIC_LOAD(&pending_log_size_); }
   int64_t get_flushed_log_size() { return ATOMIC_LOAD(&flushed_log_size_); }
-  bool is_all_redo_submitted(ObITransCallback *generate_cursor)
+  bool is_all_redo_submitted()
   {
-    return (ObITransCallback *)callback_list_.get_tail() == generate_cursor;
+    bool all_redo_submitted = true;
+    if (OB_NOT_NULL(callback_lists_)) {
+      for (int64_t i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
+        if (!callback_lists_[i].empty()) {
+          all_redo_submitted = false;
+          break;
+        }
+      }
+    }
+
+    if (all_redo_submitted) {
+      all_redo_submitted = !(((ObITransCallback *)callback_list_.get_tail())->need_submit_log());
+    }
+
+    return all_redo_submitted;
   }
   void merge_multi_callback_lists();
   void reset_pdml_stat();
@@ -271,13 +289,9 @@ public:
   { ATOMIC_AAF(&callback_remove_for_rollback_to_count_, cnt); }
   int64_t get_checksum() const { return callback_list_.get_checksum(); }
   int64_t get_tmp_checksum() const { return callback_list_.get_tmp_checksum(); }
-  int64_t get_checksum_log_ts() const { return callback_list_.get_checksum_log_ts(); }
+  share::SCN get_checksum_scn() const { return callback_list_.get_checksum_scn(); }
   transaction::ObPartTransCtx *get_trans_ctx() const;
 private:
-  bool is_all_redo_submitted(ObMvccRowCallback *generate_cursor)
-  {
-    return (ObMvccRowCallback *)callback_list_.get_tail() == generate_cursor;
-  }
   void force_merge_multi_callback_lists();
 private:
   ObITransCallback *get_guard_() { return callback_list_.get_guard(); }
@@ -388,7 +402,7 @@ public:
   int get_cluster_version(uint64_t &cluster_version) const override;
   transaction::ObTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  bool log_synced() const override { return INT64_MAX != log_ts_; }
+  bool log_synced() const override { return share::SCN::max_scn() != scn_; }
   virtual int before_append(const bool is_replay) override;
   virtual int after_append(const bool is_replay, const int ret_code) override;
   virtual int log_submitted() override;
@@ -400,7 +414,7 @@ public:
   virtual int clean();
   virtual int del();
   virtual int checkpoint_callback();
-  virtual int log_sync(const int64_t log_ts) override;
+  virtual int log_sync(const share::SCN scn) override;
   virtual int log_sync_fail() override;
   virtual int print_callback() override;
   virtual blocksstable::ObDmlFlag get_dml_flag() const override;
@@ -414,7 +428,7 @@ private:
   virtual int trans_commit() override;
   virtual int trans_abort() override;
   virtual int rollback_callback() override;
-  virtual int calc_checksum(const int64_t checksum_log_ts,
+  virtual int calc_checksum(const share::SCN checksum_scn,
                             ObBatchChecksum *checksumer) override;
   virtual int elr_trans_preparing() override;
 private:

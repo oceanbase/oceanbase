@@ -48,15 +48,12 @@ class ObFailureDetector
   friend class ObLeaderCoordinator;
 public:
   ObFailureDetector();
-  /**
-   * @description: 初始化timer，提交一detect_recover()和detect_connection_status()任务
-   * @param {*}
-   * @return {*}
-   * @Date: 2022-01-04 15:27:39
-   */
-  int init(ObLeaderCoordinator *coordinator);
+  ~ObFailureDetector();
   void destroy();
   static int mtl_init(ObFailureDetector *&p_failure_detector);
+  static int mtl_start(ObFailureDetector *&p_failure_detector);
+  static void mtl_stop(ObFailureDetector *&p_failure_detector);
+  static void mtl_wait(ObFailureDetector *&p_failure_detector);
   /**
    * @description: 设置一个不可自动恢复的failure，需要由注册的模块手动调用remove_failure_event()接口恢复failure，否则将持续存在
    * @param {FailureEvent} event failure事件，定义在failure_event.h中
@@ -89,20 +86,38 @@ public:
    */
   void detect_recover();
   /**
-   * @description: 定期探测与租户下的其他副本的网络连接是否正常
+   * @description: detect whether failure has occured
    * @param {*}
    * @return {*}
-   * @Date: 2022-01-04 21:12:16
    */
-  void detect_connection_status();
+  void detect_failure();
+  bool is_clog_disk_has_fatal_error();
+  bool is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang);
 private:
+  bool check_is_running_() const { return is_running_; }
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);
+  void detect_palf_hang_failure_();
+  void detect_slog_writer_hang_failure_();
+  void detect_sstable_io_failure_();
+  void detect_palf_disk_full_();
 private:
-  common::ObArray<FailureEvent> event_;
-  common::ObArray<ObFunction<bool()>> recover_detect_operation_;
+  struct FailureEventWithRecoverOp {
+    int init(const FailureEvent &event, const ObFunction<bool()> &recover_detect_operation);
+    int assign(const FailureEventWithRecoverOp &);
+    FailureEvent event_;
+    ObFunction<bool()> recover_detect_operation_;
+    TO_STRING_KV(K_(event));
+  };
+  bool is_running_;
+  common::ObArray<FailureEventWithRecoverOp> events_with_ops_;
   common::ObArray<common::ObAddr> tenant_server_list_;
-  common::ObOccamTimerTaskRAIIHandle task_handle_;
+  common::ObOccamTimerTaskRAIIHandle failure_task_handle_;
+  common::ObOccamTimerTaskRAIIHandle recovery_task_handle_;
   ObLeaderCoordinator *coordinator_;
+  bool has_add_clog_hang_event_;
+  bool has_add_slog_hang_event_;
+  bool has_add_sstable_hang_event_;
+  bool has_add_clog_full_event_;
   ObSpinLock lock_;
 };
 

@@ -30,7 +30,8 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-TLOCAL(Thread *, Thread::current_thread_) = nullptr;
+thread_local int64_t Thread::loop_ts_ = 0;
+thread_local Thread* Thread::current_thread_ = nullptr;
 int64_t Thread::total_thread_count_ = 0;
 
 Thread &Thread::current()
@@ -49,14 +50,15 @@ Thread::Thread(int64_t stack_size)
 
 Thread::Thread(Runnable runnable, int64_t stack_size)
     : pth_(0),
-      pid_(0),
-      tid_(0),
       runnable_(runnable),
 #ifndef OB_USE_ASAN
       stack_addr_(nullptr),
 #endif
       stack_size_(stack_size),
-      stop_(true)
+      stop_(true),
+      join_concurrency_(0),
+      pid_before_stop_(0),
+      tid_before_stop_(0)
 {}
 
 Thread::~Thread()
@@ -125,18 +127,78 @@ int Thread::start(Runnable runnable)
 
 void Thread::stop()
 {
+#ifndef OB_USE_ASAN
+  if (!stop_ && stack_addr_ != NULL) {
+    int tid_offset = 720;
+    int pid_offset = 724;
+    int len = (char*)stack_addr_ + stack_size_ - (char*)pth_;
+    if (len >= (max(tid_offset, pid_offset) + sizeof(pid_t))) {
+      tid_before_stop_ = *(pid_t*)((char*)pth_ + tid_offset);
+      pid_before_stop_ = *(pid_t*)((char*)pth_ + pid_offset);
+    }
+  }
+#endif
   stop_ = true;
+}
+
+void Thread::dump_pth() // for debug pthread join faileds
+{
+#ifndef OB_USE_ASAN
+  int ret = OB_SUCCESS;
+  int fd = 0;
+  int64_t len = 0;
+  ssize_t size = 0;
+  char path[PATH_SIZE];
+  len = (char*)stack_addr_ + stack_size_ - (char*)pth_;
+  snprintf(path, PATH_SIZE, "log/dump_pth.%p.%d", (char*)pth_, static_cast<pid_t>(syscall(__NR_gettid)));
+  LOG_WARN("dump pth start", K(path), K(pth_), K(len), K(stack_addr_), K(stack_size_));
+  if (NULL == (char*)pth_ || len >= stack_size_ || len <= 0) {
+    LOG_WARN("invalid member", K(pth_), K(stack_addr_), K(stack_size_));
+  } else if ((fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC,
+                          S_IRUSR  | S_IWUSR | S_IRGRP)) < 0) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to create file", KERRMSG, K(ret));
+  } else if (len != (size = write(fd, (char*)(pth_), len))) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("dump pth fail", K(errno), KERRMSG, K(len), K(size), K(ret));
+    if (0 != close(fd)) {
+      LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
+    }
+  } else if (::fsync(fd) != 0) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("sync pth fail", K(errno), KERRMSG, K(len), K(size), K(ret));
+    if (0 != close(fd)) {
+      LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
+    }
+  } else if (0 != close(fd)) {
+    ret = OB_IO_ERROR;
+    LOG_WARN("fail to close file fd", K(fd), KERRMSG, K(ret));
+  } else {
+    LOG_WARN("dump pth done", K(path), K(pth_), K(size));
+  }
+#endif
 }
 
 void Thread::wait()
 {
+  int ret = OB_SUCCESS;
   if (pth_ != 0) {
-    pthread_join(pth_, nullptr);
+    if (2 <= ATOMIC_AAF(&join_concurrency_, 1)) {
+      abort();
+    }
+    if (OB_FAIL(pthread_join(pth_, nullptr))) {
+      LOG_ERROR("pthread_join failed", K(ret), K(errno));
+#ifndef OB_USE_ASAN
+      dump_pth();
+      abort();
+#endif
+    }
     destroy_stack();
     pth_ = 0;
-    pid_ = 0;
-    tid_ = 0;
     runnable_ = nullptr;
+    if (1 <= ATOMIC_AAF(&join_concurrency_, -1)) {
+      abort();
+    }
   }
 }
 
@@ -182,7 +244,7 @@ void* Thread::__th_start(void *arg)
   nss.ss_size = SIG_STACK_SIZE;
   bool restore_sigstack = false;
   if (-1 == sigaltstack(&nss, &oss)) {
-    LOG_WARN("sigaltstack failed, ignore it", K(errno));
+    LOG_WARN_RET(OB_ERR_SYS, "sigaltstack failed, ignore it", K(errno));
   } else {
     restore_sigstack = true;
   }
@@ -210,17 +272,14 @@ void* Thread::__th_start(void *arg)
       pm.set_max_chunk_cache_cnt(cache_cnt);
       ObPageManager::set_thread_local_instance(pm);
       MemoryContext *mem_context = GET_TSI0(MemoryContext);
-      ret = ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
-          ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
-                        .set_label("ThreadRoot"));
-      if (OB_FAIL(ret)) {
-        LOG_ERROR("create memory context failed", K(ret));
-      } else if (OB_ISNULL(mem_context)) {
+      if (OB_ISNULL(mem_context)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("null ptr", K(ret));
+      } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(*mem_context,
+                         ContextParam().set_properties(RETURN_MALLOC_DEFAULT)
+                                       .set_label("ThreadRoot")))) {
+        LOG_ERROR("create memory context failed", K(ret));
       } else {
-        th->pid_ = getpid();
-        th->tid_ = static_cast<pid_t>(syscall(__NR_gettid));
         WITH_CONTEXT(*mem_context) {
           try {
             in_try_stmt = true;

@@ -21,6 +21,7 @@
 #include "lib/container/ob_2d_array.h"
 #include "sql/engine/aggregate/ob_exec_hash_struct.h"
 #include "lib/lock/ob_scond.h"
+#include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
 
 namespace oceanbase
 {
@@ -45,6 +46,8 @@ struct ObHashTableSharedTableInfo
 
   int64_t total_memory_row_count_;
   int64_t total_memory_size_;
+  int64_t open_cnt_;
+  int open_ret_;
 };
 
 class ObHashJoinInput : public ObOpInput
@@ -72,7 +75,7 @@ public:
     return ret;
   }
 
-  int sync_wait(ObExecContext &ctx, int64_t &sys_event, EventPred pred, bool ignore_interrupt = false);
+  int sync_wait(ObExecContext &ctx, int64_t &sys_event, EventPred pred, bool ignore_interrupt = false, bool is_open = false);
   int64_t get_sync_val()
   {
     ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
@@ -144,6 +147,13 @@ public:
     ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
     return shared_hj_info->close_cnt_;
   }
+
+  int64_t &get_open_cnt()
+  {
+    ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
+    return shared_hj_info->open_cnt_;
+  }
+
   ObHashTableSharedTableInfo *get_shared_hj_info()
   {
     return reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
@@ -153,6 +163,13 @@ public:
     ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
     ATOMIC_SET(&shared_hj_info->ret_, in_ret);
   }
+
+  void set_open_ret(int in_ret)
+  {
+    ObHashTableSharedTableInfo *shared_hj_info = reinterpret_cast<ObHashTableSharedTableInfo *>(shared_hj_info_);
+    ATOMIC_SET(&shared_hj_info->open_ret_, in_ret);
+  }
+
   virtual void reset() override
   {
     if (0 != shared_hj_info_) {
@@ -175,10 +192,12 @@ public:
 
       shared_hj_info->process_cnt_ = 0;
       shared_hj_info->close_cnt_ = 0;
+      shared_hj_info->open_cnt_ = 0;
       shared_hj_info->ret_ = OB_SUCCESS;
+      shared_hj_info->open_ret_ = OB_SUCCESS;
       shared_hj_info->read_null_in_naaj_ = false;
-      new (&shared_hj_info->cond_)(common::SimpleCond);
-      new (&shared_hj_info->lock_)(ObSpinLock);
+      new (&shared_hj_info->cond_)common::SimpleCond(common::ObWaitEventIds::SQL_SHARED_HJ_COND_WAIT);
+      new (&shared_hj_info->lock_)ObSpinLock(common::ObLatchIds::SQL_SHARED_HJ_COND_LOCK);
       reset();
     }
     return ret;
@@ -216,7 +235,7 @@ public:
         }
       } else if (SyncValueMode::FIRST_MODE == val_mode) {
       } else {
-        OB_LOG(ERROR, "the value mode is not supported", K(val_mode));
+        OB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "the value mode is not supported", K(val_mode));
       }
       if (n_times + 1 >= shared_hj_info->sqc_thread_count_) {
         // last time, set final value
@@ -946,6 +965,7 @@ private:
   int sync_set_early_exit();
   int do_sync_wait_all();
   int sync_wait_close();
+  int sync_wait_open();
   /********** end for shared hash table hash join *******/
 private:
   using PredFunc = std::function<bool(int64_t)>;
@@ -1089,7 +1109,6 @@ private:
   static const int64_t CACHE_AWARE_PART_CNT = 128;
   static const int64_t BATCH_RESULT_SIZE = 512;
   static const int64_t INIT_LTB_SIZE = 64;
-  static const int64_t INIT_L2_CACHE_SIZE = 1 * 1024 * 1024; // 1M
   static const int64_t MIN_PART_COUNT = 8;
   static const int64_t PAGE_SIZE = ObChunkDatumStore::BLOCK_SIZE;
   static const int64_t MIN_MEM_SIZE = (MIN_PART_COUNT + 1) * PAGE_SIZE;
@@ -1166,7 +1185,7 @@ private:
   common::ObIAllocator *alloc_; // for buckets
   ModulePageAllocator *bloom_filter_alloc_;
   ObGbyBloomFilter *bloom_filter_;
-  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator, true>
+  common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE, common::ModulePageAllocator>
                                                                                     right_bit_set_;
   int64_t nth_right_row_;
   int64_t ltb_size_;

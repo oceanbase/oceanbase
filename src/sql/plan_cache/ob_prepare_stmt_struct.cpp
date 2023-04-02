@@ -292,6 +292,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     num_of_returning_into_(-1),
     no_param_sql_(),
     is_sensitive_sql_(false),
+    raw_sql_(),
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator)
 
@@ -321,6 +322,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     num_of_returning_into_(-1),
     no_param_sql_(),
     is_sensitive_sql_(false),
+    raw_sql_(),
     raw_params_(inner_allocator),
     raw_params_idx_(inner_allocator)
 {
@@ -339,6 +341,18 @@ int ObPsStmtInfo::assign_no_param_sql(const common::ObString &no_param_sql)
     LOG_WARN("allocator is invalid", K(ret));
   } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, no_param_sql, no_param_sql_))) {
     LOG_WARN("deep copy no param sql failed", K(no_param_sql), K(ret));
+  }
+  return ret;
+}
+
+int ObPsStmtInfo::assign_raw_sql(const common::ObString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is invalid", K(ret));
+  } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, raw_sql, raw_sql_))) {
+    LOG_WARN("deep copy raw sql failed", K(raw_sql), K(ret));
   }
   return ret;
 }
@@ -473,6 +487,9 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, other.get_no_param_sql(),
                no_param_sql_))) {
       LOG_WARN("deep copy str failed", K(other), K(ret));
+    } else if (OB_FAIL(ObPsSqlUtils::deep_copy_str(*allocator_, other.get_raw_sql(),
+               raw_sql_))) {
+      LOG_WARN("deep copy str failed", K(other), K(ret));
     } else if (OB_FAIL(deep_copy_fixed_raw_params(other.raw_params_idx_, other.raw_params_))) {
       LOG_WARN("deep copy fixed raw params failed", K(other), K(ret));
     } else if (OB_FAIL(ps_sql_meta_.deep_copy(other.get_ps_sql_meta()))) {
@@ -507,6 +524,7 @@ int ObPsStmtInfo::get_convert_size(int64_t &cv_size) const
   int64_t convert_size = sizeof(ObPsStmtInfo);
   convert_size += ps_sql_.length() + 1;
   convert_size += no_param_sql_.length() + 1;
+  convert_size += raw_sql_.length() + 1;
   int64_t meta_convert_size = 0;
   int64_t raw_params_size = 0;
   if (OB_FAIL(ps_sql_meta_.get_convert_size(meta_convert_size))) {
@@ -610,7 +628,7 @@ bool ObPsStmtInfo::dec_ref_count_check_erase()
     need_erase = true;
     LOG_INFO("free ps info", K(ref_count), K(*this), K(need_erase));
   } else if (ref_count < 0) {
-    BACKTRACE(ERROR, true, "ObPsStmtInfo %p ref count < 0, ref_count = %ld", this, ref_count);
+    BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "ObPsStmtInfo %p ref count < 0, ref_count = %ld", this, ref_count);
   }
   return need_erase;
 }

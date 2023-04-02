@@ -13,6 +13,8 @@
 #include "observer/ob_server.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_info.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "share/scn.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -184,15 +186,15 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
           //TODO:SCN
         case OB_APP_MIN_COLUMN_ID + 7:
           // checkpoint_ts
-          cur_row_.cells_[i].set_uint64(tablet_meta.clog_checkpoint_ts_ < 0 ? 0 : tablet_meta.clog_checkpoint_ts_);
+          cur_row_.cells_[i].set_uint64(tablet_meta.clog_checkpoint_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // snapshot_version
-          cur_row_.cells_[i].set_uint64(tablet_meta.snapshot_version_ < 0 ? 0 : tablet_meta.snapshot_version_);
+          cur_row_.cells_[i].set_uint64(tablet_meta.snapshot_version_);
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
           // multi_version_start
-          cur_row_.cells_[i].set_uint64(tablet_meta.multi_version_start_ < 0 ? 0 : tablet_meta.multi_version_start_);
+          cur_row_.cells_[i].set_uint64(tablet_meta.multi_version_start_);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

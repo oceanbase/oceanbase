@@ -62,6 +62,7 @@ public:
   {
   }
   ~ObRequestTZInfoResult() {}
+  TO_STRING_KV(K_(last_version), K_(tz_array));
 public:
   int64_t last_version_;
   common::ObSArray<ObTimeZoneInfoPos> tz_array_;
@@ -142,6 +143,10 @@ ObTimeZoneInfoManager(obrpc::ObCommonRpcProxy &rs_rpc_proxy,
   static const char *FETCH_TENANT_TZ_INFO_SQL;
   static const char *FETCH_LATEST_TZ_VERSION_SQL;
   static int fill_tz_info_map(common::sqlclient::ObMySQLResult &result, ObTZInfoMap &tz_info_map);
+  static int set_tz_info_map(
+      ObTimeZoneInfoPos *&stored_tz_info,
+      ObTimeZoneInfoPos &new_tz_info,
+      ObTZInfoMap &tz_info_map);
 private:
 
   int fetch_time_zone_info_from_tenant_table(const int64_t current_tz_version);
@@ -149,8 +154,6 @@ private:
                              ObTimeZoneInfoPos &type_info);
   static int prepare_tz_info(const common::ObIArray<ObTZTransitionTypeInfo> &types_with_null,
                       ObTimeZoneInfoPos &type_info);
-  static int set_tz_info_map(ObTimeZoneInfoPos *&stored_tz_info, ObTimeZoneInfoPos &new_tz_info,
-      ObTZInfoMap &tz_info_map);
   int fill_tz_info_map(ObRequestTZInfoResult &tz_result);
   int print_tz_info_map();
 

@@ -18,6 +18,8 @@
 #include "lib/container/ob_array_serialization.h"
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
+#include "lib/hash/ob_placement_hashmap.h"
+#include "lib/geo/ob_geo_common.h"
 
 namespace oceanbase
 {
@@ -28,8 +30,17 @@ class ObQueryRange;
 enum ObKeyPartType
 {
   T_NORMAL_KEY = 0,
-  T_LIKE_KEY
+  T_LIKE_KEY,
+  T_IN_KEY,
+  T_GEO_KEY
 };
+
+enum InType
+{
+  T_IN_KEY_PART,
+  T_NOT_IN_KEY_PART
+};
+class ObKeyPart;
 
 class ObKeyPartId
 {
@@ -69,9 +80,9 @@ class ObKeyPartPos
 {
   OB_UNIS_VERSION(1);
 public:
-  ObKeyPartPos(common::ObIAllocator &alloc, int64_t offset = -1)
-      : offset_(offset),
-      column_type_(alloc),
+  ObKeyPartPos()
+      : offset_(-1),
+      column_type_(),
       enum_set_values_()
   {
   }
@@ -102,6 +113,7 @@ public:
   int set_enum_set_values(common::ObIAllocator &allocator,
                           const common::ObIArray<common::ObString> &enum_set_values);
   inline const common::ObIArray<common::ObString> &get_enum_set_values() const { return enum_set_values_; }
+  int assign(const ObKeyPartPos &other);
   TO_STRING_KV(N_OFFSET, offset_,
                N_COLUMN_TYPE, column_type_,
                N_ENUM_SET_VALUES, enum_set_values_);
@@ -144,16 +156,85 @@ struct ObLikeKeyPart
   common::ObObj escape_;
 };
 
+struct InParamMeta
+{
+  OB_UNIS_VERSION(1);
+  public:
+    InParamMeta()
+      : pos_(),
+        vals_() {
+    }
+    ~InParamMeta() { reset(); }
+    inline void reset() { vals_.reset(); }
+    ObKeyPartPos pos_;
+    ObArray<ObObj> vals_;
+    int assign(const InParamMeta &other, ObIAllocator &alloc);
+    TO_STRING_KV(K_(pos), K_(vals));
+};
+
+typedef ObSEArray<int64_t, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> OffsetsArr;
+typedef ObSEArray<InParamMeta *, OB_MAX_ROWKEY_COLUMN_NUMBER, ModulePageAllocator> InParamsArr;
+struct ObInKeyPart
+{
+  ObInKeyPart()
+    : table_id_(common::OB_INVALID_ID),
+      in_params_(),
+      offsets_(),
+      missing_offsets_(),
+      in_type_(T_IN_KEY_PART),
+      is_strict_in_(true),
+      contain_questionmark_(false) { }
+  ~ObInKeyPart() { reset(); }
+  void reset()
+  {
+    table_id_ = common::OB_INVALID_ID;
+    in_params_.reset();
+    offsets_.reset();
+    missing_offsets_.reset();
+    in_type_ = T_IN_KEY_PART;
+    is_strict_in_ = true;
+    contain_questionmark_ = false;
+  }
+  bool is_inited() const { return !offsets_.empty() && !in_params_.empty(); }
+  int64_t get_min_offset() const { return !is_inited() ? -1 : offsets_.at(0); }
+  int64_t get_max_offset() const { return !is_inited() ? -1 : offsets_.at(offsets_.count() - 1); }
+  int64_t get_param_val_cnt() const { return !is_inited() ? 0 : in_params_.at(0)->vals_.count(); }
+  int64_t get_valid_offset_cnt(int64_t max_valid_off) const;
+  bool is_in_precise_get() const { return get_param_val_cnt() == 1; }
+  bool is_single_in() const { return offsets_.count() == 1; }
+  // only can be called when no questionmark existed
+  bool find_param(const int64_t offset, InParamMeta *&param_meta);
+  bool offsets_same_to(const ObInKeyPart *other) const;
+  int union_in_key(ObInKeyPart *other);
+  int get_dup_vals(int64_t offset, const ObObj &val, ObIArray<int64_t> &dup_val_idx);
+  InParamMeta* create_param_meta(ObIAllocator &alloc);
+
+  uint64_t table_id_;
+  InParamsArr in_params_;
+  OffsetsArr offsets_;
+  // if key is is not strict in, need to store the missing offsets
+  OffsetsArr missing_offsets_;
+  InType in_type_;
+  bool is_strict_in_;
+  bool contain_questionmark_;
+};
+
+struct ObGeoKeyPart
+{
+  common::ObObj wkb_;
+  common::ObGeoRelationType geo_type_;
+  common::ObObj distance_;
+};
+
 class ObKeyPart : public common::ObDLinkBase<ObKeyPart>
 {
   OB_UNIS_VERSION_V(1);
 public:
   ObKeyPart(common::ObIAllocator &allocator,
-            uint64_t data_table_id = common::OB_INVALID_ID,
             uint64_t column_id = common::OB_INVALID_ID,
             int32_t offset = -1)
       : allocator_(allocator),
-        pos_(allocator, offset),
+        pos_(),
         null_safe_(false),
         key_type_(T_NORMAL_KEY),
         normal_keypart_(),
@@ -162,135 +243,15 @@ public:
         and_next_(NULL),
         rowid_column_idx_(OB_INVALID_ID),
         is_phy_rowid_key_part_(false)
-  {
-    id_.table_id_ = data_table_id;
-    id_.column_id_ = column_id;
-  }
-
+  { }
+  virtual ~ObKeyPart() { reset(); }
+  virtual void reset();
+  typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
+  static int try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
+                            const ObKeyPartPos &pos, ObObj &value, int64_t &cmp);
   inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
-  inline bool operator >(const ObKeyPart &other) const;
-//  {
-//    int cmp = normal_keypart_.start_.compare(*other.end_);
-//    return (cmp > 0) || (0 == cmp && !(include_start_ && other.include_end_));
-//  }
 
-  bool has_or()
-  {
-    return NULL != or_next_;
-  }
-
-  bool has_and()
-  {
-    return NULL != and_next_;
-  }
-
-  bool has_intersect(const ObKeyPart *other) const;
-  bool can_union(const ObKeyPart *other) const;
-  bool equal_to(const ObKeyPart *other);
-
-  // bool equal_const()
-  // {
-  //   bool ret = false;
-  //   if (OB_UNLIKELY(NULL == start_ || NULL == end_)) {
-  //     // nothing
-  //   } else {
-  //     ret = (*start_ == *end_) && (include_start_) && (include_end_);
-  //   }
-  //   return ret;
-  // }
-
-  bool normal_key_is_equal(const ObKeyPart *other)
-  {
-    bool ret = false;
-    if (other != NULL) {
-      ret = (!is_question_mark() && !(other->is_question_mark()))
-           && (other->is_normal_key())
-           && (is_normal_key())
-           && (id_ == other->id_)
-           && (pos_ == other->pos_)
-           && (is_rowid_key_part() == other->is_rowid_key_part())
-           && (normal_keypart_->start_ == other->normal_keypart_->start_)
-           && (normal_keypart_->end_ == other->normal_keypart_->end_)
-           && (normal_keypart_->include_start_ == other->normal_keypart_->include_start_)
-           && (normal_keypart_->include_end_ == other->normal_keypart_->include_end_)
-           && (NULL == item_next_)
-           && (NULL == other->item_next_);
-    }
-    return ret;
-  }
-
-  int intersect(ObKeyPart *other, bool contain_row);
-  void link_gt(ObKeyPart *and_next);
-
-  void cut_and_next_ptr()
-  {
-    ObKeyPart *cur = this;
-    while (NULL != cur) {
-      cur->and_next_ = NULL;
-      cur = cur->or_next_;
-    }
-  }
-
-  inline bool is_question_mark() const
-  {
-    bool bret = false;
-    if (is_like_key()) {
-      bret = like_keypart_->pattern_.is_unknown() || like_keypart_->escape_.is_unknown();
-    } else if (is_normal_key()) {
-      bret = normal_keypart_->start_.is_unknown() || normal_keypart_->end_.is_unknown();
-    }
-    return bret;
-  }
-  //是否为严格的等值条件
-  //不能为恒false或者恒true
-  //必须start和end都是闭区间
-  //start与end的值相等
-  bool is_equal_condition() const
-  {
-    bool bret = false;
-    //item_next上的节点都是合取范式，这个只要有一个节点满足equal condition，整个key都是equal condition
-    for (const ObKeyPart *cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
-      if (cur_key->is_always_false() || cur_key->is_always_true()) {
-        bret = false;
-      } else if (cur_key->is_normal_key()) {
-        if (!cur_key->normal_keypart_->include_end_ || !cur_key->normal_keypart_->include_start_) {
-          bret = false;
-        } else if (cur_key->normal_keypart_->start_.get_type() != cur_key->normal_keypart_->end_.get_type()) {
-          bret = false;
-        } else if (cur_key->normal_keypart_->start_.is_unknown() && cur_key->normal_keypart_->end_.is_unknown()) {
-          bret = (cur_key->normal_keypart_->start_.get_unknown() == cur_key->normal_keypart_->end_.get_unknown());
-        } else if (0 == cur_key->normal_keypart_->start_.compare(cur_key->normal_keypart_->end_)) {
-          bret = true;
-        }
-      }
-    }
-    return bret;
-  }
-  bool is_range_condition() const
-  {
-    bool bret = false;
-    //item_next上的节点都是合取范式，这个只要有一个节点满足range condition，整个key都是range condition
-    for (const ObKeyPart *cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
-      if (cur_key->is_always_false() || cur_key->is_always_true()) {
-        bret = false;
-      } else if (cur_key->is_normal_key()) {
-        bret = true;
-      }
-    }
-    return bret;
-  }
-  bool is_always_false_condition() const
-  {
-    bool bret = false;
-    //item_next上的节点都是合取范式，这个只要有一个节点满足always false，整个key都是always false
-    for (const ObKeyPart *cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
-      if (cur_key->is_always_false()) {
-        bret = true;
-      }
-    }
-    return bret;
-  }
-  void set_normal_start(ObKeyPart *other)
+  inline void set_normal_start(ObKeyPart *other)
   {
     if (NULL != other && other->is_normal_key() && is_normal_key()) {
       this->id_ = other->id_;
@@ -299,7 +260,7 @@ public:
       this->normal_keypart_->include_start_ = other->normal_keypart_->include_start_;
     }
   }
-  void set_normal_end(ObKeyPart *other)
+  inline void set_normal_end(ObKeyPart *other)
   {
     if (NULL != other && other->is_normal_key() && is_normal_key()) {
       this->id_ = other->id_;
@@ -308,12 +269,32 @@ public:
       this->normal_keypart_->include_end_ = other->normal_keypart_->include_end_;
     }
   }
+
+  void link_gt(ObKeyPart *and_next);
+  ObKeyPart *general_or_next();
+  ObKeyPart *cut_general_or_next();
+
+  bool equal_to(const ObKeyPart *other);
+  bool key_node_is_equal(const ObKeyPart *other);
+  bool is_equal_condition() const;
+  bool is_range_condition() const;
+  bool is_question_mark() const;
+
+  inline bool is_rowid_key_part() const { return rowid_column_idx_ != OB_INVALID_ID; }
   inline bool is_always_true() const { return is_normal_key() && normal_keypart_->always_true_; }
   inline bool is_always_false() const { return is_normal_key() && normal_keypart_->always_false_; }
   inline bool is_normal_key() const { return T_NORMAL_KEY == key_type_ && normal_keypart_ != NULL; }
   inline bool is_like_key() const { return T_LIKE_KEY == key_type_ && like_keypart_ != NULL; }
+  inline bool is_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_IN_KEY_PART; }
+  inline bool is_not_in_key() const {return T_IN_KEY == key_type_ && in_keypart_ != NULL && in_keypart_->in_type_ == T_NOT_IN_KEY_PART; }
+  inline bool is_geo_key() const { return T_GEO_KEY == key_type_ && geo_keypart_ != NULL; }
+
   int create_normal_key();
   int create_like_key();
+  int create_in_key();
+  int create_not_in_key();
+  int create_geo_key();
+
   inline ObNormalKeyPart *get_normal_key()
   {
     ObNormalKeyPart *normal_key = NULL;
@@ -330,16 +311,46 @@ public:
     }
     return like_key;
   }
-  //通过值域来判断是否为恒true或者恒false，并且设置always_true或者always_false
+  inline ObInKeyPart *get_in_key()
+  {
+    ObInKeyPart *in_key = NULL;
+    if (T_IN_KEY == key_type_) {
+      in_key = in_keypart_;
+    }
+    return in_key;
+  }
+
+  ///////// intersect /////////
+  bool has_intersect(const ObKeyPart *other) const;
+  int intersect(ObKeyPart *other, bool contain_row);
+  int intersect_in(ObKeyPart *other);
+  int intersect_two_in_keys(ObKeyPart *other,
+                            const ObIArray<int64_t> &common_offsets);
+  int collect_same_val_idxs(const bool is_first_offset,
+                            const InParamMeta *left_param,
+                            const InParamMeta *right_param,
+                            SameValIdxMap &lr_idx);
+  int merge_two_in_keys(ObKeyPart *other, const SameValIdxMap &lr_idx);
+
+  ///////// union /////////
+  bool union_key(const ObKeyPart *other);
+  int union_in_dup_vals(ObKeyPart *other, bool &is_unioned);
+
+  ///////// formalize key /////////
+  // for normal keypart, check key part can be always true of false
+  // for in keypart, adjust params according to the invalid_offsets
+  // and check it can be always true
   int formalize_keypart(bool contain_row);
+  int get_dup_param_and_vals(ObIArray<int64_t> &dup_param_idx,
+                             ObIArray<int64_t> &invalid_val_idx);
+  int remove_in_params(const ObIArray<int64_t> &invalid_param_idx, bool always_true);
+  int remove_in_params_vals(const ObIArray<int64_t> &val_idx);
+  int convert_to_true_or_false(bool is_always_true);
+
   int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row);
-  virtual void reset();
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);
-  ObKeyPart *general_or_next();
-  ObKeyPart *cut_general_or_next();
-  bool is_rowid_key_part() const { return rowid_column_idx_ != OB_INVALID_ID; }
   bool is_phy_rowid_key_part() const { return is_phy_rowid_key_part_; }
   bool is_logical_rowid_key_part() const {
     return !is_phy_rowid_key_part_ && rowid_column_idx_ != OB_INVALID_ID; }
@@ -357,6 +368,10 @@ public:
     ObNormalKeyPart *normal_keypart_;
     //like expr type
     ObLikeKeyPart *like_keypart_;
+    // in expr type
+    ObInKeyPart *in_keypart_;
+    //geo expr type
+    ObGeoKeyPart *geo_keypart_;
   };
   //list member
   ObKeyPart *item_next_;

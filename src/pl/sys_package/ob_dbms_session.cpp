@@ -22,7 +22,7 @@
 #include "pl/ob_pl.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_global_context_operator.h"
-#include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 
 namespace oceanbase
 {

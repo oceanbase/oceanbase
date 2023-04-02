@@ -59,6 +59,7 @@ int ObInMemoryLSTable::get(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const ObLSTable::Mode mode,
     ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
@@ -67,11 +68,12 @@ int ObInMemoryLSTable::get(
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (INVALID_CLUSTER_ID == cluster_id
-             || local_cluster_id != cluster_id) {
+  } else if (OB_UNLIKELY(INVALID_CLUSTER_ID == cluster_id
+             || local_cluster_id != cluster_id
+             || ObLSTable::INNER_TABLE_ONLY_MODE == mode)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get through inmemory with invalid cluster_id or not local cluster_id",
-             KR(ret), K(cluster_id), K(local_cluster_id));
+    LOG_WARN("get through inmemory with invalid cluster_id or not local cluster_id or invalid mode",
+             KR(ret), K(cluster_id), K(local_cluster_id), K(mode));
   } else if (!is_sys_tenant(tenant_id) || !ls_id.is_sys_ls()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for sys tenant's sys ls", KR(ret), KT(tenant_id), K(ls_id));
@@ -106,7 +108,9 @@ int ObInMemoryLSTable::inner_get_(
   return ret;
 }
 
-int ObInMemoryLSTable::update(const ObLSReplica &replica)
+int ObInMemoryLSTable::update(
+    const ObLSReplica &replica,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
   WLockGuard lock_guard(lock_);
@@ -115,10 +119,11 @@ int ObInMemoryLSTable::update(const ObLSReplica &replica)
     LOG_WARN("not init", KR(ret));
   } else if (!replica.is_valid()
       || !is_sys_tenant(replica.get_tenant_id())
-      || !replica.get_ls_id().is_sys_ls()) {
+      || !replica.get_ls_id().is_sys_ls()
+      || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica), "tenant_id", replica.get_tenant_id(),
-             "ls_id", replica.get_ls_id().id());
+             "ls_id", replica.get_ls_id().id(), K(inner_table_only));
   } else if (replica.is_strong_leader()) {
     // TODO: try to short the logic of update_leader/follower_replica
     if (OB_FAIL(update_leader_replica_(replica))) {
@@ -233,7 +238,8 @@ int ObInMemoryLSTable::update_leader_replica_(const ObLSReplica &replica)
 int ObInMemoryLSTable::remove(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    const ObAddr &server)
+    const ObAddr &server,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
   WLockGuard lock_guard(lock_);
@@ -242,9 +248,11 @@ int ObInMemoryLSTable::remove(
     LOG_WARN("not init", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
       || !ls_id.is_sys_ls()
-      || !server.is_valid())) {
+      || !server.is_valid())
+      || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("remove with invalid argument", KR(ret), K(tenant_id), K(ls_id), K(server));
+    LOG_WARN("remove with invalid argument", KR(ret),
+             K(tenant_id), K(ls_id), K(server), K(inner_table_only));
   } else if (OB_FAIL(ls_info_.remove(server))) {
     LOG_WARN("remove server replica failed", KR(ret), K(server), K_(ls_info));
   }

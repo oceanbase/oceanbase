@@ -32,12 +32,12 @@ namespace sql
   {                                                                                \
     if (OB_ISNULL(values)) {                                                       \
       ret = OB_ERR_UNEXPECTED;                                                     \
-    } else if (OB_FAIL(BUF_PRINTF(#values"("))) {                                 \
+    } else if (OB_FAIL(BUF_PRINTF(#values"("))) {                                  \
       LOG_WARN("fail to print to buf", K(ret));                                    \
     } else  {                                                                      \
       int64_t N = values->count();                                                 \
       int64_t M = column_count;                                                    \
-      if (N == 0 || M == 0) {                                                                \
+      if (N == 0 || M == 0) {                                                      \
         if (OB_FAIL(BUF_PRINTF("nil"))) {                                          \
           LOG_WARN("fail to print to buf", K(ret));                                \
         }                                                                          \
@@ -102,6 +102,15 @@ int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr *> &value_
   return ret;
 }
 
+int ObLogExprValues::add_values_desc(const common::ObIArray<ObColumnRefRawExpr *> &value_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(append(value_desc_, value_desc))) {
+    LOG_WARN("failed to append desc", K(ret));
+  }
+  return ret;
+}
+
 int ObLogExprValues::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;
@@ -111,7 +120,6 @@ int ObLogExprValues::compute_fd_item_set()
   } else if (!get_stmt()->is_select_stmt()) {
     set_fd_item_set(&empty_fd_item_set_);
   } else {
-    int32_t stmt_level = -1;
     ObFdItemSet *fd_item_set = NULL;
     ObSEArray<ObRawExpr*, 8> select_exprs;
     if (OB_FAIL(static_cast<const ObSelectStmt *>(get_stmt())->get_select_exprs(select_exprs))) {
@@ -119,7 +127,6 @@ int ObLogExprValues::compute_fd_item_set()
     } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {
       LOG_WARN("failed to create fd item set", K(ret));
     } else {
-      stmt_level = get_stmt()->get_current_level();
       for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
         ObSEArray<ObRawExpr *, 1> value_exprs;
         ObExprFdItem *fd_item = NULL;
@@ -128,7 +135,6 @@ int ObLogExprValues::compute_fd_item_set()
         } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_expr_fd_item(fd_item,
                                                                                true,
                                                                                value_exprs,
-                                                                               stmt_level,
                                                                                select_exprs))) {
           LOG_WARN("failed to create fd item", K(ret));
         } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
@@ -386,27 +392,18 @@ int ObLogExprValues::extract_err_log_info()
   return ret;
 }
 
-int ObLogExprValues::print_my_plan_annotation(char *buf,
-                                              int64_t &buf_len,
-                                              int64_t &pos,
-                                              ExplainType type)
+int ObLogExprValues::get_plan_item_info(PlanText &plan_text,
+                                        ObSqlPlanItem &plan_item)
 {
-  const ObIArray<ObRawExpr*> *values = &get_value_exprs();
   int ret = OB_SUCCESS;
-  int64_t tmp_pos = pos;
-  if (OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(buf));
-  } else if (OB_ISNULL(values)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get value expr", K(values));
-  } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-    LOG_WARN("fail to do buf_print", K(ret));
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
   } else {
+    const ObIArray<ObRawExpr*> *values = &get_value_exprs();
+    BEGIN_BUF_PRINT;
     EXPLAIN_PRINT_INSERT_VALUES(values, output_exprs_.count(), type);
-  }
-  if (OB_FAIL(ret)) {
-    pos = tmp_pos;
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }
@@ -472,6 +469,16 @@ bool ObLogExprValues::contain_array_binding_param() const
     bret = select_stmt->contain_ab_param();
   }
   return bret;
+}
+
+int ObLogExprValues::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replace_exprs_action(to_replace_exprs, value_exprs_))) {
+    LOG_WARN("failed to replace exprs", K(ret));
+  }
+  return ret;
 }
 
 } // namespace sql

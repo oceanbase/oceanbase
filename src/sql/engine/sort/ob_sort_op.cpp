@@ -58,9 +58,8 @@ OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
 
 ObSortOp::ObSortOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),
-  sort_impl_(),
-  prefix_sort_impl_(),
-  topn_sort_(),
+  sort_impl_(op_monitor_info_),
+  prefix_sort_impl_(op_monitor_info_),
   read_func_(&ObSortOp::sort_impl_next),
   read_batch_func_(&ObSortOp::sort_impl_next_batch),
   sort_row_count_(0),
@@ -90,7 +89,6 @@ void ObSortOp::reset()
 {
   sort_impl_.reset();
   prefix_sort_impl_.reset();
-  topn_sort_.reset();
   read_func_ = &ObSortOp::sort_impl_next;
   read_batch_func_ = &ObSortOp::sort_impl_next_batch;
   sort_row_count_ = 0;
@@ -104,7 +102,6 @@ void ObSortOp::destroy()
   sort_impl_.~ObSortOpImpl();
   prefix_sort_impl_.unregister_profile_if_necessary();
   prefix_sort_impl_.~ObPrefixSortImpl();
-  topn_sort_.~ObInMemoryTopnSortImpl();
   read_func_ = nullptr;
   read_batch_func_ = nullptr;
   sort_row_count_ = 0;
@@ -131,6 +128,8 @@ int ObSortOp::get_int_value(const ObExpr *in_val, int64_t &out_val)
     } else if (OB_ISNULL(datum)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: datum is null", K(ret));
+    } else if (datum->is_null()) {
+      out_val = 0;
     } else {
       out_val = *datum->int_;
     }
@@ -142,8 +141,9 @@ int ObSortOp::get_topn_count(int64_t &topn_cnt)
 {
   int ret = OB_SUCCESS;
   topn_cnt = INT64_MAX;
-  if ((OB_ISNULL(MY_SPEC.topn_expr_) && OB_ISNULL(MY_SPEC.topk_limit_expr_))
-        || ((NULL != MY_SPEC.topn_expr_) && (NULL != MY_SPEC.topk_limit_expr_))) {
+  if ((OB_ISNULL(MY_SPEC.topn_expr_) && OB_ISNULL(MY_SPEC.topk_limit_expr_))) {
+    // do nothing
+  } else if (((NULL != MY_SPEC.topn_expr_) && (NULL != MY_SPEC.topk_limit_expr_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid topn_expr or topk_limit_expr", K(MY_SPEC.topn_expr_),
       K(MY_SPEC.topk_limit_expr_), K(ret));
@@ -193,38 +193,6 @@ int ObSortOp::process_sort()
   int ret = OB_SUCCESS;
   if (read_func_ == &ObSortOp::prefix_sort_impl_next) {
     // prefix sort get child row in it's own wrap, do nothing here
-  } else if (read_func_ == &ObSortOp::topn_sort_next) {
-    bool need_sort = false;
-    if (0 == sort_row_count_) {
-      int64_t topn_cnt = INT64_MAX;
-      if (OB_FAIL(get_topn_count(topn_cnt))) {
-        LOG_WARN("failed to get topn count", K(ret));
-      } else {
-        topn_sort_.set_topn(topn_cnt);
-        if (topn_cnt <= 0) {
-          ret = OB_ITER_END;
-        }
-      }
-    }
-    if (OB_SUCC(ret) && topn_sort_.get_topn_cnt() > 0) {
-      while (OB_SUCC(ret) && !need_sort) {
-        clear_evaluated_flag();
-        if (OB_FAIL(try_check_status())) {
-          LOG_WARN("failed to check status", K(ret));
-        } else if (OB_FAIL(child_->get_next_row())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("failed to get next row", K(ret));
-          }
-        } else {
-          sort_row_count_++;
-          OZ(topn_sort_.add_row(MY_SPEC.all_exprs_, need_sort));
-        }
-      }
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      }
-      OZ(topn_sort_.sort_rows());
-    }
   } else if (read_func_ == &ObSortOp::sort_impl_next) {
     bool need_dump = false;
     while (OB_SUCC(ret)) {
@@ -238,6 +206,7 @@ int ObSortOp::process_sort()
       } else {
         sort_row_count_++;
         OZ(sort_impl_.add_row(MY_SPEC.all_exprs_, need_dump));
+        sort_impl_.collect_memory_dump_info(op_monitor_info_);
         if (need_dump && MY_SPEC.prescan_enabled_) {
           break;
         }
@@ -253,6 +222,7 @@ int ObSortOp::process_sort()
       ret = OB_SUCCESS;
     }
     OZ(sort_impl_.sort());
+    sort_impl_.collect_memory_dump_info(op_monitor_info_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid read function pointer",
@@ -266,37 +236,6 @@ int ObSortOp::process_sort_batch()
   int ret = OB_SUCCESS;
   if (read_batch_func_ == &ObSortOp::prefix_sort_impl_next_batch) {
     // prefix sort get child row in it's own wrap, do nothing here
-  } else if (read_batch_func_ == &ObSortOp::topn_sort_next_batch) {
-    int64_t topn_cnt = INT64_MAX;
-    if (OB_FAIL(get_topn_count(topn_cnt))) {
-      LOG_WARN("failed to get topn count", K(ret));
-    } else if (topn_cnt > 0) {
-      topn_sort_.set_topn(topn_cnt);
-      bool need_sort = false;
-      while (!need_sort && OB_SUCC(ret)) {
-        clear_evaluated_flag();
-        const ObBatchRows *input_brs = NULL;
-        if (OB_FAIL(try_check_status())) {
-          LOG_WARN("failed to check status", K(ret));
-        } else if (OB_FAIL(child_->get_next_batch(MY_SPEC.max_batch_size_, input_brs))) {
-          LOG_WARN("get next batch failed", K(ret));
-        } else {
-          if (input_brs->size_ > 0) {
-            sort_row_count_ += input_brs->size_
-                - input_brs->skip_->accumulate_bit_cnt(input_brs->size_);
-            OZ(topn_sort_.add_batch(
-                    MY_SPEC.all_exprs_, *input_brs->skip_, input_brs->size_, need_sort));
-            // Topn prefix sort may stop get child rows and start output rows,
-            // when enough row fetched. Since no more rows from child needed, there is no
-            // expression datum overwrite problem here.
-          }
-          if (input_brs->end_) {
-            break;
-          }
-        }
-      }
-      OZ(topn_sort_.sort_rows());
-    }
   } else if (read_batch_func_ == &ObSortOp::sort_impl_next_batch) {
     bool need_dump = false;
     while (OB_SUCC(ret)) {
@@ -310,7 +249,9 @@ int ObSortOp::process_sort_batch()
         if (input_brs->size_ > 0) {
           sort_row_count_ += input_brs->size_
               - input_brs->skip_->accumulate_bit_cnt(input_brs->size_);
-          OZ(sort_impl_.add_batch(MY_SPEC.all_exprs_, *input_brs->skip_, input_brs->size_, 0, need_dump, nullptr));
+          OZ(sort_impl_.add_batch(MY_SPEC.all_exprs_, *input_brs->skip_,
+                                  input_brs->size_, need_dump));
+          sort_impl_.collect_memory_dump_info(op_monitor_info_);
         }
         if (input_brs->end_ || (need_dump && MY_SPEC.prescan_enabled_)) {
           break;
@@ -324,6 +265,7 @@ int ObSortOp::process_sort_batch()
       }
     }
     OZ(sort_impl_.sort());
+    sort_impl_.collect_memory_dump_info(op_monitor_info_);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid read function pointer",
@@ -456,6 +398,53 @@ int ObSortOp::scan_all_then_sort_batch()
   return ret;
 }
 
+int ObSortOp::init_prefix_sort(int64_t tenant_id,
+                               int64_t row_count,
+                               bool is_batch,
+                               int64_t topn_cnt)
+{
+  int ret = OB_SUCCESS;
+  OZ(prefix_sort_impl_.init(tenant_id, MY_SPEC.prefix_pos_, MY_SPEC.all_exprs_,
+      &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_, &eval_ctx_, child_,
+      this, ctx_, MY_SPEC.enable_encode_sortkey_opt_, sort_row_count_, topn_cnt,
+      MY_SPEC.is_fetch_with_ties_));
+  if (is_batch) {
+    read_batch_func_ = &ObSortOp::prefix_sort_impl_next_batch;
+  } else {
+    read_func_ = &ObSortOp::prefix_sort_impl_next;
+  }
+  int aqs_head = MY_SPEC.enable_encode_sortkey_opt_ ? sizeof(oceanbase::sql::ObSortOpImpl::AQSItem) : 0;
+  prefix_sort_impl_.set_input_rows(row_count);
+  prefix_sort_impl_.set_input_width(MY_SPEC.width_ + aqs_head);
+  prefix_sort_impl_.set_operator_type(MY_SPEC.type_);
+  prefix_sort_impl_.set_operator_id(MY_SPEC.id_);
+  prefix_sort_impl_.set_io_event_observer(&io_event_observer_);
+  return ret;
+}
+
+int ObSortOp::init_sort(int64_t tenant_id,
+                        int64_t row_count,
+                        bool is_batch,
+                        int64_t topn_cnt)
+{
+  int ret = OB_SUCCESS;
+  OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
+      &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
+      false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_));
+  if (is_batch) {
+    read_batch_func_ = &ObSortOp::sort_impl_next_batch;
+  } else {
+    read_func_ = &ObSortOp::sort_impl_next;
+  }
+  int aqs_head = MY_SPEC.enable_encode_sortkey_opt_ ? sizeof(oceanbase::sql::ObSortOpImpl::AQSItem) : 0;
+  sort_impl_.set_input_rows(row_count);
+  sort_impl_.set_input_width(MY_SPEC.width_ + aqs_head);
+  sort_impl_.set_operator_type(MY_SPEC.type_);
+  sort_impl_.set_operator_id(MY_SPEC.id_);
+  sort_impl_.set_io_event_observer(&io_event_observer_);
+  return ret;
+}
+
 int ObSortOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
@@ -465,43 +454,26 @@ int ObSortOp::inner_get_next_row()
     // The name 'get_effective_tenant_id()' is really confusing. Here what we want is to account
     // the resource usage(memory usage in this case) to a 'real' tenant rather than billing
     // the innocent DEFAULT tenant. We should think about changing the name of this function.
+    is_first_ = false;
     int64_t topn_cnt = INT64_MAX;
     int64_t row_count = MY_SPEC.rows_;
     const int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
-    is_first_ = false;
     if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
         &ctx_, MY_SPEC.px_est_size_factor_, MY_SPEC.rows_, row_count))) {
       LOG_WARN("failed to get px size", K(ret));
-    } else if (NULL != MY_SPEC.topn_expr_ && OB_FAIL(get_topn_count(topn_cnt))) {
-      LOG_WARN("failed to get ", K(ret));
-    } else if ((NULL != MY_SPEC.topn_expr_ && topn_cnt < TOPN_LIMIT_COUNT)
-              || NULL != MY_SPEC.topk_limit_expr_) {
-      // topn sort is disabled for fetch with ties
-      OZ(topn_sort_.init(tenant_id, MY_SPEC.prefix_pos_,
-        &MY_SPEC.sort_collations_,
-        &MY_SPEC.sort_cmp_funs_, &eval_ctx_, &ctx_));
-      topn_sort_.set_fetch_with_ties(MY_SPEC.is_fetch_with_ties_);
-      read_func_ = &ObSortOp::topn_sort_next;
+    } else if (OB_FAIL(get_topn_count(topn_cnt))) {
+      LOG_WARN("failed to get topn count", K(ret));
+    } else if (topn_cnt <= 0) {
+      iter_end_ = true;
+      ret = OB_ITER_END;
     } else if (MY_SPEC.prefix_pos_ > 0) {
-      OZ(prefix_sort_impl_.init(tenant_id, MY_SPEC.prefix_pos_, MY_SPEC.all_exprs_,
-          &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_, &eval_ctx_, child_,
-          this, ctx_, MY_SPEC.enable_encode_sortkey_opt_, sort_row_count_, topn_cnt));
-      read_func_ = &ObSortOp::prefix_sort_impl_next;
-      prefix_sort_impl_.set_input_rows(row_count);
-      prefix_sort_impl_.set_input_width(MY_SPEC.width_);
-      prefix_sort_impl_.set_operator_type(MY_SPEC.type_);
-      prefix_sort_impl_.set_operator_id(MY_SPEC.id_);
-      prefix_sort_impl_.set_io_event_observer(&io_event_observer_);
+      if (OB_FAIL(init_prefix_sort(tenant_id, row_count, false, topn_cnt))) {
+        LOG_WARN("failed to init prefix sort", K(ret));
+      }
     } else {
-      OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
-          &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
-          false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt));
-      read_func_ = &ObSortOp::sort_impl_next;
-      sort_impl_.set_input_rows(row_count);
-      sort_impl_.set_input_width(MY_SPEC.width_);
-      sort_impl_.set_operator_type(MY_SPEC.type_);
-      sort_impl_.set_operator_id(MY_SPEC.id_);
-      sort_impl_.set_io_event_observer(&io_event_observer_);
+      if (OB_FAIL(init_sort(tenant_id, row_count, false, topn_cnt))) {
+        LOG_WARN("failed to init sort", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(process_sort())) { // process sort
@@ -536,43 +508,27 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
     brs_.end_ = true;
     brs_.size_ = 0;
   } else if (is_first_) {
+    is_first_ = false;
     int64_t topn_cnt = INT64_MAX;
     int64_t row_count = MY_SPEC.rows_;
     const int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
-    is_first_ = false;
     if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
         &ctx_, MY_SPEC.px_est_size_factor_, MY_SPEC.rows_, row_count))) {
       LOG_WARN("failed to get px size", K(ret));
-    } else if (NULL != MY_SPEC.topn_expr_ && OB_FAIL(get_topn_count(topn_cnt))) {
-      LOG_WARN("failed to get ", K(ret));
-    } else if ((NULL != MY_SPEC.topn_expr_ && topn_cnt < TOPN_LIMIT_COUNT)
-               || NULL != MY_SPEC.topk_limit_expr_) {
-      // topn sort is disabled for fetch with ties 
-      OZ(topn_sort_.init(tenant_id, MY_SPEC.prefix_pos_,
-        &MY_SPEC.sort_collations_,
-        &MY_SPEC.sort_cmp_funs_, &eval_ctx_, &ctx_));
-      topn_sort_.set_fetch_with_ties(MY_SPEC.is_fetch_with_ties_);
-      read_batch_func_ = &ObSortOp::topn_sort_next_batch;
+    } else if (OB_FAIL(get_topn_count(topn_cnt))) {
+      LOG_WARN("failed to get topn count", K(ret));
+    } else if (topn_cnt <= 0) {
+      brs_.end_ = true;
+      brs_.size_ = 0;
+      ret = OB_ITER_END;
     } else if (MY_SPEC.prefix_pos_ > 0) {
-      OZ(prefix_sort_impl_.init(tenant_id, MY_SPEC.prefix_pos_, MY_SPEC.all_exprs_,
-          &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_, &eval_ctx_, child_,
-          this, ctx_, MY_SPEC.enable_encode_sortkey_opt_, sort_row_count_, topn_cnt));
-      read_batch_func_ = &ObSortOp::prefix_sort_impl_next_batch;
-      prefix_sort_impl_.set_input_rows(row_count);
-      prefix_sort_impl_.set_input_width(MY_SPEC.width_);
-      prefix_sort_impl_.set_operator_type(MY_SPEC.type_);
-      prefix_sort_impl_.set_operator_id(MY_SPEC.id_);
-      prefix_sort_impl_.set_io_event_observer(&io_event_observer_);
+      if (OB_FAIL(init_prefix_sort(tenant_id, row_count, true, topn_cnt))) {
+        LOG_WARN("failed to init batch prefix sort", K(ret));
+      }
     } else {
-      OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
-          &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
-          false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt));
-      read_batch_func_ = &ObSortOp::sort_impl_next_batch;
-      sort_impl_.set_input_rows(row_count);
-      sort_impl_.set_input_width(MY_SPEC.width_);
-      sort_impl_.set_operator_type(MY_SPEC.type_);
-      sort_impl_.set_operator_id(MY_SPEC.id_);
-      sort_impl_.set_io_event_observer(&io_event_observer_);
+      if (OB_FAIL(init_sort(tenant_id, row_count, true, topn_cnt))) {
+        LOG_WARN("failed to init batch sort", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(process_sort_batch())) {

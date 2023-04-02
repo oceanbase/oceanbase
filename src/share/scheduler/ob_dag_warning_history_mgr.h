@@ -245,7 +245,7 @@ T* ObNodeArray<T>::at(const int64_t idx)
 {
   T *ret_ptr = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
-    COMMON_LOG(WARN, "ObNodeArray has not been inited");
+    COMMON_LOG_RET(WARN, OB_NOT_INIT, "ObNodeArray has not been inited");
   } else if (idx >= 0 && idx < max_cnt_) {
     ret_ptr = &array_[idx];
   }
@@ -296,7 +296,7 @@ int ObNodeArray<T>::free_node(const int64_t idx)
  * */
 template <typename Key, typename Value>
 ObInfoManager<Key, Value>::ObInfoManager() :
-        lock_(),
+        lock_(common::ObLatchIds::INFO_MGR_LOCK),
         max_cnt_(0),
         node_array_(),
         is_inited_(false),

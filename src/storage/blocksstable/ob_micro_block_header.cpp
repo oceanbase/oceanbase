@@ -49,7 +49,7 @@ bool ObMicroBlockHeader::is_valid() const
 {
   bool valid_data =
       header_size_ == get_serialize_size(column_count_, has_column_checksum_)
-      && version_ >= MICRO_BLOCK_HEADER_VERSION
+      && version_ >= MICRO_BLOCK_HEADER_VERSION_1
       && MICRO_BLOCK_HEADER_MAGIC == magic_
       && column_count_ >= rowkey_column_count_
       && rowkey_column_count_ > 0
@@ -122,7 +122,7 @@ int ObMicroBlockHeader::check_header_checksum() const
 
   if (0 != checksum) {
     ret = OB_PHYSIC_CHECKSUM_ERROR;
-    LOG_ERROR("record check checksum failed", K(ret), K(*this));
+    LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg","record check checksum failed", K(ret), K(*this));
   }
   return ret;
 }
@@ -139,7 +139,7 @@ int ObMicroBlockHeader::check_payload_checksum(const char *buf, const int64_t le
     const int64_t data_checksum = ob_crc64_sse42(buf, len);
     if (data_checksum != data_checksum_) {
       ret = OB_PHYSIC_CHECKSUM_ERROR;
-      LOG_ERROR("checksum error", K(ret), K(data_checksum_), K(data_checksum));
+      LOG_DBA_ERROR(OB_PHYSIC_CHECKSUM_ERROR, "msg","checksum error", K(ret), K(data_checksum_), K(data_checksum));
     }
   }
   return ret;
@@ -289,14 +289,10 @@ int ObMicroBlockHeader::deserialize(const char *buf, int64_t buf_len, int64_t &p
   return ret;
 }
 
-bool ObMicroBlockHeader::has_out_row_column() const
+bool ObMicroBlockHeader::is_contain_hash_index() const
 {
-  return row_store_type_ == common::FLAT_ROW_STORE
-      ? flat_has_out_row_column_
-      : encoding_has_out_row_column_;
+  return version_ >= MICRO_BLOCK_HEADER_VERSION_2 && contains_hash_index_ == 1;
 }
-
-
 
 }//end namespace blocksstable
 }//end namespace oceanbase

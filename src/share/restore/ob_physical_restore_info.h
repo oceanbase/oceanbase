@@ -159,9 +159,10 @@ public:
   Property_declare_ObString(comment)
 
   Property_declare_int(int64_t, restore_start_ts)
-  Property_declare_int(int64_t, restore_scn)
-  Property_declare_int(uint64_t, post_cluster_version)
+  Property_declare_int(share::SCN, restore_scn)
+  Property_declare_int(uint64_t, post_data_version)
   Property_declare_int(uint64_t, source_cluster_version)
+  Property_declare_int(uint64_t, source_data_version)
   //from cmd
   Property_declare_ObString(restore_option)
   Property_declare_ObString(backup_dest)
@@ -179,6 +180,7 @@ public:
   Property_declare_ObString(kms_info)
   Property_declare_int(bool, kms_encrypt)
   Property_declare_ObString(passwd_array)
+  Property_declare_int(int64_t, concurrency)
 
 private:
   //job_id and tenant_id in __all_restore_job primary_key

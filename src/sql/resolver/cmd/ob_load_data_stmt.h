@@ -34,6 +34,22 @@ enum class ObLoadFileLocation {
   OSS,
 };
 
+class ObLoadFileIterator
+{
+public:
+  ObLoadFileIterator() : pos_(0) {}
+  void reset();
+  bool is_valid() const { return !files_.empty(); }
+  int64_t count() const { return files_.count(); }
+  int add_files(common::ObString *start, const int64_t count = 1);
+  int get_next_file(common::ObString &file);
+  int copy(const ObLoadFileIterator &other);
+  TO_STRING_KV(K_(files), K_(pos));
+private:
+  common::ObSEArray<common::ObString, 16> files_;
+  int64_t pos_;
+};
+
 struct ObLoadArgument
 {
   ObLoadArgument(): load_file_storage_(ObLoadFileLocation::SERVER_DISK),
@@ -63,7 +79,7 @@ struct ObLoadArgument
                K_(database_id),
                K_(table_id),
                K_(is_csv_format),
-               K_(full_file_path));
+               K_(file_iter));
 
   void assign(const ObLoadArgument &other) {
     load_file_storage_ = other.load_file_storage_;
@@ -80,8 +96,8 @@ struct ObLoadArgument
     database_id_ = other.database_id_;
     table_id_ = other.table_id_;
     is_csv_format_ = other.is_csv_format_;
-    full_file_path_ = other.full_file_path_;
     part_level_ = other.part_level_;
+    file_iter_.copy(other.file_iter_);
   }
 
   ObLoadFileLocation load_file_storage_;
@@ -98,8 +114,8 @@ struct ObLoadArgument
   uint64_t database_id_;
   uint64_t table_id_; // physical table id
   bool is_csv_format_;
-  common::ObString full_file_path_;
   share::schema::ObPartitionLevel part_level_;
+  ObLoadFileIterator file_iter_;
 };
 
 struct ObDataInFileStruct
@@ -164,6 +180,11 @@ public:
     PARALLEL_THREADS = 0,  //parallel threads on the host server, for parsing and calc partition
     BATCH_SIZE,
     QUERY_TIMEOUT,
+    APPEND,
+    ENABLE_DIRECT,
+    NEED_SORT,
+    ERROR_ROWS,
+    GATHER_OPTIMIZER_STATISTICS,
     TOTAL_INT_ITEM
   };
   enum StringHintItem {

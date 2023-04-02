@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_delegate.h"
 #include "ob_failure_detector.h"
+#include "share/ob_occam_timer.h"
 #include "share/ob_table_access_helper.h"
 
 namespace oceanbase
@@ -48,37 +49,31 @@ class ObLeaderCoordinator
   friend class unittest::TestElectionPriority;
 public:
   ObLeaderCoordinator();
-  ~ObLeaderCoordinator() { destroy(); }
+  ~ObLeaderCoordinator();
+  void destroy();
   ObLeaderCoordinator(const ObLeaderCoordinator &rhs) = delete;
   ObLeaderCoordinator& operator=(const ObLeaderCoordinator &rhs) = delete;
   static int mtl_init(ObLeaderCoordinator *&p_coordinator);
-  void destroy() { stop_and_wait(); }
-  /**
-   * @description: 对内部结构进行初始化
-   * @param {*}
-   * @return {*}
-   * @Date: 2022-01-04 11:18:48
-   */
-  int init_and_start();
-  /**
-   * @description: 停止线程池和timer
-   * @param {*}
-   * @return {*}
-   * @Date: 2022-01-04 18:05:17
-   */
-  void stop_and_wait();
+  static int mtl_start(ObLeaderCoordinator *&p_coordinator);
+  static void mtl_stop(ObLeaderCoordinator *&p_coordinator);
+  static void mtl_wait(ObLeaderCoordinator *&p_coordinator);
+  static void mtl_destroy(ObLeaderCoordinator *&p_coordinator);
   /**
    * @description: 当内部表更新的时候，可以通过该接口主动触发LeaderCoordinator的刷新流程，以便切主动作可以尽快完成
    * @param {*}
    * @return {*}
    * @Date: 2021-12-27 20:30:39
-   */  
+   */
   void refresh();
   int get_ls_election_reference_info(const share::ObLSID &ls_id, LsElectionReferenceInfo &reference_info) const;
 private:
   common::ObArray<LsElectionReferenceInfo> *all_ls_election_reference_info_;
-  common::ObOccamTimer timer_;
-  bool is_inited_;
+  // refresh priority and detect recovery from failure
+  common::ObOccamTimer recovery_detect_timer_;
+  // detect whether failure has occured
+  common::ObOccamTimer failure_detect_timer_;
+  common::ObOccamTimerTaskRAIIHandle refresh_priority_task_handle_;
+  bool is_running_;
   mutable ObSpinLock lock_;
 };
 

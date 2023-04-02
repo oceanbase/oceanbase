@@ -66,3 +66,30 @@ uint64_t ObLogJoinFilter::hash(uint64_t seed) const
   seed = ObLogicalOperator::hash(seed);
   return seed;
 }
+
+int ObLogJoinFilter::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replace_exprs_action(to_replace_exprs, join_exprs_))) {
+    LOG_WARN("failed to replace join exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogJoinFilter::get_plan_item_info(PlanText &plan_text,
+                                        ObSqlPlanItem &plan_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else if (OB_INVALID_ID != get_filter_id()) {
+    BEGIN_BUF_PRINT;
+    if (OB_FAIL(BUF_PRINTF(":BF%04ld", get_filter_id()))) {
+      LOG_WARN("failed to print str", K(ret));
+    }
+    END_BUF_PRINT(plan_item.object_alias_,
+                  plan_item.object_alias_len_);
+  }
+  return ret;
+}

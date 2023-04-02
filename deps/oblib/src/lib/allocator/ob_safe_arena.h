@@ -25,7 +25,7 @@ class ObSafeArena : public ObIAllocator
 public:
   ObSafeArena(const lib::ObLabel &label, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE, ObMemAttr attr = default_memattr)
       : arena_alloc_(label, page_size, attr.tenant_id_),
-        lock_(),
+        lock_(ObLatchIds::OB_AREAN_ALLOCATOR_LOCK),
         attr_(attr)
   {}
 

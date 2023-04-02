@@ -138,7 +138,7 @@ int set_ctx_limit(uint64_t tenant_id, uint64_t ctx_id, const int64_t limit)
   int ret = OB_SUCCESS;
   ObMallocAllocator *alloc = ObMallocAllocator::get_instance();
   if (!OB_ISNULL(alloc)) {
-    ObTenantCtxAllocator *ta = alloc->get_tenant_ctx_allocator(tenant_id, ctx_id);
+    auto ta = alloc->get_tenant_ctx_allocator(tenant_id, ctx_id);
     if (OB_NOT_NULL(ta)) {
       if (OB_FAIL(ta->set_limit(limit))) {
         LIB_LOG(WARN, "set_limit failed", K(ret), K(limit));
@@ -169,6 +169,13 @@ int set_meta_obj_limit(uint64_t tenant_id, int64_t meta_obj_pct_lmt)
   const int64_t ctx_limit = 0 == meta_obj_pct_lmt ? tenant_limit : (tenant_limit / 100) * meta_obj_pct_lmt;
 
   return set_ctx_limit(tenant_id, common::ObCtxIds::META_OBJ_CTX_ID, ctx_limit);
+}
+
+int set_rpc_limit(uint64_t tenant_id, int64_t rpc_pct_lmt)
+{
+  const int64_t tenant_limit = get_tenant_memory_limit(tenant_id);
+  const int64_t rpc_lmt = (tenant_limit / 100) * rpc_pct_lmt;
+  return set_ctx_limit(tenant_id, common::ObCtxIds::RPC_CTX_ID, rpc_lmt);
 }
 
 } // end of namespace lib

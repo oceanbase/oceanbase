@@ -36,6 +36,9 @@
     tx_param.access_mode_ = ObTxAccessMode::RW;         \
     tx_param.isolation_ = ObTxIsolationLevel::RC;       \
     tx_param.cluster_id_ = 100;
+#define GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot)                   \
+    ObTxReadSnapshot snapshot;                                          \
+    ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx, tx_param.isolation_, n1->ts_after_ms(100), snapshot));
 
 #define CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp)                 \
     int64_t sp = 0;                                                     \
@@ -73,3 +76,6 @@
 
 #define ROLLBACK_TX(n1, tx)                     \
     n1->rollback_tx(tx);
+
+#define COMMIT_TX(n1, tx, timeout_us)                   \
+    n1->commit_tx(tx, n1->ts_after_us(timeout_us));

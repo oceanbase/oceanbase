@@ -139,10 +139,6 @@ public:
   static int deep_copy_str(const common::ObString &src, common::ObString &out,
                            common::ObIAllocator &alloc);
 
-  static int eval_generated_column(const ObExpr &rt_expr,
-                                   ObEvalCtx &ctx,
-                                   ObDatum &expr_datum);
-
   static int eval_stack_overflow_check(const ObExpr &rt_expr,
                                        ObEvalCtx &ctx,
                                        ObDatum &expr_datum);

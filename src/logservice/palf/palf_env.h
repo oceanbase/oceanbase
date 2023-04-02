@@ -49,7 +49,7 @@ public:
   // and return OB_SUCCESS on success.
   // store a NULL pointer ) in "palf_env", and return errno on fail.
   // caller should used destroy_palf_env to delete "palf_env" when it is no longer used.
-  static int create_palf_env(const PalfDiskOptions &disk_options,
+  static int create_palf_env(const PalfOptions &options,
                              const char *base_dir,
                              const common::ObAddr &self,
                              rpc::frame::ObReqTransport *transport,
@@ -63,15 +63,6 @@ public:
 public:
   PalfEnv();
   ~PalfEnv();
-  // 创建id对应的Paxos Replica，返回文件句柄；该句柄后续需要显式调用PalfEnv::close关闭;
-  //
-  // 对于相同Paxos Group中包含的多个replica，均需要执行create，使用者需要保证id相同；
-  // 相同id的Paxos Replica会根据member_list信息自动组成一个Paxos Group
-  //
-  // 一个PalfEnv可以支持多个Paxos Group，对于仅需要包含一个Paxos Group的使用场景，id可以传0；
-  int create(const int64_t id,
-             const AccessMode &access_mode,
-             PalfHandle &handle);
 
   // 迁移场景目的端副本创建接口
   // @param [in] id，待创建日志流的标识符
@@ -96,21 +87,26 @@ public:
   // @param [out] used_size_byte
   // @param [out] total_size_byte
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
-  // @brief update palf disk options
+  // @brief update options
   // @param [in] options
-  // NB: caller must execute 'get_disk_options' before update_disk_options
-  int update_disk_options(const PalfDiskOptions &options);
-  // @brief get current palf disk options
+  int update_options(const PalfOptions &options);
+  // @brief get current options
   // @param [out] options
-  int get_disk_options(PalfDiskOptions &options);
-
+  int get_options(PalfOptions &options);
   // @brief check the disk space used to palf whether is enough
   bool check_disk_space_enough();
-
+  // for failure detector
+  // @brief get last io worker start time
+  // @param [out] last working time
+  // last_working_time will be set as current time when a io task begins,
+  // and will be reset as OB_INVALID_TIMESTAMP when an io task ends, atomically.
+  int get_io_start_time(int64_t &last_working_time);
   // @brief iterate each PalfHandle of PalfEnv and execute 'func'
   int for_each(const ObFunction<int(const PalfHandle&)> &func);
   // just for LogRpc
-  palf::PalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }
+  palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }
+  // should be removed in version 4.2.0.0
+  int update_replayable_point(const SCN &replayable_scn);
 private:
   int start_();
   void stop_();

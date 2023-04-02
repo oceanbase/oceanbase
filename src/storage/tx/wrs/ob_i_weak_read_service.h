@@ -11,6 +11,7 @@
  */
 
 #include <stdint.h>
+#include "share/scn.h"
 
 #ifndef OCEANBASE_TRANSACTION_OB_I_WRS_SERVICE_
 #define OCEANBASE_TRANSACTION_OB_I_WRS_SERVICE_
@@ -68,13 +69,13 @@ public:
   /// @param [in]  tenant_id   target tenant ID
   /// @param [in]  is_inner    is inner table or not
   /// @param [out] version     wrs version
-  virtual int get_server_version(const uint64_t tenant_id, int64_t &version) const = 0;
+  virtual int get_server_version(const uint64_t tenant_id, share::SCN &version) const = 0;
 
   /// get CLUSTER level wrs version
   ///
   /// @param [in]  tenant_id   target tenant ID
   /// @param [out] version     wrs version
-  virtual int get_cluster_version(const uint64_t tenant_id, int64_t &version) = 0;
+  virtual int get_cluster_version(const uint64_t tenant_id, share::SCN &version) = 0;
 
   /// check server can start service or not
   virtual void check_server_can_start_service(bool &can_start_service,

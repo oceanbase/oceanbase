@@ -48,7 +48,7 @@ private:
 class MockTxLogAdapter : public ObITxLogAdapter, public ObSimpleThreadPool 
 {
 public:
-  MockTxLogAdapter():is_running_(false),max_allocated_log_ts(0),lsn_(0),task_ptr_(nullptr),CB_CNT_(0) {}
+  MockTxLogAdapter():is_running_(false),max_allocated_log_ts_(0),lsn_(0),task_ptr_(nullptr),CB_CNT_(0) {}
   int init(ObITxLogParam *param);
   int start();
   void stop();
@@ -60,10 +60,15 @@ public:
 public:
   int submit_log(const char *buf,
                  const int64_t size,
-                 const int64_t base_ts,
+                 const share::SCN &base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_block);
   int get_role(bool &is_leader, int64_t &epoch);
+  int get_max_decided_scn(share::SCN &scn)
+  {
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
 
   void push_all_cbs_();
 public:
@@ -78,7 +83,7 @@ private:
   ObSpinLock log_file_lock_;
   ObSpinLock cbs_lock_;
   int64_t unfinish_cbs_cnt_;
-  int64_t max_allocated_log_ts;
+  uint64_t max_allocated_log_ts_;
   int64_t lsn_;
   // int64_t max_success_log_ts;
   // common::ObSEArray<ObString, 100, TransModulePageAllocator> mock_log_file_;

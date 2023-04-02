@@ -24,7 +24,8 @@
 #include "storage/ob_i_store.h"
 #include "storage/access/ob_table_read_info.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
-#include "share/leak_checker/obj_leak_checker.h"
+#include "share/ob_table_range.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -50,6 +51,11 @@ struct ObDatumRange;
 class ObSSTable;
 }
 
+namespace share
+{
+struct ObScnRange;
+}
+
 namespace storage
 {
 class ObTxDataMemtable;
@@ -61,6 +67,7 @@ struct ObTableAccessParam;
 struct ObTableAccessContext;
 struct ObRowsInfo;
 class ObStoreRowIterator;
+struct ObStoreCtx;
 
 class ObITable
 {
@@ -79,9 +86,10 @@ public:
     MAJOR_SSTABLE = 10,
     MINOR_SSTABLE = 11,
     MINI_SSTABLE = 12,
-    BUF_MINOR_SSTABLE = 13,
-    KV_DUMP_SSTABLE = 14,
+    META_MAJOR_SSTABLE = 13,
+    DDL_DUMP_SSTABLE = 14,
     REMOTE_LOGICAL_MINOR_SSTABLE = 15,
+    DDL_MEM_SSTABLE = 16,
     // < add new sstable before here, See is_sstable()
     MAX_TABLE_TYPE
   };
@@ -110,28 +118,37 @@ public:
     OB_INLINE bool is_minor_sstable() const { return ObITable::is_minor_sstable(table_type_); }
     OB_INLINE bool is_mini_sstable() const { return ObITable::is_mini_sstable(table_type_); }
     OB_INLINE bool is_major_sstable() const { return ObITable::is_major_sstable(table_type_); }
-    OB_INLINE bool is_buf_minor_sstable() const { return ObITable::is_buf_minor_sstable(table_type_); }
+    OB_INLINE bool is_meta_major_sstable() const { return ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_multi_version_table() const { return ObITable::is_multi_version_table(table_type_); }
     OB_INLINE bool is_ddl_sstable() const { return ObITable::is_ddl_sstable(table_type_); }
-    OB_INLINE bool is_table_with_log_ts_range() const { return ObITable::is_table_with_log_ts_range(table_type_); }
+    OB_INLINE bool is_ddl_dump_sstable() const { return ObITable::is_ddl_dump_sstable(table_type_); }
+    OB_INLINE bool is_ddl_mem_sstable() const { return ObITable::is_ddl_mem_sstable(table_type_); }
+    OB_INLINE bool is_table_with_scn_range() const { return ObITable::is_table_with_scn_range(table_type_); }
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
 
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-    OB_INLINE int64_t get_start_log_ts() const { return log_ts_range_.start_log_ts_; }
-    OB_INLINE int64_t get_end_log_ts() const { return log_ts_range_.end_log_ts_; }
+    OB_INLINE share::SCN get_start_scn() const { return scn_range_.start_scn_; }
+    OB_INLINE share::SCN get_end_scn() const { return scn_range_.end_scn_; }
     OB_INLINE int64_t get_snapshot_version() const
     {
-      OB_ASSERT(is_major_sstable());
+      OB_ASSERT(is_major_sstable() || is_meta_major_sstable());
       return version_range_.snapshot_version_;
     }
+    OB_INLINE TableKey& operator=(const TableKey &key)
+    {
+      table_type_ = key.table_type_;
+      tablet_id_ = key.tablet_id_;
+      scn_range_ = key.scn_range_;
+      return *this;
+    }
 
-    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_), K_(log_ts_range));
+    TO_STRING_KV(K_(tablet_id), K_(column_group_idx), "table_type", get_table_type_name(table_type_), K_(scn_range));
 
   public:
     common::ObTabletID tablet_id_;
     union {
       common::ObNewVersionRange version_range_;
-      common::ObLogTsRange log_ts_range_;
+      share::ObScnRange scn_range_;
     };
     uint16_t column_group_idx_;
     ObITable::TableType table_type_;
@@ -142,8 +159,9 @@ public:
 
   int init(const TableKey &table_key);
   void reset();
+  virtual int safe_to_destroy(bool &is_safe);
   OB_INLINE const TableKey &get_key() const { return key_; }
-  void set_log_ts_range(common::ObLogTsRange log_ts_range) { key_.log_ts_range_ = log_ts_range; }
+  void set_scn_range(share::ObScnRange scn_range) { key_.scn_range_ = scn_range; }
   void set_table_type(ObITable::TableType table_type) { key_.table_type_ = table_type; }
   void set_snapshot_version(int64_t version) { key_.version_range_.snapshot_version_ = version; }
 
@@ -184,9 +202,9 @@ public:
       const common::ObIArray<blocksstable::ObDatumRange> &ranges,
       ObStoreRowIterator *&row_iter) = 0;
 
-  virtual OB_INLINE int64_t get_start_log_ts() const;
-  virtual OB_INLINE int64_t get_end_log_ts() const;
-  virtual OB_INLINE common::ObLogTsRange &get_log_ts_range() { return key_.log_ts_range_; }
+  virtual OB_INLINE share::SCN get_start_scn() const;
+  virtual OB_INLINE share::SCN get_end_scn() const;
+  virtual OB_INLINE share::ObScnRange &get_scn_range() { return key_.scn_range_; }
   virtual OB_INLINE bool is_trans_state_deterministic() { return get_upper_trans_version() < INT64_MAX; }
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }
   virtual int64_t get_upper_trans_version() const { return get_snapshot_version(); }
@@ -212,11 +230,14 @@ public:
   virtual bool is_lock_memtable() const { return is_lock_memtable(key_.table_type_); }
   virtual bool is_frozen_memtable() const { return false; }
   virtual bool is_active_memtable() const { return false; }
-  virtual bool is_buf_minor_sstable() const { return is_buf_minor_sstable(key_.table_type_); }
-  OB_INLINE bool is_table_with_log_ts_range() const { return is_table_with_log_ts_range(key_.table_type_); }
+  virtual bool is_meta_major_sstable() const { return is_meta_major_sstable(key_.table_type_); }
+  OB_INLINE bool is_table_with_scn_range() const { return is_table_with_scn_range(key_.table_type_); }
   virtual OB_INLINE int64_t get_timestamp() const { return 0; }
   virtual bool is_ddl_sstable() const { return is_ddl_sstable(key_.table_type_); }
+  virtual bool is_ddl_dump_sstable() const { return is_ddl_dump_sstable(key_.table_type_); }
+  virtual bool is_ddl_mem_sstable() const { return is_ddl_mem_sstable(key_.table_type_); }
   virtual bool is_remote_logical_minor_sstable() const { return is_remote_logical_minor_sstable(key_.table_type_); }
+  virtual bool is_empty() const = 0;
   DECLARE_VIRTUAL_TO_STRING;
 
   static bool is_sstable(const TableType table_type)
@@ -231,7 +252,6 @@ public:
   {
     return ObITable::TableType::MINOR_SSTABLE == table_type
       || ObITable::TableType::MINI_SSTABLE == table_type
-      || ObITable::TableType::BUF_MINOR_SSTABLE == table_type
       || ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE == table_type;
   }
   static bool is_multi_version_minor_sstable(const TableType table_type)
@@ -294,17 +314,26 @@ public:
     return ObITable::TableType::LOCK_MEMTABLE == table_type;
   }
 
-  static bool is_buf_minor_sstable(const TableType table_type)
+  static bool is_meta_major_sstable(const TableType table_type)
   {
-    return ObITable::TableType::BUF_MINOR_SSTABLE == table_type;
+    return ObITable::TableType::META_MAJOR_SSTABLE == table_type;
   }
   static bool is_ddl_sstable(const TableType table_type)
   {
-    return ObITable::TableType::KV_DUMP_SSTABLE == table_type;
+    return ObITable::TableType::DDL_DUMP_SSTABLE == table_type
+      || ObITable::TableType::DDL_MEM_SSTABLE == table_type;
   }
-  static bool is_table_with_log_ts_range(const TableType table_type)
+  static bool is_ddl_dump_sstable(const TableType table_type)
   {
-    return is_multi_version_table(table_type) || is_buf_minor_sstable(table_type);
+    return ObITable::TableType::DDL_DUMP_SSTABLE == table_type;
+  }
+  static bool is_ddl_mem_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::DDL_MEM_SSTABLE == table_type;
+  }
+  static bool is_table_with_scn_range(const TableType table_type)
+  {
+    return is_multi_version_table(table_type) || is_meta_major_sstable(table_type);
   }
   OB_INLINE static const char* get_table_type_name(const TableType &table_type)
   {
@@ -373,7 +402,6 @@ private:
   ObTenantMetaMemMgr *t3m_;
   common::ObIAllocator *allocator_;
   ObITable::TableType table_type_;
-  DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
 };
 
 class ObTablesHandleArray final
@@ -396,7 +424,7 @@ public:
   int get_tables(common::ObIArray<ObITable *> &tables) const;
   int get_first_memtable(memtable::ObIMemtable *&memtable) const;
   int get_all_minor_sstables(common::ObIArray<ObITable *> &tables) const;
-  int check_continues(const ObLogTsRange *log_ts_range) const;
+  int check_continues(const share::ObScnRange *scn_range) const;
   TableArray::iterator table_begin() { return tables_.begin(); }
   TableArray::iterator table_end() { return tables_.end(); }
   DECLARE_TO_STRING;
@@ -423,8 +451,8 @@ OB_INLINE bool ObITable::TableKey::is_valid() const
     valid = false;
   } else if (!tablet_id_.is_valid()) {
     valid = false;
-  } else if (ObITable::is_table_with_log_ts_range(table_type_)
-      && !log_ts_range_.is_valid()) {
+  } else if (ObITable::is_table_with_scn_range(table_type_)
+      && !scn_range_.is_valid()) {
     valid = false;
   } else if (ObITable::is_major_sstable(table_type_)
       && !version_range_.is_valid()) {
@@ -436,14 +464,15 @@ OB_INLINE bool ObITable::TableKey::is_valid() const
   return valid;
 }
 
-OB_INLINE int64_t ObITable::get_start_log_ts() const
+
+OB_INLINE share::SCN ObITable::get_start_scn() const
 {
-  return key_.log_ts_range_.start_log_ts_;
+  return key_.get_start_scn();
 }
 
-OB_INLINE int64_t ObITable::get_end_log_ts() const
+OB_INLINE share::SCN ObITable::get_end_scn() const
 {
-  return key_.log_ts_range_.end_log_ts_;
+  return key_.get_end_scn();
 }
 
 bool ObITable::TableKey::operator ==(const TableKey &table_key) const
@@ -451,7 +480,7 @@ bool ObITable::TableKey::operator ==(const TableKey &table_key) const
   bool bret = table_type_ == table_key.table_type_
       && column_group_idx_ == table_key.column_group_idx_
       && tablet_id_ == table_key.tablet_id_
-      && log_ts_range_ == table_key.log_ts_range_;
+      && scn_range_ == table_key.scn_range_;
   return bret;
 }
 

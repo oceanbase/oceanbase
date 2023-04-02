@@ -71,6 +71,7 @@ ObSimpleTenantSchema &ObSimpleTenantSchema::operator =(const ObSimpleTenantSchem
     drop_tenant_time_ = other.drop_tenant_time_;
     status_ = other.status_;
     in_recyclebin_ = other.in_recyclebin_;
+    arbitration_service_status_ = other.arbitration_service_status_;
     if (OB_FAIL(deep_copy_str(other.tenant_name_, tenant_name_))) {
       LOG_WARN("Fail to deep copy tenant_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.primary_zone_, primary_zone_))) {
@@ -104,7 +105,8 @@ bool ObSimpleTenantSchema::operator ==(const ObSimpleTenantSchema &other) const
       && gmt_modified_ == other.gmt_modified_
       && drop_tenant_time_ == other.drop_tenant_time_
       && status_ == other.status_
-      && in_recyclebin_ == other.in_recyclebin_) {
+      && in_recyclebin_ == other.in_recyclebin_
+      && arbitration_service_status_ == other.arbitration_service_status_) {
     ret = true;
   }
 
@@ -127,6 +129,7 @@ void ObSimpleTenantSchema::reset()
   drop_tenant_time_ = 0;
   status_ = TENANT_STATUS_NORMAL;
   in_recyclebin_ = false;
+  arbitration_service_status_ = ObArbitrationServiceStatus::DISABLED;
 }
 
 bool ObSimpleTenantSchema::is_valid() const
@@ -499,7 +502,10 @@ ObSchemaMgr::ObSchemaMgr()
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
       context_mgr_(allocator_),
-      mock_fk_parent_table_mgr_(allocator_)
+      mock_fk_parent_table_mgr_(allocator_),
+      rls_policy_mgr_(allocator_),
+      rls_group_mgr_(allocator_),
+      rls_context_mgr_(allocator_)
 {
 }
 
@@ -548,7 +554,10 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       dblink_mgr_(allocator_),
       directory_mgr_(allocator_),
       context_mgr_(allocator_),
-      mock_fk_parent_table_mgr_(allocator_)
+      mock_fk_parent_table_mgr_(allocator_),
+      rls_policy_mgr_(allocator_),
+      rls_group_mgr_(allocator_),
+      rls_context_mgr_(allocator_)
 {
 }
 
@@ -613,6 +622,12 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init dblink mgr failed", K(ret));
   } else if (OB_FAIL(directory_mgr_.init())) {
     LOG_WARN("init directory mgr failed", K(ret));
+  } else if (OB_FAIL(rls_policy_mgr_.init())) {
+    LOG_WARN("init rls_policy mgr failed", K(ret));
+  } else if (OB_FAIL(rls_group_mgr_.init())) {
+    LOG_WARN("init rls_group mgr failed", K(ret));
+  } else if (OB_FAIL(rls_context_mgr_.init())) {
+    LOG_WARN("init rls_context mgr failed", K(ret));
   } else if (OB_FAIL(hidden_table_name_map_.init())) {
     LOG_WARN("init hidden table name map failed", K(ret));
   } else if (OB_FAIL(context_mgr_.init())) {
@@ -676,6 +691,9 @@ void ObSchemaMgr::reset()
     tablespace_mgr_.reset();
     dblink_mgr_.reset();
     directory_mgr_.reset();
+    rls_policy_mgr_.reset();
+    rls_group_mgr_.reset();
+    rls_context_mgr_.reset();
     tenant_id_ = OB_INVALID_TENANT_ID;
     hidden_table_name_map_.clear();
     context_mgr_.reset();
@@ -780,6 +798,12 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.assign(other.mock_fk_parent_table_mgr_))) {
         LOG_WARN("assign mock_fk_parent_table_mgr_ failed", K(ret));
+      } else if (OB_FAIL(rls_policy_mgr_.assign(other.rls_policy_mgr_))) {
+        LOG_WARN("assign rls_policy mgr failed", K(ret));
+      } else if (OB_FAIL(rls_group_mgr_.assign(other.rls_group_mgr_))) {
+        LOG_WARN("assign rls_group mgr failed", K(ret));
+      } else if (OB_FAIL(rls_context_mgr_.assign(other.rls_context_mgr_))) {
+        LOG_WARN("assign rls_context mgr failed", K(ret));
       }
     }
   }
@@ -866,6 +890,12 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy context mgr failed", K(ret));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.deep_copy(other.mock_fk_parent_table_mgr_))) {
         LOG_WARN("deep copy mock_fk_parent_table_mgr_ failed", K(ret));
+      } else if (OB_FAIL(rls_policy_mgr_.deep_copy(other.rls_policy_mgr_))) {
+        LOG_WARN("deep copy rls_policy mgr failed", K(ret));
+      } else if (OB_FAIL(rls_group_mgr_.deep_copy(other.rls_group_mgr_))) {
+        LOG_WARN("deep copy rls_group mgr failed", K(ret));
+      } else if (OB_FAIL(rls_context_mgr_.deep_copy(other.rls_context_mgr_))) {
+        LOG_WARN("deep copy rls_context mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2479,59 +2509,51 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
         }
       }
       if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
-        if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-          // do-nothing for liboblog
-        } else {
-          if (NULL != replaced_table) {
-            if (!replaced_table->is_user_hidden_table()
-                && new_table_schema->is_user_hidden_table()) {
-              if (OB_FAIL(delete_foreign_keys_in_table(*replaced_table))) {
-                LOG_WARN("delete foreign keys info from a hash map failed",
-                K(ret), K(*replaced_table));
-              }
-            // deal with the situation that alter table drop fk and truncate table enter the recycle bin,
-            // and delete the foreign key information dropped from the hash map
-            // First delete the foreign key information on the table from the hash map when truncate table,
-            // and add it back when rebuild_table_hashmap
-            } else if (OB_FAIL(check_and_delete_given_fk_in_table(replaced_table, new_table_schema))) {
-              LOG_WARN("check and delete given fk in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
+        if (NULL != replaced_table) {
+          if (!replaced_table->is_user_hidden_table()
+              && new_table_schema->is_user_hidden_table()) {
+            if (OB_FAIL(delete_foreign_keys_in_table(*replaced_table))) {
+              LOG_WARN("delete foreign keys info from a hash map failed",
+              K(ret), K(*replaced_table));
             }
+          // deal with the situation that alter table drop fk and truncate table enter the recycle bin,
+          // and delete the foreign key information dropped from the hash map
+          // First delete the foreign key information on the table from the hash map when truncate table,
+          // and add it back when rebuild_table_hashmap
+          } else if (OB_FAIL(check_and_delete_given_fk_in_table(replaced_table, new_table_schema))) {
+            LOG_WARN("check and delete given fk in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
           }
-          if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
-            if (OB_FAIL(add_foreign_keys_in_table(new_table_schema->get_simple_foreign_key_info_array(), 1 /*over_write*/))) {
-              LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
-            } else {
-              // do nothing
-            }
+        }
+        if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
+          if (OB_FAIL(add_foreign_keys_in_table(new_table_schema->get_simple_foreign_key_info_array(), 1 /*over_write*/))) {
+            LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
+          } else {
+            // do nothing
           }
         }
       }
       if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
         // In mysql mode, check constraints in non-temporary tables don't share namespace with constraints in temporary tables
-        if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-          // do-nothing for liboblog
-        } else {
-          if (NULL != replaced_table) {
-            if (!replaced_table->is_user_hidden_table()
-                && new_table_schema->is_user_hidden_table()) {
-              if (OB_FAIL(delete_constraints_in_table(*replaced_table))) {
-                LOG_WARN("delete constraint info from a hash map failed",
-                K(ret), K(*replaced_table));
-              }
-            // deal with the situation that alter table drop cst and truncate table enter the recycle bin,
-            // delete the constraint information dropped from the hash map
-            // When truncate table, delete the constraint information on the table from the hash map first,
-            // and add it back when rebuild_table_hashmap
-            } else if (OB_FAIL(check_and_delete_given_cst_in_table(replaced_table, new_table_schema))) {
-              LOG_WARN("check and delete given cst in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
+        if (NULL != replaced_table) {
+          if (!replaced_table->is_user_hidden_table()
+              && new_table_schema->is_user_hidden_table()) {
+            if (OB_FAIL(delete_constraints_in_table(*replaced_table))) {
+              LOG_WARN("delete constraint info from a hash map failed",
+              K(ret), K(*replaced_table));
             }
+          // deal with the situation that alter table drop cst and truncate table enter the recycle bin,
+          // delete the constraint information dropped from the hash map
+          // When truncate table, delete the constraint information on the table from the hash map first,
+          // and add it back when rebuild_table_hashmap
+          } else if (OB_FAIL(check_and_delete_given_cst_in_table(replaced_table, new_table_schema))) {
+            LOG_WARN("check and delete given cst in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
           }
-          if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
-            if (OB_FAIL(add_constraints_in_table(new_table_schema, 1 /*over_write*/))) {
-              LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
-            } else {
-              // do nothing
-            }
+        }
+        if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
+          if (OB_FAIL(add_constraints_in_table(new_table_schema, 1 /*over_write*/))) {
+            LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
+          } else {
+            // do nothing
           }
         }
       }
@@ -2954,12 +2976,12 @@ bool ObSchemaMgr::check_schema_meta_consistent()
   // Check the number of foreign keys here, if not, you need to rebuild
   if (!is_consistent_) {
     // false == is_consistent, do nothing
-    LOG_WARN("fk or cst info is not consistent");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "fk or cst info is not consistent");
   }
 
   if (database_infos_.count() != database_name_map_.item_count()) {
     is_consistent_ = false;
-    LOG_WARN("database info is not consistent",
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "database info is not consistent",
              "database_infos_count", database_infos_.count(),
              "database_name_map_item_count", database_name_map_.item_count());
   }
@@ -2973,7 +2995,7 @@ bool ObSchemaMgr::check_schema_meta_consistent()
          lob_piece_infos_.count() +
          hidden_table_name_map_.item_count())) {
     is_consistent_ = false;
-    LOG_WARN("schema meta is not consistent, need rebuild",
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "schema meta is not consistent, need rebuild",
              "schema_mgr version", get_schema_version(),
              "table_infos_count", table_infos_.count(),
              "table_id_map_item_count", table_id_map_.item_count(),
@@ -2996,7 +3018,7 @@ int ObSchemaMgr::rebuild_schema_meta_if_not_consistent()
 
   if (!check_schema_meta_consistent()) {
     LOG_WARN("schema meta is not consistent, need rebuild", K(ret));
-    // https://aone.alibaba-inc.com/issue/8217776
+    //
     if (OB_FAIL(rebuild_table_hashmap(fk_cnt, cst_cnt))) {
       LOG_WARN("rebuild table hashmap failed", K(ret));
     } else if (OB_FAIL(rebuild_db_hashmap())) {
@@ -3019,7 +3041,17 @@ int ObSchemaMgr::rebuild_schema_meta_if_not_consistent()
     }
     // Check whether db and table are consistent
     if (!check_schema_meta_consistent()) {
-      LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", K(ret));
+      ret = OB_DUPLICATE_OBJECT_NAME_EXIST;
+      LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", KR(ret), K_(tenant_id));
+      LOG_DBA_ERROR(OB_DUPLICATE_OBJECT_NAME_EXIST,
+                    "msg", "duplicate table/database/foreign key/constraint exist", K_(tenant_id),
+                    "db_cnt", database_infos_.count(), "db_name_cnt", database_name_map_.item_count(),
+                    "table_cnt", table_infos_.count(), "table_id_cnt", table_id_map_.item_count(),
+                    "table_name_cnt", table_name_map_.item_count(), "index_name_cnt", index_name_map_.item_count(),
+                    "aux_vp_name_cnt", aux_vp_name_map_.item_count(), "lob_meta_cnt", lob_meta_infos_.count(),
+                    "log_piece_cnt", lob_piece_infos_.count(), "hidden_table_cnt", hidden_table_name_map_.item_count(),
+                    "fk_cnt", fk_cnt, "fk_name_cnt", foreign_key_name_map_.item_count(),
+                    "cst_cnt", cst_cnt, "cst_name_cnt", constraint_name_map_.item_count());
       right_to_die_or_duty_to_live();
     }
   }
@@ -3218,16 +3250,12 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
           ret = OB_HASH_NOT_EXIST != hash_ret ? hash_ret : ret;
         }
         if (OB_SUCC(ret)) {
-          if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-            // do-nothing for liboblog
-          } else if (OB_FAIL(delete_foreign_keys_in_table(*schema_to_del))) {
+          if (OB_FAIL(delete_foreign_keys_in_table(*schema_to_del))) {
             LOG_WARN("delete foreign keys info from a hash map failed", K(ret), K(*schema_to_del));
           }
         }
         if (OB_SUCC(ret)) {
-          if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-            // do-nothing for liboblog
-          } else if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
+          if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
             LOG_WARN("delete constraint info from a hash map failed", K(ret), K(*schema_to_del));
           }
         }
@@ -3328,7 +3356,7 @@ uint64_t ObSchemaMgr::extract_data_table_id_from_index_name(const ObString &inde
   ObString data_table_id_str;
   uint64_t data_table_id = OB_INVALID_ID;
   if (!index_name.prefix_match(OB_INDEX_PREFIX)) {
-    LOG_WARN("index table name not in valid format", K(index_name));
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(index_name));
   } else {
     pos = strlen(OB_INDEX_PREFIX);
     while (NULL != index_name.ptr() &&
@@ -3337,9 +3365,9 @@ uint64_t ObSchemaMgr::extract_data_table_id_from_index_name(const ObString &inde
       ++pos;
     }
     if (pos + 1 >= index_name.length()) {
-      LOG_WARN("index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
     } else if ('_' != *(index_name.ptr() + pos)) {
-      LOG_WARN("index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
     } else {
       data_table_id_str.assign_ptr(
           index_name.ptr() + strlen(OB_INDEX_PREFIX),
@@ -4095,6 +4123,12 @@ int ObSchemaMgr::del_schemas_in_tenant(const uint64_t tenant_id)
         LOG_WARN("del context in tenant failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(mock_fk_parent_table_mgr_.del_schemas_in_tenant(tenant_id))) {
         LOG_WARN("del mock_fk_parent_table in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(rls_policy_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del rls_policy in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(rls_group_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del rls_group in tenant failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(rls_context_mgr_.del_schemas_in_tenant(tenant_id))) {
+        LOG_WARN("del rls_context in tenant failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -4135,6 +4169,9 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t directory_schema_count = 0;
     int64_t context_schema_count = 0;
     int64_t mock_fk_parent_table_schema_count = 0;
+    int64_t rls_policy_schema_count = 0;
+    int64_t rls_group_schema_count = 0;
+    int64_t rls_context_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4179,6 +4216,12 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get context schema count failed", K(ret));
     } else if (OB_FAIL(mock_fk_parent_table_mgr_.get_mock_fk_parent_table_schema_count(mock_fk_parent_table_schema_count))) {
       LOG_WARN("get context schema count failed", K(ret));
+    } else if (OB_FAIL(rls_policy_mgr_.get_schema_count(rls_policy_schema_count))) {
+      LOG_WARN("get rls_policy schema count failed", K(ret));
+    } else if (OB_FAIL(rls_group_mgr_.get_schema_count(rls_group_schema_count))) {
+      LOG_WARN("get rls_group schema count failed", K(ret));
+    } else if (OB_FAIL(rls_context_mgr_.get_schema_count(rls_context_schema_count))) {
+      LOG_WARN("get rls_context schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4192,6 +4235,9 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + audit_schema_count
                        + dblink_schema_count
                        + directory_schema_count
+                       + rls_policy_schema_count
+                       + rls_group_schema_count
+                       + rls_context_schema_count
                        + sys_variable_schema_count
                        + context_schema_count
                        + mock_fk_parent_table_schema_count
@@ -4692,18 +4738,14 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                         "table_name", table_schema->get_table_name());
             }
             if (OB_SUCC(ret)) {
-              if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-                // do-nothing for liboblog
-              } else if (OB_FAIL(add_foreign_keys_in_table(table_schema->get_simple_foreign_key_info_array(), over_write))) {
+              if (OB_FAIL(add_foreign_keys_in_table(table_schema->get_simple_foreign_key_info_array(), over_write))) {
                 LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));
               } else {
                 fk_cnt += table_schema->get_simple_foreign_key_info_array().count();
               }
             }
             if (OB_SUCC(ret)) {
-              if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-                // do-nothing for liboblog
-              } else if (table_schema->is_mysql_tmp_table()) {
+              if (table_schema->is_mysql_tmp_table()) {
                 // check constraints in non-temporary tables don't share namespace with constraints in temporary tables, do nothing
               } else if (OB_FAIL(add_constraints_in_table(table_schema, over_write))) {
                 LOG_WARN("add constraint info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));
@@ -4950,6 +4992,12 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(directory_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("fail to get directory statistics", K(ret));
+  } else if (OB_FAIL(rls_policy_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get rls_policy statistics", K(ret));
+  } else if (OB_FAIL(rls_group_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get rls_group statistics", K(ret));
+  } else if (OB_FAIL(rls_context_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("fail to get rls_context statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(context_mgr_.get_schema_statistics(schema_info))) {

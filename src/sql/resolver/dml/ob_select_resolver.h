@@ -43,85 +43,6 @@ protected:
 
 class ObSelectResolver: public ObDMLResolver, public ObChildStmtResolver
 {
-  class ObCteResolverCtx
-  {
-    friend class ObSelectResolver;
-  public:
-    ObCteResolverCtx():
-      left_select_stmt_(NULL),
-      left_select_stmt_parse_node_(NULL),
-      opt_col_alias_parse_node_(NULL),
-      is_with_clause_resolver_(false),
-      current_cte_table_name_(""),
-      is_recursive_cte_(false),
-      is_cte_subquery_(false),
-      cte_resolve_level_(0),
-      cte_branch_count_(0),
-      is_set_left_resolver_(false),
-      is_set_all_(true)
-    {
-
-    }
-    virtual ~ObCteResolverCtx()
-    {
-
-    }
-    inline void set_is_with_resolver(bool is_with_resolver) { is_with_clause_resolver_ = is_with_resolver; }
-    inline void set_current_cte_table_name(const ObString& table_name) { current_cte_table_name_ = table_name; }
-    inline bool is_with_resolver() const { return is_with_clause_resolver_; }
-    inline void set_recursive(bool recursive) { is_recursive_cte_ = recursive; }
-    inline void set_in_subquery() { is_cte_subquery_ = true; }
-    inline bool is_in_subquery() { return cte_resolve_level_ >=2; }
-    inline void reset_subquery_level() { cte_resolve_level_ = 0; }
-    inline bool is_recursive() const { return is_recursive_cte_; }
-    inline void set_left_select_stmt(ObSelectStmt* left_stmt) { left_select_stmt_ = left_stmt; }
-    inline void set_left_parse_node(const ParseNode* node) { left_select_stmt_parse_node_ = node; }
-    inline void set_set_all(bool all) { is_set_all_ = all; }
-    inline bool invalid_recursive_union() { return  (nullptr != left_select_stmt_ && !is_set_all_); }
-    inline bool more_than_two_branch() { return cte_branch_count_ >= 2; }
-    inline void reset_branch_count() { cte_branch_count_ = 0; }
-    inline void set_recursive_left_branch() { is_set_left_resolver_ = true; cte_branch_count_ ++; }
-    inline void set_recursive_right_branch(ObSelectStmt* left_stmt, const ParseNode* node, bool all) {
-      is_set_left_resolver_ = false;
-      cte_branch_count_ ++;
-      left_select_stmt_ = left_stmt;
-      left_select_stmt_parse_node_ = node;
-      is_set_all_ = all;
-    }
-    int assign(ObCteResolverCtx &cte_ctx) {
-      left_select_stmt_ = cte_ctx.left_select_stmt_;
-      left_select_stmt_parse_node_ = cte_ctx.left_select_stmt_parse_node_;
-      opt_col_alias_parse_node_ = cte_ctx.opt_col_alias_parse_node_;
-      is_with_clause_resolver_ = cte_ctx.is_with_clause_resolver_;
-      current_cte_table_name_ = cte_ctx.current_cte_table_name_;
-      is_recursive_cte_ = cte_ctx.is_recursive_cte_;
-      is_cte_subquery_ = cte_ctx.is_cte_subquery_;
-      cte_resolve_level_ = cte_ctx.cte_resolve_level_;
-      cte_branch_count_ = cte_ctx.cte_branch_count_;
-      is_set_left_resolver_ = cte_ctx.is_set_left_resolver_;
-      is_set_all_ = cte_ctx.is_set_all_;
-      return cte_col_names_.assign(cte_ctx.cte_col_names_);
-    }
-    TO_STRING_KV(K_(is_with_clause_resolver),
-                 K_(current_cte_table_name),
-                 K_(is_recursive_cte),
-                 K_(is_cte_subquery),
-                 K_(cte_resolve_level),
-                 K_(cte_col_names));
-  private:
-    ObSelectStmt* left_select_stmt_;
-    const ParseNode* left_select_stmt_parse_node_;
-    const ParseNode* opt_col_alias_parse_node_;
-    bool is_with_clause_resolver_;
-    ObString current_cte_table_name_;
-    bool is_recursive_cte_;
-    bool is_cte_subquery_;
-    int64_t cte_resolve_level_;
-    int64_t cte_branch_count_;
-    common::ObArray<ObString> cte_col_names_;
-    bool is_set_left_resolver_;
-    bool is_set_all_;
-  };
 public:
   explicit ObSelectResolver(ObResolverParams &params);
   virtual ~ObSelectResolver();
@@ -154,6 +75,15 @@ public:
   inline bool has_grouping() const { return has_grouping_; };
   void set_has_group_by_clause() { has_group_by_clause_ = true; }
   inline bool has_group_by_clause() const { return has_group_by_clause_; };
+  int check_cte_pseudo(const ParseNode *search_node, const ParseNode *cycle_node);
+  int get_current_recursive_cte_table(ObSelectStmt* ref_stmt);
+  int resolve_cte_pseudo_column(const ParseNode *search_node,
+                                const ParseNode *cycle_node,
+                                const TableItem *table_item,
+                                ObString &search_pseudo_column_name,
+                                ObString &cycle_pseudo_column_name);
+  void set_current_recursive_cte_table_item(TableItem *table_item) { current_recursive_cte_table_item_ = table_item; }
+  void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
 
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
@@ -173,7 +103,6 @@ protected:
                                    ObSelectStmt *&child_stmt,
                                    const bool is_left_child = false);
   int check_cte_set_types(ObSelectStmt &left_stmt, ObSelectStmt &right_stmt);
-  int set_cte_ctx(ObCteResolverCtx &cte_ctx, bool copy_col_name = true, bool in_subquery = false);
   int set_stmt_set_type(ObSelectStmt *select_stmt, ParseNode *set_node);
   int is_set_type_same(const ObSelectStmt *select_stmt, ParseNode *set_node, bool &is_type_same);
   int check_recursive_cte_limited();
@@ -184,18 +113,8 @@ protected:
                                      const ParseNode *&group_by,
                                      const ParseNode *&having);
   int resolve_normal_query(const ParseNode &parse_node);
-  virtual int resolve_generate_table(const ParseNode &table_node, const ObString &alias_name, TableItem *&tbl_item) override;
   int create_joined_table_item(JoinedTable *&joined_table);
   virtual int check_special_join_table(const TableItem &join_table, bool is_left_child, ObItemType join_type) override;
-  virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item) override;
-  int resolve_with_clause_subquery(const ParseNode &parse_tree, TableItem *&table_item);
-  int resolve_cte_pseudo_column(const ParseNode *search_node,
-                                const ParseNode *cycle_node,
-                                const TableItem *table_item,
-                                ObString &search_pseudo_column_name,
-                                ObString &cycle_pseudo_column_name);
-  int init_cte_resolver(ObSelectResolver &select_resolver, const ParseNode *opt_col_node, ObString& table_name);
-  int get_current_recursive_cte_table(ObSelectStmt* ref_stmt);
   int resolve_search_clause(const ParseNode &parse_tree, const TableItem* cte_table_item, ObString& name);
   int resolve_search_item(const ParseNode* sort_list, ObSelectStmt* r_union_stmt);
   int resolve_search_pseudo(const ParseNode* search_set_clause, ObSelectStmt* r_union_stmt, ObString& name);
@@ -206,20 +125,8 @@ protected:
                            const ParseNode* cycle_value,
                            const ParseNode* cycle_default_value,
                            ObString& cycle_pseudo_column_name);
-  int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);
-  int add_fake_schema(ObSelectStmt* left_stmt);
-  int set_parent_cte();
   int generate_fake_column_expr(const share::schema::ObColumnSchemaV2 *column_schema, ObSelectStmt* left_stmt, ObColumnRefRawExpr*& fake_col_expr);
-  /**
-   * @bref 提前解析名字，用于cte递归引用时的列检测
-   */
-  int get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString>& columns, const ParseNode *parse_tree);
-  int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
-  int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
-  int add_parent_cte_table_to_children(ObChildStmtResolver& child_resolver);
-  int add_cte_table_item(TableItem *table_item,  bool &dup_name);
   int add_parent_cte_table_item(TableItem *table_item);
-  int resolve_with_clause(const ParseNode *node, bool same_level = false);
   int resolve_from_clause(const ParseNode *node);
   int resolve_field_list(const ParseNode &node);
   int resolve_star(const ParseNode *node);
@@ -240,6 +147,8 @@ protected:
                                 ObSelectStmt *select_stmt,
                                 bool &has_explicit_dir,
                                 bool is_groupby_expr);
+  int check_rollup_clause(const ParseNode *node, bool &has_rollup);
+
   int resolve_group_by_list(const ParseNode *node,
                             common::ObIArray<ObRawExpr*> &groupby_exprs,
                             common::ObIArray<ObRawExpr*> &rollup_exprs,
@@ -269,7 +178,6 @@ protected:
   int check_search_clause(const ParseNode &node);
   int check_search_cycle_set_column(const ParseNode &search_node, const ParseNode &cycle_node);
   int check_cycle_values(const ParseNode &cycle_node);
-  int check_cte_pseudo(const ParseNode *search_node, const ParseNode *cycle_node);
   int check_unsupported_operation_in_recursive_branch();
   int check_recursive_cte_usage(const ObSelectStmt &select_stmt);
   int gen_unpivot_target_column(const int64_t table_count, ObSelectStmt &select_stmt,
@@ -298,7 +206,6 @@ protected:
                                    const common::ObString &cname,
                                    ObRawExpr *&coalesce_expr);
   int resolve_having_clause(const ParseNode *node);
-  int replace_having_expr_when_nested_aggr(ObSelectStmt *select_stmt, ObAggFunRawExpr *aggr_expr);
   int resolve_named_windows_clause(const ParseNode *node);
   int check_nested_aggr_in_having(ObRawExpr* expr);
   int resolve_start_with_clause(const ParseNode *node);
@@ -325,6 +232,7 @@ protected:
   int resolve_alias_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_column_ref_in_group_by(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_all_function_table_columns(const TableItem &table_item, ObIArray<ColumnItem> *column_items);
+  int resolve_all_json_table_columns(const TableItem &table_item, ObIArray<ColumnItem> *column_items);
   int resolve_all_generated_table_columns(const TableItem &table_item, common::ObIArray<ColumnItem> *column_items);
   virtual int set_select_item(SelectItem &select_item, bool is_auto_gen);
   int resolve_query_options(const ParseNode *node);
@@ -343,13 +251,12 @@ protected:
   int check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&expr);
   int check_window_exprs();
   int check_sequence_exprs();
-  int check_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
-  int check_CTE_name_exist(const ObString &var_name, bool &dup_name);
+  int check_udt_set_query();
   int set_having_self_column(const ObRawExpr *real_ref_expr);
-  static int check_win_func_arg_valid(ObSelectStmt *select_stmt,
-                                      const ObItemType func_type,
-                                      common::ObIArray<ObRawExpr *> &arg_exp_arr,
-                                      common::ObIArray<ObRawExpr *> &partition_exp_arr);
+  int check_win_func_arg_valid(ObSelectStmt *select_stmt,
+                               const ObItemType func_type,
+                               common::ObIArray<ObRawExpr *> &arg_exp_arr,
+                               common::ObIArray<ObRawExpr *> &partition_exp_arr);
   int check_query_is_recursive_union(const ParseNode &parse_tree, bool &recursive_union, bool &need_swap_child);
   int do_check_basic_table_in_cte_recursive_union(const ParseNode &parse_tree, bool &recursive_union);
   int do_check_node_in_cte_recursive_union(const ParseNode* node, bool &recursive_union);
@@ -419,7 +326,7 @@ private:
                             ObStmtCompareContext *check_context = NULL);
   int check_subquery_return_one_column(const ObRawExpr &expr, bool is_exists_param = false);
 
-  int check_nested_aggr_valid(const ObIArray<ObAggFunRawExpr*> &aggr_exprs);
+  int mark_nested_aggr_if_required(const ObIArray<ObAggFunRawExpr*> &aggr_exprs);
 
   int check_multi_rollup_items_valid(const common::ObIArray<ObMultiRollupItem> &multi_rollup_items);
 
@@ -428,12 +335,10 @@ private:
   int add_name_for_anonymous_view();
   int add_name_for_anonymous_view_recursive(TableItem *table_item);
 
-  int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt, ObQueryCtx *query_ctx);
-
+  int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 protected:
   // data members
   /*these member is only for with clause*/
-  ObCteResolverCtx cte_ctx_;
   //由于search以及cycle解析的特殊性，需要解析儿子stmt中定义的CTE_TABLE类型
   TableItem* current_recursive_cte_table_item_;
   ObSelectStmt* current_cte_involed_stmt_;
@@ -455,6 +360,7 @@ protected:
   bool has_grouping_;
   //用于标识当前的query是否有group by子句
   bool has_group_by_clause_;
+  bool has_nested_aggr_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);

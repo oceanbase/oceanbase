@@ -26,7 +26,8 @@ public:
      : ObLogPlan(ctx, help_stmt)
      {}
   virtual ~ObHelpLogPlan() {}
-  int generate_raw_plan();
+protected:
+  int generate_normal_raw_plan();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHelpLogPlan);
 };

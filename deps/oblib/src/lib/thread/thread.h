@@ -14,6 +14,7 @@
 #define CORO_THREAD_H
 
 #include <functional>
+#include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase {
@@ -24,6 +25,7 @@ namespace lib {
 class Thread {
 public:
   using Runnable = std::function<void()>;
+  static constexpr int PATH_SIZE = 128;
   Thread();
   Thread(int64_t stack_size);
   Thread(Runnable runnable, int64_t stack_size=0);
@@ -34,9 +36,7 @@ public:
   void stop();
   void wait();
   void destroy();
-
-  pid_t get_pid() const;
-  pid_t get_tid() const;
+  void dump_pth();
 
   /// \brief Get current thread object.
   ///
@@ -46,37 +46,43 @@ public:
 
   bool has_set_stop() const;
 
+  OB_INLINE static int64_t update_loop_ts(int64_t t)
+  {
+    int64_t ret = loop_ts_;
+    loop_ts_ = t;
+    return ret;
+  }
+
+  OB_INLINE static int64_t update_loop_ts()
+  {
+    return update_loop_ts(common::ObTimeUtility::fast_current_time());
+  }
+public:
+  static thread_local int64_t loop_ts_;
+
 private:
   static void* __th_start(void *th);
   void destroy_stack();
-  static TLOCAL(Thread *, current_thread_);
+  static thread_local Thread* current_thread_;
 
 private:
   static int64_t total_thread_count_;
 private:
   pthread_t pth_;
-  pid_t pid_;
-  pid_t tid_;
   Runnable runnable_;
 #ifndef OB_USE_ASAN
   void *stack_addr_;
 #endif
   int64_t stack_size_;
   bool stop_;
+  int64_t join_concurrency_;
+  pid_t pid_before_stop_;
+  pid_t tid_before_stop_;
 };
-
-OB_INLINE pid_t Thread::get_pid() const
-{
-  return pid_;
-}
-
-OB_INLINE pid_t Thread::get_tid() const
-{
-  return tid_;
-}
 
 OB_INLINE bool Thread::has_set_stop() const
 {
+  IGNORE_RETURN update_loop_ts();
   return stop_;
 }
 

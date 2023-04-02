@@ -46,7 +46,8 @@ private:
                                const uint32_t pktlen_before_compress, char *&pkt_body,
                                const uint32_t pkt_body_size);
 
-  int process_compressed_packet(ObCompressedPktContext& context, ObMysqlPktContext &mysql_pkt_context, ObICSMemPool& pool,
+  int process_compressed_packet(ObCompressedPktContext& context, ObMysqlPktContext &mysql_pkt_context,
+                                obmysql::ObPacketRecordWrapper &pkt_rec_wrapper, ObICSMemPool& pool,
                                 void *&ipacket, bool &need_decode_more);
 
 private:

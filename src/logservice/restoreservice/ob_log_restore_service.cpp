@@ -14,6 +14,7 @@
 
 #include "ob_log_restore_service.h"
 #include "lib/ob_errno.h"
+#include "lib/ob_define.h"                    // is_user_tenant
 #include "lib/utility/ob_macro_utils.h"       // K*
 #include "share/ob_ls_id.h"                   // ObLSID
 #include "storage/tx_storage/ob_ls_service.h" // ObLSService
@@ -37,6 +38,8 @@ ObLogRestoreService::ObLogRestoreService() :
   fetch_log_impl_(),
   fetch_log_worker_(),
   error_reporter_(),
+  allocator_(),
+  scheduler_(),
   cond_()
 {}
 
@@ -58,14 +61,20 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("invalid argument", K(ret), K(transport), K(ls_svr), K(log_service));
   } else if (OB_FAIL(proxy_.init(transport))) {
     LOG_WARN("proxy_ init failed", K(ret));
+  } else if (OB_FAIL(restore_controller_.init(MTL_ID(), log_service))) {
+    LOG_WARN("restore_controller_ init failed");
   } else if (OB_FAIL(location_adaptor_.init(MTL_ID(), ls_svr))) {
     LOG_WARN("location_adaptor_ init failed", K(ret));
   } else if (OB_FAIL(fetch_log_impl_.init(MTL_ID(), ls_svr, log_service, &fetch_log_worker_))) {
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_worker_.init(MTL_ID(), this, ls_svr))) {
+  } else if (OB_FAIL(fetch_log_worker_.init(MTL_ID(), &allocator_, &restore_controller_, this, ls_svr))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
   } else if (OB_FAIL(error_reporter_.init(MTL_ID(), ls_svr))) {
     LOG_WARN("error_reporter_ init failed", K(ret));
+  } else if (OB_FAIL(allocator_.init(MTL_ID()))) {
+    LOG_WARN("allocator_ init failed", K(ret));
+  } else if (OB_FAIL(scheduler_.init(MTL_ID(), &allocator_, &fetch_log_worker_))) {
+    LOG_WARN("scheduler_ init failed", K(ret));
   } else {
     ls_svr_ = ls_svr;
     inited_ = true;
@@ -80,9 +89,13 @@ void ObLogRestoreService::destroy()
   fetch_log_worker_.destroy();
   stop();
   wait();
+  restore_controller_.destroy();
   location_adaptor_.destroy();
   fetch_log_impl_.destroy();
   error_reporter_.destroy();
+  proxy_.destroy();
+  allocator_.destroy();
+  scheduler_.destroy();
   ls_svr_ = NULL;
 }
 
@@ -128,9 +141,9 @@ void ObLogRestoreService::run1()
   lib::set_thread_name("LogRessvr");
   ObCurTraceId::init(GCONF.self_addr_);
 
-  const int64_t THREAD_RUN_INTERVAL = 5 * 1000 * 1000L;
+  const int64_t THREAD_RUN_INTERVAL = 1 * 1000 * 1000L;
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogRestoreService not init", "tenant_id", MTL_ID());
+    LOG_ERROR_RET(OB_NOT_INIT, "ObLogRestoreService not init", "tenant_id", MTL_ID());
   } else {
     while (! has_set_stop()) {
       int64_t begin_stamp = ObTimeUtility::current_time();
@@ -147,11 +160,22 @@ void ObLogRestoreService::run1()
 
 void ObLogRestoreService::do_thread_task_()
 {
-  update_upstream_();
+  if (is_user_tenant(MTL_ID())) {
+    update_restore_quota_();
 
-  schedule_fetch_log_();
+    update_upstream_();
 
-  report_error_();
+    schedule_fetch_log_();
+
+    schedule_resource_();
+
+    report_error_();
+  }
+}
+
+void ObLogRestoreService::update_restore_quota_()
+{
+  (void)restore_controller_.update_quota();
 }
 
 void ObLogRestoreService::update_upstream_()
@@ -162,6 +186,11 @@ void ObLogRestoreService::update_upstream_()
 void ObLogRestoreService::schedule_fetch_log_()
 {
   (void)fetch_log_impl_.do_schedule();
+}
+
+void ObLogRestoreService::schedule_resource_()
+{
+  (void)scheduler_.schedule();
 }
 
 void ObLogRestoreService::report_error_()

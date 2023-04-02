@@ -178,7 +178,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
       LOG_WARN("alloc failed", K(ret));
     } else {
       common::ObMemLeakChecker::mod_info_map_t tmp_map;
-      if (OB_FAIL(tmp_map.create(1024, attr, attr))) {
+      if (OB_FAIL(tmp_map.create(1024))) {
         LOG_WARN("create map failed", K(ret));
       } else if (OB_FAIL(get_mem_leak_checker().load_leak_info_map(tmp_map))) {
         LOG_WARN("load map failed", K(ret));
@@ -191,7 +191,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
                         get_mem_leak_checker().get_label(),
                         get_mem_leak_checker().get_check_type(),
                         ObTimeUtility::current_time());
-        for (auto it = tmp_map.begin(); it != tmp_map.end(); ++it) {
+        for (auto it = tmp_map->begin(); it != tmp_map->end(); ++it) {
           pos += snprintf(buf + pos, buf_len - pos, "bt=%s, count=%ld, bytes=%ld\n",
               it->first.bt_, it->second.first, it->second.second);
           if (pos > buf_len / 2) {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -80,7 +80,7 @@ int ObLSIterator::get_next(ObLS *&ls)
           ret = OB_ITER_END;
         } else {
           if (OB_NOT_NULL(ls_map_->ls_buckets_[bucket_pos_])) {
-            share::ObQSyncLockReadGuard guard(ls_map_->buckets_lock_[bucket_pos_]);
+            ObQSyncLockReadGuard guard(ls_map_->buckets_lock_[bucket_pos_]);
             ls = ls_map_->ls_buckets_[bucket_pos_];
 
             while (OB_NOT_NULL(ls) && OB_SUCC(ret)) {
@@ -149,14 +149,14 @@ int ObLSMap::init(const int64_t tenant_id, ObIAllocator *ls_allocator)
   } else if (OB_ISNULL(ls_allocator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (OB_ISNULL(buckets_lock_ = (share::ObQSyncLock*)ob_malloc(sizeof(share::ObQSyncLock) * BUCKETS_CNT, mem_attr))) {
+  } else if (OB_ISNULL(buckets_lock_ = (common::ObQSyncLock*)ob_malloc(sizeof(common::ObQSyncLock) * BUCKETS_CNT, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObLS*) * BUCKETS_CNT, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to allocate memory, ", K(ret), LITERAL_K(BUCKETS_CNT));
   } else {
     for (int64_t i = 0 ; i < BUCKETS_CNT; ++i) {
-      new(buckets_lock_ + i) share::ObQSyncLock();
+      new(buckets_lock_ + i) common::ObQSyncLock();
       if (OB_FAIL((buckets_lock_ + i)->init(mem_attr))) {
         LOG_WARN("buckets_lock_ init fail", K(ret), K(tenant_id));
         for (int64_t j = 0 ; j <= i; ++j) {
@@ -201,7 +201,7 @@ int ObLSMap::add_ls(
     LOG_WARN("ObLSMap not init", K(ret), K(ls_id));
   } else {
     int64_t pos = ls_id.hash() % BUCKETS_CNT;
-    share::ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
     curr = ls_buckets_[pos];
     while (OB_NOT_NULL(curr)) {
       if (curr->get_ls_id() == ls_id) {
@@ -248,7 +248,7 @@ int ObLSMap::del_ls(const share::ObLSID &ls_id)
   } else {
     int64_t pos = ls_id.hash() % BUCKETS_CNT;
     //remove ls from map
-    share::ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
     ls = ls_buckets_[pos];
     while (OB_NOT_NULL(ls)) {
       if (ls->get_ls_id() == ls_id) {
@@ -302,7 +302,7 @@ int ObLSMap::get_ls(const share::ObLSID &ls_id,
     LOG_WARN("ObLSMap not init", K(ret), K(ls_id));
   } else {
     pos = ls_id.hash() % BUCKETS_CNT;
-    share::ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
+    ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
     ls = ls_buckets_[pos];
     while (OB_NOT_NULL(ls)) {
       if (ls->get_ls_id() == ls_id) {
@@ -329,7 +329,7 @@ int ObLSMap::remove_duplicate_ls()
     LOG_WARN("ObLSMap has not been inited", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < BUCKETS_CNT; ++i) {
-      share::ObQSyncLockWriteGuard bucket_guard(buckets_lock_[i]);
+      ObQSyncLockWriteGuard bucket_guard(buckets_lock_[i]);
       if (nullptr != ls_buckets_[i]) {
         if (OB_FAIL(remove_duplicate_ls_in_linklist(ls_buckets_[i]))) {
           LOG_WARN("fail to remove same ls in linklist", K(ret));

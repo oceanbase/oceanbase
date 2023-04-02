@@ -510,6 +510,24 @@ int ObCandiTableLoc::all_select_fixed_server(const ObAddr &fixed_server)
   return ret;
 }
 
+int ObCandiTableLoc::get_all_servers(common::ObIArray<common::ObAddr> &servers) const
+{
+  int ret = OB_SUCCESS;
+  const ObCandiTabletLocIArray &phy_part_loc_info_list = get_phy_part_loc_info_list();
+  FOREACH_CNT_X(it, phy_part_loc_info_list, OB_SUCC(ret)) {
+    share::ObLSReplicaLocation replica_location;
+    if (OB_FAIL((*it).get_selected_replica(replica_location))) {
+      LOG_WARN("fail to get selected replica", K(*it));
+    } else if (!replica_location.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("replica location is invalid", K(ret), K(replica_location));
+    } else if (OB_FAIL(add_var_to_array_no_dup(servers, replica_location.get_server()))) {
+      LOG_WARN("failed to push back server", K(ret));
+    }
+  }
+  return ret;
+}
+
 //给定ObCandiTableLoc 和ObCandiTabletLoc(来自复制表)
 //判断是否前者的每个分区leader都在同一个server, 且上面都存在复制表的副本, 如果是则返回TRUE
 int ObCandiTableLoc::is_server_in_replica(const ObCandiTableLoc &l_phy_loc,

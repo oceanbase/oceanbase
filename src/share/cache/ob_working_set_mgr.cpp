@@ -67,7 +67,7 @@ int WorkingSetMB::alloc(
 void WorkingSetMB::set_full(const double base_mb_score)
 {
   if (NULL == mb_handle_) {
-    LOG_ERROR("mb_handle_ is null", KP_(mb_handle));
+    LOG_ERROR_RET(common::OB_ERR_UNEXPECTED, "mb_handle_ is null", KP_(mb_handle));
   } else {
     mb_handle_->set_full(base_mb_score);
   }
@@ -356,7 +356,7 @@ bool ObWorkingSet::try_reuse_mb(WorkingSetMB *ws_mb, ObKVMemBlockHandle *&mb_han
           // try_check_and_inc_seq_num will set ref_cnt to 0, no need to de_handle_ref any more
         } else {
           if (!ATOMIC_BCAS((uint32_t*)(&reused_handle->status_), FREE, FULL)) {
-            COMMON_LOG(ERROR, "change mb_handle status back to FULL failed");
+            COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "change mb_handle status back to FULL failed");
           }
           mb_handle_allocator_->de_handle_ref(reused_handle);
         }

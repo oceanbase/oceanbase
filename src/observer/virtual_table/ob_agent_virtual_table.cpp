@@ -106,7 +106,8 @@ static int timestamp2otimestamp(const ObObj &src, ObObj &dst, ObIAllocator &)
   return OB_SUCCESS;
 }
 
-ObAgentVirtualTable::ObAgentVirtualTable() : general_tenant_id_(OB_INVALID_TENANT_ID)
+ObAgentVirtualTable::ObAgentVirtualTable() : general_tenant_id_(OB_INVALID_TENANT_ID),
+                                             mode_(lib::Worker::CompatMode::ORACLE)
 {
 }
 
@@ -121,7 +122,8 @@ int ObAgentVirtualTable::init(
     const bool sys_tenant_base_table,
     const share::schema::ObTableSchema *index_table,
     const ObVTableScanParam &scan_param,
-    const bool only_sys_data)
+    const bool only_sys_data,
+    const lib::Worker::CompatMode &mode)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == pure_table_id
@@ -131,6 +133,7 @@ int ObAgentVirtualTable::init(
     LOG_WARN("invalid argument", K(ret), K(pure_table_id), KP(index_table), K(scan_param));
   } else {
     only_sys_data_ = only_sys_data;
+    mode_ = mode;
     const uint64_t base_tenant_id = (sys_tenant_base_table || only_sys_data) ?
                                     OB_SYS_TENANT_ID : scan_param.tenant_id_;
     if (OB_FAIL(ObAgentTableBase::init(base_tenant_id, pure_table_id, index_table, scan_param))) {
@@ -146,23 +149,20 @@ int ObAgentVirtualTable::init(
 int ObAgentVirtualTable::do_open()
 {
   int ret = OB_SUCCESS;
+  ObSqlString sql;
   if (OB_FAIL(ObAgentTableBase::do_open())) {
-    LOG_WARN("base agent table open failed", K(ret));
+    LOG_WARN("base agent table open failed", KR(ret));
+  } else if (OB_FAIL(construct_sql(base_tenant_id_, sql))) {
+    LOG_WARN("construct sql failed", KR(ret), K(base_tenant_id_));
+  } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr()))) {
+    LOG_WARN("execute sql failed", KR(ret), K(base_tenant_id_), K(sql));
+  } else if (OB_ISNULL(sql_res_->get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL sql executing result", KR(ret), K(base_tenant_id_), K(sql));
   } else {
-    ObSqlString sql;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(construct_sql(sql))) {
-      LOG_WARN("construct sql failed", K(ret));
-    } else if (OB_FAIL(GCTX.sql_proxy_->read(*sql_res_, base_tenant_id_, sql.ptr()))) {
-      LOG_WARN("execute sql failed", K(ret), K(base_tenant_id_), K(sql));
-    } else if (OB_ISNULL(sql_res_->get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL sql executing result", K(ret));
-    } else {
-      inner_sql_res_ = static_cast<ObInnerSQLResult *>(sql_res_->get_result());
-      if (general_tenant_id_ != OB_INVALID_TENANT_ID) {
-        inner_sql_res_->result_set().get_session().switch_tenant(general_tenant_id_);
-      }
+    inner_sql_res_ = static_cast<ObInnerSQLResult *>(sql_res_->get_result());
+    if (general_tenant_id_ != OB_INVALID_TENANT_ID) {
+      inner_sql_res_->result_set().get_session().switch_tenant(general_tenant_id_);
     }
   }
 
@@ -173,27 +173,31 @@ int ObAgentVirtualTable::set_convert_func(convert_func_t &func,
       const schema::ObColumnSchemaV2 &col, const schema::ObColumnSchemaV2 &base_col)
 {
   int ret = OB_SUCCESS;
-  ObObjType from = base_col.get_data_type();
-  ObObjType to = col.get_data_type();
-  ObObjTypeClass fromclass = ob_obj_type_class(from);
-  if (ObVarcharType == from && ObVarcharType == to) {
-    func = varchar2varchar;
-  } else if (ObNumberType == to && ObNumberType == from) {
-    func = number2number;
-  } else if (ObNumberType == to && ObIntTC == fromclass) {
-    func = int2number;
-  } else if (ObNumberType == to && ObUIntTC == fromclass) {
-    func = uint2number;
-  } else if (ObNumberType == to && ObDoubleTC == fromclass) {
-    func = double2number;
-  } else if (ObTimestampType == from && ObTimestampLTZType == to) {
-    func = timestamp2otimestamp;
-  } else if (ObLongTextType == from && ObLongTextType == to) {
-    func = longtext2longtext;
+  if (lib::Worker::CompatMode::MYSQL == mode_) {
+    // do not set_convert_func
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unsupported type convert",
-        K(ret), K(from), K(to), K(col), K(base_col));
+    ObObjType from = base_col.get_data_type();
+    ObObjType to = col.get_data_type();
+    ObObjTypeClass fromclass = ob_obj_type_class(from);
+    if (ObVarcharType == from && ObVarcharType == to) {
+      func = varchar2varchar;
+    } else if (ObNumberType == to && ObNumberType == from) {
+      func = number2number;
+    } else if (ObNumberType == to && ObIntTC == fromclass) {
+      func = int2number;
+    } else if (ObNumberType == to && ObUIntTC == fromclass) {
+      func = uint2number;
+    } else if (ObNumberType == to && ObDoubleTC == fromclass) {
+      func = double2number;
+    } else if (ObTimestampType == from && ObTimestampLTZType == to) {
+      func = timestamp2otimestamp;
+    } else if (ObLongTextType == from && ObLongTextType == to) {
+      func = longtext2longtext;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsupported type convert",
+          K(ret), K(from), K(to), K(col), K(base_col));
+    }
   }
 
   return ret;
@@ -222,6 +226,8 @@ int ObAgentVirtualTable::add_extra_condition(common::ObSqlString &sql)
   }
   bool need_tenant_id = true;
   if (OB_FAIL(ret)) {
+  } else if (lib::Worker::CompatMode::MYSQL == mode_ && is_sys_tenant(effective_tenant_id_)) {
+    LOG_TRACE("do not add tenant_id filter", K_(mode), K_(effective_tenant_id));
   } else if (OB_FAIL(should_add_tenant_condition(need_tenant_id, tenant_id))) {
     LOG_WARN("failed to get is_add_tenant_condition flag", K(ret));
   } else if (need_tenant_id && NULL != table_schema_->get_column_schema("tenant_id")) {
@@ -259,6 +265,9 @@ int ObAgentVirtualTable::inner_get_next_row(common::ObNewRow *&row)
       const ObObj &input = base_row->get_cell(i);
       if (input.is_null()) {
         cur_row_.cells_[i].set_null();
+      } else if (lib::Worker::CompatMode::MYSQL == mode_) {
+        cur_row_.cells_[i] = input;
+        LOG_INFO("mysql compat mode agent do not do convert", KR(ret), K(input));
       } else if (OB_FAIL(mapping_[scan_param_->column_ids_.at(i)].convert_func_(
           input, cur_row_.cells_[i], convert_alloc_))) {
         LOG_WARN("convert obj failed", K(ret), K(input),

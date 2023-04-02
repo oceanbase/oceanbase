@@ -29,7 +29,6 @@ public:
   virtual ~ObSwitchTenantStmt()
   {
   }
-  void set_tenant_name(const ObString &tenant_name) { arg_.set_tenant_name(tenant_name); }
 
   obrpc::ObSwitchTenantArg  &get_arg() { return arg_; }
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(arg));

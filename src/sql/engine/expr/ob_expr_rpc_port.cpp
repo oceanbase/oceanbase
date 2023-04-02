@@ -48,7 +48,7 @@ int ObExprRpcPort::eval_rpc_port(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   UNUSED(expr);
   UNUSED(ctx);
-  //see https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/4074657
+  //see
   ObAddr addr = ObCurTraceId::get_addr();
   expr_datum.set_int32(addr.get_port());
   return ret;

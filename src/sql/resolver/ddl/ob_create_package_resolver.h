@@ -53,6 +53,12 @@ public:
   explicit ObCreatePackageBodyResolver(ObResolverParams &params) : ObDDLResolver(params) {}
   virtual ~ObCreatePackageBodyResolver() {}
   virtual int resolve(const ParseNode &parse_tree);
+  static int update_routine_route_sql(ObIAllocator &allocator,
+                                      const ObSQLSessionInfo &session_info,
+                                      ObIArray<ObRoutineInfo> &public_routine_list,
+                                      const pl::ObPLRoutineTable &spec_routine_table,
+                                      const pl::ObPLRoutineTable &body_routine_table,
+                                      ObIArray<const ObRoutineInfo *> &routine_infos);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePackageBodyResolver);
 };

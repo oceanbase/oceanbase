@@ -16,7 +16,7 @@
 
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 namespace transaction
 {
 
@@ -35,24 +35,27 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param)
 
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
-                                 const int64_t base_ts,
+                                 const SCN &base_scn,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock)
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
-  int64_t ts = 0;
+  SCN scn;
 
-  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid() || NULL == buf || 0 == size
-      || base_ts > ObTimeUtility::current_time_ns() + 86400000000000L) {
+  if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_scn.is_valid() ||
+      base_scn.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_), KP(buf), K(size), K(base_ts));
-  } else if (OB_FAIL(log_handler_->append(buf, size, base_ts, need_nonblock, cb, lsn, ts))) {
-    TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_ts),
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size), K(base_scn), KP(cb));
+  } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else if (OB_FAIL(log_handler_->append(buf, size, base_scn, need_nonblock, cb, lsn, scn))) {
+    TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock));
   } else {
     cb->set_lsn(lsn);
-    cb->set_log_ts(ts);
+    cb->set_log_ts(scn);
     cb->set_submit_ts(ObTimeUtility::current_time());
     ObTransStatistic::get_instance().add_clog_submit_count(MTL_ID(), 1);
     ObTransStatistic::get_instance().add_trans_log_total_size(MTL_ID(), size);
@@ -83,6 +86,18 @@ int ObLSTxLogAdapter::get_role(bool &is_leader, int64_t &epoch)
     is_leader = false;
   }
 
+  return ret;
+}
+
+int ObLSTxLogAdapter::get_max_decided_scn(SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else {
+    ret = log_handler_->get_max_decided_scn(scn);
+  }
   return ret;
 }
 

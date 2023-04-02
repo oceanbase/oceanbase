@@ -108,7 +108,8 @@ static ObGetIRType OB_IR_TYPE[common::ObMaxType + 1] =
   reinterpret_cast<ObGetIRType>(ObIRType::getInt8PtrTy),  // 45. ObURowIDType
   NULL,                                                    //46.ObLobType
   NULL,                                                    //47.ObJsonType
-  NULL,                                                    //48.ObMaxType
+  NULL,                                                    //48.ObGeometryType
+  NULL,                                                    //49.ObMaxType
 };
 
 template<typename T, int64_t N>

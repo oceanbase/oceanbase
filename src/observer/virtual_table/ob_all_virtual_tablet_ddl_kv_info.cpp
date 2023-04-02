@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_tablet_ddl_kv_info.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 using namespace oceanbase::common;
@@ -135,7 +136,9 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv(ObDDLKV *&ddl_kv)
     }
 
     if (OB_SUCC(ret) && ddl_kv_idx_ >= 0 && ddl_kv_idx_ < ddl_kvs_handle_.get_count()) {
-      if (OB_FAIL(ddl_kvs_handle_.get_ddl_kv(ddl_kv_idx_, ddl_kv))) {
+      ddl_kv = static_cast<ObDDLKV *>(ddl_kvs_handle_.get_table(ddl_kv_idx_));
+      if (OB_ISNULL(ddl_kv)) {
+        ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "fail to get ddl kv", K(ret), K(ddl_kv_idx_));
       } else {
         ddl_kv_idx_++;
@@ -193,16 +196,16 @@ int ObAllVirtualTabletDDLKVInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(curr_tablet_id_.id());
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
-          // freeze_log_scn
-          cur_row_.cells_[i].set_uint64(cur_kv->get_freeze_log_ts());
+          // freeze_scn
+          cur_row_.cells_[i].set_uint64(cur_kv->get_freeze_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
-          // start_log_scn
-          cur_row_.cells_[i].set_uint64(cur_kv->get_ddl_start_log_ts());
+          // start_scn
+          cur_row_.cells_[i].set_uint64(cur_kv->get_ddl_start_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
-          // min_log_scn
-          cur_row_.cells_[i].set_uint64(cur_kv->get_min_log_ts());
+          // min_scn
+          cur_row_.cells_[i].set_uint64(cur_kv->get_min_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // macro_block_cnt

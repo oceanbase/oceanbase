@@ -177,18 +177,23 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
     }
   }
   if (OB_SUCC(ret)) {
-    if (!is_oracle_mode() && ob_is_number_tc(res_type)) {
-      ObPrecision tmp_res_prec = -1;
-      if (1 == param_num) {
-        tmp_res_prec = static_cast<ObPrecision>(params[0].get_precision() -
-                                                params[0].get_scale() + 1);
+    if (!is_oracle_mode()) {
+      if (ob_is_number_tc(res_type)) {
+        ObPrecision tmp_res_prec = -1;
+        if (1 == param_num) {
+          tmp_res_prec = static_cast<ObPrecision>(params[0].get_precision() -
+                                                  params[0].get_scale() + 1);
+          res_prec = tmp_res_prec >= 0 ? tmp_res_prec : res_prec;
+          res_scale = 0;
+        } else {
+          tmp_res_prec = static_cast<ObPrecision>(params[0].get_precision() -
+                                                  params[0].get_scale() + res_scale + 1);
+        }
         res_prec = tmp_res_prec >= 0 ? tmp_res_prec : res_prec;
-        res_scale = 0;
-      } else {
-        tmp_res_prec = static_cast<ObPrecision>(params[0].get_precision() -
-                                                params[0].get_scale() + res_scale + 1);
+      } else if (ob_is_real_type(res_type)) {
+        res_prec = (SCALE_UNKNOWN_YET == res_scale) ?
+          PRECISION_UNKNOWN_YET : ObMySQLUtil::float_length(res_scale);
       }
-      res_prec = tmp_res_prec >= 0 ? tmp_res_prec : res_prec;
     }
     type.set_scale(res_scale);
     type.set_precision(res_prec);
@@ -612,7 +617,7 @@ int calc_round_expr_datetime_inner(const ObDatum &x_datum, const ObString &fmt_s
   const ObTimeZoneInfo *tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
   if (OB_FAIL(ob_datum_to_ob_time_with_date(x_datum, ObDateTimeType,
                               tz_info, ob_time,
-                              get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0))) {
+                              get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0, false))) {
     LOG_WARN("ob_datum_to_ob_time_with_date failed", K(ret));
   } else {
     ObTimeConvertCtx cvrt_ctx(TZ_INFO(ctx.exec_ctx_.get_my_session()), false);

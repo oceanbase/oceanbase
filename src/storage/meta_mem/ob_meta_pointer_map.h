@@ -36,7 +36,8 @@ public:
   int get_meta_obj_with_external_memory(
       const Key &key,
       common::ObIAllocator &allocator,
-      ObMetaObjGuard<T> &guard);
+      ObMetaObjGuard<T> &guard,
+      const bool force_alloc_new = false);
   int try_get_in_memory_meta_obj(const Key &key, bool &success, ObMetaObjGuard<T> &guard);
   int try_get_in_memory_meta_obj_and_addr(
       const Key &key,
@@ -239,18 +240,18 @@ int ObMetaPointerMap<Key, T>::erase(const Key &key)
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
-    if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
-      STORAGE_LOG(WARN, "fail to get from map", K(ret));
-    } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
-      STORAGE_LOG(WARN, "fail to erase from map", K(ret));
-    } else {
-      ObMetaPointer<T> *value = ptr->get_value_ptr();
-      value->reset_obj();
-      if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
-        STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
-      }
-    }
+     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
+       STORAGE_LOG(WARN, "fail to get from map", K(ret));
+     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
+       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+     } else {
+       ObMetaPointer<T> *value = ptr->get_value_ptr();
+       value->reset_obj();
+       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
+         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
+       }
+     }
    }
   return ret;
 }
@@ -517,7 +518,8 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
     const Key &key,
     common::ObIAllocator &allocator,
-    ObMetaObjGuard<T> &guard)
+    ObMetaObjGuard<T> &guard,
+    const bool force_alloc_new)
 {
   int ret = common::OB_SUCCESS;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
@@ -527,13 +529,21 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (force_alloc_new) {
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      if (common::OB_ENTRY_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+      }
+    }
   } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else {
       STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
     }
-  } else if (!is_in_memory) {
+  }
+  if (OB_SUCC(ret) && !is_in_memory) {
     t_ptr = ptr_hdl.get_resource_ptr();
     ObMetaDiskAddr disk_addr;
     void *buf = allocator.alloc(sizeof(T));
@@ -543,8 +553,9 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
     } else {
       bool need_free_obj = false;
       T *t = nullptr;
+      t = new (buf) T();
       do {
-        t = new (buf) T();
+        t->reset();
         if (OB_FAIL(load_meta_obj(key, t_ptr, allocator, disk_addr, t, false/*using_obj_pool*/))) {
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
         } else {
@@ -555,7 +566,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
             if (OB_ENTRY_NOT_EXIST != ret) {
               STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
             }
-          } else if (t_ptr->is_in_memory()) {
+          } else if (!force_alloc_new && t_ptr->is_in_memory()) {
             if (OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
               STORAGE_LOG(ERROR, "fail to get meta object", K(ret), KP(t_ptr));
             } else {
@@ -839,6 +850,8 @@ int ObMetaPointerMap<Key, T>::wash_meta_obj_with_func(
        t_ptr->set_addr_without_reset_obj(new_addr);
        if (OB_FAIL(t_ptr->dump_meta_obj(is_washed))){
          STORAGE_LOG(ERROR, "fail to dump met obj", K(ret), K(key));
+       }  else {
+         STORAGE_LOG(INFO, "wash tablet with slog succeed", K(key), K(old_addr), K(new_addr));
        }
      }
    }

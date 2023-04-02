@@ -50,6 +50,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*TinyIntType*/
@@ -102,6 +103,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*SmallIntType*/
@@ -154,6 +156,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*MediumIntType*/
@@ -206,6 +209,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*Int32Type*/
@@ -258,6 +262,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*IntType*/
@@ -310,6 +315,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UTinyIntType*/
@@ -362,6 +368,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*USmallIntType*/
@@ -414,6 +421,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UMediumIntType*/
@@ -466,6 +474,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UInt32Type*/
@@ -518,6 +527,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UIntType*/
@@ -570,6 +580,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*FloatType*/
@@ -622,6 +633,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*DoubleType*/
@@ -674,6 +686,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UFloatType*/
@@ -726,6 +739,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObUDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UDoubleType*/
@@ -778,6 +792,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObUDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*NumberType*/
@@ -830,6 +845,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UNumberType*/
@@ -882,6 +898,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObUDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*DateTimeType*/
@@ -934,6 +951,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*TimestampType*/
@@ -986,6 +1004,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*DateType*/
@@ -1038,6 +1057,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*TimeType*/
@@ -1090,6 +1110,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*YearType*/
@@ -1142,6 +1163,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObUDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*VarcharType*/
@@ -1194,6 +1216,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*CharType*/
@@ -1246,6 +1269,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*HexStringType*/
@@ -1298,6 +1322,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObUDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*ExtendType*/
@@ -1350,6 +1375,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 
   /*UnknownType*/
@@ -1402,6 +1428,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*TinyTextType*/
   {
@@ -1453,6 +1480,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
  /*TextType*/
   {
@@ -1504,6 +1532,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
  /*MediumTextType*/
   {
@@ -1555,6 +1584,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*LongTextType*/
   {
@@ -1606,6 +1636,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*BitType*/
   {
@@ -1657,6 +1688,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObUDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObEnumType*/
   {
@@ -1708,6 +1740,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObSetType*/
   {
@@ -1759,6 +1792,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObEnumInnerType*/
   {
@@ -1810,6 +1844,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObSetInnerType*/
   {
@@ -1861,6 +1896,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   
   /*ObTimestampTZType*/
@@ -1913,6 +1949,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObTimestampLTZType*/
   {
@@ -1964,6 +2001,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
     /*ObTimestampNanoType*/
   {
@@ -2015,6 +2053,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObRawType*/
   {
@@ -2066,6 +2105,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObIntervalYMType*/
   {
@@ -2117,6 +2157,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObIntervalDSType*/
   {
@@ -2168,6 +2209,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObNumberFloatType*/
   {
@@ -2219,6 +2261,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObNVarchar2Type*/
   {
@@ -2270,6 +2313,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObNCharType*/
   {
@@ -2321,6 +2365,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObURowIDType*/
   {
@@ -2372,6 +2417,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObLobType*/
   {
@@ -2423,6 +2469,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
   /*ObJsonType*/
   {
@@ -2474,5 +2521,58 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
+  },
+  /*ObGeometryType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,        /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,      /* ObEnumType  */
+    ObMaxType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,      /* ObTimestampTZType  */
+    ObMaxType,      /* ObTimestampLTZType  */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+    ObMaxType,         /*ObGeometryType   */
   },
 };

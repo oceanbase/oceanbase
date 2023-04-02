@@ -12,7 +12,7 @@ target_include_directories(obcdc_base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(obcdc_base
   INTERFACE ob_base
   obcdc_msg rocksdb
-  -Wl,-znorelro -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
+  ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 
 ob_set_subtarget(obcdc_object_list common
   libobcdc.cpp
@@ -42,6 +42,15 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_ddl_parser.cpp
   ob_log_dml_parser.cpp
   ob_log_entry_task_pool.cpp
+  ob_log_meta_data_service.cpp
+  ob_log_meta_data_fetcher.cpp
+  ob_log_meta_data_refresh_mode.cpp
+  ob_log_meta_data_baseline_loader.cpp
+  ob_log_meta_data_struct.cpp
+  ob_log_meta_data_queryer.cpp
+  ob_log_meta_data_replayer.cpp
+  ob_log_schema_incremental_replay.cpp
+  ob_log_meta_data_fetcher_dispatcher.cpp
   ob_log_factory.cpp
   ob_log_fetch_log_rpc.cpp
   ob_log_fetch_stat_info.cpp
@@ -53,6 +62,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_fetcher_dead_pool.cpp
   ob_log_fetcher_dispatcher.cpp
   ob_log_fetcher_idle_pool.cpp
+  ob_log_fetching_mode.cpp
   ob_log_formatter.cpp
   ob_log_hbase_mode.cpp
   ob_log_instance.cpp

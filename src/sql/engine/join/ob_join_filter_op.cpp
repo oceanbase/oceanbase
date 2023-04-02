@@ -39,7 +39,8 @@ OB_SERIALIZE_MEMBER(ObJoinFilterShareInfo,
     filter_ptr_);
 OB_SERIALIZE_MEMBER(ObJoinFilterOpInput,
     share_info_,
-    is_local_create_);
+    is_local_create_,
+    bf_idx_at_sqc_proxy_);
 
 int ObJoinFilterOpInput::init(ObTaskInfo &task_info)
 {
@@ -206,7 +207,6 @@ ObJoinFilterOp::~ObJoinFilterOp()
 int ObJoinFilterOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  bool wait_bloom_filter_ready = false;
   ObJoinFilterOpInput *op_input = static_cast<ObJoinFilterOpInput*>(input_);
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -243,7 +243,7 @@ int ObJoinFilterOp::inner_open()
     bf_key_.init(ctx_.get_my_session()->get_effective_tenant_id(),
                  MY_SPEC.filter_id_,
                  MY_SPEC.server_id_,
-                 ctx_.get_my_session()->get_current_execution_id()  ,
+                 op_input->get_px_sequence_id(),
                  op_input->task_id_);
     if (MY_SPEC.is_use_mode()) {
       //在ctx中创建expr ctx, 并初始化bloom filter key
@@ -255,11 +255,13 @@ int ObJoinFilterOp::inner_open()
         } else {
           join_filter_ctx->bf_key_ = bf_key_;
           int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+          bool wait_bloom_filter_ready = false;
           omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
           if (OB_LIKELY(tenant_config.is_valid())) {
             wait_bloom_filter_ready = tenant_config->_enable_px_bloom_filter_sync;
           }
-          join_filter_ctx->wait_ready_ = wait_bloom_filter_ready;
+          join_filter_ctx->need_wait_bf_ = wait_bloom_filter_ready;
+          join_filter_ctx->window_size_ = ADAPTIVE_BF_WINDOW_ORG_SIZE;
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -445,8 +447,41 @@ int ObJoinFilterOp::send_filter()
   int ret = OB_SUCCESS;
   if (!MY_SPEC.is_shuffle() && OB_FAIL(send_local_filter())) {
     LOG_WARN("fail to send local bloom filter", K(ret));
-  } else if (MY_SPEC.is_shuffle() && OB_FAIL(mark_rpc_filter())) {
+  } else if (MY_SPEC.is_shuffle() &&
+    is_acceptable_filter() &&
+    OB_FAIL(mark_rpc_filter())) {
     LOG_WARN("fail to send rpc bllom filter", K(ret));
+  }
+  return ret;
+}
+
+bool ObJoinFilterOp::is_acceptable_filter()
+{
+  bool ret = true;
+  if (OB_NOT_NULL(filter_create_)) {
+    int64_t bits_cnt = 0;
+    int64_t total_cnt =0;
+    int64_t i = 0;
+    int64_t step = 1;
+    int64_t *bits_array_ptr = filter_create_->get_bits_array();
+    int64_t len = filter_create_->get_bits_array_length();
+    if (len > 1000L * 1000)  {
+      //64MB bits.
+      step = round(((double)len) / 1000L * 1000);
+    }
+    if (OB_NOT_NULL(bits_array_ptr)) {
+      while (i < len) {
+        bits_cnt += ObBitVector::popcount64(bits_array_ptr[i]);
+        total_cnt += (sizeof(int64_t) * 8);
+        i += step;
+      }
+      double bits_rate = bits_cnt / (double)total_cnt;
+      if (bits_rate > ACCEPTABLE_FILTER_RATE &&
+          bits_rate <= 1) {
+        ret = false;
+      }
+      LOG_TRACE("record join bloom filter bits rate", K(bits_rate), K(ret), K(bits_cnt), K(total_cnt), K(len));
+    }
   }
   return ret;
 }
@@ -497,6 +532,7 @@ int ObJoinFilterOp::mark_rpc_filter()
   int ret = OB_SUCCESS;
   ObPxBloomFilterData *filter_data = NULL;
   void *filter_ptr = NULL;
+  common::ObIArray<ObJoinFilterDataCtx> &bf_ctx_array = ctx_.get_bloom_filter_ctx_array();
   if (OB_ISNULL(filter_ptr = ctx_.get_allocator().alloc(sizeof(ObPxBloomFilterData)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to init ObPxBloomFilterData", K(ret));
@@ -505,22 +541,27 @@ int ObJoinFilterOp::mark_rpc_filter()
     LOG_WARN("fail to init ObPxBloomFilterData", K(ret));
   } else if (OB_FAIL(filter_data->filter_.init(filter_create_))) {
     LOG_WARN("fail to init filter data", K(ret));
+  } else if (OB_FAIL(bf_ctx_array.push_back(ObJoinFilterDataCtx()))) {
+    LOG_WARN("failed to push back bloom filter context", K(ret));
   } else {
+    // don't need considerate concurrency control, cause px bloom filter will be ready one after other in execute plan
+    ObJoinFilterDataCtx &bf_ctx = bf_ctx_array.at(bf_ctx_array.count() - 1);
     ObTenantConfigGuard tenant_config(TENANT_CONF(bf_key_.tenant_id_));
     if (tenant_config.is_valid() && true == tenant_config->_px_message_compression) {
-      ctx_.get_bf_ctx().compressor_type_ = ObCompressorType::LZ4_COMPRESSOR;
+      bf_ctx.compressor_type_ = ObCompressorType::LZ4_COMPRESSOR;
     }
     ObJoinFilterOpInput *filter_input_ = static_cast<ObJoinFilterOpInput*>(input_);
     filter_data->tenant_id_ = bf_key_.tenant_id_;
     filter_data->server_id_ = MY_SPEC.server_id_;
     filter_data->filter_id_ = MY_SPEC.filter_id_;
-    filter_data->execution_id_ = bf_key_.execution_id_;
+    filter_data->px_sequence_id_ = bf_key_.px_sequence_id_;
     filter_data->bloom_filter_count_ = 0;
-    ctx_.get_bf_ctx().filter_data_ = filter_data;
-    ctx_.get_bf_ctx().filter_ready_ = true;
-    ctx_.get_bf_ctx().filter_id_ = MY_SPEC.filter_id_;
-    ctx_.get_bf_ctx().ch_set_.reset();
-    ctx_.get_bf_ctx().ch_provider_ptr_ = filter_input_->share_info_.ch_provider_ptr_;
+    bf_ctx.filter_data_ = filter_data;
+    bf_ctx.filter_ready_ = true;
+    bf_ctx.ch_set_.reset();
+    bf_ctx.ch_provider_ptr_ = filter_input_->share_info_.ch_provider_ptr_;
+    bf_ctx.bf_idx_at_sqc_proxy_ = filter_input_->get_bf_idx_at_sqc_proxy();
+    LOG_DEBUG("join filter succ to mark rpc filter", K(bf_ctx_array.count()), K(bf_ctx_array), K(filter_data->filter_id_), K(ret));
   }
   return ret;
 }

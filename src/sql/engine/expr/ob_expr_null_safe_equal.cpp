@@ -108,13 +108,15 @@ int ObExprNullSafeEqual::cg_expr(
       } else {
         auto &l = rt_expr.args_[0]->datum_meta_;
         auto &r = rt_expr.args_[1]->datum_meta_;
+        bool has_lob_header = rt_expr.args_[0]->obj_meta_.has_lob_header() ||
+                              rt_expr.args_[1]->obj_meta_.has_lob_header();
         if (ObDatumFuncs::is_string_type(l.type_) && ObDatumFuncs::is_string_type(r.type_)) {
           CK(l.cs_type_ == r.cs_type_);
         }
 
         if (OB_SUCC(ret)) {
           funcs[0] = (void *)ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-                  l.type_, r.type_, lib::is_oracle_mode(), l.cs_type_);
+                  l.type_, r.type_, l.scale_, r.scale_, lib::is_oracle_mode(), l.cs_type_, has_lob_header);
           CK(NULL != funcs[0]);
           rt_expr.inner_functions_ = funcs;
           rt_expr.inner_func_cnt_ = 1;

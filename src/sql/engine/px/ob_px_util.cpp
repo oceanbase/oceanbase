@@ -27,10 +27,10 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
-#include "sql/engine/table/ob_table_lookup_op.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "share/ob_server_blacklist.h"
 #include "common/ob_smart_call.h"
+#include "storage/ob_locality_manager.h"
+#include "rpc/obrpc/ob_net_keepalive.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -58,25 +58,6 @@ int ObPXServerAddrUtil::alloc_by_data_distribution(const ObIArray<ObTableLocatio
   return ret;
 }
 
-int ObPXServerAddrUtil::mark_virtual_table_dfo(common::ObIArray<const ObTableScanSpec*> &scan_ops,
-    ObDfo &dfo)
-{
-  int ret = OB_SUCCESS;
-  bool is_vtable = true;
-  for (int i = 0; i < scan_ops.count() && OB_SUCC(ret); ++i) {
-    if (OB_ISNULL(scan_ops.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("scan ops is null", K(ret));
-    } else if (!is_virtual_table(scan_ops.at(i)->get_ref_table_id())) {
-      is_vtable = false;
-      break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    dfo.set_ignore_vtable_error(is_vtable && scan_ops.count() > 0);
-  }
-  return ret;
-}
 
 int ObPXServerAddrUtil::build_dynamic_partition_table_location(common::ObIArray<const ObTableScanSpec *> &scan_ops,
       const ObIArray<ObTableLocation> *table_locations, ObDfo &dfo)
@@ -172,9 +153,6 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
                                    ref_table_id,
                                    table_loc));
     } else {
-      if (OB_FAIL(mark_virtual_table_dfo(scan_ops, dfo))) {
-        LOG_WARN("fail to mark virtual table dfo", K(ret));
-      } else
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
       if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
@@ -220,6 +198,8 @@ int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifyS
     if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
         PHY_MERGE != op.get_type()) {
       // px no need schedule das except merge
+    } else if (PHY_LOCK == op.get_type()) {
+      // no need lock op
     } else if (OB_FAIL(insert_ops.push_back(static_cast<const ObTableModifySpec *>(&op)))) {
       LOG_WARN("fail to push back table insert op", K(ret));
     }
@@ -307,10 +287,9 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_qc_id(dfo.get_qc_id());
         sqc.set_interrupt_id(dfo.get_interrupt_id());
         sqc.set_fulltree(dfo.is_fulltree());
-        sqc.set_rpc_worker(dfo.is_rpc_worker());
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
-        sqc.set_ignore_vtable_error(dfo.is_ignore_vtable_error());
+        sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
         for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
           if (addrs.at(i) == (*iter)->server_) {
             if (OB_FAIL(sqc_locations.push_back(*iter))) {
@@ -407,7 +386,6 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
         sqc.set_qc_id(child.get_qc_id());
         sqc.set_interrupt_id(child.get_interrupt_id());
         sqc.set_fulltree(child.is_fulltree());
-        sqc.set_rpc_worker(child.is_rpc_worker());
         sqc.set_qc_server_id(child.get_qc_server_id());
         sqc.set_parent_dfo_id(child.get_parent_dfo_id());
         if (OB_FAIL(child.add_sqc(sqc))) {
@@ -484,7 +462,6 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_qc_id(parent.get_qc_id());
         sqc.set_interrupt_id(parent.get_interrupt_id());
         sqc.set_fulltree(parent.is_fulltree());
-        sqc.set_rpc_worker(parent.is_rpc_worker());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         if (OB_FAIL(parent.add_sqc(sqc))) {
@@ -566,7 +543,6 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         sqc.set_qc_id(parent.get_qc_id());
         sqc.set_interrupt_id(parent.get_interrupt_id());
         sqc.set_fulltree(parent.is_fulltree());
-        sqc.set_rpc_worker(parent.is_rpc_worker());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         if (OB_FAIL(parent.add_sqc(sqc))) {
@@ -599,7 +575,6 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
       sqc.set_qc_id(dfo.get_qc_id());
       sqc.set_interrupt_id(dfo.get_interrupt_id());
       sqc.set_fulltree(dfo.is_fulltree());
-      sqc.set_rpc_worker(dfo.is_rpc_worker());
       sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
       sqc.set_qc_server_id(dfo.get_qc_server_id());
       if (OB_FAIL(dfo.add_sqc(sqc))) {
@@ -703,7 +678,7 @@ int ObPXServerAddrUtil::get_access_partition_order_recursively (
     LOG_DEBUG("No GI in this dfo");
   } else if (PHY_GRANULE_ITERATOR == phy_op->get_type()) {
     const ObGranuleIteratorSpec *gi = static_cast<const ObGranuleIteratorSpec*>(phy_op);
-    asc_order = !gi->desc_order();
+    asc_order = !ObGranuleUtil::desc_order(gi->gi_attri_flag_);
   } else if (OB_FAIL(get_access_partition_order_recursively(root, phy_op->get_parent(), asc_order))) {
     LOG_WARN("fail to access partition order", K(ret));
   }
@@ -1009,7 +984,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
 }
 
 /**
- * 算法文档：https://yuque.antfin-inc.com/ob/sql/pbaedu
+ * 算法文档：
  * 大致思路：
  * n为总线程数，p为涉及总的partition数，ni为第i个sqc被计算分的线程数，pi为第i个sqc的partition数量。
  * a. 一个adjust函数，递归的调整sqc的线程数。求得ni ＝ n*pi/p的值，保证每个都是大于等于1。
@@ -1660,6 +1635,7 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
                                        int64_t &pos,
                                        ObOpSpec &root,
                                        bool is_fulltree,
+                                       const ObAddr &run_svr,
                                        ObPhyOpSeriCtx *seri_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1671,10 +1647,24 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
   } else if (OB_FAIL((seri_ctx == NULL ? root.serialize(buf, buf_len, pos) :
       root.serialize(buf, buf_len, pos, *seri_ctx)))) {
     LOG_WARN("fail to serialize root", K(ret), "type", root.type_, "root", to_cstring(root));
-  } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_
-              || PHY_TABLE_LOOKUP == root.type_)
+  } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == root.type_)
              && OB_FAIL(serialize_sub_plan(buf, buf_len, pos, root))) {
     LOG_WARN("fail to serialize sub plan", K(ret));
+  }
+  if (OB_SUCC(ret)
+      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0
+      && root.is_table_scan()
+      && static_cast<ObTableScanSpec&>(root).is_global_index_back()) {
+    bool is_same_zone = false;
+    if (OB_ISNULL(GCTX.locality_manager_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid argument", K(ret), K(GCTX.locality_manager_));
+    } else if (OB_FAIL(GCTX.locality_manager_->is_same_zone(run_svr, is_same_zone))) {
+      LOG_WARN("check same zone failed", K(ret), K(run_svr));
+    } else if (!is_same_zone) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-zone global index lookup during 4.0 upgrade");
+    }
   }
   // Terminate serialization when meet ObReceive, as this op indicates
   for (int32_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
@@ -1682,7 +1672,7 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
     if (OB_ISNULL(child_op)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null child operator", K(i), K(root.type_));
-    } else if (OB_FAIL(serialize_tree(buf, buf_len, pos, *child_op, is_fulltree, seri_ctx))) {
+    } else if (OB_FAIL(serialize_tree(buf, buf_len, pos, *child_op, is_fulltree, run_svr, seri_ctx))) {
       LOG_WARN("fail to serialize tree", K(ret));
     }
   }
@@ -1717,8 +1707,7 @@ int ObPxTreeSerializer::deserialize_tree(const char *buf,
     } else {
       if (OB_FAIL(op->deserialize(buf, data_len, pos))) {
         LOG_WARN("fail to deserialize operator", K(ret), N_TYPE, phy_operator_type);
-      } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op->type_
-                 || PHY_TABLE_LOOKUP == op->type_)
+      } else if ((PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op->type_)
                  && OB_FAIL(deserialize_sub_plan(buf, data_len, pos, phy_plan, op))) {
         LOG_WARN("fail to deserialize sub plan", K(ret));
       } else {
@@ -1987,8 +1976,7 @@ int64_t ObPxTreeSerializer::get_serialize_op_input_tree_size(
     OB_UNIS_ADD_LEN(static_cast<int64_t>(op_spec_input->get_type())); //serialize operator type
     OB_UNIS_ADD_LEN(*op_spec_input); //serialize input parameter
   }
-  if (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_
-              || PHY_TABLE_LOOKUP == op_spec.type_) {
+  if (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_) {
     len += get_serialize_op_input_subplan_size(op_spec, op_kit_store, true/*is_fulltree*/);
     // do nothing
   }
@@ -2055,8 +2043,7 @@ int ObPxTreeSerializer::serialize_op_input_tree(
       ++real_input_count;
     }
   }
-  if (OB_SUCC(ret) && (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_
-              || PHY_TABLE_LOOKUP == op_spec.type_)
+  if (OB_SUCC(ret) && (PHY_TABLE_SCAN_WITH_DOMAIN_INDEX == op_spec.type_)
              && OB_FAIL(serialize_op_input_subplan(
                buf, buf_len, pos, op_spec, op_kit_store, true/*is_fulltree*/, real_input_count))) {
     LOG_WARN("fail to serialize sub plan", K(ret));
@@ -3493,18 +3480,16 @@ int ObExtraServerAliveCheck::do_check() const
     if (OB_FAIL(dfo_mgr_->get_running_dfos(dfos))) {
       LOG_WARN("fail find dfo", K(ret));
     } else {
-      share::ObServerBlacklist &server_black_list = share::ObServerBlacklist::get_instance();
       // need check all sqc because we set sqc need_report = false here and don't need wait sqc finish msg.
       for (int64_t i = 0; i < dfos.count(); i++) {
         ObIArray<ObPxSqcMeta> &sqcs = dfos.at(i)->get_sqcs();
         for (int64_t j = 0; j < sqcs.count(); j++) {
           if (sqcs.at(j).need_report()) {
-            if (OB_UNLIKELY(server_black_list.is_in_blacklist(
-                share::ObCascadMember(sqcs.at(j).get_exec_addr(), cluster_id_), true,
+            if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(sqcs.at(j).get_exec_addr(),
                 query_start_time_))) {
               sqcs.at(j).set_need_report(false);
               sqcs.at(j).set_thread_finish(true);
-              sqcs.at(j).set_server_not_alive();
+              sqcs.at(j).set_server_not_alive(true);
               if (!sqcs.at(j).is_ignore_vtable_error()) {
                 ret = OB_RPC_CONNECT_ERROR;
                 LOG_WARN("server not in communication, maybe crashed.", K(ret),
@@ -3516,12 +3501,50 @@ int ObExtraServerAliveCheck::do_check() const
       }
     }
   } else if (OB_LIKELY(qc_addr_.is_valid())) {
-    if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(share::ObCascadMember(
-          qc_addr_, cluster_id_), true, query_start_time_))) {
+    if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(qc_addr_, query_start_time_))) {
       ret = OB_RPC_CONNECT_ERROR;
       LOG_WARN("qc not in communication, maybe crashed", K(ret), K(qc_addr_));
     }
   }
   LOG_DEBUG("server alive do check", K(ret), K(qc_addr_), K(cluster_id_), K(dfo_mgr_));
   return ret;
+}
+
+bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
+{
+  bool should_ignore = false;
+  switch (error_code) {
+    case OB_ALLOCATE_MEMORY_FAILED: {
+      should_ignore = true;
+      break;
+    }
+    case OB_RPC_CONNECT_ERROR: {
+      should_ignore = true;
+      break;
+    }
+    case OB_RPC_SEND_ERROR: {
+      should_ignore = true;
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return should_ignore;
+}
+
+bool ObPxCheckAlive::is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time)
+{
+  int ret = OB_SUCCESS;
+  bool in_blacklist = false;
+  obrpc::ObNetKeepAliveData alive_data;
+  if (OB_FAIL(ObNetKeepAlive::get_instance().in_black(addr, in_blacklist, &alive_data))) {
+    LOG_WARN("check in black failed", K(ret));
+  } else if (!in_blacklist && server_start_time > 0) {
+    in_blacklist = alive_data.start_service_time_ >= server_start_time;
+  }
+  if (in_blacklist) {
+    LOG_WARN("server in blacklist", K(addr), K(server_start_time), K(alive_data.start_service_time_));
+  }
+  return in_blacklist;
 }

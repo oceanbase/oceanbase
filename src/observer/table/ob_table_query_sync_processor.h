@@ -16,8 +16,9 @@
 #include "rpc/obrpc/ob_rpc_processor.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor.h"
-#include "ob_table_service.h"
-
+#include "ob_table_context.h"
+#include "ob_table_scan_executor.h"
+#include "ob_table_query_common.h"
 namespace oceanbase
 {
 
@@ -27,6 +28,31 @@ class ObPartitionService;
 }
 namespace observer
 {
+
+/**
+ * ---------------------------------------- ObTableQuerySyncCtx ----------------------------------------
+ */
+struct ObTableQuerySyncCtx
+{
+  explicit ObTableQuerySyncCtx(common::ObIAllocator &allocator)
+      : tb_ctx_(allocator),
+        expr_frame_info_(allocator),
+        spec_(nullptr),
+        executor_(nullptr)
+  {}
+  virtual ~ObTableQuerySyncCtx()
+  {
+    row_iter_.close();
+    if (OB_NOT_NULL(spec_) && OB_NOT_NULL(executor_)) {
+      spec_->destroy_executor(executor_);
+    }
+  }
+  table::ObTableCtx tb_ctx_;
+  ObExprFrameInfo expr_frame_info_;
+  table::ObTableApiSpec *spec_;
+  table::ObTableApiScanExecutor *executor_;
+  table::ObTableApiScanRowIterator row_iter_;
+};
 
 /**
  * ---------------------------------------- ObTableQuerySyncSession ----------------------------------------
@@ -42,37 +68,35 @@ public:
       tenant_id_(MTL_ID()),
       query_(),
       result_iterator_(nullptr),
-      allocator_(ObModIds::TABLE_PROC),
-      table_service_ctx_(allocator_),
+      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      query_ctx_(allocator_),
       iterator_mementity_(nullptr)
   {}
   ~ObTableQuerySyncSession();
 
-  void set_result_iterator(ObNormalTableQueryResultIterator* iter);
-  int deep_copy_select_columns(const ObTableQuery &query);
+  void set_result_iterator(table::ObTableQueryResultIterator* iter);
   void set_in_use(bool in_use) {in_use_ = in_use;}
   bool is_in_use() {return in_use_;}
   int init();
 
   void set_timout_ts(uint64_t timeout_ts) { timeout_ts_ = timeout_ts; }
-  ObTableServiceQueryCtx *get_table_service_ctx() {return &table_service_ctx_;}
-  ObNormalTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
+  table::ObTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
   ObArenaAllocator *get_allocator() {return &allocator_;}
   common::ObObjectID get_tenant_id() { return tenant_id_; }
-
+  table::ObTableQuery &get_query() { return query_; }
+  ObTableQuerySyncCtx &get_query_ctx() { return query_ctx_; }
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
   transaction::ObTxDesc* get_trans_desc() {return trans_desc_;}
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
-
 private:
   bool in_use_;
   uint64_t timeout_ts_;
   common::ObObjectID tenant_id_;
-  ObTableQuery query_; // only select_columns is correct
-  ObNormalTableQueryResultIterator *result_iterator_;
+  table::ObTableQuery query_; // deep copy from arg_.query_
+  table::ObTableQueryResultIterator *result_iterator_;
   ObArenaAllocator allocator_;
-  ObTableServiceQueryCtx table_service_ctx_;
+  ObTableQuerySyncCtx query_ctx_;
   lib::MemoryContext iterator_mementity_;
 
 private:
@@ -174,26 +198,21 @@ protected:
 private:
   int process_query_start();
   int process_query_next();
-  int process_query_end();
   int destory_query_session(bool need_rollback_trans);
   DISALLOW_COPY_AND_ASSIGN(ObTableQuerySyncP);
 
 private:
-  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
   int get_session_id(uint64_t &real_sessid, uint64_t arg_sessid);
   int get_query_session(uint64_t sessid, ObTableQuerySyncSession *&query_session);
   int query_scan_with_init();
   int query_scan_without_init();
-  int query_scan_with_old_context(const int64_t timeout);
-  int query_scan_with_new_context(ObTableQuerySyncSession * session_ctx, table::ObTableQueryResultIterator *result_iterator,
-    const int64_t timeout);
 
 private:
-  void set_trans_from_session(ObTableQuerySyncSession *query_session);
   int check_query_type();
+  int init_tb_ctx(table::ObTableCtx &ctx);
+  int execute_query();
 
 private:
-  ObTableServiceQueryCtx *table_service_ctx_;
   int64_t result_row_count_;
   uint64_t query_session_id_;
   ObArenaAllocator allocator_;

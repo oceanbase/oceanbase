@@ -14,6 +14,7 @@
 #include "sql/optimizer/ob_delete_log_plan.h"
 #include "sql/optimizer/ob_log_delete.h"
 #include "sql/optimizer/ob_log_group_by.h"
+#include "sql/optimizer/ob_log_link_dml.h"
 #include "ob_log_operator_factory.h"
 #include "ob_log_table_scan.h"
 #include "ob_log_sort.h"
@@ -48,17 +49,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql::log_op_def;
 
-int ObDeleteLogPlan::generate_raw_plan()
+int ObDeleteLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
-  const ObDeleteStmt *delete_stmt = NULL;
-  if (OB_ISNULL(delete_stmt = get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+  const ObDeleteStmt *delete_stmt = get_stmt();
+  if (OB_ISNULL(delete_stmt) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(delete_stmt), K(ret));
   } else {
     bool need_limit = true;
     ObSEArray<OrderItem, 4> order_items;
     LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
+    OPT_TRACE("generate plan for ", get_stmt());
     if (OB_FAIL(generate_plan_tree())) {
       LOG_WARN("failed to generate plan tree for plain select", K(ret));
     } else {
@@ -178,6 +180,9 @@ int ObDeleteLogPlan::candi_allocate_delete()
   ObSEArray<CandidatePlan, 8> delete_plans;
   const bool force_no_multi_part = get_log_plan_hint().no_use_distributed_dml();
   const bool force_multi_part = get_log_plan_hint().use_distributed_dml();
+  OPT_TRACE("start generate normal insert plan");
+  OPT_TRACE("force no multi part:", force_no_multi_part);
+  OPT_TRACE("force multi part:", force_multi_part);
   if (OB_FAIL(check_table_rowkey_distinct(index_dml_infos_))) {
     LOG_WARN("failed to check table rowkey distinct", K(ret));
   } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, candi_plans))) {
@@ -280,6 +285,7 @@ int ObDeleteLogPlan::candi_allocate_pdml_delete()
 {
   int ret = OB_SUCCESS;
   int64_t gidx_cnt = index_dml_infos_.count();
+  OPT_TRACE("start generate pdml delete plan");
   const bool is_pdml_update_split = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos_.count(); i++) {
     if (OB_FAIL(candi_allocate_one_pdml_delete(i > 0,

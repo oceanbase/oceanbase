@@ -31,6 +31,7 @@ using namespace oceanbase::rootserver;
 ObDropPrimaryKeyTask::ObDropPrimaryKeyTask()
   : ObTableRedefinitionTask()
 {
+  task_type_ = ObDDLType::DDL_DROP_PRIMARY_KEY;
 }
 
 ObDropPrimaryKeyTask::~ObDropPrimaryKeyTask()
@@ -48,6 +49,7 @@ int ObDropPrimaryKeyTask::init(const uint64_t tenant_id, const int64_t task_id, 
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {
     task_version_ = OB_DROP_PRIMARY_KEY_TASK_VERSION;
+    ddl_tracing_.open();
   }
   return ret;
 }
@@ -61,6 +63,7 @@ int ObDropPrimaryKeyTask::process()
   } else if (OB_FAIL(check_health())) {
     LOG_WARN("check task health failed", K(ret));
   } else {
+    ddl_tracing_.restore_span_hierarchy();
     switch(task_status_) {
       case ObDDLTaskStatus::PREPARE:
         if (OB_FAIL(prepare(ObDDLTaskStatus::WAIT_TRANS_END))) {
@@ -112,6 +115,58 @@ int ObDropPrimaryKeyTask::process()
         LOG_WARN("unexpected drop primary key task state", K(task_status_));
         break;
     }
+    ddl_tracing_.release_span_hierarchy();
   }
   return ret;
+}
+void ObDropPrimaryKeyTask::flt_set_task_span_tag() const
+{
+  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
+              ddl_data_table_id, object_id_, ddl_schema_version, schema_version_);
+}
+
+void ObDropPrimaryKeyTask::flt_set_status_span_tag() const
+{
+  switch (task_status_) {
+  case ObDDLTaskStatus::PREPARE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::LOCK_TABLE: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::WAIT_TRANS_END: {
+    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
+                ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::REDEFINITION: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::MODIFY_AUTOINC: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::TAKE_EFFECT: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::FAIL: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  case ObDDLTaskStatus::SUCCESS: {
+    FLT_SET_TAG(ddl_ret_code, ret_code_);
+    break;
+  }
+  default: {
+    break;
+  }
+  }
 }

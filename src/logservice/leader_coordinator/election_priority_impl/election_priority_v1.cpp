@@ -28,6 +28,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace logservice
 {
 namespace coordinator
@@ -54,9 +55,9 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   } else if (COMPARE_OUT(compare_fatal_failures_(ret, rhs_impl))) {// 比较致命的异常
     (void) reason.assign("FATAL FAILURE");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from fatal_failures_");
-  } else if (COMPARE_OUT(compare_log_ts_(ret, rhs_impl))) {// 避免切换至回放位点过小的副本
+  } else if (COMPARE_OUT(compare_scn_(ret, rhs_impl))) {// 避免切换至回放位点过小的副本
     (void) reason.assign("LOG TS");
-    COORDINATOR_LOG_(TRACE, "compare done! get compared resultfrom log_ts_");
+    COORDINATOR_LOG_(TRACE, "compare done! get compared resultfrom scn_");
   } else if (COMPARE_OUT(compare_in_blacklist_flag_(ret, rhs_impl, reason))) {// 比较是否被标记删除
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from in_blacklist_flag_");
   } else if (COMPARE_OUT(compare_manual_leader_flag_(ret, rhs_impl))) {// 比较是否存在用户指定的leader
@@ -79,46 +80,63 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   #undef PRINT_WRAPPER
 }
 
-int PriorityV1::get_log_ts_(const share::ObLSID &ls_id, int64_t &log_ts)
+//           |           Leader             | Follower
+// ----------|------------------------------|-----------------
+//  APPEND   |           max_scn            | max_replayed_scn
+// ----------|------------------------------|-----------------
+// RAW_WRITE | min(replayable_scn, max_scn) | max_replayed_scn
+// ----------|------------------------------|-----------------
+// OTHER     |          like RAW_WRITE
+int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
 {
   LC_TIME_GUARD(100_ms);
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(ls_id), K(*this)
   int ret = OB_SUCCESS;
   palf::PalfHandleGuard palf_handle_guard;
-//  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
-  if (OB_ISNULL(MTL(ObLogService*))) {
+  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+  ObLogService* log_service = MTL(ObLogService*);
+  common::ObRole role;
+  SCN replayable_scn, max_scn;
+  int64_t unused_pid = -1;
+  if (OB_ISNULL(log_service)) {
     COORDINATOR_LOG_(ERROR, "ObLogService is nullptr");
-  } else if (CLICK_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard))) {
+  } else if (CLICK_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
     COORDINATOR_LOG_(WARN, "open_palf failed");
-//  } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
-//    COORDINATOR_LOG_(WARN, "get_access_mode failed");
-//  } else if (palf::AccessMode::APPEND != access_mode) {
-//    // Set log_ts to 0 when current access mode is not APPEND.
-//    log_ts = 0;
-  } else {
-    common::ObRole role;
-    int64_t unused_pid = -1;
-    int64_t min_unreplay_log_ts_ns = OB_INVALID_TIMESTAMP;
-    if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
-      COORDINATOR_LOG_(WARN, "get_role failed");
-    } else if (CLICK_FAIL(palf_handle_guard.get_max_ts_ns(log_ts))) {
-      COORDINATOR_LOG_(WARN, "get_max_ts_ns failed");
-    } else if (FOLLOWER == role) {
-      if (CLICK_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_ts_ns(ls_id, min_unreplay_log_ts_ns))) {
-        COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_log_ts_ns");
-        ret = OB_SUCCESS;
-      } else if (min_unreplay_log_ts_ns - 1 < log_ts) {
-        // For restore case, min_unreplay_log_ts_ns may be larger than max_ts.
-        log_ts = min_unreplay_log_ts_ns - 1;
-      } else {}
-    } else {}
-    // log_ts may fallback because palf's role may be different with apply_service.
-    // So we need check it here to keep inc update semantic.
-    if (log_ts < log_ts_) {
-      COORDINATOR_LOG_(TRACE, "new log_ts is smaller than current, no need update", K(role), K(min_unreplay_log_ts_ns), K(log_ts));
-      log_ts = log_ts_;
+  } else if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+    COORDINATOR_LOG_(WARN, "get_role failed");
+  } else if (FOLLOWER == role) {
+    if (CLICK_FAIL(log_service->get_log_replay_service()->get_max_replayed_scn(ls_id, scn))) {
+      COORDINATOR_LOG_(WARN, "failed to get_max_replayed_scn");
+      ret = OB_SUCCESS;
     }
-    COORDINATOR_LOG_(TRACE, "get_log_ts_ finished", K(role), K(min_unreplay_log_ts_ns), K(log_ts));
+  } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
+    COORDINATOR_LOG_(WARN, "get_access_mode failed");
+  } else if (palf::AccessMode::APPEND == access_mode) {
+    if (CLICK_FAIL(palf_handle_guard.get_max_scn(scn))) {
+      COORDINATOR_LOG_(WARN, "get_max_scn failed");
+    }
+  } else if (CLICK_FAIL(log_service->get_log_replay_service()->get_replayable_point(replayable_scn))) {
+    COORDINATOR_LOG_(WARN, "failed to get_replayable_point");
+    ret = OB_SUCCESS;
+  } else if (CLICK_FAIL(palf_handle_guard.get_max_scn(max_scn))) {
+    COORDINATOR_LOG_(WARN, "get_max_scn failed");
+  } else {
+    // For LEADER in RAW_WRITE mode, scn = min(replayable_scn, max_scn)
+    if (max_scn < replayable_scn) {
+      scn = max_scn;
+    } else {
+      scn = replayable_scn;
+    }
+  }
+  // scn may fallback because palf's role may be different with apply_service.
+  // So we need check it here to keep inc update semantic.
+  if (scn < scn_) {
+    COORDINATOR_LOG_(TRACE, "new scn is smaller than current, no need update", K(role), K(access_mode), K(scn));
+    scn = scn_;
+  }
+  COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(access_mode), K(scn));
+  if (OB_SUCC(ret) && !scn.is_valid()) {
+    scn.set_min();
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -132,7 +150,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
   ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
-  int64_t log_ts = OB_INVALID_TIMESTAMP;
+  SCN scn = SCN::min_scn();
   if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");
@@ -144,8 +162,8 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     COORDINATOR_LOG_(WARN, "fail to get ls election reference info");
   } else if (CLICK_FAIL(in_blacklist_reason_.assign(election_reference_info.element<3>().element<1>()))) {
     COORDINATOR_LOG_(WARN, "fail to copy removed reason string");
-  } else if (CLICK_FAIL(get_log_ts_(ls_id, log_ts))) {
-    COORDINATOR_LOG_(WARN, "get_log_ts failed");
+  } else if (CLICK_FAIL(get_scn_(ls_id, scn))) {
+    COORDINATOR_LOG_(WARN, "get_scn failed");
   } else {
     zone_priority_ = election_reference_info.element<1>();
     is_manual_leader_ = election_reference_info.element<2>();
@@ -155,7 +173,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     is_primary_region_ = election_reference_info.element<6>();
     is_observer_stopped_ = (observer::ObServer::get_instance().is_stopped()
         || observer::ObServer::get_instance().is_prepare_stopped());
-    log_ts_ = log_ts;
+    scn_ = scn;
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -315,19 +333,32 @@ int PriorityV1::compare_primary_region_(int &ret, const PriorityV1&rhs) const
   return compare_result;
 }
 
-int PriorityV1::compare_log_ts_(int &ret, const PriorityV1&rhs) const
+int PriorityV1::compare_scn_(int &ret, const PriorityV1&rhs) const
 {
   int compare_result = 0;
   if (OB_SUCC(ret)) {
-    if (std::max(log_ts_, rhs.log_ts_) - std::min(log_ts_, rhs.log_ts_) <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_NS) {
+    if (scn_ == rhs.scn_) {
       compare_result = 0;
-    } else if (std::max(log_ts_, rhs.log_ts_) == log_ts_) {
+    } else if (scn_.is_valid() && rhs.scn_.is_valid()) {
+      if (std::max(scn_, rhs.scn_).convert_to_ts() - std::min(scn_, rhs.scn_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {
+        compare_result = 0;
+      } else if (std::max(scn_, rhs.scn_) == scn_) {
+        compare_result = 1;
+      } else {
+        compare_result = -1;
+      }
+    } else if (scn_.is_valid() && (!rhs.scn_.is_valid())) {
       compare_result = 1;
-    } else {
+    } else if ((!scn_.is_valid()) && rhs.scn_.is_valid()) {
       compare_result = -1;
     }
   }
   return compare_result;
+}
+
+bool PriorityV1::has_fatal_failure_() const
+{
+  return !fatal_failures_.empty();
 }
 
 }

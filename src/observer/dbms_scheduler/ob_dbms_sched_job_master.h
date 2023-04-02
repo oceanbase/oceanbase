@@ -125,7 +125,8 @@ public:
     : inited_(false),
       job_key_(NULL),
       ready_queue_(NULL),
-      wait_vector_(0, NULL, ObModIds::VECTOR) {}
+      wait_vector_(0, NULL, ObModIds::VECTOR),
+      lock_(common::ObLatchIds::DBMS_SCHEDULER_TASK_LOCK) {}
 
   virtual ~ObDBMSSchedJobTask() {}
 
@@ -171,6 +172,7 @@ public:
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
       self_addr_(),
+      lock_(common::ObLatchIds::DBMS_SCHEDULER_MASTER_LOCK),
       alive_jobs_() {}
 
   virtual ~ObDBMSSchedJobMaster() { alive_jobs_.destroy(); };

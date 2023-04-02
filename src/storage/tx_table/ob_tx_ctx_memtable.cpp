@@ -19,6 +19,8 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
+
 namespace storage
 {
 
@@ -219,19 +221,18 @@ transaction::ObLSTxCtxMgr *ObTxCtxMemtable::get_ls_tx_ctx_mgr()
   return ls_ctx_mgr_guard_.get_ls_tx_ctx_mgr();
 }
 
-// TODO: handle exception
-int64_t ObTxCtxMemtable::get_rec_log_ts()
+SCN ObTxCtxMemtable::get_rec_scn()
 {
   int ret = OB_SUCCESS;
-  int64_t rec_log_ts = OB_INVALID_TIMESTAMP;
+  SCN rec_scn;
 
-  if (OB_FAIL(get_ls_tx_ctx_mgr()->get_rec_log_ts(rec_log_ts))) {
-    TRANS_LOG(WARN, "get rec log ts failed", K(ret));
+  if (OB_FAIL(get_ls_tx_ctx_mgr()->get_rec_scn(rec_scn))) {
+    TRANS_LOG(WARN, "get rec scn failed", K(ret));
   } else {
-    TRANS_LOG(INFO, "tx ctx memtable get rec log ts", KPC(this), K(rec_log_ts));
+    TRANS_LOG(INFO, "tx ctx memtable get rec scn", KPC(this), K(rec_scn));
   }
 
-  return rec_log_ts;
+  return rec_scn;
 }
 
 ObTabletID ObTxCtxMemtable::get_tablet_id() const
@@ -260,32 +261,35 @@ bool ObTxCtxMemtable::is_active_memtable() const
   return !ATOMIC_LOAD(&is_frozen_);
 }
 
-int ObTxCtxMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
+int ObTxCtxMemtable::flush(SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(flush_lock_);
-  
+
   if (need_freeze) {
-    int64_t rec_log_ts = get_rec_log_ts();
-    if (rec_log_ts >= recycle_log_ts) {
-      TRANS_LOG(INFO, "no need to freeze", K(rec_log_ts), K(recycle_log_ts));
+    SCN rec_scn = get_rec_scn();
+    if (rec_scn >= recycle_scn) {
+      TRANS_LOG(INFO, "no need to freeze", K(rec_scn), K(recycle_scn));
     } else if (is_active_memtable()) {
-      int64_t cur_ts = common::ObClockGenerator::getClock();
-      ObLogTsRange log_ts_range;
-      log_ts_range.start_log_ts_ = 1;
-      log_ts_range.end_log_ts_ = cur_ts;
-      set_log_ts_range(log_ts_range);
-      set_snapshot_version(cur_ts);
-      ATOMIC_STORE(&is_frozen_, true);
+      int64_t cur_time_us = ObTimeUtility::current_time();
+      ObScnRange scn_range;
+      scn_range.start_scn_.set_base();
+      if (OB_FAIL(scn_range.end_scn_.convert_for_tx(cur_time_us))) {
+        TRANS_LOG(WARN, "failed to convert_from_ts", K(ret), K(cur_time_us));
+      } else {
+        set_scn_range(scn_range);
+        set_snapshot_version(scn_range.end_scn_);
+        ATOMIC_STORE(&is_frozen_, true);
+      }
     }
   }
 
-  if (is_frozen_memtable()) {
+  if (OB_SUCC(ret) && is_frozen_memtable()) {
     compaction::ObTabletMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = LS_TX_CTX_TABLET;
     param.merge_type_ = MINI_MERGE;
-    param.merge_version_ = ObVersion::MIN_VERSION;
+    param.merge_version_ = ObVersionRange::MIN_VERSION;
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
           TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));

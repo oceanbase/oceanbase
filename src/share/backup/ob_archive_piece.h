@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"                 // int64_t..
 #include "lib/utility/ob_print_utils.h"    // print
 #include <cstdint>
+#include "share/scn.h"    //SCN
 
 namespace oceanbase
 {
@@ -32,8 +33,8 @@ namespace share
  * 最终呈现效果可能是[d1:A(1-10)]/[d2:A(1-15)]/[d3:A(1-30)],
  * 也可能是[d1:A(1-30)]/[d2:A(1-30)]/[d3:A(1-30)]
  *
- * 公式 piece = (log_ts - genesis_ts) / interval + base_piece_id
- * 其中log_ts为日志提交时间戳, genesis_ts为基准, interval为piece时间跨度默认为一天
+ * 公式 piece = (scn.convert_to_ts() - genesis_scn.convert_to_ts()) / interval + base_piece_id
+ * 其中scn日志提交scn, genesis_ts为基准, interval为piece时间跨度默认为一天
  *
  * 实际生产环境以天为piece切分单元, 并且不对用户展示,
  * 测试环境支持更细粒度目录切分单元
@@ -43,34 +44,34 @@ namespace share
 class ObArchivePiece final
 {
 public:
-  // 单位ns
-  const int64_t ONE_SECOND = 1000 * 1000 * 1000L;
+  //us
+  const int64_t ONE_SECOND = 1000 * 1000L;
   const int64_t ONE_MINUTE = 60L * ONE_SECOND;
   const int64_t ONE_HOUR = 60L * ONE_MINUTE;
   const int64_t ONE_DAY = 24L * ONE_HOUR;
 
 public:
   ObArchivePiece();
-  ObArchivePiece(const int64_t timestamp, const int64_t interval, const int64_t genesis_ts, const int64_t base_piece_id);
+  ObArchivePiece(const SCN &scn, const int64_t interval_us, const SCN &genesis_scn, const int64_t base_piece_id);
   ~ObArchivePiece();
 
 public:
   int64_t get_piece_id() const { return piece_id_; }
-  int64_t get_piece_lower_limit();
+  int get_piece_lower_limit(share::SCN &scn);
   bool is_valid() const;
   void reset();
-  int set(const int64_t piece_id, const int64_t interval, const int64_t genesis_ts, const int64_t base_piece_id);
+  int set(const int64_t piece_id, const int64_t interval_us, const SCN &genesis_scn, const int64_t base_piece_id);
   void inc();
   ObArchivePiece &operator=(const ObArchivePiece &other);
   ObArchivePiece &operator++();       // 前置++
   bool operator==(const ObArchivePiece &other) const;
   bool operator!=(const ObArchivePiece &other) const;
   bool operator>(const ObArchivePiece &other) const;
-  TO_STRING_KV(K_(interval), K_(genesis_ts), K_(piece_id), K_(base_piece_id));
+  TO_STRING_KV(K_(interval_us), K_(genesis_scn), K_(piece_id), K_(base_piece_id));
 
 private:
-  int64_t        interval_;    // piece时间长度
-  int64_t        genesis_ts_;  // 归档基准时间戳
+  int64_t        interval_us_;    // piece时间长度
+  SCN      genesis_scn_;  // 归档基准SCN
   int64_t        base_piece_id_; // 基准piece id
   int64_t        piece_id_;    // piece目录
 };

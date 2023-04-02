@@ -117,6 +117,9 @@ public:
   int apply_for_tenant_conn_resource(const uint64_t tenant_id, const ObPrivSet &priv,
                      const uint64_t max_tenant_connections);
   void release_tenant_conn_resource(const uint64_t tenant_id);
+  int get_tenant_cur_connections(const uint64_t tenant_id,
+                                 bool &tenant_exists,
+                                 uint64_t &cur_connections);
   int get_or_insert_user_resource(
       const uint64_t tenant_id,
       const uint64_t user_id,

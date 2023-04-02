@@ -69,7 +69,7 @@ SELECT CONVERT_TZ('2021-01-01 07:11:00', '+05:12','MET');
 SELECT CONVERT_TZ('2021-01-01 07:11:00', '+03:32','PRC');
 SELECT CONVERT_TZ('2021-01-01 07:11:00', '+11:32','PRC');
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/37089894
+##bugfix:
 SELECT CONVERT_TZ('2004-01-01 12:00:00','-13:00','+10:00');
 SELECT CONVERT_TZ('2004-01-01 12:00:00','-12:00','+14:00');
 SELECT CONVERT_TZ('2004-01-01 12:00:00','-13:00','ABC');
@@ -93,7 +93,7 @@ insert into t values(convert_tz('0000-01-01 01:00:00', '+00:00', '-02:00'));
 select * from t;
 
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/37089982
+##bugfix:
 SELECT CONVERT_TZ(123456,'-12:00','+10:00');
 SELECT CONVERT_TZ('','-12:00','+10:00');
 SELECT CONVERT_TZ('aa','-12:00','+10:00');
@@ -102,14 +102,14 @@ SELECT CONVERT_TZ('1asd561ad','-12:00','+10:00');
 SELECT CONVERT_TZ('￥￥%……&*￥','-12:00','+10:00');
 
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/37090102
+##bugfix:
 drop table t;
 create table t(c1 year);
 insert into t values('1901'),('2155'), ('0000'), ('0001');
 SELECT c1, CONVERT_TZ(c1,'+00:00','+00:00') from t;
 
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/37090351
+##bugfix:
 drop table t;
 create table t(a1 int,a2 year,c1 timestamp,c2 timestamp);
 insert into t values(1,'1998','1998-12-12 12:12:12','2038-01-19 03:14:07');
@@ -127,7 +127,7 @@ select c3, convert_tz(c3, '+00:00', '+08:00') from t;
 drop table t;
 
 
-##bugfix: https://work.aone.alibaba-inc.com/issue/38186028
+##bugfix:
 SELECT CONVERT_TZ('2007-03-11 2:00:00','US/Eastern','US/Central') AS time1,
 		CONVERT_TZ('2007-03-11 2:00:01','US/Eastern','US/Central') AS time2,
 		CONVERT_TZ('2007-03-11 3:00:00','US/Eastern','US/Central') AS time3,

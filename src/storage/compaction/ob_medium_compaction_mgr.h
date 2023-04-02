@@ -14,127 +14,139 @@
 #define OB_STORAGE_COMPACTION_MEDIUM_COMPACTION_MGR_H_
 
 #include "storage/ob_storage_schema.h"
+#include "storage/ob_storage_clog_recorder.h"
+#include "lib/container/ob_array_array.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/compaction/ob_medium_compaction_info.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObTablet;
+}
 namespace compaction
 {
-
-/*
- * TODO (@lixia.yq) add parallel merge info
-struct ObParallelMergeInfo
-{
-    int64_t concurrent_cnt;
-    ObDatumRowkey parallel_end_key[]; // concurrent_cnt - 1
-};
-*/
-
-struct ObMediumCompactionInfo : public common::ObDLinkBase<ObMediumCompactionInfo>
+class ObTabletMediumCompactionInfoRecorder : public storage::ObIStorageClogRecorder
 {
 public:
-  enum ObCompactionType
-  {
-    MAJOR_COMPACTION = 0,
-    MEDIUM_COMPACTION = 1,
-    COMPACTION_TYPE_MAX,
-  };
-  const static char *ObCompactionTypeStr[];
-  const static char *get_compaction_type_str(enum ObCompactionType type);
-public:
-  ObMediumCompactionInfo();
-  ~ObMediumCompactionInfo();
-
-  int init(ObIAllocator &allocator, const ObMediumCompactionInfo &medium_info);
-  bool is_valid() const;
+  ObTabletMediumCompactionInfoRecorder();
+  ~ObTabletMediumCompactionInfoRecorder();
+  int init(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const int64_t max_saved_version,
+      logservice::ObLogHandler *log_handler);
+  virtual void destroy() override;
   void reset();
-  int save_storage_schema(ObIAllocator &allocator, const storage::ObStorageSchema &storage_schema);
-
-  // serialize & deserialize
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(
-      common::ObIAllocator &allocator,
-      const char *buf,
-      const int64_t data_len,
-      int64_t &pos);
-  int64_t get_serialize_size() const;
-
-  void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV(K_(medium_compat_version),
-      "compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      K_(cluster_id), K_(medium_snapshot), K_(medium_log_ts), K_(is_schema_changed),
-      K_(storage_schema));
-public:
-  static const int64_t MEIDUM_COMPAT_VERSION = 1;
+  bool is_inited() const { return is_inited_; }
+  // for leader
+  int submit_medium_compaction_info(ObMediumCompactionInfo &medium_info, ObIAllocator &allocator);
+  // follower
+  int replay_medium_compaction_log(const share::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
 
 private:
-  static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 57;
+  virtual int inner_replay_clog(
+      const int64_t update_version,
+      const share::SCN &scn,
+      const char *buf,
+      const int64_t size,
+      int64_t &pos) override;  virtual int sync_clog_succ_for_leader(const int64_t update_version) override;
+  virtual void sync_clog_failed_for_leader() override;
 
-public:
-  union {
-    uint64_t info_;
-    struct {
-      uint64_t medium_compat_version_           : 4;
-      uint64_t compaction_type_                 : 2;
-      uint64_t is_schema_changed_               : SCS_ONE_BIT;  // TODO for progressive merge
-      uint64_t reserved_                        : SCS_RESERVED_BITS;
-    };
-  };
-  uint64_t cluster_id_; // for backup database to throw MEDIUM_COMPACTION clog
-  int64_t medium_snapshot_;
-  int64_t medium_log_ts_; // for follower minor merge
-  storage::ObStorageSchema storage_schema_;
-  //TODO(@lixia.yq) ObParallelMergeInfo parallel_merge_info;
+  virtual int prepare_struct_in_lock(
+      int64_t &update_version,
+      ObIAllocator *allocator,
+      char *&clog_buf,
+      int64_t &clog_len) override;
+  virtual int submit_log(
+      const int64_t update_version,
+      const char *clog_buf,
+      const int64_t clog_len) override;
+  virtual void free_struct_in_lock() override
+  {
+    free_allocated_info();
+  }
+  void free_allocated_info();
+  OB_INLINE int dec_ref_on_memtable(const bool sync_finish);
+private:
+  bool is_inited_;
+  bool ignore_medium_;
+  share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  storage::ObTabletHandle *tablet_handle_ptr_;
+  ObMediumCompactionInfo *medium_info_;
+  common::ObIAllocator *allocator_;
 };
 
 class ObMediumCompactionInfoList
 {
 public:
-  enum ObMediumListType
-  {
-    MEDIUM_LIST_IN_MEMORY = 0,
-    MEDIUM_LIST_IN_STORAGE = 1,
-    MEDIUM_LIST_MAX,
-  };
-
-public:
-  ObMediumCompactionInfoList(ObMediumListType medium_list_type);
+  ObMediumCompactionInfoList();
   ~ObMediumCompactionInfoList();
 
-  typedef common::ObDList<ObMediumCompactionInfo> MediumInfoList;
+  typedef memtable::ObIMultiSourceDataUnit BasicNode;
+  typedef common::ObDList<BasicNode> MediumInfoList;
 
   int init(common::ObIAllocator &allocator);
 
   int init(common::ObIAllocator &allocator,
-      const ObMediumCompactionInfoList *old_list);
+      const ObMediumCompactionInfoList *old_list,
+      const ObMediumCompactionInfoList *dump_list = nullptr,
+      const int64_t finish_medium_scn = 0,
+      const ObMergeType merge_type = MERGE_TYPE_MAX);
+
+  int init_after_check_finish(
+      ObIAllocator &allocator,
+      const ObMediumCompactionInfoList &old_list);
 
   void reset();
   OB_INLINE bool is_empty() const { return 0 == medium_info_list_.get_size(); }
   OB_INLINE int64_t size() const { return medium_info_list_.get_size(); }
 
-  bool is_valid() const
+  OB_INLINE bool is_valid() const
   {
-    return cur_medium_snapshot_ >= 0 && size() >= 0
-        && (MEDIUM_LIST_IN_MEMORY == medium_list_type_
-            || (MEDIUM_LIST_IN_STORAGE == medium_list_type_ && size() <= MAX_SERIALIZE_SIZE));
+    return is_inited_ && inner_is_valid();
   }
 
   int add_medium_compaction_info(const ObMediumCompactionInfo &input_info);
-  int save_medium_compaction_info(const ObMediumCompactionInfoList &input_list);
 
-  const MediumInfoList &get_list() const { return medium_info_list_; }
-  int64_t get_cur_medium_snapshot() const { return cur_medium_snapshot_; }
+  OB_INLINE const MediumInfoList &get_list() const { return medium_info_list_; }
+  OB_INLINE int64_t get_wait_check_medium_scn() const { return wait_check_flag_ ? last_medium_scn_ : 0; }
+  OB_INLINE bool need_check_finish() const { return wait_check_flag_; }
+  // check status on serialized medium list
+  OB_INLINE bool could_schedule_next_round() const
+  {
+    return !wait_check_flag_ && medium_info_list_.is_empty();
+  }
+  OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
+  {
+    return (ObMediumCompactionInfo::ObCompactionType)last_compaction_type_;
+  }
+  OB_INLINE int64_t get_last_compaction_scn() const
+  {
+    return last_medium_scn_;
+  }
+  void get_schedule_scn(
+    const int64_t major_compaction_scn,
+    int64_t &schedule_scn,
+    ObMediumCompactionInfo::ObCompactionType &compaction_type) const;
 
-  int get_specified_snapshot_info(
+  int get_specified_scn_info(
       const int64_t snapshot,
       const ObMediumCompactionInfo *&compaction_info) const;
   OB_INLINE int64_t get_max_medium_snapshot() const
   {
-    return 0 == size() ? 0 : medium_info_list_.get_last()->medium_snapshot_;
+    return is_empty() ? 0 : static_cast<const ObMediumCompactionInfo *>(medium_info_list_.get_last())->medium_snapshot_;
   }
-  static bool need_select_inner_table_to_decide(const int64_t total_medium_info_size)
+  OB_INLINE int64_t get_min_medium_snapshot() const
   {
-    return total_medium_info_size > MAX_SERIALIZE_SIZE;
+    return is_empty() ? -1 : static_cast<const ObMediumCompactionInfo *>(medium_info_list_.get_first())->medium_snapshot_;
+  }
+  const ObMediumCompactionInfo *get_first_medium_info() const
+  {
+    return is_empty() ? nullptr : static_cast<const ObMediumCompactionInfo *>(medium_info_list_.get_first());
   }
 
   // serialize & deserialize
@@ -147,31 +159,61 @@ public:
   int64_t get_serialize_size() const;
 
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV(K_(is_inited), K_(medium_list_type), K_(cur_medium_snapshot),
+
+  TO_STRING_KV(K_(is_inited), K_(info), K_(last_compaction_type), K_(wait_check_flag), K_(last_medium_scn),
       "list_size", size(), K_(medium_info_list));
 
 private:
-  OB_INLINE int append_list_with_deep_copy(const ObMediumCompactionInfoList &input_list)
+  void reset_list();
+  OB_INLINE bool inner_is_valid() const
+  {
+    return last_compaction_type_ < ObMediumCompactionInfo::COMPACTION_TYPE_MAX
+        && last_medium_scn_ >= 0 && size() >= 0;
+  }
+  OB_INLINE int append_list_with_deep_copy(
+      const int64_t finish_scn,
+      const ObMediumCompactionInfoList &input_list)
   {
     int ret = OB_SUCCESS;
     DLIST_FOREACH_X(input_info, input_list.medium_info_list_, OB_SUCC(ret)) {
-      ret = inner_deep_copy_node(*input_info);
+      const ObMediumCompactionInfo *medium_info = static_cast<const ObMediumCompactionInfo *>(input_info);
+      if (medium_info->medium_snapshot_ > finish_scn) {
+        ret = inner_deep_copy_node(*medium_info);
+      }
     }
     return ret;
   }
   int inner_deep_copy_node(const ObMediumCompactionInfo &medium_info);
+  OB_INLINE void set_basic_info(const ObMediumCompactionInfoList &input_list)
+  {
+    last_compaction_type_ = input_list.last_compaction_type_;
+    last_medium_scn_ = input_list.last_medium_scn_;
+    wait_check_flag_ = input_list.wait_check_flag_;
+  }
 
 private:
+  static const int64_t MEDIUM_LIST_VERSION = 1;
   static const int64_t MAX_SERIALIZE_SIZE = 2;
+  static const int32_t MEDIUM_LIST_INFO_RESERVED_BITS = 51;
 
 private:
   bool is_inited_;
-  ObMediumListType medium_list_type_; // no need to serialize
-  int64_t cur_medium_snapshot_;
   common::ObIAllocator *allocator_;
+
+  // need serialize
+  union {
+    uint64_t info_;
+    struct {
+      uint64_t compat_                  : 8;
+      uint64_t last_compaction_type_    : 4; // check inner_table when last_compaction is major
+      uint64_t wait_check_flag_         : 1; // true: need check finish, false: don't need check
+      uint64_t reserved_                : MEDIUM_LIST_INFO_RESERVED_BITS;
+    };
+  };
+  int64_t last_medium_scn_;
+
   MediumInfoList medium_info_list_;
 };
-
 
 } // namespace compaction
 } // namespace oceanbase

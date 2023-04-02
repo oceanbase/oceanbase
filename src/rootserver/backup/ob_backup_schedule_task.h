@@ -296,7 +296,7 @@ protected:
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
-  share::ObBackupSCN start_scn_;
+  share::SCN start_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
 private:
@@ -328,8 +328,8 @@ private:
   share::ObBackupType backup_type_;
   int64_t backup_date_;
   share::ObLSID ls_id_;
-  int64_t start_scn_;
-  int64_t end_scn_;
+  share::SCN start_scn_;
+  share::SCN end_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
 private:

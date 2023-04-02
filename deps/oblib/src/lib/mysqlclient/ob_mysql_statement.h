@@ -50,13 +50,14 @@ public:
    * but ignore affected_rows
    */
   int execute_update();
+  bool is_need_disconnect_error(const int ret);
 
   /*
    * ! Deprecated
    * use prepare method to read data instead
    * reference ObMySQLPrepareStatement
    */
-  ObMySQLResult *execute_query();
+  ObMySQLResult *execute_query(bool enable_use_result = false);
 
 private:
   ObMySQLConnection *conn_;

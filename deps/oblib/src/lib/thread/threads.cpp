@@ -53,13 +53,14 @@ int Threads::do_set_thread_count(int64_t n_threads)
         thread->wait();
         thread->destroy();
         thread->~Thread();
+        ob_free(thread);
         threads_[i] = nullptr;
       }
       n_threads_ = n_threads;
     } else if (n_threads == n_threads_) {
     } else {
       auto new_threads = reinterpret_cast<Thread**>(
-          ob_malloc(sizeof (Thread*) * n_threads, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::CO_STACK, OB_NORMAL_ALLOC)));
+          ob_malloc(sizeof (Thread*) * n_threads, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
       if (new_threads == nullptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else {
@@ -93,8 +94,8 @@ int Threads::do_set_thread_count(int64_t n_threads)
         }
       }
     }
-  } else {
-    n_threads_ = n_threads;
+  } else { // modify init_threads_ before start
+    init_threads_ = n_threads;
   }
   return ret;
 }
@@ -112,6 +113,48 @@ int Threads::inc_thread_count(int64_t inc)
   return do_set_thread_count(n_threads);
 }
 
+int Threads::thread_recycle()
+{
+  // check if any idle threads and notify them to exit
+  // idle defination: not working for more than N minutes
+  common::SpinWLockGuard g(lock_);
+  // int target = 10; // leave at most 10 threads as cached thread
+  return do_thread_recycle();
+}
+
+int Threads::do_thread_recycle()
+{
+  int ret = OB_SUCCESS;
+  int n_threads = n_threads_;
+  // destroy all stopped threads
+  // px threads mark itself as stopped when it is idle for more than 10 minutes.
+  for (int i = 0; i < n_threads_; i++) {
+    if (nullptr != threads_[i]) {
+      if (threads_[i]->has_set_stop()) {
+        destroy_thread(threads_[i]);
+        threads_[i] = nullptr;
+        n_threads--;
+        LOG_INFO("recycle one thread", "total", n_threads_, "remain", n_threads);
+      }
+    }
+  }
+  // for simplicity, don't free threads_ buffer, only reduce n_threads_ size
+  if (n_threads != n_threads_) {
+    int from = 0;
+    int to = 0;
+    // find non-empty slot, set it to threads_[i]
+    while (from < n_threads_ && to < n_threads_) {
+      if (nullptr != threads_[from]) {
+        threads_[to] = threads_[from];
+        to++;
+      }
+      from++;
+    }
+    n_threads_ = n_threads;
+  }
+  return ret;
+}
+
 int Threads::init()
 {
   return OB_SUCCESS;
@@ -122,13 +165,14 @@ int Threads::start()
   int ret = OB_SUCCESS;
   // 检查租户上下文
   IRunWrapper *expect_wrapper = get_expect_run_wrapper();
+  n_threads_ = init_threads_;
   if (expect_wrapper != nullptr && expect_wrapper != run_wrapper_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Threads::start tenant ctx not match", KP(expect_wrapper), KP(run_wrapper_));
     ob_abort();
   } else {
     threads_ = reinterpret_cast<Thread**>(
-      ob_malloc(sizeof (Thread*) * n_threads_, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::CO_STACK, OB_NORMAL_ALLOC)));
+      ob_malloc(sizeof (Thread*) * n_threads_, ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC)));
     if (threads_ == nullptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     }
@@ -162,8 +206,10 @@ int Threads::start()
 
 void Threads::run(int64_t idx)
 {
+  ObTLTaGuard ta_guard(GET_TENANT_ID() ?:OB_SERVER_TENANT_ID);
   thread_idx_ = static_cast<uint64_t>(idx);
   Worker worker;
+  Worker::set_worker_to_thread_local(&worker);
   run1();
 }
 
@@ -171,7 +217,7 @@ int Threads::create_thread(Thread *&thread, std::function<void()> entry)
 {
   int ret = OB_SUCCESS;
   thread = nullptr;
-  const auto buf = ob_malloc(sizeof (Thread), ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::CO_STACK, OB_NORMAL_ALLOC));
+  const auto buf = ob_malloc(sizeof (Thread), ObMemAttr(0 == GET_TENANT_ID() ? OB_SERVER_TENANT_ID : GET_TENANT_ID(), "Coro", ObCtxIds::DEFAULT_CTX_ID, OB_NORMAL_ALLOC));
   if (buf == nullptr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -191,6 +237,7 @@ void Threads::destroy_thread(Thread *thread)
   thread->wait();
   thread->destroy();
   thread->~Thread();
+  ob_free(thread);
 }
 
 void Threads::wait()
@@ -231,9 +278,4 @@ void Threads::destroy()
     ob_free(threads_);
     threads_ = nullptr;
   }
-}
-
-void Threads::set_thread_max_tasks(uint64_t cnt)
-{
-  thread_max_tasks_ = cnt;
 }

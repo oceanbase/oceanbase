@@ -79,6 +79,7 @@ typedef enum ObItemType
   T_UROWID      = 45,
   T_LOB         = 46,
   T_JSON        = 47,
+  T_GEOMETRY    = 48,
 
   T_IEEE754_NAN = 61,
   T_IEEE754_INFINITE = 62,
@@ -416,6 +417,7 @@ typedef enum ObItemType
   T_FUN_SYS_PART_KEY_V3 = 696,
   //following T_FUN_SYS_PART_HASH_V2 has been removed, it's useless now.
   T_FUN_SYS_PART_HASH_V2 = 697,
+  T_FUN_SYS_SQL_MODE_CONVERT = 698,
 
   ///< @note add new mysql/oracle function type before this line
   T_COMMON_FUN_SYS_END = 700,
@@ -476,6 +478,20 @@ typedef enum ObItemType
   T_FUN_SYS_ERRNO = 751,
   T_FUN_SYS_ADDTIME = 752,
   T_FUN_SYS_DAY_NAME = 753,
+  T_FUN_SYS_UUID2BIN = 754,
+  T_FUN_SYS_IS_UUID = 755,
+  T_FUN_SYS_BIN2UUID = 756,
+  T_FUN_SYS_NAME_CONST = 757,
+  T_FUN_SYS_FORMAT_BYTES = 758,
+  T_FUN_SYS_FORMAT_PICO_TIME = 759,
+  T_FUN_SYS_DECODE = 760,
+  T_FUN_SYS_ENCODE = 761,
+  T_FUN_SYS_DES_DECRYPT = 762,
+  T_FUN_SYS_DES_ENCRYPT = 763,
+  T_FUN_SYS_ENCRYPT = 764,
+  T_FUN_SYS_ICU_VERSION = 765,
+
+  T_FUN_SYS_CURRENT_USER_PRIV = 766,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -718,6 +734,64 @@ typedef enum ObItemType
   //T_FUN_SYS_TIMESTAMP_TO_SCN and T_FUN_SYS_SCN_TO_TIMESTAMP are supported both in mysql and oracle
   T_FUN_SYS_TIMESTAMP_TO_SCN = 1633,
   T_FUN_SYS_SCN_TO_TIMESTAMP = 1634,
+
+  T_FUN_SYS_ST_LONGITUDE = 1635,
+  T_FUN_SYS_ST_TRANSFORM = 1636,
+  T_FUN_SYS_POINT = 1637,
+  T_FUN_SYS_LINESTRING = 1638,
+  T_FUN_SYS_MULTIPOINT = 1639,
+  T_FUN_SYS_MULTILINESTRING = 1640,
+  T_FUN_SYS_POLYGON = 1641,
+  T_FUN_SYS_MULTIPOLYGON = 1642,
+  T_FUN_SYS_GEOMCOLLECTION = 1643,
+  T_FUN_SYS_ST_COVERS = 1644,
+  T_FUN_SYS_PRIV_ST_BESTSRID = 1645,
+  T_FUN_SYS_ST_ASTEXT = 1646,
+  T_FUN_SYS_ST_BUFFER_STRATEGY = 1647,
+  T_FUN_SYS_ST_BUFFER = 1648,
+  T_FUN_SYS_SPATIAL_CELLID = 1649,
+  T_FUN_SYS_SPATIAL_MBR = 1650,
+  T_FUN_SYS_ST_GEOMFROMEWKB = 1651,
+  T_FUN_SYS_ST_GEOMFROMWKB = 1652,
+  T_FUN_SYS_ST_GEOMETRYFROMWKB = 1653,
+  T_FUN_SYS_ST_GEOMFROMEWKT = 1654,
+  T_FUN_SYS_PRIV_ST_ASEWKT = 1655,
+  T_FUN_SYS_ST_SRID = 1656,
+  T_FUN_SYS_ST_ASWKT = 1657,
+  T_FUN_SYS_ST_DISTANCE = 1658,
+  T_FUN_SYS_ST_GEOMETRYFROMTEXT = 1659,
+  T_FUN_SYS_PRIV_ST_SETSRID = 1660,
+  T_FUN_SYS_PRIV_ST_POINT = 1661,
+  T_FUN_SYS_PRIV_ST_GEOGFROMTEXT = 1662,
+  T_FUN_SYS_PRIV_ST_GEOGRAPHYFROMTEXT = 1663,
+  T_FUN_SYS_ST_ISVALID = 1664,
+  T_FUN_SYS_PRIV_ST_BUFFER = 1665,
+  T_FUN_SYS_ST_ASWKB = 1666,
+  T_FUN_SYS_PRIV_ST_ASEWKB = 1667,
+  T_FUN_SYS_ST_ASBINARY = 1668,
+  T_FUN_SYS_ST_DISTANCE_SPHERE = 1669,
+  T_FUN_SYS_ST_DWITHIN = 1670,
+  T_FUN_SYS_ST_WITHIN = 1671,
+  T_FUN_SYS_ST_CONTAINS = 1672,
+  T_FUN_SYS_PRIV_ST_TRANSFORM = 1673,
+  T_FUN_SYS_ST_GEOMFROMTEXT = 1674,
+  T_FUN_SYS_ST_INTERSECTION = 1675,
+  T_FUN_SYS_ST_AREA = 1676,
+  T_FUN_SYS_ST_INTERSECTS = 1677,
+  T_FUN_SYS_ST_X = 1678,
+  T_FUN_SYS_ST_Y = 1679,
+  T_FUN_SYS_ST_LATITUDE = 1680,
+  // gis expr should add above
+  // please maintain is_geo_expr / is_mysql_geo_expr / is_priv_geo_expr if other gis expr added
+
+  T_FUN_SYS_IS_JSON = 1681,
+  T_FUN_SYS_JSON_EQUAL = 1682,
+  T_FUN_SYS_JSON_QUERY = 1683,
+  T_FUN_ORA_JSON_ARRAYAGG = 1684,
+  T_FUN_ORA_JSON_OBJECTAGG = 1685,
+  T_FUN_SYS_JSON_EXISTS = 1686,
+  T_FUN_SYS_TREAT = 1687,
+
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -735,6 +809,7 @@ typedef enum ObItemType
   T_PSEUDO_DUP_EXPR = 3008,
   T_PSEUDO_STMT_ID = 3009,
   T_PSEUDO_RANDOM = 3010,
+  T_INNER_WF_AGGR_STAUTS = 3011,
   T_PSEUDO_GROUP_PARAM = 3040,
 
   ///< @note values of the following symbols are insiginificant
@@ -854,6 +929,7 @@ typedef enum ObItemType
   T_CONSTR_AUTO_INCREMENT,
   T_CONSTR_PRIMARY_KEY,
   T_CONSTR_UNIQUE_KEY,
+  T_CONSTR_SRID,
   T_CHECK_CONSTRAINT,
   T_WINDOW_FUNCTION,
   T_WIN_GENERALIZED_WINDOW,
@@ -894,6 +970,7 @@ typedef enum ObItemType
   T_INDEX_TABLE_ID,
   T_TABLET_ID,
   T_TENANT_TABLET,
+  T_TENANT_LS_TABLET,
   T_VIRTUAL_COLUMN_ID,
   T_DATABASE_ID,
   T_REPLICA_NUM,
@@ -962,6 +1039,8 @@ typedef enum ObItemType
   T_EXPR_WITH_ALIAS,
   T_TABLE_COLLECTION_EXPRESSION,
   T_DIAGNOSTICS,
+  T_JSON_TABLE_EXPRESSION,
+  T_JSON_TABLE_COLUMN,
 
   //pseudo_column
   T_PSEUDO_COLUMN,
@@ -1073,6 +1152,7 @@ typedef enum ObItemType
   T_SHOW_RESTORE_PREVIEW,
   T_SHOW_CREATE_TRIGGER,
   T_SHOW_QUERY_RESPONSE_TIME,
+  T_SHOW_SEQUENCES,
   T_SHOW_GRANTS, //新增show类型请添加在T_SHOW_GRANTS前面
 
   T_SHOW_LIMIT,
@@ -1131,6 +1211,7 @@ typedef enum ObItemType
   T_CLIENT_VERSION,
   T_MYSQL_DRIVER,
   T_QUERY_TIMEOUT,
+  T_DBLINK_INFO,
   T_LOG_LEVEL,
   T_LEADING,
   T_ORDERED,
@@ -1139,6 +1220,9 @@ typedef enum ObItemType
   T_FULL_HINT,
   T_USE_DAS_HINT,
   T_NO_USE_DAS_HINT,
+  T_INDEX_SS_HINT,
+  T_INDEX_SS_ASC_HINT,
+  T_INDEX_SS_DESC_HINT,
   T_USE_MERGE,
   T_USE_HASH,
   T_NO_USE_HASH,
@@ -1184,6 +1268,10 @@ typedef enum ObItemType
   T_TRACING,
   T_DOP,
   T_STAT,
+  T_GATHER_OPTIMIZER_STATISTICS,
+  T_NO_GATHER_OPTIMIZER_STATISTICS,
+  T_APPEND,
+  T_DBMS_STATS,
 
   T_KILL,
   T_HELP,
@@ -1314,6 +1402,10 @@ typedef enum ObItemType
   T_RELOAD_SERVER,
   T_RELOAD_ZONE,
   T_MIGRATE_UNIT,
+  T_ADD_ARBITRATION_SERVICE,
+  T_REMOVE_ARBITRATION_SERVICE,
+  T_REPLACE_ARBITRATION_SERVICE,
+  T_ENABLE_ARBITRATION_SERVICE,
   T_CLEAR_MERGE_ERROR,
   T_QEURY_EXPRESSION_LIST,
   T_UPGRADE_VIRTUAL_SCHEMA,
@@ -1327,6 +1419,7 @@ typedef enum ObItemType
   T_GATHER_PLAN_STATISTICS,
   T_TP_NAME,
   T_TP_NO,
+  T_TP_COND,
   T_ACTION,
   T_ERROR,
   T_ERROR_CODE,
@@ -1374,6 +1467,7 @@ typedef enum ObItemType
   T_SP_SOURCE,
   T_SP_PROC_STMT_LIST,
   T_SQL_STMT,
+  T_EXPR,
   T_SP_USING_LIST,
   T_SP_USING_PARAM,
   T_SP_EXECUTE_IMMEDIATE,
@@ -1557,6 +1651,7 @@ typedef enum ObItemType
   T_RANDOM,
   T_TABLEGROUP_ID,
   T_TABLEGROUP_BINDING,
+  T_TABLEGROUP_SHARDING,
   T_MAX_USED_PART_ID,
   T_TENANT_ID,
 
@@ -1611,8 +1706,11 @@ typedef enum ObItemType
   T_MYSQL_DROP_HISTOGRAM,
   T_ANALYZE_MYSQL_COLUMN_LIST,
   T_SWITCHOVER,
-  T_SWITCHOVER_LEADER,
-  T_SWITCHOVER_FOLLOWER,
+  T_SWITCHOVER_TO_PRIMARY,
+  T_SWITCHOVER_TO_STANDBY,
+  T_RECOVER,
+  T_RECOVER_UNLIMITED,
+  T_RECOVER_CANCEL,
   T_ALTER_SYSTEM_SET,
   T_ALTER_SYSTEM_SET_PARAMETER,
   T_ALTER_SESSION_SET,
@@ -1902,8 +2000,10 @@ typedef enum ObItemType
   T_RESTORE_TENANT_2,
   T_GEN_ROWS,
   T_LOAD_BATCH_SIZE,
+  T_DIRECT, // direct load data
   T_REMOTE_OSS,
   T_PHYSICAL_RESTORE_TENANT,
+  T_PHYSICAL_RESTORE_UNTIL,
   T_REVOKE_SYSAUTH,
 
   // hint, for slave mapping
@@ -1962,7 +2062,9 @@ typedef enum ObItemType
   T_SP_OBJ_ELEMENT_SPEC_LIST,
   T_FETCH_CLAUSE, //use to support fetch next rows only
   T_FETCH_TIES_CLAUSE, //use to support fetch next rows with tie
+  T_DBLINK_NAME,
   T_CREATE_DBLINK,
+  T_REVERSE_DBLINK,
   T_DROP_DBLINK,
   T_ALTER_DBLINK,
   T_LABEL_LIST,
@@ -2083,13 +2185,27 @@ typedef enum ObItemType
   T_OB_DDL_SCHEMA_VERSION,
   T_TG_ORDER,
   T_ODBC_ESCAPE_SEQUENCES,
+  T_SP_DATA_ACCESS,
 
   // column group
   T_COLUMN_GROUP,
   T_ALL_COLUMN_GROUP,
   T_SINGLE_COLUMN_GROUP,
   T_NORMAL_COLUMN_GROUP,
-  
+  T_TRACE_FORMAT,
+  T_TG_ALTER_OPTIONS,
+
+  T_EXTERNAL_FILE_LOCATION,
+  T_EXTERNAL_FILE_FORMAT,
+  T_EXTERNAL_FILE_FORMAT_TYPE,
+  T_EXTERNAL,
+  T_ALTER_REFRESH_EXTERNAL_TABLE,
+
+  T_SKIP_HEADER,
+  T_SKIP_BLANK_LINE,
+  T_TRIM_SPACE,
+  T_NULL_IF_EXETERNAL,
+  T_EMPTY_FIELD_AS_NULL,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2133,8 +2249,17 @@ typedef enum ObContextType {
     || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
     || ((op) == T_FUN_SYS_JSON_CONTAINS) \
     || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
+    || ((op) == T_FUN_SYS_JSON_EQUAL) \
+    || ((op) == T_FUN_SYS_IS_JSON) \
+    || ((op) == T_FUN_SYS_JSON_EXISTS) \
     || ((op) == T_BOOL) \
-    || ((op) == T_OP_XOR)) \
+    || ((op) == T_OP_XOR) \
+    || ((op) == T_FUN_SYS_IS_UUID) \
+    || ((op) == T_FUN_SYS_ST_CONTAINS) \
+    || ((op) == T_FUN_SYS_ST_WITHIN) \
+    || ((op) == T_FUN_SYS_ST_DWITHIN) \
+    || ((op) == T_FUN_SYS_ST_INTERSECTS) \
+    || ((op) == T_FUN_SYS_ST_COVERS)) \
 
 //in oracle mode, only lists exprs can accept bool(tinyint) param
 #define ALLOW_BOOL_INPUT(op) \
@@ -2149,6 +2274,8 @@ typedef enum ObContextType {
     || ((op) == T_OP_ARG_CASE) \
     || ((op) == T_OP_CASE) \
     || ((op) == T_OP_OUTPUT_PACK) \
+    || ((op) == T_FUN_SYS_JSON_OBJECT) \
+    || ((op) == T_FUN_SYS_JSON_ARRAY) \
     || ((op) == T_OP_TO_OUTFILE_ROW)) \
 
 
@@ -2212,6 +2339,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_TOP_FRE_HIST || (op) == T_FUN_HYBRID_HIST || \
                          (op) == T_FUN_AGG_UDF || (op) == T_FUN_GROUPING_ID || \
                          (op) == T_FUN_JSON_ARRAYAGG || (op) == T_FUN_JSON_OBJECTAGG ||\
+                         (op) == T_FUN_ORA_JSON_ARRAYAGG || (op) == T_FUN_ORA_JSON_OBJECTAGG ||\
                          (op) == T_FUN_GROUP_ID || \
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
@@ -2242,6 +2370,12 @@ inline ObItemType get_opposite_compare_type(ObItemType src_type)
       break;
     case T_OP_GE:
       ret_type = T_OP_LE;
+      break;
+    case T_OP_EXISTS:
+      ret_type = T_OP_NOT_EXISTS;
+      break;
+    case T_OP_NOT_EXISTS:
+      ret_type = T_OP_EXISTS;
       break;
     default:
       ret_type = src_type;

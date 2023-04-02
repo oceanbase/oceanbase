@@ -35,25 +35,31 @@ int ObExprFindInSet::calc_result_type2(ObExprResType &type,
 																			 ObExprResType &type2,
 																			 ObExprTypeCtx &type_ctx) const
 {
-	UNUSED(type_ctx);
 	int ret = OB_SUCCESS;
-	type1.set_calc_type(ObVarcharType);
-  type1.set_calc_collation_type(ObCharset::get_system_collation());
-	type2.set_calc_type(ObVarcharType);
-  type2.set_calc_collation_type(ObCharset::get_system_collation());
 	if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
 		type.set_uint64();
 		type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
 		type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
+    type.set_calc_type(ObVarcharType);
 		ObExprOperator::calc_result_flag2(type, type1, type2);
+    ObObjMeta coll_types[2];
+    coll_types[0] = type1.get_obj_meta();
+    coll_types[1] = type2.get_obj_meta();
+    if (OB_FAIL(aggregate_charsets_for_comparison(type.get_calc_meta(),
+                 coll_types, 2, type_ctx.get_coll_type()))) {
+      LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
+    } else {
+      type1.set_calc_type(ObVarcharType);
+      type1.set_calc_collation_type(type.get_calc_collation_type());
+      type2.set_calc_type(ObVarcharType);
+      type2.set_calc_collation_type(type.get_calc_collation_type());
+    }
 	} else {
 		ret = OB_ERR_INVALID_TYPE_FOR_OP;
 	}
 	return ret;
 }
 
-int search(const ObString &str, const ObString &str_list, const ObCollationType &cs_type,
-           uint64_t &res_pos);
 int search(const ObString &str, const ObString &str_list, const ObCollationType &cs_type,
            uint64_t &res_pos)
 {
@@ -64,38 +70,32 @@ int search(const ObString &str, const ObString &str_list, const ObCollationType 
   if (ObCharset::locate(cs_type, first_ptr, first_length, ",", 1, 1) != 0) {
     res_pos = 0;
   } else {
-    bool is_found = false;
-    res_pos = 1;
-    uint32_t pre_separtor_pos = 0;
-    uint32_t cur_separtor_pos = 0;
-    uint32_t pre_sep_pos_byte = 0;
-    uint32_t cur_sep_pos_byte = 0;
-    const char *second_ptr = str_list.ptr();
-    int64_t second_length = str_list.length();
-    while ((!is_found) &&
-            (cur_separtor_pos = ObCharset::locate(cs_type, second_ptr, second_length,
-                                                  ",", 1, cur_separtor_pos + 1)) != 0) {
-      cur_sep_pos_byte = ObCharset::charpos(cs_type, second_ptr, second_length, cur_separtor_pos);
-      if (ObCharset::strcmp(cs_type, first_ptr, first_length, second_ptr + pre_sep_pos_byte,
-                            cur_sep_pos_byte - pre_sep_pos_byte - 1) == 0) {
-        is_found = true;
+    int64_t str_list_pos = 0;
+    int64_t comma_pos = 0;
+    int64_t elem_idx = 1;
+
+    ObString comma_str = ObCharsetUtils::get_const_str(cs_type, ',');
+
+    while (str_list_pos < str_list.length()) {
+      int64_t comma_pos = ObCharset::instrb(cs_type, str_list.ptr() + str_list_pos, str_list.length() - str_list_pos,
+                                            comma_str.ptr(), comma_str.length());
+      const char* elem_ptr = str_list.ptr() + str_list_pos;
+      int64_t elem_length = (comma_pos >=0) ? comma_pos : str_list.length() - str_list_pos;
+      if (0 != ObCharset::strcmp(cs_type, elem_ptr, elem_length, str.ptr(), str.length())) {
+        //not match
+        str_list_pos += elem_length + ((comma_pos >= 0) ? comma_str.length() : 0);
+        elem_idx++;
       } else {
-        pre_separtor_pos = cur_separtor_pos;
-        pre_sep_pos_byte = cur_sep_pos_byte;
-        ++res_pos;
-      }
-      LOG_DEBUG("find_in_set debug", K(ret), K(pre_sep_pos_byte), K(cur_separtor_pos),
-                K(pre_sep_pos_byte), K(cur_separtor_pos), K(is_found), K(res_pos));
-    }
-    if (!is_found) {
-      // match the last substring extracted from strlist
-      if (ObCharset::strcmp(cs_type, first_ptr, first_length, second_ptr + pre_sep_pos_byte,
-                            second_length - pre_sep_pos_byte) == 0) {
-        // do nothing
-      } else {
-        res_pos = 0;
+        break;
       }
     }
+
+    if (str_list_pos < str_list.length()) {
+      res_pos = elem_idx;
+    } else {
+      res_pos = 0;
+    }
+
 	}
 	return ret;
 }

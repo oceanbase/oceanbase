@@ -140,21 +140,25 @@ class ObIOUsage final
 public:
   ObIOUsage();
   ~ObIOUsage();
-  void accumulate(const ObIORequest &req);
+  int init(const int64_t group_num);
+  int refresh_group_num (const int64_t group_num);
+  void accumulate(ObIORequest &req);
   void calculate_io_usage();
-  typedef double AvgItems[static_cast<int>(ObIOCategory::MAX_CATEGORY)][static_cast<int>(ObIOMode::MAX_MODE)];
-  void get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us) const;
-  void record_request_start(const ObIORequest &req);
-  void record_request_finish(const ObIORequest &req);
-  bool is_request_doing(const ObIOCategory category) const;
+  typedef ObSEArray<ObSEArray<double, GROUP_START_NUM>, 2> AvgItems;
+  void get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us);
+  void record_request_start(ObIORequest &req);
+  void record_request_finish(ObIORequest &req);
+  bool is_request_doing(const int64_t index) const;
+  int64_t get_io_usage_num() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
-  ObIOStat io_stats_[static_cast<int>(ObIOCategory::MAX_CATEGORY)][static_cast<int>(ObIOMode::MAX_MODE)];
-  ObIOStatDiff io_estimators_[static_cast<int>(ObIOCategory::MAX_CATEGORY)][static_cast<int>(ObIOMode::MAX_MODE)];
-  AvgItems avg_iops_;
-  AvgItems avg_byte_;
-  AvgItems avg_rt_us_;
-  int64_t doing_request_count_[static_cast<int>(ObIOCategory::MAX_CATEGORY)];
+  ObSEArray<ObSEArray<ObIOStat, GROUP_START_NUM>, 2> io_stats_;
+  ObSEArray<ObSEArray<ObIOStatDiff, GROUP_START_NUM>, 2> io_estimators_;
+  AvgItems group_avg_iops_;
+  AvgItems group_avg_byte_;
+  AvgItems group_avg_rt_us_;
+  int64_t group_num_;
+  ObSEArray<int64_t, GROUP_START_NUM> doing_request_count_;
 };
 
 class ObCpuUsage final
@@ -180,6 +184,7 @@ public:
   virtual void run1() override;
 
 private:
+  void print_sender_status();
   void print_io_status();
 private:
   bool is_inited_;
@@ -187,15 +192,32 @@ private:
   ObIOScheduler &io_scheduler_;
 };
 
-struct ObIOCategoryQueues final {
+struct ObIOGroupQueues final {
 public:
-  ObIOCategoryQueues();
-  ~ObIOCategoryQueues();
-  int init();
+  ObIOGroupQueues(ObIAllocator &allocator);
+  ~ObIOGroupQueues();
+  int init(const int64_t group_num);
   void destroy();
+  TO_STRING_KV(K(is_inited_), K(other_phy_queue_), K(group_phy_queues_));
 public:
   bool is_inited_;
-  ObPhyQueue phy_queues_[static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1];
+  ObIAllocator &allocator_;
+  ObSEArray<ObPhyQueue *, GROUP_START_NUM> group_phy_queues_;
+  ObPhyQueue other_phy_queue_;
+};
+
+
+struct ObSenderInfo final
+{
+public:
+  ObSenderInfo();
+  ~ObSenderInfo();
+public:
+  int64_t queuing_count_;
+  int64_t reservation_ts_;
+  int64_t group_limitation_ts_;
+  int64_t tenant_limitation_ts_;
+  int64_t proportion_ts_;
 };
 
 class ObIOSender : public lib::TGRunnable
@@ -203,7 +225,7 @@ class ObIOSender : public lib::TGRunnable
 public:
   ObIOSender(ObIAllocator &allocator);
   virtual ~ObIOSender();
-  int init(const int32_t queue_depth);
+  int init(const int64_t sender_index);
   void stop();
   void wait();
   void destroy();
@@ -217,23 +239,30 @@ public:
   int enqueue_request(ObIORequest &req);
   int enqueue_phy_queue(ObPhyQueue &phyqueue);
   int dequeue_request(ObIORequest *&req);
-  int remove_phy_queue(const uint64_t tenant_id);
+  int update_group_queue(const uint64_t tenant_id, const int64_t group_num);
+  int remove_group_queues(const uint64_t tenant_id);
+  int stop_phy_queue(const uint64_t tenant_id, const uint64_t index);
   int notify();
-  int32_t get_queue_count() const;
-  TO_STRING_KV(K(is_inited_), K(stop_submit_), KPC(io_queue_), K(tg_id_));
+  int64_t get_queue_count() const;
+  int get_sender_info(int64_t &reservation_ts,
+                      int64_t &group_limitation_ts,
+                      int64_t &tenant_limitation_ts,
+                      int64_t &proportion_ts);
+  int get_sender_status(const uint64_t tenant_id, const uint64_t index, ObSenderInfo &sender_info);
+  TO_STRING_KV(K(is_inited_), K(stop_submit_), KPC(io_queue_), K(tg_id_), K(sender_index_));
 //private:
   void pop_and_submit();
   int64_t calc_wait_timeout(const int64_t queue_deadline);
   int submit(ObIORequest &req);
-
-  bool is_inited_;
-  ObIAllocator &allocator_;
-  bool stop_submit_;
+  int64_t sender_req_count_;
+  int64_t sender_index_;
   int tg_id_; // thread group id
+  bool is_inited_;
+  bool stop_submit_;
+  ObIAllocator &allocator_;
   ObMClockQueue *io_queue_;
   ObThreadCond queue_cond_;
-  hash::ObHashMap<uint64_t, ObIOCategoryQueues *> tenant_map_;
-  int64_t sender_req_count_;
+  hash::ObHashMap<uint64_t, ObIOGroupQueues *> tenant_groups_map_;
 };
 
 
@@ -242,14 +271,18 @@ class ObIOScheduler final
 public:
   ObIOScheduler(const ObIOConfig &io_config, ObIAllocator &allocator);
   ~ObIOScheduler();
-  int init(const int64_t queue_count, const int64_t queue_depth, const int64_t schedule_media_id = 0);
+  int init(const int64_t queue_count, const int64_t schedule_media_id = 0);
   void destroy();
   int start();
   void stop();
   void accumulate(const ObIORequest &req);
-  int schedule_request(ObIOClock &io_clock, ObIORequest &req);
-  int add_tenant_map(uint64_t tenant_id);
-  int remove_tenant_map(uint64_t tenant_id);
+  int schedule_request(ObIORequest &req);
+  int init_group_queues(const uint64_t tenant_id, const int64_t group_num);
+  int update_group_queues(const uint64_t tenant_id, const int64_t group_num);
+  int remove_phyqueues(const uint64_t tenant_id);
+  int stop_phy_queues(const uint64_t tenant_id, const int64_t index);
+  ObIOSender *get_cur_sender(const int thread_id){ return senders_.at(thread_id); };
+  int64_t get_senders_count() { return senders_.count(); }
   TO_STRING_KV(K(is_inited_), K(io_config_), K(senders_));
 private:
   friend class ObIOTuner;
@@ -315,7 +348,7 @@ private:
 
 private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
-  static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L; //1s
+  static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L - 1L; // almost 1s, for timespec_valid check
   ObIOContext *io_context_;
   ObIOEvents *io_events_;
   struct timespec polling_timeout_;

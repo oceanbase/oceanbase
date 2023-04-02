@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/rc/context.h"
+#include "lib/signal/ob_signal_struct.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/ob_req_time_service.h"
 #include "omt/ob_tenant.h"
@@ -76,7 +77,15 @@ int ObInnerSQLResult::init(bool has_tenant_resource)
     .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
   if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     LOG_WARN("create memory entity failed", K(ret));
-  } else {
+  } else if (has_tenant_resource) {
+    if (OB_FAIL(GCTX.omt_->get_tenant_with_tenant_lock(session_.get_effective_tenant_id(), handle_, tenant_))) {
+      if (OB_IN_STOP_STATE == ret) {
+        ret = OB_TENANT_NOT_IN_SERVER;
+      }
+      LOG_WARN("get tenant lock fail", K(ret), K(session_.get_effective_tenant_id()));
+    }
+  }
+  if (OB_SUCC(ret)) {
     set_has_tenant_resource(has_tenant_resource);
     if (!has_tenant_resource) {
       remote_result_set_ = new (buf_) ObRemoteResultSet(mem_context_->get_arena_allocator());
@@ -127,15 +136,11 @@ int ObInnerSQLResult::open()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (has_tenant_resource() && OB_FAIL(GCTX.omt_->get_tenant_with_tenant_lock(session_.get_effective_tenant_id(), handle_, tenant_))) {
-    if (OB_IN_STOP_STATE == ret) {
-      ret = OB_TENANT_NOT_IN_SERVER;
-    }
-    LOG_WARN("get tenant lock fail", K(ret), K(session_.get_effective_tenant_id()));
   } else if (has_tenant_resource() && OB_FAIL(tenant_guard.switch_to(tenant_))) {
     LOG_WARN("switch tenant failed", K(ret), K(session_.get_effective_tenant_id()));
   } else {
     lib::CompatModeGuard g(compat_mode_);
+    common::ObSqlInfoGuard si_guard(session_.get_current_query_string());
     bool is_select = has_tenant_resource() ?
            ObStmt::is_select_stmt(result_set_->get_stmt_type())
            : ObStmt::is_select_stmt(remote_result_set_->get_stmt_type());
@@ -196,11 +201,11 @@ int ObInnerSQLResult::force_close()
   column_indexed_ = false;
   return ret;
 }
-
 int ObInnerSQLResult::inner_close()
 {
   int ret = OB_SUCCESS;
   lib::CompatModeGuard g(compat_mode_);
+  common::ObSqlInfoGuard si_guard(session_.get_current_query_string());
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
 
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
@@ -239,6 +244,7 @@ int ObInnerSQLResult::next()
   } else {
     row_ = NULL;
     lib::CompatModeGuard g(compat_mode_);
+    common::ObSqlInfoGuard si_guard(session_.get_current_query_string());
     WITH_CONTEXT(mem_context_) {
       if (has_tenant_resource() && OB_FAIL(result_set_->get_next_row(row_))) {
         if (OB_ITER_END != ret) {
@@ -251,6 +257,7 @@ int ObInnerSQLResult::next()
                    K(ret), K(remote_result_set_->get_field_columns()->count()));
         }
       }
+
     }
   }
   return ret;

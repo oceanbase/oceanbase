@@ -152,7 +152,7 @@ int ObMySQLPacket::encode(char *buffer, int64_t length, int64_t &pos, int64_t &p
 
 int64_t ObMySQLPacket::get_serialize_size() const
 {
-  BACKTRACE(ERROR, 1, "not a serializiable packet");
+  BACKTRACE_RET(ERROR, OB_ERROR, 1, "not a serializiable packet");
   return -1;
 }
 
@@ -173,6 +173,30 @@ int ObMySQLRawPacket::serialize(char *buf, const int64_t length, int64_t &pos) c
     LOG_WARN("fail to store cmd", K(length), K(cmd_), K(pos), K(ret));
   } else if (OB_FAIL(ObMySQLUtil::store_str_vnzt(buf, length, get_cdata(), get_clen(), pos))) {
     LOG_WARN("fail to store content", K(length), KP(get_cdata()), K(get_clen()), K(pos), K(ret));
+  }
+  return ret;
+}
+
+int Ob20ExtraInfo::assign(const Ob20ExtraInfo &other, char* buf, int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  uint64_t total_len = other.get_total_len();
+  if (total_len > buf_len) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(ERROR, "invalid alloc size", K(total_len), K(ret));
+  } else {
+    uint64_t len = 0;
+    MEMCPY(buf+len, other.trace_info_.ptr(), other.trace_info_.length());
+    trace_info_.assign_ptr(buf+len, other.trace_info_.length());
+    len += other.trace_info_.length();
+
+    MEMCPY(buf+len, other.sync_sess_info_.ptr(), other.sync_sess_info_.length());
+    sync_sess_info_.assign_ptr(buf+len, other.sync_sess_info_.length());
+    len += other.sync_sess_info_.length();
+
+    MEMCPY(buf+len, other.full_link_trace_.ptr(), other.full_link_trace_.length());
+    full_link_trace_.assign_ptr(buf+len, other.full_link_trace_.length());
+    len += other.full_link_trace_.length();
   }
   return ret;
 }

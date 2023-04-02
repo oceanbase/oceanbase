@@ -13,9 +13,6 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_DEFINE_H_
 #define OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_DEFINE_H_
 
-#include "lib/container/ob_se_array.h"
-#include "lib/net/ob_addr.h"                  // ObAddr
-#include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/palf/lsn.h"              // LSN
 #include "share/ob_define.h"
@@ -23,10 +20,10 @@ namespace oceanbase
 {
 namespace logservice
 {
-using oceanbase::palf::LSN;
-using oceanbase::common::ObAddr;
-using oceanbase::common::ObString;
 const int64_t MAX_FETCH_LOG_BUF_LEN = 4 * 1024 * 1024L;
+const int64_t MIN_FETCH_LOG_WORKER_THREAD_COUNT = 1;
+const int64_t MAX_FETCH_LOG_WORKER_THREAD_COUNT = 10;
+const int64_t MAX_LS_FETCH_LOG_TASK_CONCURRENCY = 4;
 
 struct ObLogRestoreErrorContext
 {
@@ -39,23 +36,16 @@ struct ObLogRestoreErrorContext
   TO_STRING_KV(K_(ret_code), K_(trace_id));
 };
 
-// The fetch log context of one ls,
-// if the ls is scheduled with fetch log task,
-// it is marked issued.
-struct ObRemoteFetchContext
+struct ObRestoreLogContext
 {
-  bool issued_;
-  int64_t last_fetch_ts_;
-  LSN max_submit_lsn_;
-  LSN max_fetch_lsn_;
-  ObLogRestoreErrorContext error_context_;          // 记录该日志流遇到错误信息, 仅leader有效
+  bool seek_done_;
+  palf::LSN lsn_;
 
-  ObRemoteFetchContext() { reset(); }
-  ~ObRemoteFetchContext() { reset(); }
+  ObRestoreLogContext() { reset(); }
+  ~ObRestoreLogContext() { reset(); }
   void reset();
-  TO_STRING_KV(K_(issued), K_(last_fetch_ts), K_(max_submit_lsn), K_(max_fetch_lsn), K_(error_context));
+  TO_STRING_KV(K_(seek_done), K_(lsn));
 };
-
 } // namespace logservice
 } // namespace oceanbase
 

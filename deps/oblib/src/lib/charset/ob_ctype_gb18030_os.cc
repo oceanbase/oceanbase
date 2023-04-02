@@ -19475,7 +19475,7 @@ static size_t ob_strnxfrm_gb18030(const ObCharsetInfo *cs, uchar *dst,
       ++src;
     }
   }
-  return ob_strxfrm_pad(cs, ds, dst, de, nweights, flags);
+  return ob_strxfrm_pad_desc_and_reverse(cs, ds, dst, de, nweights, flags, 0);
 }
 
 size_t ob_varlen_encoding_gb18030_for_memcmp(const struct ObCharsetInfo* cs,		
@@ -19490,22 +19490,19 @@ size_t ob_varlen_encoding_gb18030_for_memcmp(const struct ObCharsetInfo* cs,
   *is_valid_unicode = 1;		
   ob_charset_assert(cs != NULL);		
   sort_order = cs->sort_order;		
-  for (; dst < de && src < se && nweights; nweights--) {		
+  for (; *is_valid_unicode && dst < de && src < se && nweights; nweights--) {
     uint mblen = cs->cset->ismbchar(cs, (const char *)src, (const char *)se);		
     uint weight = 0;		
     if (mblen > 0) {		
-      weight = get_weight_for_mbchar<INSENSITIVE>(cs, src, mblen);		
-    } else {		
+      weight = get_weight_for_mbchar<INSENSITIVE>(cs, src, mblen);
+      dst += code_to_gb18030_chs(dst, de - dst, weight);
+      src += mblen;
+    } else {
+      *is_valid_unicode = 0;
       weight = sort_order ? sort_order[*src] : *src;		
-      ++src;		
-    }		
-    if (weight == 0) {		
-      dst += code_to_gb18030_chs(dst, de - dst, weight);		
-      weight = 0x0000000000000001;		
-    }		
-    dst += code_to_gb18030_chs(dst, de - dst, weight);		
-    src += mblen;		
-  }		
+      ++src;
+    }
+  }
   // adds 0x0000 0000 0000 0000, 0x0000 0000 0000 0000		
   memset(dst, 0x00, 8);		
   dst += 8;		
@@ -19514,8 +19511,8 @@ size_t ob_varlen_encoding_gb18030_for_memcmp(const struct ObCharsetInfo* cs,
 uint16_t find_space_char_count_gb18030(const uchar* src, const uchar* se)		
 {		
   int space_cnt = 1;		
-  while (*(src+space_cnt) == 0x20 && (src+space_cnt)<se) space_cnt++;		
-  if (space_cnt+src<se) return space_cnt;		
+  while ((src + space_cnt) < se && *(src + space_cnt) == 0x20 ) space_cnt++;
+  if ((src + space_cnt) < se) return space_cnt;
   else return 0;		
 }		
 size_t ob_varlen_encoding_gb18030_for_spacecmp(const struct ObCharsetInfo* cs,		
@@ -19531,7 +19528,7 @@ size_t ob_varlen_encoding_gb18030_for_spacecmp(const struct ObCharsetInfo* cs,
   ob_charset_assert(cs != NULL);		
   sort_order = cs->sort_order;		
   uint16_t space_cnt = 0xFFFF;		
-  for (; dst < de && src < se && nweights; nweights--) {		
+  for (;*is_valid_unicode && dst < de && src < se && nweights; nweights--) {
     // for reslovable multiple bytes, only space's first byte is 0x20,		
     // in gb18030 encoding scheme		
     if (*src == 0x20) {		
@@ -19557,12 +19554,13 @@ size_t ob_varlen_encoding_gb18030_for_spacecmp(const struct ObCharsetInfo* cs,
     uint weight = 0;		
     if (mblen > 0) {		
       weight = get_weight_for_mbchar<INSENSITIVE>(cs, src, mblen);		
+      dst += code_to_gb18030_chs(dst, de - dst, weight);
       src += mblen;		
     } else {		
+      *is_valid_unicode = 0;
       weight = sort_order ? sort_order[*src] : *src;		
       ++src;		
     }		
-    dst += code_to_gb18030_chs(dst, de - dst, weight);		
   }		
   // adds 0x20, 0x20		
   memset(dst, 0x00, 8);		

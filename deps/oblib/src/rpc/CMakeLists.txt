@@ -38,6 +38,7 @@ ob_set_subtarget(oblib_rpc obmysql
   obmysql/ob_sql_sock_session.cpp
   obmysql/ob_virtual_cs_protocol_processor.cpp
   obmysql/obp20_extra_info.cpp
+  obmysql/ob_packet_record.cpp
 )
 
 ob_set_subtarget(oblib_rpc obmysql_packet
@@ -61,7 +62,6 @@ ob_set_subtarget(oblib_rpc obrpc
   obrpc/ob_net_keepalive.cpp
   obrpc/ob_listener.cpp
   obrpc/ob_net_client.cpp
-  obrpc/ob_poc_nio.cpp
   obrpc/ob_poc_rpc_proxy.cpp
   obrpc/ob_poc_rpc_request_operator.cpp
   obrpc/ob_poc_rpc_server.cpp

@@ -77,7 +77,7 @@ private:
 class ObHybridHistEstimator : public ObStatsEstimator
 {
 public:
-  ObHybridHistEstimator(ObExecContext &ctx);
+  explicit ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
   int estimate(const ObTableStatParam &param,
                ObExtraParam &extra,

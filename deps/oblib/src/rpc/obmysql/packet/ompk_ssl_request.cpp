@@ -43,10 +43,10 @@ int OMPKSSLRequest::decode()
     capability_.capability_ = uint2korr(pos);
     if (OB_UNLIKELY(!capability_.cap_flags_.OB_CLIENT_SSL)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("error capability from ssl request packet", K(ret));
+      LOG_WARN("error capability from ssl request packet", K(ret));
     } else if (OB_UNLIKELY(!capability_.cap_flags_.OB_CLIENT_PROTOCOL_41)) {
       ret = OB_NOT_SUPPORTED;
-      LOG_ERROR("ob only support mysql client protocol 4.1", K(ret));
+      LOG_WARN("ob only support mysql client protocol 4.1", K(ret));
     } else {
       if (JDBC_SSL_MIN_SIZE == len) {
         // JConnector only sends server capabilities before starting SSL negotiation.  The below code is patch for this.

@@ -19,6 +19,8 @@
 static int easy_client_uthread_wakeup_conn(easy_connection_t *c);
 static int easy_client_uthread_wakeup_session(easy_request_t *r);
 
+int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
+                         pthread_mutex_t *__restrict __mutex);
 /**
  * 把session发送到addr上
  */
@@ -148,7 +150,7 @@ void easy_client_wait(easy_client_wait_t *w, int count)
     pthread_mutex_lock(&w->mutex);
 
     while (w->done_count < count) {
-        pthread_cond_wait(&w->cond, &w->mutex);
+        ob_pthread_cond_wait(&w->cond, &w->mutex);
     }
 
     pthread_mutex_unlock(&w->mutex);

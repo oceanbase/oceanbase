@@ -288,7 +288,7 @@ int ObAllVirtualIOBenchmark::inner_get_next_row(common::ObNewRow *&row)
 
 ObAllVirtualIOQuota::QuotaInfo::QuotaInfo()
   : tenant_id_(OB_INVALID_TENANT_ID),
-    category_(ObIOCategory::MAX_CATEGORY),
+    group_id_(0),
     mode_(ObIOMode::MAX_MODE),
     size_(0),
     real_iops_(0),
@@ -336,33 +336,70 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
           LOG_WARN("tenant not exist", K(ret), K(cur_tenant_id));
         }
       } else {
-        const ObIOUsage &io_usage = tenant_holder.get_ptr()->get_io_usage();
+        ObIOUsage &io_usage = tenant_holder.get_ptr()->get_io_usage();
         const ObTenantIOConfig &io_config = tenant_holder.get_ptr()->get_io_config();
         ObIOUsage::AvgItems avg_iops, avg_size, avg_rt;
+        io_usage.calculate_io_usage();
         io_usage.get_io_usage(avg_iops, avg_size, avg_rt);
-        for (int64_t i = 0; OB_SUCC(ret) && i < static_cast<int>(ObIOCategory::MAX_CATEGORY); ++i) {
+        for (int64_t i = 0; i < io_config.group_num_; ++i) {
+          if (io_config.group_configs_.at(i).deleted_) {
+            continue;
+          }
           for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
-            if (avg_size[i][j] > std::numeric_limits<double>::epsilon()) {
+            if (avg_size.at(i+1).at(j) > std::numeric_limits<double>::epsilon()) {
               QuotaInfo item;
               item.tenant_id_ = cur_tenant_id;
-              item.category_ = static_cast<ObIOCategory>(i);
               item.mode_ = static_cast<ObIOMode>(j);
-              item.size_ = avg_size[i][j];
-              item.real_iops_ = avg_iops[i][j];
-              int64_t category_min_iops = 0, category_max_iops = 0, category_iops_weight = 0;
+              item.group_id_ = io_config.group_ids_.at(i);
+              item.size_ = avg_size.at(i+1).at(j);
+              item.real_iops_ = avg_iops.at(i+1).at(j);
+              int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
               double iops_scale = 0;
-              if (OB_FAIL(io_config.get_category_config(static_cast<ObIOCategory>(i),
-                                                        category_min_iops,
-                                                        category_max_iops,
-                                                        category_iops_weight))) {
-                LOG_WARN("get category config failed", K(ret), "category", get_io_category_name(static_cast<ObIOCategory>(i)));
-              } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j), avg_size[i][j], iops_scale))) {
+              if (OB_FAIL(io_config.get_group_config(i,
+                                                     group_min_iops,
+                                                     group_max_iops,
+                                                     group_iops_weight))) {
+                LOG_WARN("get group config failed", K(ret), K(i));
+              } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j),
+                                                                                avg_size.at(i+1).at(j),
+                                                                                iops_scale))) {
                 LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(j)));
               } else {
-                item.min_iops_ = category_min_iops * iops_scale;
-                item.max_iops_ = category_max_iops * iops_scale;
+                item.min_iops_ = group_min_iops * iops_scale;
+                item.max_iops_ = group_max_iops * iops_scale;
                 if (OB_FAIL(quota_infos_.push_back(item))) {
-                  LOG_WARN("push back io quota item failed", K(ret), K(item));
+                  LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+                }
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          // OTHER_GROUPS
+          for (int64_t k = 0; OB_SUCC(ret) && k < static_cast<int>(ObIOMode::MAX_MODE); ++k) {
+            if (avg_size.at(0).at(k) > std::numeric_limits<double>::epsilon()) {
+              QuotaInfo item;
+              item.tenant_id_ = cur_tenant_id;
+              item.mode_ = static_cast<ObIOMode>(k);
+              item.group_id_ = 0;
+              item.size_ = avg_size.at(0).at(k);
+              item.real_iops_ = avg_iops.at(0).at(k);
+              int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
+              double iops_scale = 0;
+              if (OB_FAIL(io_config.get_group_config(INT64_MAX,
+                                                     group_min_iops,
+                                                     group_max_iops,
+                                                     group_iops_weight))) {
+                LOG_WARN("get other group config failed", K(ret), "gruop_info", io_config.other_group_config_);
+              } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(k),
+                                                                                avg_size.at(0).at(k),
+                                                                                iops_scale))) {
+                LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(k)));
+              } else {
+                item.min_iops_ = group_min_iops * iops_scale;
+                item.max_iops_ = group_max_iops * iops_scale;
+                if (OB_FAIL(quota_infos_.push_back(item))) {
+                  LOG_WARN("push back other group item failed", K(k), K(ret), K(item));
                 }
               }
             }
@@ -413,9 +450,8 @@ int ObAllVirtualIOQuota::inner_get_next_row(common::ObNewRow *&row)
           cells[i].set_int(item.tenant_id_);
           break;
         }
-        case CATEGORY: {
-          cells[i].set_varchar(get_io_category_name(item.category_));
-          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        case GROUP_ID: {
+          cells[i].set_int(item.group_id_);
           break;
         }
         case MODE: {
@@ -462,6 +498,211 @@ int ObAllVirtualIOQuota::inner_get_next_row(common::ObNewRow *&row)
       row = &cur_row_;
     }
     ++quota_pos_;
+  }
+  return ret;
+}
+
+/******************               IOScheduler                *******************/
+ObAllVirtualIOScheduler::ScheduleInfo::ScheduleInfo()
+  : thread_id_ (-1),
+    tenant_id_(OB_INVALID_TENANT_ID),
+    group_id_(0),
+    queuing_count_(0),
+    reservation_ts_(INT_MAX64),
+    group_limitation_ts_(INT_MAX64),
+    tenant_limitation_ts_(INT_MAX64),
+    proportion_ts_(INT_MAX64)
+{
+
+}
+
+ObAllVirtualIOScheduler::ScheduleInfo::~ScheduleInfo()
+{
+
+}
+
+ObAllVirtualIOScheduler::ObAllVirtualIOScheduler()
+  : schedule_pos_(0), schedule_infos_()
+{
+
+}
+
+ObAllVirtualIOScheduler::~ObAllVirtualIOScheduler()
+{
+
+}
+
+int ObAllVirtualIOScheduler::init(const common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(init_addr(addr))) {
+    LOG_WARN("init failed", K(ret), K(addr));
+  } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant id failed", K(ret));
+  } else {
+    ObIOScheduler *io_scheduler = OB_IO_MANAGER.get_scheduler();
+    int64_t thread_num = io_scheduler->get_senders_count();
+    for (int64_t thread_id = 0; OB_SUCC(ret) && thread_id < thread_num; ++thread_id) {
+      ObIOSender *cur_sender = io_scheduler->get_cur_sender(thread_id);
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+        const uint64_t cur_tenant_id = tenant_ids.at(i);
+        ObRefHolder<ObTenantIOManager> tenant_holder;
+        if (OB_SERVER_TENANT_ID == cur_tenant_id) {
+          // tenent_id = 500, do nothing
+        } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+          if (OB_HASH_NOT_EXIST != ret) {
+            LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
+          } else {
+            ret = OB_TENANT_NOT_EXIST;
+            LOG_WARN("tenant not exist", K(ret), K(cur_tenant_id));
+          }
+        } else {
+          const ObTenantIOConfig &io_config = tenant_holder.get_ptr()->get_io_config();
+          int64_t group_num = tenant_holder.get_ptr()->get_group_num();
+          for (int64_t index = 0; OB_SUCC(ret) && index < group_num; ++index) {
+            if (io_config.group_configs_.at(index).deleted_) {
+              continue;
+            }
+            ScheduleInfo item;
+            item.thread_id_ = thread_id;
+            item.tenant_id_ = cur_tenant_id;
+            item.group_id_ = io_config.group_ids_.at(index);
+            ObSenderInfo sender_info;
+            if (OB_FAIL(cur_sender->get_sender_status(cur_tenant_id, index, sender_info))) {
+              LOG_WARN("get sender status failed", K(ret), K(cur_tenant_id), K(index));
+            } else {
+              item.queuing_count_ = sender_info.queuing_count_;
+              item.reservation_ts_ = sender_info.reservation_ts_;
+              item.group_limitation_ts_ = sender_info.group_limitation_ts_;
+              item.tenant_limitation_ts_ = sender_info.tenant_limitation_ts_;
+              item.proportion_ts_ = sender_info.proportion_ts_;
+              if (OB_FAIL(schedule_infos_.push_back(item))) {
+                LOG_WARN("push back io quota item failed", K(ret), K(item));
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            // OTHER_GROUPS
+            ScheduleInfo item;
+            item.thread_id_ = thread_id;
+            item.tenant_id_ = cur_tenant_id;
+            item.group_id_ = 0;
+            ObSenderInfo sender_info;
+            if (OB_FAIL(cur_sender->get_sender_status(cur_tenant_id, INT64_MAX, sender_info))) {
+              LOG_WARN("get sender status failed", K(ret), K(cur_tenant_id), K(index));
+            } else {
+              item.queuing_count_ = sender_info.queuing_count_;
+              item.reservation_ts_ = sender_info.reservation_ts_;
+              item.group_limitation_ts_ = sender_info.group_limitation_ts_;
+              item.tenant_limitation_ts_ = sender_info.tenant_limitation_ts_;
+              item.proportion_ts_ = sender_info.proportion_ts_;
+              if (OB_FAIL(schedule_infos_.push_back(item))) {
+                LOG_WARN("push back io quota item failed", K(ret), K(item));
+              }
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObAllVirtualIOScheduler::reset()
+{
+  ObAllVirtualIOStatusIterator::reset();
+  schedule_pos_ = 0;
+  schedule_infos_.reset();
+}
+
+int ObAllVirtualIOScheduler::inner_get_next_row(common::ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  row = nullptr;
+  ObObj *cells = cur_row_.cells_;
+  if (OB_UNLIKELY(!is_inited_ || nullptr == cells)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), KP(cur_row_.cells_), K(is_inited_));
+  } else if (schedule_pos_ >= schedule_infos_.count()) {
+    row = nullptr;
+    ret = OB_ITER_END;
+  } else {
+    ScheduleInfo &item = schedule_infos_.at(schedule_pos_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids_.count(); ++i) {
+      const uint64_t column_id = output_column_ids_.at(i);
+      switch (column_id) {
+        case SVR_IP: {
+          cells[i].set_varchar(ip_buf_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case SVR_PORT: {
+          cells[i].set_int(addr_.get_port());
+          break;
+        }
+        case THREAD_ID: {
+          cells[i].set_int(item.thread_id_);
+          break;
+        }
+        case TENANT_ID: {
+          cells[i].set_int(item.tenant_id_);
+          break;
+        }
+        case GROUP_ID: {
+          cells[i].set_int(item.group_id_);
+          break;
+        }
+        case QUEUING_COUNT: {
+          cells[i].set_int(item.queuing_count_);
+          break;
+        }
+        case RESERVATION_TS: {
+          if (INT_MAX64 == item.reservation_ts_) {
+            cells[i].set_null();
+          } else {
+            cells[i].set_timestamp(item.reservation_ts_);
+          }
+          break;
+        }
+        case CATEGORY_LIMIT_TS: {
+          if (INT_MAX64 == item.group_limitation_ts_) {
+            cells[i].set_null();
+          } else {
+            cells[i].set_timestamp(item.group_limitation_ts_);
+          }
+          break;
+        }
+        case TENANT_LIMIT_TS: {
+          if (INT_MAX64 == item.tenant_limitation_ts_) {
+            cells[i].set_null();
+          } else {
+            cells[i].set_timestamp(item.tenant_limitation_ts_);
+          }
+          break;
+        }
+        case PROPORTION_TS: {
+          if (INT_MAX64 == item.proportion_ts_) {
+            cells[i].set_null();
+          } else {
+            cells[i].set_timestamp(item.proportion_ts_);
+          }
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column id", K(ret), K(column_id), K(i), K(output_column_ids_));
+          break;
+        }
+      } // end switch
+    } // end for-loop
+    if (OB_SUCC(ret)) {
+      row = &cur_row_;
+    }
+    ++schedule_pos_;
   }
   return ret;
 }

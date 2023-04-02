@@ -21,12 +21,14 @@
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_base_header.h"
+#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "sql/das/ob_das_id_service.h"
 
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
 namespace transaction
 {
 void ObIDService::reset()
@@ -37,8 +39,8 @@ void ObIDService::reset()
   tmp_last_id_ = 0;
   limited_id_ = MIN_LAST_ID;
   is_logging_ = false;
-  rec_log_ts_ = INT_MAX64;
-  latest_log_ts_ = OB_INVALID_TIMESTAMP;
+  rec_log_ts_.set_max();
+  latest_log_ts_.reset();
   submit_log_ts_ = OB_INVALID_TIMESTAMP;
   ls_ = NULL;
 }
@@ -126,7 +128,7 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
   } else {
     ObPresistIDLog ls_log(last_id, limited_id);
     palf::LSN lsn;
-    int64_t log_ts = 0;
+    SCN log_ts, base_scn;
     int64_t base_ts = 0;
     if (TimestampService == service_type_) {
       if (ATOMIC_LOAD(&tmp_last_id_) != 0) {
@@ -135,11 +137,13 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
         base_ts = ATOMIC_LOAD(&last_id_);
       }
     }
-    if (OB_FAIL(cb_.serialize_ls_log(ls_log, service_type_))) {
+    if (OB_FAIL(base_scn.convert_for_gts(base_ts))) {
+      TRANS_LOG(ERROR, "failed to convert scn", KR(ret), K(base_ts));
+    } else if (OB_FAIL(cb_.serialize_ls_log(ls_log, service_type_))) {
       TRANS_LOG(WARN, "serialize ls log error", KR(ret), K(cb_));
     } else {
       cb_.set_srv_type(service_type_);
-      if (OB_FAIL(ls_->get_log_handler()->append(cb_.get_log_buf(), cb_.get_log_pos(), base_ts, false, &cb_, lsn, log_ts))) {
+      if (OB_FAIL(ls_->get_log_handler()->append(cb_.get_log_buf(), cb_.get_log_pos(), base_scn, false, &cb_, lsn, log_ts))) {
         cb_.reset();
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           TRANS_LOG(WARN, "submit ls log failed", KR(ret), K(service_type_));
@@ -157,20 +161,20 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
   return ret;
 }
 
-int ObIDService::handle_submit_callback(const bool success, const int64_t limited_id, const int64_t log_ts)
+int ObIDService::handle_submit_callback(const bool success, const int64_t limited_id, const SCN log_ts)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
-  if (limited_id < 0 || log_ts < 0) {
-    TRANS_LOG(WARN, "invalid argument", K(limited_id));
+  if (limited_id < 0 || !log_ts.is_valid()) {
+    TRANS_LOG(WARN, "invalid argument", K(limited_id), K(log_ts));
   } else if (success) {
     if (ATOMIC_LOAD(&tmp_last_id_) != 0) {
       ATOMIC_STORE(&last_id_, tmp_last_id_);
       ATOMIC_STORE(&tmp_last_id_, 0);
     }
     (void)inc_update(&limited_id_, limited_id);
-    ATOMIC_STORE(&rec_log_ts_, log_ts);
-    ATOMIC_STORE(&latest_log_ts_, log_ts);
+    rec_log_ts_.atomic_set(log_ts);
+    latest_log_ts_.atomic_set(log_ts);
     if (OB_FAIL(update_ls_id_meta(false))) {
       TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_), K(limited_id), K(log_ts));
     }
@@ -185,19 +189,21 @@ int ObIDService::handle_submit_callback(const bool success, const int64_t limite
   return ret;
 }
 
-int ObIDService::replay(const void *buffer, const int64_t buf_size, const palf::LSN &lsn, const int64_t log_ts)
+int ObIDService::replay(const void *buffer, const int64_t buf_size,
+                        const palf::LSN &lsn, const SCN &log_scn)
 {
+  //TODO(scn)
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
   int64_t tmp_pos = 0;
   const char *log_buf = static_cast<const char *>(buffer);
   ObPresistIDLog ls_log;
   if (OB_FAIL(base_header.deserialize(log_buf, buf_size, tmp_pos))) {
-   TRANS_LOG(WARN, "log base header deserialize error", K(ret), KP(buffer), K(buf_size), K(lsn), K(log_ts));
+   TRANS_LOG(WARN, "log base header deserialize error", K(ret), KP(buffer), K(buf_size), K(lsn), K(log_scn));
   } else if (OB_FAIL(ls_log.deserialize((char *)buffer, buf_size, tmp_pos))) {
-    TRANS_LOG(WARN, "desrialize tx_log_body error", K(ret), KP(buffer), K(buf_size), K(lsn), K(log_ts));
-  } else if (OB_FAIL(handle_replay_result(ls_log.get_last_id(), ls_log.get_limit_id(), log_ts))) {
-    TRANS_LOG(WARN, "handle replay result fail", K(ret), K(ls_log), K(log_ts));
+    TRANS_LOG(WARN, "desrialize tx_log_body error", K(ret), KP(buffer), K(buf_size), K(lsn), K(log_scn));
+  } else if (OB_FAIL(handle_replay_result(ls_log.get_last_id(), ls_log.get_limit_id(), log_scn))) {
+    TRANS_LOG(WARN, "handle replay result fail", K(ret), K(ls_log), K(log_scn));
   } else {
     // do nothing
   }
@@ -205,13 +211,13 @@ int ObIDService::replay(const void *buffer, const int64_t buf_size, const palf::
   return ret;
 }
 
-int ObIDService::handle_replay_result(const int64_t last_id, const int64_t limited_id, const int64_t log_ts)
+int ObIDService::handle_replay_result(const int64_t last_id, const int64_t limited_id, const SCN log_ts)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
-  if (last_id < 0 || limited_id < 0 || log_ts < 0) {
+  if (last_id < 0 || limited_id < 0 || !log_ts.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(last_id), K(limited_id));
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(last_id), K(limited_id), K(log_ts));
   } else {
     if (last_id != limited_id && limited_id == ATOMIC_LOAD(&limited_id_)) {
       (void)inc_update(&tmp_last_id_, last_id);
@@ -220,9 +226,9 @@ int ObIDService::handle_replay_result(const int64_t last_id, const int64_t limit
     }
     (void)inc_update(&last_id_, limited_id);
     (void)inc_update(&limited_id_, limited_id);
-    if (log_ts > ATOMIC_LOAD(&latest_log_ts_)) {
-      ATOMIC_STORE(&rec_log_ts_, log_ts);
-      ATOMIC_STORE(&latest_log_ts_, log_ts);
+    if (log_ts > latest_log_ts_.atomic_get()) {
+      rec_log_ts_.atomic_set(log_ts);
+      latest_log_ts_.atomic_set(log_ts);
       if (OB_FAIL(update_ls_id_meta(false))) {
         TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_), K(last_id), K(limited_id), K(log_ts));
       }
@@ -241,12 +247,12 @@ int ObIDService::update_ls_id_meta(const bool write_slog)
   } else if (write_slog) {
     ret = ls_->update_id_meta(service_type_,
                               ATOMIC_LOAD(&limited_id_),
-                              ATOMIC_LOAD(&latest_log_ts_),
+                              latest_log_ts_.atomic_load(),
                               true /* write slog */);
   } else {
     ret = ls_->update_id_meta(service_type_,
                               ATOMIC_LOAD(&limited_id_),
-                              ATOMIC_LOAD(&latest_log_ts_),
+                              latest_log_ts_.atomic_load(),
                               false /* not write slog */);
   }
 
@@ -257,17 +263,17 @@ int ObIDService::update_ls_id_meta(const bool write_slog)
   return ret;
 }
 
-int ObIDService::flush(int64_t rec_log_ts)
+int ObIDService::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
-  int64_t latest_rec_log_ts = ATOMIC_LOAD(&rec_log_ts_);
-  if (latest_rec_log_ts <= rec_log_ts) {
-    latest_rec_log_ts = ATOMIC_LOAD(&rec_log_ts_);
+  SCN latest_rec_log_ts = rec_log_ts_.atomic_get();
+  if (latest_rec_log_ts <= rec_scn) {
+    latest_rec_log_ts = rec_log_ts_.atomic_get();
     if (OB_FAIL(update_ls_id_meta(true))) {
       TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_));
     } else {
-      (void)ATOMIC_BCAS(&rec_log_ts_, latest_rec_log_ts, INT_MAX64);
+      rec_log_ts_.atomic_bcas(latest_rec_log_ts, SCN::max_scn());
     }
     TRANS_LOG(INFO, "flush", K(ret), K(service_type_), K(rec_log_ts_), K(limited_id_));
   }
@@ -294,10 +300,10 @@ int ObIDService::check_leader(bool &leader)
   return ret;
 }
 
-int64_t ObIDService::get_rec_log_ts()
+SCN ObIDService::get_rec_scn()
 {
-  const int64_t rec_log_ts = ATOMIC_LOAD(&rec_log_ts_);
-  TRANS_LOG(INFO, "get rec log ts", K(service_type_), K(rec_log_ts));
+  const SCN rec_log_ts = rec_log_ts_.atomic_get();
+  TRANS_LOG(INFO, "get rec log scn", K(service_type_), K(rec_log_ts));
   return rec_log_ts;
 }
 
@@ -375,7 +381,7 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
       }
     }
     if (OB_EAGAIN == ret || (limited_id_ - last_id_) < (pre_allocated_range_ * 2 / 3)) {
-      const int64_t pre_allocated_id = max(base_id, limited_id_) + max(range * 10, pre_allocated_range_);
+      const int64_t pre_allocated_id = min(max_pre_allocated_id_(base_id), max(base_id, limited_id_) + max(range * 10, pre_allocated_range_));
       submit_log_with_lock_(pre_allocated_id, pre_allocated_id);
     }
   }
@@ -385,15 +391,28 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
 	return ret;
 }
 
-void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, int64_t &rec_log_ts,
-                                   int64_t &latest_log_ts, int64_t &pre_allocated_range,
+
+int64_t ObIDService::max_pre_allocated_id_(const int64_t base_id)
+{
+  int64_t max_pre_allocated_id = INT64_MAX;
+  if (TimestampService == service_type_) {
+    if (base_id > ATOMIC_LOAD(&limited_id_)) {
+      (void)inc_update(&last_id_, base_id);
+    }
+    max_pre_allocated_id = ATOMIC_LOAD(&last_id_) + 2 * pre_allocated_range_;
+  }
+  return max_pre_allocated_id;
+}
+
+void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, SCN &rec_scn,
+                                   SCN &latest_log_ts, int64_t &pre_allocated_range,
                                    int64_t &submit_log_ts, bool &is_master)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   last_id = last_id_;
   limited_id = limited_id_;
-  rec_log_ts = rec_log_ts_;
+  rec_scn = rec_log_ts_;
   latest_log_ts = latest_log_ts_;
   pre_allocated_range = pre_allocated_range_;
   submit_log_ts = submit_log_ts_;
@@ -439,7 +458,7 @@ int ObIDService::update_id_service(const ObAllIDMeta &id_meta)
   for(int i = 0; i < ObIDService::MAX_SERVICE_TYPE && OB_SUCC(ret); i++) {
     ObIDService *id_service = NULL;
     int64_t limited_id = 0;
-    int64_t latest_log_ts = 0;
+    SCN latest_log_ts = SCN::min_scn();
     if (OB_FAIL(id_meta.get_id_meta(i, limited_id, latest_log_ts))) {
       TRANS_LOG(WARN, "get id meta fail", K(ret), K(id_meta));
     } else if (OB_FAIL(get_id_service(i, id_service))) {
@@ -455,13 +474,13 @@ int ObIDService::update_id_service(const ObAllIDMeta &id_meta)
   return ret;
 }
 
-void ObIDService::update_limited_id(const int64_t limited_id, const int64_t latest_log_ts)
+void ObIDService::update_limited_id(const int64_t limited_id, const SCN latest_log_ts)
 {
   WLockGuard guard(rwlock_);
   (void)inc_update(&last_id_, limited_id);
   (void)inc_update(&limited_id_, limited_id);
-  ATOMIC_STORE(&rec_log_ts_, INT_MAX64);
-  ATOMIC_STORE(&latest_log_ts_, latest_log_ts);
+  rec_log_ts_.set_max();
+  latest_log_ts_.atomic_set(latest_log_ts);
 }
 
 OB_SERIALIZE_MEMBER(ObPresistIDLog, last_id_, limit_id_);
@@ -470,7 +489,7 @@ void ObPresistIDLogCb::reset()
 {
   id_srv_type_ = ObIDService::INVALID_ID_SERVICE_TYPE;
   limited_id_ = 0;
-  log_ts_ = 0;
+  log_ts_.reset();
   pos_ = 0;
   memset(log_buf_, 0, sizeof(log_buf_));
 }
@@ -668,13 +687,13 @@ void ObAllIDMeta::update_all_id_meta(const ObAllIDMeta &all_id_meta)
   ObSpinLockGuard lock_guard(lock_);
   for(int i=0; i<ObIDService::MAX_SERVICE_TYPE; i++) {
     (void)inc_update(&id_meta_[i].limited_id_, all_id_meta.id_meta_[i].limited_id_);
-    (void)inc_update(&id_meta_[i].latest_log_ts_, all_id_meta.id_meta_[i].latest_log_ts_);
+    id_meta_[i].latest_log_ts_.inc_update(all_id_meta.id_meta_[i].latest_log_ts_);
   }
 }
 
 int ObAllIDMeta::update_id_meta(const int64_t service_type,
                                 const int64_t limited_id,
-                                const int64_t latest_log_ts)
+                                const SCN &latest_log_ts)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard lock_guard(lock_);
@@ -684,14 +703,14 @@ int ObAllIDMeta::update_id_meta(const int64_t service_type,
     TRANS_LOG(WARN, "invalid argument", K(ret), K(service_type));
   } else {
     (void)inc_update(&id_meta_[service_type].limited_id_, limited_id);
-    (void)inc_update(&id_meta_[service_type].latest_log_ts_, latest_log_ts);
+    id_meta_[service_type].latest_log_ts_.inc_update(latest_log_ts);
   }
   return ret;
 }
 
 int ObAllIDMeta::get_id_meta(const int64_t service_type,
                              int64_t &limited_id,
-                             int64_t &latest_log_ts) const
+                             SCN &latest_log_ts) const
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard lock_guard(lock_);
@@ -705,7 +724,6 @@ int ObAllIDMeta::get_id_meta(const int64_t service_type,
   }
   return ret;
 }
-
 
 }
 }

@@ -78,6 +78,7 @@ protected:
   virtual int inner_close() override;
 protected:
   virtual int write_row_to_das_buffer() override;
+  virtual int check_need_exec_single_row() override;
 private:
   int check_match_conditions(const int64_t tbl_idx,
                              const bool have_insert_row,

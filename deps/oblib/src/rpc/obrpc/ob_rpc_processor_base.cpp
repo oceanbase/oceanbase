@@ -37,6 +37,12 @@ namespace oceanbase
 
 namespace obrpc
 {
+int __attribute__((weak)) check_arb_white_list(int64_t cluster_id, bool& is_arb)
+{
+  //do nothing
+  int ret = OB_SUCCESS;
+  return ret;
+}
 
 void ObRpcProcessorBase::reuse()
 {
@@ -105,17 +111,20 @@ int ObRpcProcessorBase::run()
 int ObRpcProcessorBase::check_cluster_id()
 {
   int ret = OB_SUCCESS;
+  bool is_arb = false;
   if (OB_ISNULL(rpc_pkt_)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(ERROR, "rpc_pkt_ should not be NULL", K(ret));
-  }  else if (INVALID_CLUSTER_ID != ObRpcNetHandler::CLUSTER_ID
+  } else if (OB_FAIL(check_arb_white_list(rpc_pkt_->get_src_cluster_id(), is_arb))) {
+    LOG_WARN("arbitration mode, and src_cluster_id not in arb_cluster_id_white_list", K(ret));
+  } else if (!is_arb && INVALID_CLUSTER_ID != ObRpcNetHandler::CLUSTER_ID
               && INVALID_CLUSTER_ID != rpc_pkt_->get_dst_cluster_id()
               && ObRpcNetHandler::CLUSTER_ID != rpc_pkt_->get_dst_cluster_id()) {
     // The verification is turned on locally and does not match the received pkt dst_cluster_id
     ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
     if (REACH_TIME_INTERVAL(500 * 1000)) {
       LOG_WARN("packet dst_cluster_id not match", K(ret), "self.dst_cluster_id", ObRpcNetHandler::CLUSTER_ID,
-               "pkt.dst_cluster_id", rpc_pkt_->get_dst_cluster_id(), "pkt", *rpc_pkt_);
+              "pkt.dst_cluster_id", rpc_pkt_->get_dst_cluster_id(), "pkt", *rpc_pkt_);
     }
   } else if (ObRpcPacket::INVALID_CLUSTER_NAME_HASH != rpc_pkt_->get_cluster_name_hash()
               && ObRpcPacket::INVALID_CLUSTER_NAME_HASH != ObRpcPacket::get_self_cluster_name_hash()
@@ -124,7 +133,7 @@ int ObRpcProcessorBase::check_cluster_id()
     ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
     if (REACH_TIME_INTERVAL(500 * 1000)) {
       RPC_OBRPC_LOG(WARN, "packet cluster name hash not match", K(ret), "self.cluster_name_hash", ObRpcPacket::get_self_cluster_name_hash(),
-               "pkt.cluster_name_hash", rpc_pkt_->get_cluster_name_hash(), "pkt", *rpc_pkt_);
+              "pkt.cluster_name_hash", rpc_pkt_->get_cluster_name_hash(), "pkt", *rpc_pkt_);
     }
   }
   return ret;
@@ -309,7 +318,7 @@ int ObRpcProcessorBase::do_response(const Response &rsp)
         if (rsp.bad_routing_) {
           packet->set_bad_routing();
         }
-        packet->set_unis_version(unis_version_);
+        packet->set_unis_version(0);
         packet->calc_checksum();
         opacket_size = packet->get_clen() + packet->get_header_size() + common::OB_NET_HEADER_LENGTH;
         EVENT_INC(RPC_PACKET_OUT);
@@ -565,7 +574,7 @@ void ObRpcProcessorBase::cleanup()
     if (preserved_buf_) {
       common::ob_free(preserved_buf_);
     } else {
-      RPC_OBRPC_LOG(WARN, "preserved buffer is NULL, maybe alloc fail");
+      RPC_OBRPC_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "preserved buffer is NULL, maybe alloc fail");
     }
   }
 
@@ -585,7 +594,7 @@ void ObRpcProcessorBase::cleanup()
     piece.queue_time_ = get_run_timestamp() - get_enqueue_timestamp();
     piece.process_time_ = common::ObTimeUtility::current_time() - get_run_timestamp();
     if (0 == tenant_id_) {
-      RPC_OBRPC_LOG(WARN, "tenant_id of rpc_pkt is 0");
+      RPC_OBRPC_LOG_RET(WARN, OB_INVALID_ARGUMENT, "tenant_id of rpc_pkt is 0");
     }
     RPC_STAT(static_cast<ObRpcPacketCode>(m_get_pcode()), tenant_id_, piece);
   }

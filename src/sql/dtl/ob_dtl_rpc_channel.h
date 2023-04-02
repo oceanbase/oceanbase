@@ -48,8 +48,9 @@ class ObDtlRpcChannel
   class SendMsgCB : public obrpc::ObDtlRpcProxy::AsyncCB<obrpc::OB_DTL_SEND>
   {
   public:
-    explicit SendMsgCB(SendMsgResponse &response, const common::ObCurTraceId::TraceId trace_id)
-        : response_(response)
+    explicit SendMsgCB(SendMsgResponse &response, const common::ObCurTraceId::TraceId trace_id, const int64_t timeout_ts)
+        : response_(response),
+          timeout_ts_(timeout_ts)
     {
       trace_id_.set(trace_id);
     }
@@ -61,6 +62,7 @@ class ObDtlRpcChannel
   private:
     SendMsgResponse &response_;
     common::ObCurTraceId::TraceId trace_id_;
+    int64_t timeout_ts_;
   };
 
   class SendBCMsgCB : public obrpc::ObDtlRpcProxy::AsyncCB<obrpc::OB_DTL_BC_SEND>
@@ -99,8 +101,6 @@ public:
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
   virtual int send_message(ObDtlLinkedBuffer *&buf);
 
-private:
-  int64_t recv_mock_eof_cnt_;
 };
 
 }  // dtl

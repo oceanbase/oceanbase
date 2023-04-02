@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -18,6 +18,11 @@
 
 namespace obutil
 {
+/**
+ * A monitor is a synchronization construct that allows threads to have both mutual exclusion and the ability to
+ * wait (block) for a certain condition to become false. Monitors also have a mechanism for signaling other threads
+ * that their condition has been met.
+ */
 template <class T>
 class ObMonitor
 {

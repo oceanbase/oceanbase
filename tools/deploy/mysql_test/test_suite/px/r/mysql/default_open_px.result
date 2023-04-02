@@ -7,118 +7,129 @@ create table t1 (c1 int(11) not null, c2 int(11) not null, c3 int(11) not null, 
 
 explain select * from t1;
 Query Plan
-====================================================
-|ID|OPERATOR               |NAME    |EST. ROWS|COST|
-----------------------------------------------------
-|0 |PX COORDINATOR         |        |1        |9   |
-|1 | EXCHANGE OUT DISTR    |:EX10000|1        |8   |
-|2 |  PX PARTITION ITERATOR|        |1        |7   |
-|3 |   TABLE SCAN          |t1      |1        |7   |
-====================================================
-
-Outputs & filters: 
+===========================================================
+|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |PX COORDINATOR         |        |1       |9           |
+|1 | EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|2 |  PX PARTITION ITERATOR|        |1       |7           |
+|3 |   TABLE SCAN          |t1      |1       |7           |
+===========================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256, dop=1
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+      dop=1
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
+      force partition granule
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_px*/ * from t1;
 Query Plan
-====================================================
-|ID|OPERATOR               |NAME    |EST. ROWS|COST|
-----------------------------------------------------
-|0 |PX COORDINATOR         |        |1        |9   |
-|1 | EXCHANGE OUT DISTR    |:EX10000|1        |8   |
-|2 |  PX PARTITION ITERATOR|        |1        |7   |
-|3 |   TABLE SCAN          |t1      |1        |7   |
-====================================================
-
-Outputs & filters: 
+===========================================================
+|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |PX COORDINATOR         |        |1       |9           |
+|1 | EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|2 |  PX PARTITION ITERATOR|        |1       |7           |
+|3 |   TABLE SCAN          |t1      |1       |7           |
+===========================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256, dop=1
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+      dop=1
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
+      force partition granule
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_px parallel(15)*/ * from t1;
 Query Plan
-================================================
-|ID|OPERATOR           |NAME    |EST. ROWS|COST|
-------------------------------------------------
-|0 |PX COORDINATOR     |        |1        |1   |
-|1 | EXCHANGE OUT DISTR|:EX10000|1        |1   |
-|2 |  PX BLOCK ITERATOR|        |1        |1   |
-|3 |   TABLE SCAN      |t1      |1        |1   |
-================================================
-
-Outputs & filters: 
+=======================================================
+|ID|OPERATOR           |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |PX COORDINATOR     |        |1       |1           |
+|1 | EXCHANGE OUT DISTR|:EX10000|1       |1           |
+|2 |  PX BLOCK ITERATOR|        |1       |1           |
+|3 |   TABLE SCAN      |t1      |1       |1           |
+=======================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256, dop=15
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+      dop=15
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+no_use_px */ * from t1;
 Query Plan
-====================================================
-|ID|OPERATOR               |NAME    |EST. ROWS|COST|
-----------------------------------------------------
-|0 |PX COORDINATOR         |        |1        |9   |
-|1 | EXCHANGE OUT DISTR    |:EX10000|1        |8   |
-|2 |  PX PARTITION ITERATOR|        |1        |7   |
-|3 |   TABLE SCAN          |t1      |1        |7   |
-====================================================
-
-Outputs & filters: 
+===========================================================
+|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |PX COORDINATOR         |        |1       |9           |
+|1 | EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|2 |  PX PARTITION ITERATOR|        |1       |7           |
+|3 |   TABLE SCAN          |t1      |1       |7           |
+===========================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256, dop=1
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+      dop=1
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
+      force partition granule
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+no_use_px use_px*/ * from t1;
 Query Plan
-====================================================
-|ID|OPERATOR               |NAME    |EST. ROWS|COST|
-----------------------------------------------------
-|0 |PX COORDINATOR         |        |1        |9   |
-|1 | EXCHANGE OUT DISTR    |:EX10000|1        |8   |
-|2 |  PX PARTITION ITERATOR|        |1        |7   |
-|3 |   TABLE SCAN          |t1      |1        |7   |
-====================================================
-
-Outputs & filters: 
+===========================================================
+|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |PX COORDINATOR         |        |1       |9           |
+|1 | EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|2 |  PX PARTITION ITERATOR|        |1       |7           |
+|3 |   TABLE SCAN          |t1      |1       |7           |
+===========================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256, dop=1
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+      dop=1
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
+      force partition granule
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 explain select /*+use_px no_use_px */ * from t1;
 Query Plan
-====================================================
-|ID|OPERATOR               |NAME    |EST. ROWS|COST|
-----------------------------------------------------
-|0 |PX COORDINATOR         |        |1        |9   |
-|1 | EXCHANGE OUT DISTR    |:EX10000|1        |8   |
-|2 |  PX PARTITION ITERATOR|        |1        |7   |
-|3 |   TABLE SCAN          |t1      |1        |7   |
-====================================================
-
-Outputs & filters: 
+===========================================================
+|ID|OPERATOR               |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |PX COORDINATOR         |        |1       |9           |
+|1 | EXCHANGE OUT DISTR    |:EX10000|1       |8           |
+|2 |  PX PARTITION ITERATOR|        |1       |7           |
+|3 |   TABLE SCAN          |t1      |1       |7           |
+===========================================================
+Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256, dop=1
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3)]), filter(nil), rowset=256
+      dop=1
   2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
-  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256, 
+      force partition granule
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t1.c1], [t1.c2], [t1.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 
 drop table if exists t7;
 create table t7(a int, b int, c int, d int, primary key (a)) partition by hash(a) partitions 3;

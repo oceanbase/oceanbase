@@ -125,7 +125,7 @@ int ObTabletToLSTableOperator::batch_get_ls(
       }
     }
     if (OB_SUCC(ret) && OB_UNLIKELY(ls_ids.count() != tablet_ids.count())) {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_ITEM_NOT_MATCH;
       LOG_WARN("count of ls_ids and tablet_ids do not match,"
           " there may be duplicates or nonexistent values in tablet_ids",
           KR(ret), "tablet_ids count", tablet_ids.count(), "ls_ids count", ls_ids.count(),

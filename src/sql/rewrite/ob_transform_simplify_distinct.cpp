@@ -32,6 +32,7 @@ int ObTransformSimplifyDistinct::transform_one_stmt(common::ObIArray<ObParentDML
     LOG_WARN("stmt is null", K(ret));
   } else if (!stmt->is_select_stmt()) {
     // do nothing
+    OPT_TRACE("not select stmt");
   } else if (OB_FAIL(remove_distinct_on_const_exprs(sel_stmt, is_const_distinct))) {
     LOG_WARN("failed to remove distinct for const exprs", K(ret));
   } else if (OB_FAIL(remove_distinct_on_unique_exprs(sel_stmt, is_unique_distinct))) {
@@ -53,6 +54,7 @@ int ObTransformSimplifyDistinct::remove_distinct_on_const_exprs(ObSelectStmt *st
   bool is_valid = false;
   trans_happened = false;
   ObConstRawExpr *limit_count_expr = NULL;
+  OPT_TRACE("try to remove distinct on const exprs");
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is unexpected null", K(ret), K(stmt), K(ctx_));
@@ -60,6 +62,7 @@ int ObTransformSimplifyDistinct::remove_distinct_on_const_exprs(ObSelectStmt *st
     LOG_WARN("distinct_can_be_eliminated() fails unexpectedly", K(ret));
   } else if (!is_valid) {
     // do nothing
+    OPT_TRACE("can not eliminate");
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
                                                           ObIntType,
                                                           1L,
@@ -90,7 +93,9 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
              stmt->is_calc_found_rows()) {
     // Do nothing for non-select query.
     // When there are `@var := ` assignment, don't eliminate distinct.
-  } else if (stmt->has_distinct() && !stmt->is_set_stmt() && stmt->get_from_item_size() > 0) {
+    OPT_TRACE("stmt has assignment or calc found rows");
+  } else if (stmt->has_distinct() && !stmt->is_set_stmt() && stmt->get_from_item_size() > 0 &&
+             !stmt->has_rollup()) {
     // Only try to eliminate DISTINCT for plain SELECT
     int64_t limit_count = 0;
     const ObConstRawExpr *limit_expr = static_cast<ObConstRawExpr *>(stmt->get_limit_expr());
@@ -105,7 +110,7 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
       ObArenaAllocator alloc;
       ObSEArray<ObRawExpr *, 4> const_exprs;
       const ObIArray<ObRawExpr *> &conditions = stmt->get_condition_exprs();
-      if (OB_FAIL(stmt->get_stmt_equal_sets(equal_sets, alloc, true, EQUAL_SET_SCOPE::SCOPE_ALL))) {
+      if (OB_FAIL(stmt->get_stmt_equal_sets(equal_sets, alloc, true, true))) {
         LOG_WARN("failed to get stmt equal sets", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(conditions, const_exprs))) {
         LOG_WARN("failed to compute const equivalent exprs", K(ret));
@@ -133,13 +138,13 @@ int ObTransformSimplifyDistinct::remove_distinct_on_unique_exprs(ObSelectStmt *s
   int ret = OB_SUCCESS;
   bool is_unique = false;
   ObSEArray<ObRawExpr *, 16> select_exprs;
+  OPT_TRACE("try to remove distinct on unique exprs");
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(ctx_));
   } else if (!stmt->has_distinct()) {
     // do nothing
-  } else if (stmt->get_select_exprs(select_exprs)) {
-    LOG_WARN("failed to get select exprs", K(ret));
+    OPT_TRACE("stmt do not has distinct");
   } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::check_stmt_unique(stmt, ctx_->session_info_,
@@ -151,9 +156,12 @@ int ObTransformSimplifyDistinct::remove_distinct_on_unique_exprs(ObSelectStmt *s
   } else if (is_unique) {
     stmt->assign_all();
     trans_happened = true;
+  } else {
+    OPT_TRACE("select expr is not unique, can not eliminate");
   }
 
   if (OB_SUCC(ret) && stmt->is_set_stmt()) {
+    OPT_TRACE("try to remove child stmt`s distinct for set stmt");
     if (OB_FAIL(remove_child_stmt_distinct(stmt, trans_happened))) {
       LOG_WARN("failed to remove child stmt distinct", K(ret));
     }
@@ -173,6 +181,7 @@ int ObTransformSimplifyDistinct::remove_child_stmt_distinct(ObSelectStmt *set_st
   } else if (!set_stmt->is_set_distinct() ||
              ObSelectStmt::RECURSIVE == set_stmt->get_set_op()) {
     /*do nothing*/
+    OPT_TRACE("union all or recurisve union can not remove distinct");
   } else {
     bool child_happended = false;
     ObIArray<ObSelectStmt*> &child_stmts = set_stmt->get_set_query();
@@ -204,14 +213,18 @@ int ObTransformSimplifyDistinct::try_remove_child_stmt_distinct(ObSelectStmt *st
         || stmt->has_sequence()
         || stmt->has_limit()) {
       /*do nothing*/
+      OPT_TRACE("stmt do not has distinct or has sequence/limit");
     } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
       LOG_WARN("failed to check has rownum", K(ret));
     } else if (!has_rownum) {
       stmt->assign_all();
       trans_happened = true;
+    } else {
+      OPT_TRACE("stmt has rownum");
     }
   } else if (ObSelectStmt::RECURSIVE == stmt->get_set_op() || stmt->has_limit()) {
     /*do nothing*/
+    OPT_TRACE("is recursive union or stmt has limit");
   } else {
     bool child_happended = false;
     ObIArray<ObSelectStmt*> &child_stmts = stmt->get_set_query();

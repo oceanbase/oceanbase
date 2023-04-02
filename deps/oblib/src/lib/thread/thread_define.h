@@ -19,11 +19,12 @@ TG_DEF(TEST3, test3, "", TG_STATIC, DEDUP_QUEUE, ThreadCountPair(1, 1), 8, 8, 16
 TG_DEF(TEST4, test4, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1 ,1))
 TG_DEF(TEST5, test5, "", TG_STATIC, ASYNC_TASK_QUEUE, ThreadCountPair(1 ,1), 16)
 TG_DEF(TEST6, test6, "", TG_STATIC, TIMER_GROUP, ThreadCountPair(2 ,2))
-TG_DEF(TEST7, test7, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(1 ,1))
+TG_DEF(TEST7, test7, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(10 ,10), 10)
+TG_DEF(TEST8, test8, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(1 ,1))
 // other
 TG_DEF(MEMORY_DUMP, memDump, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(SchemaRefTask, SchemaRefTask, "", TG_STATIC, DEDUP_QUEUE, ThreadCountPair(1, 1), 1024, 1024, 1L << 30, 512L << 20, common::OB_MALLOC_BIG_BLOCK_SIZE, common::ObModIds::OB_SCHEMA_DEDUP_QUEUE)
-TG_DEF(CONFIG_MGR, ConfigMgr, "", TG_STATIC, TIMER)
+TG_DEF(CONFIG_MGR, ConfigMgr, "", TG_STATIC, TIMER, 1024)
 TG_DEF(ReqMemEvict, ReqMemEvict, "", TG_DYNAMIC, TIMER)
 TG_DEF(IO_TUNING, IO_TUNING, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(IO_SCHEDULE, IO_SCHEDULE, "", TG_DYNAMIC, THREAD_POOL, ThreadCountPair(1, 1))
@@ -34,4 +35,5 @@ TG_DEF(IO_BENCHMARK, IO_BENCHMARK, "", TG_DYNAMIC, THREAD_POOL, ThreadCountPair(
 TG_DEF(replica_control, replica_control, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(TIMEZONE_MGR, TimezoneMgr, "", TG_STATIC, TIMER)
 TG_DEF(MASTER_KEY_MGR, MasterKeyMgr, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1 ,1), 100)
+TG_DEF(SRS_MGR, SrsMgr, "", TG_STATIC, TIMER)
 #endif

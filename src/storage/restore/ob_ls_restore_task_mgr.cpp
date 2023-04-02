@@ -14,6 +14,7 @@
 #include "ob_ls_restore_task_mgr.h"
 #include "storage/ls/ob_ls.h"
 #include "lib/lock/ob_mutex.h"
+#include "storage/tablet/ob_tablet.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -24,7 +25,7 @@ using namespace logservice;
 
 ObLSRestoreTaskMgr::ObLSRestoreTaskMgr()
   : is_inited_(false),
-    mtx_(),
+    mtx_(ObLatchIds::RESTORE_LOCK),
     tablet_map_(),
     schedule_tablet_set_(),
     wait_tablet_set_()
@@ -72,10 +73,12 @@ void ObLSRestoreTaskMgr::destroy()
   schedule_tablet_set_.destroy();
 }
 
-int ObLSRestoreTaskMgr::pop_need_restore_tablets(ObIArray<ObTabletID> &tablet_need_restore)
+int ObLSRestoreTaskMgr::pop_need_restore_tablets(
+    storage::ObLS &ls, ObIArray<ObTabletID> &tablet_need_restore)
 {
   int ret = OB_SUCCESS;
   tablet_need_restore.reset();
+  ObArray<ObTabletID> need_remove_tablet;
   lib::ObMutexGuard guard(mtx_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -85,13 +88,32 @@ int ObLSRestoreTaskMgr::pop_need_restore_tablets(ObIArray<ObTabletID> &tablet_ne
   } else {
     TabletSet::iterator iter = wait_tablet_set_.begin();
     while (OB_SUCC(ret) && iter != wait_tablet_set_.end()) {
-      if (OB_FAIL(tablet_need_restore.push_back(iter->first))) {
+      bool is_deleted = false;
+      bool is_restored = false;
+      if (OB_FAIL(check_tablet_deleted_or_restored_(ls, iter->first, is_deleted, is_restored))) {
+        LOG_WARN("failed to check tablet deleted or restored", K(ret));
+      } else if (is_deleted || is_restored) {
+        if (OB_FAIL(need_remove_tablet.push_back(iter->first))) {
+          LOG_WARN("failed to push back tablet", K(ret));
+        } else {
+          ++iter;
+        }
+      } else if (OB_FAIL(tablet_need_restore.push_back(iter->first))) {
         LOG_WARN("fail to push backup tablet", K(ret));
       } else if (tablet_need_restore.count() >= OB_LS_RESOTRE_TABLET_DAG_NET_BATCH_NUM) {
         break;
       } else {
         ++iter;
       }
+    }
+
+    if(!need_remove_tablet.empty()) {
+      ARRAY_FOREACH(need_remove_tablet, i) {
+        if (OB_FAIL(wait_tablet_set_.erase_refactored(need_remove_tablet.at(i)))) {
+          LOG_WARN("failed to erase from set", K(ret));
+        }
+      }
+      LOG_INFO("tablets may be deleted or restored and removed from wait set.", K(ls), K(need_remove_tablet));
     }
     if (OB_SUCC(ret)) {
       LOG_INFO("succeed pop need restore tablets", K(tablet_need_restore));
@@ -209,10 +231,9 @@ int ObLSRestoreTaskMgr::schedule_tablet(const ObTaskId &task_id, const ObSArray<
   return ret;
 }
 
-int ObLSRestoreTaskMgr::check_all_task_done(bool &is_all_done)
+int ObLSRestoreTaskMgr::cancel_task()
 {
   int ret = OB_SUCCESS;
-  is_all_done = true;
   bool is_exist = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -221,11 +242,36 @@ int ObLSRestoreTaskMgr::check_all_task_done(bool &is_all_done)
     lib::ObMutexGuard guard(mtx_);
     TaskMap::iterator iter = tablet_map_.begin();
     for (; OB_SUCC(ret) && iter != tablet_map_.end(); ++iter) {
+      is_exist = false;
       if (OB_FAIL(check_task_exist_(iter->first, is_exist))) {
         LOG_WARN("fail to check task exist", K(ret), "taks_id", iter->first);
       } else if (is_exist) {
-        is_all_done = false;
+        ObTenantDagScheduler *scheduler = nullptr;
+        if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+        } else if (OB_FAIL(scheduler->cancel_dag_net(iter->first))) {
+          LOG_WARN("failed to check dag net exist", K(ret), K(iter->first));
+        }
       }
+    }
+
+    int64_t start_ts = ObTimeUtil::current_time();
+    for (; OB_SUCC(ret) && iter != tablet_map_.end(); ++iter) {
+      is_exist = true;
+      do {
+        if (OB_FAIL(check_task_exist_(iter->first, is_exist))) {
+          LOG_WARN("fail to check task exist", K(ret), "taks_id", iter->first);
+        } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+          LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "cancel dag next task cost too much time", K(ret), "task_id", iter->first,
+              "cost_time", ObTimeUtil::current_time() - start_ts);
+        }
+      } while (is_exist && OB_SUCC(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      reuse_set();
+      tablet_map_.reuse();
     }
   }
   return ret;
@@ -346,6 +392,9 @@ int ObLSRestoreTaskMgr::check_tablet_deleted_or_restored_(storage::ObLS &ls, con
   } else if (nullptr == (tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("nullptr tablet", K(ret));
+  } else if (OB_FAIL(ObLSRestoreHandler::check_tablet_deleted(tablet_handle, is_deleted))) {
+    LOG_WARN("failed to check tablet deleted", K(ret), K(tablet_handle));
+  } else if (is_deleted) { // do nothing
   } else {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     if (OB_FAIL(ObLSRestoreHandler::check_tablet_restore_finish_(ls_restore_status, tablet_meta, is_restored))) {

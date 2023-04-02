@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_utils.h"
 #include "storage/tx/ob_trans_service.h"
 #include "logservice/ob_log_service.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -73,6 +74,8 @@ void ObPxTenantTargetMonitor::reset()
   global_target_usage_.clear();
   version_ = UINT64_MAX;
   parallel_session_count_ = 0;
+  print_debug_log_ = false;
+  need_send_refresh_all_ = true;
 }
 
 void ObPxTenantTargetMonitor::set_parallel_servers_target(int64_t parallel_servers_target)
@@ -97,11 +100,13 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
   if (OB_FAIL(get_dummy_leader(leader))) {
     LOG_WARN("get dummy leader fail", K(ret));
   } else if (server_ != leader) {
+    LOG_TRACE("follower refresh statistics", K(tenant_id_), K(server_), K(leader), K(role_), K(version_));
     // 单机情况下，不走全局排队
     if (role_ == LEADER) {
+      LOG_INFO("leader switch to follower", K(tenant_id_), K(server_), K(leader), K(version_));
       role_ = FOLLOWER;
       // from leader to follower, refresh all the statistics
-      if (OB_FAIL(reset_statistics(-1))) {
+      if (OB_FAIL(reset_follower_statistics(-1))) {
         LOG_WARN("reset statisitcs failed", K(ret));
       }
     }
@@ -110,14 +115,18 @@ int ObPxTenantTargetMonitor::refresh_statistics(bool need_refresh_all)
     }
   } else {
     // 只有leader能进，可以无主，但不能多主
+    LOG_TRACE("leader refresh statistics", K(tenant_id_), K(server_), K(leader), K(role_), K(need_refresh_all), K(version_));
     if (role_ == FOLLOWER || need_refresh_all) {
       role_ = LEADER;
       // from follower to leader or observer is not longer alive, refresh all the statistics
-      if (OB_FAIL(reset_statistics(version_ + 1))) {
+      if (OB_FAIL(reset_leader_statistics())) {
         LOG_WARN("reset statisitcs failed", K(ret));
       }
-      LOG_INFO("refresh global_target_usage_", K(version_), K(server_));
+      LOG_INFO("refresh global_target_usage_", K(tenant_id_), K(version_), K(server_), K(need_refresh_all));
     }
+  }
+  if (!print_debug_log_ && OB_SUCCESS != OB_E(EventTable::EN_PX_PRINT_TARGET_MONITOR_LOG) OB_SUCCESS) {
+    print_debug_log_ = true;
   }
   return ret;
 }
@@ -214,13 +223,13 @@ int ObPxTenantTargetMonitor::refresh_dummy_location()
       } else if (OB_FAIL(location_adapter->nonblock_renew(cluster_id_, tenant_id_, SYS_LS))) {
         LOG_WARN("nonblock renew failed", K(ret));
       } else {
-        LOG_INFO("refresh locatition cache for target_monitor", K(refresh_ctrl));
+        LOG_INFO("refresh locatition cache for target_monitor", K(tenant_id_), K(refresh_ctrl));
       }
     } else {
       LOG_WARN("switch to tenant failed", K(tenant_id_));
     }
   } else {
-    LOG_INFO("waiting for refresh locatition cache for target_monitor", K(refresh_ctrl));
+    LOG_INFO("waiting for refresh locatition cache for target_monitor", K(tenant_id_), K(refresh_ctrl));
   }
   return ret;
 }
@@ -230,37 +239,37 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
   int ret = OB_SUCCESS;
   // send once in 100ms, 1s timeout should be more appropriate than default
   static const int64_t OB_TARGET_MONITOR_RPC_TIMEOUT = 1000 * 1000; // 1s
-  ObPxRpcFetchStatArgs args;
+  ObPxRpcFetchStatArgs args(tenant_id_, version_, need_send_refresh_all_);
   SMART_VAR(ObPxRpcFetchStatResponse, result) {
-    args.set_tenant_id(tenant_id_);
-    args.set_version(version_);
-    for (hash::ObHashMap<ObAddr, ServerTargetUsage>::iterator it = global_target_usage_.begin();
-        OB_SUCC(ret) && it != global_target_usage_.end(); ++it) {
-      auto report_local_used = [&](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> int {
-        int ret = OB_SUCCESS;
-        // 和上次汇报相比，本机又消耗了entry 机器几个资源，把这个数目汇报给 leader，leader 会把这个值加到全局统计中。
-        // 为什么是汇报“增量”呢？因为 entry 机器的资源被多台机器使用，任何一个人都拿不到全量数据
-        if (OB_FAIL(args.push_local_target_usage(entry.first, entry.second.get_local_used() - entry.second.get_report_used()))) {
-          LOG_WARN("push server and target_usage failed", K(ret));
-        } else {
-          entry.second.set_report_used(entry.second.get_local_used());
-        }
-        return ret;
-      };
+    need_send_refresh_all_ = false;
+    if (!args.need_refresh_all()) {
+      for (hash::ObHashMap<ObAddr, ServerTargetUsage>::iterator it = global_target_usage_.begin();
+          OB_SUCC(ret) && it != global_target_usage_.end(); ++it) {
+        auto report_local_used = [&](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> int {
+          int ret = OB_SUCCESS;
+          // 和上次汇报相比，本机又消耗了entry 机器几个资源，把这个数目汇报给 leader，leader 会把这个值加到全局统计中。
+          // 为什么是汇报“增量”呢？因为 entry 机器的资源被多台机器使用，任何一个人都拿不到全量数据
+          if (OB_FAIL(args.push_local_target_usage(entry.first, entry.second.get_local_used() - entry.second.get_report_used()))) {
+            LOG_WARN("push server and target_usage failed", K(ret));
+          } else {
+            entry.second.set_report_used(entry.second.get_local_used());
+          }
+          return ret;
+        };
 
-      if (OB_FAIL(global_target_usage_.atomic_refactored(it->first, report_local_used))) {
-        LOG_WARN("atomic refactored, report_local_used failed", K(ret));
+        if (OB_FAIL(global_target_usage_.atomic_refactored(it->first, report_local_used))) {
+          LOG_WARN("atomic refactored, report_local_used failed", K(ret));
+        }
       }
     }
-    bool need_rollback = false;
     if (OB_FAIL(rpc_proxy_
                 .to(leader)
                 .by(tenant_id_)
                 .timeout(OB_TARGET_MONITOR_RPC_TIMEOUT)
                 .fetch_statistics(args, result))) {
-      need_rollback = true;
-      LOG_WARN("send rpc to query statistics failed", K(ret));
-      ret = OB_SUCCESS;
+      // whether leader receive the rpc is unknown
+      need_send_refresh_all_ = true;
+      LOG_WARN("send rpc to query statistics failed, need send refresh all", K(ret));
     } else if (result.get_status() == MONITOR_READY) {
       for (int i = 0; OB_SUCC(ret) && i < result.addr_target_array_.count(); i++) {
         ObAddr &server = result.addr_target_array_.at(i).addr_;
@@ -271,27 +280,12 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
       }
     } else if (result.get_status() == MONITOR_NOT_MASTER) {
       refresh_dummy_location();
+      need_send_refresh_all_ = true;
+      LOG_INFO("report to not master, need send refresh all", K(tenant_id_), K(leader), K(version_));
     } else if (result.get_status() == MONITOR_VERSION_NOT_MATCH) {
       uint64_t leader_version = result.get_version();
-      if (OB_FAIL(reset_statistics(leader_version))) {
-        LOG_WARN("reset statistics failed", K(ret));
-      }
-    }
-
-    if (need_rollback) {
-      refresh_dummy_location();
-      for (int i = 0; OB_SUCC(ret) && i < args.addr_target_array_.count(); i++) {
-        ObAddr &server = args.addr_target_array_.at(i).addr_;
-        int64_t report_target_usage = args.addr_target_array_.at(i).target_;
-        if (OB_FAIL(rollback_local_report_target_used(server, report_target_usage))) {
-          LOG_WARN("rollback local report target_used failed", K(ret), K(server), K(report_target_usage));
-        }
-      }
-    }
-
-    // A simple and rude exception handling, re-statistics
-    if (OB_FAIL(ret)) {
-      if (OB_FAIL(reset_statistics(0))) {
+      LOG_INFO("monitor version not match", K(tenant_id_), K(leader_version), K(version_));
+      if (OB_FAIL(reset_follower_statistics(leader_version))) {
         LOG_WARN("reset statistics failed", K(ret));
       }
     }
@@ -315,26 +309,39 @@ int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64
 {
   int ret = OB_SUCCESS;
   ServerTargetUsage target_usage;
-  if (OB_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
-    if (ret != OB_HASH_NOT_EXIST) {
-      LOG_WARN("get refactored failed", K(ret));
+  if (print_debug_log_) {
+    LOG_INFO("update_peer_target_used", K(tenant_id_), K(is_leader()), K(version_), K(server), K(peer_used));
+  }
+  auto update_peer_used = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
+    if (is_leader()) {
+      entry.second.update_peer_used(peer_used);
+      if (OB_UNLIKELY(entry.second.get_peer_used() < 0)) {
+        LOG_ERROR("peer used negative", K(tenant_id_), K(version_), K(server), K(peer_used));
+      }
     } else {
-      target_usage.set_peer_used(peer_used);
-      if (OB_FAIL(global_target_usage_.set_refactored(server, target_usage))) {
-        LOG_WARN("set refactored failed", K(ret));
+      entry.second.set_peer_used(peer_used);
+    }
+  };
+  if (OB_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
+    LOG_WARN("get refactored failed", K(ret), K(tenant_id_), K(server), K(version_));
+    if (ret != OB_HASH_NOT_EXIST) {
+    } else {
+      ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
+      if (OB_FAIL(global_target_usage_.get_refactored(server, target_usage))) {
+        if (ret != OB_HASH_NOT_EXIST) {
+          LOG_WARN("get refactored failed", K(ret));
+        } else {
+          target_usage.set_peer_used(peer_used);
+          if (OB_FAIL(global_target_usage_.set_refactored(server, target_usage))) {
+            LOG_WARN("set refactored failed", K(ret));
+          }
+        }
+      } else if (OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
+        LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
       }
     }
-  } else {
-    auto update_peer_used = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
-      if (is_leader()) {
-        entry.second.update_peer_used(peer_used);
-      } else {
-        entry.second.set_peer_used(peer_used);
-      }
-    };
-    if (OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
-      LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
-    }
+  } else if (OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
+    LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
   }
   return ret;
 }
@@ -358,15 +365,31 @@ int ObPxTenantTargetMonitor::get_global_target_usage(const hash::ObHashMap<ObAdd
   return ret;
 }
 
-int ObPxTenantTargetMonitor::reset_statistics(uint64_t version)
+int ObPxTenantTargetMonitor::reset_follower_statistics(uint64_t version)
 {
   int ret = OB_SUCCESS;
+  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
   global_target_usage_.clear();
   if (OB_FAIL(global_target_usage_.set_refactored(server_, ServerTargetUsage()))) {
     LOG_WARN("set refactored failed", K(ret));
   } else {
     version_ = version;
   }
+  LOG_INFO("reset follower statistics", K(tenant_id_), K(ret), K(version));
+  return ret;
+}
+
+int ObPxTenantTargetMonitor::reset_leader_statistics()
+{
+  int ret = OB_SUCCESS;
+  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
+  global_target_usage_.clear();
+  if (OB_FAIL(global_target_usage_.set_refactored(server_, ServerTargetUsage()))) {
+    LOG_WARN("set refactored failed", K(ret));
+  } else {
+    version_ = get_new_version();
+  }
+  LOG_INFO("reset leader statistics", K(tenant_id_), K(ret), K(version_), K(GCTX.server_id_));
   return ret;
 }
 
@@ -380,7 +403,7 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
   bool need_wait = false;
   if (OB_SUCC(ret)) {
     ObLockGuard<ObSpinLock> lock_guard(spin_lock_); // Just for avoid multiple SQL applications at the same time
-    // for pmas https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/4804361
+    // for pmas
     int64_t target = session_target != INT64_MAX ? session_target : parallel_servers_target_;
     uint64_t version = version_;
     bool is_first_query = true;
@@ -432,8 +455,8 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
           };
           if (OB_FAIL(global_target_usage_.atomic_refactored(server, apply_local_target))) {
             LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
-          } else {
-            LOG_TRACE("apply target success", K(server), K(acquired_cnt),
+          } else if (print_debug_log_) {
+            LOG_INFO("apply target success", K(tenant_id_), K(server), K(acquired_cnt), K(version), K(version_),
                                               K(parallel_servers_target_));
           }
         }
@@ -478,14 +501,14 @@ int ObPxTenantTargetMonitor::release_target(hash::ObHashMap<ObAddr, int64_t> &wo
       };
       if (OB_FAIL(global_target_usage_.atomic_refactored(server, release_local_target))) {
         LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
-      } else {
-        LOG_TRACE("release target success", K(server), K(acquired_cnt),
+      } else if (print_debug_log_) {
+        LOG_INFO("release target success", K(tenant_id_), K(server), K(acquired_cnt), K(version_),
                                             K(parallel_servers_target_));
       }
     }
     target_cond_.notifyAll();
   } else {
-    LOG_INFO("version changed", K(version_), K(version));
+    LOG_INFO("version changed", K(tenant_id_), K(version_), K(version));
   }
   parallel_session_count_--;
   return ret;
@@ -517,6 +540,18 @@ int ObPxTenantTargetMonitor::get_all_target_info(common::ObIArray<ObPxTargetInfo
     LOG_WARN("foreach refactored get_target_info failed", K(ret));
   }
   return ret;
+}
+
+uint64_t ObPxTenantTargetMonitor::get_new_version()
+{
+  uint64_t current_time = common::ObTimeUtility::current_time();
+	uint64_t svr_id = GCTX.server_id_;
+	uint64_t new_version = ((current_time & 0x0000FFFFFFFFFFFF) | (svr_id << SERVER_ID_SHIFT));
+  return new_version;
+}
+
+uint64_t ObPxTenantTargetMonitor::get_server_id(uint64_t version) {
+  return (version >> SERVER_ID_SHIFT);
 }
 
 int ObPxTargetCond::wait(const int64_t wait_time_us)

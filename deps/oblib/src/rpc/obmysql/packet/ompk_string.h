@@ -44,6 +44,7 @@ public:
     }
     return ret;
   }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_STR; }
 
   VIRTUAL_TO_STRING_KV("header", hdr_, K_(str));
 

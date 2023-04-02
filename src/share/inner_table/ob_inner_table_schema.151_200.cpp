@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_macro_define.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -2900,7 +2901,7 @@ int ObInnerTableSchema::all_restore_job_schema(ObTableSchema &table_schema)
 
   if (OB_SUCC(ret)) {
     ObObj value_default;
-    value_default.set_lob_value(ObLongTextType, "", strlen(""));
+    value_default.set_lob_value(ObLongTextType, "", static_cast<int32_t>(strlen("")));
     ADD_COLUMN_SCHEMA_T("value", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -4877,6 +4878,25 @@ int ObInnerTableSchema::all_synonym_schema(ObTableSchema &table_schema)
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj status_default;
+    status_default.set_int(1);
+    ADD_COLUMN_SCHEMA_T("status", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      status_default,
+      status_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -5097,6 +5117,25 @@ int ObInnerTableSchema::all_synonym_history_schema(ObTableSchema &table_schema)
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj status_default;
+    status_default.set_int(1);
+    ADD_COLUMN_SCHEMA_T("status", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      status_default,
+      status_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
@@ -5278,6 +5317,25 @@ int ObInnerTableSchema::all_auto_increment_schema(ObTableSchema &table_schema)
       -1, //column_scale
       false, //is_nullable
       false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj truncate_version_default;
+    truncate_version_default.set_int(-1);
+    ADD_COLUMN_SCHEMA_T("truncate_version", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      truncate_version_default,
+      truncate_version_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

@@ -17,7 +17,7 @@
 #include "share/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-#include "sql/monitor/full_link_trace/ob_flt_control_info_mgr.h"
+#include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 namespace oceanbase
 {
 
@@ -30,16 +30,11 @@ int ObDBMSAppInfo::read_client_info(sql::ObExecContext &ctx, sql::ParamStore &pa
   int ret = OB_SUCCESS;
   ObString client_info;
   UNUSED(result);
-  if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_3_2_3_0)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cluster is not ready, and dbms_application_info not support");
-  } else {
-    CK (OB_NOT_NULL(ctx.get_my_session()));
-    CK (OB_LIKELY(1 == params.count()));
-    OV (params.at(0).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
-    client_info = ctx.get_my_session()->get_client_info();
-    params.at(0).set_varchar(client_info);
-  }
+  CK (OB_NOT_NULL(ctx.get_my_session()));
+  CK (OB_LIKELY(1 == params.count()));
+  OV (params.at(0).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
+  client_info = ctx.get_my_session()->get_client_info();
+  params.at(0).set_varchar(client_info);
   return ret;
 }
 // this is a procedure, and not need to return result
@@ -49,19 +44,14 @@ int ObDBMSAppInfo::read_module(sql::ObExecContext &ctx, sql::ParamStore &params,
   ObString module_name;
   ObString action_name;
   UNUSED(result);
-  if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_3_2_3_0)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cluster is not ready, and dbms_application_info not support");
-  } else {
-    CK (OB_NOT_NULL(ctx.get_my_session()));
-    CK (OB_LIKELY(2 == params.count()));
-    OV (params.at(0).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
-    OV (params.at(1).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
-    module_name = ctx.get_my_session()->get_module_name();
-    action_name = ctx.get_my_session()->get_action_name();
-    params.at(0).set_varchar(module_name);
-    params.at(1).set_varchar(action_name);
-  }
+  CK (OB_NOT_NULL(ctx.get_my_session()));
+  CK (OB_LIKELY(2 == params.count()));
+  OV (params.at(0).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
+  OV (params.at(1).get_param_meta().is_varchar(), OB_INVALID_ARGUMENT);
+  module_name = ctx.get_my_session()->get_module_name();
+  action_name = ctx.get_my_session()->get_action_name();
+  params.at(0).set_varchar(module_name);
+  params.at(1).set_varchar(action_name);
   return ret;
 }
 // this is a procedure, and not need to return result
@@ -74,9 +64,6 @@ int ObDBMSAppInfo::set_action(sql::ObExecContext &ctx, sql::ParamStore &params, 
   ObSQLSessionInfo* sess = const_cast<ObSQLSessionInfo*>(ctx.get_my_session());
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_3_2_3_0)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cluster is not ready, and dbms_application_info not support");
   } else if (sess->is_obproxy_mode() && !sess->is_ob20_protocol()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "oceanbase 2.0 protocol is not ready, and dbms_application_info not support");
@@ -110,9 +97,6 @@ int ObDBMSAppInfo::set_client_info(sql::ObExecContext &ctx, sql::ParamStore &par
   ObSQLSessionInfo* sess = const_cast<ObSQLSessionInfo*>(ctx.get_my_session());
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_3_2_3_0)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cluster is not ready, and dbms_application_info not support");
   } else if (sess->is_obproxy_mode() && !sess->is_ob20_protocol()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "oceanbase 2.0 protocol is not ready, and dbms_application_info not support");
@@ -151,9 +135,6 @@ int ObDBMSAppInfo::set_module(sql::ObExecContext &ctx, sql::ParamStore &params, 
   ObSQLSessionInfo* sess = const_cast<ObSQLSessionInfo*>(ctx.get_my_session());
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_3_2_3_0)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cluster is not ready, and dbms_application_info not support");
   } else if (sess->is_obproxy_mode() && !sess->is_ob20_protocol()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "oceanbase 2.0 protocol is not ready, and dbms_application_info not support");

@@ -37,7 +37,7 @@ public:
   virtual ~ObUpgradeUtils() {}
   static int can_run_upgrade_job(rootserver::ObRsJobType job_type, bool &can);
   static int check_upgrade_job_passed(rootserver::ObRsJobType job_type);
-  static int check_schema_sync(bool &is_sync);
+  static int check_schema_sync(const uint64_t tenant_id, bool &is_sync);
   // upgrade_sys_variable()/upgrade_sys_stat() can be called when enable_ddl = false.
   static int upgrade_sys_variable(
              obrpc::ObCommonRpcProxy &rpc_proxy,
@@ -165,13 +165,29 @@ class ObUpgradeChecker
 {
 public:
   static bool check_data_version_exist(const uint64_t version);
+  static int get_data_version_by_cluster_version(
+             const uint64_t cluster_version,
+             uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 1;
+  static const int64_t DATA_VERSION_NUM = 2;
   static const uint64_t UPGRADE_PATH[DATA_VERSION_NUM];
 };
 
 /* =========== special upgrade processor start ============= */
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 0, 0, 0)
+class ObUpgradeFor4100Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4100Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4100Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_srs();
+  int post_upgrade_for_backup();
+  int init_rewrite_rule_version(const uint64_t tenant_id);
+  static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

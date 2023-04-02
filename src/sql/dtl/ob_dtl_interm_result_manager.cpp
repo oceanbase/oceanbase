@@ -165,6 +165,18 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
   }
 }
 
+int ObEraseTenantIntermResultInfo::operator() (common::hash::HashMapPair<ObDTLIntermResultKey, ObDTLIntermResultInfo *> &entry)
+{
+  int ret = OB_SUCCESS;
+  if (entry.second->tenant_id_ == tenant_id_) {
+    if (OB_FAIL(expire_keys_.push_back(entry.first))) {
+      LOG_WARN("push back failed", K(ret));
+      ret_ = ret;
+    }
+  }
+  return OB_SUCCESS;
+}
+
 ObDTLIntermResultManager &ObDTLIntermResultManager::getInstance()
 {
   static ObDTLIntermResultManager the_ir_manager;
@@ -232,6 +244,7 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     result_info->is_read_ = false;
     result_info->trace_id_ = *ObCurTraceId::get_trace_id();
     result_info->monitor_info_ = monitor_info;
+    result_info->tenant_id_ = attr.tenant_id_;
     result_info_guard.set_result_info(*result_info);
   }
   if (OB_FAIL(ret)) {
@@ -383,6 +396,35 @@ int ObDTLIntermResultManager::generate_monitor_info_rows(observer::ObDTLIntermRe
   if (OB_FAIL(map_.foreach_refactored(monitor_info_getter))) {
     LOG_WARN("fail to generate monitor info array from map", K(ret));
   }
+  LOG_TRACE("generate monitor info rows", K(ret), K(map_.size()));
+  return ret;
+}
+
+int ObDTLIntermResultManager::erase_tenant_interm_result_info(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObEraseTenantIntermResultInfo eraser;
+  eraser.tenant_id_ = tenant_id;
+  if (OB_FAIL(map_.foreach_refactored(eraser))) {
+    LOG_WARN("fail to get tenant result info in result manager", K(ret), K(tenant_id));
+  } else {
+    ret = eraser.ret_;
+    for (int i = 0; i < eraser.expire_keys_.count(); ++i) {
+      ObDTLIntermResultKey &key = eraser.expire_keys_.at(i);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+        if (OB_HASH_NOT_EXIST != tmp_ret) {
+          LOG_WARN("fail to erase result info", K(key), K(ret));
+          ret = tmp_ret;
+        }
+      }
+    }
+    if (eraser.expire_keys_.count() < 100) {
+      LOG_INFO("erase_tenant_interm_result_info", K(tenant_id), K(eraser.expire_keys_));
+    } else {
+      LOG_INFO("erase_tenant_interm_result_info", K(tenant_id), K(eraser.expire_keys_.count()));
+    }
+  }
   return ret;
 }
 
@@ -510,7 +552,7 @@ void ObDTLIntermResultManager::dec_interm_result_ref_count(ObDTLIntermResultInfo
     int64_t ref_count = result_info->dec_ref_count();
     if (ref_count <= 0) {
       if (OB_UNLIKELY(ref_count < 0)) {
-        LOG_ERROR("ref count of interm result < 0", K(ref_count), KPC(result_info));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ref count of interm result < 0", K(ref_count), KPC(result_info));
       }
       free_interm_result_info(result_info);
       result_info = NULL;

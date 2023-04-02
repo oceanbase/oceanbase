@@ -26,6 +26,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+
 /**
  * ---------------------------------------ObMacroBlockHandle----------------------------------------
  */
@@ -111,6 +112,15 @@ int ObMacroBlockHandle::report_bad_block() const
   return ret;
 }
 
+uint64_t ObMacroBlockHandle::get_tenant_id()
+{
+  uint64_t tenant_id = MTL_ID();
+  if (is_virtual_tenant_id(tenant_id) || 0 == tenant_id) {
+    tenant_id = OB_SERVER_TENANT_ID; // use 500 tenant in io manager
+  }
+  return tenant_id;
+}
+
 int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
@@ -120,13 +130,14 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
   } else {
     reuse();
     ObIOInfo io_info;
-    io_info.tenant_id_ = MTL_ID();
+    io_info.tenant_id_ = get_tenant_id();
     io_info.offset_ = read_info.offset_;
     io_info.size_ = static_cast<int32_t>(read_info.size_);
     io_info.flag_ = read_info.io_desc_;
     io_info.callback_ = read_info.io_callback_;
     io_info.fd_.first_id_ = read_info.macro_block_id_.first_id();
     io_info.fd_.second_id_ = read_info.macro_block_id_.second_id();
+    io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
 
     io_info.flag_.set_read();
     if (OB_FAIL(ObIOManager::get_instance().aio_read(io_info, io_handle_))) {
@@ -146,18 +157,23 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     LOG_WARN("Invalid argument", K(ret), K(write_info));
   } else {
     ObIOInfo io_info;
-    io_info.tenant_id_ = MTL_ID();
+    io_info.tenant_id_ = get_tenant_id();
     io_info.offset_ = write_info.offset_;
     io_info.size_ = write_info.size_;
     io_info.buf_ = write_info.buffer_;
     io_info.flag_ = write_info.io_desc_;
     io_info.fd_.first_id_ = macro_id_.first_id();
     io_info.fd_.second_id_ = macro_id_.second_id();
+    io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
 
     io_info.flag_.set_write();
     if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle_))) {
       LOG_WARN("Fail to aio_write", K(ret), K(write_info));
     } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(macro_id_))) {
+        LOG_WARN("fail to update write time for macro block", K(tmp_ret), K(macro_id_));
+      }
       FLOG_INFO("Async write macro block", K(macro_id_));
     }
   }
@@ -268,7 +284,7 @@ void ObMacroBlocksHandle::reset()
 
     for (int64_t i = 0; i < macro_id_list_.count(); ++i) {
       if (OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id_list_.at(i)))) {
-        LOG_ERROR("failed to dec macro block ref cnt", K(tmp_ret), "macro_id", macro_id_list_.at(i));
+        LOG_ERROR_RET(tmp_ret, "failed to dec macro block ref cnt", K(tmp_ret), "macro_id", macro_id_list_.at(i));
       }
     }
   }
@@ -285,5 +301,6 @@ int ObMacroBlocksHandle::reserve(const int64_t block_cnt)
   }
   return ret;
 }
+
 } // namespace blocksstable
 } // namespace oceanbase

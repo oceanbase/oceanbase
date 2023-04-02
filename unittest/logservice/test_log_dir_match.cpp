@@ -13,7 +13,6 @@
 #include <gtest/gtest.h>
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
-#include "lib/regex/ob_regex.h"
 #include "lib/oblog/ob_log.h"
 #include <gtest/gtest.h>
 #include <regex>

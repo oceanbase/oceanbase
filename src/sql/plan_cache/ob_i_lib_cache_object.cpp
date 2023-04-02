@@ -50,7 +50,7 @@ void ObILibCacheObject::reset()
 void ObILibCacheObject::dump_deleted_log_info(const bool is_debug_log /* = true */) const
 {
   if (is_debug_log) {
-    SQL_PC_LOG(WARN, "Dumping Cache Deleted Info",
+    SQL_PC_LOG_RET(WARN, OB_SUCCESS, "Dumping Cache Deleted Info",
                K(object_id_),
                K(tenant_id_),
                K(added_to_lc_),
@@ -96,7 +96,7 @@ int64_t ObILibCacheObject::inc_ref_count(const CacheRefHandleID ref_handle)
 {
   int ret = OB_SUCCESS;
   if (GCONF._enable_plan_cache_mem_diagnosis) {
-    ObPlanCache *lib_cache = ObCacheObjectFactory::get_plan_cache(tenant_id_);
+    ObPlanCache *lib_cache = MTL(ObPlanCache*);
     if (OB_ISNULL(lib_cache)) {
       LOG_ERROR("invalid null lib cache", K(ret));
     } else {
@@ -110,7 +110,7 @@ int64_t ObILibCacheObject::dec_ref_count(const CacheRefHandleID ref_handle)
 {
   int ret = OB_SUCCESS;
   if (GCONF._enable_plan_cache_mem_diagnosis) {
-    ObPlanCache *lib_cache = ObCacheObjectFactory::get_plan_cache(tenant_id_);
+    ObPlanCache *lib_cache = MTL(ObPlanCache*);
     if (OB_ISNULL(lib_cache)) {
       LOG_ERROR("invalid null lib cache", K(ret));
     } else {

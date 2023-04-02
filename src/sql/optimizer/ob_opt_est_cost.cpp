@@ -431,7 +431,7 @@ int ObOptEstCost::estimate_width_for_table(const OptTableMetas &table_metas,
         // do nothing
       } else {
         int64_t avg_len = 0;
-        if (OB_NOT_NULL(table_meta) &&
+        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
             OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                 table_meta->get_ref_table_id(),
                                                                 table_meta->get_all_used_parts(),
@@ -479,7 +479,7 @@ int ObOptEstCost::estimate_width_for_exprs(const OptTableMetas &table_metas,
         int64_t avg_len = 0;
         const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
         // base table column expr use statistic
-        if (OB_NOT_NULL(table_meta) &&
+        if (OB_NOT_NULL(table_meta) && table_meta->use_opt_stat() &&
             OB_FAIL(ctx.get_opt_stat_manager()->get_column_stat(ctx.get_session_info()->get_effective_tenant_id(),
                                                                 table_meta->get_ref_table_id(),
                                                                 table_meta->get_all_used_parts(),
@@ -607,6 +607,12 @@ int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_inf
     LOG_WARN("failed to calculate selectivity", K(est_cost_info.pushdown_prefix_filters_), K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
                                                              *est_cost_info.sel_ctx_,
+                                                             est_cost_info.ss_postfix_range_filters_,
+                                                             est_cost_info.ss_postfix_range_filters_sel_,
+                                                             all_predicate_sel))) {
+    LOG_WARN("failed to calculate selectivity", K(est_cost_info.ss_postfix_range_filters_), K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
+                                                             *est_cost_info.sel_ctx_,
                                                              est_cost_info.postfix_filters_,
                                                              est_cost_info.postfix_filter_sel_,
                                                              all_predicate_sel))) {
@@ -622,6 +628,7 @@ int ObOptEstCost::calculate_filter_selectivity(ObCostTableScanInfo &est_cost_inf
         K(est_cost_info.prefix_filters_), K(est_cost_info.pushdown_prefix_filters_),
         K(est_cost_info.postfix_filters_), K(est_cost_info.table_filters_),
         K(est_cost_info.prefix_filter_sel_), K(est_cost_info.pushdown_prefix_filter_sel_),
+        K(est_cost_info.ss_postfix_range_filters_), K(est_cost_info.ss_postfix_range_filters_sel_),
         K(est_cost_info.postfix_filter_sel_), K(est_cost_info.table_filter_sel_));
   }
   return ret;

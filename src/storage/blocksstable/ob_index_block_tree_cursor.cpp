@@ -303,7 +303,7 @@ int ObIndexBlockTreeCursor::init(
     tenant_id_ = MTL_ID();
     const ObSSTableMeta &sstable_meta = sstable.get_meta();
     ObRowStoreType root_row_store_type
-        = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().row_store_type_);
+        = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
     curr_path_item_->row_store_type_ = root_row_store_type;
     read_info_ = read_info;
     rowkey_column_cnt_ = read_info_->get_rowkey_count();
@@ -367,6 +367,7 @@ int ObIndexBlockTreeCursor::drill_down(
     while (OB_SUCC(ret) && 0 == cmp_ret) {
       if (OB_FAIL(get_current_endkey(tmp_endkey, compare_schema_rowkey))) {
         LOG_WARN("Fail to get current endkey", K(ret));
+      } else if (FALSE_IT(tmp_endkey.datum_cnt_ = rowkey.datum_cnt_)) {
       } else if (OB_FAIL(tmp_endkey.compare(
           rowkey,
           read_info_->get_datum_utils(),
@@ -428,7 +429,7 @@ int ObIndexBlockTreeCursor::drill_down(
         } else {
           curr_path_item_->is_root_micro_block_ = true;
           curr_path_item_->row_store_type_
-              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().row_store_type_);
+              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
         }
 
         if (OB_FAIL(ret)) {
@@ -458,7 +459,7 @@ int ObIndexBlockTreeCursor::drill_down(
         } else {
           curr_path_item_->is_root_micro_block_ = true;
           curr_path_item_->row_store_type_
-              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().row_store_type_);
+              = static_cast<ObRowStoreType>(sstable_meta.get_basic_meta().root_row_store_type_);
         }
 
         while (OB_SUCC(ret) && !reach_target_depth) {
@@ -976,14 +977,21 @@ int ObIndexBlockTreeCursor::get_next_level_block(
     const ObIndexBlockRowHeader &idx_row_header)
 {
   int ret = OB_SUCCESS;
+  int64_t absolute_offset = 0;
   if (OB_UNLIKELY(!macro_block_id.is_valid() || !idx_row_header.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid macro block id or index block row data",
         K(ret), K(macro_block_id), K(idx_row_header));
+  } else {
+    absolute_offset = sstable_->get_macro_offset() + idx_row_header.get_block_offset();
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(index_block_cache_->get_cache_block(
       tenant_id_,
       macro_block_id,
-      idx_row_header.get_block_offset(),
+      absolute_offset,
       idx_row_header.get_block_size(),
       curr_path_item_->cache_handle_))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
@@ -999,10 +1007,9 @@ int ObIndexBlockTreeCursor::get_next_level_block(
       ObMicroBlockDesMeta block_des_meta;
       bool is_compressed = false;
       read_info.macro_block_id_ = macro_block_id;
-      read_info.offset_ = idx_row_header.get_block_offset();
+      read_info.offset_ = absolute_offset;
       read_info.size_ = idx_row_header.get_block_size();
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      read_info.io_desc_.set_category(ObIOCategory::USER_IO);
       idx_row_header.fill_deserialize_meta(block_des_meta);
       if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
         LOG_WARN("Fail to read micro block from sync io", K(ret));

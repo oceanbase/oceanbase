@@ -29,6 +29,11 @@ namespace storage
 using namespace blocksstable;
 using namespace common;
 
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+
 static int get_number(const char *str, const char *&endpos, int64_t &num)
 {
   int ret = OB_SUCCESS;
@@ -619,7 +624,7 @@ public:
 private:
   void set_tablet_size(int64_t tablet_size)
   {
-    table_schema_.tablet_size_ = tablet_size;
+    storage_schema_.tablet_size_ = tablet_size;
     range_spliter_.tablet_size_ = tablet_size;
   }
   void set_major_sstable_meta(int64_t macro_block_count, int64_t occupy_size, int64_t row_count)
@@ -654,7 +659,7 @@ private:
   share::ObTenantBase tenant_base_;
   ObArenaAllocator allocator_;
   compaction::ObTabletMergeDagParam param_;
-  share::schema::ObTableSchema table_schema_;
+  ObStorageSchema storage_schema_;
   ObTablet tablet_;
   ObMockSSTableV2 major_sstable_;
   ObSSTable minor_sstable_;  // 增量
@@ -682,13 +687,14 @@ void TestPartitionIncrementalRangeSliter::SetUp()
     ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
 
     // table schema
-    table_schema_.tablet_size_ = 1024;
-    table_schema_.rowkey_column_num_ = ObMockDatumRowkey::COLUMN_NUM;
-    ObRowkeyColumn rowkey_col;
-    rowkey_col.column_id_ = 1;
-    rowkey_col.type_.set_int();
+    storage_schema_.tablet_size_ = 1024;
+    storage_schema_.rowkey_array_.set_allocator(&allocator_);
+    storage_schema_.rowkey_array_.reserve(1);
+    ObStorageRowkeyColumnSchema rowkey_col;
+    rowkey_col.column_idx_ = 1 + common::OB_APP_MIN_COLUMN_ID;
+    rowkey_col.meta_type_.set_int();
     rowkey_col.order_ = ASC;
-    ASSERT_EQ(OB_SUCCESS, table_schema_.rowkey_info_.add_column(rowkey_col));
+    ASSERT_EQ(OB_SUCCESS, storage_schema_.rowkey_array_.push_back(rowkey_col));
 
     // major sstable
     major_sstable_.set_table_type(ObITable::MAJOR_SSTABLE);
@@ -703,7 +709,7 @@ void TestPartitionIncrementalRangeSliter::SetUp()
     minor_sstable_.key_.tablet_id_ = 1;
 
     // merge ctx
-    merge_ctx_.schema_ctx_.merge_schema_ = &table_schema_;
+    merge_ctx_.schema_ctx_.storage_schema_ = &storage_schema_;
     ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_table(&major_sstable_));
     ASSERT_EQ(OB_SUCCESS, merge_ctx_.tables_handle_.add_table(&minor_sstable_));
     merge_ctx_.tablet_handle_.obj_ = &tablet_;
@@ -1157,7 +1163,7 @@ TEST_F(TestPartitionIncrementalRangeSliter, test_not_empty_major_sstable_split_r
 int main(int argc, char **argv)
 {
   system("rm -f test_partition_incremental_range_spliter.log*");
-  oceanbase::ObLogger::get_logger().set_file_name("test_partition_incremental_range_spliter.log", true);
+  oceanbase::ObLogger::get_logger().set_file_name("test_partition_incremental_range_spliter.log");
   oceanbase::ObLogger::get_logger().set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

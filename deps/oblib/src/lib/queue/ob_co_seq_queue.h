@@ -72,11 +72,11 @@ public:
   {
     bool bret = false;
     if (NULL == items_) {
-      LIB_LOG(ERROR, "invalid item", K(items_));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid item", K(items_));
     } else if (id < 0) {
-      LIB_LOG(ERROR, "invalid id", K(id));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid id", K(id));
     } else if (0 == len_) {
-      LIB_LOG(ERROR, "invalid len", K(len_));
+      LIB_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid len", K(len_));
     } else {
       bret = items_[id % len_] >= id + READY;
     }

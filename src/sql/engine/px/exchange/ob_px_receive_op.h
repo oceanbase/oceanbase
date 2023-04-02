@@ -39,7 +39,8 @@ public:
     : ObPxExchangeOpInput(ctx, spec),
       child_dfo_id_(common::OB_INVALID_ID),
       ch_provider_ptr_(0),
-      ignore_vtable_error_(false)
+      ignore_vtable_error_(false),
+      init_channel_count_(0)
   {}
   virtual ~ObPxReceiveOpInput() {}
   virtual int init(ObTaskInfo &task_info)
@@ -49,6 +50,7 @@ public:
     return ret;
   }
   void set_child_dfo_id(int64_t child_dfo_id) { child_dfo_id_ = child_dfo_id; }
+  int64_t get_child_dfo_id() const { return child_dfo_id_; }
   // 由 sqc 设置好后发给 task，该指针会序列化给 task
   void set_sqc_proxy(ObPxSQCProxy &sqc_proxy)
   {
@@ -60,10 +62,13 @@ public:
   uint64_t get_ch_provider() { return ch_provider_ptr_; }
   void set_ignore_vtable_error(bool flag) { ignore_vtable_error_ = flag; };
   bool is_ignore_vtable_error() { return ignore_vtable_error_; }
+  int64_t inc_init_channel_count() { return ATOMIC_AAF(&init_channel_count_, 1); }
+  int64_t get_init_channel_count() const { return ATOMIC_LOAD(&init_channel_count_); }
 protected:
   int64_t child_dfo_id_;
   uint64_t ch_provider_ptr_;
   bool ignore_vtable_error_;
+  int64_t init_channel_count_;
 };
 
 class ObPxReceiveSpec : public ObReceiveSpec
@@ -73,6 +78,8 @@ public:
   ObPxReceiveSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
   ~ObPxReceiveSpec() {}
   virtual const common::ObIArray<ObExpr *> *get_all_exprs() const { return NULL; }
+  virtual int register_to_datahub(ObExecContext &ctx) const override;
+  virtual int register_init_channel_msg(ObExecContext &ctx) override;
   // 保存child是为了获取child的数据，由于数据是shuffle过来，所以拿数据只能全部拿过来
   ExprFixedArray child_exprs_;
   int64_t repartition_table_id_;
@@ -90,6 +97,7 @@ public:
   virtual int inner_rescan() override;
   virtual void destroy() override;
   virtual int inner_close() override { return ObOperator::inner_close(); }
+  virtual void do_clear_datum_eval_flag() override;
 
   ObPxTaskChSet &get_ch_set() { return task_ch_set_; };
   virtual int try_link_channel() = 0;
@@ -115,12 +123,14 @@ public:
   common::ObIArray<dtl::ObDtlChannel *> &get_task_channels() { return task_channels_; }
 
   int64_t get_sqc_id();
+  int get_bf_ctx(int64_t idx, ObJoinFilterDataCtx &bf_ctx);
 
   int wrap_get_next_batch(const int64_t max_row_cnt);
-
+  int prepare_send_bloom_filter();
   int try_send_bloom_filter();
 
   int erase_dtl_interm_result();
+  int send_channel_ready_msg(int64_t child_dfo_id);
 public:
   // clear dynamic const expr parent evaluate flag, because when dynmaic param datum
   // changed, if we don't clear dynamic const expr parent expr evaluate flag, the
@@ -157,20 +167,6 @@ public:
     return ts_;
   }
 protected:
-  OB_INLINE bool need_send_bloom_filter() {
-    bool is_match = false;
-    int64_t filter_id = ctx_.get_bf_ctx().filter_id_;
-    if (ctx_.get_bf_ctx().filter_ready_) {
-      for (int64_t i = 0; i < (static_cast<const ObPxReceiveSpec &>(get_spec())).bloom_filter_id_array_.count(); ++i) {
-        if (filter_id == (static_cast<const ObPxReceiveSpec &>(get_spec())).bloom_filter_id_array_.at(i)) {
-          is_match = true;
-          break;
-        }
-      }
-    }
-    return is_match;
-  }
-protected:
   ObPxTaskChSet task_ch_set_;
   bool iter_end_;
   bool channel_linked_;
@@ -187,6 +183,11 @@ protected:
   // stored rows used for get batch rows from DTL reader.
   const ObChunkDatumStore::StoredRow **stored_rows_;
   obrpc::ObPxBFProxy bf_rpc_proxy_;
+  int64_t bf_ctx_idx_; // the idx of bloom_filter_id_array_ in spec
+  int64_t bf_send_idx_; // the idx of bf_send_ctx_array_ in sqc proxy
+  // each_group_size_ only used in ObPxMsgProc::mark_rpc_filter()(this func will calc group_size, then each_group_size_ keep it for next use)
+  // means how many node(sqc level) in this group
+  int64_t each_group_size_;
 };
 
 class ObPxFifoReceiveOpInput : public ObPxReceiveOpInput

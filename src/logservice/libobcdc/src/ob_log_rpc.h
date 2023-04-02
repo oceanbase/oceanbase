@@ -38,7 +38,7 @@ public:
   // Reuest start LSN by timestamp
   virtual int req_start_lsn_by_tstamp(const uint64_t tenant_id,
       const common::ObAddr &svr,
-      const obrpc::ObCdcReqStartLSNByTsReq &req,
+      obrpc::ObCdcReqStartLSNByTsReq &req,
       obrpc::ObCdcReqStartLSNByTsResp &resp,
       const int64_t timeout) = 0;
 
@@ -46,7 +46,7 @@ public:
   // Asynchronous RPC
   virtual int async_stream_fetch_log(const uint64_t tenant_id,
       const common::ObAddr &svr,
-      const obrpc::ObCdcLSFetchLogReq &req,
+      obrpc::ObCdcLSFetchLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_LOG2> &cb,
       const int64_t timeout) = 0;
 
@@ -54,7 +54,7 @@ public:
   // Asynchronous RPC
   virtual int async_stream_fetch_missing_log(const uint64_t tenant_id,
       const common::ObAddr &svr,
-      const obrpc::ObCdcLSFetchMissLogReq &req,
+      obrpc::ObCdcLSFetchMissLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> &cb,
       const int64_t timeout) = 0;
 };
@@ -79,19 +79,19 @@ public:
 public:
   int req_start_lsn_by_tstamp(const uint64_t tenant_id,
       const common::ObAddr &svr,
-      const obrpc::ObCdcReqStartLSNByTsReq &req,
+      obrpc::ObCdcReqStartLSNByTsReq &req,
       obrpc::ObCdcReqStartLSNByTsResp &resp,
       const int64_t timeout);
 
   int async_stream_fetch_log(const uint64_t tenant_id,
       const common::ObAddr &svr,
-      const obrpc::ObCdcLSFetchLogReq &req,
+      obrpc::ObCdcLSFetchLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_LOG2> &cb,
       const int64_t timeout);
 
   int async_stream_fetch_missing_log(const uint64_t tenant_id,
       const common::ObAddr &svr,
-      const obrpc::ObCdcLSFetchMissLogReq &req,
+      obrpc::ObCdcLSFetchMissLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> &cb,
       const int64_t timeout);
 
@@ -101,10 +101,14 @@ public:
   int reload_ssl_config();
 
 private:
+  int init_client_id_();
+
+private:
   bool                is_inited_;
   obrpc::ObNetClient  net_client_;
   uint64_t            last_ssl_info_hash_;
   int64_t             ssl_key_expired_time_;
+  ObCdcRpcId          client_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRpc);

@@ -29,8 +29,8 @@ namespace oceanbase
 {
 namespace palf
 {
-
-int __get_palf_env_impl(uint64_t tenant_id, PalfEnvImpl *&palf_env_impl);
+class IPalfEnvImpl;
+int __get_palf_env_impl(uint64_t tenant_id, IPalfEnvImpl *&palf_env_impl, const bool need_check_tenant_id);
 
 DEFINE_RPC_PROCESSOR(LogPushReqP,
                      obrpc::LogRpcProxyV2,
@@ -82,6 +82,11 @@ DEFINE_RPC_PROCESSOR(LogNotifyRebuildReqP,
                      NotifyRebuildReq,
                      obrpc::OB_LOG_NOTIFY_REBUILD_REQ);
 
+DEFINE_RPC_PROCESSOR(LogNotifyFetchLogReqP,
+                     obrpc::LogRpcProxyV2,
+                     NotifyFetchLogReq,
+                     obrpc::OB_LOG_NOTIFY_FETCH_LOG);
+
 DEFINE_RPC_PROCESSOR(LogLearnerReqP,
                      obrpc::LogRpcProxyV2,
                      LogLearnerReq,
@@ -132,6 +137,12 @@ DEFINE_SYNC_RPC_PROCESSOR(LogGetMCStP,
                           LogGetMCStReq,
                           LogGetMCStResp,
                           obrpc::OB_LOG_GET_MC_ST);
+
+DEFINE_SYNC_RPC_PROCESSOR(LogGetStatP,
+                          obrpc::LogRpcProxyV2,
+                          LogGetStatReq,
+                          LogGetStatResp,
+                          obrpc::OB_LOG_GET_STAT);
 } // end namespace palf
 } // end namespace oceanbase
 

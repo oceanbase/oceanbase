@@ -15,7 +15,7 @@ devdeps-libcurl-static-7.29.0-32022093010.el8.x86_64.rpm
 devdeps-libunwind-static-1.6.2-222022100410.el8.x86_64.rpm
 devdeps-mariadb-connector-c-3.1.12-12022100422.el8.x86_64.rpm
 devdeps-libaio-0.3.112-12022092915.el8.x86_64.rpm
-devdeps-rapidjson-1.1.0-12022100410.el8.x86_64.rpm
+devdeps-relaxed-rapidjson-1.0.0-52023011719.el8.x86_64.rpm
 devdeps-openssl-static-1.0.1e-12022100422.el8.x86_64.rpm
 devdeps-libxml2-2.10.3-32022111420.el8.x86_64.rpm
 devdeps-mxml-2.12.0-12022090616.el8.x86_64.rpm
@@ -25,6 +25,9 @@ devdeps-lua-5.4.3-92022090614.el8.x86_64.rpm
 devdeps-oss-c-sdk-3.9.2-182022100412.el8.x86_64.rpm
 devdeps-zlib-static-1.2.7-132022100815.el8.x86_64.rpm
 devdeps-ncurses-static-6.2-72022100815.el8.x86_64.rpm
+devdeps-boost-1.74.0-22022110914.el8.x86_64.rpm
+devdeps-s2geometry-0.9.0-42022111116.el8.x86_64.rpm
+devdeps-icu-69.1-72022112416.el8.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.x86_64.rpm
@@ -36,9 +39,10 @@ obdevtools-gcc9-9.3.0-52022092914.el8.x86_64.rpm
 obdevtools-llvm-11.0.1-312022092921.el8.x86_64.rpm
 
 [tools-deps]
-devdeps-oblogmsg-1.0-42022101823.el8.x86_64.rpm
+devdeps-oblogmsg-1.0-52022113019.el8.x86_64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.x86_64.rpm
 
 [test-utils]
 ob-deploy-1.6.0-41.el8.x86_64.rpm target=community
 obclient-2.0.2-3.el8.x86_64.rpm target=community
+libobclient-2.0.2-2.el8.x86_64.rpm target=community

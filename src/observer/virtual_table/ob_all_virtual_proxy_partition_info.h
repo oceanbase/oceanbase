@@ -85,6 +85,7 @@ class ObAllVirtualProxyPartitionInfo : public ObAllVirtualProxyBaseIterator
     SPARE4,
     SPARE5,
     SPARE6,
+    PART_KEY_DEFAULT_VALUE,
   };
 
 public:

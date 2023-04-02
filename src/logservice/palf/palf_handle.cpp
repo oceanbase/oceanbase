@@ -20,9 +20,11 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 #define CHECK_VALID if (NULL == palf_handle_impl_) { return OB_NOT_INIT; }
+
 PalfHandle::PalfHandle() : palf_handle_impl_(NULL),
                            rc_cb_(NULL),
                            fs_cb_(NULL),
@@ -82,11 +84,6 @@ int PalfHandle::set_initial_member_list(const common::ObMemberList &member_list,
   return palf_handle_impl_->set_initial_member_list(member_list, paxos_replica_num);
 }
 
-int PalfHandle::set_initial_member_list(const common::ObMemberList &member_list, const common::ObMember &arb_replica, const int64_t paxos_replica_num)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->set_initial_member_list(member_list, arb_replica, paxos_replica_num);
-}
 
 int PalfHandle::set_region(const common::ObRegion &region)
 {
@@ -102,13 +99,13 @@ int PalfHandle::set_paxos_member_region_map(const common::ObArrayHashMap<common:
 int PalfHandle::append(const PalfAppendOptions &opts,
                        const void *buffer,
                        const int64_t nbytes,
-                       const int64_t ref_ts_ns,
+                       const SCN &ref_scn,
                        LSN &lsn,
-                       int64_t &ts_ns)
+                       SCN &scn)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_ts_ns, lsn, ts_ns);
+  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_scn, lsn, scn);
   return ret;
 }
 
@@ -121,20 +118,6 @@ int PalfHandle::raw_write(const PalfAppendOptions &opts,
   CHECK_VALID;
   ret = palf_handle_impl_->submit_group_log(opts, lsn, static_cast<const char*>(buffer), nbytes);
   return ret;
-}
-
-int PalfHandle::pread(void *&buffer,
-                      const int64_t nbytes,
-                      const LSN &lsn,
-                      int64_t &ts_ns,
-                      int64_t &read_size)
-{
-  UNUSED(buffer);
-  UNUSED(nbytes);
-  UNUSED(lsn);
-  UNUSED(ts_ns);
-  UNUSED(read_size);
-  return OB_NOT_SUPPORTED;
 }
 
 int PalfHandle::seek(const LSN &lsn, PalfBufferIterator &iter)
@@ -167,22 +150,22 @@ int PalfHandle::seek(const LSN &lsn, PalfGroupBufferIterator &iter)
   return ret;
 }
 
-int PalfHandle::seek(const int64_t ts_ns, PalfGroupBufferIterator &iter)
+int PalfHandle::seek(const SCN &scn, PalfGroupBufferIterator &iter)
 {
   CHECK_VALID;
-  return palf_handle_impl_->alloc_palf_group_buffer_iterator(ts_ns, iter);
+  return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter);
 }
 
-int PalfHandle::locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn)
+int PalfHandle::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 {
   CHECK_VALID;
-  return palf_handle_impl_->locate_by_ts_ns_coarsely(ts_ns, result_lsn);
+  return palf_handle_impl_->locate_by_scn_coarsely(scn, result_lsn);
 }
 
-int PalfHandle::locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns)
+int PalfHandle::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
 {
   CHECK_VALID;
-  return palf_handle_impl_->locate_by_lsn_coarsely(lsn, result_ts_ns);
+  return palf_handle_impl_->locate_by_lsn_coarsely(lsn, result_scn);
 }
 
 int PalfHandle::enable_sync()
@@ -215,16 +198,28 @@ int PalfHandle::advance_base_info(const palf::PalfBaseInfo &palf_base_info, cons
   return palf_handle_impl_->advance_base_info(palf_base_info, is_rebuild);
 }
 
+int PalfHandle::flashback(const int64_t mode_version, const SCN &flashback_scn, const int64_t timeout_us)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->flashback(mode_version, flashback_scn, timeout_us);
+}
+
 int PalfHandle::get_begin_lsn(LSN &lsn) const
 {
   CHECK_VALID;
   return palf_handle_impl_->get_begin_lsn(lsn);
 }
 
-int PalfHandle::get_begin_ts_ns(int64_t &ts) const
+int PalfHandle::get_begin_scn(SCN &scn) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_begin_ts_ns(ts);
+  return palf_handle_impl_->get_begin_scn(scn);
+}
+
+int PalfHandle::get_base_lsn(LSN &lsn) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_base_lsn(lsn);
 }
 
 int PalfHandle::get_base_info(const LSN &lsn,
@@ -259,11 +254,11 @@ int PalfHandle::get_max_lsn(LSN &lsn) const
   return ret;
 }
 
-int PalfHandle::get_max_ts_ns(int64_t &ts_ns) const
+int PalfHandle::get_max_scn(SCN &scn) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ts_ns = palf_handle_impl_->get_max_ts_ns();
+  scn = palf_handle_impl_->get_max_scn();
   return ret;
 }
 
@@ -273,11 +268,17 @@ int PalfHandle::get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pe
   return palf_handle_impl_->get_role(role, proposal_id, is_pending_state);
 }
 
-int PalfHandle::get_end_ts_ns(int64_t &ts_ns) const
+int PalfHandle::get_palf_id(int64_t &palf_id) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_palf_id(palf_id);
+}
+
+int PalfHandle::get_end_scn(SCN &scn) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ts_ns = palf_handle_impl_->get_end_ts_ns();
+  scn = palf_handle_impl_->get_end_scn();
   return ret;
 }
 
@@ -293,100 +294,80 @@ int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t
   return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num);
 }
 
+int PalfHandle::get_election_leader(common::ObAddr &addr) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_election_leader(addr);
+}
+
 int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
                                    const int64_t curr_replica_num,
                                    const int64_t new_replica_num,
-                                   const int64_t timeout_ns)
+                                   const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->change_replica_num(member_list, curr_replica_num, new_replica_num, timeout_ns);
+  return palf_handle_impl_->change_replica_num(member_list, curr_replica_num, new_replica_num, timeout_us);
+}
+int PalfHandle::force_set_as_single_replica()
+{
+  CHECK_VALID;
+  return palf_handle_impl_->force_set_as_single_replica();
+}
+int PalfHandle::get_ack_info_array(LogMemberAckInfoList &ack_info_array,
+                                   common::GlobalLearnerList &degraded_list) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_ack_info_array(ack_info_array, degraded_list);
 }
 
 int PalfHandle::add_member(const common::ObMember &member,
                            const int64_t new_replica_num,
-                           const int64_t timeout_ns)
+                           const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->add_member(member, new_replica_num, timeout_ns);
+  return palf_handle_impl_->add_member(member, new_replica_num, timeout_us);
 }
 
 int PalfHandle::remove_member(const common::ObMember &member,
                               const int64_t new_replica_num,
-                              const int64_t timeout_ns)
+                              const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->remove_member(member, new_replica_num, timeout_ns);
+  return palf_handle_impl_->remove_member(member, new_replica_num, timeout_us);
 }
 
 int PalfHandle::replace_member(const common::ObMember &added_member,
                                const common::ObMember &removed_member,
-                               const int64_t timeout_ns)
+                               const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->replace_member(added_member, removed_member, timeout_ns);
+  return palf_handle_impl_->replace_member(added_member, removed_member, timeout_us);
 }
 
-int PalfHandle::add_learner(const common::ObMember &added_learner, const int64_t timeout_ns)
+int PalfHandle::add_learner(const common::ObMember &added_learner, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->add_learner(added_learner, timeout_ns);
+  return palf_handle_impl_->add_learner(added_learner, timeout_us);
 }
 
-int PalfHandle::remove_learner(const common::ObMember &removed_learner, const int64_t timeout_ns)
+int PalfHandle::remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->remove_learner(removed_learner, timeout_ns);
+  return palf_handle_impl_->remove_learner(removed_learner, timeout_us);
 }
 
-int PalfHandle::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_ns)
+int PalfHandle::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->switch_learner_to_acceptor(learner, timeout_ns);
+  return palf_handle_impl_->switch_learner_to_acceptor(learner, timeout_us);
 }
 
-int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_ns)
+int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->switch_acceptor_to_learner(member, timeout_ns);
+  return palf_handle_impl_->switch_acceptor_to_learner(member, timeout_us);
 }
 
-int PalfHandle::add_arb_member(const common::ObMember &member,
-                               const int64_t new_replica_num,
-                               const int64_t timeout_ns)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->add_arb_member(member, new_replica_num, timeout_ns);
-}
-
-int PalfHandle::remove_arb_member(const common::ObMember &member,
-                                  const int64_t new_replica_num,
-                                  const int64_t timeout_ns)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->remove_arb_member(member, new_replica_num, timeout_ns);
-}
-
-int PalfHandle::replace_arb_member(const common::ObMember &added_member,
-                                   const common::ObMember &removed_member,
-                                   const int64_t timeout_ns)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->replace_arb_member(added_member, removed_member, timeout_ns);
-}
-
-int PalfHandle::degrade_acceptor_to_learner(const common::ObMemberList &member_list,
-                                            const int64_t timeout_ns)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->degrade_acceptor_to_learner(member_list, timeout_ns);
-}
-
-int PalfHandle::upgrade_learner_to_acceptor(const common::ObMemberList &learner_list,
-                                            const int64_t timeout_ns)
-{
-  CHECK_VALID;
-  return palf_handle_impl_->upgrade_learner_to_acceptor(learner_list, timeout_ns);
-}
 
 int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
 {
@@ -399,11 +380,11 @@ int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
 int PalfHandle::change_access_mode(const int64_t proposal_id,
                                    const int64_t mode_version,
                                    const AccessMode &access_mode,
-                                   const int64_t ref_ts_ns)
+                                   const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->change_access_mode(proposal_id, mode_version, access_mode, ref_ts_ns);
+  ret = palf_handle_impl_->change_access_mode(proposal_id, mode_version, access_mode, ref_scn);
   return ret;
 }
 
@@ -429,6 +410,15 @@ int PalfHandle::disable_vote()
   CHECK_VALID;
   ret = palf_handle_impl_->disable_vote();
   return ret;
+}
+
+bool PalfHandle::is_vote_enabled() const
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = false;
+  CHECK_VALID;
+  bool_ret = palf_handle_impl_->is_vote_enabled();
+  return bool_ret;
 }
 
 int PalfHandle::enable_vote()
@@ -559,7 +549,7 @@ int PalfHandle::unregister_rebuild_cb()
   } else {
     MTL_DELETE(PalfRebuildCbNode, "RebuildCbNode", rebuild_cb_);
     rebuild_cb_ = NULL;
-    PALF_LOG(INFO, "unregister_rebuild_cb success", K(ret));
+    PALF_LOG(INFO, "unregister_rebuild_cb success", K(ret), KPC(this));
   }
 	return ret;
 }

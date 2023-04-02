@@ -12,13 +12,15 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_barrier_log.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 ObTabletBarrierLogState::ObTabletBarrierLogState()
-  : state_(TABLET_BARRIER_LOG_INIT), log_ts_(0), schema_version_(0)
+  : state_(TABLET_BARRIER_LOG_INIT), scn_(SCN::min_scn()), schema_version_(0)
 {
 }
 
@@ -44,17 +46,17 @@ ObTabletBarrierLogStateEnum ObTabletBarrierLogState::to_persistent_state() const
 void ObTabletBarrierLogState::reset()
 {
   state_ = TABLET_BARRIER_LOG_INIT;
-  log_ts_ = 0;
+  scn_.set_min();
   schema_version_ = 0;
 }
 
 void ObTabletBarrierLogState::set_log_info(
     const ObTabletBarrierLogStateEnum state,
-    const int64_t log_ts,
+    const SCN &scn,
     const int64_t schema_version)
 {
   state_ = state;
-  log_ts_ = log_ts;
+  scn_ = scn;
   schema_version_ = schema_version;
 }
 
@@ -64,8 +66,8 @@ int ObTabletBarrierLogState::serialize(char *buf, const int64_t buf_len, int64_t
   const ObTabletBarrierLogStateEnum persistent_state = to_persistent_state();
   if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, persistent_state))) {
     LOG_WARN("fail to encode state", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, log_ts_))) {
-    LOG_WARN("encode log ts failed", K(ret));
+  } else if (OB_FAIL(scn_.fixed_serialize(buf, buf_len, pos))) {
+    LOG_WARN("serialize scn failed", K(ret));
   }
   return ret;
 }
@@ -76,8 +78,8 @@ int ObTabletBarrierLogState::deserialize(const char *buf, const int64_t data_len
   int64_t tmp_state = 0;
   if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &tmp_state))) {
     LOG_WARN("fail to decode state", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &log_ts_))) {
-    LOG_WARN("decode log ts failed", K(ret));
+  } else if (OB_FAIL(scn_.fixed_deserialize(buf, data_len, pos))) {
+    LOG_WARN("deserialize scn failed", K(ret));
   } else {
     state_ = static_cast<ObTabletBarrierLogStateEnum>(tmp_state);
   }
@@ -88,7 +90,7 @@ int64_t ObTabletBarrierLogState::get_serialize_size() const
 {
   int64_t len = 0;
   len += serialization::encoded_length_i64(to_persistent_state());
-  len += serialization::encoded_length_i64(log_ts_);
+  len += scn_.get_fixed_serialize_size();
   return len;
 }
 }

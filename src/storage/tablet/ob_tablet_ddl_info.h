@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/utility/ob_print_utils.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -31,13 +32,13 @@ public:
   void reset();
   int get(int64_t &schema_version, int64_t &schema_refreshed_ts);
   int update(const int64_t schema_version,
-             const int64_t log_ts,
+             const share::SCN &scn,
              int64_t &schema_refreshed_ts);
-  TO_STRING_KV(K_(ddl_schema_version), K_(ddl_schema_refreshed_ts), K_(schema_version_change_log_ts));
+  TO_STRING_KV(K_(ddl_schema_version), K_(ddl_schema_refreshed_ts), K_(schema_version_change_scn));
 private:
   int64_t ddl_schema_version_;
   int64_t ddl_schema_refreshed_ts_;
-  int64_t schema_version_change_log_ts_;
+  share::SCN schema_version_change_scn_;
   common::TCRWLock rwlock_;
 };
 } // namespace storage

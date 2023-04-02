@@ -19,6 +19,8 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "share/ob_encryption_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/resolver/ob_resolver_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -44,22 +46,29 @@ int calc_digest_text(ObIAllocator &allocator,
     ObSqlCtx sql_ctx;
     sql_ctx.session_info_ = session;
     sql_ctx.schema_guard_ = schema_guard;
-    ObPlanCacheCtx pc_ctx(sql_str, false, allocator, sql_ctx, exec_ctx,
+    ObPlanCacheCtx pc_ctx(sql_str, PC_TEXT_MODE, allocator, sql_ctx, exec_ctx,
                           session->get_effective_tenant_id());
     ObParser parser(allocator, session->get_sql_mode(), cs_type);
     ParseResult parse_result;
     ParamStore tmp_params((ObWrapperAllocator(allocator)));
+    stmt::StmtType stmt_type = stmt::T_NONE;
     if (OB_FAIL(parser.parse(sql_str, parse_result))) {
       LOG_WARN("fail to parse sql str", K(sql_str), K(ret));
-    } else if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
-                                                                       true,
-                                                                       pc_ctx,
-                                                                       parse_result.result_tree_,
-                                                                       tmp_params,
-                                                                       cs_type))) {
-      LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
+      LOG_WARN("failed to resolve stmt type", K(ret));
+    } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
+      if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(allocator,
+                                                                  true,
+                                                                  pc_ctx,
+                                                                  parse_result.result_tree_,
+                                                                  tmp_params,
+                                                                  cs_type))) {
+        LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
+      } else {
+        digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      }
     } else {
-      digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      digest_str = sql_str;
     }
   }
   return ret;
@@ -179,7 +188,7 @@ int ObExprStatementDigestText::eval_statement_digest_text(const ObExpr &expr, Ob
   } else if (arg->is_null()) {
     expr_datum.set_null();
   } else{
-    ObExprStrResAlloc res_alloc(expr, ctx);
+    // result must be clob
     ObString sql_str = arg->get_string();
     ObString digest_str;
     ObString res_str;
@@ -190,11 +199,11 @@ int ObExprStatementDigestText::eval_statement_digest_text(const ObExpr &expr, Ob
     if (OB_FAIL(calc_digest_text(calc_alloc, sql_str, in_cs_type, session,
                                  schema_guard, digest_str))) {
       LOG_WARN("fail to calc statement digest text", K(sql_str), K(ret));
-    } else if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(res_alloc, digest_str, res_str,
+    } else if (OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(calc_alloc, digest_str, res_str,
         in_cs_type, res_cs_type))) {
       LOG_WARN("fail to check need_convert_string_collation", K(ret));
-    } else {
-      expr_datum.set_string(res_str);
+    } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, expr_datum, res_str))) {
+      LOG_WARN("fail to convert result to temporary lob", K(ret));
     }
   }
   return ret;

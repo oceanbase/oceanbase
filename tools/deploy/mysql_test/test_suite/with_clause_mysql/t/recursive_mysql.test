@@ -141,9 +141,9 @@ with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from 
 ##   PART 2.2.1 定义列数量与查询产生列一致或不一致
 with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 
---error 5740
+--error 1353
 with RECURSIVE cte(a,b,c) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
---error 5740
+--error 1353
 with RECURSIVE cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 
 ##   PART 2.2.2 不使用定义列使用原来的列
@@ -238,11 +238,11 @@ with RECURSIVE cte(a) as (select 1 from dual union all select 2 from dual), cte_
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 UNION ALL select 2 from dual) select * from cte;
 
 ## 递归必须包含union all
---error 5742
+--error 3573
 with RECURSIVE cte(n) AS ( select 1 from cte) select * from cte;
 
 set @@ob_query_timeout=1000000;
---error 5758
+--error 3575
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
 
 set @@ob_query_timeout=10000000;
@@ -254,17 +254,17 @@ with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where
 --error 5746
 with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
 
---error 5744
+--error 3577
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
 
 ## 不能出现在right join的左边，left join的右边，full join的两边
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
 set @@ob_query_timeout=10000000;
 

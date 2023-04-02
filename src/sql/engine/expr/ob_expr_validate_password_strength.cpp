@@ -182,7 +182,9 @@ int ObExprValidatePasswordStrength::validate_password_medium(const ObString &pas
     auto handle_char_func = [&lower_count, &upper_count, &digit_count, &special_count]
                             (ObString, int wchar) -> int {
       int ret = OB_SUCCESS;
-      if (islower(wchar)) {
+      if (!ob_isascii(wchar)) {
+        special_count++;
+      } else if (islower(wchar)) {
         lower_count++;
       } else if (isupper(wchar)) {
         upper_count++;

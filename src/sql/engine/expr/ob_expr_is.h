@@ -33,49 +33,15 @@ public:
                          const char *name);
   virtual ~ObExprIsBase() {};
 
-  int calc_with_int_internal(common::ObObj &result,
-                             const common::ObObj &obj1,
-                             const common::ObObj &obj2,
-                             common::ObCastCtx &cast_ctx,
-                             bool is_not/* True if IS_NOT */) const;
-  int calc_with_infinity_internal(common::ObObj &result,
-                             const common::ObObj &obj1,
-                             const common::ObObj &obj2,
-                             common::ObCastCtx &cast_ctx,
-                             bool is_not/* True if IS_NOT */) const;
-  int calc_with_nan_internal(common::ObObj &result,
-                             const common::ObObj &obj1,
-                             const common::ObObj &obj2,
-                             common::ObCastCtx &cast_ctx,
-                             bool is_not/* True if IS_NOT */) const;
   int cg_expr_internal(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
-                      ObExpr &rt_expr, const ObConstRawExpr *&const_param2,
-                      const ObConstRawExpr *&const_param3) const;
+                      ObExpr &rt_expr, const ObConstRawExpr *&const_param2) const;
   int cg_result_type_class(common::ObObjType type, ObExpr::EvalFunc &eval_func,
                           bool is_not, bool is_true) const;
-  int calc_result_type3(ObExprResType &type,
+  int calc_result_type2(ObExprResType &type,
                         ObExprResType &type1,
                         ObExprResType &type2,
-                        ObExprResType &type3,
                         common::ObExprTypeCtx &type_ctx) const;
 
-  virtual int calc_with_null(common::ObObj &result,
-                             const common::ObObj &obj1,
-                             const common::ObObj &obj2,
-                             const common::ObObj &obj3,
-                             common::ObCastCtx &cast_ctx) const = 0;
-  virtual int calc_with_int(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const = 0;
-  virtual int calc_with_nan(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const = 0;
-  virtual int calc_with_infinity(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const = 0;
   template <typename T>
   static int is_zero(T number);
   static int is_infinite_nan(const common::ObObjType, common::ObDatum *, bool &, Ieee754);
@@ -96,27 +62,13 @@ class ObExprIs: public ObExprIsBase
      : ObExprIsBase(alloc, T_OP_IS, N_IS) {};
   virtual ~ObExprIs() {};
 
-  virtual int calc_with_null(common::ObObj &result,
-                             const common::ObObj &obj1,
-                             const common::ObObj &obj2,
-                             const common::ObObj &obj3,
-                             common::ObCastCtx &cast_ctx) const;
-  virtual int calc_with_int(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const;
-  virtual int calc_with_infinity(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const;
-  virtual int calc_with_nan(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const;
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                   const ObRawExpr &raw_expr,
                   ObExpr &rt_expr) const override;
+
+  // keep this function for compatibility with server before 4.1
   static int calc_is_date_int_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
   static int calc_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_true(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int int_is_false(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
@@ -146,23 +98,6 @@ public:
      : ObExprIsBase(alloc, T_OP_IS_NOT, N_IS_NOT) {};
   virtual ~ObExprIsNot() {};
 
-  virtual int calc_with_null(common::ObObj &result,
-                             const common::ObObj &obj1,
-                             const common::ObObj &obj2,
-                             const common::ObObj &obj3,
-                             common::ObCastCtx &cast_ctx) const;
-  virtual int calc_with_int(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const;
-  virtual int calc_with_infinity(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const;
-  virtual int calc_with_nan(common::ObObj &result,
-                            const common::ObObj &obj1,
-                            const common::ObObj &obj2,
-                            common::ObCastCtx &cast_ctx) const;
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                   const ObRawExpr &raw_expr,
                   ObExpr &rt_expr) const override;
@@ -179,6 +114,9 @@ public:
   static int calc_is_not_nan(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 
   static int calc_collection_is_not_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
+                                    const ObBitVector &skip, const int64_t batch_size);
 private:
   // types and constants
 private:

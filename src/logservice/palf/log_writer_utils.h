@@ -43,7 +43,7 @@ public:
   // NB: check_memory_is_continous firstly, and ensure dest_buf can hold enough data.
   void memcpy_to_continous_memory(char *dest_buf) const;
 
-  TO_STRING_KV("total_size", get_total_size(), "count", get_buf_count());
+  TO_STRING_KV("total_size", get_total_size(), "count", get_buf_count(), K_(write_buf));
   NEED_SERIALIZE_AND_DESERIALIZE;
   static constexpr int64_t MAX_COUNT = 2;
 

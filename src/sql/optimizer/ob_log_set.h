@@ -49,7 +49,7 @@ public:
   const char *get_name() const;
   inline void assign_set_distinct(const bool is_distinct) { is_distinct_ = is_distinct; }
   inline void set_recursive_union(bool is_recursive_union) { is_recursive_union_ = is_recursive_union; }
-  inline void set_is_breadth_search(bool is_breadth_search) { is_breadth_search_ = is_breadth_search;}
+  inline void set_is_breadth_search(bool is_breadth_search) { is_breadth_search_ = is_breadth_search; }
   inline bool is_recursive_union() { return is_recursive_union_; }
   inline bool is_breadth_search() { return is_breadth_search_; }
   inline bool is_set_distinct() const { return is_distinct_; }
@@ -60,7 +60,7 @@ public:
   //hash set 全部都是从left 建立hash表，0号孩子是block input
   virtual bool is_block_input(const int64_t child_idx) const override 
   {
-    return HASH_SET == set_algo_ && 0 == child_idx;
+    return HASH_SET == set_algo_ && 0 == child_idx && ObSelectStmt::UNION != get_set_op();
   }
   inline void assign_set_op(const ObSelectStmt::SetOperator set_op) { set_op_ = set_op; }
   inline ObSelectStmt::SetOperator get_set_op() const { return set_op_; }
@@ -94,7 +94,6 @@ public:
   int get_equal_set_conditions(ObIArray<ObRawExpr*> &equal_conds);
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
   virtual int allocate_granule_pre(AllocGIContext &ctx) override;
-  virtual int generate_link_sql_post(GenLinkStmtPostContext &link_ctx) override;
   ObIArray<int64_t> &get_map_array() { return map_array_; }
   int set_map_array(const ObIArray<int64_t> &map_array)
   {
@@ -109,11 +108,11 @@ public:
   inline SetAlgo get_algo() const { return set_algo_; }
   inline void set_algo_type(const SetAlgo type) { set_algo_ = type; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { set_dist_algo_ = set_dist_algo; }
+  inline DistAlgo get_distributed_algo() { return set_dist_algo_; }
   int estimate_row_count(double &rows);
   int allocate_startup_expr_post() override;
-  virtual int print_outline(planText &plan) override;
-  int print_used_hint(planText &plan_text);
-  int print_outline_data(planText &plan_text);
+  virtual int print_outline_data(PlanText &plan_text) override;
+  virtual int print_used_hint(PlanText &plan_text) override;
   int get_used_pq_set_hint(const ObPQSetHint *&used_hint);
   int construct_pq_set_hint(ObPQSetHint &hint);
 private:

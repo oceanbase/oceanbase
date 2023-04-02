@@ -40,12 +40,12 @@ public:
   virtual void SetUp()
   {
     ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-    ASSERT_EQ(OB_SUCCESS, ma->create_tenant_ctx_allocator(tenant_id, ctx_id));
+    ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
     ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id, limit));
-    ObTenantCtxAllocator *ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+    auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
     ASSERT_TRUE(NULL != ta);
 
-    ASSERT_EQ(OB_SUCCESS, ma->create_tenant_ctx_allocator(new_tenant_id, ctx_id));
+    ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(new_tenant_id));
     ta = ma->get_tenant_ctx_allocator(new_tenant_id, ctx_id);
     ASSERT_TRUE(NULL != ta);
   }
@@ -56,7 +56,7 @@ public:
 TEST_F(TestAllocator, basic)
 {
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  ObTenantCtxAllocator *ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
   ObMemAttr attr(tenant_id, label, ctx_id);
   ObAllocator a(nullptr, attr);
   int64_t sz = 100;
@@ -97,7 +97,7 @@ TEST_F(TestAllocator, basic)
 TEST_F(TestAllocator, reveal_unfree)
 {
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  ObTenantCtxAllocator *ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
   ObMemAttr attr(tenant_id, label, ctx_id);
   has_unfree = false;
   // no unfree
@@ -129,7 +129,7 @@ TEST_F(TestAllocator, reveal_unfree)
 TEST_F(TestAllocator, reset)
 {
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  ObTenantCtxAllocator *ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
   ObMemAttr attr(tenant_id, label, ctx_id);
   const int64_t hold = 0;
   ObAllocator a(nullptr, attr);
@@ -215,7 +215,7 @@ TEST_F(TestAllocator, pm_basic)
 TEST_F(TestAllocator, pm_reveal_unfree)
 {
   ObMallocAllocator *ma = ObMallocAllocator::get_instance();
-  ObTenantCtxAllocator *ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  auto ta = ma->get_tenant_ctx_allocator(tenant_id, ctx_id);
   has_unfree = false;
   int64_t ps = 8L << 10;
   // no unfree

@@ -33,7 +33,8 @@ public:
   static int initcap_string(const common::ObString &text,
                                 const common::ObCollationType cs_type,
                                 common::ObIAllocator *allocator,
-                                common::ObString &res_str);
+                                common::ObString &res_str,
+                                bool &has_first_letter);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInitcap);
 };

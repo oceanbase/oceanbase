@@ -2321,7 +2321,7 @@ size_t ob_varlen_encoding_for_memcmp(const struct ObCharsetInfo* cs,
   wc = 0;
   ob_charset_assert(src);
   *is_valid_unicode = 1;
-  for (; dst < de && nweights; nweights--)
+  for (;*is_valid_unicode && src < se && dst < de && nweights; nweights--)
   {
     if ((res= cs->cset->mb_wc(cs, &wc, src, se)) <= 0) {
       if (src < se) {
@@ -2353,8 +2353,8 @@ size_t ob_varlen_encoding_for_memcmp(const struct ObCharsetInfo* cs,
 uint16_t find_space_char_count(const uchar* src, const uchar* se)
 {
   int space_cnt = 1;
-  while (*(src+space_cnt) == 0x20 && (src+space_cnt)<se) space_cnt++;
-  if (space_cnt+src<se) return space_cnt;
+  while ((src + space_cnt) < se && *(src + space_cnt) == 0x20) space_cnt++;
+  if ((src + space_cnt) < se) return space_cnt;
   else return 0;
 }
 size_t ob_varlen_encoding_for_spacecmp(const struct ObCharsetInfo* cs,
@@ -2372,7 +2372,7 @@ size_t ob_varlen_encoding_for_spacecmp(const struct ObCharsetInfo* cs,
   ob_charset_assert(src);
   *is_valid_unicode = 1;
   uint16_t space_cnt = 0xFFFF;
-  for (; dst < de && nweights; nweights--)
+  for (;*is_valid_unicode && src < se && dst < de && nweights; nweights--)
   {
     // for reslovable multiple bytes, only space's first byte is 0x20,
     // in utf8 encoding scheme.

@@ -15,6 +15,7 @@
 
 #include "rpc/obmysql/ob_mysql_protocol_processor.h"
 #include "rpc/obmysql/obp20_extra_info.h"
+#include "rpc/obmysql/ob_packet_record.h"
 
 namespace oceanbase
 {
@@ -47,7 +48,8 @@ private:
                             const char*& payload_start,
                             Ob20ExtraInfo &extra_info);
   int decode_ob20_body(ObICSMemPool& pool, const char*& buf, const Ob20ProtocolHeader &hdr, rpc::ObPacket *&pkt);
-  int process_ob20_packet(ObProto20PktContext& context, ObMysqlPktContext &mysql_pkt_context, ObICSMemPool& pool,
+  int process_ob20_packet(ObProto20PktContext& context, ObMysqlPktContext &mysql_pkt_context,
+                          obmysql::ObPacketRecordWrapper &pkt_rec_wrapper, ObICSMemPool& pool,
                           void *&ipacket, bool &need_decode_more);
   Obp20Decoder* svr_decoders_[OBP20_SVR_END-OBP20_PROXY_MAX_TYPE] = {
                               &trace_info_dcd_,

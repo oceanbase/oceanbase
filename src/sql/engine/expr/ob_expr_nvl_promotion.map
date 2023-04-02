@@ -25,6 +25,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*int -> XXX*/
@@ -51,6 +52,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*uint -> XXX*/
@@ -77,6 +79,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*float -> XXX*/
@@ -103,6 +106,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*double -> XXX*/
@@ -129,6 +133,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*number -> XXX*/
@@ -155,6 +160,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*datetime -> XXX*/
@@ -181,6 +187,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*date -> XXX*/
@@ -207,6 +214,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*time -> XXX*/
@@ -233,6 +241,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*year -> XXX*/
@@ -259,6 +268,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*string -> XXX*/
@@ -285,6 +295,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*extend -> XXX*/
@@ -311,6 +322,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*unknown -> XXX*/
@@ -337,6 +349,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*text -> XXX*/
@@ -363,6 +376,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*bit -> XXX*/
@@ -389,6 +403,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*EnumSet -> XXX*/
@@ -415,6 +430,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*EnumSetInner -> XXX*/
@@ -441,6 +457,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*OTimestamp -> XXX*/
@@ -467,6 +484,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*Raw -> XXX*/
@@ -493,6 +511,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*Interval -> XXX*/
@@ -519,6 +538,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*RowID -> XXX*/
@@ -545,6 +565,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*Lob -> XXX*/
@@ -571,6 +592,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
   {
     /*Json -> XXX*/
@@ -597,6 +619,34 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*RowID*/
     ObMaxType, /*Lob*/
     ObJsonType, /*Json*/
+    ObMaxType,  /*Geometry*/
+  },
+{
+    /*Geometry -> XXX*/
+    ObMaxType, /*null*/
+    ObMaxType, /*int*/
+    ObMaxType, /*uint*/
+    ObMaxType, /*float*/
+    ObMaxType, /*double*/
+    ObMaxType, /*number*/
+    ObMaxType, /*datetime*/
+    ObMaxType, /*date*/
+    ObMaxType, /*time*/
+    ObMaxType, /*year*/
+    ObMaxType, /*string*/
+    ObMaxType, /*extend*/
+    ObMaxType, /*unknown*/
+    ObMaxType, /*text*/
+    ObMaxType, /*bit*/
+    ObMaxType, /*EnumSet*/
+    ObMaxType, /*EnumSetInner*/
+    ObMaxType, /*OTimestamp*/
+    ObMaxType, /*Raw*/
+    ObMaxType, /*Interval*/
+    ObMaxType, /*RowID*/
+    ObMaxType, /*Lob*/
+    ObMaxType, /*Json*/
+    ObMaxType, /*Geometry*/
   },
 };
 

@@ -89,7 +89,7 @@ int LsElectionReferenceInfoRow::end_(const bool true_to_commit)
 int LsElectionReferenceInfoRow::change_zone_priority(const ObArray<ObArray<ObStringHolder>> &zone_list_list)
 {
   LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER K(*this), KR(ret)
+  #define PRINT_WRAPPER K(*this), KR(ret), K(zone_list_list)
   int ret = OB_SUCCESS;
   if (CLICK_FAIL(start_and_read_())) {
     COORDINATOR_LOG_(WARN, "failed when start trans, read row, convert info");
@@ -97,6 +97,8 @@ int LsElectionReferenceInfoRow::change_zone_priority(const ObArray<ObArray<ObStr
     COORDINATOR_LOG_(WARN, "fail to assign zone list list");
   } else if (CLICK_FAIL(write_and_commit_())) {
     COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
+  } else {
+    COORDINATOR_LOG_(INFO, "change_zone_priority");
   }
   if (trans_.is_started()) {
     COORDINATOR_LOG_(WARN, "transaction execute failed");
@@ -112,13 +114,15 @@ int LsElectionReferenceInfoRow::change_zone_priority(const ObArray<ObArray<ObStr
 int LsElectionReferenceInfoRow::change_manual_leader(const common::ObAddr &manual_leader_server)
 {
   LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER K(*this), KR(ret)
+  #define PRINT_WRAPPER K(*this), KR(ret), K(manual_leader_server)
   int ret = OB_SUCCESS;
   if (CLICK_FAIL(start_and_read_())) {
     COORDINATOR_LOG_(WARN, "failed when start trans, read row, convert info");
   } else if (FALSE_IT(row_for_user_.element<3>() = manual_leader_server)) {
   } else if (CLICK_FAIL(write_and_commit_())) {
     COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
+  } else {
+    COORDINATOR_LOG_(INFO, "change_manual_leader");
   }
   if (trans_.is_started()) {
     COORDINATOR_LOG_(WARN, "transaction execute failed");
@@ -134,7 +138,7 @@ int LsElectionReferenceInfoRow::change_manual_leader(const common::ObAddr &manua
 int LsElectionReferenceInfoRow::add_server_to_blacklist(const common::ObAddr &server, InsertElectionBlacklistReason reason)
 {
   LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER K(*this), KR(ret)
+  #define PRINT_WRAPPER K(*this), KR(ret), K(server), K(reason)
   int ret = OB_SUCCESS;
   if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -157,6 +161,8 @@ int LsElectionReferenceInfoRow::add_server_to_blacklist(const common::ObAddr &se
           COORDINATOR_LOG_(WARN, "copy reason failed");
         } else if (CLICK_FAIL(write_and_commit_())) {
           COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
+        } else {
+          COORDINATOR_LOG_(INFO, "add_server_to_blacklist");
         }
       }
     }
@@ -175,7 +181,7 @@ int LsElectionReferenceInfoRow::add_server_to_blacklist(const common::ObAddr &se
 int LsElectionReferenceInfoRow::delete_server_from_blacklist(const common::ObAddr &server)
 {
   LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER K(*this), KR(ret)
+  #define PRINT_WRAPPER K(*this), KR(ret), K(server)
   int ret = OB_SUCCESS;
   if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -200,6 +206,8 @@ int LsElectionReferenceInfoRow::delete_server_from_blacklist(const common::ObAdd
         COORDINATOR_LOG_(WARN, "replace old array with new array failed");
       } else if (CLICK_FAIL(write_and_commit_())) {
         COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
+      } else {
+        COORDINATOR_LOG_(INFO, "delete_server_from_blacklist");
       }
     }
   }
@@ -225,6 +233,8 @@ int LsElectionReferenceInfoRow::start_and_read_()
     COORDINATOR_LOG_(WARN, "read row from table failed");
   } else if (CLICK_FAIL(convert_table_info_to_user_info_())) {
     COORDINATOR_LOG_(WARN, "convert table info to user info failed");
+  } else {
+    COORDINATOR_LOG_(INFO, "read __all_ls_election_reference_info");
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -392,7 +402,8 @@ int LsElectionReferenceInfoRow::get_row_from_table_()
   LC_TIME_GUARD(1_s);
   #define PRINT_WRAPPER KR(ret), K(*this)
   int ret = OB_SUCCESS;
-  const char *columns[5] = { "tenant_id", "ls_id", "zone_priority", "manual_leader_server", "blacklist" };
+  constexpr int64_t culumn_size = 5;
+  const char *columns[culumn_size] = { "tenant_id", "ls_id", "zone_priority", "manual_leader_server", "blacklist" };
   char buffer[STACK_BUFFER_SIZE] = {0};
   int64_t pos = 0;
   if (CLICK_FAIL(databuff_printf(buffer, STACK_BUFFER_SIZE, pos, "where tenant_id=%ld and ls_id=%ld for update", tenant_id_, ls_id_.id()))) {
@@ -402,8 +413,10 @@ int LsElectionReferenceInfoRow::get_row_from_table_()
     COORDINATOR_LOG_(WARN, "transaction is not started yet");
   } else {
     HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-      common::sqlclient::ObMySQLResult *result = ObTableAccessHelper::get_my_sql_result_(columns, share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME, buffer, trans_, exec_tenant_id_, res);
-      if (OB_NOT_NULL(result)) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(ObTableAccessHelper::get_my_sql_result_(columns, culumn_size, share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME, buffer, trans_, exec_tenant_id_, res, result))) {
+        COORDINATOR_LOG_(WARN, "fail to get mysql result");
+      } else if (OB_NOT_NULL(result)) {
         int64_t iter_times = 0;
         while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           if (++iter_times > 1) {

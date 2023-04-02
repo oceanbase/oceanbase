@@ -93,6 +93,7 @@ protected:
   int close_table_for_each();
   int check_delete_affected_row();
   virtual int write_row_to_das_buffer() override;
+  virtual int check_need_exec_single_row() override;
 protected:
   DelRtDef2DArray del_rtdefs_;  //see the comment of DelCtDef2DArray
   ObErrLogService err_log_service_;

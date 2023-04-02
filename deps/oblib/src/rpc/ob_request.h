@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/net/ob_addr.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/time/ob_time_utility.h"
 #include "lib/queue/ob_link.h"
 #include "lib/hash/ob_fixed_hash2.h"
 #include "rpc/ob_packet.h"
@@ -61,10 +62,10 @@ public:
   };
 public:
   explicit ObRequest(Type type, int nio_protocol=0)
-      : ez_req_(NULL), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), pkt_(NULL),
+      : ez_req_(NULL), nio_protocol_(nio_protocol), type_(type), handle_ctx_(NULL), group_id_(0), sql_req_level_(0), pkt_(NULL),
         connection_phase_(ConnectionPhaseEnum::CPE_CONNECTED),
         recv_timestamp_(0), enqueue_timestamp_(0),
-        request_arrival_time_(0), arrival_push_diff_(0),
+        request_arrival_time_(0), recv_mts_(), arrival_push_diff_(0),
         push_pop_diff_(0), pop_process_start_diff_(0),
         process_start_end_diff_(0), process_end_response_diff_(0),
         trace_id_(),discard_flag_(false),large_retry_flag_(false),retry_times_(0)
@@ -80,6 +81,8 @@ public:
 
   int32_t get_group_id() const { return group_id_; }
   void set_group_id(const int32_t &group_id) { group_id_ = group_id; }
+  int64_t get_sql_request_level() const { return sql_req_level_; }
+  void set_sql_request_level(const int64_t &sql_req_level) { sql_req_level_ = sql_req_level; }
   bool large_retry_flag() const { return large_retry_flag_; }
   void set_large_retry_flag(bool large_retry_flag) { large_retry_flag_ = large_retry_flag; }
 
@@ -91,6 +94,7 @@ public:
   void set_request_opacket_size(int64_t size);
   int64_t get_send_timestamp() const;
   int64_t get_receive_timestamp() const;
+  common::ObMonotonicTs get_receive_mts() const;
   void set_receive_timestamp(const int64_t recv_timestamp);
   void set_enqueue_timestamp(const int64_t enqueue_timestamp);
   void set_request_arrival_time(const int64_t now);
@@ -125,7 +129,7 @@ public:
 
   ObLockWaitNode &get_lock_wait_node() { return lock_wait_node_; }
   bool is_retry_on_lock() const { return lock_wait_node_.try_lock_times_ > 0;}
-  VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
+  VIRTUAL_TO_STRING_KV("packet", pkt_, "type", type_, "group", group_id_, "sql_req_level", sql_req_level_, "connection_phase", connection_phase_, K(recv_timestamp_), K(enqueue_timestamp_), K(request_arrival_time_), K(trace_id_));
 
   ObLockWaitNode lock_wait_node_;
   mutable ObReusableMem reusable_mem_;
@@ -136,11 +140,14 @@ protected:
   Type type_;
   void* handle_ctx_;
   int32_t group_id_;
+  int64_t sql_req_level_;
   const ObPacket *pkt_; // set in rpc handler
   ConnectionPhaseEnum connection_phase_;
   int64_t recv_timestamp_;
   int64_t enqueue_timestamp_;
   int64_t request_arrival_time_;
+  // only used by transaction
+  common::ObMonotonicTs recv_mts_;
   int32_t arrival_push_diff_;
   int32_t push_pop_diff_;
   int32_t pop_process_start_diff_;
@@ -174,7 +181,7 @@ inline void ObRequest::set_ez_req(easy_request_t *r)
 inline void ObRequest::enable_request_ratelimit()
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->ratelimit_enabled = 1;
     ez_req_->redispatched = 0;
@@ -184,7 +191,7 @@ inline void ObRequest::enable_request_ratelimit()
 inline void ObRequest::set_request_background_flow()
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->is_bg_flow = 1;
   }
@@ -193,7 +200,7 @@ inline void ObRequest::set_request_background_flow()
 inline void ObRequest::set_request_opacket_size(int64_t size)
 {
   if (OB_ISNULL(ez_req_)) {
-    RPC_LOG(ERROR, "invalid argument", K(ez_req_));
+    RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
   } else {
     ez_req_->opacket_size = size;
   }
@@ -204,9 +211,16 @@ inline int64_t ObRequest::get_receive_timestamp() const
   return recv_timestamp_;
 }
 
+inline common::ObMonotonicTs ObRequest::get_receive_mts() const
+{
+  return recv_mts_;
+}
+
 inline void ObRequest::set_receive_timestamp(const int64_t recv_timestamp)
 {
   recv_timestamp_ = recv_timestamp;
+  // used by transaction
+  recv_mts_ = ObMonotonicTs::current_time();
 }
 
 inline int64_t ObRequest::get_enqueue_timestamp() const

@@ -24,6 +24,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 
 using namespace oceanbase;
 using namespace share;
@@ -49,6 +50,7 @@ const char *const ObBackupConfigType::type_str[ObBackupConfigType::Type::MAX_CON
   "log_archive_dest_state_7",
   "log_archive_dest_8",
   "log_archive_dest_state_8",
+  "log_restore_source",
 };
 
 int ObBackupConfigType::set_backup_config_type(const common::ObString& str) {
@@ -82,7 +84,7 @@ const char *ObBackupConfigType::get_backup_config_type_str()
   const char *str = "UNKNOWN";
   STATIC_ASSERT(Type::MAX_CONFIG_NAME == ARRAYSIZEOF(type_str), "types count mismatch");
   if (type_ < Type::DATA_BACKUP_DEST || type_ >= Type::MAX_CONFIG_NAME) {
-    LOG_ERROR("invalid backup config type", K(type_));
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid backup config type", K(type_));
   } else {
     str = type_str[type_];
   }
@@ -191,6 +193,7 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 6, LOG_ARCHIVE_DEST_STATE_6, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 7, LOG_ARCHIVE_DEST_STATE_7, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 8, LOG_ARCHIVE_DEST_STATE_8, tenant_id);
+    GENERATE_LOG_ARCHIVE_PARSER(RestoreSource, 0, LOG_RESTORE_SOURCE, tenant_id);
     default: {
       ret = OB_ERR_SYS;
       LOG_ERROR("invalid config type", K(ret), K(type));
@@ -669,7 +672,7 @@ int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &
   if (name.empty() || value.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value));
-  } else if (0 == STRCASECMP(value.ptr(), OB_STR_ENBALE)
+  } else if (0 == STRCASECMP(value.ptr(), OB_STR_ENABLE)
       || 0 == STRCASECMP(value.ptr(), OB_STR_DISABLE)) {
     share::BackupConfigItemPair pair;
     if (OB_FAIL(pair.key_.assign(name))) {
@@ -733,5 +736,99 @@ int ObLogArchiveDestStateConfigParser::check_before_update_inner_config(obrpc::O
 {
   int ret = OB_SUCCESS;
   // do nothing
+  return ret;
+}
+
+int ObLogArchiveRestoreSourceConfigParser::update_inner_config_table(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestMgr dest_mgr;
+  ObLogRestoreSourceMgr restore_source_mgr;
+  ObAllTenantInfo tenant_info;
+
+  if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", KR(ret), KPC(this));
+  } else if (OB_FAIL(restore_source_mgr.init(tenant_id_, &trans))) {
+    LOG_WARN("failed to init restore_source_mgr", KR(ret), KPC(this));
+  } else if (is_empty_) {
+    if (OB_FAIL(restore_source_mgr.delete_source())) {
+      LOG_WARN("failed to delete restore source", KR(ret), KPC(this));
+    }
+  } else {
+    if (!archive_dest_.is_dest_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid restore source", KR(ret), KPC(this));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
+    } else if (OB_FAIL(archive_dest_.gen_path_config_items(config_items_))) {
+      LOG_WARN("fail to gen archive config items", KR(ret), KPC(this));
+    } else {
+      ObString key_string = ObString::make_string(config_items_.at(0).key_.ptr());
+      ObString path_string = ObString::make_string(OB_STR_PATH);
+      ObString value_string = ObString::make_string(config_items_.at(0).value_.ptr());
+      if (1 != config_items_.count()
+          || path_string != key_string
+          || config_items_.at(0).value_.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid archive source", KR(ret), KPC(this));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
+      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
+                                                                true /* for update */, tenant_info))) {
+        LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(restore_source_mgr.add_location_source(tenant_info.get_recovery_until_scn(),
+                                                                value_string))) {
+        LOG_WARN("failed to add log restore source", KR(ret), K(tenant_info), K(value_string), KPC(this));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogArchiveRestoreSourceConfigParser::check_before_update_inner_config(
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_empty_) {
+  } else if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parser", KR(ret), KPC(this));
+  }
+  //TODO (zbf271370) need supports format check, checks whether the directory exists, and is a log backup
+
+  //TODO (wenjinyu.wjy) need support access permission check
+  //
+  return ret;
+}
+
+int ObLogArchiveRestoreSourceConfigParser::do_parse_sub_config_(const common::ObString &config_str)
+{
+  int ret = OB_SUCCESS;
+  const char *target= nullptr;
+  if (config_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty log restore source is not allowed", KR(ret), K(config_str));
+  } else {
+    char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+    char *token = nullptr;
+    char *saveptr = nullptr;
+    char *p_end = nullptr;
+    if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", config_str.length(), config_str.ptr()))) {
+      LOG_WARN("fail to set config value", KR(ret), K(config_str));
+    } else if (OB_ISNULL(token = ::STRTOK_R(tmp_str, "=", &saveptr))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to split config str", K(ret), KP(token));
+    } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
+    } else if (0 == STRCASECMP(token, OB_STR_LOCATION)) {
+      if (OB_FAIL(do_parse_log_archive_dest_(token, saveptr))) {
+        LOG_WARN("fail to do parse log archive dest", KR(ret), K(token), K(saveptr));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("log restore source does not has this config", KR(ret), K(token));
+    }
+  }
   return ret;
 }

@@ -26,13 +26,23 @@ class ObPxMultiPartInsertOpInput : public ObPxMultiPartModifyOpInput
   OB_UNIS_VERSION_V(1);
 public:
   ObPxMultiPartInsertOpInput(ObExecContext &ctx, const ObOpSpec &spec)
-    : ObPxMultiPartModifyOpInput(ctx, spec)
+    : ObPxMultiPartModifyOpInput(ctx, spec),
+      error_code_(OB_SUCCESS)
   {}
   int init(ObTaskInfo &task_info) override
   {
     return ObPxMultiPartModifyOpInput::init(task_info);
   }
+  void reset() override
+  {
+    ObPxMultiPartModifyOpInput::reset();
+    error_code_ = OB_SUCCESS;
+  }
+  inline void set_error_code(const int error_code) { error_code_ = error_code; }
+  inline int get_error_code() const { return error_code_; }
+  TO_STRING_KV(K_(error_code));
 private:
+  int error_code_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartInsertOpInput);
 };
 

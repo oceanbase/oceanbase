@@ -106,7 +106,8 @@ int ObAlterDatabaseResolver::resolve(const ParseNode &parse_tree)
       } else {
         ObDatabaseResolver<ObAlterDatabaseStmt> resolver;
         if (OB_FAIL(resolver.resolve_database_options(alter_database_stmt,
-                                                      dboption_node))) {
+                                                      dboption_node,
+                                                      session_info_))) {
           LOG_WARN("resolve database option failed", K(ret));
         } else {
           if(resolver.get_alter_option_bitset().has_member(obrpc::ObAlterDatabaseArg::PRIMARY_ZONE)) {

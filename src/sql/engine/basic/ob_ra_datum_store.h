@@ -306,6 +306,7 @@ public:
 
   private:
     void reset_cursor(const int64_t file_size);
+    void free_all_blks();
 
   private:
     ObRADatumStore &store_;
@@ -338,7 +339,8 @@ public:
   int init(int64_t mem_limit,
            uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
            int64_t mem_ctx_id = common::ObCtxIds::DEFAULT_CTX_ID,
-           const char *label = common::ObModIds::OB_SQL_ROW_STORE);
+           const char *label = common::ObModIds::OB_SQL_ROW_STORE,
+           uint32_t row_extend_size = 0);
 
   void reset();
   // Keeping one memory block, reader must call reuse() too.
@@ -376,6 +378,8 @@ public:
 
   void set_mem_hold(int64_t hold);
   void inc_mem_hold(int64_t hold);
+  void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
 
   TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
       K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size));
@@ -431,7 +435,7 @@ private:
 
   int64_t mem_hold_;
   common::DefaultPageAllocator inner_allocator_;
-  common::ObIAllocator &allocator_;
+  common::ObIAllocator *allocator_;
 
   uint32_t row_extend_size_;
   ObSqlMemoryCallback *mem_stat_;

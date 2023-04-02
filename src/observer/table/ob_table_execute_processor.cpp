@@ -12,12 +12,14 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_execute_processor.h"
-#include "ob_table_rpc_processor_util.h"
 #include "observer/ob_service.h"
 #include "ob_table_end_trans_cb.h"
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "lib/stat/ob_session_stat.h"
 #include "storage/tx_storage/ob_access_service.h"
+#include "ob_table_scan_executor.h"
+#include "ob_table_cg_service.h"
+#include "observer/ob_req_time_service.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -33,13 +35,13 @@ int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &enti
   int64_t val = 0;
   if (3 == entity.get_rowkey_size()) {
     if (OB_FAIL(entity.get_rowkey_value(2, T_val))) {
-      LOG_WARN("failed to get T from entity", K(ret), K(entity));
+      LOG_WARN("fail to get T from entity", K(ret), K(entity));
     } else if (OB_FAIL(T_val.get_int(val))) {
       LOG_WARN("invalid obj type for T", K(ret), K(T_val));
     } else {
       T_val.set_int(-val);
       if (OB_FAIL(entity.set_rowkey_value(2, T_val))) {
-        LOG_WARN("failed to negate T value", K(ret));
+        LOG_WARN("fail to negate T value", K(ret));
       } else {
         LOG_DEBUG("[yzfdebug] nenative T value", K(ret), K(T_val));
       }
@@ -51,8 +53,8 @@ int ObTableRpcProcessorUtil::negate_htable_timestamp(table::ObITableEntity &enti
 ////////////////////////////////////////////////////////////////
 ObTableApiExecuteP::ObTableApiExecuteP(const ObGlobalContext &gctx)
     :ObTableRpcProcessor(gctx),
-     allocator_(ObModIds::TABLE_PROC),
-     get_ctx_(allocator_),
+     allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+     tb_ctx_(allocator_),
      need_rollback_trans_(false),
      query_timeout_ts_(0)
 {
@@ -87,14 +89,100 @@ int ObTableApiExecuteP::check_arg()
 int ObTableApiExecuteP::check_arg2() const
 {
   int ret = OB_SUCCESS;
-  if (arg_.returning_rowkey_
-      || arg_.returning_affected_entity_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("some options not supported yet", K(ret),
-             "returning_rowkey", arg_.returning_rowkey_,
-             "returning_affected_entity", arg_.returning_affected_entity_,
-             "operation_type", arg_.table_operation_.type());
+  ObTableOperationType::Type op_type = arg_.table_operation_.type();
+
+  if (ObTableOperationType::Type::APPEND != op_type &&
+      ObTableOperationType::Type::INCREMENT != op_type) {
+    if (arg_.returning_rowkey_ || arg_.returning_affected_entity_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some options not supported yet", K(ret),
+              "returning_rowkey", arg_.returning_rowkey_,
+              "returning_affected_entity", arg_.returning_affected_entity_,
+              "operation_type", op_type);
+    }
   }
+
+  return ret;
+}
+
+int ObTableApiExecuteP::init_tb_ctx()
+{
+  int ret = OB_SUCCESS;
+  ObExprFrameInfo *expr_frame_info = nullptr;
+  ObTableOperationType::Type op_type = arg_.table_operation_.type();
+  tb_ctx_.set_entity(&arg_.table_operation_.entity());
+  tb_ctx_.set_operation_type(op_type);
+
+  if (tb_ctx_.is_init()) {
+    LOG_INFO("tb ctx has been inited", K_(tb_ctx));
+  } else if (OB_FAIL(tb_ctx_.init_common(credential_,
+                                         arg_.tablet_id_,
+                                         arg_.table_name_,
+                                         get_timeout_ts()))) {
+    LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
+  } else {
+    switch(op_type) {
+      case ObTableOperationType::INSERT: {
+        if (OB_FAIL(tb_ctx_.init_insert())) {
+          LOG_WARN("fail to init insert ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::UPDATE: {
+        if (OB_FAIL(tb_ctx_.init_update())) {
+          LOG_WARN("fail to init update ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::DEL: {
+        if (OB_FAIL(tb_ctx_.init_delete())) {
+          LOG_WARN("fail to init delete ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::REPLACE: {
+        if (OB_FAIL(tb_ctx_.init_replace())) {
+          LOG_WARN("fail to init replace ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::INSERT_OR_UPDATE: {
+        if (OB_FAIL(tb_ctx_.init_insert_up())) {
+          LOG_WARN("fail to init insert up ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::APPEND: {
+        if (OB_FAIL(tb_ctx_.init_append(arg_.returning_affected_entity_,
+                                        arg_.returning_rowkey_))) {
+          LOG_WARN("fail to init append ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::INCREMENT: {
+        if (OB_FAIL(tb_ctx_.init_increment(arg_.returning_affected_entity_,
+                                           arg_.returning_rowkey_))) {
+          LOG_WARN("fail to init increment ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      case ObTableOperationType::GET: {
+        if (OB_FAIL(tb_ctx_.init_get())) {
+          LOG_WARN("fail to init get ctx", K(ret), K(tb_ctx_));
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid operation type", K(ret), K(op_type));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tb_ctx_.init_exec_ctx())) {
+      LOG_WARN("fail to init exec ctx", K(ret), K(tb_ctx_));
+    }
+  }
+
   return ret;
 }
 
@@ -102,10 +190,6 @@ int ObTableApiExecuteP::process()
 {
   int ret = OB_SUCCESS;
   ret = ParentType::process();
-  int tmp_ret = revert_get_ctx();
-  if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("fail to revert get ctx", K(tmp_ret));
-  }
   return ret;
 }
 
@@ -131,7 +215,7 @@ int ObTableApiExecuteP::try_process()
     switch (table_operation.type()) {
       case ObTableOperationType::INSERT:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT;
-        ret = process_insert();
+        ret = process_dml_op<TABLE_API_EXEC_INSERT>();
         break;
       case ObTableOperationType::GET:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
@@ -139,28 +223,27 @@ int ObTableApiExecuteP::try_process()
         break;
       case ObTableOperationType::DEL:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_DELETE;
-        ret = process_del();
+        ret = process_dml_op<TABLE_API_EXEC_DELETE>();
         break;
       case ObTableOperationType::UPDATE:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_UPDATE;
-        ret = process_update();
+        ret = process_dml_op<TABLE_API_EXEC_UPDATE>();
         break;
       case ObTableOperationType::INSERT_OR_UPDATE:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE;
-        ret = process_insert_or_update();
+        ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
         break;
       case ObTableOperationType::REPLACE:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_REPLACE;
-        ret = process_replace();
+        ret = process_dml_op<TABLE_API_EXEC_REPLACE>();
         break;
       case ObTableOperationType::INCREMENT:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
-        ret = process_increment();
+        ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
         break;
       case ObTableOperationType::APPEND:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
-        // for both increment and append
-        ret = process_increment();
+        ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
         break;
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -178,25 +261,6 @@ int ObTableApiExecuteP::try_process()
   LOG_TRACE("[TABLE] execute operation", K(ret), K_(arg), K_(result),
             "timeout", rpc_pkt_->get_timeout(), "receive_ts", get_receive_timestamp(), K_(retry_count));
 #endif
-  return ret;
-}
-
-int ObTableApiExecuteP::revert_get_ctx()
-{
-  int ret = OB_SUCCESS;
-  if (ObTableOperationType::GET == arg_.table_operation_.type()) {
-    if (NULL != get_ctx_.scan_result_) {
-      access_service_->revert_scan_iter(get_ctx_.scan_result_);
-      get_ctx_.scan_result_ = NULL;
-    }
-    if (query_timeout_ts_ <= 0) {
-      // for robust purpose
-      query_timeout_ts_ = ObTimeUtility::current_time() + 1000000;
-    }
-    if (OB_FAIL(end_trans(need_rollback_trans_, req_, query_timeout_ts_))) {
-      LOG_WARN("failed to end trans", K(ret));
-    }
-  }
   return ret;
 }
 
@@ -241,8 +305,6 @@ int ObTableApiExecuteP::response(const int retcode)
 
 void ObTableApiExecuteP::reset_ctx()
 {
-  (void)revert_get_ctx();
-  get_ctx_.reset_dml();
   ObTableApiProcessorBase::reset_ctx();
   need_rollback_trans_ = false;
   need_retry_in_queue_ = false;
@@ -256,9 +318,9 @@ int ObTableApiExecuteP::get_tablet_id(uint64_t table_id, const ObRowkey &rowkey,
     ObSEArray<ObRowkey, 1> rowkeys;
     ObSEArray<ObTabletID, 1> tablet_ids;
     if (OB_FAIL(rowkeys.push_back(rowkey))) {
-      LOG_WARN("failed to push back", K(ret));
+      LOG_WARN("fail to push back", K(ret));
     } else if (OB_FAIL(get_tablet_by_rowkey(table_id, rowkeys, tablet_ids))) {
-      LOG_WARN("failed to get partition", K(ret), K(table_id), K(rowkeys));
+      LOG_WARN("fail to get partition", K(ret), K(table_id), K(rowkeys));
     } else if (1 != tablet_ids.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("should have one tablet", K(ret));
@@ -271,42 +333,49 @@ int ObTableApiExecuteP::get_tablet_id(uint64_t table_id, const ObRowkey &rowkey,
   return ret;
 }
 
-////////////////////////////////////////////////////////////////
-// get
 int ObTableApiExecuteP::process_get()
 {
   int ret = OB_SUCCESS;
-  need_rollback_trans_ = false;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_);
-  const bool is_readonly = true;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObNewRow *row = nullptr;
   if (OB_FAIL(check_arg2())) {
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level,
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start readonly transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_get(get_ctx_, arg_.table_operation_, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to execute get", K(ret), K(table_id));
+    LOG_WARN("fail to check arg", K(ret));
+  } else if (OB_FAIL(init_tb_ctx())) {
+    LOG_WARN("fail to init table ctx", K(ret));
+  } else if (OB_FAIL(init_read_trans(arg_.consistency_level_,
+                                     tb_ctx_.get_ls_id(),
+                                     tb_ctx_.get_timeout_ts()))) {
+    LOG_WARN("fail to init wead read trans", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+    LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(ObTableOpWrapper::process_get(tb_ctx_, row))) {
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get row", K(ret));
     }
-  } else {}
-  // end trans in after_process()
-  need_rollback_trans_ = (OB_SUCCESS != ret);
+  } else {
+    // fill result entity
+    ObITableEntity *result_entity = nullptr;
+    const ObTableSchema *table_schema = tb_ctx_.get_table_schema();
+    if (OB_FAIL(result_.get_entity(result_entity))) {
+      LOG_WARN("fail to get result entity", K(ret));
+    } else if (OB_FAIL(ObTableApiUtil::construct_entity_from_row(allocator_,
+                                                                 row,
+                                                                 table_schema,
+                                                                 tb_ctx_.get_query_col_names(),
+                                                                 result_entity))) {
+      LOG_WARN("fail to fill result entity", K(ret));
+    }
+  }
+
+  release_read_trans();
+  result_.set_errno(ret);
+  ObTableApiUtil::replace_ret_code(ret);
+  result_.set_type(arg_.table_operation_.type());
+
   return ret;
 }
+
 
 ////////////////////////////////////////////////////////////////
 // insert_or_update
@@ -317,7 +386,7 @@ ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
     // @todo optimize to avoid this copy
     int ret = OB_SUCCESS;
     if (OB_FAIL(cb->assign_execute_result(result_))) {
-      LOG_WARN("failed to assign result", K(ret));
+      LOG_WARN("fail to assign result", K(ret));
       cb->~ObTableExecuteEndTransCb();
       cb = NULL;
     } else {
@@ -325,233 +394,4 @@ ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
     }
   }
   return cb;
-}
-
-int ObTableApiExecuteP::process_insert_or_update()
-{
-  int ret = OB_SUCCESS;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_);
-
-  const bool is_readonly = false;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(check_arg2())) {
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, consistency_level,
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_insert_or_update(get_ctx_, arg_.table_operation_, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to insert_or_update", K(ret), K(table_id));
-    }
-  }
-  int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("failed to end trans", K(ret));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-  return ret;
-}
-
-int ObTableApiExecuteP::process_del()
-{
-  int ret = OB_SUCCESS;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_);
-  const bool is_readonly = false;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(check_arg2())) {
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, consistency_level,
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_delete(get_ctx_, arg_.table_operation_, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to delete", K(ret), K(table_id));
-    }
-  }
-  int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("failed to end trans", K(ret));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-  return ret;
-}
-
-int ObTableApiExecuteP::process_replace()
-{
-  int ret = OB_SUCCESS;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_);
-  const bool is_readonly = false;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(check_arg2())) {
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_REPLACE, consistency_level, 
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start transaction", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));    
-  } else if (OB_FAIL(table_service_->execute_replace(get_ctx_, arg_.table_operation_, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to replace", K(ret), K(table_id));
-    }
-  }
-  int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("failed to end trans", K(ret));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-  return ret;
-}
-
-int ObTableApiExecuteP::process_insert()
-{
-  int ret = OB_SUCCESS;
-  ObNewRowIterator *duplicate_row_iter = nullptr;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_);
-
-  const bool is_readonly = false;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(check_arg2())) {
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, consistency_level, 
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_insert(get_ctx_,
-      arg_.table_operation_, result_, duplicate_row_iter))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to insert", K(ret), K(table_id));
-    }
-  }
-  int tmp_ret = ret;
-  const bool did_rollback = (OB_SUCCESS != ret || OB_SUCCESS != result_.get_errno());
-  if (OB_FAIL(end_trans(did_rollback, req_, get_timeout_ts()))) {
-    LOG_WARN("failed to end trans", K(ret));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-  return ret;
-}
-
-
-int ObTableApiExecuteP::process_update()
-{
-  int ret = OB_SUCCESS;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_);
-  const bool is_readonly = false;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(check_arg2())) {
-  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_UPDATE, consistency_level,
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_update(get_ctx_, arg_.table_operation_, nullptr, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to update", K(ret), K(table_id));
-    }
-  }
-  int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("failed to end trans", K(ret));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-  return ret;
-}
-
-int ObTableApiExecuteP::process_increment()
-{
-  int ret = OB_SUCCESS;
-  uint64_t &table_id = get_ctx_.param_table_id();
-  get_ctx_.init_param(get_timeout_ts(), this, &allocator_,
-                      arg_.returning_affected_rows_,
-                      arg_.entity_type_,
-                      arg_.binlog_row_image_type_,
-                      arg_.returning_affected_entity_,
-                      arg_.returning_rowkey_);
-  const bool is_readonly = false;
-  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
-  ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-    LOG_WARN("failed to get table id", K(ret), K(table_id));
-  } else if (OB_FAIL(get_tablet_id(table_id, rowkey, get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to get tablet id", K(ret));
-  } else if (OB_FAIL(get_ls_id(get_ctx_.param_tablet_id(), get_ctx_.param_ls_id()))) {
-    LOG_WARN("failed to get ls id", K(ret)); 
-  } else if (OB_FAIL(tablet_ids.push_back(get_ctx_.param_tablet_id()))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_UPDATE, consistency_level,
-                                 table_id, get_ctx_.param_ls_id(), get_timeout_ts()))) {
-    LOG_WARN("failed to start transaction", K(ret));
-  } else if (OB_FAIL(table_service_->execute_increment(get_ctx_, arg_.table_operation_, result_))) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("failed to update", K(ret), K(table_id));
-    }
-  }
-  int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("failed to end trans", K(ret));
-  }
-  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
-  return ret;
 }

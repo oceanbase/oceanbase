@@ -74,7 +74,7 @@ public:
   Iterator &operator ++()
   {
     if (OB_ISNULL(hash_map_)) {
-      SHARE_LOG(ERROR, "hash_map_ is null");
+      SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "hash_map_ is null");
     } else if (NULL != node_ && NULL != (node_ = node_->next_)) {
       // do nothing
     } else {
@@ -257,7 +257,7 @@ typename ObFixedHashMap<Key, Value, HashFunc>::iterator ObFixedHashMap<Key, Valu
   Node *node = NULL;
   int64_t bucket_pos = 0;
   if (!inited_) {
-    SHARE_LOG(WARN, "not init");
+    SHARE_LOG_RET(WARN, common::OB_NOT_INIT, "not init");
   } else {
     while (NULL == node && bucket_pos < bucket_num_) {
       node = buckets_[bucket_pos];

@@ -59,7 +59,7 @@ void TestBackupIndexCache::SetUp()
   const int64_t bucket_num = 1024;
   const int64_t max_cache_size = 1024 * 1024 * 1024;
   const int64_t block_size = lib::ACHUNK_SIZE;
-  const uint64_t tenant_id = 1002;
+  const uint64_t tenant_id = 1;
   ret = getter.add_tenant(tenant_id, lower_mem_limit_, upper_mem_limit_);
   ret = ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
   if (OB_INIT_TWICE == ret) {
@@ -84,10 +84,10 @@ static bool cmp_backup_index_cache_value(const ObBackupIndexCacheValue *lhs, con
   bool bret = true;
   if (OB_ISNULL(lhs) || OB_ISNULL(rhs)) {
     bret = false;
-    LOG_WARN("lhs or rhs is null", KP(lhs), KP(rhs));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "lhs or rhs is null", KP(lhs), KP(rhs));
   } else if (lhs->len() != rhs->len()) {
     bret = false;
-    LOG_WARN("lhs and rhs not equal", K(lhs), K(rhs));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "lhs and rhs not equal", K(lhs), K(rhs));
   } else {
     const int64_t len = lhs->len();
     const char *lhs_buf = lhs->buf();
@@ -95,7 +95,7 @@ static bool cmp_backup_index_cache_value(const ObBackupIndexCacheValue *lhs, con
     for (int64_t i = 0; i < len; ++i) {
       if (lhs_buf[i] != rhs_buf[i]) {
         bret = false;
-        LOG_WARN("buf content is not same", K(lhs_buf[i]), K(rhs_buf[i]), K(i));
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "buf content is not same", K(lhs_buf[i]), K(rhs_buf[i]), K(i));
         break;
       }
     }

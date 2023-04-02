@@ -58,6 +58,7 @@ public:
 
 public:
   int init(const int64_t thread_num,
+      void *fetcher_host_host,
       IObLogLSFetchMgr &ls_fetch_mgr,
       IObLogErrHandler &err_handler);
   void destroy();
@@ -81,6 +82,7 @@ private:
 
 private:
   bool                      inited_;
+  void                      *fetcher_host_;
   IObLogErrHandler          *err_handler_;
   IObLogLSFetchMgr          *ls_fetch_mgr_;
 

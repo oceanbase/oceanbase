@@ -8,6 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
+ * This file contains implementation for json_extract.
  */
 
 #define USING_LOG_PREFIX SQL_ENG
@@ -73,8 +74,12 @@ int ObExprJsonExtract::calc_result_typeN(ObExprResType& type,
     }
 
     if (OB_SUCC(ret)) {
-      type.set_json();
-      type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+      if (is_null_result) {
+        type.set_null();
+      } else {
+        type.set_json();
+        type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+      }
     }
   }
   return ret;
@@ -115,7 +120,9 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else {
     ObString j_str = json_datum->get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base))) {
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null_result))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
     }
@@ -144,10 +151,12 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
       } else {
         ObString path_text = path_data->get_string();
         ObJsonPath *j_path = NULL;
-        if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, path_text, i, true))) {
-          LOG_WARN("parse text to path failed", K(path_data->get_string()), K(ret));
+        if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[i], ctx, allocator, path_text, is_null_result))) {
+          LOG_WARN("fail to get real data.", K(ret), K(path_text));
+        } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(path_cache, j_path, path_text, i, true))) {
+          LOG_WARN("parse text to path failed", K(path_text), K(ret));
         } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, false, hit))) {
-          LOG_WARN("json seek failed", K(path_data->get_string()), K(ret));
+          LOG_WARN("json seek failed", K(path_text), K(ret));
         } else {
           if (j_path->can_match_many()) {
             may_match_many = true;
@@ -187,15 +196,8 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
         LOG_WARN("json extarct get results failed", K(ret));
       } else if (OB_FAIL(jb_res->get_raw_binary(raw_str, &allocator))) {
         LOG_WARN("json extarct get result binary failed", K(ret));
-      } else {
-        char *buf = expr.get_str_res_mem(ctx, raw_str.length());
-        if (OB_UNLIKELY(buf == NULL)){
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory for result failed", K(raw_str.length()), K(ret));
-        } else {
-          MEMCPY(buf, raw_str.ptr(), raw_str.length());
-          res.set_string(buf, raw_str.length());
-        }
+      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_str))) {
+        LOG_WARN("fail to pack json result", K(ret));
       }
     }
   } else if (OB_SUCC(ret) && is_null_result) {

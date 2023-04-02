@@ -35,7 +35,7 @@ struct ObBackupLeaseInfo
 
 
   static const int64_t MAX_LEASE_TIME = 30 * 1000 * 1000;
-  static const int64_t MAX_LEASE_TAKEOVER_TIME = 10 * 60 * 1000 * 1000L;
+  static const int64_t MAX_LEASE_TAKEOVER_TIME = 10 * 1000 * 1000L;
 
   ObBackupLeaseInfo();
   void reset();

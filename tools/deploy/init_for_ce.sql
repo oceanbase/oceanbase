@@ -26,3 +26,5 @@ alter tenant mysql set variables recyclebin = 'on';
 alter tenant mysql set variables ob_enable_truncate_flashback = 'on';
 alter system set ob_compaction_schedule_interval = '10s' tenant all;
 alter system set merger_check_interval = '10s' tenant all;
+alter system set enable_sql_extension=true tenant all;
+alter system set _enable_adaptive_compaction = false tenant all;

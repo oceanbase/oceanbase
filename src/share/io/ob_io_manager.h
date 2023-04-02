@@ -48,6 +48,8 @@ public:
 
   int pwrite(ObIOInfo &info, int64_t &write_size);
   
+  int detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms);
+
   // config related, thread safe
   int set_io_config(const ObIOConfig &conf);
   const ObIOConfig &get_io_config() const;
@@ -71,6 +73,7 @@ public:
   int refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
   int get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObTenantIOManager> &tenant_holder);
   int get_tenant_ids(ObIArray<uint64_t> &tenant_ids);
+  ObIOScheduler *get_scheduler();
 
 private:
   friend class ObTenantIOManager;
@@ -110,19 +113,49 @@ public:
   void stop();
   bool is_working() const;
   int inner_aio(const ObIOInfo &info, ObIOHandle &handle);
+  int detect_aio(const ObIOInfo &info, ObIOHandle &handle);
   int enqueue_callback(ObIORequest &req);
-  ObIOClock *get_io_clock() { return io_clock_; }
-  const ObIOUsage &get_io_usage() { return io_usage_; }
-  int update_io_config(const ObTenantIOConfig &io_config);
+  ObTenantIOClock *get_io_clock() { return io_clock_; }
+  ObIOUsage &get_io_usage() { return io_usage_; }
+  int update_basic_io_config(const ObTenantIOConfig &io_config);
   int alloc_io_request(ObIAllocator &allocator,const int64_t callback_size,  ObIORequest *&req);
-  int alloc_io_clock(ObIAllocator &allocator, ObIOClock *&io_clock);
+  int alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *&io_clock);
+  int init_group_index_map(const ObTenantIOConfig &io_config);
+  int get_group_index(const int64_t group_id, uint64_t &index);
+  int modify_group_io_config(const uint64_t index,
+                             const int64_t min_percent,
+                             const int64_t max_percent,
+                             const int64_t weight_percent,
+                             const bool deleted = false,
+                             const bool cleared = false);
+
+  //for modify group config
+  int modify_io_config(const uint64_t group_id,
+                       const int64_t min_percent,
+                       const int64_t max_percent,
+                       const int64_t weight_percent);
+  //for add group
+  int add_group_io_config(const int64_t group_id,
+                          const int64_t min_percent,
+                          const int64_t max_percent,
+                          const int64_t weight_percent);
+  //for delete plan
+  int reset_all_group_config();
+  //for delete directive
+  int reset_consumer_group_config(const int64_t group_id);
+  //for delete group
+  int delete_consumer_group_config(const int64_t group_id);
+  //随directive refresh而定期刷新(最晚10S一次)
+  int refresh_group_io_config();
   const ObTenantIOConfig &get_io_config();
   int trace_request_if_need(const ObIORequest *req, const char* msg, ObIOTracer::TraceType trace_type);
+  int64_t get_group_num();
+  uint64_t get_usage_index(const int64_t group_id);
   void print_io_status();
   void inc_ref();
   void dec_ref();
   TO_STRING_KV(K(is_inited_), K(ref_cnt_), K(tenant_id_), K(io_config_), K(io_clock_),
-      K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_));
+       K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_));
 private:
   friend class ObIORequest;
   bool is_inited_;
@@ -130,16 +163,18 @@ private:
   int64_t ref_cnt_;
   uint64_t tenant_id_;
   ObTenantIOConfig io_config_;
-  ObIOClock *io_clock_;
+  ObTenantIOClock *io_clock_;
   ObIOAllocator io_allocator_;
   ObIOScheduler *io_scheduler_;
   ObIOCallbackManager callback_mgr_;
   ObIOUsage io_usage_;
   ObIOTracer io_tracer_;
+  DRWLock io_config_lock_; //for map and config
+  hash::ObHashMap<uint64_t, uint64_t> group_id_index_map_; //key:group_id, value:index
 };
 
 #define OB_IO_MANAGER (oceanbase::common::ObIOManager::get_instance())
-}// end namespace oceanbase
+}// end namespace common
 }// end namespace oceanbase
 
 #endif//OCEANBASE_LIB_STORAGE_OB_IO_MANAGER_H

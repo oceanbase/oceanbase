@@ -15,7 +15,6 @@
 
 #include "common/object/ob_object.h"
 
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_plan_cache_callback.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"
@@ -59,20 +58,18 @@ int ObGVSql::inner_open()
   int ret = OB_SUCCESS;
   // sys tenant show all tenant plan cache stat
   if (is_sys_tenant(effective_tenant_id_)) {
-    ObPlanCacheManager::ObGetAllCacheKeyOp op(&tenant_id_array_);
-    if (OB_UNLIKELY(NULL == pcm_)) {
-      ret = OB_NOT_INIT;
-      SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-    } else if (OB_FAIL(pcm_->get_plan_cache_map().foreach_refactored(op))) {
-      SERVER_LOG(WARN, "fail to traverse pcm", K(ret));
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
+      SERVER_LOG(WARN, "failed to add tenant id", K(ret));
     }
   } else {
+    tenant_id_array_.reset();
     // user tenant show self tenant stat
     if (OB_FAIL(tenant_id_array_.push_back(effective_tenant_id_))) {
       SERVER_LOG(WARN, "fail to push back effective_tenant_id_", KR(ret), K(effective_tenant_id_),
           K(tenant_id_array_));
     }
   }
+  SERVER_LOG(TRACE,"get tenant_id array", K(effective_tenant_id_), K(is_sys_tenant(effective_tenant_id_)), K(tenant_id_array_));
   return ret;
 }
 
@@ -83,24 +80,15 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
   ObReqTimeGuard req_timeinfo_guard;
   is_end = false;
   if (OB_INVALID_ID == static_cast<uint64_t>(plan_id_array_idx_)) {
-    if (OB_UNLIKELY(NULL == pcm_)) {
-      ret = OB_NOT_INIT;
-      SERVER_LOG(WARN, "pcm_ is NULL", K(ret));
-    } else if (OB_UNLIKELY(NULL != plan_cache_)){
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "before get_plan_cache, the point of plan_cache must be NULL", K(ret));
-    } else if (OB_UNLIKELY(NULL == (plan_cache_ = pcm_->get_plan_cache(tenant_id)))) {
-      SERVER_LOG(WARN, "plan cache is null", K(ret));
+    plan_cache_ = MTL(ObPlanCache*);
+    NG_TRACE(trav_ps_map_start);
+    ObGetAllCacheIdOp plan_id_op(&plan_id_array_);
+    if (OB_FAIL(plan_cache_->foreach_cache_obj(plan_id_op))) {
+      SERVER_LOG(WARN, "fail to traverse id2stat_map");
     } else {
-      NG_TRACE(trav_ps_map_start);
-      ObGetAllCacheIdOp plan_id_op(&plan_id_array_);
-      if (OB_FAIL(plan_cache_->foreach_cache_obj(plan_id_op))) {
-        SERVER_LOG(WARN, "fail to traverse id2stat_map");
-      } else {
-        plan_id_array_idx_ = 0;
-      }
-      NG_TRACE(trav_ps_map_end);
+      plan_id_array_idx_ = 0;
     }
+    NG_TRACE(trav_ps_map_end);
   }
   if (NULL == plan_cache_) {
     // do nothing
@@ -119,7 +107,6 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "plan cache is null", K(ret));
         } else {
-          plan_cache_->dec_ref_count();
           plan_cache_ = NULL;
         }
       } else {
@@ -128,17 +115,17 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
         ++plan_id_array_idx_;
         ObCacheObjGuard guard(GV_SQL_HANDLE);
         int tmp_ret = plan_cache_->ref_cache_obj(plan_id, guard); //plan引用计数加1
-        ObPlanCacheObject *cache_obj = static_cast<ObPlanCacheObject*>(guard.get_cache_obj());
+
         //如果当前plan_id对应的plan已被淘汰, 则忽略继续获取下一个plan
         if (OB_HASH_NOT_EXIST == tmp_ret) {
           //do nothing;
         } else if (OB_SUCCESS != tmp_ret) {
           ret = tmp_ret;
-        } else if (OB_ISNULL(cache_obj)) {
+        } else if (OB_ISNULL(guard.get_cache_obj())) {
           ret = OB_ERR_UNEXPECTED;
           //SERVER_LOG(WARN, "cache object is NULL", K(ret));
-        } else if (OB_FAIL(fill_cells(cache_obj, *plan_cache_))) { //plan exist
-          SERVER_LOG(WARN, "fail to fill cells", K(cache_obj), K(tenant_id));
+        } else if (OB_FAIL(fill_cells(guard.get_cache_obj(), *plan_cache_))) { //plan exist
+          SERVER_LOG(WARN, "fail to fill cells", KPC(guard.get_cache_obj()), K(tenant_id));
         } else {
           is_filled = true;
         }
@@ -153,7 +140,7 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
   return ret;
 }
 
-int ObGVSql::fill_cells(const ObPlanCacheObject *cache_obj, const ObPlanCache &plan_cache)
+int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &plan_cache)
 {
   int ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();
@@ -359,10 +346,17 @@ int ObGVSql::fill_cells(const ObPlanCacheObject *cache_obj, const ObPlanCache &p
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PARAM_INFOS: {
       if (cache_obj->is_sql_crsr()) {
-        cells[i].set_lob_value(ObLongTextType, plan->stat_.param_infos_.ptr(),
-                               static_cast<int32_t>(plan->stat_.param_infos_.length()));
-        cells[i].set_collation_type(ObCharset::get_default_collation(
-                                      ObCharset::get_default_charset()));
+        ObString param_info_lob_str;
+        if (OB_FAIL(ob_write_string(*allocator_,
+                                    plan->stat_.param_infos_,
+                                    param_info_lob_str))) {
+          SERVER_LOG(ERROR, "copy param_infos failed", K(ret));
+        } else {
+          cells[i].set_lob_value(ObLongTextType, param_info_lob_str.ptr(),
+                                  static_cast<int32_t>(param_info_lob_str.length()));
+          cells[i].set_collation_type(ObCharset::get_default_collation(
+                                        ObCharset::get_default_charset()));
+        }
       } else {
         cells[i].set_null();
       }
@@ -853,6 +847,35 @@ int ObGVSql::fill_cells(const ObPlanCacheObject *cache_obj, const ObPlanCache &p
       cells[i].set_int(cache_obj->get_obj_status());
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::RULE_NAME: {
+      ObString rule_name;
+      if (!cache_obj->is_sql_crsr() || plan->get_rule_name()) {
+        cells[i].set_null();
+      } else if (OB_FAIL(ob_write_string(*allocator_,
+                                         plan->get_rule_name(),
+                                         rule_name))) {
+        SERVER_LOG(ERROR, "copy rule_name failed", K(ret));
+      } else {
+        cells[i].set_varchar(rule_name);
+        cells[i].set_collation_type(ObCharset::get_default_collation(
+                                      ObCharset::get_default_charset()));
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_IN_PC: {
+      common::hash::ObHashMap<ObCacheObjID, ObILibCacheObject*> &co_map = const_cast<ObPlanCache *>(&plan_cache)->get_cache_obj_mgr().get_cache_obj_map();
+
+      if (NULL != co_map.get(cache_obj->get_object_id())) {
+        cells[i].set_bool(true);
+      } else {
+        cells[i].set_bool(false);
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::ERASE_TIME: {
+      cells[i].set_timestamp(cache_obj->get_logical_del_time());
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,
@@ -881,17 +904,20 @@ int ObGVSql::get_row_from_tenants()
       ret = OB_ITER_END;
       tenant_id_array_idx_ = 0;
     } else {
-      if (OB_FAIL(get_row_from_specified_tenant(tenant_id_array_.at(tenant_id_array_idx_),
-                                                is_sub_end))) {
-        SERVER_LOG(WARN,
-                   "fail to insert plan by tenant id",
-                   K(ret),
-                   "tenant id",
-                   tenant_id_array_.at(tenant_id_array_idx_),
-                   K(tenant_id_array_idx_));
-      } else {
-        if (is_sub_end) {
-          ++tenant_id_array_idx_;
+      uint64_t tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
+      MTL_SWITCH(tenant_id) {
+        if (OB_FAIL(get_row_from_specified_tenant(tenant_id,
+                                                  is_sub_end))) {
+          SERVER_LOG(WARN,
+                     "fail to insert plan by tenant id",
+                     K(ret),
+                     "tenant id",
+                     tenant_id_array_.at(tenant_id_array_idx_),
+                     K(tenant_id_array_idx_));
+        } else {
+          if (is_sub_end) {
+            ++tenant_id_array_idx_;
+          }
         }
       }
     }

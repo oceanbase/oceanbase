@@ -19,9 +19,10 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/stat/ob_opt_stat_sql_service.h"
-#include "sql/plan_cache/ob_plan_cache_manager.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_stat_item.h"
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -34,7 +35,6 @@ namespace  common
 ObOptStatManager::ObOptStatManager()
   : inited_(false),
     stat_service_(),
-    pc_mgr_(NULL),
     last_schema_version_(-1)
 {
 }
@@ -74,22 +74,17 @@ int ObOptStatManager::refresh_on_schema_change(int64_t schema_version)
 #endif
 
 int ObOptStatManager::init(ObMySQLProxy *proxy,
-                           ObServerConfig *config,
-                           sql::ObPlanCacheManager *pc_mgr)
+                           ObServerConfig *config)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("optimizer statistics manager has already been initialized.", K(ret));
-  } else if (OB_ISNULL(pc_mgr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("initialize optimizer statistics manager with invalid arguments.", K(ret));
   } else if (OB_FAIL(stat_service_.init(proxy, config))) {
     LOG_WARN("failed to init stat service", K(ret));
   } else if (OB_FAIL(refresh_stat_task_queue_.init(1, "OptRefTask", REFRESH_STAT_TASK_NUM, REFRESH_STAT_TASK_NUM))) {
     LOG_WARN("initialize timer failed. ", K(ret));
   } else {
-    pc_mgr_ = pc_mgr;
     inited_ = true;
   }
   return ret;
@@ -218,7 +213,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret), K(inited_));
   } else if (OB_FAIL(stat_service_.get_table_stat(tenant_id, key, tstat))) {
     LOG_WARN("get table stat failed", K(ret));
   }
@@ -228,7 +223,8 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
 int ObOptStatManager::update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                          const uint64_t tenant_id,
                                          const ObIArray<ObOptColumnStat *> &column_stats,
-                                         bool only_update_col_stat /*default false*/)
+                                         bool only_update_col_stat /*default false*/,
+                                         const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   int64_t current_time = ObTimeUtility::current_time();
@@ -239,7 +235,9 @@ int ObOptStatManager::update_column_stat(share::schema::ObSchemaGetterGuard *sch
                                                                         tenant_id,
                                                                         column_stats,
                                                                         current_time,
-                                                                        only_update_col_stat))) {
+                                                                        only_update_col_stat,
+                                                                        false,
+                                                                        print_params))) {
     LOG_WARN("failed to update column stat.", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -279,7 +277,17 @@ int ObOptStatManager::update_table_stat(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatManager::delete_table_stat(const uint64_t tenant_id,
+int ObOptStatManager::delete_table_stat(uint64_t tenant_id,
+                                        const uint64_t ref_id,
+                                        int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 1> part_ids;
+  bool cascade_column = true;
+  return delete_table_stat(tenant_id, ref_id, part_ids, cascade_column, affected_rows);
+}
+
+int ObOptStatManager::delete_table_stat(uint64_t tenant_id,
                                         const uint64_t ref_id,
                                         const ObIArray<int64_t> &part_ids,
                                         const bool cascade_column,
@@ -350,7 +358,8 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                   ObIArray<ObOptColumnStat *> &column_stats,
                                   const int64_t current_time,
                                   const bool is_index_stat,
-                                  const bool is_history_stat)
+                                  const bool is_history_stat,
+                                  const ObObjPrintParams &print_params)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -370,7 +379,8 @@ int ObOptStatManager::batch_write(share::schema::ObSchemaGetterGuard *schema_gua
                                                                         column_stats,
                                                                         current_time,
                                                                         false,
-                                                                        is_history_stat))) {
+                                                                        is_history_stat,
+                                                                        print_params))) {
     LOG_WARN("failed to update coumn stats", K(ret));
   }
   return ret;
@@ -409,16 +419,14 @@ int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg
 int ObOptStatManager::invalidate_plan(const uint64_t tenant_id, const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  sql::ObPlanCache *pc = NULL;
-  if (OB_ISNULL(pc_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan cache manager is null", K(ret), K(pc_mgr_));
-  } else if (NULL == (pc = pc_mgr_->get_plan_cache(tenant_id))) {
-    // do nothing
-  } else if (OB_FAIL(pc->evict_plan(table_id))) {
-    LOG_WARN("failed to evict plan", K(ret));
-    // use OB_SQL_PC_NOT_EXIST represent evict plan failed
-    ret = OB_SQL_PC_NOT_EXIST;
+  MTL_SWITCH(tenant_id) {
+    sql::ObPlanCache *pc = MTL(sql::ObPlanCache*);
+
+    if (OB_FAIL(pc->evict_plan(table_id))) {
+      LOG_WARN("failed to evict plan", K(ret));
+      // use OB_SQL_PC_NOT_EXIST represent evict plan failed
+      ret = OB_SQL_PC_NOT_EXIST;
+    }
   }
   return ret;
 }
@@ -464,7 +472,8 @@ int64_t ObOptStatManager::get_default_avg_row_size()
   return DEFAULT_ROW_SIZE;
 }
 
-int ObOptStatManager::check_has_opt_stat(const uint64_t tenant_id,
+int ObOptStatManager::check_has_opt_stat(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const uint64_t tenant_id,
                                          const uint64_t table_ref_id,
                                          const ObIArray<int64_t> &part_ids,
                                          const int64_t part_cnt,
@@ -472,8 +481,16 @@ int ObOptStatManager::check_has_opt_stat(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   has_opt_stat = false;
-  if (is_sys_table(table_ref_id) || is_virtual_table(table_ref_id)) {
-    //do nothing, assume inner table has no user gathered statistics
+  bool is_valid = false;
+  if (OB_FAIL(check_stat_tables_ready(schema_guard, tenant_id, is_valid))) {
+    LOG_WARN("failed to check stat tables ready", K(ret));
+  } else if (!is_valid) {
+    //do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard, tenant_id,
+                                                           table_ref_id, is_valid))) {
+    LOG_WARN("failed to check is stat table", K(ret));
+  } else if (!is_valid) {
+    //do nothing
   } else if (!part_ids.empty()) {
     has_opt_stat = true;
     for (int64_t i = 0; OB_SUCC(ret) && has_opt_stat && i < part_ids.count(); ++i) {
@@ -491,7 +508,8 @@ int ObOptStatManager::check_has_opt_stat(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatManager::check_stat_version(const uint64_t tenant_id,
+int ObOptStatManager::check_stat_version(share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const uint64_t tenant_id,
                                          const uint64_t tab_ref_id,
                                          const int64_t part_id,
                                          int64_t &last_analyzed)
@@ -499,8 +517,16 @@ int ObOptStatManager::check_stat_version(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   last_analyzed = 0;
   ObOptTableStat tstat;
-  if (is_sys_table(tab_ref_id) || is_virtual_table(tab_ref_id)) {
-    // assume inner table has no user gathered statistics
+  bool is_valid = false;
+  if (OB_FAIL(check_stat_tables_ready(schema_guard, tenant_id, is_valid))) {
+    LOG_WARN("failed to check stat tables ready", K(ret));
+  } else if (!is_valid) {
+    //do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard, tenant_id,
+                                                           tab_ref_id, is_valid))) {
+    LOG_WARN("failed to check is stat table", K(ret));
+  } else if (!is_valid) {
+    //do nothing
   } else if (OB_FAIL(get_table_stat(tenant_id,
                                     ObOptTableStat::Key(tenant_id, tab_ref_id, part_id),
                                     tstat))) {
@@ -519,7 +545,8 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      int64_t *avg_len,
                                      int64_t *avg_part_size,
                                      int64_t *macro_block_count,
-                                     int64_t *micro_block_count)
+                                     int64_t *micro_block_count,
+                                     int64_t *last_analyzed)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat::Key key(tenant_id, table_ref_id, part_id);
@@ -533,6 +560,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                   avg_part_size);
     assign_value(opt_stat.get_macro_block_num(), macro_block_count);
     assign_value(opt_stat.get_micro_block_num(), micro_block_count);
+    assign_value(opt_stat.get_last_analyzed(), last_analyzed);
   }
   return ret;
 }
@@ -544,10 +572,12 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      int64_t *row_count,
                                      int64_t *avg_len,
                                      int64_t *avg_part_size,
-                                     int64_t *micro_block_count)
+                                     int64_t *micro_block_count,
+                                     int64_t *last_analyzed)
 {
   int ret = OB_SUCCESS;
   ObGlobalTableStat global_tstat;
+  int64_t tmp_last_analyzed = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
     int64_t tmp_row_count = 0;
     int64_t tmp_row_len = 0;
@@ -556,7 +586,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
     int64_t tmp_micro_block_count = 0;
     if (OB_FAIL(get_table_stat(tenant_id, tab_ref_id, part_ids.at(i), part_cnt,
                                &tmp_row_count, &tmp_row_len, &tmp_data_size, &tmp_macro_block_count,
-                               &tmp_micro_block_count))) {
+                               &tmp_micro_block_count, &tmp_last_analyzed))) {
       LOG_WARN("failed to get table stat", K(ret));
     } else {
       global_tstat.add(tmp_row_count, tmp_row_len,
@@ -568,6 +598,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
     assign_value(global_tstat.get_avg_row_size(), avg_len);
     assign_value(global_tstat.get_avg_data_size(), avg_part_size);
     assign_value(global_tstat.get_micro_block_count(), micro_block_count);
+    assign_value(tmp_last_analyzed, last_analyzed);
   }
   return ret;
 }
@@ -684,6 +715,49 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObOptStatManager::get_table_rowcnt(const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       const ObIArray<ObTabletID> &all_tablet_ids,
+                                       const ObIArray<ObLSID> &all_ls_ids,
+                                       int64_t &table_rowcnt)
+{
+  return stat_service_.get_table_rowcnt(tenant_id, table_id, all_tablet_ids, all_ls_ids, table_rowcnt);
+}
+
+//we need check the stat tables are valid, now we only check the stat table are exist. in some situation,
+//stat tables maybe not exist, such as the core table is created fist, and execute relation query, but
+//the stat tables are not created.
+int ObOptStatManager::check_stat_tables_ready(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const uint64_t tenant_id,
+                                              bool &are_stat_tables_ready)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  are_stat_tables_ready = false;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   share::OB_ALL_TABLE_STAT_TID,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   share::OB_ALL_COLUMN_STAT_TID,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                   share::OB_ALL_HISTOGRAM_STAT_TID,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_schema));
+  } else if (OB_ISNULL(table_schema)) {
+    //do nothing
+  } else {
+    are_stat_tables_ready = true;
   }
   return ret;
 }

@@ -60,6 +60,13 @@ int ObSqlSockProcessor::decode_sql_packet(ObSqlSockSession& sess, rpc::ObPacket*
       LOG_WARN("do_decode fail", K(ret));
     } else if (NULL == pkt) {
       // try read more
+    } else if (conn.is_in_ssl_connect_phase()) {
+      ret_pkt = NULL;
+      sess.set_last_pkt_sz(consume_sz);
+      if (OB_FAIL(sess.set_ssl_enabled())) {
+        LOG_WARN("sql nio enable ssl for server failed", K(ret));
+      }
+      break;
     } else if (!conn.is_in_authed_phase()) {
       ret_pkt = pkt;
       sess.set_last_pkt_sz(consume_sz);
@@ -93,7 +100,7 @@ ObVirtualCSProtocolProcessor *ObSqlSockProcessor::get_protocol_processor(ObCSPro
       break;
     }
     default: {
-      LOG_ERROR("invalid cs protocol type", K(type));
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid cs protocol type", K(type));
       break;
     }
   }

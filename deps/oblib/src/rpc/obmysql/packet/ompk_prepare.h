@@ -57,6 +57,7 @@ public:
   inline void set_param_num(const uint16_t num) { param_num_ = num; }
 
   inline void set_warning_count(const uint16_t count) { warning_count_ = count; }
+  inline ObMySQLPacketType get_mysql_packet_type() { return ObMySQLPacketType::PKT_PREPARE; }
 
 private:
   uint8_t  status_;

@@ -77,7 +77,6 @@ ObMPStmtPrexecute::ObMPStmtPrexecute(const ObGlobalContext &gctx)
 int ObMPStmtPrexecute::before_process()
 {
   int ret = OB_SUCCESS;
-  bool use_sess_trace = false;
 
   if (OB_FAIL(ObMPBase::before_process())) {
     LOG_WARN("fail to call before process", K(ret));
@@ -180,8 +179,7 @@ int ObMPStmtPrexecute::before_process()
             THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
             retry_ctrl_.set_tenant_global_schema_version(tenant_version);
             retry_ctrl_.set_sys_global_schema_version(sys_version);
-            if (OB_FAIL(init_process_var(get_ctx(), ObMultiStmtItem(false, 0, ObString()), *session,
-                                         use_sess_trace))) {
+            if (OB_FAIL(init_process_var(get_ctx(), ObMultiStmtItem(false, 0, ObString()), *session))) {
               LOG_WARN("init process var faield.", K(ret));
             } else if (OB_FAIL(check_and_refresh_schema(session->get_login_tenant_id(),
                                                         session->get_effective_tenant_id()))) {
@@ -221,7 +219,7 @@ int ObMPStmtPrexecute::before_process()
                   get_ctx().is_prepare_stage_ = true;
                   if (OB_FAIL(result.init())) {
                     LOG_WARN("result set init failed", K(ret));
-                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session,
+                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session, ObTimeUtil::current_time(),
                                   obmysql::ObMySQLCmd::COM_STMT_PREPARE))) {
                     LOG_WARN("fail to set session active", K(ret));
                   }
@@ -240,15 +238,6 @@ int ObMPStmtPrexecute::before_process()
                       LOG_WARN("run stmt_query failed, check if need retry",
                                K(ret), K(cli_ret), K(get_retry_ctrl().need_retry()), K(sql_));
                       ret = cli_ret;
-                    } else {
-                      if (session->get_in_transaction()) {
-                        if (ObStmt::is_write_stmt(result.get_stmt_type(),
-                                                  result.has_global_variable())) {
-                          session->set_has_exec_write_stmt(true);
-                        }
-                      } else {
-                        session->set_has_exec_write_stmt(false);
-                      }
                     }
                     session->set_session_in_retry(retry_ctrl_.need_retry());
                   }
@@ -279,6 +268,10 @@ int ObMPStmtPrexecute::before_process()
             stmt_type_ = ps_session_info->get_stmt_type();
             if (is_arraybinding_has_result_type(stmt_type_) && iteration_count_ > 1) {
               set_arraybounding(true);
+              if (get_ctx().can_reroute_sql_) {
+                get_ctx().can_reroute_sql_ = false;
+                LOG_INFO("arraybinding not support reroute sql.");
+              }
               // only init param_store
               // array_binding_row_ and array_binding_columns_ will init later
               OZ (init_arraybinding_paramstore(*allocator_));
@@ -292,7 +285,7 @@ int ObMPStmtPrexecute::before_process()
               LOG_WARN("prepare-execute protocol get params request failed", K(ret));
             } else {
               ObMySQLUtil::get_uint4(pos, exec_mode_);
-              // https://yuque.antfin.com/docs/share/a5705d97-1d74-4b90-8be2-6e500249345f?#
+              //
               // is_commit_on_success_ is not use yet
               // other exec_mode set use ==
               is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
@@ -414,7 +407,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     CK (OB_NOT_NULL(cursor));
     OX (cursor->set_stmt_type(stmt::T_SELECT));
     OZ (session.get_inner_ps_stmt_id(stmt_id_, inner_stmt_id));
-    OX (cursor->set_stmt_id(inner_stmt_id));
+    OX (cursor->set_ps_sql(sql_));
     OZ (session.ps_use_stream_result_set(use_stream));
     if (use_stream) {
       OX (cursor->set_streaming());

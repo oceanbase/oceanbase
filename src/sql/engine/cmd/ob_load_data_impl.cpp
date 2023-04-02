@@ -178,7 +178,7 @@ int ObLoadDataBase::make_parameterize_stmt(ObExecContext &ctx,
     ObMaxConcurrentParam::FixParamStore fixed_param_store(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                                           ObWrapperAllocator(&ctx.get_allocator()));
     if (OB_FAIL(parser.parse(insertsql.string(), parse_result))) {
-      LOG_WARN("paser template insert sql failed", K(ret));
+      LOG_WARN("parser template insert sql failed", K(ret));
     } else if (OB_FAIL(ObSqlParameterization::transform_syntax_tree(ctx.get_allocator(),
                                                                     *session,
                                                                     NULL,
@@ -454,7 +454,7 @@ int ObLoadDataBase::pre_parse_lines(ObLoadFileBuffer &buffer,
         }
       }
     }
-    if (is_last_buf && buffer.current_ptr() > cur_pos) {
+    if (is_last_buf && cur_lines < line_count && buffer.current_ptr() > cur_pos) {
       cur_lines++;
       cur_pos = buffer.current_ptr();
     }
@@ -588,13 +588,15 @@ int ObInsertValueGenerator::set_params(ObString &insert_header, ObCollationType 
 }
 
 int ObInsertValueGenerator::init(ObSQLSessionInfo &session,
-                                 ObLoadFileBuffer *data_buffer)
+                                 ObLoadFileBuffer *data_buffer,
+                                 ObSchemaGetterGuard *schema_guard)
 {
   ObObjPrintParams param = session.create_obj_print_params();
   param.cs_type_ = CS_TYPE_UTF8MB4_BIN;
   expr_printer_.init(data_buffer->begin_ptr(),
                      data_buffer->get_buffer_size(),
                      data_buffer->get_pos(),
+                     schema_guard,
                      param);
   data_buffer_ = data_buffer;
   return OB_SUCCESS;
@@ -603,7 +605,8 @@ int ObInsertValueGenerator::init(ObSQLSessionInfo &session,
 int ObLoadDataSPImpl::gen_insert_columns_names_buff(ObExecContext &ctx,
                                                     const ObLoadArgument &load_args,
                                                     ObIArray<ObLoadTableColumnDesc> &insert_infos,
-                                                    ObString &data_buff)
+                                                    ObString &data_buff,
+                                                    bool need_online_osg)
 {
   int ret = OB_SUCCESS;
 
@@ -639,7 +642,8 @@ int ObLoadDataSPImpl::gen_insert_columns_names_buff(ObExecContext &ctx,
     if (OB_FAIL(ObLoadDataUtils::build_insert_sql_string_head(load_args.dupl_action_,
                                                               load_args.combined_name_,
                                                               insert_column_names,
-                                                              insert_stmt))) {
+                                                              insert_stmt,
+                                                              need_online_osg))) {
       LOG_WARN("gen insert sql column_names failed", K(ret));
     } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), insert_stmt.string(), data_buff))) {
       LOG_WARN("fail to write string", K(ret));
@@ -899,7 +903,7 @@ void ObCSVFormats::init(const ObDataInFileStruct &file_formats)
   if (!file_formats.field_term_str_.empty()
       && file_formats.line_term_str_.empty()) {
     is_line_term_by_counting_field_ = true;
-    field_term_char_ = line_term_char_;
+    line_term_char_ = field_term_char_;
   }
   is_simple_format_ =
       !is_line_term_by_counting_field_
@@ -985,7 +989,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
 
   if (OB_ISNULL(handle)
       || OB_ISNULL(handle->data_buffer)
-      || OB_ISNULL(handle->exec_ctx.get_my_session())) {
+      || OB_ISNULL(handle->exec_ctx.get_my_session())
+      || OB_ISNULL(handle->exec_ctx.get_sql_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(handle));
 //  } else if (FALSE_IT(handle->exec_ctx.get_allocator().reuse())) {
@@ -1017,7 +1022,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
       return common::OB_SUCCESS;
     };
 
-    if (OB_FAIL(handle->generator.init(*(handle->exec_ctx.get_my_session()), expr_buffer))) {
+    if (OB_FAIL(handle->generator.init(*(handle->exec_ctx.get_my_session()), expr_buffer,
+                                       handle->exec_ctx.get_sql_ctx()->schema_guard_))) {
       LOG_WARN("fail to init buffer", K(ret));
     } else if (OB_FAIL(parse_result.prepare_allocate(handle->generator.get_field_exprs().count()))) {
       LOG_WARN("fail to allocate", K(ret));
@@ -1666,8 +1672,8 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
       }
       */
      
-      box.job_status->processed_rows_ = box.affected_rows;
-      box.job_status->processed_bytes_ += insert_task.data_size_;
+      box.job_status->parsed_rows_ = box.affected_rows;
+      box.job_status->parsed_bytes_ += insert_task.data_size_;
       box.job_status->total_insert_task_ = box.insert_task_controller.get_total_task_cnt();
       box.job_status->insert_rt_sum_ = box.insert_rt_sum;
       box.job_status->total_wait_secs_ = box.wait_secs_for_mem_release;
@@ -1691,6 +1697,7 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
                "task_id", insert_task.task_id_,
                "ret", result.exec_ret_,
                "row_count", insert_task.row_count_);
+      ret = result.exec_ret_;
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -2414,14 +2421,17 @@ int ObLoadDataSPImpl::ToolBox::build_calc_partid_expr(ObExecContext &ctx,
   ObSqlString insert_sql;
   ObSEArray<ObString, 16> column_names;
   ObLoadArgument &load_args = load_stmt.get_load_arguments();
+  bool need_online_osg = false;
 
   for (int i = 0; OB_SUCC(ret) && i < insert_infos.count(); ++i) {
     OZ (column_names.push_back(insert_infos.at(i).column_name_));
   }
+  OZ (ObLoadDataUtils::check_need_opt_stat_gather(ctx, load_stmt, need_online_osg));
   OZ (ObLoadDataUtils::build_insert_sql_string_head(load_args.dupl_action_,
                                                     load_args.combined_name_,
                                                     column_names,
-                                                    insert_sql));
+                                                    insert_sql,
+                                                    need_online_osg));
   OZ (insert_sql.append(" VALUES("));
   for (int i = 0; OB_SUCC(ret) && i < insert_infos.count(); ++i) {
     if (i != 0) {
@@ -2534,10 +2544,14 @@ int ObLoadDataSPImpl::ToolBox::build_calc_partid_expr(ObExecContext &ctx,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(calc_partid_expr,
+      if (OB_ISNULL(ctx.get_sql_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sql ctx is null", K(ret));
+      } else if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(calc_partid_expr,
                                                                row_desc,
                                                                ctx.get_allocator(),
                                                                ctx.get_my_session(),
+                                                               ctx.get_sql_ctx()->schema_guard_,
                                                                temp_expr))) {
         LOG_WARN("fail to gen temp expr", K(ret));
       } else {
@@ -2574,6 +2588,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   ObIODOpt opt;
   ObIODOpts iod_opts;
   ObBackupIoAdapter util;
+  bool need_online_osg = false;
 
   iod_opts.opts_ = &opt;
   iod_opts.opt_cnt_ = 0;
@@ -2599,16 +2614,20 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   ObSQLSessionInfo *session = NULL;
   ObTempExpr *calc_tablet_id_expr = nullptr;
 
-  if (OB_ISNULL(session = ctx.get_my_session())) {
+  if (OB_ISNULL(session = ctx.get_my_session()) ||
+      OB_ISNULL(ctx.get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(data_trimer.init(ctx.get_allocator(), formats))) {
     LOG_WARN("fail to init data_trimer", K(ret));
   } else if (OB_FAIL(gen_load_table_column_desc(ctx, load_stmt, insert_infos))) {
     LOG_WARN("fail to build load table column desc", K(ret));
+  } else if (OB_FAIL(ObLoadDataUtils::check_need_opt_stat_gather(ctx, load_stmt, need_online_osg))) {
+    LOG_WARN("fail to check need online stats gather", K(ret));
   } else if (OB_FAIL(gen_insert_columns_names_buff(ctx, load_args,
                                                    insert_infos,
-                                                   insert_stmt_head_buff))) {
+                                                   insert_stmt_head_buff,
+                                                   need_online_osg))) {
     LOG_WARN("fail to gen insert column names buff", K(ret));
   } else if (OB_FAIL(data_frag_mgr.init(ctx, load_args.table_id_))) {
     LOG_WARN("fail to init data frag mgr", K(ret));
@@ -2717,7 +2736,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       LOG_WARN("allocate memory failed", K(ret));
     } else if (FALSE_IT(expr_buffer = new(buf) ObLoadFileBuffer(
                           ObLoadFileBuffer::MAX_BUFFER_SIZE - sizeof(ObLoadFileBuffer)))) {
-    } else if (OB_FAIL(generator.init(*session, expr_buffer))) {
+    } else if (OB_FAIL(generator.init(*session, expr_buffer, ctx.get_sql_ctx()->schema_guard_))) {
       LOG_WARN("fail to init generator", K(ret));
     } else if (OB_FAIL(generator.set_params(insert_stmt_head_buff, load_args.file_cs_type_))) {
       LOG_WARN("fail to set pararms", K(ret));
@@ -2981,8 +3000,10 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       ObLoadDataGID::generate_new_id(temp_gid);
       job_status->tenant_id_ = tenant_id;
       job_status->job_id_ = temp_gid.id;
-      job_status->table_name_ = load_args.combined_name_;
-      job_status->file_path_ = load_args.file_name_;
+      OZ(ob_write_string(job_status->allocator_,
+                         load_args.combined_name_, job_status->table_name_));
+      OZ(ob_write_string(job_status->allocator_,
+                         load_args.file_name_, job_status->file_path_));
       job_status->file_column_ = num_of_file_column;
       job_status->table_column_ = num_of_table_column;
       job_status->batch_size_ = batch_row_count;

@@ -1350,7 +1350,7 @@ void ObChunkRowStore::ChunkIterator::reset_cursor(const int64_t file_size)
     cur_iter_blk_ = NULL;
     store_->callback_free(chunk_read_size_);
     if (read_file_iter_end()) {
-      LOG_ERROR("unexpect status: chunk mem is allocated, but don't free");
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: chunk mem is allocated, but don't free");
     }
   }
   if (!read_file_iter_end() && cur_iter_blk_ != NULL) {
@@ -1615,14 +1615,11 @@ int ObChunkRowStore::write_file(void *buf, int64_t size)
       } else {
         file_size_ = 0;
         io_.tenant_id_ = tenant_id_;
-        common::ObIOCategory io_category = GCONF._large_query_io_percentage.get_value() > 0 ?
-          common::ObIOCategory::LARGE_QUERY_IO : common::ObIOCategory::USER_IO;
-        io_.io_desc_.set_category(io_category);
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         LOG_TRACE("open file success", K_(io_.fd), K_(io_.dir_id));
       }
     }
-    ret = E(EventTable::EN_8) ret;
+    ret = OB_E(EventTable::EN_8) ret;
   }
   if (OB_SUCC(ret) && size > 0) {
     set_io(size, static_cast<char *>(buf));
@@ -1661,9 +1658,6 @@ int ObChunkRowStore::read_file(void *buf, const int64_t size, const int64_t offs
     OX (ret = OB_ITER_END);
   } else {
     this->set_io(size, static_cast<char *>(buf));
-    common::ObIOCategory io_category = GCONF._large_query_io_percentage.get_value() > 0 ?
-      common::ObIOCategory::LARGE_QUERY_IO : common::ObIOCategory::USER_IO;
-    io_.io_desc_.set_category(io_category);
     io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_READ);
     blocksstable::ObTmpFileIOHandle handle;
     if (0 == read_size

@@ -146,7 +146,8 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     ObTime ot1(DT_TYPE_TIME);
     ObTime ot2(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(*param_datum1, expr.args_[0]->datum_meta_.type_,
-                                                get_timezone_info(session), ot1))) {
+                                                get_timezone_info(session), ot1,
+                                                expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the first param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
@@ -157,7 +158,8 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
       expr_datum.set_null();
     } else if (OB_FAIL(ob_datum_to_ob_time_without_date(*param_datum2,
                                                 expr.args_[1]->datum_meta_.type_,
-                                                get_timezone_info(session), ot2))) {
+                                                get_timezone_info(session), ot2,
+                                                expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();

@@ -208,7 +208,13 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                                                         value_obj))) {
                   LOG_WARN("fail to process auto increment hook", K(ret));
                 } else {}
-              }
+              } else if (ObSetVar::SET_SCOPE_GLOBAL == node.set_scope_
+                        && node.variable_name_ == OB_SV_RESOURCE_MANAGER_PLAN) {
+                if (OB_FAIL(update_resource_mapping_rule_version(*sql_proxy,
+                              session->get_effective_tenant_id()))) {
+                  LOG_WARN("fail to update resource mapping rule version", K(ret));
+                }
+              } else {}
 
               if (OB_FAIL(ret)) {
               } else if (ObSetVar::SET_SCOPE_SESSION == node.set_scope_) {
@@ -340,7 +346,7 @@ int ObVariableSetExecutor::calc_subquery_expr_value(ObExecContext &ctx,
                                                     common::ObObj &value_obj)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr) || OB_ISNULL(session_info)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(session_info) || OB_ISNULL(ctx.get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(expr), K(session_info));
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
@@ -353,8 +359,12 @@ int ObVariableSetExecutor::calc_subquery_expr_value(ObExecContext &ctx,
       ObCharsetType client_cs_type = CHARSET_INVALID;
       ObSqlString tmp_expr_subquery;
       ObSqlString expr_subquery;
+      ObObjPrintParams print_params(session_info->get_timezone_info());
+      print_params.print_with_cte_ = true;
+      print_params.force_print_cte_ = true;
+      print_params.need_print_converter_ = false;
       ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH,
-                                    &pos, session_info->get_timezone_info());
+                                    &pos, ctx.get_sql_ctx()->schema_guard_, print_params);
       if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true))) {
         LOG_WARN("print expr definition failed", K(ret));
       } else if (OB_FAIL(tmp_expr_subquery.assign_fmt("select %.*s from dual",
@@ -516,6 +526,9 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       } else if (OB_UNLIKELY(!ObCharset::is_valid_collation(coll_int64))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid collation", K(ret), K(coll_int64), K(val));
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
       } else if (FALSE_IT(coll_str = ObString::make_string(ObCharset::collation_name(static_cast<ObCollationType>(coll_int64))))) {
         //do nothing
       } else if (OB_FAIL(ObBasicSysVar::get_charset_var_and_val_by_collation(
@@ -529,8 +542,8 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
         should_update_extra_var = true;
       }
     } else if (set_var.var_name_ == OB_SV_CHARACTER_SET_SERVER ||
-        set_var.var_name_ == OB_SV_CHARACTER_SET_DATABASE ||
-        set_var.var_name_ == OB_SV_CHARACTER_SET_CONNECTION) {
+               set_var.var_name_ == OB_SV_CHARACTER_SET_DATABASE ||
+               set_var.var_name_ == OB_SV_CHARACTER_SET_CONNECTION) {
       ObString cs_str;
       int64_t coll_int64 = OB_INVALID_INDEX;
       if (OB_FAIL(val.get_int(coll_int64))) {
@@ -538,8 +551,11 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       } else if (OB_UNLIKELY(!ObCharset::is_valid_collation(coll_int64))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid collation", K(ret), K(coll_int64));
-      } else if (FALSE_IT(cs_str = ObString::make_string(ObCharset::charset_name(ObCharset::charset_type_by_coll(
-            static_cast<ObCollationType>(coll_int64)))))) {
+      } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64)),
+                                                                        session->get_effective_tenant_id()))) {
+        LOG_WARN("failed to check charset data version valid", K(ret));
+      } else if (FALSE_IT(cs_str = ObString::make_string(ObCharset::charset_name(
+                                   ObCharset::charset_type_by_coll(static_cast<ObCollationType>(coll_int64)))))) {
         //do nothing
       } else if (OB_FAIL(ObBasicSysVar::get_collation_var_and_val_by_charset(
           set_var.var_name_, cs_str, extra_var_name, extra_val, extra_coll_type))) {
@@ -683,7 +699,7 @@ int ObVariableSetExecutor::global_variable_timezone_formalize(ObExecContext &ctx
   int ret_more = OB_SUCCESS;
   bool check_timezone_valid = false;
   bool is_oralce_mode = false;
-  ObSQLSessionInfo *session = ctx.get_my_session(); 
+  ObSQLSessionInfo *session = ctx.get_my_session();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session info", K(ret), K(session));
@@ -892,15 +908,15 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx);
+  bool orig_ac = true;
+  int64_t autocommit = 0;
   if (OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
-    int64_t autocommit = 0;
-    bool in_trans = my_session->get_in_transaction();
-    bool ac = true;
-
-    if (OB_FAIL(my_session->get_autocommit(ac))) {
+    auto tx_desc = my_session->get_tx_desc();
+    bool in_trans = OB_NOT_NULL(tx_desc) && tx_desc->in_tx_or_has_extra_state();
+    if (OB_FAIL(my_session->get_autocommit(orig_ac))) {
       LOG_WARN("fail to get autocommit", K(ret));
     } else if (OB_FAIL(val.get_int(autocommit))) {
       LOG_WARN("fail get commit val", K(val), K(ret));
@@ -910,7 +926,8 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
     } else {
-      if (false == ac &&  true == in_trans && 1 == autocommit) {
+      // skip commit txn if this is txn free route temporary node
+      if (false == orig_ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
         if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false))) {
           LOG_WARN("fail implicit commit trans", K(ret));
         }
@@ -1001,6 +1018,48 @@ int ObVariableSetExecutor::process_last_insert_id_hook(ObPhysicalPlanCtx *plan_c
       plan_ctx->set_last_insert_id_session(unsigned_value);
     } else {
       plan_ctx->set_last_insert_id_session(static_cast<uint64_t>(value));
+    }
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::update_resource_mapping_rule_version(ObMySQLProxy &sql_proxy,
+                                                                uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const char *tname = OB_ALL_SYS_STAT_TNAME;
+  if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s (", tname))) {
+    STORAGE_LOG(WARN, "append table name failed, ", K(ret));
+  } else {
+    ObSqlString values;
+    SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), "tenant_id", "%lu");
+    SQL_COL_APPEND_CSTR_VALUE(sql, values, "", "zone");
+    SQL_COL_APPEND_CSTR_VALUE(sql, values, "ob_current_resource_mapping_version", "name");
+    SQL_COL_APPEND_VALUE(sql, values, 5, "data_type", "%d");
+    // need use microsecond in case insert multiple rules in one second concurrently.
+    // It means mapping rule is updated but version keeps the same.
+    SQL_COL_APPEND_VALUE(sql, values, "cast(unix_timestamp(now(6)) * 1000000 as signed)", "value", "%s");
+    SQL_COL_APPEND_CSTR_VALUE(sql, values, "version of resource mapping rule", "info");
+    if (OB_SUCC(ret)) {
+      int64_t affected_rows = 0;
+      if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)",
+                                  static_cast<int32_t>(values.length()),
+                                  values.ptr()))) {
+        LOG_WARN("append sql failed, ", K(ret));
+      } else if (OB_FAIL(sql_proxy.write(tenant_id,
+                                      sql.ptr(),
+                                      affected_rows))) {
+        LOG_WARN("fail to execute sql", K(sql), K(ret));
+      } else {
+        if (is_single_row(affected_rows) || is_double_row(affected_rows)) {
+          // insert or replace
+          LOG_TRACE("update resource mapping version successfully", K(sql.string()));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected value. expect 1 or 2 row affected", K(affected_rows), K(sql), K(ret));
+        }
+      }
     }
   }
   return ret;

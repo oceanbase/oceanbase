@@ -33,6 +33,7 @@ const static double VECTOR_FETCH_ROW_RND_COST = 2.294445334;
 const static double VECTOR_CMP_INT_COST = 0.0084782994043;
 const static double VECTOR_CMP_NUMBER_COST = 0.0144099836801;
 const static double VECTOR_CMP_CHAR_COST = 0.03754351606603;
+const static double VECTOR_CMP_SPATIAL_COST = 19.311884382850465;  // gis vector is not supported
 const static double VECTOR_INVALID_CMP_COST = -1;
 const static double VECTOR_HASH_INT_COST = 0.00742821518373;
 const static double VECTOR_HASH_NUMBER_COST = 0.01494804432806;
@@ -66,6 +67,7 @@ const static double VECTOR_UPDATE_CHECK_PER_ROW_COST = 92.15352;
 const static double VECTOR_DELETE_PER_ROW_COST = 5.0310162499999995;
 const static double VECTOR_DELETE_INDEX_PER_ROW_COST = 6.549611874999999;
 const static double VECTOR_DELETE_CHECK_PER_ROW_COST = 59.4583275;
+const static double VECTOR_SPATIAL_PER_ROW_COST = 3.2434868757557513;  // todo: fix later
 
 const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // null
@@ -116,6 +118,7 @@ const static ObOptEstCostModel::ObCostParams cost_params_vector(
    VECTOR_CMP_INT_COST,
    VECTOR_CMP_NUMBER_COST,
    VECTOR_CMP_CHAR_COST,
+   VECTOR_CMP_SPATIAL_COST,
    VECTOR_INVALID_CMP_COST,
    VECTOR_HASH_INT_COST,
    VECTOR_HASH_NUMBER_COST,
@@ -148,7 +151,8 @@ const static ObOptEstCostModel::ObCostParams cost_params_vector(
    VECTOR_UPDATE_CHECK_PER_ROW_COST,
    VECTOR_DELETE_PER_ROW_COST,
    VECTOR_DELETE_INDEX_PER_ROW_COST,
-   VECTOR_DELETE_CHECK_PER_ROW_COST
+   VECTOR_DELETE_CHECK_PER_ROW_COST,
+   VECTOR_SPATIAL_PER_ROW_COST
 );
 
 }

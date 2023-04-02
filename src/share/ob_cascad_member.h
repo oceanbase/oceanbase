@@ -47,7 +47,7 @@ public:
   ObCascadMember &operator=(const ObCascadMember &rhs);
 
   TO_STRING_KV(K_(server), K_(cluster_id));
-  TO_YSON_KV(Y_(server), OB_ID(cluster_id), cluster_id_);
+  TO_YSON_KV( OB_Y_(server), OB_ID(cluster_id), cluster_id_);
 protected:
   common::ObAddr server_;
   int64_t cluster_id_;

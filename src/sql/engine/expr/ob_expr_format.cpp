@@ -16,6 +16,7 @@
 #include "lib/charset/ob_charset.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -159,7 +160,7 @@ int ObExprFormat::calc_result_type(ObExprResType &type, ObExprResType *type_arra
         }
         case ObVarcharType:
         case ObCharType: {
-          int32_t length = type_array[0].get_length();
+          int32_t length = ori_type.get_length();
           if (length <= MAX_VARCHAR_BUFFER_SIZE) {
             type.set_varchar();
             int64_t max_sep_count = (length / 3) + /*decimals*/1 + /*sign*/1;
@@ -320,12 +321,23 @@ int ObExprFormat::calc_format_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       tmp_buf = tmp_buf + MAX_FORMAT_BUFFER_SIZE;
       if (OB_FAIL(build_format_str(tmp_buf, locale, scale, str))) {
         LOG_WARN("fail to build format str", K(ret));
-      } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, str.length()))) {
-        LOG_ERROR("fail to allocate memory", K(buf_len), K(ret));
-      } else {
-        MEMCPY(res_buf, str.ptr(), str.length());
-        res_str.assign_ptr(res_buf, str.length());
-        res_datum.set_string(res_str);
+      } else if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+        if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, str.length()))) {
+          LOG_ERROR("fail to allocate memory", K(buf_len), K(ret));
+        } else {
+          MEMCPY(res_buf, str.ptr(), str.length());
+          res_str.assign_ptr(res_buf, str.length());
+          res_datum.set_string(res_str);
+        }
+      } else { // text tc
+        ObTextStringDatumResult text_res(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+        if (OB_FAIL(text_res.init(str.length()))) {
+          LOG_WARN("init lob result failed", K(ret), K(str.length()));
+        } else if (OB_FAIL(text_res.append(str.ptr(), str.length()))) {
+          LOG_WARN("failed to append realdata", K(ret), K(str), K(text_res));
+        } else {
+          text_res.set_result();
+        }
       }
     }
   }

@@ -101,7 +101,8 @@ enum DatumReserveSize {
   OBJ_DATUM_4BYTE_LEN_DATA_RES_SIZE = 12,
   OBJ_DATUM_FULL_DATA_RES_SIZE = 16,
   OBJ_DATUM_NUMBER_RES_SIZE = 40,
-  OBJ_DATUM_STRING_RES_SIZE = 128
+  OBJ_DATUM_STRING_RES_SIZE = 128,
+  OBJ_DATUM_MAX_RES_SIZE = 128
 };
 
 // Pointer to data
@@ -158,8 +159,6 @@ struct ObDatumDesc {
   bool is_ext() const { return flag_ == FlagType::EXT; }
   void set_outrow() { null_ = 0; flag_ = FlagType::OUTROW; }
   bool is_outrow() const { return flag_ == FlagType::OUTROW; }
-  void set_has_lob_header() { null_ = 0; flag_ = FlagType::HAS_LOB_HEADER; }
-  bool has_lob_header() const { return flag_ == FlagType::HAS_LOB_HEADER; }
 } __attribute__ ((packed)) ;
 
 // Datum structure, multiple inheritance from ObDatumPtr and ObDatumDesc makes
@@ -193,7 +192,7 @@ public:
   static uint32_t get_reserved_size(const ObObjDatumMapType type);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj, const ObObjDatumMapType map_type);
-  inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type);
+  inline int from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy = false);
   // From ObObj, the caller is responsible for ensuring %ptr_ has enough memory
   inline int from_obj(const ObObj &obj);
   inline int64_t checksum(const int64_t current) const;
@@ -295,12 +294,12 @@ public:
   inline void set_interval_nmonth(const int64_t interval_nmonth)
   {
     *no_cv(interval_nmonth_) = interval_nmonth;
-    pack_ = sizeof(int64_t);
+    pack_ = static_cast<uint32_t>(sizeof(int64_t));
   };
   inline void set_interval_ym(const int64_t interval_nmonth)
   {
     *no_cv(interval_nmonth_) = interval_nmonth;
-    pack_ = sizeof(int64_t);
+    pack_ = static_cast<uint32_t>(sizeof(int64_t));
   };
   inline void set_interval_ds(const ObIntervalDSValue &v)
   {
@@ -348,27 +347,28 @@ public:
   OB_INLINE void set_pack(const int64_t len);
 
   inline void set_string(const ObString &v) { ptr_ = v.ptr(); pack_ = v.length(); }
-  inline void set_string(const char *ptr, const int64_t len) { ptr_ = ptr; pack_ = len; }
+  inline void set_string(const char *ptr, const uint32_t len) { ptr_ = ptr; pack_ = len; }
   inline void set_enumset_inner(const ObString &v) { set_string(v); }
-  inline void set_enumset_inner(const char *ptr, const int64_t len) { set_string(ptr, len); }
+  inline void set_enumset_inner(const char *ptr, const uint32_t len) { set_string(ptr, len); }
   inline void set_urowid(const ObURowIDData &urowid_data)
   {
     ptr_ = reinterpret_cast<const char *>(urowid_data.rowid_content_);
-    pack_ = urowid_data.rowid_len_;
+    pack_ = static_cast<uint32_t>(urowid_data.rowid_len_);//TODO(yongle.xh): need check
   }
   inline void set_urowid(const char *ptr, const int64_t size)
   {
-    ptr_ = ptr; pack_ = size;
+    ptr_ = ptr;
+    pack_ = static_cast<uint32_t>(size);
   }
   inline void set_lob_locator(const ObLobLocator &value)
   {
     lob_locator_ = &value;
-    pack_ = value.get_total_size();
+    pack_ = static_cast<uint32_t>(value.get_total_size());//TODO(yuanzhi.zy): need check
   }
   inline void set_lob_data(const ObLobCommon &value, int64_t length)
   {
     lob_data_ = &value;
-    pack_ = length;
+    pack_ = static_cast<uint32_t>(length);//TODO(yuanzhi.zy):need check
   }
   inline void set_datum(const ObDatum &other) { *this = other; }
   inline int deep_copy(const ObDatum &src, char *buf, int64_t max_size, int64_t &pos)
@@ -503,18 +503,18 @@ OB_INLINE void ObDatum::set_number(const number::ObNumber &num)
   no_cv(num_)->desc_ = num.d_;
   const int64_t len = num.d_.len_ * sizeof(*num.get_digits());
   memcpy(&no_cv(num_)->digits_[0], num.get_digits(), len);
-  pack_ = len + sizeof(*num_);
+  pack_ = static_cast<uint32_t>(len + sizeof(*num_));
 }
 
 OB_INLINE void ObDatum::set_number(const number::ObCompactNumber &cnum)
 {
-  pack_ = sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]);
+  pack_ = static_cast<uint32_t>(sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]));
   memcpy(no_cv(num_), &cnum, len_);
 }
 
 OB_INLINE void ObDatum::set_number_shallow(const number::ObCompactNumber &cnum)
 {
-  pack_ = sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]);
+  pack_ = static_cast<uint32_t>(sizeof(cnum) + cnum.desc_.len_ * sizeof(cnum.digits_[0]));
   num_ = &cnum;
 }
 
@@ -522,7 +522,7 @@ OB_INLINE void ObDatum::set_number_shallow(const number::ObCompactNumber &cnum)
 OB_INLINE void ObDatum::set_pack(const int64_t len)
 {
   //pack_ = desc.len_ * sizeof(no_cv(num_)->digits_[0]) + sizeof(*num_);
-  pack_ = len;
+  pack_ = static_cast<uint32_t>(len);
 }
 
 template <>
@@ -548,9 +548,7 @@ inline void ObDatum::obj2datum<OBJ_DATUM_STRING>(const ObObj &obj)
 {
   ptr_ = const_cast<char *>(obj.v_.string_);
   pack_ = obj.val_len_;
-  if (obj.has_lob_header()) {
-    set_has_lob_header();
-  } else if (obj.is_outrow()) {
+  if (obj.is_outrow()) {
     set_outrow();
   }
 }
@@ -560,9 +558,7 @@ inline void ObDatum::datum2obj<OBJ_DATUM_STRING>(ObObj &obj) const
 {
   obj.val_len_ = len_;
   obj.v_.string_ = ptr_;
-  if (has_lob_header()) {
-    obj.set_has_lob_header();
-  } else if (is_outrow()) {
+  if (is_outrow()) {
     obj.set_outrow();
   }
 }
@@ -729,7 +725,7 @@ inline int ObDatum::from_obj(const ObObj &obj, const ObObjDatumMapType map_type)
   return ret;
 }
 
-inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type)
+inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMapType map_type, bool need_copy)
 {
   int ret = common::OB_SUCCESS;
   if (datum.is_ext()) {
@@ -737,6 +733,9 @@ inline int ObDatum::from_storage_datum(const ObDatum &datum, const ObObjDatumMap
     COMMON_LOG(WARN, "Invalid argument for ext storage datum to datum", K(ret), K(datum));
   } else if (datum.is_null()) {
     set_null();
+  } else if (need_copy) {
+    memcpy(no_cv(ptr_), datum.ptr_, datum.len_);
+    pack_ = datum.pack_;
   } else {
     switch (map_type) {
       case OBJ_DATUM_NULL: { datum2datum<OBJ_DATUM_NULL>(datum); break; }
@@ -792,7 +791,8 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObNCharType:
       case ObURowIDType:
       case ObLobType:
-      case ObJsonType: {
+      case ObJsonType:
+      case ObGeometryType: {
         obj2datum<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -912,7 +912,8 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObNCharType:
       case ObURowIDType:
       case ObLobType:
-      case ObJsonType: {
+      case ObJsonType:
+      case ObGeometryType: {
         datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }

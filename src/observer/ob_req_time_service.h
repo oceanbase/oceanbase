@@ -31,14 +31,18 @@ struct ObReqTimeInfo: public common::ObDLinkBase<ObReqTimeInfo>
 
   ObReqTimeInfo();
   ~ObReqTimeInfo();
-
+  static ObReqTimeInfo &get_thread_local_instance()
+  {
+    thread_local ObReqTimeInfo req_timeinfo;
+    return req_timeinfo;
+  }
   void update_start_time()
   {
     if (0 == reentrant_cnt_) {
       // currrent_monotonic_time只保证时间不会退
       // 并不能保证时间一定递增，所以这里检测逻辑用start_time_ > end_time_
       if (OB_UNLIKELY(start_time_ > end_time_)) {
-        SERVER_LOG(ERROR, "invalid start and end time", K(start_time_),
+        SERVER_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid start and end time", K(start_time_),
                    K(end_time_), K(this));
       }
       start_time_ = common::ObTimeUtility::current_monotonic_time();
@@ -52,7 +56,7 @@ struct ObReqTimeInfo: public common::ObDLinkBase<ObReqTimeInfo>
     if (0 == reentrant_cnt_) {
       // 原因同上
       if (OB_UNLIKELY(start_time_ < end_time_)) {
-        SERVER_LOG(ERROR, "invalid start and end time", K(start_time_),
+        SERVER_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid start and end time", K(start_time_),
                    K(end_time_), K(this));
       }
       end_time_ = common::ObTimeUtility::current_monotonic_time();
@@ -135,18 +139,14 @@ struct ObReqTimeGuard
 {
   ObReqTimeGuard()
   {
-    ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(ObReqTimeInfo,
-                                               ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_start_time();
+    ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_start_time();
   }
 
   ~ObReqTimeGuard()
   {
-    ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(ObReqTimeInfo,
-                                               ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_end_time();
+    ObReqTimeInfo &req_timeinfo = observer::ObReqTimeInfo::get_thread_local_instance();
+    req_timeinfo.update_end_time();
   }
 };
 } // end namespace observer

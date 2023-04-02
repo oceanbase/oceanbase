@@ -33,6 +33,7 @@ public:
   inline int trylock() { return latch_.try_lock(latch_id_); }
   inline int unlock() { return latch_.unlock(); }
   void enable_record_stat(bool enable) { latch_.enable_record_stat(enable); }
+  void set_latch_id(const uint32_t latch_id) { latch_id_ = latch_id; }
 private:
   common::ObLatchMutex latch_;
   uint32_t latch_id_;

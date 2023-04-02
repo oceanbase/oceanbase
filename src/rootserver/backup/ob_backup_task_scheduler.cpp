@@ -33,7 +33,7 @@ namespace rootserver
 {
 ObBackupTaskSchedulerQueue::ObBackupTaskSchedulerQueue()
   : is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::BACKUP_LOCK),
     max_size_(0),
     tenant_stat_map_(nullptr),
     server_stat_map_(nullptr),
@@ -64,10 +64,10 @@ void ObBackupTaskSchedulerQueue::reset()
     ObBackupScheduleTask *t = wait_list_.remove_first();
     if (NULL != t) {
       if (OB_SUCCESS != (tmp_ret = clean_tenant_ref_(t->get_tenant_id()))) {
-        LOG_WARN("fail to clean tenant ref", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean tenant ref", K(tmp_ret), KPC(t));
       }
       if (OB_SUCCESS != (tmp_ret = clean_task_map(t->get_task_key()))) {
-        LOG_WARN("fail to clean task map", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean task map", K(tmp_ret), KPC(t));
       }
       t->~ObBackupScheduleTask();
       task_allocator_.free(t);
@@ -78,13 +78,13 @@ void ObBackupTaskSchedulerQueue::reset()
     ObBackupScheduleTask *t = schedule_list_.remove_first();
     if (NULL != t) {
       if (OB_SUCCESS != (tmp_ret = clean_server_ref_(t->get_dst(), t->get_type()))) {
-        LOG_WARN("fail to clean server ref", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean server ref", K(tmp_ret), KPC(t));
       } 
       if (OB_SUCCESS != (tmp_ret = clean_tenant_ref_(t->get_tenant_id()))) {
-        LOG_WARN("fail to clean tenant ref", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean tenant ref", K(tmp_ret), KPC(t));
       } 
       if (OB_SUCCESS != (tmp_ret = clean_task_map(t->get_task_key()))) {
-        LOG_WARN("fail to clean task map", K(tmp_ret), KPC(t));
+        LOG_WARN_RET(tmp_ret, "fail to clean task map", K(tmp_ret), KPC(t));
       }
       t->~ObBackupScheduleTask();
       task_allocator_.free(t);
@@ -256,10 +256,11 @@ int ObBackupTaskSchedulerQueue::dump_statistics()
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&task)
+int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  task = nullptr;
+  ObBackupScheduleTask *task = nullptr;
+  output_task = nullptr;
   ObArray<ObBackupZone> backup_zone;
   ObArray<ObBackupRegion> backup_region;
   ObArray<ObBackupServer> all_servers;
@@ -356,6 +357,24 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&task)
         task = nullptr;
       }
     }
+
+    if (OB_FAIL(ret) || OB_ISNULL(task)) {
+    } else {
+      void *raw_ptr = nullptr;
+      const int64_t task_deep_copy_size = task->get_deep_copy_size();
+      if (OB_ISNULL(raw_ptr = allocator.alloc(task_deep_copy_size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate task", K(ret));
+      } else if (OB_FAIL(task->clone(raw_ptr, output_task))) {
+        LOG_WARN("fail to clone input task", K(ret));
+      } else if (OB_ISNULL(output_task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input task ptr is null", K(ret));
+      } else {
+        task->set_executor_time(ObTimeUtility::current_time());
+      }
+      raw_ptr = nullptr;
+    }
   }
   return ret;
 }
@@ -401,7 +420,7 @@ int ObBackupTaskSchedulerQueue::get_all_servers_(
         }
       }
     }
-    LOG_INFO("get all alternative servers", K(backup_zone), K(backup_region), K(servers));
+    LOG_DEBUG("get all alternative servers", K(backup_zone), K(backup_region), K(servers));
   }
   return ret;
 }
@@ -1060,7 +1079,7 @@ ObBackupTaskScheduler::ObBackupTaskScheduler()
   : ObRsReentrantThread(true),
     is_inited_(false),
     idling_(stop_),
-    scheduler_mtx_(),
+    scheduler_mtx_(common::ObLatchIds::BACKUP_LOCK),
     tenant_stat_map_(),
     server_stat_map_(),
     queue_(),
@@ -1120,7 +1139,7 @@ void ObBackupTaskScheduler::stop()
   int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     tmp_ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "not init", K(tmp_ret));
   } else {
     ObRsReentrantThread::stop();
     idling_.wakeup();
@@ -1147,7 +1166,7 @@ void ObBackupTaskScheduler::wakeup()
   int tmp_ret = OB_SUCCESS;
   if (!is_inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "not init", K(tmp_ret));
   } else {
     idling_.wakeup();
   }
@@ -1234,36 +1253,19 @@ int ObBackupTaskScheduler::reload_task_(int64_t &last_reload_task_ts, bool &relo
 int ObBackupTaskScheduler::pop_and_send_task_()
 {
   int ret = OB_SUCCESS;
+  common::ObArenaAllocator allocator;
   ObBackupScheduleTask *task = nullptr;
-  if (OB_FAIL(pop_task_(task))) {
-    LOG_WARN("pop task for execute failed", K(ret));
-  } 
+  if (OB_FAIL(queue_.pop_task(task, allocator))) {
+    LOG_WARN("pop_task failed", K(ret));
+  }
   // execute task
   if (OB_SUCC(ret) && nullptr != task) {
-    void *raw_ptr = nullptr;
-    ObBackupScheduleTask *input_task = nullptr;
-    common::ObArenaAllocator allocator;
-    const int64_t task_deep_copy_size = task->get_deep_copy_size();
-    if (nullptr == (raw_ptr = allocator.alloc(task_deep_copy_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate task", K(ret));
-    } else if (OB_FAIL(task->clone(raw_ptr, input_task))) {
-      LOG_WARN("fail to clone input task", K(ret));
-    } else if (nullptr == input_task) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("input task ptr is null", K(ret));
-    } else if (OB_FAIL(execute_task_(*input_task))) {
-      LOG_WARN("send task to execute failed", K(ret), KPC(input_task));
-    } else {
-      int64_t now = ObTimeUtility::current_time();
-      task->set_executor_time(now);
+    if (OB_FAIL(execute_task_(*task))) {
+      LOG_WARN("send task to execute failed", K(ret), KPC(task));
     } 
-    if (nullptr != input_task) {
-      input_task->~ObBackupScheduleTask();
-      input_task = nullptr;
-    } 
-    if (nullptr != raw_ptr) {
-      raw_ptr = nullptr;
+    if (nullptr != task) {
+      task->~ObBackupScheduleTask();
+      task = nullptr;
     }
   }
   return ret;
@@ -1401,18 +1403,6 @@ int ObBackupTaskScheduler::do_execute_(const ObBackupScheduleTask &task)
   return ret;
 }
 
-int ObBackupTaskScheduler::pop_task_(ObBackupScheduleTask *&task)
-{
-  int ret = OB_SUCCESS;
-  task = nullptr;
-  if (OB_FAIL(queue_.pop_task(task))) {
-    LOG_WARN("pop_task failed", K(ret));
-  } else if (nullptr != task) {
-    LOG_INFO("pop_task succeed", KPC(task));
-  }
-  return ret;
-}
-
 int ObBackupTaskScheduler::add_task(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
@@ -1440,7 +1430,7 @@ void ObBackupTaskScheduler::dump_statistics_(int64_t &last_dump_time)
     // record scheduler execution log periodically
     last_dump_time = now;
     if (OB_SUCCESS != (tmp_ret = queue_.dump_statistics())) {
-      LOG_WARN("fail to dump statistics", K(tmp_ret));
+      LOG_WARN_RET(tmp_ret, "fail to dump statistics", K(tmp_ret));
     }
   }
 }

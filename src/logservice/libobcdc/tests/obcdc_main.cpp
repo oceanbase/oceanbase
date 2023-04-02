@@ -16,6 +16,7 @@
 
 #include "obcdc_main.h"
 #include "ob_log_instance.h"    // ObLogInstance
+#include "share/ob_time_zone_info_manager.h"              // FETCH_TZ_INFO_SQL
 
 #include <stdio.h>        // fprintf
 #include <getopt.h>       // getopt_long
@@ -55,6 +56,7 @@ ObLogMain::ObLogMain() : inited_(false),
                          verify_mode_(false),
                          enable_reentrant_(false),
                          output_br_detail_(false),
+                         output_br_special_detail_(false),
                          start_timestamp_usec_(0),
                          tenant_id_(OB_INVALID_TENANT_ID),
                          tg_match_pattern_(NULL),
@@ -80,9 +82,10 @@ int ObLogMain::init(int argc, char **argv)
     LOG_ERROR("check arguments fail");
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(br_printer_.init(data_file_, heartbeat_file_, print_console_, only_print_hex_, only_print_dml_tx_checksum_,
-      print_hex_, print_lob_md5_, verify_mode_, output_br_detail_))) {
+      print_hex_, print_lob_md5_, verify_mode_, output_br_detail_, output_br_special_detail_))) {
     LOG_ERROR("init binlog record printer fail", K(ret), K(data_file_), K(heartbeat_file_),
-        K(print_console_), K(only_print_hex_), K_(only_print_dml_tx_checksum), K(print_hex_), K(print_lob_md5_), K(verify_mode_), K_(output_br_detail));
+        K(print_console_), K(only_print_hex_), K_(only_print_dml_tx_checksum), K(print_hex_), K(print_lob_md5_),
+        K(verify_mode_), K_(output_br_detail), K_(output_br_special_detail));
   } else {
     stop_flag_ = true;
     inited_ = true;
@@ -116,6 +119,7 @@ void ObLogMain::destroy()
   last_heartbeat_timestamp_micro_sec_ = 0;
   stop_flag_ = true;
   output_br_detail_ = false;
+  output_br_special_detail_ = false;
   br_printer_.destroy();
 }
 
@@ -125,7 +129,7 @@ int ObLogMain::parse_args_(int argc, char **argv)
 
   // option variables
   int opt = -1;
-  const char *opt_string = "ivcdD:f:hH:oVt:rR:OxmT:P";
+  const char *opt_string = "iIvcdD:f:hH:oVt:rR:OxmT:Pp:";
   struct option long_opts[] =
   {
     {"print_dml_checksum", 0, NULL, 'c'},
@@ -147,6 +151,8 @@ int ObLogMain::parse_args_(int argc, char **argv)
     {"version", 0, NULL, 'v'},
     {"verify_begin_trans_id", 0, NULL, 'P'},
     {"output_br_detail", 0, NULL, 'i'},
+    {"output_br_special_detail", 0, NULL, 'I'},
+    {"parse_timezone_info", 0, NULL, 'p'},
     {0, 0, 0, 0}
   };
 
@@ -220,6 +226,12 @@ int ObLogMain::parse_args_(int argc, char **argv)
         break;
       }
 
+      case 'p': {
+        parse_timezone_info_(optarg);
+        ret = OB_IN_STOP_STATE;
+        break;
+      }
+
       case 'O': {
         only_print_hex_ = true;
         break;
@@ -238,6 +250,13 @@ int ObLogMain::parse_args_(int argc, char **argv)
       case 'i': {
         // output detail info of binlog record, default off
         output_br_detail_ = true;
+        break;
+      }
+
+      case 'I': {
+        // output special detail info of binlog record, default off
+        // Such as, ObTraceInfo
+        output_br_special_detail_ = true;
         break;
       }
 
@@ -457,6 +476,74 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
     } else {
       // succ
     }
+  }
+
+  return ret;
+}
+
+int ObLogMain::parse_timezone_info_(const char *tzinfo_fpath)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  char *print_buf = nullptr;
+  const int64_t buf_len = 24 * _M_;
+  int64_t pos = 0;
+  int64_t str_len = 0;
+  common::ObRequestTZInfoResult tz_info_res;
+  const char *parsed_timezone_info_file_name = "timezone_info.parsed";
+
+  if (OB_ISNULL(buf = static_cast<char*>(ob_cdc_malloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory to load tz_info from local file failed", KR(ret), K(buf_len));
+  } else if (OB_ISNULL(print_buf = static_cast<char*>(ob_cdc_malloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory to write parsed tz_info file failed", KR(ret), K(buf_len));
+  } else if (OB_FAIL(read_from_file(tzinfo_fpath, buf, buf_len))) {
+    LOG_ERROR("read_from_file failed", KR(ret), KCSTRING(tzinfo_fpath));
+  } else if (OB_FAIL(tz_info_res.deserialize(buf, buf_len, pos))) {
+    LOG_ERROR("deserialize tz_info_res failed", KR(ret), K(buf_len), K(pos), KP(buf));
+  } else {
+    const int64_t tz_info_cnt = tz_info_res.tz_array_.count();
+    common::databuff_printf(print_buf, buf_len, str_len, "package: %s\r\n", PACKAGE_STRING);
+    common::databuff_printf(print_buf, buf_len, str_len, "timezone_info_version: %ld\r\n", tz_info_res.last_version_);
+
+    for(int64_t i = 0; OB_SUCC(ret) && i < tz_info_cnt; i++) {
+      const common::ObTimeZoneInfoPos &pos = tz_info_res.tz_array_[i];
+      int64_t tmp_buf_len = 1 * _M_;
+      char tmp_buf[tmp_buf_len];
+      int64_t tmp_pos = pos.to_string(tmp_buf, tmp_buf_len);
+      tmp_buf[tmp_pos] = '\0';
+
+      if (OB_FAIL(common::databuff_printf(print_buf, buf_len, str_len,
+          "timezone_info_pos[%ld/%ld]: %s\r\n",
+          i + 1, tz_info_cnt, tmp_buf))) {
+        LOG_ERROR("print timezone_info_pos failed", KR(ret), K(buf_len), K(str_len), K(i), K(tz_info_cnt));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(buf_len < str_len)) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_ERROR("read len is larger than prepared buf", KR(ret), K(buf_len), K(str_len));
+    } else if (OB_FAIL(write_to_file(parsed_timezone_info_file_name, print_buf, str_len))) {
+      LOG_ERROR("write parsed timezone_info to file failed", KR(ret));
+    } else {
+      LOG_STD("parse_timezone_info success. parse from:%s(size: %s) to %s(size: %s)",
+          tzinfo_fpath,
+          SIZE_TO_STR(pos),
+          parsed_timezone_info_file_name,
+          SIZE_TO_STR(str_len));
+    }
+  }
+
+  if (OB_NOT_NULL(print_buf)) {
+    ob_cdc_free(print_buf);
+    print_buf = nullptr;
+  }
+
+  if (OB_NOT_NULL(buf)) {
+    ob_cdc_free(buf);
+    buf = nullptr;
   }
 
   return ret;

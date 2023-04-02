@@ -42,7 +42,8 @@ class ObTabletAutoincMgr: public common::LinkHashValue<ObTabletAutoincKey>
 {
 public:
   ObTabletAutoincMgr()
-    : tablet_id_(),
+    : mutex_(ObLatchIds::TABLET_AUTO_INCREMENT_MGR_LOCK),
+      tablet_id_(),
       next_value_(1),
       last_refresh_ts_(common::ObTimeUtility::current_time()),
       cache_size_(DEFAULT_TABLET_INCREMENT_CACHE_SIZE),
@@ -84,7 +85,6 @@ private:
 private:
   static const int64_t PREFETCH_THRESHOLD = 4;
   static const int64_t RETRY_INTERVAL = 100 * 1000L; // 100ms
-  static const int64_t RETRY_TIMES_LIMIT = 10;
   lib::ObMutex mutex_;
   common::ObTabletID tablet_id_;
   uint64_t next_value_;
@@ -135,7 +135,7 @@ public:
       const ObLS *ls,
       const ObTabletID &tablet_id,
       const uint64_t autoinc_seq,
-      const int64_t replay_log_ts);
+      const SCN &replay_scn);
 private:
   ObTabletAutoincSeqRpcHandler();
   ~ObTabletAutoincSeqRpcHandler();

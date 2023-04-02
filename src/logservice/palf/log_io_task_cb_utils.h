@@ -12,9 +12,12 @@
 
 #ifndef LOGSERVICE_LOG_IO_TASK_CB_UTILS_
 #define LOGSERVICE_LOG_IO_TASK_CB_UTILS_
+#include "lib/ob_define.h"
 #include "lib/oblog/ob_log_print_kv.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"               // TO_STRING_KV
+#include "log_group_entry_header.h"
+#include "share/scn.h"
 #include "lsn.h"
 #include "palf_base_info.h"
 #include "log_meta_info.h"
@@ -26,16 +29,16 @@ namespace palf
 struct FlushLogCbCtx
 {
   FlushLogCbCtx();
-  FlushLogCbCtx(const int64_t log_id, const int64_t log_ts, const LSN &lsn,
+  FlushLogCbCtx(const int64_t log_id, const share::SCN &scn, const LSN &lsn,
                 const int64_t &log_proposal_id, const int64_t total_len,
                 const int64_t &curr_log_proposal_id, const int64_t begine_ts);
   ~FlushLogCbCtx();
-  bool is_valid() const { return true == lsn_.is_valid() && true == is_valid_log_ts(log_ts_); }
+  bool is_valid() const { return true == lsn_.is_valid() && true == scn_.is_valid(); }
   void reset();
   FlushLogCbCtx &operator=(const FlushLogCbCtx &flush_log_cb_ctx);
-  TO_STRING_KV(K_(log_id), K_(log_ts), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
+  TO_STRING_KV(K_(log_id), K_(scn), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
   int64_t log_id_;
-  int64_t log_ts_;
+  share::SCN scn_;
   LSN lsn_;
   int64_t log_proposal_id_;
   int64_t total_len_;
@@ -65,6 +68,17 @@ struct TruncatePrefixBlocksCbCtx {
   LSN lsn_;
 };
 
+struct FlashbackCbCtx {
+  FlashbackCbCtx(const share::SCN &flashback_scn);
+  FlashbackCbCtx();
+  ~FlashbackCbCtx();
+  bool is_valid() const { return flashback_scn_.is_valid(); }
+  void reset();
+  FlashbackCbCtx& operator=(const FlashbackCbCtx& flashback_ctx);
+  TO_STRING_KV(K_(flashback_scn));
+  share::SCN flashback_scn_;
+};
+
 enum MetaType {
   PREPARE_META = 0,
   CHANGE_CONFIG_META = 1,
@@ -88,6 +102,7 @@ struct FlushMetaCbCtx {
   LSN base_lsn_;
   bool allow_vote_;
   // log_mode_meta_ is apply-effective, so need record log_mode_meta in FlushCtx
+  bool is_applied_mode_meta_;
   LogModeMeta log_mode_meta_;
 };
 }

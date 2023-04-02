@@ -228,12 +228,9 @@ int ObKVStoreMemBlock::alloc(
   if (OB_UNLIKELY(NULL == buffer_)) {
     ret = OB_INVALID_DATA;
     COMMON_LOG(WARN, "The mem block is invalid, ", KP_(buffer), K(ret));
-  } else if (OB_UNLIKELY(key_size <= 0)) {
+  } else if (OB_UNLIKELY(key_size <= 0 || value_size <= 0 || align_kv_size < 0 || align_kv_size > INT32_MAX)) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "The size of key is 0, ", K(ret));
-  } else if (OB_UNLIKELY(value_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "The size of value is 0, ", K(ret));
+    COMMON_LOG(WARN, "invalid args", K(ret), K(key_size), K(value_size), K(align_kv_size));
   }
 
   //find write position
@@ -244,7 +241,7 @@ int ObKVStoreMemBlock::alloc(
       ret = OB_BUF_NOT_ENOUGH;
       break;
     } else {
-      new_atomic_pos.buffer += align_kv_size;
+      new_atomic_pos.buffer += static_cast<int32_t>(align_kv_size);
       new_atomic_pos.pairs += 1;
       if (ATOMIC_BCAS(&(atomic_pos_.atomic), old_atomic_pos.atomic, new_atomic_pos.atomic)) {
         break;
@@ -255,7 +252,7 @@ int ObKVStoreMemBlock::alloc(
   //if has found store pos, then store the kv
   if (OB_SUCC(ret)) {
     kvpair = reinterpret_cast<ObKVCachePair *>(&(buffer_[old_atomic_pos.buffer]));
-    kvpair->size_ = align_kv_size;
+    kvpair->size_ = static_cast<int32_t>(align_kv_size);
     kvpair->key_ = reinterpret_cast<ObIKVCacheKey *>(&(buffer_[old_atomic_pos.buffer + sizeof(ObKVCachePair)]));
     kvpair->value_ = reinterpret_cast<ObIKVCacheValue *>(&(buffer_[old_atomic_pos.buffer
         + sizeof(ObKVCachePair) + key_size]));
@@ -329,6 +326,17 @@ void ObKVMemBlockHandle::set_full(const double base_mb_score)
   score_ += base_mb_score;
   ATOMIC_STORE((uint32_t*)(&status_), FULL);
 }
+
+
+/*
+ * -------------------------------------------------ObKVCacheStoreMemblockInfo------------------------------------------------
+ */
+bool ObKVCacheStoreMemblockInfo::is_valid() const
+{
+  return tenant_id_ != OB_INVALID_TENANT_ID && cache_id_ >= 0;
+}
+
+
 }//end namespace common
 }//end namespace oceanbase
 

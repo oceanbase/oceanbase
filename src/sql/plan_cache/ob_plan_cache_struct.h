@@ -26,6 +26,7 @@
 #include "sql/plan_cache/ob_i_lib_cache_context.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "sql/udr/ob_udr_struct.h"
 
 namespace oceanbase
 {
@@ -39,29 +40,22 @@ namespace sql
 
 typedef common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> TmpTableNameArray;
 
+enum PlanCacheMode
+{
+  PC_INVALID_MODE = -1,
+  PC_TEXT_MODE = 0,
+  PC_PS_MODE = 1,
+  PC_PL_MODE = 2,
+  PC_MAX_MODE = 3
+};
+
 struct ObPlanCacheKey : public ObILibCacheKey
 {
   ObPlanCacheKey()
       : key_id_(common::OB_INVALID_ID),
         db_id_(common::OB_INVALID_ID),
         sessid_(0),
-        is_ps_mode_(false) {}
-  ObPlanCacheKey(const ObString &name,
-                 uint64_t key_id,
-                 uint64_t db_id,
-                 uint64_t sessid,
-                 bool is_ps_mode,
-                 const ObString &sys_vars_str,
-                 const ObString &config_str,
-                 ObLibCacheNameSpace namespace_arg)
-      : ObILibCacheKey(namespace_arg),
-        name_(name),
-        key_id_(key_id),
-        db_id_(db_id),
-        sessid_(sessid),
-        is_ps_mode_(is_ps_mode),
-        sys_vars_str_(sys_vars_str),
-        config_str_(config_str) {}
+        mode_(PC_TEXT_MODE) {}
 
   inline void reset()
   {
@@ -69,7 +63,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     key_id_ = common::OB_INVALID_ID;
     db_id_ = common::OB_INVALID_ID;
     sessid_ = 0;
-    is_ps_mode_ = false;
+    mode_ = PC_TEXT_MODE;
     sys_vars_str_.reset();
     config_str_.reset();
     namespace_ = NS_INVALID;
@@ -94,7 +88,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
       db_id_ = pc_key.db_id_;
       key_id_ = pc_key.key_id_;
       sessid_ = pc_key.sessid_;
-      is_ps_mode_ = pc_key.is_ps_mode_;
+      mode_ = pc_key.mode_;
       namespace_ = pc_key.namespace_;
     }
     return ret;
@@ -118,7 +112,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     hash_ret = common::murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
-    hash_ret = common::murmurhash(&is_ps_mode_, sizeof(bool), hash_ret);
+    hash_ret = common::murmurhash(&mode_, sizeof(PlanCacheMode), hash_ret);
     hash_ret = sys_vars_str_.hash(hash_ret);
     hash_ret = config_str_.hash(hash_ret);
     hash_ret = common::murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
@@ -133,7 +127,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
                    db_id_ == pc_key.db_id_ &&
                    key_id_ == pc_key.key_id_ &&
                    sessid_ == pc_key.sessid_ &&
-                   is_ps_mode_ == pc_key.is_ps_mode_ &&
+                   mode_ == pc_key.mode_ &&
                    sys_vars_str_ == pc_key.sys_vars_str_ &&
                    config_str_ == pc_key.config_str_ &&
                    namespace_ == pc_key.namespace_;
@@ -144,7 +138,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
                K_(key_id),
                K_(db_id),
                K_(sessid),
-               K_(is_ps_mode),
+               K_(mode),
                K_(sys_vars_str),
                K_(config_str),
                K_(namespace));
@@ -156,7 +150,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
   uint64_t key_id_; //在ps中key_id_的含有为statement id
   uint64_t db_id_;
   uint32_t sessid_;
-  bool is_ps_mode_;
+  PlanCacheMode mode_;
   common::ObString sys_vars_str_;
   common::ObString config_str_;
 };
@@ -180,6 +174,11 @@ struct NotParamInfo
   TO_STRING_KV(K_(idx), K_(raw_text));
 };
 
+typedef common::ObSEArray<NotParamInfo, 4> NotParamInfoList;
+
+// Template SQL Constant Constraints
+typedef common::ObSEArray<NotParamInfoList, 4> TplSqlConstCons;
+
 struct PsNotParamInfo
 {
   int64_t idx_;
@@ -196,20 +195,32 @@ public:
   ObFastParserResult()
     : inner_alloc_("FastParserRes"),
       raw_params_(&inner_alloc_),
-      ps_params_(&inner_alloc_),
+      parameterized_params_(&inner_alloc_),
       cache_params_(NULL)
-  {}
+  {
+    reset_question_mark_ctx();
+  }
   ObPlanCacheKey pc_key_; //plan cache key, parameterized by fast parser
   common::ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
-  common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> ps_params_;
+  common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> parameterized_params_;
   ParamStore *cache_params_;
+  ObQuestionMarkCtx question_mark_ctx_;
   void reset() {
     pc_key_.reset();
     raw_params_.reuse();
-    ps_params_.reuse();
+    parameterized_params_.reuse();
     cache_params_ = NULL;
   }
-   TO_STRING_KV(K(pc_key_), K(raw_params_), K(ps_params_), K(cache_params_));
+  void reset_question_mark_ctx()
+  {
+    question_mark_ctx_.name_ = NULL;
+    question_mark_ctx_.count_ = 0;
+    question_mark_ctx_.capacity_ = 0;
+    question_mark_ctx_.by_ordinal_ = false;
+    question_mark_ctx_.by_name_ = false;
+    question_mark_ctx_.by_defined_name_ = false;
+  }
+   TO_STRING_KV(K(pc_key_), K(raw_params_), K(parameterized_params_), K(cache_params_));
 };
 
 enum WayToGenPlan {
@@ -265,12 +276,12 @@ typedef common::ObFixedArray<SelectItemParamInfo, common::ObIAllocator> SelectIt
 struct ObPlanCacheCtx : public ObILibCacheCtx
 {
   ObPlanCacheCtx(const common::ObString &sql,
-                 const bool is_ps_mode,
+                 const PlanCacheMode mode,
                  common::ObIAllocator &allocator,
                  ObSqlCtx &sql_ctx,
                  ObExecContext &exec_ctx,
                  uint64_t tenant_id)
-    : is_ps_mode_(is_ps_mode),
+    : mode_(mode),
       raw_sql_(sql),
       allocator_(allocator),
       sql_ctx_(sql_ctx),
@@ -288,14 +299,22 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       multi_stmt_fp_results_(allocator),
       handle_id_(MAX_HANDLE),
       is_remote_executor_(false),
-      is_ps_execute_stage_(false),
+      is_parameterized_execute_(false),
       ps_need_parameterized_(false),
       fixed_param_idx_(allocator),
       need_add_obj_stat_(true),
       is_inner_sql_(false),
-      ab_params_(NULL)
+      is_original_ps_mode_(false),
+      ab_params_(NULL),
+      is_rewrite_sql_(false),
+      rule_name_(),
+      def_name_ctx_(NULL),
+      fixed_param_info_list_(allocator),
+      dynamic_param_info_list_(allocator),
+      tpl_sql_const_cons_(allocator),
+      need_retry_add_plan_(true)
   {
-    fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
+    fp_result_.pc_key_.mode_ = mode_;
   }
 
   int get_not_param_info_str(common::ObIAllocator &allocator, common::ObString &str)
@@ -328,16 +347,32 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     return ret;
   }
 
+  uint64_t get_normalized_pattern_digest() const
+  {
+    common::ObString normalized_pattern;
+    if (mode_ == PC_PS_MODE || mode_ == PC_PL_MODE || fp_result_.pc_key_.name_.empty()) {
+      normalized_pattern = raw_sql_;
+    } else {
+      normalized_pattern = fp_result_.pc_key_.name_;
+    }
+    return normalized_pattern.hash();
+  }
+
   int is_retry(bool &v) const;  //是否在重试之中
   int is_retry_for_dup_tbl(bool &v) const; //仅复制表原因的重试才会设置为true
   void set_begin_commit_stmt() { begin_commit_stmt_ = true; }
   bool is_begin_commit_stmt() const { return begin_commit_stmt_; }
-  void set_is_ps_execute_stage() { is_ps_execute_stage_ = true; }
-  bool is_ps_execute_stage() { return is_ps_execute_stage_; }
+  void set_is_parameterized_execute() { is_parameterized_execute_ = true; }
+  bool is_parameterized_execute() { return is_parameterized_execute_; }
   void set_is_inner_sql(bool v) { is_inner_sql_ = v; };
   bool is_inner_sql() const { return is_inner_sql_; } 
+  void set_is_rewrite_sql(bool v) { is_rewrite_sql_ = v; }
+  bool is_rewrite_sql() const { return is_rewrite_sql_; }
+  void set_need_retry_add_plan(bool v) { need_retry_add_plan_ = v; }
+  bool need_retry_add_plan() const { return need_retry_add_plan_; }
+  void set_pc_key_mode() { fp_result_.pc_key_.mode_ = mode_; }
   TO_STRING_KV(
-    K(is_ps_mode_),
+    K(mode_),
     K(raw_sql_),
     K(not_param_info_),
     K(not_param_var_),
@@ -347,13 +382,21 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(should_add_plan_),
     K(begin_commit_stmt_),
     K(is_remote_executor_),
-    K(is_ps_execute_stage_),
+    K(is_parameterized_execute_),
     K(ps_need_parameterized_),
     K(fixed_param_idx_),
     K(need_add_obj_stat_),
-    K(is_inner_sql_)
+    K(is_inner_sql_),
+    K(is_rewrite_sql_),
+    K(rule_name_),
+    K(def_name_ctx_),
+    K(fixed_param_info_list_),
+    K(dynamic_param_info_list_),
+    K(tpl_sql_const_cons_),
+    K(is_original_ps_mode_),
+    K(need_retry_add_plan_)
     );
-  bool is_ps_mode_; //control use which variables to do match
+  PlanCacheMode mode_; //control use which variables to do match
 
   const common::ObString &raw_sql_; //query sql
   common::ObIAllocator &allocator_; //result mem_pool
@@ -393,12 +436,24 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   common::ObFixedArray<ObFastParserResult, common::ObIAllocator> multi_stmt_fp_results_;
   CacheRefHandleID handle_id_;
   bool is_remote_executor_;
-  bool is_ps_execute_stage_;
+  bool is_parameterized_execute_;
   bool ps_need_parameterized_;
   common::ObFixedArray<int64_t, common::ObIAllocator> fixed_param_idx_;
   bool need_add_obj_stat_;
   bool is_inner_sql_;
+  bool is_original_ps_mode_;
   ParamStore *ab_params_;  // arraybinding batch parameters,
+
+  // **********  for rewrite rule **********
+  bool is_rewrite_sql_;
+  common::ObString rule_name_;
+  QuestionMarkDefNameCtx *def_name_ctx_;
+  common::ObFixedArray<FixedParamValue, common::ObIAllocator> fixed_param_info_list_;
+  common::ObFixedArray<DynamicParamInfo, common::ObIAllocator> dynamic_param_info_list_;
+  common::ObFixedArray<NotParamInfoList, common::ObIAllocator> tpl_sql_const_cons_;
+  // **********  for rewrite end **********
+  // when schema version of cache node is old, whether remove this node and retry add cache obj.
+  bool need_retry_add_plan_;
 };
 
 struct ObPlanCacheStat

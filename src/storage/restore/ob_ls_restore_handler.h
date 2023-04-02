@@ -50,9 +50,10 @@ public:
   bool is_met_retry_time_interval();
   void set_result(const int result, const share::ObTaskId &trace_id, const RestoreFailedType &failed_type);
   int get_comment_str(Comment &comment) const;
+
+  bool can_retrieable_err(const int err) const;
+
   TO_STRING_KV(K_(result), K_(retry_cnt), K_(trace_id), K_(failed_type));
-private:
-  bool can_retrieable_err_(const int err) const;
 private:
   lib::ObMutex mtx_;
   int result_;
@@ -81,19 +82,24 @@ public:
       const ObIArray<common::ObTabletID> &restore_failed_tablets, const share::ObLSID &ls_id, const int &result);
   // when follower received rpc, call this
   int handle_pull_tablet(const ObIArray<common::ObTabletID> &tablet_ids, 
-      const share::ObLSRestoreStatus &leader_restore_status); 
+      const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id);
   static int check_tablet_restore_finish_(const share::ObLSRestoreStatus &ls_restore_status, 
       const ObTabletMeta &tablet_meta, bool &is_finish);
+  static int check_tablet_deleted(const ObTabletHandle &tablet_handle, bool &is_deleted);
   void wakeup();
   void stop() { ATOMIC_STORE(&is_stop_, true); } // when remove ls, set this
   int safe_to_destroy(bool &is_safe);
+  int offline();
+  int online();
   bool is_stop() { return is_stop_; }
   int update_rebuild_seq();
   int64_t get_rebuild_seq();
 private:
+  int cancel_task_();
   int check_before_do_restore_(bool &can_do_restore);
   int update_state_handle_();
   int check_meta_tenant_normal_(bool &is_normal);
+  int check_restore_job_exist_(bool &is_exist);
   int get_restore_state_handler_(const share::ObLSRestoreStatus &new_status, ObILSRestoreState *&new_state_handler);
   template <typename T>
   int construct_state_handler_(T *&new_handler);
@@ -101,14 +107,15 @@ private:
   int fill_restore_arg_();
 private:
   bool is_inited_;
-  bool is_stop_;
+  bool is_stop_; // used by ls destory
+  bool is_online_; // used by ls online/offline
+  int64_t rebuild_seq_; // update by rebuild
   lib::ObMutex mtx_;
   ObLSRestoreResultMgr result_mgr_;
   storage::ObLS *ls_;
   ObTenantRestoreCtx ls_restore_arg_;
   ObILSRestoreState *state_handler_;
   common::ObFIFOAllocator allocator_;
-  int64_t rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreHandler);
 };
 
@@ -123,8 +130,9 @@ public:
   virtual void set_retry_flag() {} // used by restore sys tablets
   int deal_failed_restore(const ObLSRestoreResultMgr &result_mgr);
   int handle_pull_tablet(const ObIArray<common::ObTabletID> &tablet_ids,
-      const share::ObLSRestoreStatus &leader_restore_status);
+      const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id);
   share::ObLSRestoreStatus get_restore_status() const { return ls_restore_status_; }
+  common::ObRole get_role() const { return role_; }
   ObLSRestoreTaskMgr &get_tablet_mgr() { return tablet_mgr_; }
   TO_STRING_KV(K_(*ls), K_(ls_restore_status));
 protected:
@@ -135,9 +143,11 @@ protected:
 
   int notify_follower_restore_tablet_(const ObIArray<common::ObTabletID> &tablet_ids);
   int get_follower_server_(ObIArray<ObStorageHASrcInfo> &follower);
-  int request_follower_restore_status_(bool &finish);
+  int check_all_follower_restore_finish_(bool &finish);
   int check_follower_restore_finish(const share::ObLSRestoreStatus &leader_status, 
       const share::ObLSRestoreStatus &follower_status, bool &is_finish);
+  bool check_leader_restore_finish_(
+      const share::ObLSRestoreStatus &leader_status, const share::ObLSRestoreStatus &follower_status);
 
   int update_role_();
   bool is_switch_to_leader_(const ObRole &new_role);
@@ -159,7 +169,7 @@ protected:
   int schedule_ls_restore_(
       const ObLSRestoreArg &arg,
       const share::ObTaskId &task_id);
-  int check_restore_concurrency_limit_();
+  int check_restore_concurrency_limit_(bool &reach_limit);
   int schedule_tablet_group_restore_dag_net_(
       const ObTabletGroupRestoreArg &arg,
       const share::ObTaskId &task_id);
@@ -171,11 +181,12 @@ protected:
   int report_ls_restore_progress_(storage::ObLS &ls, const share::ObLSRestoreStatus &status, 
       const share::ObTaskId &trace_id, const int result = OB_SUCCESS, const char *comment = "");
 
-  int enable_replay_();
-  void disable_replay_();
+  int online_();
+  void offline_();
   int update_restore_status_(
       storage::ObLS &ls,
       const share::ObLSRestoreStatus &next_status);
+  int check_new_election_(bool &is_changed) const;
 
 protected:
   bool is_inited_;
@@ -184,6 +195,7 @@ protected:
   share::ObLSRestoreStatus ls_restore_status_;
   ObTenantRestoreCtx *ls_restore_arg_;
   common::ObRole role_;
+  int64_t proposal_id_;
   ObLSRestoreTaskMgr tablet_mgr_;
   share::ObLocationService *location_service_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;

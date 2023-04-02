@@ -118,6 +118,19 @@ public:
   LogInfo base_prev_log_info_;
 };
 
+struct NotifyFetchLogReq {
+  OB_UNIS_VERSION(1);
+public:
+  NotifyFetchLogReq();
+  ~NotifyFetchLogReq();
+  bool is_valid() const;
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    return pos;
+  }
+};
+
 struct LogPrepareReq {
   OB_UNIS_VERSION(1);
 public:
@@ -136,19 +149,22 @@ struct LogPrepareResp {
 public:
   LogPrepareResp();
   LogPrepareResp(const int64_t &msg_proposal_id,
-                   const bool vote_granted,
-                   const int64_t &log_proposal_id,
-                   const LSN &lsn,
-                   const LogModeMeta &mode_meta);
+                 const bool vote_granted,
+                 const int64_t &log_proposal_id,
+                 const LSN &max_flushed_lsn,
+                 const LogModeMeta &mode_meta,
+                 const LSN &committed_end_lsn);
   ~LogPrepareResp();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(msg_proposal_id), K_(vote_granted), K_(log_proposal_id), K_(lsn), K_(log_mode_meta));
+  TO_STRING_KV(K_(msg_proposal_id), K_(vote_granted), K_(log_proposal_id), K_(max_flushed_lsn),
+      K_(log_mode_meta), K_(committed_end_lsn));
   int64_t msg_proposal_id_;
   bool vote_granted_;
   int64_t log_proposal_id_;
-  LSN lsn_;
+  LSN max_flushed_lsn_;
   LogModeMeta log_mode_meta_;
+  LSN committed_end_lsn_;
 };
 
 struct LogChangeConfigMetaReq {
@@ -191,13 +207,15 @@ struct LogChangeModeMetaReq {
 public:
   LogChangeModeMetaReq();
   LogChangeModeMetaReq(const int64_t &msg_proposal_id,
-                       const LogModeMeta &meta);
+                       const LogModeMeta &meta,
+                       const bool is_applied_mode_meta);
   ~LogChangeModeMetaReq();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(msg_proposal_id), K_(meta));
+  TO_STRING_KV(K_(msg_proposal_id), K_(meta), K_(is_applied_mode_meta));
   int64_t msg_proposal_id_;
   LogModeMeta meta_;
+  bool is_applied_mode_meta_;
 };
 
 struct LogChangeModeMetaResp {
@@ -341,6 +359,37 @@ public:
   int64_t prev_log_id_;
   int64_t prev_log_proposal_id_;
   LSN committed_end_lsn_;
+};
+
+enum LogGetStatType
+{
+  INVALID_SYNC_GET_TYPE = 0,
+  GET_LEADER_MAX_SCN = 1,
+};
+
+struct LogGetStatReq {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetStatReq();
+  LogGetStatReq(const LogGetStatType get_type);
+  ~LogGetStatReq();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(get_type));
+  int16_t get_type_;
+};
+
+struct LogGetStatResp {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetStatResp();
+  LogGetStatResp(const share::SCN &max_scn, const LSN &end_lsn);
+  ~LogGetStatResp();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(max_scn), K_(end_lsn));
+  share::SCN max_scn_;
+  LSN end_lsn_;
 };
 
 } // end namespace palf

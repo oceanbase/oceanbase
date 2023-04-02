@@ -24,6 +24,7 @@
 #include "ob_log_ls_info.h"                     // LSInfoMap
 #include "ob_log_table_id_cache.h"              // GIndexCache, TableIDCache
 #include "ob_log_ls_getter.h"                   // ObLogLsGetter
+#include "ob_log_meta_data_refresh_mode.h"      // RefreshMode
 
 namespace oceanbase
 {
@@ -48,6 +49,19 @@ public:
   virtual int add_all_tenants(const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
       const int64_t timeout) = 0;
+
+  // add tenant when fetch archive log in direct mode
+  // @param old_sys_schema_version sys_schema_version before ADD_TENANT DDL operate success
+  //
+  // @retval OB_SUCCESS                   success
+  // @retval OB_TIMEOUT                   timeout
+  // @retval other error code             fail
+  virtual int add_tenant(
+      const int64_t start_tstamp_ns,
+      const int64_t sys_schema_version,
+      const char *&tenant_name,
+      const int64_t timeout,
+      bool &add_tenant_succ) = 0;
 
   // add tenant
   // @param old_sys_schema_version sys_schema_version before ADD_TENANT DDL operate success
@@ -180,7 +194,7 @@ public:
   virtual ~ObLogTenantMgr();
 
 public:
-  int init(const bool enable_oracle_mode_match_case_sensitive);
+  int init(const bool enable_oracle_mode_match_case_sensitive, const RefreshMode &refresh_mode);
   void destroy();
 
   int register_ls_add_callback(LSAddCallback *callback);
@@ -189,6 +203,13 @@ public:
   int add_all_tenants(const int64_t start_tstamp_ns,
       const int64_t sys_schema_version,
       const int64_t timeout);
+
+  int add_tenant(
+      const int64_t start_tstamp_ns,
+      const int64_t sys_schema_version,
+      const char *&tenant_name,
+      const int64_t timeout,
+      bool &add_tenant_succ);
 
   // add tenant
   int add_tenant(const uint64_t tenant_id,
@@ -250,6 +271,7 @@ public:
   // advance tenant output_checkpoint by global_heartbeat to at least target_checkpoint.
   int update_committer_global_heartbeat(const int64_t global_heartbeat);
   int get_min_output_checkpoint_for_all_tenant(int64_t &min_output_checkpoint) override;
+
 private:
   static const int64_t DATA_OP_TIMEOUT = 1 * _SEC_;
   static const int64_t DEFAULT_TENANT_SET_SIZE = 64;
@@ -351,6 +373,11 @@ private:
   };
 
 private:
+  int get_tenant_ids_(
+      const int64_t start_tstamp_ns,
+      const int64_t sys_schema_version,
+      const int64_t timeout,
+      common::ObIArray<uint64_t> &tenant_id_list);
   void revert_tenant_(ObLogTenant *tenant);
   int add_served_tenant_for_stat_(const char *tenant_name, const uint64_t tenant_id);
   int add_served_tenant_into_set_(const char *tenant_name, const uint64_t tenant_id);
@@ -400,6 +427,7 @@ private:
   void try_del_tenant_start_ddl_info_(const uint64_t tenant_id);
 private:
   bool                inited_;
+  RefreshMode         refresh_mode_;
 
   TenantHashMap       tenant_hash_map_;
   common::ObLinkHashMap<TenantID, AddTenantStartDDlInfo> add_tenant_start_ddl_info_map_;

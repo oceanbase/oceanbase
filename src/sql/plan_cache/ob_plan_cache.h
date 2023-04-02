@@ -24,7 +24,6 @@
 #include "sql/plan_cache/ob_lib_cache_key_creator.h"
 #include "sql/plan_cache/ob_lib_cache_node_factory.h"
 #include "sql/plan_cache/ob_lib_cache_object_manager.h"
-
 namespace oceanbase
 {
 namespace rpc
@@ -35,6 +34,7 @@ namespace pl
 {
 class ObPLFunction;
 class ObPLPackage;
+class ObGetPLKVEntryOp;
 }  // namespace pl
 using common::ObPsStmtId;
 namespace sql
@@ -49,9 +49,53 @@ class ObPCVSet;
 class ObILibCacheObject;
 class ObPhysicalPlan;
 class ObLibCacheAtomicOp;
-class ObKVEntryTraverseOp;
+class ObEvolutionPlan;
 
 typedef common::hash::ObHashMap<uint64_t, ObPlanCache *> PlanCacheMap;
+
+struct ObKVEntryTraverseOp
+{
+  typedef common::hash::HashMapPair<ObILibCacheKey *, ObILibCacheNode *> LibCacheKVEntry;
+  explicit ObKVEntryTraverseOp(LCKeyValueArray *key_val_list,
+                               const CacheRefHandleID ref_handle)
+    : ref_handle_(ref_handle),
+      key_value_list_(key_val_list)
+  {
+  }
+
+  virtual int check_entry_match(LibCacheKVEntry &entry, bool &is_match)
+  {
+    UNUSED(entry);
+    int ret = OB_SUCCESS;
+    is_match = true;
+    return ret;
+  }
+  virtual int operator()(LibCacheKVEntry &entry)
+  {
+    int ret = common::OB_SUCCESS;
+    bool is_match = false;
+    if (OB_ISNULL(key_value_list_) || OB_ISNULL(entry.first) || OB_ISNULL(entry.second)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      PL_CACHE_LOG(WARN, "invalid argument",
+      K(key_value_list_), K(entry.first), K(entry.second), K(ret));
+    } else if (OB_FAIL(check_entry_match(entry, is_match))) {
+      PL_CACHE_LOG(WARN, "failed to check entry match", K(ret));
+    } else if (is_match) {
+      if (OB_FAIL(key_value_list_->push_back(ObLCKeyValue(entry.first, entry.second)))) {
+        PL_CACHE_LOG(WARN, "fail to push back key", K(ret));
+      } else {
+        entry.second->inc_ref_count(ref_handle_);
+      }
+    }
+    return ret;
+  }
+  CacheRefHandleID get_ref_handle() { return ref_handle_; } const
+  LCKeyValueArray *get_key_value_list() { return key_value_list_; }
+
+  const CacheRefHandleID ref_handle_;
+  LCKeyValueArray *key_value_list_;
+};
+
 
 struct ObDumpAllCacheObjOp
 {
@@ -149,10 +193,28 @@ struct ObDumpAllCacheObjByNsOp : ObDumpAllCacheObjOp
   ObLibCacheNameSpace namespace_;
 };
 
+class ObPlanCacheEliminationTask : public common::ObTimerTask
+{
+public:
+  ObPlanCacheEliminationTask() : plan_cache_(NULL),
+                            run_task_counter_(0)
+  {
+  }
+  void runTimerTask(void);
+private:
+  void run_plan_cache_task();
+  //void run_ps_cache_task();
+  void run_free_cache_obj_task();
+public:
+  ObPlanCache* plan_cache_;
+  int64_t run_task_counter_;
+};
 
 class ObPlanCache
 {
 friend class ObCacheObjectFactory;
+friend class ObPlanCacheEliminationTask;
+
 public:
   static const int64_t MAX_PLAN_SIZE = 20*1024*1024; //20M
   static const int64_t MAX_PLAN_CACHE_SIZE = 5*1024L*1024L*1024L; // 5G
@@ -163,14 +225,11 @@ public:
 
   ObPlanCache();
   virtual ~ObPlanCache();
-  int init(int64_t hash_bucket,
-           common::ObAddr addr,
-           uint64_t tenant_id,
-           PlanCacheMap* pcm);
+  static int mtl_init(ObPlanCache* &plan_cache);
+  static void mtl_stop(ObPlanCache * &plan_cache);
+  int init(int64_t hash_bucket, uint64_t tenant_id);
   bool is_inited() { return inited_; }
-  
-  //添加pl 对象到Cache
-  int add_pl_cache(ObILibCacheObject *pl_object, ObPlanCacheCtx &pc_ctx);
+
   /**
    * Add new plan to PlanCache
    */
@@ -185,10 +244,6 @@ public:
   // cache object access functions
   /* 根据ObPlanCacheKey以及参数在plan cache中查询符合要求的执行计划 */
   int get_plan(common::ObIAllocator &allocator, ObPlanCacheCtx &pc_ctx, ObCacheObjGuard& guard);
-  //根据ObPlanCacheKey以及参数在plan cache中查询缓存的pl function
-  int get_pl_function(ObCacheObjGuard& guard, ObPlanCacheCtx &pc_ctx);
-  //根据ObPlanCacheKey以及参数在plan cache中查询缓存的pl package
-  int get_pl_package(ObCacheObjGuard& cacheobj_guard, ObPlanCacheCtx &pc_ctx);
   /* 根据ObPlanCacheKey以及参数在plan cache中查询符合要求的执行计划 */
   int get_ps_plan(ObCacheObjGuard& guard, const ObPsStmtId stmt_id, ObPlanCacheCtx &pc_ctx);
   int ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard);
@@ -201,6 +256,7 @@ public:
   int add_exists_cache_obj_by_sql(ObILibCacheCtx &ctx,
                                   ObILibCacheObject *cache_obj);
   int evict_plan(uint64_t table_id);
+  int evict_plan_by_table_name(uint64_t database_id, ObString tab_name);
 
   /**
    * memory related
@@ -253,19 +309,18 @@ public:
   int64_t get_label_hold(lib::ObLabel &label) const;
   int64_t get_bucket_num() const { return bucket_num_; }
 
-  // access count related 
+  // access count related
   void inc_access_cnt() { ATOMIC_INC(&pc_stat_.access_count_);}
   void inc_hit_and_access_cnt()
   {
     ATOMIC_INC(&pc_stat_.hit_count_);
     ATOMIC_INC(&pc_stat_.access_count_);
   }
-  
+
   /*
    * cache evict
    */
   int cache_evict_all_plan();
-  int cache_evict_all_pl();
   int cache_evict_all_obj();
   //evict plan, adjust mem between hwm and lwm
   int cache_evict();
@@ -273,13 +328,7 @@ public:
   int cache_evict_by_ns(ObLibCacheNameSpace ns);
   template<typename CallBack = ObKVEntryTraverseOp>
   int foreach_cache_evict(CallBack &cb);
-  //asynchronous update plan baseline
-  int asyn_update_baseline();
-  bool is_valid() {return valid_;}
-  void set_valid(bool valid) {valid_ = valid;}
   void destroy();
-  int64_t inc_ref_count();
-  void dec_ref_count();
   common::ObAddr &get_host() { return host_; }
   void set_host(common::ObAddr &addr) { host_ = addr; }
   int64_t get_tenant_id() const { return tenant_id_; }
@@ -289,11 +338,11 @@ public:
   void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
   common::ObIAllocator *get_pc_allocator() { return &inner_allocator_; }
   common::ObIAllocator &get_pc_allocator_ref() { return inner_allocator_; }
-  int64_t get_ref_count() const { return ref_count_; }
   int64_t get_cache_obj_size() const { return co_mgr_.get_cache_obj_size(); }
   ObPlanCacheStat &get_plan_cache_stat() { return pc_stat_; }
   const ObPlanCacheStat &get_plan_cache_stat() const { return pc_stat_; }
   int remove_cache_obj_stat_entry(const ObCacheObjID cache_obj_id);
+  int remove_cache_node(ObILibCacheKey *key);
   ObLCObjectManager &get_cache_obj_mgr() { return co_mgr_; }
   ObLCNodeFactory &get_cache_node_factory() { return cn_factory_; }
   int alloc_cache_obj(ObCacheObjGuard& guard, ObLibCacheNameSpace ns, uint64_t tenant_id);
@@ -330,6 +379,13 @@ public:
   ObCacheRefHandleMgr &get_ref_handle_mgr() { return ref_handle_mgr_; }
   const ObCacheRefHandleMgr &get_ref_handle_mgr() const { return ref_handle_mgr_; }
 
+public:
+  int flush_plan_cache();
+  int flush_plan_cache_by_sql_id(uint64_t db_id, common::ObString sql_id);
+  int flush_lib_cache();
+  int flush_lib_cache_by_ns(const ObLibCacheNameSpace ns);
+  int flush_pl_cache();
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCache);
   int add_plan_cache(ObILibCacheCtx &ctx,
@@ -342,7 +398,7 @@ private:
   int add_cache_obj_stat(ObILibCacheCtx &ctx,
                          ObILibCacheObject *cache_obj);
   bool calc_evict_num(int64_t &plan_cache_evict_num);
-  int remove_cache_node(ObILibCacheKey *key);
+
   int batch_remove_cache_node(const LCKeyValueArray &to_evict);
   bool is_reach_memory_limit() { return get_mem_hold() > get_mem_limit(); }
   int construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNameSpace ns);
@@ -362,13 +418,14 @@ private:
   int deal_add_ps_plan_result(int add_plan_ret,
                               ObPlanCacheCtx &pc_ctx,
                               const ObILibCacheObject &cache_object);
-  int get_pl_cache(ObPlanCacheCtx &pc_ctx, ObCacheObjGuard& guard);
   int check_after_get_plan(int tmp_ret, ObILibCacheCtx &ctx, ObILibCacheObject *cache_obj);
+private:
+  enum PlanCacheGCStrategy { INVALID = -1, OFF = 0, REPORT = 1, AUTO = 2};
+  static int get_plan_cache_gc_strategy();
 private:
   const static int64_t SLICE_SIZE = 1024; //1k
 private:
   bool inited_;
-  bool valid_;
   int64_t tenant_id_;
   int64_t mem_limit_pct_;
   int64_t mem_high_pct_;                     // high water mark percentage
@@ -378,7 +435,6 @@ private:
   common::ObMalloc inner_allocator_;
   common::ObAddr host_;
   ObPlanCacheStat pc_stat_;
-  volatile int64_t ref_count_;
   // ref handle infos
   ObCacheRefHandleMgr ref_handle_mgr_;
   PlanCacheMap* pcm_;
@@ -387,6 +443,8 @@ private:
   ObLCObjectManager co_mgr_;
   ObLCNodeFactory cn_factory_;
   CacheKeyNodeMap cache_key_node_map_;
+  ObPlanCacheEliminationTask evict_task_;
+  int tg_id_;
 };
 
 template<typename _callback>

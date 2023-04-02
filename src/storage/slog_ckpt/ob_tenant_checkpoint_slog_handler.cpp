@@ -30,6 +30,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "sql/das/ob_das_id_service.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -57,7 +58,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     is_writing_checkpoint_(false),
     last_ckpt_time_(0),
     last_frozen_version_(0),
-    lock_(),
+    lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     ls_block_handle_(),
     tablet_block_handle_(),
     tg_id_(-1),
@@ -123,6 +124,9 @@ void ObTenantCheckpointSlogHandler::stop()
   if (IS_INIT) {
     TG_STOP(tg_id_);
   }
+  // since the ls service deletes tablets in the stop interface when observer stop,
+  // it must ensure that no checkpoint is in progress after stop, otherwise the tablet may be lost
+  wait();
 }
 
 void ObTenantCheckpointSlogHandler::wait()

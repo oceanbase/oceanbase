@@ -33,6 +33,7 @@ public:
   ObStoreRowkey() : key_(), hash_(0), group_idx_(0) {}
   ~ObStoreRowkey() {};
   inline void reset() {key_.reset(); hash_ = 0; group_idx_ = 0; }
+  void destroy(ObIAllocator &allocator);
 
   //TODO column order is fake now, need to enable by someone in some day
   //FIXME-yangsuli

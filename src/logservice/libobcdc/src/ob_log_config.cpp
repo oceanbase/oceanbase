@@ -36,17 +36,11 @@ ObLogConfig &ObLogConfig::get_instance()
 int ObLogConfig::init()
 {
   int ret = OB_SUCCESS;
-  const int64_t buf_len= OBLOG_MAX_CONFIG_LENGTH;
-
   if (OB_UNLIKELY(inited_)) {
     LOG_ERROR("init twice", K(inited_));
     ret = OB_INIT_TWICE;
-  } else if (OB_ISNULL(config_file_buf1_= static_cast<char *>(ob_malloc(buf_len, ObModIds::OB_LOG_CONFIG)))) {
-    LOG_ERROR("allocate memory for buffer fail", K(config_file_buf1_), K(buf_len));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_ISNULL(config_file_buf2_= static_cast<char *>(ob_malloc(buf_len, ObModIds::OB_LOG_CONFIG)))) {
-    LOG_ERROR("allocate memory for buffer fail", K(config_file_buf2_), K(buf_len));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(ObBaseConfig::init())){
+    LOG_ERROR("init ObBaseConfig failed", KR(ret));
   } else {
     inited_ = true;
   }
@@ -56,16 +50,7 @@ int ObLogConfig::init()
 
 void ObLogConfig::destroy()
 {
-  if (NULL != config_file_buf1_) {
-    ob_free(config_file_buf1_);
-    config_file_buf1_ = NULL;
-  }
-
-  if (NULL != config_file_buf2_) {
-    ob_free(config_file_buf2_);
-    config_file_buf2_ = NULL;
-  }
-
+  ObBaseConfig::destroy();
   inited_ = false;
 }
 
@@ -115,90 +100,19 @@ int ObLogConfig::format_cluster_url()
   return ret;
 }
 
-int ObLogConfig::check_all()
-{
-  int ret = OB_SUCCESS;
-  ObConfigContainer::const_iterator it = container_.begin();
-
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogConfig has not been initialized");
-    ret = OB_NOT_INIT;
-  } else {
-    for (; OB_SUCCESS == ret && it != container_.end(); it++) {
-      if (OB_ISNULL(it->second)) {
-        LOG_ERROR("config item const_iterator second element is NULL",
-            "first_item", it->first.str());
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_ISNULL(it->second->str())) {
-        LOG_ERROR("config item string value is NULL",
-            "first_item", it->first.str());
-        ret = OB_ERR_UNEXPECTED;
-      } else if (! it->second->check()) {
-        _LOG_ERROR("invalid config, name: [%s], value: [%s]", it->first.str(), it->second->str());
-        ret = OB_INVALID_CONFIG;
-      } else if (0 == strlen(it->second->str())) {
-        // All configuration items are not allowed to be empty
-        _LOG_ERROR("invalid empty config, name: [%s], value: [%s]",
-            it->first.str(), it->second->str());
-        ret = OB_INVALID_CONFIG;
-      } else {
-        // normal
-      }
-    }
-  }
-
-  return ret;
-}
-
-struct ConfigItem
-{
-  std::string key_;
-  std::string val_;
-
-  bool operator == (const ConfigItem &item)
-  {
-    return key_ == item.key_;
-  }
-
-  bool operator < (const ConfigItem &item)
-  {
-    return key_ < item.key_;
-  }
-
-  ConfigItem() : key_(), val_()
-  {}
-
-  ConfigItem(const char *key, const char *val) : key_(key), val_(val) {}
-
-  TO_STRING_KV("key", key_.c_str(), "val", val_.c_str());
-};
-
-typedef ObArray<ConfigItem> ConfigItemArray;
-
-void get_sorted_config_items(const ObConfigContainer &container, ConfigItemArray &configs)
-{
-  // Transfer the configuration items to an array and sort the output
-  ObConfigContainer::const_iterator it = container.begin();
-  for (; it != container.end(); it++) {
-    ConfigItem item(it->first.str(), NULL == it->second ? "" : it->second->str());
-    (void)configs.push_back(item);
-  }
-  std::sort(configs.begin(), configs.end());
-}
-
 void ObLogConfig::print() const
 {
   static const int64_t BUF_SIZE = 1L << 22;
   char *buf = static_cast<char*>(ob_malloc(BUF_SIZE, ObModIds::OB_LOG_CONFIG));
 
   if (OB_ISNULL(buf)) {
-    LOG_ERROR("allocate memory fail", K(BUF_SIZE));
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(BUF_SIZE));
   } else {
     int64_t pos = 0;
     int64_t size = BUF_SIZE;
     ConfigItemArray configs;
 
-    get_sorted_config_items(container_, configs);
+    get_sorted_config_items(configs);
 
     (void)databuff_printf(buf, size, pos,
         "\n%s ================================ *libobcdc config begin* ================================\n",
@@ -248,165 +162,6 @@ int ObLogConfig::load_from_map(const ConfigMap &configs,
         (*pp_item)->set_version(version);
         _LOG_INFO("load config succ, %s=%s", iter->first.c_str(), iter->second.c_str());
       }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogConfig::load_from_buffer(const char *config_str,
-    const int64_t config_str_len,
-    const int64_t version /* = 0 */,
-    const bool check_name /* = false */)
-{
-  int ret = OB_SUCCESS;
-  char *saveptr = NULL;
-  char *token = NULL;
-  int64_t pos =0;
-
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogConfig has not been initialized");
-    ret = OB_NOT_INIT;
-  } else if (NULL == config_str || config_str_len <= 0) {
-    LOG_ERROR("invalid argument", K(config_str), K(config_str_len));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(config_file_buf2_)) {
-    LOG_ERROR("config_file_buf2_ is NULL", K(config_file_buf2_));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    config_file_buf2_[0] = '\0';
-    const int64_t buf_size = OBLOG_MAX_CONFIG_LENGTH;
-
-    if (config_str_len > (buf_size - 1)) {
-      LOG_ERROR("extra config is too long!", K(config_str_len), K(buf_size));
-      ret = OB_BUF_NOT_ENOUGH;
-    } else if (OB_FAIL(databuff_printf(config_file_buf2_, buf_size, pos, "%.*s",
-            static_cast<int>(config_str_len), config_str))) {
-      LOG_ERROR("copy config string fail", KR(ret), K(config_file_buf2_), K(buf_size), K(pos), K(config_str_len),
-          K(config_str));
-    } else {
-      token = strtok_r(config_file_buf2_, ",\n", &saveptr);
-      while (NULL != token && OB_SUCCESS == ret) {
-        char *saveptr_one = NULL;
-        const char *name = NULL;
-        const char *value = NULL;
-        ObConfigItem *const *pp_item = NULL;
-        if (NULL == (name = strtok_r(token, "=", &saveptr_one))) {
-          LOG_ERROR("fail to parse config string, can not find '=' from token",
-              K(token), K(config_str));
-          ret = OB_INVALID_CONFIG;
-        } else if ('\0' == *(value = saveptr_one)) {
-          _LOG_WARN("empty config string: [%s]", token);
-          name = "";
-        } else if (NULL == (pp_item = container_.get(ObConfigStringKey(name)))) {
-          if (check_name) {
-            _LOG_WARN("invalid config string, unknown config item! name: [%s] value: [%s]",
-                name, value);
-            ret = OB_INVALID_ARGUMENT;
-          }
-        } else {
-          (*pp_item)->set_value(value);
-          (*pp_item)->set_version(version);
-          _LOG_INFO("load config succ, %s=%s", name, value);
-        }
-
-        if (OB_SUCCESS == ret) {
-          token = strtok_r(NULL, ",\n", &saveptr);
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogConfig::load_from_file(const char *config_file,
-    const int64_t version /* = 0 */,
-    const bool check_name /* = false */)
-{
-  int ret = OB_SUCCESS;
-  FILE *fp = NULL;
-
-  if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogConfig has not been initialized");
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(config_file)) {
-    LOG_ERROR("invalid argument", K(config_file));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(config_file_buf1_)) {
-    LOG_ERROR("config_file_buf1_ is NULL", K(config_file_buf1_));
-    ret = OB_ERR_UNEXPECTED;
-  } else if (NULL == (fp = fopen(config_file, "rb"))) {
-    ret = OB_IO_ERROR;
-    LOG_ERROR("can't open file", K(config_file), KR(ret), KERRNOMSG(errno));
-  } else {
-    config_file_buf1_[0] = '\0';
-    int64_t buffer_size = OBLOG_MAX_CONFIG_LENGTH;
-    int64_t read_len = fread(config_file_buf1_, 1, buffer_size - 1, fp);
-
-    if (0 != ferror(fp)) {
-      ret = OB_IO_ERROR;
-      LOG_ERROR("read config file error!", K(config_file), KERRNOMSG(errno));
-    } else if (0 == feof(fp)) {
-      ret = OB_BUF_NOT_ENOUGH;
-      LOG_ERROR("config file is too long!", K(config_file), K(buffer_size));
-    } else if (read_len <= 0) {
-      LOG_WARN("config file is empty", K(config_file));
-    } else if (read_len >= buffer_size) {
-      LOG_ERROR("fread buffer overflow", K(read_len), K(buffer_size));
-      ret = OB_SIZE_OVERFLOW;
-    } else {
-      // end with '\0'
-      config_file_buf1_[read_len] = '\0';
-
-      if (OB_FAIL(load_from_buffer(config_file_buf1_, read_len, version, check_name))) {
-        LOG_ERROR("load config fail", KR(ret), K(config_file), K(version), K(check_name),
-            K(read_len));
-      } else {
-        LOG_INFO("load config from file succ", K(config_file));
-      }
-    }
-  }
-
-  if (NULL != fp) {
-    fclose(fp);
-    fp = NULL;
-  }
-
-  return ret;
-}
-
-int ObLogConfig::dump2file(const char *file) const
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(file)) {
-    LOG_ERROR("invalid argument", K(file));
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    FILE *fp = NULL;
-    ConfigItemArray configs;
-
-    get_sorted_config_items(container_, configs);
-
-    if (NULL == (fp = fopen(file, "w+"))) {
-      ret = OB_IO_ERROR;
-      LOG_ERROR("open file fail", K(file), KERRMSG);
-    } else {
-      for (int64_t index = 0; index < configs.count(); index++) {
-        const ConfigItem &item = configs.at(index);
-
-        int write_len = fprintf(fp, "%s=%s\n", item.key_.c_str(), item.val_.c_str());
-        if (write_len <= 0) {
-          LOG_WARN("write config file fail",
-              K(write_len), "config: name", item.key_.c_str(), "value", item.val_.c_str());
-        }
-      }
-    }
-
-    if (NULL != fp) {
-      fclose(fp);
-      fp = NULL;
     }
   }
 

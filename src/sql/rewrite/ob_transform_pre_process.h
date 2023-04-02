@@ -15,6 +15,7 @@
 
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/ob_sql_context.h"
 
@@ -86,6 +87,21 @@ struct DistinctObjMeta
    * following functions are for grouping sets and multi rollup
    */
   int transform_for_grouping_sets_and_multi_rollup(ObDMLStmt *&stmt, bool &trans_happened);
+
+  int is_subquery_correlated(const ObSelectStmt *stmt,
+                             bool &is_correlated);
+
+  int is_subquery_correlated(const ObSelectStmt *stmt,
+                             hash::ObHashSet<uint64_t> &param_set,
+                             bool &is_correlated);
+
+  int add_exec_params(const ObSelectStmt &stmt,
+                      hash::ObHashSet<uint64_t> &param_set);
+
+  int has_new_exec_param(const ObRawExpr *expr,
+                         const hash::ObHashSet<uint64_t> &param_set,
+                         bool &has_new);
+
   int add_generated_table_as_temp_table(ObTransformerCtx *ctx,
                                         ObDMLStmt *stmt);
   int replace_with_set_stmt_view(ObSelectStmt *origin_stmt,
@@ -118,6 +134,9 @@ struct DistinctObjMeta
    */
   int transform_for_hierarchical_query(ObDMLStmt *stmt, bool &trans_happened);
 
+  int try_split_hierarchical_query(ObSelectStmt &stmt, ObSelectStmt *&hierarchical_stmt);
+
+  int check_need_split_hierarchical_query(ObSelectStmt &stmt, bool &need_split);
   /**
    * @brief create_connect_by_view
    * 为层次查询构建一个spj，封装所有与层次查询相关的计算
@@ -149,6 +168,21 @@ struct DistinctObjMeta
 
   int extract_connect_by_related_exprs(ObRawExpr *expr, ObIArray<ObRawExpr*> &special_exprs);
 
+  int get_prior_exprs(ObIArray<ObRawExpr *> &expr, ObIArray<ObRawExpr *> &prior_exprs);
+  int get_prior_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &prior_exprs);
+
+  /**
+   * @brief modify_prior_exprs
+   * replace prior exprs into left view columns
+   */
+  int modify_prior_exprs(ObRawExprFactory &expr_factory,
+                         ObSelectStmt &stmt,
+                         const ObIArray<ObRawExpr *> &parent_columns,
+                         const ObIArray<ObRawExpr *> &left_columns,
+                         const ObIArray<ObRawExpr *> &prior_exprs,
+                         ObIArray<ObRawExpr *> &convert_exprs,
+                         const bool only_columns);
+
   uint64_t get_real_tid(uint64_t tid, ObSelectStmt &stmt);
 
 	/*
@@ -170,8 +204,38 @@ struct DistinctObjMeta
                                       ObIAllocator &allocator,
                                       int64_t &result);
 
-  int transform_for_merge_into(ObDMLStmt *stmt, bool &trans_happened);
+  /*
+   * following functions are used to transform merge into stmt
+   */
+  int transform_for_merge_into(ObDMLStmt *&stmt, bool &trans_happened);
+  int transform_merge_into_subquery(ObMergeStmt *merge_stmt);
+  int create_matched_expr(ObMergeStmt &stmt,
+                          ObRawExpr *&matched_flag,
+                          ObRawExpr *&not_matched_flag);
+  int generate_merge_conditions_subquery(ObRawExpr *matched_expr,
+                                         ObIArray<ObRawExpr*> &condition_exprs);
+  int get_update_insert_condition_subquery(ObMergeStmt *merge_stmt,
+                                           ObRawExpr *matched_expr,
+                                           ObRawExpr *not_matched_expr,
+                                           bool &update_has_subquery,
+                                           bool &insert_has_subquery,
+                                           ObIArray<ObRawExpr*> &new_subquery_exprs);
+  int get_update_insert_target_subquery(ObMergeStmt *merge_stmt,
+                                        ObRawExpr *matched_expr,
+                                        ObRawExpr *not_matched_expr,
+                                        bool update_has_subquery,
+                                        bool insert_has_subquery,
+                                        ObIArray<ObRawExpr*> &new_subquery_exprs);
+  int get_delete_condition_subquery(ObMergeStmt *merge_stmt,
+                                    ObRawExpr *matched_expr,
+                                    bool update_has_subquery,
+                                    ObIArray<ObRawExpr*> &new_subquery_exprs);
 
+  int transform_insert_only_merge_into(ObDMLStmt* stmt, ObDMLStmt*& out);
+
+  int transform_update_only_merge_into(ObDMLStmt* stmt);
+
+  int create_source_view_for_merge_into(ObMergeStmt *merge_stmt, TableItem *&view_table);
 	/*
 	 * following functions are used for temporary and se table
 	 */
@@ -181,6 +245,71 @@ struct DistinctObjMeta
 	int collect_all_tableitem(ObDMLStmt *stmt,
                             TableItem *table_item,
                             common::ObArray<TableItem*> &table_item_list);
+  /*
+   * following functions are used for row level security
+   */
+  int transform_for_rls_table(ObDMLStmt *stmt, bool &trans_happened);
+  int check_exempt_rls_policy(bool &exempt_rls_policy);
+  int check_need_transform_column_level(ObDMLStmt &stmt,
+                                        const TableItem &table_item,
+                                        const share::schema::ObRlsPolicySchema &policy_schema,
+                                        bool &need_trans);
+  int transform_for_single_rls_policy(ObDMLStmt &stmt,
+                                      TableItem &table_item,
+                                      const share::schema::ObRlsPolicySchema &policy_schema,
+                                      bool &trans_happened);
+  int calc_policy_function(ObDMLStmt &stmt,
+                           const TableItem &table_item,
+                           const share::schema::ObRlsPolicySchema &policy_schema,
+                           ObRawExpr *&predicate_expr,
+                           common::ObString &predicate_str);
+  int build_policy_predicate_expr(const common::ObString &predicate_str,
+                                  const TableItem &table_item,
+                                  common::ObIArray<ObQualifiedName> &columns,
+                                  ObRawExpr *&expr);
+  int add_rls_policy_constraint(const ObRawExpr *expr, const common::ObString &predicate_str);
+  int build_rls_filter_expr(ObDMLStmt &stmt,
+                            const TableItem &table_item,
+                            const common::ObIArray<ObQualifiedName> &columns,
+                            ObRawExpr *predicate_expr,
+                            ObRawExpr *&expr);
+  int build_rls_constraint_expr(const ObDmlTableInfo &table_info,
+                                const ObIArray<ObQualifiedName> &columns,
+                                ObRawExpr *predicate_expr,
+                                ObRawExpr *&expr);
+  int add_filter_for_rls_select(ObDMLStmt &stmt,
+                                TableItem &table_item,
+                                const common::ObIArray<ObQualifiedName> &columns,
+                                ObRawExpr *predicate_expr);
+  int add_filter_for_rls_merge(ObDMLStmt &stmt,
+                               const TableItem &table_item,
+                               const common::ObIArray<ObQualifiedName> &columns,
+                               ObRawExpr *predicate_expr);
+  int add_filter_for_rls(ObDMLStmt &stmt,
+                         const TableItem &table_item,
+                         const common::ObIArray<ObQualifiedName> &columns,
+                         ObRawExpr *predicate_expr);
+  int add_constraint_for_rls(ObDMLStmt &stmt,
+                             const TableItem &table_item,
+                             const common::ObIArray<ObQualifiedName> &columns,
+                             ObRawExpr *predicate_expr);
+  int add_constraint_for_rls_insert(ObDMLStmt &stmt,
+                                   const TableItem &table_item,
+                                   const common::ObIArray<ObQualifiedName> &columns,
+                                   ObRawExpr *predicate_expr);
+  int add_constraint_for_rls_update(ObDMLStmt &stmt,
+                                    const TableItem &table_item,
+                                    const common::ObIArray<ObQualifiedName> &columns,
+                                    ObRawExpr *predicate_expr);
+  int add_constraint_for_rls_merge(ObDMLStmt &stmt,
+                                   const TableItem &table_item,
+                                   const common::ObIArray<ObQualifiedName> &columns,
+                                   ObRawExpr *predicate_expr);
+  int replace_expr_for_rls(ObDMLStmt &stmt,
+                           const TableItem &table_item,
+                           const share::schema::ObRlsPolicySchema &policy_schema,
+                           const common::ObIArray<ObQualifiedName> &columns,
+                           ObRawExpr *predicate_expr);
 
   int transform_exprs(ObDMLStmt *stmt, bool &trans_happened);
   int transform_for_nested_aggregate(ObDMLStmt *&stmt, bool &trans_happened);
@@ -255,7 +384,7 @@ struct DistinctObjMeta
                                        ObDMLStmt *&stmt,
                                        bool &trans_happened);
   int transform_common_rownum_as_limit(ObDMLStmt *&stmt, bool &trans_happened);
-  int try_transform_common_rownum_as_limit(ObDMLStmt *stmt, ObRawExpr *&limit_expr);
+  int try_transform_common_rownum_as_limit_or_false(ObDMLStmt *stmt, ObRawExpr *&limit_expr, bool& is_valid);
   int transform_generated_rownum_as_limit(const ObIArray<ObParentDMLStmt> &parent_stmts,
                                           ObDMLStmt *stmt,
                                           bool &trans_happened);
@@ -403,6 +532,21 @@ struct DistinctObjMeta
 
   int mock_select_list_for_inner_view(ObDMLStmt &batch_stmt, ObSelectStmt &inner_view);
 
+  int transform_outerjoin_exprs(ObDMLStmt *stmt, bool &trans_happened);
+
+  int remove_shared_expr(ObDMLStmt *stmt,
+                         JoinedTable *joined_table,
+                         hash::ObHashSet<uint64_t> &expr_set,
+                         bool is_nullside);
+
+  int do_remove_shared_expr(hash::ObHashSet<uint64_t> &expr_set,
+                            ObIArray<ObRawExpr *> &padnull_exprs,
+                            bool is_nullside,
+                            ObRawExpr *&expr,
+                            bool &has_nullside_column);
+
+  int check_nullside_expr(ObRawExpr *expr, bool &bret);
+
   int transform_full_outer_join(ObDMLStmt *&stmt, bool &trans_happened);
 
   int check_join_condition(ObDMLStmt *stmt,
@@ -415,7 +559,7 @@ struct DistinctObjMeta
    * 以左-右-后的方式后续遍历from item及semi from item中的joined_table结构
    */
   int recursively_eliminate_full_join(ObDMLStmt &stmt,
-                                      TableItem &table_item,
+                                      TableItem *table_item,
                                       bool &trans_happened);
 
   /**
@@ -436,6 +580,33 @@ struct DistinctObjMeta
   int extract_idx_from_table_items(ObDMLStmt *sub_stmt,
                                    const TableItem *table_item,
                                    ObSqlBitSet<> &rel_ids);
+
+  int formalize_limit_expr(ObDMLStmt &stmt);
+  int transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened);
+  int get_rollup_const_exprs(ObSelectStmt *stmt,
+                             ObIArray<ObRawExpr*> &const_exprs,
+                             ObIArray<ObRawExpr*> &const_remove_const_exprs,
+                             ObIArray<ObRawExpr*> &exec_params,
+                             ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
+                             ObIArray<ObRawExpr*> &column_ref_exprs,
+                             ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                             bool &trans_happened);
+  int replace_remove_const_exprs(ObSelectStmt *stmt,
+                                ObIArray<ObRawExpr*> &const_exprs,
+                                ObIArray<ObRawExpr*> &const_remove_const_exprs,
+                                ObIArray<ObRawExpr*> &exec_params,
+                                ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
+                                ObIArray<ObRawExpr*> &column_ref_exprs,
+                                ObIArray<ObRawExpr*> &column_ref_remove_const_exprs);
+
+  int transform_cast_multiset_for_stmt(ObDMLStmt *&stmt, bool &is_happened);
+  int transform_cast_multiset_for_expr(ObRawExpr *&expr, bool &trans_happened);
+  int add_constructor_to_multiset(ObQueryRefRawExpr *multiset_expr,
+                                  const pl::ObPLDataType &elem_type,
+                                  bool& trans_happened);
+  int add_column_conv_to_multiset(ObQueryRefRawExpr *multiset_expr,
+                                  const pl::ObPLDataType &elem_type,
+                                  bool& trans_happened);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

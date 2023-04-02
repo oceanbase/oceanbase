@@ -37,7 +37,7 @@ namespace oceanbase
 namespace lib
 {
   int get_max_thread_num() {
-    return 0 == GCONF._ob_max_thread_num ? INT32_MAX : GCONF._ob_max_thread_num;
+    return 0 == GCONF._ob_max_thread_num ? INT32_MAX : static_cast<int32_t>(GCONF._ob_max_thread_num);
   }
 }
 
@@ -71,8 +71,11 @@ void get_tenant_ids(uint64_t *ids, int cap, int &cnt)
 {
   auto *instance = ObMallocAllocator::get_instance();
   cnt = 0;
-  for (uint64_t tenant_id = 1; tenant_id <= ObMallocAllocator::get_max_used_tenant_id() && cnt < cap; ++tenant_id) {
-    if (nullptr != instance->get_tenant_ctx_allocator(tenant_id, 0)) {
+  for (uint64_t tenant_id = 1; tenant_id <= instance->get_max_used_tenant_id() && cnt < cap; ++tenant_id) {
+    if (nullptr != instance->get_tenant_ctx_allocator(tenant_id,
+                                                      ObCtxIds::DEFAULT_CTX_ID) ||
+        nullptr != instance->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                 ObCtxIds::DEFAULT_CTX_ID)) {
       ids[cnt++] = tenant_id;
     }
   }

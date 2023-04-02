@@ -21,13 +21,14 @@ Query Plan
 |0 |DELETE     |    |
 |1 | TABLE SCAN|t_s |
 =====================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 explain basic delete /*+use_px*/ from t_s;
 Query Plan
 =====================
@@ -36,13 +37,14 @@ Query Plan
 |0 |DELETE     |    |
 |1 | TABLE SCAN|t_s |
 =====================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 delete /*+use_px*/ from t_s;
 select * from t_s order by c1;
 +----+------+------+
@@ -62,16 +64,18 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_s     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 delete /*+use_px, parallel(10)*/ from t_s;
 select * from t_s order by c1;
 +----+------+------+
@@ -92,16 +96,19 @@ Query Plan
 |3 |   DELETE              |        |
 |4 |    TABLE SCAN         |t_p     |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
 explain basic delete /*+use_px,parallel(10)*/ from t_p;
 Query Plan
 =====================================
@@ -113,16 +120,19 @@ Query Plan
 |3 |   DELETE              |        |
 |4 |    TABLE SCAN         |t_p     |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
 delete /*+use_px,parallel(10)*/ from t_p;
 select * from t_p order by c1;
 +----+------+------+
@@ -143,16 +153,20 @@ Query Plan
 |3 |   DELETE              |        |
 |4 |    TABLE SCAN         |t_p     |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 explain basic delete /*+use_px,parallel(10)*/ from t_p where c1 >= 5;
 Query Plan
 =====================================
@@ -164,16 +178,20 @@ Query Plan
 |3 |   DELETE              |        |
 |4 |    TABLE SCAN         |t_p     |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 delete /*+use_px,parallel(10)*/ from t_p where c1 >= 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -196,13 +214,15 @@ Query Plan
 |0 |DELETE    |    |
 |1 | TABLE GET|t_p |
 ====================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; 5],
+      range_cond([t_p.c1 = 5])
 explain basic delete /*+use_px,parallel(10)*/ from t_p where c1 = 5;
 Query Plan
 ==================================
@@ -214,16 +234,19 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE GET       |t_p     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; 5],
+      range_cond([t_p.c1 = 5])
 explain basic delete /*+no_use_px,parallel(10)*/ from t_p where c1 = 5;
 Query Plan
 ==================================
@@ -235,16 +258,19 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE GET       |t_p     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; 5],
+      range_cond([t_p.c1 = 5])
 delete /*+use_px,parallel(10)*/ from t_p where c1 = 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -279,20 +305,27 @@ Query Plan
 |5 |     TABLE SCAN           |t_p     |
 |6 |     DISTRIBUTED TABLE GET|t_p4    |
 ========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_([t_p.c1])
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_([t_p.c1]), batch_join=true
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-  6 - output(nil), filter(nil), rowset=256, 
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
+  6 - output(nil), filter(nil), rowset=256
       access([GROUP_ID]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p4.c1]), range(MIN ; MAX),
+      range_cond([:0 = t_p4.c1])
 explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
 Query Plan
 ===============================================
@@ -310,24 +343,32 @@ Query Plan
 |9 |    PX PARTITION HASH JOIN-FILTER|:BF0000 |
 |10|     TABLE SCAN                  |t_p     |
 ===============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=4
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=4
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c1]), other_conds(nil)
   4 - output([t_p4.c1]), filter(nil), rowset=256
   5 - output([t_p4.c1]), filter(nil), rowset=256
-  6 - (#keys=1, [t_p4.c1]), output([t_p4.c1]), filter(nil), rowset=256, dop=10
+  6 - output([t_p4.c1]), filter(nil), rowset=256
+      (#keys=1, [t_p4.c1]), dop=10
   7 - output([t_p4.c1]), filter(nil), rowset=256
-  8 - output([t_p4.c1]), filter(nil), rowset=256, 
+  8 - output([t_p4.c1]), filter(nil), rowset=256
       access([t_p4.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_p4.c1]), range[5 ; MAX),
+      range_cond([t_p4.c1 >= 5])
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256, 
+      affinitize
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -359,24 +400,31 @@ Query Plan
 |9 |    PX PARTITION HASH JOIN-FILTER|:BF0000 |
 |10|     TABLE SCAN                  |t_p     |
 ===============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=4
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=4
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
   5 - output([t_p4.c2]), filter(nil), rowset=256
-  6 - (#keys=1, [t_p4.c2]), output([t_p4.c2]), filter(nil), rowset=256, dop=10
+  6 - output([t_p4.c2]), filter(nil), rowset=256
+      (#keys=1, [t_p4.c2]), dop=10
   7 - output([t_p4.c2]), filter(nil), rowset=256
-  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256, 
+  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256, 
+      affinitize
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
 Query Plan
 ===============================================
@@ -394,24 +442,31 @@ Query Plan
 |9 |    PX PARTITION HASH JOIN-FILTER|:BF0000 |
 |10|     TABLE SCAN                  |t_p     |
 ===============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=4
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=4
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
   5 - output([t_p4.c2]), filter(nil), rowset=256
-  6 - (#keys=1, [t_p4.c2]), output([t_p4.c2]), filter(nil), rowset=256, dop=10
+  6 - output([t_p4.c2]), filter(nil), rowset=256
+      (#keys=1, [t_p4.c2]), dop=10
   7 - output([t_p4.c2]), filter(nil), rowset=256
-  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256, 
+  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256, 
+      affinitize
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -445,24 +500,29 @@ Query Plan
 |9 |       PX BLOCK ITERATOR            |        |
 |10|        TABLE SCAN                  |t_p     |
 ==================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)}), hash_distinct}], [{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)}), hash_distinct}], [{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
   6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
   7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
 explain basic delete /*+use_px,parallel(10) LEADING(t_s t_p) USE_NL(t_p) PQ_DISTRIBUTE(t_p NONE BROADCAST ) */ t_s,t_p from t_s,t_p;
 Query Plan
 ==================================================
@@ -480,24 +540,29 @@ Query Plan
 |9 |       PX BLOCK ITERATOR            |        |
 |10|        TABLE SCAN                  |t_p     |
 ==================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)}), hash_distinct}], [{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)}), hash_distinct}], [{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
   6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
   7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
 delete /*+use_px,parallel(10)*/ t_s,t_p from t_s,t_p;
 select * from t_p order by c1;
 +----+------+------+
@@ -530,23 +595,28 @@ Query Plan
 |8 |    PX BLOCK ITERATOR            |        |
 |9 |     TABLE SCAN                  |t_s     |
 ===============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
   4 - output([t_p.c1]), filter(nil), rowset=256
-  5 - output([t_p.c1]), filter(nil), rowset=256, dop=10
+  5 - output([t_p.c1]), filter(nil), rowset=256
+      dop=10
   6 - output([t_p.c1]), filter(nil), rowset=256
-  7 - output([t_p.c1]), filter(nil), rowset=256, 
+  7 - output([t_p.c1]), filter(nil), rowset=256
       access([t_p.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
   8 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 explain basic delete /*+use_px, parallel(10),leading(t_s,t_p),pq_distribute(t_p,none,broadcast)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
 Query Plan
 =================================================
@@ -563,23 +633,28 @@ Query Plan
 |8 |      PX BLOCK ITERATOR            |        |
 |9 |       TABLE SCAN                  |t_p     |
 =================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
   4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
   6 - output([t_p.c1]), filter(nil), rowset=256
-  7 - output([t_p.c1]), filter(nil), rowset=256, dop=10
+  7 - output([t_p.c1]), filter(nil), rowset=256
+      dop=10
   8 - output([t_p.c1]), filter(nil), rowset=256
-  9 - output([t_p.c1]), filter(nil), rowset=256, 
+  9 - output([t_p.c1]), filter(nil), rowset=256
       access([t_p.c1]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
 delete /*+use_px, parallel(10),leading(t_s,t_p),pq_distribute(t_p,none,broadcast)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
 select * from t_s order by c1;
 +----+------+------+
@@ -604,23 +679,28 @@ Query Plan
 |8 |    PX BLOCK ITERATOR            |        |
 |9 |     TABLE SCAN                  |t_s     |
 ===============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
   4 - output([t_p.c1]), filter(nil), rowset=256
-  5 - output([t_p.c1]), filter(nil), rowset=256, dop=10
+  5 - output([t_p.c1]), filter(nil), rowset=256
+      dop=10
   6 - output([t_p.c1]), filter(nil), rowset=256
-  7 - output([t_p.c1]), filter(nil), rowset=256, 
+  7 - output([t_p.c1]), filter(nil), rowset=256
       access([t_p.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range(MIN ; MAX)always true
   8 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 delete /*+use_px, parallel(10)*/ t_s from t_s,t_p where t_p.c1 = t_s.c1;
 select * from t_s order by c1;
 +----+------+------+
@@ -648,45 +728,57 @@ Query Plan
 |9 |       PX BLOCK ITERATOR            |        |
 |10|        TABLE GET                   |t_s     |
 ==================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[1 ; 1],
+      range_cond([t_p.c1 = 1])
   6 - output(nil), filter(nil), rowset=256
   7 - output(nil), filter(nil), rowset=256
-  8 - output(nil), filter(nil), rowset=256, dop=10
+  8 - output(nil), filter(nil), rowset=256
+      dop=10
   9 - output(nil), filter(nil), rowset=256
-  10 - output(nil), filter(nil), rowset=256, 
+ 10 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range[1 ; 1],
+      range_cond([1 = t_s.c1])
 explain basic delete /*+use_px, parallel(1)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
 Query Plan
-=====================================
-|ID|OPERATOR                   |NAME|
+======================================
+|ID|OPERATOR                    |NAME|
+--------------------------------------
+|0 |DELETE                      |    |
+|1 | NESTED-LOOP JOIN CARTESIAN |    |
+|2 |  TABLE GET                 |t_s |
+|3 |  TABLE GET                 |t_p |
+======================================
+Outputs & filters:
 -------------------------------------
-|0 |DELETE                     |    |
-|1 | NESTED-LOOP JOIN CARTESIAN|    |
-|2 |  TABLE GET                |t_s |
-|3 |  TABLE GET                |t_p |
-=====================================
-
-Outputs & filters: 
--------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
-  2 - output(nil), filter(nil), rowset=256, 
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
+  2 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range[1 ; 1],
+      range_cond([1 = t_s.c1])
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[1 ; 1],
+      range_cond([t_p.c1 = 1])
 explain basic delete /*+use_px, parallel(10)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
 Query Plan
 ==================================================
@@ -704,24 +796,31 @@ Query Plan
 |9 |       PX BLOCK ITERATOR            |        |
 |10|        TABLE GET                   |t_s     |
 ==================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[1 ; 1],
+      range_cond([t_p.c1 = 1])
   6 - output(nil), filter(nil), rowset=256
   7 - output(nil), filter(nil), rowset=256
-  8 - output(nil), filter(nil), rowset=256, dop=10
+  8 - output(nil), filter(nil), rowset=256
+      dop=10
   9 - output(nil), filter(nil), rowset=256
-  10 - output(nil), filter(nil), rowset=256, 
+ 10 - output(nil), filter(nil), rowset=256
       access(nil), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range[1 ; 1],
+      range_cond([1 = t_s.c1])
 delete /*+use_px, parallel(10)*/ t_p from t_s,t_p where t_p.c1 = t_s.c1 and t_p.c1 = 1;
 select * from t_p order by c1;
 +----+------+------+
@@ -760,53 +859,65 @@ Query Plan
 |9 |     PX BLOCK ITERATOR             |        |
 |10|      TABLE GET                    |t_p     |
 =================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   4 - output(nil), filter(nil), rowset=256
-  5 - output(nil), filter(nil), rowset=256, dop=10
+  5 - output(nil), filter(nil), rowset=256
+      dop=10
   6 - output(nil), filter(nil), rowset=256
-  7 - output(nil), filter([t_p4.c2 = 4]), rowset=256, 
+  7 - output(nil), filter([t_p4.c2 = 4]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
   8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[4 ; 4],
+      range_cond([t_p.c1 = 4])
 explain basic delete /*+use_px, parallel(1)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 Query Plan
-=========================================
-|ID|OPERATOR                   |NAME    |
------------------------------------------
-|0 |DELETE                     |        |
-|1 | NESTED-LOOP JOIN CARTESIAN|        |
-|2 |  PX COORDINATOR           |        |
-|3 |   EXCHANGE OUT DISTR      |:EX10000|
-|4 |    PX PARTITION ITERATOR  |        |
-|5 |     TABLE SCAN            |t_p4    |
-|6 |  MATERIAL                 |        |
-|7 |   TABLE GET               |t_p     |
-=========================================
-
-Outputs & filters: 
+==========================================
+|ID|OPERATOR                    |NAME    |
+------------------------------------------
+|0 |DELETE                      |        |
+|1 | NESTED-LOOP JOIN CARTESIAN |        |
+|2 |  PX COORDINATOR            |        |
+|3 |   EXCHANGE OUT DISTR       |:EX10000|
+|4 |    PX PARTITION ITERATOR   |        |
+|5 |     TABLE SCAN             |t_p4    |
+|6 |  MATERIAL                  |        |
+|7 |   TABLE GET                |t_p     |
+==========================================
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), rowset=256, dop=1
+  3 - output(nil), filter(nil), rowset=256
+      dop=1
   4 - output(nil), filter(nil), rowset=256
-  5 - output(nil), filter([t_p4.c2 = 4]), rowset=256, 
+      force partition granule
+  5 - output(nil), filter([t_p4.c2 = 4]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
   6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[4 ; 4],
+      range_cond([t_p.c1 = 4])
 delete /*+use_px, parallel(1)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 select * from t_p order by c1;
 +----+------+------+
@@ -843,24 +954,30 @@ Query Plan
 |9 |     PX BLOCK ITERATOR             |        |
 |10|      TABLE GET                    |t_p     |
 =================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   4 - output(nil), filter(nil), rowset=256
-  5 - output(nil), filter(nil), rowset=256, dop=10
+  5 - output(nil), filter(nil), rowset=256
+      dop=10
   6 - output(nil), filter(nil), rowset=256
-  7 - output(nil), filter([t_p4.c2 = 4]), rowset=256, 
+  7 - output(nil), filter([t_p4.c2 = 4]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
   8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[4 ; 4],
+      range_cond([t_p.c1 = 4])
 delete /*+use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 select * from t_p order by c1;
 +----+------+------+
@@ -894,17 +1011,20 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_s     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c2=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range[5 ; MAX),
+      range_cond([t_s.c1 >= 5])
 explain basic update /*+use_px, parallel(10)*/ t_s set t_s.c2 = 20 where t_s.c1 >= 5;
 Query Plan
 ==================================
@@ -916,17 +1036,20 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_s     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c2=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range[5 ; MAX),
+      range_cond([t_s.c1 >= 5])
 update /*+use_px, parallel(10)*/ t_s set t_s.c2 = 20 where t_s.c1 >=5;
 select * from t_s order by c1;
 +----+------+------+
@@ -958,17 +1081,19 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_s     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=256, 
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 explain basic update /*+use_px, parallel(10)*/ t_s set t_s.c1 = 20 where t_s.c2 = 5;
 Query Plan
 ==================================
@@ -980,17 +1105,19 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_s     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
   1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=256, 
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_s.c1]), range(MIN ; MAX)always true
 update /*+use_px, parallel(10)*/ t_s set t_s.c1 = 20 where t_s.c2 = 5;
 select * from t_s order by c1;
 +----+------+------+
@@ -1022,17 +1149,21 @@ Query Plan
 |3 |   UPDATE              |        |
 |4 |    TABLE SCAN         |t_p     |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=256, 
+  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c3], [t_p.c2]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 explain basic update /*+use_px, parallel(10)*/ t_p set t_p.c3 = 20 where t_p.c1 >= 5;
 Query Plan
 =====================================
@@ -1044,17 +1175,21 @@ Query Plan
 |3 |   UPDATE              |        |
 |4 |    TABLE SCAN         |t_p     |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=256, 
+  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c3], [t_p.c2]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
 update /*+use_px, parallel(10)*/ t_p set t_p.c3 = 20 where t_p.c1 >= 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -1086,17 +1221,20 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE GET       |t_p     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; 5],
+      range_cond([t_p.c1 = 5])
 explain basic update /*+use_px, parallel(10)*/ t_p set t_p.c1 = 20 where t_p.c1 = 5;
 Query Plan
 ==================================
@@ -1108,17 +1246,20 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE GET       |t_p     |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; 5],
+      range_cond([t_p.c1 = 5])
 update /*+use_px, parallel(10)*/ t_p set t_p.c1 = 20 where t_p.c1 = 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -1150,17 +1291,21 @@ Query Plan
 |3 |   UPDATE              |        |
 |4 |    TABLE SCAN         |pp      |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
       update([pp.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=256, 
+  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=256
       access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([pp.c1]), range[5 ; MAX),
+      range_cond([pp.c1 >= 5])
 explain basic update /*+use_px, parallel(10)*/ t_p as pp set pp.c3 = 20 where pp.c1 >= 5;
 Query Plan
 =====================================
@@ -1172,17 +1317,21 @@ Query Plan
 |3 |   UPDATE              |        |
 |4 |    TABLE SCAN         |pp      |
 =====================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
+      table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
       update([pp.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=256, 
+  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=256
       access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([pp.c1]), range[5 ; MAX),
+      range_cond([pp.c1 >= 5])
 update /*+use_px, parallel(10)*/ t_p as pp set pp.c3 = 20 where pp.c1 >= 5;
 select * from t_p order by c1;
 +----+------+------+
@@ -1214,17 +1363,19 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_no_p  |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
       update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))], [t_no_p.__pk_increment=T_HIDDEN_PK])
   1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=256, 
+  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=256
       access([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_no_p.__pk_increment]), range(MIN ; MAX)always true
 explain basic update /*+use_px, parallel(10)*/ t_no_p set t_no_p.c1 = 20 where t_no_p.c1 >= 5;
 Query Plan
 ==================================
@@ -1236,17 +1387,19 @@ Query Plan
 |3 |   PX BLOCK ITERATOR|        |
 |4 |    TABLE SCAN      |t_no_p  |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
+  0 - output(nil), filter(nil)
+      table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
       update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))], [t_no_p.__pk_increment=T_HIDDEN_PK])
   1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256, dop=10
+  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
+      dop=10
   3 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=256, 
+  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=256
       access([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_no_p.__pk_increment]), range(MIN ; MAX)always true
 update /*+use_px, parallel(10)*/ t_no_p set t_no_p.c1 = 20 where t_no_p.c1 >= 5;
 select * from t_no_p order by c2;
 +------+------+------+
@@ -1281,17 +1434,17 @@ Query Plan
 |1 | SUBPLAN SCAN|ANONYMOUS_VIEW1|
 |2 |  TABLE SCAN |t_temp_s       |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px*/ into t_s select * from t_temp_s;
 Query Plan
 ==================================
@@ -1301,17 +1454,17 @@ Query Plan
 |1 | SUBPLAN SCAN|ANONYMOUS_VIEW1|
 |2 |  TABLE SCAN |t_temp_s       |
 ==================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px*/ into t_s select * from t_temp_s;
 select * from t_s order by c1;
 +----+------+------+
@@ -1346,20 +1499,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_s       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_s;
 Query Plan
 ==========================================
@@ -1372,20 +1526,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_s       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_s;
 select * from t_s order by c1;
 +----+------+------+
@@ -1421,20 +1576,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_p       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=256, 
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_p where t_temp_p.c2 >= 5;
 Query Plan
 ==========================================
@@ -1447,20 +1603,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_p       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=256, 
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px,parallel(10)*/ into t_s select * from t_temp_p where t_temp_p.c2 >= 5;
 select * from t_s order by c1;
 +----+------+------+
@@ -1493,27 +1650,31 @@ Query Plan
 |9 |     PX BLOCK ITERATOR            |               |
 |10|      TABLE SCAN                  |t_temp_s       |
 =======================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
   5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+      dop=10
   7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, 
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
-  10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_s select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
 Query Plan
 =======================================================
@@ -1531,27 +1692,31 @@ Query Plan
 |9 |     PX BLOCK ITERATOR            |               |
 |10|      TABLE SCAN                  |t_temp_s       |
 =======================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
   5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+      dop=10
   7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, 
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
-  10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px,parallel(10)*/ into t_s select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
 select * from t_s order by c1;
 +----+------+------+
@@ -1583,20 +1748,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_s       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_s;
 Query Plan
 ==========================================
@@ -1609,20 +1775,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_s       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_s;
 select * from t_p order by c1;
 +----+------+------+
@@ -1654,20 +1821,22 @@ Query Plan
 |4 |    SUBPLAN SCAN       |ANONYMOUS_VIEW1|
 |5 |     TABLE SCAN        |t_temp_p       |
 ============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
-  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_p;
 Query Plan
 ============================================
@@ -1680,20 +1849,22 @@ Query Plan
 |4 |    SUBPLAN SCAN       |ANONYMOUS_VIEW1|
 |5 |     TABLE SCAN        |t_temp_p       |
 ============================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256, dop=10
+  1 - output(nil), filter(nil), rowset=256
+      dop=10
   2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), 
+      partition wise, force partition granule
+  3 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
-  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_p;
 select * from t_p order by c1;
 +----+------+------+
@@ -1732,29 +1903,34 @@ Query Plan
 |11|       PX BLOCK ITERATOR       |               |
 |12|        TABLE SCAN             |t_temp_p       |
 ====================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  6 - (#keys=1, [t_temp_p5.c1]), output([t_temp_p5.c1]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p5.c1]), filter(nil), rowset=256
+      (#keys=1, [t_temp_p5.c1]), dop=10
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  8 - output([t_temp_p5.c1]), filter(nil), rowset=256, 
+  8 - output([t_temp_p5.c1]), filter(nil), rowset=256
       access([t_temp_p5.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  10 - (#keys=1, [t_temp_p.c1]), output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, dop=10
-  11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+      (#keys=1, [t_temp_p.c1]), dop=10
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
 Query Plan
 ====================================================
@@ -1774,29 +1950,34 @@ Query Plan
 |11|       PX BLOCK ITERATOR       |               |
 |12|        TABLE SCAN             |t_temp_p       |
 ====================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  6 - (#keys=1, [t_temp_p5.c1]), output([t_temp_p5.c1]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p5.c1]), filter(nil), rowset=256
+      (#keys=1, [t_temp_p5.c1]), dop=10
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  8 - output([t_temp_p5.c1]), filter(nil), rowset=256, 
+  8 - output([t_temp_p5.c1]), filter(nil), rowset=256
       access([t_temp_p5.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  10 - (#keys=1, [t_temp_p.c1]), output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, dop=10
-  11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+      (#keys=1, [t_temp_p.c1]), dop=10
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
 select * from t_p order by c1;
 +----+------+------+
@@ -1834,28 +2015,32 @@ Query Plan
 |10|      PX BLOCK ITERATOR             |               |
 |11|       TABLE SCAN                   |t_temp_p       |
 =========================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p3), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
-      conds(nil), nl_params_(nil)
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), batch_join=false
   5 - output(nil), filter(nil), rowset=256
-  6 - output(nil), filter(nil), rowset=256, dop=10
+  6 - output(nil), filter(nil), rowset=256
+      dop=10
   7 - output(nil), filter(nil), rowset=256
-  8 - output(nil), filter([3 = t_temp_p5.c1]), rowset=256, 
+  8 - output(nil), filter([3 = t_temp_p5.c1]), rowset=256
       access([t_temp_p5.c1]), partitions(p3)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c1 = 3]), rowset=256, 
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c1 = 3]), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p3)
-
+      is_index_back=false, is_global_index=false, filter_before_indexback[false],
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1 and t_temp_p.c1 = 3;
 select * from t_p order by c1;
 +----+------+------+
@@ -1885,29 +2070,34 @@ Query Plan
 |11|       PX BLOCK ITERATOR       |               |
 |12|        TABLE SCAN             |t_temp_p       |
 ====================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p4.c1]), other_conds(nil)
   5 - output([t_temp_p4.c1]), filter(nil), rowset=256
-  6 - (#keys=1, [t_temp_p4.c1]), output([t_temp_p4.c1]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p4.c1]), filter(nil), rowset=256
+      (#keys=1, [t_temp_p4.c1]), dop=10
   7 - output([t_temp_p4.c1]), filter(nil), rowset=256
-  8 - output([t_temp_p4.c1]), filter(nil), rowset=256, 
+  8 - output([t_temp_p4.c1]), filter(nil), rowset=256
       access([t_temp_p4.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p4.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  10 - (#keys=1, [t_temp_p.c1]), output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, dop=10
-  11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+      (#keys=1, [t_temp_p.c1]), dop=10
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px, parallel(10)*/ into t_p select  t_temp_p.c1, t_temp_p.c2, t_temp_p.c3 from t_temp_p, t_temp_p4 where t_temp_p.c1 = t_temp_p4.c1;
 select * from t_p order by c1;
 +----+------+------+
@@ -1944,27 +2134,31 @@ Query Plan
 |9 |     PX BLOCK ITERATOR            |               |
 |10|      TABLE SCAN                  |t_temp_s       |
 =======================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
   5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+      dop=10
   7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, 
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
-  10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
 Query Plan
 =======================================================
@@ -1982,27 +2176,31 @@ Query Plan
 |9 |     PX BLOCK ITERATOR            |               |
 |10|      TABLE SCAN                  |t_temp_s       |
 =======================================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256, 
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
   5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, dop=10
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+      dop=10
   7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256, 
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
   9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
-  10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256, 
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
 insert /*+use_px,parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_s.c3 from t_temp_p,t_temp_s where t_temp_p.c1 = t_temp_s.c1;
 select * from t_p order by c1;
 +----+------+------+
@@ -2036,20 +2234,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_p       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px,parallel(10)*/ into t_p select * from t_temp_p on duplicate key update c3 = 2;
 Query Plan
 ==========================================
@@ -2062,20 +2261,21 @@ Query Plan
 |4 |    PX BLOCK ITERATOR|               |
 |5 |     TABLE SCAN      |t_temp_p       |
 ==========================================
-
-Outputs & filters: 
+Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), 
+  0 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)]),
       update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
   1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256, 
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256, 
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
-
+      is_index_back=false, is_global_index=false,
+      range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 
 drop table if exists t_s,t_p,t_p4,t_no_p,t_temp_s,t_temp_p,t_temp_p4,t_temp_p5;

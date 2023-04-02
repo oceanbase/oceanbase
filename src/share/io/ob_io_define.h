@@ -17,9 +17,12 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/container/ob_rbtree.h"
-#include "common/storage/ob_io_device.h"
 #include "lib/list/ob_list.h"
 #include "lib/container/ob_heap.h"
+#include "lib/container/ob_array_iterator.h"
+#include "lib/container/ob_array_wrap.h"
+#include "common/storage/ob_io_device.h"
+#include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
@@ -28,7 +31,8 @@ namespace common
 
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L; // 5min
-
+static constexpr int64_t GROUP_START_ID = 10000L; // start id = 10000
+static constexpr int64_t GROUP_START_NUM = 8L;
 enum class ObIOMode : uint8_t
 {
   READ = 0,
@@ -39,19 +43,6 @@ enum class ObIOMode : uint8_t
 const char *get_io_mode_string(const ObIOMode mode);
 ObIOMode get_io_mode_enum(const char *mode_string);
 
-enum class ObIOCategory : uint8_t
-{
-  LOG_IO = 0,
-  USER_IO = 1,
-  SYS_IO = 2,
-  PREWARM_IO = 3,
-  LARGE_QUERY_IO = 4,
-  MAX_CATEGORY
-};
-
-const char *get_io_category_name(ObIOCategory category);
-ObIOCategory get_io_category_enum(const char *category_name);
-
 struct ObIOFlag final
 {
 public:
@@ -61,9 +52,9 @@ public:
   bool is_valid() const;
   void set_mode(ObIOMode mode);
   ObIOMode get_mode() const;
-  void set_category(ObIOCategory category);
-  ObIOCategory get_category() const;
+  void set_group_id(int64_t group_id);
   void set_wait_event(int64_t wait_event_id);
+  int64_t get_group_id() const;
   int64_t get_wait_event() const;
   void set_read();
   bool is_read() const;
@@ -74,29 +65,33 @@ public:
   bool is_sync() const;
   void set_unlimited(const bool is_unlimited = true);
   bool is_unlimited() const;
+  void set_detect(const bool is_detect = true);
+  bool is_detect() const;
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)),
-               "category", common::get_io_category_name(static_cast<ObIOCategory>(category_)),
-               K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_));
+               K(group_id_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_));
 private:
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
-  static constexpr int64_t IO_CATEGORY_BIT = 8; // clog, user, prewarm, large query, etc
+  static constexpr int64_t IO_GROUP_ID_BIT = 16; // for consumer group in resource manager
   static constexpr int64_t IO_WAIT_EVENT_BIT = 32; // for performance monitor
   static constexpr int64_t IO_SYNC_FLAG_BIT = 1; // indicate if the caller is waiting io finished
+  static constexpr int64_t IO_DETECT_FLAG_BIT = 1; // notify a retry task
   static constexpr int64_t IO_UNLIMITED_FLAG_BIT = 1; // indicate if the io is unlimited
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
-                                                - IO_CATEGORY_BIT
+                                                - IO_GROUP_ID_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
-                                                - IO_UNLIMITED_FLAG_BIT;
+                                                - IO_UNLIMITED_FLAG_BIT
+                                                - IO_DETECT_FLAG_BIT;
 
   union {
     int64_t flag_;
     struct {
       int64_t mode_ : IO_MODE_BIT;
-      int64_t category_ : IO_CATEGORY_BIT;
+      int64_t group_id_ : IO_GROUP_ID_BIT;
       int64_t wait_event_id_ : IO_WAIT_EVENT_BIT;
       bool is_sync_ : IO_SYNC_FLAG_BIT;
       bool is_unlimited_ : IO_UNLIMITED_FLAG_BIT;
+      bool is_detect_ : IO_DETECT_FLAG_BIT;
       int64_t reserved_ : IO_RESERVED_BIT;
     };
   };
@@ -215,9 +210,10 @@ public:
   int init(const ObIOInfo &info);
   virtual void destroy();
   int64_t get_data_size() const;
+  int64_t get_group_id() const;
+  uint64_t get_io_usage_index();
   const char *get_data();
   const ObIOFlag &get_flag() const;
-  ObIOCategory get_category() const;
   ObIOMode get_mode() const;
   void cancel();
   int alloc_io_buf();
@@ -229,7 +225,7 @@ public:
   void inc_out_ref();
   void dec_out_ref();
   VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_finished_), K(is_canceled_), K(has_estimated_), K(io_info_), K(deadline_ts_),
-      KP(control_block_), KP(raw_buf_), KP(io_buf_), K(io_offset_), K(io_size_), K(complete_size_),
+      K(sender_index_), KP(control_block_), KP(raw_buf_), KP(io_buf_), K(io_offset_), K(io_size_), K(complete_size_),
       K(time_log_), KP(channel_), K(ref_cnt_), K(out_ref_cnt_),
       K(trace_id_), K(ret_code_), K(retry_count_), K(callback_buf_size_), KP(copied_callback_), K(tenant_io_mgr_));
 private:
@@ -241,6 +237,7 @@ public:
   bool has_estimated_;
   ObIOInfo io_info_;
   int64_t deadline_ts_;
+  int64_t sender_index_;
   ObIOCB *control_block_;
   void *raw_buf_;
   char *io_buf_;
@@ -267,26 +264,29 @@ class ObPhyQueue final
 public:
   ObPhyQueue();
   ~ObPhyQueue();
-  int init(const int index);
+  bool is_stop_accept() { return stop_accept_; }
+  int init(const int64_t index);
   void destroy();
   void reset_time_info();
   void reset_queue_info();
+  void set_stop_accept() { stop_accept_ = true; }
 public:
   typedef common::ObDList<ObIORequest> IOReqList;
-  TO_STRING_KV(K_(reservation_ts), K_(category_limitation_ts), K_(tenant_limitation_ts));
+  TO_STRING_KV(K_(reservation_ts), K_(group_limitation_ts), K_(tenant_limitation_ts), K_(stop_accept));
   bool is_inited_;
+  bool stop_accept_;
   int64_t reservation_ts_;
-  int64_t category_limitation_ts_;
+  int64_t group_limitation_ts_;
   int64_t tenant_limitation_ts_;
   int64_t proportion_ts_;
-  bool is_category_ready_;
+  bool is_group_ready_;
   bool is_tenant_ready_;
-  int category_index_;
+  int64_t queue_index_; //index in array, INT64_MAX means other
   int64_t reservation_pos_;
-  int64_t category_limitation_pos_;
+  int64_t group_limitation_pos_;
   int64_t tenant_limitation_pos_;
   int64_t proportion_pos_;
-  IOReqList req_list_;  
+  IOReqList req_list_;
 };
 
 class ObIOHandle final
@@ -329,29 +329,44 @@ public:
     int64_t max_iops_;
     int64_t weight_;
   };
-  struct CategoryConfig
+
+  struct GroupConfig
   {
-    CategoryConfig();
+  public:
+    GroupConfig();
+    ~GroupConfig();
     bool is_valid() const;
-    TO_STRING_KV(K_(min_percent), K_(max_percent), K_(weight_percent));
+    TO_STRING_KV(K_(deleted), K_(cleared),K_(min_percent), K_(max_percent), K_(weight_percent));
+  public:
+    bool deleted_; //group被删除的标记
+    bool cleared_; //group被清零的标记，以后有新的directive就会重置
     int64_t min_percent_;
     int64_t max_percent_;
     int64_t weight_percent_;
   };
+
 public:
   ObTenantIOConfig();
+  ~ObTenantIOConfig();
+  void destroy();
   static const ObTenantIOConfig &default_instance();
   bool is_valid() const;
   bool operator ==(const ObTenantIOConfig &other) const;
-  int parse_category_config(const char *config_str);
-  int get_category_config(const ObIOCategory category, int64_t &min_iops, int64_t &max_iops, int64_t &iops_weight) const;
+  int deep_copy(const ObTenantIOConfig &other_config);
+  int parse_group_config(const char *config_str);
+  int add_single_group_config(const uint64_t tenant_id, const int64_t group_id, int64_t min_percent, int64_t max_percent, int64_t weight_percent);
+  int get_group_config(const uint64_t index, int64_t &min_iops, int64_t &max_iops, int64_t &iops_weight) const;
+  int64_t get_all_group_num() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
   int64_t memory_limit_;
   int64_t callback_thread_count_;
+  int64_t group_num_;
   UnitConfig unit_config_;
-  CategoryConfig category_configs_[static_cast<int>(ObIOCategory::MAX_CATEGORY)];
-  CategoryConfig other_config_;
+  ObSEArray <int64_t , GROUP_START_NUM> group_ids_;
+  ObSEArray <GroupConfig, GROUP_START_NUM> group_configs_;
+  GroupConfig other_group_config_;
+  bool group_config_change_;
   bool enable_io_tracer_;
 };
 
@@ -364,18 +379,6 @@ struct ObAtomIOClock final
   TO_STRING_KV(K_(iops), K_(last_ns));
   int64_t iops_;
   int64_t last_ns_; // the unit is nano sescond for max iops of 1 billion
-};
-
-class ObIOClock
-{
-public:
-  ObIOClock() {}
-  virtual ~ObIOClock() {}
-  virtual int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage) = 0;
-  virtual void destroy() = 0;
-  virtual int update_io_config(const ObTenantIOConfig &io_config) = 0;
-  virtual int sync_clocks(ObIArray<ObIOClock *> &io_clocks) = 0;
-  DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
 class ObIOQueue
@@ -395,6 +398,10 @@ public:
   virtual ~ObMClockQueue();
   virtual int init() override;
   virtual void destroy() override;
+  int get_time_info(int64_t &reservation_ts,
+                    int64_t &group_limitation_ts,
+                    int64_t &tenant_limitation_ts,
+                    int64_t &proportion_ts);
   int push_phyqueue(ObPhyQueue *phy_queue);
   int pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts);
   TO_STRING_KV(K(is_inited_));
@@ -413,11 +420,11 @@ private:
 private:
   bool is_inited_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_> r_cmp_;
-  HeapCompare<ObPhyQueue, &ObPhyQueue::category_limitation_ts_> cl_cmp_;
+  HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_> gl_cmp_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_> tl_cmp_;
   HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_> p_cmp_;
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_>, &ObPhyQueue::reservation_pos_> r_heap_;
-  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::category_limitation_ts_>, &ObPhyQueue::category_limitation_pos_> cl_heap_;
+  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_>, &ObPhyQueue::group_limitation_pos_> gl_heap_;
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_>, &ObPhyQueue::tenant_limitation_pos_> tl_heap_;
   ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_>, &ObPhyQueue::proportion_pos_> ready_heap_;
 };

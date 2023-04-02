@@ -95,7 +95,8 @@ ObLogFormatter::ObLogFormatter() : inited_(false),
                                    hbase_util_(NULL),
                                    skip_hbase_mode_put_column_count_not_consistency_(false),
                                    enable_output_hidden_primary_key_(false),
-                                   log_entry_task_count_(0)
+                                   log_entry_task_count_(0),
+                                   stmt_in_lob_merger_count_(0)
 
 {
 }
@@ -131,7 +132,7 @@ int ObLogFormatter::init(const int64_t thread_num,
       || OB_ISNULL(obj2str_helper)
       || OB_ISNULL(br_pool)
       || OB_ISNULL(meta_manager)
-      || OB_ISNULL(schema_getter)
+      || (OB_ISNULL(schema_getter) && is_online_refresh_mode(TCTX.refresh_mode_))
       || OB_ISNULL(storager)
       || OB_ISNULL(err_handler)) {
     LOG_ERROR("invalid arguments", K(thread_num), K(queue_size), K(working_mode), K(obj2str_helper),
@@ -156,6 +157,7 @@ int ObLogFormatter::init(const int64_t thread_num,
     skip_hbase_mode_put_column_count_not_consistency_ = skip_hbase_mode_put_column_count_not_consistency;
     enable_output_hidden_primary_key_ = enable_output_hidden_primary_key;
     log_entry_task_count_ = 0;
+    stmt_in_lob_merger_count_ = 0;
     inited_ = true;
     LOG_INFO("Formatter init succ", K(working_mode_), "working_mode", print_working_mode(working_mode_),
         K(thread_num), K(queue_size));
@@ -187,6 +189,7 @@ void ObLogFormatter::destroy()
   skip_hbase_mode_put_column_count_not_consistency_ = false;
   enable_output_hidden_primary_key_ = false;
   log_entry_task_count_ = 0;
+  stmt_in_lob_merger_count_ = 0;
 }
 
 int ObLogFormatter::start()
@@ -268,7 +271,9 @@ int ObLogFormatter::push_single_task(IStmtTask *stmt_task, volatile bool &stop_f
 
     RETRY_FUNC(stop_flag, *(static_cast<ObMQThread *>(this)), push, push_task, hash_value, DATA_OP_TIMEOUT);
 
-    if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret) {
+    if (OB_SUCC(ret)) {
+      ATOMIC_DEC(&stmt_in_lob_merger_count_);
+    } else if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("push task into formatter fail", KR(ret), K(push_task), K(hash_value));
     }
   }
@@ -276,12 +281,15 @@ int ObLogFormatter::push_single_task(IStmtTask *stmt_task, volatile bool &stop_f
   return ret;
 }
 
-int ObLogFormatter::get_task_count(int64_t &br_count,
-    int64_t &log_entry_task_count)
+int ObLogFormatter::get_task_count(
+    int64_t &br_count,
+    int64_t &log_entry_task_count,
+    int64_t &stmt_in_lob_merger_count)
 {
   int ret = OB_SUCCESS;
   br_count = 0;
   log_entry_task_count = 0;
+  stmt_in_lob_merger_count = 0;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("parser has not been initialized");
@@ -290,6 +298,8 @@ int ObLogFormatter::get_task_count(int64_t &br_count,
     LOG_ERROR("get_total_task_num fail", KR(ret), K(br_count));
   } else {
     log_entry_task_count = ATOMIC_LOAD(&log_entry_task_count_);
+    stmt_in_lob_merger_count = ATOMIC_LOAD(&stmt_in_lob_merger_count_);
+
   }
 
   return ret;
@@ -298,165 +308,31 @@ int ObLogFormatter::get_task_count(int64_t &br_count,
 int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-
-  ObLogBR *br = NULL;
-  ObLogSchemaGuard schema_guard;
-  DBSchemaInfo db_schema_info;
-  const TableSchemaType *table_schema = NULL;
+  bool cur_stmt_need_callback = false;
   IStmtTask *stmt_task = static_cast<IStmtTask *>(data);
   DmlStmtTask *dml_stmt_task = dynamic_cast<DmlStmtTask *>(stmt_task);
   RowValue *rv = row_value_array_ + thread_index;
-  int64_t new_column_cnt = 0;
-  bool is_ignore = false;
-  // Get the tenant schema: MYSQL or ORACLE
-  // To ensure the correctness of ObObj2strHelper::obj2str, you need to set the mysql or Oracle schema locally in the thread, there are two scenarios that depend on it:
-  // 1. set_meta_info_: first build local schema cache, depends on ObObj2strHelper
-  // 2. build_row_value_: formatting row data, relies on ObObj2strHelper
-  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
-  const bool enable_formatter_print_log = (TCONF.enable_formatter_print_log != 0);
-  bool cur_stmt_need_callback = false;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(stmt_task)) {
-    LOG_ERROR("invalid arguments", K(stmt_task));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KPC(stmt_task));
   } else if (OB_UNLIKELY(! stmt_task->is_dml_stmt()) || OB_ISNULL(dml_stmt_task)) {
-    LOG_ERROR("stmt_task is not DML statement", "stmt_task", *stmt_task);
     ret = OB_NOT_SUPPORTED;
-  } else if (OB_FAIL(init_binlog_record_for_dml_stmt_task_(dml_stmt_task, br, is_ignore))) {
-    LOG_ERROR("init_binlog_record_for_dml_stmt_task_ fail", KR(ret), K(dml_stmt_task), K(is_ignore));
-  } else if (is_ignore) {
-    br->set_is_valid(false);
-  }
-  // Collectively get Simple Schema
-  // Retry until exit or success
-  else if (OB_FAIL(get_schema_(
-      schema_getter_,
-      dml_stmt_task->get_global_schema_version(),
-      dml_stmt_task->get_host().get_tenant_id(),
-      dml_stmt_task->get_table_id(),
-      stop_flag,
-      schema_guard,
-      table_schema,
-      db_schema_info))) {
-    // Ignore the statement if the tenant was deleted, or the table was deleted or the get schema failed
-    if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-      LOG_INFO("[IGNORE_DATA] get schema error, tenant may be dropped",
-          "tenant_id", dml_stmt_task->get_tenant_id(),
-          "table_id", dml_stmt_task->get_table_id(),
-          "dml_stmt_task", *dml_stmt_task);
-      br->set_is_valid(false);
-      // reset ret
-      ret = OB_SUCCESS;
-    } else if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("get_schema_ fail", KR(ret), KPC(dml_stmt_task), K(table_schema));
-    }
-  }
-  // Failed to get table schema, table was deleted
-  // TODO: After the table is deleted, do some aftercare
-  else if (OB_ISNULL(table_schema)) {
-    if (enable_formatter_print_log) {
-      LOG_INFO("[IGNORE_DATA] get schema error, table may be dropped",
-          "table_id", dml_stmt_task->get_table_id(),
-          "dml_stmt_task", *dml_stmt_task);
-    } else if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
-      LOG_INFO("[IGNORE_DATA] get schema error, table may be dropped",
-          "table_id", dml_stmt_task->get_table_id(),
-          "dml_stmt_task", *dml_stmt_task);
-    }
-    br->set_is_valid(false);
-  } else if (table_schema->is_aux_lob_meta_table()) {
-    LOG_DEBUG("is_aux_lob_meta_table",
-        "table_name", table_schema->get_table_name(),
-        "table_id", table_schema->get_table_id(),
-        "table_type", ob_table_type_str(table_schema->get_table_type()));
-
-    if (OB_FAIL(parse_aux_lob_meta_table_(*dml_stmt_task))) {
-      LOG_ERROR("parse_aux_lob_meta_table_ failed", KR(ret), K(*dml_stmt_task));
-    }
-    // set false for aux lob meta table
-    br->set_is_valid(false);
-  // Filter sys tables that are not user tables and are not in backup mode
-  } else if (! table_schema->is_user_table()
-      && ! BackupTableHelper::is_sys_table_exist_on_backup_mode(table_schema->is_sys_table(),
-          table_schema->get_table_id())) {
-    LOG_DEBUG("[IGNORE_DATA] ignore non-user table or sys table not exist on backup mode",
-        "table_name", table_schema->get_table_name(),
-        "table_id", table_schema->get_table_id(),
-        "table_type", ob_table_type_str(table_schema->get_table_type()));
-    br->set_is_valid(false);
-  }
-  // Ignore data from tables in the recycle bin
-  else if (table_schema->is_in_recyclebin() && ! is_backup_mode()) {
-    if (enable_formatter_print_log) {
-      LOG_INFO("[IGNORE_DATA] table is in recyclebin",
-          "table_id", dml_stmt_task->get_table_id(),
-          "is_backup_mode", is_backup_mode(),
-          KPC(dml_stmt_task));
-    } else if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
-      LOG_INFO("[IGNORE_DATA] table is in recyclebin",
-          "table_id", dml_stmt_task->get_table_id(),
-          "is_backup_mode", is_backup_mode(),
-          KPC(dml_stmt_task));
-    }
-    br->set_is_valid(false);
-  } else if (OB_FAIL(get_tenant_compat_mode(table_schema->get_tenant_id(), compat_mode, stop_flag))) {
+    LOG_ERROR("stmt_task is not DML statement", KR(ret), "stmt_task", *stmt_task);
+  } else if (OB_FAIL(handle_dml_stmt_(
+      *dml_stmt_task,
+      rv,
+      cur_stmt_need_callback,
+      stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("get_tenant_compat_mode fail", KR(ret), "tenant_id", table_schema->get_tenant_id(),
-          "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
-    }
-  } else {
-    lib::CompatModeGuard g(compat_mode);
-    const uint64_t tenant_id = dml_stmt_task->get_host().get_tenant_id();
-
-    if (OB_FAIL(set_meta_info_(
-        tenant_id,
-        dml_stmt_task->get_global_schema_version(),
-        table_schema,
-        db_schema_info,
-        schema_guard,
-        br,
-        stop_flag))) {
-      // Failed to get schema, ignore the data
-      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-        LOG_INFO("[IGNORE_DATA] schema error when set_meta_info, tenant may be dropped", KR(ret), K(tenant_id),
-            "table_id", dml_stmt_task->get_table_id(), KPC(dml_stmt_task), K(db_schema_info));
-        br->set_is_valid(false);
-        ret = OB_SUCCESS;
-      } else if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("set_meta_info_ fail", KR(ret), K(table_schema), K(db_schema_info), K(br),
-            "compat_mode", print_compat_mode(compat_mode));
-      }
-    } else if (OB_FAIL(build_row_value_(tenant_id, rv, dml_stmt_task, table_schema, new_column_cnt,
-            cur_stmt_need_callback, stop_flag))) {
-      LOG_ERROR("build_row_value_ fail", KR(ret), K(tenant_id), K(rv), "dml_stmt_task", *dml_stmt_task,
-          K(new_column_cnt), K(cur_stmt_need_callback),
-          "compat_mode", print_compat_mode(compat_mode));
-    } else if (! cur_stmt_need_callback) {
-      if (OB_FAIL(build_binlog_record_(br, rv, new_column_cnt, dml_stmt_task->get_dml_flag(), table_schema))) {
-        LOG_ERROR("build_binlog_record_ fail", KR(ret), K(br), K(rv), K(new_column_cnt), KPC(dml_stmt_task));
-      } else {
-        if (OB_NOT_NULL(br->get_data()) &&
-            OB_UNLIKELY(SRC_FULL_RECORDED != br->get_data()->getSrcCategory())) {
-          // Handling non-full column logging modes: currently not support
-          handle_non_full_columns_(*dml_stmt_task, *table_schema);
-          if (skip_dirty_data_) {
-            ret = OB_SUCCESS;
-          } else {
-            // Do not ignore, requires full log, if not full log, exit with an error
-            ret = OB_NOT_SUPPORTED;
-          }
-        } else {
-          // do nothing
-        }
-      }
-    } else {
-      // cur_stmt_need_callback is true, do nothing, wait callback process.
-      // Note: You cannot continue to manipulate any data structures afterwards.
+      LOG_ERROR("handle_dml_stmt_ failed", KR(ret), KPC(dml_stmt_task), K(cur_stmt_need_callback));
     }
   }
+  // cur_stmt_need_callback is true, do nothing, wait callback process.
+  // Note: You cannot continue to manipulate any data structures afterwards.
 
   if (stop_flag) {
     ret = OB_IN_STOP_STATE;
@@ -484,7 +360,54 @@ int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool
   return ret;
 }
 
-int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(DmlStmtTask *stmt_task,
+int ObLogFormatter::handle_dml_stmt_(
+    DmlStmtTask &dml_stmt_task,
+    RowValue *row_value,
+    bool &cur_stmt_need_callback,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  const bool is_online_schema_mode = is_online_refresh_mode(TCTX.refresh_mode_);
+  ObLogBR *br = NULL;
+  bool is_ignore = false;
+
+  if (OB_ISNULL(row_value)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid args", KR(ret), KP(row_value));
+  } else if (OB_FAIL(init_binlog_record_for_dml_stmt_task_(&dml_stmt_task, br, is_ignore))) {
+    LOG_ERROR("init_binlog_record_for_dml_stmt_task_ fail", KR(ret), K(dml_stmt_task), K(is_ignore));
+  } else if (is_ignore) {
+    br->set_is_valid(false);
+  } else if (is_online_schema_mode) {
+    if (OB_FAIL(handle_dml_stmt_with_online_schema_(
+        dml_stmt_task,
+        *row_value,
+        *br,
+        cur_stmt_need_callback,
+        stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("handle_dml_stmt_with_online_schema_ failed", KR(ret), K(dml_stmt_task), KPC(br));
+      }
+    }
+  } else {
+    // data_dict mode
+    if (OB_FAIL(handle_dml_stmt_with_dict_schema_(
+        dml_stmt_task,
+        *row_value,
+        *br,
+        cur_stmt_need_callback,
+        stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("handle_dml_stmt_with_dict_schema_ failed", KR(ret), K(dml_stmt_task), KPC(br));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(
+    DmlStmtTask *stmt_task,
     ObLogBR *&br,
     bool &is_ignore)
 {
@@ -516,7 +439,8 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(DmlStmtTask *stmt_task
       LOG_ERROR("alloc binlog record fail", K(br));
       ret = OB_ERR_UNEXPECTED;
     } else {
-      // select ... for update to record DF_LOCK log to prevent loss of row lock information on the standby machine in the event of a master/standby switchover, no synchronization required
+      // select ... for update to record DF_LOCK log to prevent loss of row lock information on the
+      // standby machine in the event of a master/standby switchover, no synchronization required
       if (ObDmlFlag::DF_LOCK == stmt_task->get_dml_flag()) {
         is_ignore = true;
       } else {
@@ -557,13 +481,309 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(DmlStmtTask *stmt_task
   return ret;
 }
 
-void ObLogFormatter::handle_non_full_columns_(DmlStmtTask &dml_stmt_task,
-    const TableSchemaType &table_schema)
+int ObLogFormatter::handle_dml_stmt_with_online_schema_(
+    DmlStmtTask &dml_stmt_task,
+    RowValue &row_value,
+    ObLogBR &br,
+    bool &cur_stmt_need_callback,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  ObLogSchemaGuard schema_guard;
+  DBSchemaInfo db_schema_info;
+  const TableSchemaType *table_schema = NULL;
+  const uint64_t tenant_id = dml_stmt_task.get_tenant_id();
+  // Get the tenant schema: MYSQL or ORACLE
+  // To ensure the correctness of ObObj2strHelper::obj2str, you need to set the mysql or Oracle schema locally in the thread, there are two scenarios that depend on it:
+  // 1. set_meta_info_: first build local schema cache, depends on ObObj2strHelper
+  // 2. format_row_: formatting row data, relies on ObObj2strHelper
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  bool need_ignore = false;
+
+  if (OB_FAIL(get_schema_with_online_schema_(
+      dml_stmt_task.get_global_schema_version(),
+      dml_stmt_task.get_host().get_tenant_id(),
+      dml_stmt_task.get_table_id(),
+      stop_flag,
+      schema_guard,
+      table_schema,
+      db_schema_info))) {
+    // Ignore the statement if the tenant was deleted, or the table was deleted or the get schema failed
+    if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+      LOG_INFO("[IGNORE_DATA] get schema error, tenant may be dropped",
+          K(tenant_id),
+          "table_id", dml_stmt_task.get_table_id(),
+          K(dml_stmt_task));
+      br.set_is_valid(false);
+      // reset ret
+      ret = OB_SUCCESS;
+    } else if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("get_schema_ fail", KR(ret), K(dml_stmt_task), K(table_schema));
+    }
+  } else if (OB_FAIL(check_table_need_ignore_(table_schema, dml_stmt_task, need_ignore))) {
+    LOG_ERROR("check_table_need_ignore_ failed", KR(ret), KPC(table_schema), K(dml_stmt_task), K(need_ignore));
+  } else if (need_ignore) {
+    br.set_is_valid(false);
+  } else if (OB_FAIL(get_tenant_compat_mode(tenant_id, compat_mode, stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("get_tenant_compat_mode fail", KR(ret), K(tenant_id),
+          "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
+    }
+  } else {
+    lib::CompatModeGuard g(compat_mode);
+
+    if (OB_FAIL(set_meta_info_with_online_schema_(
+        tenant_id,
+        dml_stmt_task.get_global_schema_version(),
+        table_schema,
+        db_schema_info,
+        schema_guard,
+        &br,
+        stop_flag))) {
+      // Failed to get schema, ignore the data
+      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+        LOG_INFO("[IGNORE_DATA] schema error when set_meta_info, tenant may be dropped", KR(ret), K(tenant_id),
+            "table_id", dml_stmt_task.get_table_id(), K(dml_stmt_task), K(db_schema_info));
+        br.set_is_valid(false);
+        ret = OB_SUCCESS;
+      } else if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("set_meta_info_ fail", KR(ret), K(table_schema), K(db_schema_info), K(br),
+            "compat_mode", print_compat_mode(compat_mode));
+      }
+    } else if (OB_FAIL(format_row_(
+        *table_schema,
+        row_value,
+        dml_stmt_task,
+        br,
+        cur_stmt_need_callback,
+        stop_flag))) {
+      LOG_ERROR("format_row failed", KR(ret), K(dml_stmt_task), K(cur_stmt_need_callback),
+          "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
+    } else {
+      // Note: You cannot continue to manipulate any data structures afterwards.
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::handle_dml_stmt_with_dict_schema_(
+    DmlStmtTask &dml_stmt_task,
+    RowValue &row_value,
+    ObLogBR &br,
+    bool &cur_stmt_need_callback,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  ObDictTenantInfoGuard dict_tenant_info_guard;
+  DBSchemaInfo db_schema_info;
+  datadict::ObDictTableMeta *table_schema = NULL;
+  const uint64_t tenant_id = dml_stmt_task.get_tenant_id();
+  // Get the tenant schema: MYSQL or ORACLE
+  // To ensure the correctness of ObObj2strHelper::obj2str, you need to set the mysql or Oracle schema locally in the thread, there are two scenarios that depend on it:
+  // 1. set_meta_info_: first build local schema cache, depends on ObObj2strHelper
+  // 2. format_row_: formatting row data, relies on ObObj2strHelper
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  const bool enable_formatter_print_log = (TCONF.enable_formatter_print_log != 0);
+  bool need_ignore = false;
+
+  if (enable_formatter_print_log) {
+    LOG_DEBUG("handle_dml_stmt_with_dict_schema_", K(tenant_id), K(dml_stmt_task));
+  }
+
+  if (OB_FAIL(get_schema_with_data_dict_(
+      dml_stmt_task.get_global_schema_version(),
+      dml_stmt_task.get_host().get_tenant_id(),
+      dml_stmt_task.get_table_id(),
+      stop_flag,
+      dict_tenant_info_guard,
+      table_schema,
+      db_schema_info))) {
+    // Ignore the statement if the tenant was deleted, or the table was deleted or the get schema failed
+    if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+      LOG_INFO("[IGNORE_DATA] get schema error, tenant may be dropped",
+          K(tenant_id),
+          "table_id", dml_stmt_task.get_table_id(),
+          K(dml_stmt_task));
+      br.set_is_valid(false);
+      // reset ret
+      ret = OB_SUCCESS;
+    } else if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("get_schema_ fail", KR(ret), K(dml_stmt_task), K(table_schema));
+    }
+  } else if (OB_FAIL(check_table_need_ignore_(table_schema, dml_stmt_task, need_ignore))) {
+    LOG_ERROR("check_table_need_ignore_ failed", KR(ret), KPC(table_schema), K(dml_stmt_task), K(need_ignore));
+  } else if (need_ignore) {
+    br.set_is_valid(false);
+  } else if (OB_FAIL(get_tenant_compat_mode_with_data_dict_(tenant_id, dict_tenant_info_guard,
+          compat_mode, stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("get_tenant_compat_mode_with_data_dict_ fail", KR(ret), K(tenant_id),
+          "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
+    }
+  } else {
+    lib::CompatModeGuard g(compat_mode);
+
+    if (OB_FAIL(set_meta_info_with_data_dict_(
+        tenant_id,
+        dml_stmt_task.get_global_schema_version(),
+        table_schema,
+        db_schema_info,
+        &br,
+        stop_flag))) {
+      // Failed to get schema, ignore the data
+      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+        LOG_INFO("[IGNORE_DATA] schema error when set_meta_info, tenant may be dropped", KR(ret), K(tenant_id),
+            "table_id", dml_stmt_task.get_table_id(), K(dml_stmt_task), K(db_schema_info));
+        br.set_is_valid(false);
+        ret = OB_SUCCESS;
+      } else if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("set_meta_info_ fail", KR(ret), K(tenant_id), K(table_schema), K(db_schema_info), K(br),
+            "compat_mode", print_compat_mode(compat_mode));
+      }
+    } else if (OB_FAIL(format_row_(
+        *table_schema,
+        row_value,
+        dml_stmt_task,
+        br,
+        cur_stmt_need_callback,
+        stop_flag))) {
+      LOG_ERROR("format_row failed", KR(ret), K(dml_stmt_task), K(cur_stmt_need_callback),
+          "compat_mode", print_compat_mode(compat_mode), KPC(table_schema));
+    } else {
+      // Note: You cannot continue to manipulate any data structures afterwards.
+    }
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogFormatter::check_table_need_ignore_(
+    const TABLE_SCHEMA *table_schema,
+    DmlStmtTask &dml_stmt_task,
+    bool &need_ignore)
+{
+  int ret = OB_SUCCESS;
+  need_ignore = false;
+  const bool enable_formatter_print_log = (TCONF.enable_formatter_print_log != 0);
+
+  // For Online Schema:
+  // Failed to get table schema, table was deleted
+  // TODO: After the table is deleted, do some aftercare
+  if (OB_ISNULL(table_schema)) {
+    need_ignore = true;
+    if (enable_formatter_print_log) {
+      LOG_INFO("[IGNORE_DATA] get schema error, table may be dropped",
+          "table_id", dml_stmt_task.get_table_id(),
+          K(dml_stmt_task));
+    } else if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+      LOG_INFO("[IGNORE_DATA] get schema error, table may be dropped",
+          "table_id", dml_stmt_task.get_table_id(),
+          K(dml_stmt_task));
+    }
+  } else if (table_schema->is_aux_lob_meta_table()) {
+    // set false for aux lob meta table
+    need_ignore = true;
+    LOG_DEBUG("is_aux_lob_meta_table",
+        "table_name", table_schema->get_table_name(),
+        "table_id", table_schema->get_table_id(),
+        "table_type", ob_table_type_str(table_schema->get_table_type()));
+
+    if (OB_FAIL(parse_aux_lob_meta_table_(dml_stmt_task))) {
+      LOG_ERROR("parse_aux_lob_meta_table_ failed", KR(ret), K(dml_stmt_task));
+    }
+  // Filter sys tables that are not user tables and are not in backup mode
+  } else if (! table_schema->is_user_table()
+      && ! BackupTableHelper::is_sys_table_exist_on_backup_mode(
+          table_schema->is_sys_table(),
+          table_schema->get_table_id())) {
+    need_ignore = true;
+    LOG_DEBUG("[IGNORE_DATA] ignore non-user table or sys table not exist on backup mode",
+        "table_name", table_schema->get_table_name(),
+        "table_id", table_schema->get_table_id(),
+        "table_type", ob_table_type_str(table_schema->get_table_type()));
+  }
+  // Ignore data from tables in the recycle bin
+  else if (table_schema->is_in_recyclebin() && ! is_backup_mode()) {
+    need_ignore = true;
+    if (enable_formatter_print_log) {
+      LOG_INFO("[IGNORE_DATA] table is in recyclebin",
+          "table_id", dml_stmt_task.get_table_id(),
+          "is_backup_mode", is_backup_mode(),
+          K(dml_stmt_task));
+    } else if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+      LOG_INFO("[IGNORE_DATA] table is in recyclebin",
+          "table_id", dml_stmt_task.get_table_id(),
+          "is_backup_mode", is_backup_mode(),
+          K(dml_stmt_task));
+    }
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogFormatter::format_row_(
+    const TABLE_SCHEMA &table_schema,
+    RowValue &row_value,
+    DmlStmtTask &dml_stmt_task,
+    ObLogBR &br,
+    bool &cur_stmt_need_callback,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_column_cnt = 0;
+  const uint64_t tenant_id = dml_stmt_task.get_tenant_id();
+
+  if (OB_FAIL(build_row_value_(
+      tenant_id,
+      &row_value,
+      &dml_stmt_task,
+      &table_schema,
+      new_column_cnt,
+      cur_stmt_need_callback,
+      stop_flag))) {
+    LOG_ERROR("build_row_value_ fail", KR(ret), K(tenant_id), K(dml_stmt_task), K(row_value),
+        K(new_column_cnt), K(cur_stmt_need_callback));
+  } else if (! cur_stmt_need_callback) {
+    if (OB_FAIL(build_binlog_record_(
+        &br,
+        &row_value,
+        new_column_cnt,
+        dml_stmt_task.get_dml_flag(),
+        &table_schema))) {
+      LOG_ERROR("build_binlog_record_ fail", KR(ret), K(br), K(row_value), K(new_column_cnt), K(dml_stmt_task));
+    } else {
+      if (OB_NOT_NULL(br.get_data())
+          && OB_UNLIKELY(SRC_FULL_RECORDED != br.get_data()->getSrcCategory())) {
+        // Handling non-full column logging modes: currently not support
+        handle_non_full_columns_(dml_stmt_task, table_schema);
+        if (skip_dirty_data_) {
+          ret = OB_SUCCESS;
+        } else {
+          // Do not ignore, requires full log, if not full log, exit with an error
+          ret = OB_NOT_SUPPORTED;
+        }
+      }
+    }
+  } else {
+    // cur_stmt_need_callback is true, do nothing, wait callback process.
+    // Note: You cannot continue to manipulate any data structures afterwards.
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+void ObLogFormatter::handle_non_full_columns_(
+    DmlStmtTask &dml_stmt_task,
+    const TABLE_SCHEMA &table_schema)
 {
   PartTransTask &task = dml_stmt_task.get_host();
 
   if (! skip_dirty_data_) {
-    LOG_ERROR("row data is not full recorded",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "row data is not full recorded",
         "tls_id", task.get_tls_id(),
         "commit_log_lsn", task.get_commit_log_lsn(),
         "commit_version", task.get_trans_commit_version(),
@@ -596,7 +816,7 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
           LOG_ERROR("redo_log_entry_task link_row_list fail", KR(ret), K(redo_log_entry_task));
         }
       } else {
-        LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), K(redo_log_entry_task), K(part_trans_task));
+        LOG_DEBUG("[FORMATT]", K(tenant_id), K(stmt_num), KP(&redo_log_entry_task), K(redo_log_entry_task), K(part_trans_task));
         IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
         if (0 == row_ref_cnt) {
@@ -625,10 +845,10 @@ int ObLogFormatter::finish_format_(PartTransTask &part_trans_task,
 // @retval OB_SUCCESS                  success
 // @retval OB_TENANT_HAS_BEEN_DROPPED  tenant dropped
 // #retval other error code            fail
-int ObLogFormatter::set_meta_info_(
+int ObLogFormatter::set_meta_info_with_online_schema_(
     const uint64_t tenant_id,
     const int64_t global_schema_version,
-    const TableSchemaType *&simple_table_schema,
+    const TableSchemaType *simple_table_schema,
     const DBSchemaInfo &db_schema_info,
     ObLogSchemaGuard &schema_guard,
     ObLogBR *br,
@@ -637,20 +857,24 @@ int ObLogFormatter::set_meta_info_(
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(! inited_)) {
-    LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
   } else if (OB_ISNULL(simple_table_schema) || OB_UNLIKELY(! db_schema_info.is_valid()) || OB_ISNULL(br)) {
-    LOG_ERROR("invalid argument", K(simple_table_schema), K(br), K(db_schema_info));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(meta_manager_) || OB_ISNULL(schema_getter_)) {
-    LOG_ERROR("meta_manager_ or schema_getter_ is null", K(meta_manager_), K(schema_getter_));
+    LOG_ERROR("invalid argument", KR(ret), K(simple_table_schema), K(br), K(db_schema_info));
+  } else if (OB_ISNULL(meta_manager_)) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("meta_manager_ is null", KR(ret), K(meta_manager_));
   } else {
     IDBMeta *db_meta = NULL;
     ITableMeta *table_meta = NULL;
 
-    if (OB_FAIL(meta_manager_->get_table_meta(tenant_id, global_schema_version, simple_table_schema, *schema_getter_, table_meta, stop_flag))
-        || NULL == table_meta) {
+    if (OB_FAIL(meta_manager_->get_table_meta(
+        tenant_id,
+        global_schema_version,
+        simple_table_schema,
+        table_meta,
+        stop_flag)) || OB_ISNULL(table_meta)) {
       if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
         LOG_WARN("schema error when get_table_meta, tenant may by dropped", KR(ret), K(tenant_id),
             K(global_schema_version),
@@ -662,7 +886,7 @@ int ObLogFormatter::set_meta_info_(
         ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
       }
     } else if (OB_FAIL(meta_manager_->get_db_meta(tenant_id, db_schema_info, schema_guard, db_meta, stop_flag))
-        || NULL == db_meta) {
+        || OB_ISNULL(db_meta)) {
       if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
         LOG_WARN("schema error when get_db_meta, tenant may by dropped", KR(ret), K(tenant_id),
             "table_id", simple_table_schema->get_table_id(),
@@ -681,6 +905,86 @@ int ObLogFormatter::set_meta_info_(
       LOG_ERROR("set_db_meta fail", KR(ret), K(br), K(db_meta));
     } else {
       // success
+    }
+
+    if (OB_SUCCESS != ret) {
+      if (NULL != table_meta) {
+        meta_manager_->revert_table_meta(table_meta);
+        table_meta = NULL;
+      }
+
+      if (NULL != db_meta) {
+        meta_manager_->revert_db_meta(db_meta);
+        db_meta = NULL;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::set_meta_info_with_data_dict_(
+    const uint64_t tenant_id,
+    const int64_t global_schema_version,
+    datadict::ObDictTableMeta *simple_table_schema,
+    const DBSchemaInfo &db_schema_info,
+    ObLogBR *br,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
+  } else if (OB_ISNULL(simple_table_schema) || OB_UNLIKELY(! db_schema_info.is_valid()) || OB_ISNULL(br)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(simple_table_schema), K(br), K(db_schema_info));
+  } else if (OB_ISNULL(meta_manager_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("meta_manager_ is null", KR(ret), K(meta_manager_));
+  } else {
+    IDBMeta *db_meta = NULL;
+    ITableMeta *table_meta = NULL;
+
+    if (OB_FAIL(meta_manager_->get_table_meta(
+        tenant_id,
+        global_schema_version,
+        simple_table_schema,
+        table_meta,
+        stop_flag)) || OB_ISNULL(table_meta)) {
+      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+        LOG_WARN("schema error when get_table_meta, tenant may by dropped", KR(ret), K(tenant_id),
+            K(global_schema_version),
+            "table_id", simple_table_schema->get_table_id(),
+            "table_name", simple_table_schema->get_table_name());
+      } else if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("get_table_meta fail", KR(ret), K(global_schema_version), "table_id", simple_table_schema->get_table_id(),
+            "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema), K(table_meta));
+        ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
+      }
+    } else if (OB_FAIL(meta_manager_->get_db_meta(tenant_id, db_schema_info, db_meta, stop_flag))
+        || OB_ISNULL(db_meta)) {
+      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+        LOG_WARN("schema error when get_db_meta, tenant may by dropped", KR(ret), K(tenant_id),
+            "table_id", simple_table_schema->get_table_id(),
+            "table_name", simple_table_schema->get_table_name(),
+            K(db_schema_info));
+      } else if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("get_db_meta fail", KR(ret),
+            "table_id", simple_table_schema->get_table_id(),
+            "table_name", simple_table_schema->get_table_name(),
+            K(db_schema_info));
+        ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
+      }
+    } else if (OB_FAIL(br->set_table_meta(table_meta))) {
+      LOG_ERROR("set_table_meta fail", KR(ret), K(br), K(table_meta));
+    } else if (OB_FAIL(br->set_db_meta(db_meta))) {
+      LOG_ERROR("set_db_meta fail", KR(ret), K(br), K(db_meta));
+    } else {
+      // success
+      if (TCONF.enable_formatter_print_log != 0) {
+        LOG_DEBUG("set_meta_info_with_data_dict_ succ", K(tenant_id), K(global_schema_version));
+      }
     }
 
     if (OB_SUCCESS != ret) {
@@ -731,11 +1035,12 @@ void ObLogFormatter::destroy_row_value_array_()
   }
 }
 
+template<class TABLE_SCHEMA>
 int ObLogFormatter::build_row_value_(
     const uint64_t tenant_id,
     RowValue *rv,
     DmlStmtTask *stmt_task,
-    const TableSchemaType *simple_table_schema,
+    const TABLE_SCHEMA *simple_table_schema,
     int64_t &new_column_cnt,
     bool &cur_stmt_need_callback,
     volatile bool &stop_flag)
@@ -758,10 +1063,14 @@ int ObLogFormatter::build_row_value_(
   } else if (OB_ISNULL(meta_manager_)) {
     LOG_ERROR("meta_manager_ is null", K(meta_manager_));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(meta_manager_->get_table_schema_meta(simple_table_schema->get_schema_version(),
-          simple_table_schema->get_table_id(), tb_schema_info))) {
+  } else if (OB_FAIL(meta_manager_->get_table_schema_meta(
+        simple_table_schema->get_schema_version(),
+        simple_table_schema->get_tenant_id(),
+        simple_table_schema->get_table_id(),
+        tb_schema_info))) {
     LOG_ERROR("meta_manager_ get_table_schema_meta fail", KR(ret),
         "version", simple_table_schema->get_schema_version(),
+        "tenant_id", simple_table_schema->get_tenant_id(),
         "table_id", simple_table_schema->get_table_id(),
         "table_name", simple_table_schema->get_table_name(), KPC(tb_schema_info));
   } else if (OB_ISNULL(tb_schema_info)) {
@@ -780,8 +1089,11 @@ int ObLogFormatter::build_row_value_(
     if (column_num <= 0) {
       LOG_INFO("no valid column is found", "table_name", simple_table_schema->get_table_name(),
           "table_id", simple_table_schema->get_table_id());
-    } else if (! is_cur_stmt_task_cb_progress && OB_FAIL(stmt_task->parse_cols(obj2str_helper_, simple_table_schema,
-            tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key_))) {
+    } else if (! is_cur_stmt_task_cb_progress && OB_FAIL(stmt_task->parse_cols(
+        obj2str_helper_,
+        tb_schema_info,
+        tz_info_wrap,
+        enable_output_hidden_primary_key_))) {
       LOG_ERROR("stmt_task.parse_cols fail", KR(ret), K(*stmt_task), K(obj2str_helper_),
           KPC(simple_table_schema), KPC(tb_schema_info),
           K(enable_output_hidden_primary_key_));
@@ -802,11 +1114,13 @@ int ObLogFormatter::build_row_value_(
         LOG_ERROR("init RowValue fail", KR(ret), K(column_num));
       }
       // fill new column value
-      else if (OB_FAIL(fill_normal_cols_(rv, *new_cols, *new_lob_ctx_cols, simple_table_schema, *tb_schema_info, true))) {
+      else if (OB_FAIL(fill_normal_cols_(*stmt_task, rv, *new_cols, *new_lob_ctx_cols, simple_table_schema,
+          *tb_schema_info, tz_info_wrap, true))) {
         LOG_ERROR("fill normal new columns fail", KR(ret), K(rv), KPC(new_cols));
       }
       // fill old column value
-      else if (OB_FAIL(fill_normal_cols_(rv, *old_cols, *new_lob_ctx_cols, simple_table_schema, *tb_schema_info, false))) {
+      else if (OB_FAIL(fill_normal_cols_(*stmt_task, rv, *old_cols, *new_lob_ctx_cols, simple_table_schema,
+          *tb_schema_info, tz_info_wrap, false))) {
         LOG_ERROR("fill normal old columns fail", KR(ret), K(rv), KPC(old_cols));
       } else if (OB_FAIL(fill_rowkey_cols_(rv, *rowkey_cols, simple_table_schema,
               *tb_schema_info))) {
@@ -872,6 +1186,8 @@ int ObLogFormatter::handle_lob_ctx_cols_(
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("ObCDCLobDataMerger push failed", KR(ret));
         }
+      } else {
+        ATOMIC_INC(&stmt_in_lob_merger_count_);
       }
     }
   }
@@ -879,12 +1195,15 @@ int ObLogFormatter::handle_lob_ctx_cols_(
   return ret;
 }
 
+template<class TABLE_SCHEMA>
 int ObLogFormatter::fill_normal_cols_(
+    DmlStmtTask &stmt_task,
     RowValue *rv,
     ColValueList &cv_list,
     ObLobDataOutRowCtxList &lob_ctx_cols,
-    const TableSchemaType *simple_table_schema,
+    const TABLE_SCHEMA *simple_table_schema,
     const TableSchemaInfo &tb_schema_info,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_new_value)
 {
   int ret = OB_SUCCESS;
@@ -936,7 +1255,19 @@ int ObLogFormatter::fill_normal_cols_(
             }
 
             if (OB_SUCC(ret)) {
-              rv->new_columns_[usr_column_idx] = new_col_str;
+              if (cv->is_json() || cv->is_geometry()) {
+                const common::ObObjType obj_type = cv->get_obj_type();
+                cv->value_.set_string(obj_type, *new_col_str);
+
+                if (OB_FAIL(stmt_task.parse_col(stmt_task.get_tenant_id(), column_id, *column_schema_info,
+                    tz_info_wrap, *obj2str_helper_, *cv))) {
+                  LOG_ERROR("stmt_task parse_col failed", KR(ret), K(stmt_task), K(column_id), KPC(cv));
+                } else {
+                  rv->new_columns_[usr_column_idx] = &cv->string_value_;
+                }
+              } else {
+                rv->new_columns_[usr_column_idx] = new_col_str;
+              }
               // TODO remove
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(new_col_str->ptr(), new_col_str->length()),
@@ -960,7 +1291,19 @@ int ObLogFormatter::fill_normal_cols_(
             }
 
             if (OB_SUCC(ret)) {
-              rv->old_columns_[usr_column_idx] = old_col_str;
+              if (cv->is_json() || cv->is_geometry()) {
+                const common::ObObjType obj_type = cv->get_obj_type();
+                cv->value_.set_string(obj_type, *old_col_str);
+
+                if (OB_FAIL(stmt_task.parse_col(stmt_task.get_tenant_id(), column_id, *column_schema_info,
+                    tz_info_wrap, *obj2str_helper_, *cv))) {
+                  LOG_ERROR("stmt_task parse_col failed", KR(ret), K(stmt_task), K(column_id), KPC(cv));
+                } else {
+                  rv->old_columns_[usr_column_idx] = &cv->string_value_;
+                }
+              } else {
+                rv->old_columns_[usr_column_idx] = old_col_str;
+              }
               // TODO remove
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(old_col_str->ptr(), old_col_str->length()),
@@ -983,9 +1326,11 @@ int ObLogFormatter::fill_normal_cols_(
   return ret;
 }
 
-int ObLogFormatter::fill_rowkey_cols_(RowValue *rv,
+template<class TABLE_SCHEMA>
+int ObLogFormatter::fill_rowkey_cols_(
+    RowValue *rv,
     ColValueList &rowkey_cols,
-    const TableSchemaType *simple_table_schema,
+    const TABLE_SCHEMA *simple_table_schema,
     const TableSchemaInfo &tb_schema_info)
 {
   int ret = OB_SUCCESS;
@@ -1042,8 +1387,10 @@ int ObLogFormatter::fill_rowkey_cols_(RowValue *rv,
   return ret;
 }
 
-int ObLogFormatter::fill_orig_default_value_(RowValue *rv,
-    const TableSchemaType *simple_table_schema,
+template<class TABLE_SCHEMA>
+int ObLogFormatter::fill_orig_default_value_(
+    RowValue *rv,
+    const TABLE_SCHEMA *simple_table_schema,
     const TableSchemaInfo &tb_schema_info,
     common::ObIAllocator &allocator)
 {
@@ -1170,12 +1517,13 @@ int ObLogFormatter::set_src_category_(IBinlogRecord *br_data,
   return ret;
 }
 
+template<class TABLE_SCHEMA>
 int ObLogFormatter::build_binlog_record_(
     ObLogBR *br,
     RowValue *rv,
     const int64_t new_column_cnt,
     const ObDmlFlag &dml_flag,
-    const TableSchemaType *simple_table_schema)
+    const TABLE_SCHEMA *simple_table_schema)
 {
   int ret = OB_SUCCESS;
   IBinlogRecord *br_data = NULL;
@@ -1480,7 +1828,7 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
   return ret;
 }
 
-int ObLogFormatter::get_schema_(IObLogSchemaGetter *schema_getter,
+int ObLogFormatter::get_schema_with_online_schema_(
     const int64_t version,
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -1494,9 +1842,9 @@ int ObLogFormatter::get_schema_(IObLogSchemaGetter *schema_getter,
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ObLogFormatter has not been initialized");
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(schema_getter) || OB_UNLIKELY(version <= 0)) {
-    LOG_ERROR("invalid argument", K(schema_getter), K(version));
+  } else if (OB_ISNULL(schema_getter_) || OB_UNLIKELY(version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP_(schema_getter), K(version));
   } else {
     int64_t refreshed_version = version;
     const uint64_t pure_tb_id = table_id;
@@ -1517,7 +1865,7 @@ int ObLogFormatter::get_schema_(IObLogSchemaGetter *schema_getter,
     }
 
     // get schema guard
-    RETRY_FUNC(stop_flag, (*schema_getter), get_schema_guard_and_table_schema,
+    RETRY_FUNC(stop_flag, (*schema_getter_), get_schema_guard_and_table_schema,
         tenant_id,
         table_id,
         refreshed_version,
@@ -1531,6 +1879,77 @@ int ObLogFormatter::get_schema_(IObLogSchemaGetter *schema_getter,
       // Get database schema information, including name and version
       RETRY_FUNC(stop_flag, schema_guard, get_database_schema_info, tenant_id, db_id, db_schema_info,
           GET_SCHEMA_TIMEOUT);
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::get_schema_with_data_dict_(
+    const int64_t version,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    volatile bool &stop_flag,
+    ObDictTenantInfoGuard &dict_tenant_info_guard,
+    datadict::ObDictTableMeta *&table_schema,
+    DBSchemaInfo &db_schema_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
+  } else if (OB_UNLIKELY(version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(version));
+  } else {
+    ObDictTenantInfo *tenant_info = nullptr;
+
+    if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
+        tenant_id,
+        dict_tenant_info_guard))) {
+      LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tenant_info is nullptr", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_schema))) {
+      LOG_ERROR("get_table_meta failed", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(tenant_info->get_database_schema_info(table_schema->get_database_id(), db_schema_info))) {
+      LOG_ERROR("get_database_schema_info failed", KR(ret), K(tenant_id), KPC(table_schema));
+    } else {
+      if (TCONF.enable_formatter_print_log != 0) {
+        LOG_DEBUG("get_schema_with_data_dict_ succ", K(tenant_id), K(table_id), KPC(table_schema), K(db_schema_info));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::get_tenant_compat_mode_with_data_dict_(
+    const uint64_t tenant_id,
+    ObDictTenantInfoGuard &dict_tenant_info_guard,
+    lib::Worker::CompatMode &compat_mode,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  ObDictTenantInfo *tenant_info = nullptr;
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogFormatter has not been initialized", KR(ret));
+  } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_info is nullptr", KR(ret), K(tenant_id));
+  } else {
+    const common::ObCompatibilityMode &compatible_mode = tenant_info->get_compatibility_mode();
+
+    if (common::ObCompatibilityMode::MYSQL_MODE == compatible_mode) {
+      compat_mode = lib::Worker::CompatMode::MYSQL;
+    } else if (common::ObCompatibilityMode::ORACLE_MODE == compatible_mode) {
+      compat_mode = lib::Worker::CompatMode::ORACLE;
+    } else {
+      compat_mode = lib::Worker::CompatMode::INVALID;
     }
   }
 

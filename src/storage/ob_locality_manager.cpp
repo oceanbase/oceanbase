@@ -24,7 +24,7 @@ using namespace share;
 namespace storage
 {
 ObLocalityManager::ObLocalityManager()
-  : rwlock_(), ssl_invited_nodes_buf_(NULL)
+  : rwlock_(ObLatchIds::SERVER_LOCALITY_MGR_LOCK), ssl_invited_nodes_buf_(NULL)
 {
   reset();
   ssl_invited_nodes_buf_ = new (std::nothrow) char[common::OB_MAX_CONFIG_VALUE_LEN];
@@ -671,7 +671,7 @@ IObDedupTask *ObLocalityManager::ObRefreshLocalityTask::deep_copy(
   ObRefreshLocalityTask *task = NULL;
   if (OB_UNLIKELY(OB_ISNULL(buffer))
       || OB_UNLIKELY(buf_size < get_deep_copy_size())) {
-    STORAGE_LOG(WARN, "invalid argument", KP(buffer), K(buf_size));
+    STORAGE_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid argument", KP(buffer), K(buf_size));
   } else {
     task = new(buffer) ObRefreshLocalityTask(locality_mgr_);
   }

@@ -92,7 +92,6 @@ int ObLogLimit::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
     LOG_WARN("failed to get limit value", K(ret));
   } else if (!is_null_value && limit_expr_ != NULL &&
              OB_FAIL(ObTransformUtils::get_limit_value(limit_expr_,
-                                                       get_stmt(),
                                                        get_plan()->get_optimizer_context().get_params(),
                                                        get_plan()->get_optimizer_context().get_exec_ctx(),
                                                        &get_plan()->get_optimizer_context().get_allocator(),
@@ -101,7 +100,6 @@ int ObLogLimit::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
     LOG_WARN("failed to get limit value", K(ret));
   } else if (!is_null_value && offset_expr_ != NULL &&
             OB_FAIL(ObTransformUtils::get_limit_value(offset_expr_,
-                                                      get_stmt(),
                                                       get_plan()->get_optimizer_context().get_params(),
                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
                                                       &get_plan()->get_optimizer_context().get_allocator(),
@@ -184,7 +182,6 @@ int ObLogLimit::inner_est_cost(double child_card,
     LOG_WARN("failed to get limit value", K(ret));
   } else if (!is_null_value && limit_expr_ != NULL &&
              OB_FAIL(ObTransformUtils::get_limit_value(limit_expr_,
-                                                       get_stmt(),
                                                        get_plan()->get_optimizer_context().get_params(),
                                                        get_plan()->get_optimizer_context().get_exec_ctx(),
                                                        &get_plan()->get_optimizer_context().get_allocator(),
@@ -193,7 +190,6 @@ int ObLogLimit::inner_est_cost(double child_card,
     LOG_WARN("failed to get limit value", K(ret));
   } else if (!is_null_value && offset_expr_ != NULL &&
              OB_FAIL(ObTransformUtils::get_limit_value(offset_expr_,
-                                                       get_stmt(),
                                                        get_plan()->get_optimizer_context().get_params(),
                                                        get_plan()->get_optimizer_context().get_exec_ctx(),
                                                        &get_plan()->get_optimizer_context().get_allocator(),
@@ -273,27 +269,51 @@ int ObLogLimit::check_output_dep_specific(ObRawExprCheckDep &checker)
   return ret;
 }
 
-int ObLogLimit::print_my_plan_annotation(char *buf, int64_t &buf_len, int64_t &pos, ExplainType type)
+int ObLogLimit::get_plan_item_info(PlanText &plan_text,
+                                   ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
-  if (NULL != limit_expr_ || NULL != offset_expr_ ||  NULL != percent_expr_) {
-    if (OB_FAIL(BUF_PRINTF(", "))) {
-      LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else {
-      ObRawExpr *limit = limit_expr_;
-      ObRawExpr *offset = offset_expr_;
-      ObRawExpr *percent = percent_expr_;
-      EXPLAIN_PRINT_EXPR(limit, type);
+  if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
+    LOG_WARN("failed to get plan item info", K(ret));
+  } else if (NULL != limit_expr_ || NULL != offset_expr_ ||  NULL != percent_expr_) {
+    BEGIN_BUF_PRINT;
+    ObRawExpr *limit = limit_expr_;
+    ObRawExpr *offset = offset_expr_;
+    ObRawExpr *percent = percent_expr_;
+    EXPLAIN_PRINT_EXPR(limit, type);
+    ret = BUF_PRINTF(", ");
+    EXPLAIN_PRINT_EXPR(offset, type);
+    if (percent_expr_ != NULL) {
       BUF_PRINTF(", ");
-      EXPLAIN_PRINT_EXPR(offset, type);
-      if (percent_expr_ != NULL) {
-        BUF_PRINTF(", ");
-        EXPLAIN_PRINT_EXPR(percent, type);
-      }
-      if (is_fetch_with_ties_) {
-        BUF_PRINTF(", ");
-        BUF_PRINTF("with_ties(%s)", "true");
-      }
+      EXPLAIN_PRINT_EXPR(percent, type);
+    }
+    if (is_fetch_with_ties_) {
+      BUF_PRINTF(", ");
+      BUF_PRINTF("with_ties(%s)", "true");
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
+  }
+  return ret;
+}
+
+int ObLogLimit::inner_replace_op_exprs(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != limit_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, limit_expr_))) {
+    LOG_WARN("failed to replace limit expr", K(ret));
+  } else if (NULL != offset_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, offset_expr_))) {
+    LOG_WARN("failed to replace offset expr", K(ret));
+  } else if (NULL != percent_expr_ && OB_FAIL(replace_expr_action(to_replace_exprs, percent_expr_))) {
+    LOG_WARN("failed to replace percent expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < order_items_.count(); ++i) {
+    if (OB_ISNULL(order_items_.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null ", K(ret));
+    } else if (OB_FAIL(replace_expr_action(to_replace_exprs, order_items_.at(i).expr_))) {
+      LOG_WARN("failed to adjust order expr with onetime", K(ret));
     }
   }
   return ret;

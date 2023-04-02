@@ -33,7 +33,7 @@ ObDASGroupScanOp::ObDASGroupScanOp(ObIAllocator &op_alloc)
 ObDASGroupScanOp::~ObDASGroupScanOp()
 {
   if (result_iter_ != nullptr && result_iter_->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("table group scan iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table group scan iter is not released, maybe some bug occured",
               KPC(scan_ctdef_), K(scan_param_), KPC(scan_rtdef_));
   }
 }
@@ -65,10 +65,9 @@ int ObDASGroupScanOp::release_op()
   int ret = OB_SUCCESS;
   OZ(ObDASScanOp::release_op());
   if (nullptr != group_lookup_op_) {
-    ObITabletScan &tsc_service = get_tsc_service();
-    if (OB_FAIL(tsc_service.revert_scan_iter(group_lookup_op_->get_lookup_storage_iter()))) {
-      LOG_WARN("revert scan iterator failed", K(ret));
-    } 
+    if (OB_FAIL(group_lookup_op_->revert_iter())) {
+      LOG_WARN("revert lookup iterator failed", K(ret));
+    }
   }
   group_lookup_op_ = NULL;
   iter_.reset();
@@ -123,7 +122,6 @@ int ObDASGroupScanOp::do_local_index_lookup()
       op->set_is_group_scan(true);
       OZ(op->init_group_scan_iter(cur_group_idx_,
                                   group_size_,
-                                  op_alloc_,
                                   scan_ctdef_->group_id_expr_));
     }
   }
@@ -154,6 +152,23 @@ int ObDASGroupScanOp::switch_scan_group()
   return ret;
 }
 
+int ObDASGroupScanOp::set_scan_group(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  ObLocalIndexLookupOp *lookup_op = get_lookup_op();
+  // for lookup group scan, switch lookup group scan iter
+  if (NULL != lookup_op) {
+    ret = lookup_op->set_lookup_scan_group(group_id);
+  } else {
+    ret = iter_.set_scan_group(group_id);
+  }
+
+  if (OB_FAIL(ret) && OB_ITER_END != ret) {
+    LOG_WARN("set scan group failed", K(ret), KP(lookup_op), K(iter_));
+  }
+  return ret;
+}
+
 ObNewRowIterator *ObDASGroupScanOp::get_storage_scan_iter()
 {
   ObNewRowIterator *iter = NULL;
@@ -169,7 +184,7 @@ ObNewRowIterator *ObDASGroupScanOp::get_storage_scan_iter()
   return iter;
 }
 
-int ObDASGroupScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more)
+int ObDASGroupScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
   if (NULL == group_lookup_op_) {
@@ -178,7 +193,7 @@ int ObDASGroupScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_
     result_iter_ = group_lookup_op_;
     set_is_exec_remote(true);
   }
-  if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more))) {
+  if (OB_FAIL(ObDASScanOp::fill_task_result(task_result, has_more, memory_limit))) {
     LOG_WARN("fail to fill task result", K(ret));
   }
 
@@ -235,13 +250,13 @@ ObGroupLookupOp::~ObGroupLookupOp()
 {
   const ObNewRowIterator *lookup_iter = get_lookup_storage_iter();
   if (lookup_iter != nullptr && lookup_iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("lookup_iter iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "lookup_iter iter is not released, maybe some bug occured",
               KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
               K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
   }
   const ObNewRowIterator *rowkey_iter = static_cast<ObGroupScanIter *>(get_rowkey_iter())->get_iter();
   if (rowkey_iter != nullptr && rowkey_iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    LOG_ERROR("rowkey_iter iter is not released, maybe some bug occured",
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "rowkey_iter iter is not released, maybe some bug occured",
               KPC(lookup_ctdef_), K(scan_param_), KPC(index_ctdef_),
               K(lookup_rowkey_cnt_), K(lookup_row_cnt_));
   }
@@ -266,29 +281,20 @@ int ObGroupLookupOp::init_group_range(int64_t cur_group_idx, int64_t group_size)
 
 int ObGroupLookupOp::init_group_scan_iter(int64_t cur_group_idx,
                                           int64_t group_size,
-                                          ObIAllocator &allocator,
                                           ObExpr *group_id_expr)
 {
   int ret = OB_SUCCESS;
-  void *buf = allocator.alloc(sizeof(ObGroupScanIter));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("group scan iter buf allocated failed", K(ret));
-  } else {
-    ObGroupScanIter *group_iter = new(buf)(ObGroupScanIter);
-    lookup_iter_ = group_iter;
-    bool is_vectorized = lookup_rtdef_->p_pd_expr_op_->is_vectorized();
+  bool is_vectorized = lookup_rtdef_->p_pd_expr_op_->is_vectorized();
 
-    int64_t max_row_store_size = is_vectorized ? lookup_rtdef_->eval_ctx_->max_batch_size_: 1;
-    group_iter->init_group_range(cur_group_idx, group_size);
-    OZ(group_iter->init_row_store(lookup_ctdef_->result_output_,
-                                  *lookup_rtdef_->eval_ctx_,
-                                  lookup_rtdef_->stmt_allocator_,
-                                  max_row_store_size,
-                                  group_id_expr,
-                                  &group_iter->get_result_tmp_iter(),
-                                  lookup_rtdef_->need_check_output_datum_));
-  }
+  int64_t max_row_store_size = is_vectorized ? lookup_rtdef_->eval_ctx_->max_batch_size_: 1;
+  group_iter_.init_group_range(cur_group_idx, group_size);
+  OZ(group_iter_.init_row_store(lookup_ctdef_->result_output_,
+                                *lookup_rtdef_->eval_ctx_,
+                                lookup_rtdef_->stmt_allocator_,
+                                max_row_store_size,
+                                group_id_expr,
+                                &group_iter_.get_result_tmp_iter(),
+                                lookup_rtdef_->need_check_output_datum_));
 
   return ret;
 }
@@ -323,6 +329,33 @@ int ObGroupLookupOp::switch_lookup_scan_group()
 
   return ret;
 }
+
+int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  state_ = OUTPUT_ROWS;
+  ObGroupScanIter *group_iter = NULL;
+  group_iter = static_cast<ObGroupScanIter *>(get_lookup_iter());
+  if (NULL == group_iter) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguement", K(group_iter), K(ret));
+  } else {
+    ret = group_iter->set_scan_group(group_id);
+    if(-1 == group_id) {
+      ++lookup_group_cnt_;
+    } else {
+      lookup_group_cnt_ = group_id + 1;
+    }
+
+    if(lookup_group_cnt_ >= index_group_cnt_ && OB_ITER_END == ret && !index_end_) {
+      ret = OB_SUCCESS;
+      state_ = INDEX_SCAN;
+    }
+  }
+
+  return ret;
+}
+
 
 
 OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp), iter_, cur_group_idx_, group_size_);

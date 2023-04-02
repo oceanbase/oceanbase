@@ -36,7 +36,7 @@ struct EstimateBlockRes
 class ObBasicStatsEstimator : public ObStatsEstimator
 {
 public:
-  ObBasicStatsEstimator(ObExecContext &ctx);
+  explicit ObBasicStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
   static int estimate_block_count(ObExecContext &ctx,
                                   const ObTableStatParam &param,
@@ -110,6 +110,17 @@ private:
 
   static int generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
                                          hash::ObHashMap<int64_t, int64_t> &first_part_idx_map);
+
+  int refine_basic_stats(const ObTableStatParam &param,
+                         const ObExtraParam &extra,
+                         ObIArray<ObOptStat> &dst_opt_stats);
+
+  int check_stat_need_re_estimate(const ObTableStatParam &origin_param,
+                                  const ObExtraParam &origin_extra,
+                                  ObOptStat &opt_stat,
+                                  bool &need_re_estimate,
+                                  ObTableStatParam &new_param,
+                                  ObExtraParam &new_extra);
 
 };
 

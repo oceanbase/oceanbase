@@ -65,14 +65,17 @@ struct ObIndexBlockRowDesc
   bool is_data_block_;
   bool is_secondary_meta_;
   bool is_macro_node_;
-  bool has_out_row_column_;
+  bool has_string_out_row_;
+  bool has_lob_out_row_;
+  bool is_last_row_last_flag_;
 
   TO_STRING_KV(KP_(data_store_desc), K_(row_key), K_(macro_id),
       K_(block_offset), K_(row_count), K_(row_count_delta),
       K_(max_merged_trans_version), K_(block_size),
       K_(macro_block_count), K_(micro_block_count),
       K_(is_deleted), K_(contain_uncommitted_row), K_(is_data_block),
-      K_(is_secondary_meta), K_(is_macro_node), K_(has_out_row_column));
+      K_(is_secondary_meta), K_(is_macro_node), K_(has_string_out_row), K_(has_lob_out_row),
+      K_(is_last_row_last_flag));
 };
 
 struct ObIndexBlockRowHeader
@@ -127,7 +130,8 @@ struct ObIndexBlockRowHeader
   OB_INLINE bool is_deleted() const { return 1 == is_deleted_; }
   OB_INLINE bool is_macro_node() const { return 1 == is_macro_node_; }
   OB_INLINE bool is_data_index() const { return 1 == is_data_index_; }
-  OB_INLINE bool has_out_row_column() const { return 1 == has_out_row_column_; }
+  OB_INLINE bool has_string_out_row() const { return 1 == has_string_out_row_; }
+  OB_INLINE bool has_lob_out_row() const { return 0 == all_lob_in_row_; }
 
   OB_INLINE void set_data_block() { is_data_block_ = 1; }
   OB_INLINE void set_leaf_block() { is_leaf_block_ = 1; }
@@ -155,8 +159,9 @@ struct ObIndexBlockRowHeader
       uint64_t is_deleted_:1;               // Whether the microblock was pointed was deleted
       uint64_t contain_uncommitted_row_:1;  // Whether children of this row contains uncommitted row
       uint64_t is_macro_node_:1;            // Whether this row represent for macro block level meta
-      uint64_t has_out_row_column_ : 1;     // Whether sub-tree of this node has out row column
-      uint64_t reserved_:31;
+      uint64_t has_string_out_row_ : 1;     // Whether sub-tree of this node has string column out row as lob
+      uint64_t all_lob_in_row_ : 1;         // Whether sub-tree of this node has out row lob column
+      uint64_t reserved_:30;
     };
   };
   MacroBlockId macro_id_;                   // Physical macro block id, set to default in leaf node
@@ -175,7 +180,7 @@ struct ObIndexBlockRowHeader
       K_(version), K_(row_store_type), K_(compressor_type),
       K_(is_data_index), K_(is_data_block),K_(is_leaf_block),
       K_(is_major_node), K_(is_pre_aggregated),K_(is_deleted), K_(contain_uncommitted_row),
-      K_(is_macro_node), K_(has_out_row_column), K_(macro_id), K_(block_offset), K_(block_size),
+      K_(is_macro_node), K_(has_string_out_row), K_(all_lob_in_row), K_(macro_id), K_(block_offset), K_(block_size),
       K_(master_key_id), K_(encrypt_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
       K_(row_count), K_(schema_version), K_(macro_block_count), K_(micro_block_count));
 };
@@ -199,7 +204,8 @@ public:
       query_range_(nullptr),
       flag_(0),
       range_idx_(-1),
-      parent_macro_id_()
+      parent_macro_id_(),
+      nested_offset_(0)
   {
   }
   OB_INLINE void reset()
@@ -211,6 +217,7 @@ public:
     flag_ = 0;
     range_idx_ = -1;
     parent_macro_id_.reset();
+    nested_offset_ = 0;
   }
   OB_INLINE bool is_valid() const
   {
@@ -249,7 +256,7 @@ public:
   OB_INLINE uint64_t get_block_offset() const
   {
     OB_ASSERT(nullptr != row_header_);
-    return row_header_->get_block_offset();
+    return row_header_->get_block_offset() + nested_offset_;
   }
   OB_INLINE uint64_t get_block_size() const
   {
@@ -288,10 +295,15 @@ public:
     OB_ASSERT(nullptr != row_header_);
     return row_header_->is_deleted();
   }
-  OB_INLINE bool has_out_row_column() const
+  OB_INLINE bool has_string_out_row() const
   {
     OB_ASSERT(nullptr != row_header_);
-    return row_header_->has_out_row_column();
+    return row_header_->has_string_out_row();
+  }
+  OB_INLINE bool has_lob_out_row() const
+  {
+    OB_ASSERT(nullptr != row_header_);
+    return row_header_->has_lob_out_row();
   }
   OB_INLINE bool is_left_border() const
   {
@@ -305,7 +317,7 @@ public:
   {
     return 0 != is_get_;
   }
-  OB_INLINE int16_t range_idx() const
+  OB_INLINE int64_t range_idx() const
   {
     return range_idx_;
   }
@@ -324,9 +336,9 @@ public:
     OB_ASSERT(nullptr != row_header_);
     return row_header_->is_data_block() ? parent_macro_id_ : row_header_->get_macro_id();
   }
-  OB_INLINE bool can_blockscan() const
+  OB_INLINE bool can_blockscan(const bool has_lob_out) const
   {
-    return can_blockscan_ && !has_out_row_column();
+    return can_blockscan_ && !has_string_out_row() && (!has_lob_out || !has_lob_out_row());
   }
   OB_INLINE void set_blockscan()
   {
@@ -346,7 +358,7 @@ public:
   }
 
   TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), KPC_(endkey),
-      K_(flag), K_(range_idx), K_(parent_macro_id));
+      K_(flag), K_(range_idx), K_(parent_macro_id), K_(nested_offset));
 
 public:
   const ObIndexBlockRowHeader *row_header_;
@@ -369,8 +381,9 @@ public:
       uint16_t reserved_ : 11;
     };
   };
-  int16_t range_idx_;
+  int64_t range_idx_;
   MacroBlockId parent_macro_id_;
+  int64_t nested_offset_;
 };
 
 

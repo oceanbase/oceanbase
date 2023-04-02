@@ -22,6 +22,9 @@
 #include "ob_archive_persist_mgr.h"     // ObArchivePersistMgr
 #include "ob_archive_round_mgr.h"       // ObArchiveRoundMgr
 #include "ob_ls_mgr.h"          // ObArchiveLSMgr
+#include "ob_archive_scheduler.h"       // ObArchiveScheduler
+#include "ob_archive_timer.h"           // ObArchiveTimer
+#include "ob_ls_meta_recorder.h"        // ObLSMetaRecorder
 
 namespace oceanbase
 {
@@ -73,12 +76,20 @@ public:
   //
   // @param [in], id 日志流ID
   // @param [out], lsn 日志流归档进度lsn
+  // @param [out], scn 日志流归档进度scn
   // @param [out], force_wait 调用模块需要严格参考归档进度, 归档落后时卡调用模块
   // @param [out], ignore忽略归档进度
   //
   // @retval OB_SUCCESS 获取归档进度成功
   // @retval OB_EGAIN 需要调用者重试
-  int get_ls_archive_progress(const ObLSID &id, LSN &lsn, bool &force_wait, bool &ignore);
+  int get_ls_archive_progress(const ObLSID &id, LSN &lsn, share::SCN &scn, bool &force_wait, bool &ignore);
+
+  // 实时SQL查表获取租户是否在归档模式, 非必要无需调此接口(当前仅GC需要)
+  // @param [out], in_archive 租户处于归档模式
+  //
+  // @retval OB_SUCCESS 确认成功
+  // @retval other_code 获取失败
+  int check_tenant_in_archive(bool &in_archive);
 
   // 获取日志流归档速度
   //
@@ -108,6 +119,7 @@ private:
     STOP = 2,
     FORCE_STOP = 3,
     MARK_INTERRUPT = 4,
+    SUSPEND = 5,
   };
 private:
   void run1();
@@ -147,6 +159,9 @@ private:
   // 5. 归档轮次落后并且租户处于关闭归档状态, 强制stop, 状态推到STOP
   int force_stop_archive(const int64_t incarnation, const int64_t round);
 
+  // 6. set archive suspend
+  int suspend_archive_(const ObTenantArchiveRoundAttr &attr);
+
   // ====== 打印归档状态 =========== //
   void print_archive_status_();
 
@@ -162,6 +177,9 @@ private:
   ObArchiveFetcher fetcher_;
   ObArchiveSender sender_;
   ObArchivePersistMgr persist_mgr_;
+  ObArchiveScheduler scheduler_;
+  ObLSMetaRecorder ls_meta_recorder_;
+  ObArchiveTimer timer_;
   logservice::ObLogService *log_service_;
   ObLSService *ls_svr_;
   common::ObCond cond_;

@@ -67,7 +67,7 @@ int ObLogDDLProcessor::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("init twice", KR(ret), K(is_inited_));
-  } else if (OB_ISNULL(schema_getter_ = schema_getter)) {
+  } else if (OB_ISNULL(schema_getter_ = schema_getter) && is_online_refresh_mode(TCTX.refresh_mode_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(schema_getter));
   } else {
@@ -142,29 +142,41 @@ int ObLogDDLProcessor::get_old_schema_version_(
   old_schema_version = tenant_ddl_cur_schema_version;
 
   if (OB_UNLIKELY(ddl_schema_version <= tenant_ddl_cur_schema_version)) {
-    // 遇到Schema版本反转情况，如果skip_reversed_schema_version_=true忽略，否则报错退出
-    LOG_ERROR("DDL schema version is reversed", K(ddl_schema_version), K(tenant_ddl_cur_schema_version),
-        K(task));
+    // In ONLINE_SCHEMA refresh mode, should ALWALYS report ERROR if schema_version is reversed
+    // except OBCDC is configed with skip_reversed_schema_version = true;
+    //
+    // In DATA_DICT refresh mode, schema_version reversed is ignored, because tenant_schema_version is
+    // updated in sys_ls_handler before ddl really handled, should not report error
 
-    if (skip_reversed_schema_version_) {
-      if (OB_FAIL(get_schema_version_by_timestamp_util_succ_(tenant_id, ddl_schema_version, old_schema_version, stop_flag))) {
-        if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-          // do nothing
-        } else if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("get_schema_version_by_timestamp_util_succ_ fail", KR(ret), K(tenant_id), K(ddl_schema_version),
-              K(old_schema_version));
-        }
-      } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == old_schema_version)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("old_schema_version is not valid", KR(ret), K(old_schema_version));
-      } else {
-        LOG_WARN("ignore DDL schema version is reversed, "
-            "set old schema version as suitable ddl_schema_version",
-            K(skip_reversed_schema_version_), K(old_schema_version),
-          K(ddl_schema_version), K(tenant_ddl_cur_schema_version));
-      }
+    if (is_data_dict_refresh_mode(TCTX.refresh_mode_)) {
+      // log WARN and use tenant latest ddl_schema_version for data_dict mode.
+      LOG_WARN("DDL schema version is reversed", K(ddl_schema_version), K(tenant_ddl_cur_schema_version),
+          K(task));
     } else {
-      ret = OB_ERR_UNEXPECTED;
+      // here should be online schema mode.
+      LOG_ERROR("DDL schema version is reversed", K(ddl_schema_version), K(tenant_ddl_cur_schema_version),
+          K(task));
+
+      if (skip_reversed_schema_version_) {
+        if (OB_FAIL(get_schema_version_by_timestamp_util_succ_(tenant_id, ddl_schema_version, old_schema_version, stop_flag))) {
+          if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+            // do nothing
+          } else if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("get_schema_version_by_timestamp_util_succ_ fail", KR(ret), K(tenant_id), K(ddl_schema_version),
+                K(old_schema_version));
+          }
+        } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == old_schema_version)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("old_schema_version is not valid", KR(ret), K(old_schema_version));
+        } else {
+          LOG_WARN("ignore DDL schema version is reversed, "
+              "set old schema version as suitable ddl_schema_version",
+              K(skip_reversed_schema_version_), K(old_schema_version),
+            K(ddl_schema_version), K(tenant_ddl_cur_schema_version));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+      }
     }
   }
 
@@ -518,7 +530,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_(
     default: {
       // Other DDL types, by default, are output directly and not processed
       // new version of schema parsing is used by default
-      ret = handle_ddl_stmt_direct_output_(tenant, ddl_stmt, new_schema_version, stop_flag);
+      ret = handle_ddl_stmt_direct_output_(tenant, ddl_stmt, new_schema_version, stop_flag, true);
       break;
     }
   }
@@ -536,7 +548,8 @@ int ObLogDDLProcessor::handle_ddl_stmt_direct_output_(
     ObLogTenant &tenant,
     DdlStmtTask &ddl_stmt,
     const int64_t schema_version,
-    volatile bool &stop_flag)
+    volatile bool &stop_flag,
+    const bool format_with_new_schema /* = false */)
 {
   int ret = OB_SUCCESS;
   ObSchemaOperationType op_type =
@@ -545,7 +558,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_direct_output_(
       tenant.get_tenant_id(), ObSchemaOperation::type_str(op_type), op_type,
       to_cstring(ddl_stmt.get_ddl_stmt_str()));
 
-  if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, schema_version, stop_flag))) {
+  if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, schema_version, stop_flag, NULL, NULL, format_with_new_schema))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(tenant), K(ddl_stmt), K(schema_version));
     }
@@ -562,10 +575,10 @@ int ObLogDDLProcessor::commit_ddl_stmt_(ObLogTenant &tenant,
     volatile bool &stop_flag,
     const char *tenant_name /* = NULL */,
     const char *db_name /* = NULL */,
+    const bool format_with_new_schema /* = false */,
     const bool filter_ddl_stmt /* = false */)
 {
   int ret = OB_SUCCESS;
-  ObLogSchemaGuard schema_guard;
   ObLogBR *br = ddl_stmt.get_binlog_record();
   IBinlogRecord *br_data = NULL;
   ObSchemaOperationType op_type = (ObSchemaOperationType)ddl_stmt.get_operation_type();
@@ -609,18 +622,30 @@ int ObLogDDLProcessor::commit_ddl_stmt_(ObLogTenant &tenant,
   }
   // get tenant schmea and db schema
   else if (need_get_schema
-      && OB_FAIL(get_schemas_for_ddl_stmt_(ddl_tenant_id, ddl_stmt, schema_version, schema_guard,
-      tenant_name, db_name, stop_flag))) {
+      && OB_FAIL(get_schemas_for_ddl_stmt_(
+          ddl_tenant_id,
+          ddl_stmt,
+          schema_version,
+          format_with_new_schema,
+          tenant_name,
+          db_name,
+          stop_flag))) {
     if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
       // Tenant does not exist, or schema fetching failure, ignore this DDL statement
       LOG_WARN("get schemas for ddl stmt fail, tenant may be dropped, ignore DDL statement",
-          KR(ret), K(ddl_tenant_id), K(schema_version), K(ddl_stmt));
+          KR(ret), K(ddl_tenant_id), K(schema_version), K(format_with_new_schema), K(ddl_stmt));
       // Set all binlog record invalid
       mark_stmt_binlog_record_invalid_(ddl_stmt);
       ret = OB_SUCCESS;
     } else if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("get_schemas_for_ddl_stmt_ fail", KR(ret), K(ddl_stmt), K(schema_version),
-          K(ddl_tenant_id));
+      if (OB_ENTRY_NOT_EXIST == ret && is_data_dict_refresh_mode(TCTX.refresh_mode_)) {
+        LOG_INFO("ignore binlog_record which dict_meta may not exist", KR(ret), K(ddl_stmt));
+        mark_stmt_binlog_record_invalid_(ddl_stmt);
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("get_schemas_for_ddl_stmt_ fail", KR(ret), K(ddl_stmt), K(schema_version),
+            K(format_with_new_schema), K(ddl_tenant_id));
+      }
     }
   }
   // set db name for binlog record
@@ -724,6 +749,46 @@ int ObLogDDLProcessor::decide_ddl_stmt_database_id_(
   return ret;
 }
 
+int ObLogDDLProcessor::decide_ddl_stmt_database_id_with_data_dict_(
+    const uint64_t tenant_id,
+    const bool use_new_schema,
+    DdlStmtTask &ddl_stmt,
+    uint64_t &db_id)
+{
+  int ret = OB_SUCCESS;
+  db_id = OB_INVALID_ID;
+
+  if (use_new_schema) {
+    db_id = ddl_stmt.get_op_database_id();
+  } else {
+    uint64_t table_id = ddl_stmt.get_op_table_id();
+
+    // If the table id is invalid, the db_id is used in the DDL.
+    if (OB_INVALID_ID == table_id || 0 == table_id) {
+      db_id = ddl_stmt.get_op_database_id();
+    } else {
+      ObDictTenantInfoGuard dict_tenant_info_guard;
+      ObDictTenantInfo *tenant_info = nullptr;
+      datadict::ObDictTableMeta *table_meta = nullptr;
+
+      if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
+          tenant_id,
+          dict_tenant_info_guard))) {
+        LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tenant_info is nullptr", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
+        LOG_ERROR("get_table_meta failed", KR(ret), K(tenant_id), K(table_id), KPC(tenant_info));
+      } else {
+        db_id = table_meta->get_database_id();
+      }
+    }
+  }
+
+  return ret;
+}
+
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // @retval OB_IN_STOP_STATE             exit
@@ -732,15 +797,63 @@ int ObLogDDLProcessor::get_schemas_for_ddl_stmt_(
     const uint64_t ddl_tenant_id,
     DdlStmtTask &ddl_stmt,
     const int64_t schema_version,
-    ObLogSchemaGuard &schema_guard,
+    const bool format_with_new_schema,
     const char *&tenant_name,
     const char *&db_name,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  uint64_t db_id = OB_INVALID_ID;
   TenantSchemaInfo tenant_schema_info;
   DBSchemaInfo db_schema_info;
+
+  if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+    if (OB_FAIL(get_schema_info_with_online_schema_(
+        ddl_tenant_id,
+        schema_version,
+        ddl_stmt,
+        tenant_schema_info,
+        db_schema_info,
+        stop_flag))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("get_schema_info_with_online_schema failed", KR(ret), K(ddl_tenant_id), K(schema_version), K(ddl_stmt));
+      }
+    }
+  } else if (OB_FAIL(get_schema_info_with_data_dict_(
+      ddl_tenant_id,
+      format_with_new_schema,
+      ddl_stmt,
+      tenant_schema_info,
+      db_schema_info))) {
+    LOG_ERROR("get_schema_info_with_data_dict failed", KR(ret), K(ddl_tenant_id), K(schema_version), K(format_with_new_schema), K(ddl_stmt));
+  }
+
+  if (OB_SUCC(ret)) {
+    // set tenant name and db name, NOTICE: tenant_name and db_name may be NULL.
+    tenant_name = tenant_schema_info.name_;
+    db_name = db_schema_info.name_;
+
+    if (ddl_tenant_id != ddl_stmt.get_op_tenant_id()) {
+      LOG_INFO("[DDL] [NOTICE] DDL stmt belong to different tenant with operated tenant",
+          K(ddl_tenant_id), K(ddl_stmt));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogDDLProcessor::get_schema_info_with_online_schema_(
+    const uint64_t ddl_tenant_id,
+    const int64_t schema_version,
+    DdlStmtTask &ddl_stmt,
+    TenantSchemaInfo &tenant_schema_info,
+    DBSchemaInfo &db_schema_info,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  tenant_schema_info.reset();
+  db_schema_info.reset();
+  uint64_t db_id = OB_INVALID_ID;
+  ObLogSchemaGuard schema_guard;
 
   // Get schema guard based on tenant_id and version number
   if (OB_FAIL(get_lazy_schema_guard_(ddl_tenant_id, schema_version, schema_guard, stop_flag))) {
@@ -767,14 +880,8 @@ int ObLogDDLProcessor::get_schemas_for_ddl_stmt_(
             K(schema_version), K(ddl_stmt));
       }
     } else {
-      // set tenant name
-      tenant_name = tenant_schema_info.name_;
-
       // FIXME: Currently there are two invalid values: 0 and OB_INVALID_ID, it is recommended that the observer is unified
-      if (OB_INVALID_ID == db_id || 0 == db_id) {
-        // If db_id is invalid, the corresponding database name is not retrieved
-        db_name = NULL;
-      } else {
+      if (OB_INVALID_ID != db_id && 0 != db_id) {
         // Retry to get the database schema until it succeeds or exit
         RETRY_FUNC(stop_flag, schema_guard, get_database_schema_info, ddl_tenant_id, db_id, db_schema_info,
             DATA_OP_TIMEOUT);
@@ -786,24 +893,78 @@ int ObLogDDLProcessor::get_schemas_for_ddl_stmt_(
             LOG_WARN("get database schema fail, set database name NULL", KR(ret),
                 K(tenant_schema_info), K(db_id), K(schema_version),
                 "ddl_stmt", ddl_stmt.get_ddl_stmt_str());
-            db_name = NULL;
             ret = OB_SUCCESS;
           } else if (OB_IN_STOP_STATE != ret) {
             LOG_WARN("get_database_schema_info fail", KR(ret), K(db_id), K(schema_version));
           }
-        } else {
-          db_name = db_schema_info.name_;
         }
       }
     }
   }
 
-  if (OB_SUCCESS == ret) {
-    if (ddl_tenant_id != ddl_stmt.get_op_tenant_id()) {
-      LOG_INFO("[DDL] [NOTICE] DDL stmt belong to different tenant with operated tenant",
-          K(ddl_tenant_id), K(ddl_stmt));
+  return ret;
+}
+
+int ObLogDDLProcessor::get_schema_info_with_data_dict_(
+    const uint64_t ddl_tenant_id,
+    const bool format_with_new_schema,
+    DdlStmtTask &ddl_stmt,
+    TenantSchemaInfo &tenant_schema_info,
+    DBSchemaInfo &db_schema_info)
+{
+  int ret = OB_SUCCESS;
+  tenant_schema_info.reset();
+  db_schema_info.reset();
+  uint64_t db_id = OB_INVALID_ID;
+
+  if (OB_FAIL(decide_ddl_stmt_database_id_with_data_dict_(ddl_tenant_id, format_with_new_schema, ddl_stmt, db_id))) {
+    LOG_ERROR("decide_ddl_stmt_database_id_with_data_dict_ failed", KR(ret), K(ddl_tenant_id), K(db_id), K(ddl_stmt));
+  } else if (format_with_new_schema) {
+    if (OB_FAIL(ddl_stmt.get_host().get_tenant_schema_info_with_inc_dict(ddl_tenant_id, tenant_schema_info))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_DEBUG("tenant_schema_info not found, may skip by invoker", KR(ret), K(ddl_tenant_id), K(format_with_new_schema));
+      } else {
+        LOG_ERROR("get_tenant_schema_info_with_inc_dict failed", KR(ret), K(ddl_tenant_id), K(format_with_new_schema));
+      }
+    } else if (OB_INVALID_ID != db_id && 0 != db_id) {
+      if (OB_FAIL(ddl_stmt.get_host().get_database_schema_info_with_inc_dict(ddl_tenant_id, db_id, db_schema_info))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          LOG_DEBUG("get_database_schema_info_with_inc_dict failed, may skip by invoker", KR(ret), K(ddl_tenant_id), K(db_id));
+        } else {
+          LOG_ERROR("get_database_schema_info_with_inc_dict failed", KR(ret), K(ddl_tenant_id), K(db_id));
+        }
+      }
+    }
+  } else {
+    ObDictTenantInfoGuard dict_tenant_info_guard;
+    ObDictTenantInfo *tenant_info = nullptr;
+
+    if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
+        ddl_tenant_id,
+        dict_tenant_info_guard))) {
+      LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(ddl_tenant_id));
+    } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tenant_info is nullptr", KR(ret), K(ddl_tenant_id));
+    } else if (OB_FAIL(tenant_info->get_tenant_schema_info(tenant_schema_info))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_DEBUG("tenant_schema_info not found, may skip by invoker", KR(ret), K(ddl_tenant_id), K(format_with_new_schema));
+      } else {
+        LOG_ERROR("get_tenant_schema_info failed", KR(ret), K(ddl_tenant_id), K(format_with_new_schema));
+      }
+    } else if (OB_INVALID_ID != db_id && 0 != db_id) {
+      if (OB_FAIL(tenant_info->get_database_schema_info(db_id, db_schema_info))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          LOG_DEBUG("get_database_schema_info failed, may skip by invoker", KR(ret), K(ddl_tenant_id), K(db_id), K(format_with_new_schema));
+        } else {
+          LOG_ERROR("get_database_schema_info failed", KR(ret), K(ddl_tenant_id), K(db_id), K(format_with_new_schema));
+        }
+      }
     }
   }
+
+  LOG_DEBUG("get_schema_info_with_data_dict_ for ddl_stmt done", KR(ret),
+      K(ddl_tenant_id), K(tenant_schema_info), K(db_id), K(db_schema_info), K(ddl_stmt));
 
   return ret;
 }
@@ -876,7 +1037,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_drop_table_(ObLogTenant &tenant,
 
   if (OB_SUCC(ret)) {
     // Delete table using old_schema_version parsing
-    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, old_schema_version, stop_flag, tenant_name, db_name,
+    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, old_schema_version, stop_flag, tenant_name, db_name, false,
         is_table_should_ignore_in_committer))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(ddl_stmt), K(tenant), K(old_schema_version),
@@ -927,17 +1088,17 @@ int ObLogDDLProcessor::handle_ddl_stmt_alter_table_(
       trans_commit_version);
 
   // Atopt new_schema_version
-  RETRY_FUNC(stop_flag, tenant.get_part_mgr(), alter_table,
-      ddl_stmt.get_op_table_id(),
-      old_schema_version,
-      new_schema_version,
-      start_serve_timestamp,
-      old_schema_guard,
-      new_schema_guard,
-      old_tenant_name,
-      old_db_name,
-      event,
-      DATA_OP_TIMEOUT);
+  // RETRY_FUNC(stop_flag, tenant.get_part_mgr(), alter_table,
+  //     ddl_stmt.get_op_table_id(),
+  //     old_schema_version,
+  //     new_schema_version,
+  //     start_serve_timestamp,
+  //     old_schema_guard,
+  //     new_schema_guard,
+  //     old_tenant_name,
+  //     old_db_name,
+  //     event,
+  //     DATA_OP_TIMEOUT);
 
   // If the schema error is encountered, it means that the tenant may be deleted in the future, so the schema of table,
   // database, tenant or table group cannot be obtained, in this case, the DDL will be ignored.
@@ -991,7 +1152,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_create_table_(
   IGNORE_SCHEMA_ERROR(ret, "schema_version", new_schema_version, K(ddl_stmt), K(is_table_should_ignore_in_committer));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, db_name,
+    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, db_name, true,
         is_table_should_ignore_in_committer))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(tenant), K(ddl_stmt), K(tenant_name),
@@ -1048,7 +1209,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_create_index_(
   IGNORE_SCHEMA_ERROR(ret, "schema_version", new_schema_version, K(ddl_stmt));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, db_name))) {
+    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, db_name, true))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(tenant), K(ddl_stmt), K(tenant_name),
             K(db_name));
@@ -1215,7 +1376,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_truncate_table_create_(
 
   if (OB_SUCC(ret)) {
     // Adopt new version of schema parsing
-    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, db_name,
+    if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, db_name, true,
         is_table_should_ignore_in_committer))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(tenant), K(ddl_stmt), K(tenant_name),
@@ -1264,7 +1425,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_add_tenant_start_(
   }
 
   if (OB_SUCC(ret)) {
-    ret = handle_ddl_stmt_direct_output_(tenant, ddl_stmt, new_schema_version, stop_flag);
+    ret = handle_ddl_stmt_direct_output_(tenant, ddl_stmt, new_schema_version, stop_flag, true);
   }
 
   return ret;
@@ -1288,9 +1449,10 @@ int ObLogDDLProcessor::handle_ddl_stmt_add_tenant_(
   ObLogSchemaGuard schema_guard;
   const char *tenant_name = NULL;
   int64_t valid_schema_version = new_schema_version;
+
   if (OB_ISNULL(tenant_mgr)) {
-    LOG_ERROR("invalid tenant mgr", K(tenant_mgr));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid tenant mgr", KR(ret), K(tenant_mgr));
   } else if (OB_FAIL(parse_tenant_ddl_stmt_for_restore_(ddl_stmt, valid_schema_version, start_serve_tstamp, is_new_tenant_by_restore))) {
     LOG_ERROR("parse_tenant_ddl_stmt_for_restore_ failed", KR(ret), K(ddl_stmt), K(valid_schema_version), K(start_serve_tstamp), K(is_new_tenant_by_restore));
   } else {
@@ -1305,8 +1467,8 @@ int ObLogDDLProcessor::handle_ddl_stmt_add_tenant_(
         DATA_OP_TIMEOUT,
         tenant_is_chosen);
 
-  // If the schema error is encountered, it means that the tenant may be deleted in the future, so the schema of table,
-  // database, tenant or table group cannot be obtained, in this case, the DDL will be ignored.
+    // If the schema error is encountered, it means that the tenant may be deleted in the future, so the schema of table,
+    // database, tenant or table group cannot be obtained, in this case, the DDL will be ignored.
     IGNORE_SCHEMA_ERROR(ret, K(valid_schema_version), K(start_serve_tstamp),
         K(target_tenant_id), K(ddl_stmt));
 
@@ -1318,7 +1480,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_add_tenant_(
       }
 
       // DB name is empty
-      if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, NULL, filter_ddl_stmt))) {
+      if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, NULL, true, filter_ddl_stmt))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(tenant), K(ddl_stmt), K(filter_ddl_stmt),
               K(tenant_name));
@@ -1436,7 +1598,7 @@ int ObLogDDLProcessor::handle_ddl_stmt_rename_tenant_(
       }
 
       // DB name is empty
-      if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, NULL, filter_ddl_stmt))) {
+      if (OB_FAIL(commit_ddl_stmt_(tenant, ddl_stmt, new_schema_version, stop_flag, tenant_name, NULL, true, filter_ddl_stmt))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("commit_ddl_stmt_ fail", KR(ret), K(tenant), K(ddl_stmt), K(filter_ddl_stmt),
               K(tenant_name));
@@ -1574,12 +1736,13 @@ int ObLogDDLProcessor::parse_tenant_ddl_stmt_for_restore_(
     } else {
       is_create_tenant_by_restore_ddl = true;
       schema_version = tenant_schema_version_from_ddl > schema_version ? tenant_schema_version_from_ddl : schema_version;
-      tenant_gts_value = tenant_gts_from_ddl;
+      tenant_gts_value = std::max(tenant_gts_from_ddl, tenant_gts_value);
     }
+
     if (OB_SUCC(ret)) {
       mark_stmt_binlog_record_invalid_(ddl_stmt);
-      LOG_INFO("mark create_tenant_end_ddl invalid for restore tenant", KR(ret), K(is_create_tenant_by_restore_ddl),
-        K(schema_version), K(tenant_gts_value), K(ddl_stmt));
+      LOG_INFO("mark create_tenant_end_ddl invalid for restore tenant", K(is_create_tenant_by_restore_ddl),
+        K(schema_version), K(tenant_gts_value), K(tenant_gts_from_ddl), K(ddl_stmt));
     } else if (skip_dirty_data) {
       LOG_WARN("parse_tenant_ddl_stmt_for_restore_ fail!", KR(ret), K(is_create_tenant_by_restore_ddl), K(schema_version), K(tenant_gts_value),
           K(value_gts), K(value_version), K(ddl_stmt), K(kv_c));

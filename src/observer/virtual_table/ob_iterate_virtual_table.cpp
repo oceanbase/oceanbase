@@ -62,7 +62,8 @@ int ObIterateVirtualTable::init(
 {
   return ObAgentTableBase::init(OB_SYS_TENANT_ID,
                                 base_table_id,
-                                index_table, scan_param);
+                                index_table,
+                                scan_param);
 }
 
 int ObIterateVirtualTable::do_open()
@@ -98,7 +99,16 @@ int ObIterateVirtualTable::do_open()
         if (in_range
             && (is_sys_tenant(effective_tenant_id_)
                 || *id == effective_tenant_id_)) {
-          if (OB_FAIL(tenants_.push_back(*id))) {
+          bool exist = false;
+          if (OB_FAIL(schema_guard_->check_table_exist(*id, base_table_id_, exist))) {
+            LOG_WARN("fail to check table exist",
+                     KR(ret), "tenant_id", *id, K(base_table_id_));
+          } else if (!exist) {
+            // 1. in upgrade process
+            // 2. restore tenant from low data version
+            LOG_TRACE("table not exist in tenant, maybe inner schemas are old, just skip",
+                      "tenant_id", *id, K(base_table_id_));
+          } else if (OB_FAIL(tenants_.push_back(*id))) {
             LOG_WARN("array push back failed", KR(ret));
           }
         }
@@ -234,21 +244,21 @@ int ObIterateVirtualTable::next_tenant()
     ObSQLClientRetryWeak sql_client_retry_weak(GCTX.sql_proxy_, exec_tenant_id, base_table_id_);
     if (OB_ISNULL(sql_res_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql or sql result no init", K(ret), KP(sql_res_), K(sql_));
+      LOG_WARN("sql or sql result no init", KR(ret), K(exec_tenant_id), KP(sql_res_), K(sql_));
     } else if (OB_FAIL(sql_.set_length(0))) {
-      LOG_WARN("reset sql failed", K(ret));
-    } else if (OB_FAIL(construct_sql(sql_))) {
-      LOG_WARN("construct sql failed", K(ret));
+      LOG_WARN("reset sql failed", KR(ret), K(exec_tenant_id), K(sql_));
+    } else if (OB_FAIL(construct_sql(exec_tenant_id, sql_))) {
+      LOG_WARN("construct sql failed", KR(ret), K(exec_tenant_id), K(sql_));
     } else {
       sql_res_->~ReadResult();
       inner_sql_res_ = NULL;
       new (sql_res_) ObMySQLProxy::MySQLResult();
-      LOG_DEBUG("execute sql", K(cur_tenant_id_), K(sql_));
+      LOG_TRACE("execute sql", K(exec_tenant_id), K(sql_));
       if (OB_FAIL(sql_client_retry_weak.read(*sql_res_, exec_tenant_id, sql_.ptr()))) {
-        LOG_WARN("execute sql failed", K(ret), K(sql_));
+        LOG_WARN("execute sql failed", KR(ret), K(exec_tenant_id), K(sql_));
       } else if (OB_ISNULL(sql_res_->get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL sql executing result", K(ret));
+        LOG_WARN("NULL sql executing result", KR(ret), K(exec_tenant_id), K(sql_));
       } else {
         inner_sql_res_ = static_cast<ObInnerSQLResult *>(sql_res_->get_result());
       }

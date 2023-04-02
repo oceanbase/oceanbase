@@ -17,6 +17,7 @@
 #include "share/ob_scanner.h"
 #include "common/row/ob_row.h"
 #include "share/io/ob_io_calibration.h"
+#include "share/io/ob_io_struct.h"
 
 namespace oceanbase
 {
@@ -104,7 +105,7 @@ private:
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     TENANT_ID,
-    CATEGORY,
+    GROUP_ID,
     MODE,
     SIZE,
     MIN_IOPS,
@@ -119,10 +120,10 @@ private:
   public:
     QuotaInfo();
     ~QuotaInfo();
-    TO_STRING_KV(K(tenant_id_), K(category_), K(mode_), K(size_), K(real_iops_), K(min_iops_), K(max_iops_));
+    TO_STRING_KV(K(tenant_id_), K(group_id_), K(mode_), K(size_), K(real_iops_), K(min_iops_), K(max_iops_));
   public:
     uint64_t tenant_id_;
-    common::ObIOCategory category_;
+    uint64_t group_id_;
     common::ObIOMode mode_;
     double size_;
     double real_iops_;
@@ -133,6 +134,50 @@ private:
 private:
   ObArray<QuotaInfo> quota_infos_;
   int64_t quota_pos_;
+};
+
+class ObAllVirtualIOScheduler : public ObAllVirtualIOStatusIterator
+{
+public:
+  ObAllVirtualIOScheduler();
+  virtual ~ObAllVirtualIOScheduler();
+  int init(const common::ObAddr &addr);
+  virtual void reset() override;
+  virtual int inner_get_next_row(common::ObNewRow *&row) override;
+private:
+  enum COLUMN
+  {
+    SVR_IP = common::OB_APP_MIN_COLUMN_ID,
+    SVR_PORT,
+    THREAD_ID,
+    TENANT_ID,
+    GROUP_ID,
+    QUEUING_COUNT,
+    RESERVATION_TS,
+    CATEGORY_LIMIT_TS,
+    TENANT_LIMIT_TS,
+    PROPORTION_TS
+  };
+  struct ScheduleInfo
+  {
+  public:
+    ScheduleInfo();
+    ~ScheduleInfo();
+    TO_STRING_KV(K(thread_id_),K(tenant_id_), K(group_id_), K(queuing_count_));
+  public:
+    uint64_t thread_id_;
+    uint64_t tenant_id_;
+    uint64_t group_id_;
+    int64_t queuing_count_;
+    int64_t reservation_ts_;
+    int64_t group_limitation_ts_;
+    int64_t tenant_limitation_ts_;
+    int64_t proportion_ts_;
+  };
+  DISALLOW_COPY_AND_ASSIGN(ObAllVirtualIOScheduler);
+private:
+  int64_t schedule_pos_;
+  ObArray<ScheduleInfo> schedule_infos_;
 };
 
 }// namespace observer

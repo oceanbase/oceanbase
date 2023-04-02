@@ -58,7 +58,7 @@ int ObLogLSMgr::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBLOG_PART_MGR_SCHEMA_VERSION_WAIT))) {
+  if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBCDC_PART_MGR_SCHEMA_VERSION_WAIT))) {
     LOG_ERROR("schema_cond_ init fail", KR(ret));
   } else {
     tenant_id_ = tenant_id;
@@ -398,15 +398,18 @@ int ObLogLSMgr::call_add_ls_callbacks_(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogLSMgr has not been initialized", KR(ret));
   } else {
+    ObLogFetcherStartParameters start_parameters;
+    start_parameters.reset(start_serve_tstamp, start_lsn);
+
     for (int64_t index = 0; OB_SUCCESS == ret && index < ls_add_cb_array_->count(); index++) {
       LSAddCallback *cb = NULL;
 
       if (OB_FAIL(ls_add_cb_array_->at(index, reinterpret_cast<int64_t &>(cb)))) {
         LOG_ERROR("get callback from array fail", KR(ret), K(index));
       } else if (OB_ISNULL(cb)) {
-        LOG_ERROR("get callback from array fail, callback is NULL", KR(ret), K(index), K(cb));
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(cb->add_ls(tls_id, start_serve_tstamp, start_lsn))) {
+        LOG_ERROR("get callback from array fail, callback is NULL", KR(ret), K(index), K(cb));
+      } else if (OB_FAIL(cb->add_ls(tls_id, start_parameters))) {
         LOG_ERROR("add_ls fail", KR(ret), K(tls_id), K(start_serve_tstamp), K(cb),
             K(start_lsn));
       } else {

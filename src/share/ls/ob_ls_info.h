@@ -43,6 +43,7 @@ enum ObReplicaStatus
 
 const char *ob_replica_status_str(const ObReplicaStatus status);
 int get_replica_status(const char* str, ObReplicaStatus &status);
+int get_replica_status(const ObString &status_str, ObReplicaStatus &status);
 
 // [class_full_name] SimpleMember
 // [class_functions] Use this class to build a member_list consists of this simple SimpleMember
@@ -111,6 +112,7 @@ public:
   inline bool is_paxos_replica() const { return common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type_
                                                 || common::REPLICA_TYPE_FULL == replica_type_
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
+  inline bool is_in_restore() const { return !restore_status_.is_restore_none(); }
   // format-related functions
   static int member_list2text(const MemberList &member_list, char *text, const int64_t length);
   static int text2member_list(const char *text, MemberList &member_list);
@@ -217,6 +219,8 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(replicas));
   // operator-related functions
   int assign(const ObLSInfo &other);
+  // composite with other ls to add missing follower replica
+  int composite_with(const ObLSInfo &other);
   // other functions
   virtual int add_replica(const ObLSReplica &replica);
   int update_replica_status();   // TODO: have to make sure actions in this function

@@ -23,6 +23,7 @@ namespace storage
 ObTableScanRange::ObTableScanRange()
   : rowkeys_(),
     ranges_(),
+    skip_scan_ranges_(),
     allocator_(nullptr),
     status_(EMPTY),
     is_inited_(false)
@@ -30,16 +31,23 @@ ObTableScanRange::ObTableScanRange()
 
 void ObTableScanRange::reset()
 {
+#define RESET_SCAN_RANGES(RANGES)                                                    \
+do {                                                                                 \
+  for (int64_t i = 0; i < RANGES.count(); i++) {                                     \
+    ObDatumRange &range = RANGES.at(i);                                              \
+    if (!range.get_start_key().is_static_rowkey()) {                                 \
+      allocator_->free(const_cast<ObStorageDatum *>(range.get_start_key().datums_)); \
+    }                                                                                \
+    if (!range.get_end_key().is_static_rowkey()) {                                   \
+      allocator_->free(const_cast<ObStorageDatum *>(range.get_end_key().datums_));   \
+    }                                                                                \
+  }                                                                                  \
+} while(0)                                                                           \
+
   if (nullptr != allocator_) {
-    for (int64_t i = 0; i < ranges_.count(); i++) {
-      ObDatumRange &range = ranges_.at(i);
-      if (!range.get_start_key().is_static_rowkey()) {
-        allocator_->free(const_cast<ObStorageDatum *>(range.get_start_key().datums_));
-      }
-      if (!range.get_end_key().is_static_rowkey()) {
-        allocator_->free(const_cast<ObStorageDatum *>(range.get_end_key().datums_));
-      }
-    }
+    RESET_SCAN_RANGES(ranges_);
+    RESET_SCAN_RANGES(skip_scan_ranges_);
+
     for (int64_t i = 0; i < rowkeys_.count(); i++) {
       if (!rowkeys_.at(i).is_static_rowkey()) {
         allocator_->free(const_cast<ObStorageDatum *>(rowkeys_.at(i).datums_));
@@ -48,6 +56,7 @@ void ObTableScanRange::reset()
   }
   rowkeys_.reset();
   ranges_.reset();
+  skip_scan_ranges_.reset();
   allocator_ = nullptr;
   status_ = EMPTY;
   is_inited_ = false;
@@ -72,8 +81,15 @@ int ObTableScanRange::init(ObTableScanParam &scan_param)
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected error for invalid datum utils", K(ret), KPC(scan_param.table_param_));
     } else if (scan_param.is_get_) {
-      if (OB_FAIL(init_rowkeys(scan_param.key_ranges_, scan_param.scan_flag_, datum_utils))) {
+      if (scan_param.use_index_skip_scan()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected, index skip scan can only be used in scan", K(ret));
+      } else if (OB_FAIL(init_rowkeys(scan_param.key_ranges_, scan_param.scan_flag_, datum_utils))) {
         STORAGE_LOG(WARN, "Failed to init rowkeys", K(ret));
+      }
+    } else if (scan_param.use_index_skip_scan()) {
+      if (OB_FAIL(init_ranges_in_skip_scan(scan_param.key_ranges_, scan_param.ss_key_ranges_, scan_param.scan_flag_, datum_utils))) {
+        STORAGE_LOG(WARN, "Failed to init range in skip scan", K(ret), K(scan_param.key_ranges_), K(scan_param.ss_key_ranges_));
       }
     } else if (OB_FAIL(init_ranges(scan_param.key_ranges_, scan_param.scan_flag_, datum_utils))) {
       STORAGE_LOG(WARN, "Failed to init ranges", K(ret));
@@ -175,8 +191,7 @@ int ObTableScanRange::init_rowkeys(const common::ObIArray<common::ObNewRange> &r
       if (OB_SUCC(ret)) {
         if (rowkeys_.empty()) {
           status_ = EMPTY;
-        } else if (rowkeys_.count() > 1 && nullptr != datum_utils
-            && (scan_flag.scan_order_ == ObQueryFlag::Forward || scan_flag.scan_order_ == ObQueryFlag::Reverse)) {
+        } else if (rowkeys_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
           ObDatumComparor<ObDatumRowkey> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
           std::sort(rowkeys_.begin(), rowkeys_.end(), comparor);
           if (OB_FAIL(ret)) {
@@ -224,8 +239,7 @@ int ObTableScanRange::init_ranges(const common::ObIArray<common::ObNewRange> &ra
       if (OB_SUCC(ret)) {
         if (ranges_.empty()) {
           status_ = EMPTY;
-        } else if (ranges_.count() > 1 && nullptr != datum_utils
-            && (scan_flag.scan_order_ == ObQueryFlag::Forward || scan_flag.scan_order_ == ObQueryFlag::Reverse)) {
+        } else if (ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
           ObDatumComparor<ObDatumRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
           std::sort(ranges_.begin(), ranges_.end(), comparor);
           if (OB_FAIL(ret)) {
@@ -239,6 +253,61 @@ int ObTableScanRange::init_ranges(const common::ObIArray<common::ObNewRange> &ra
   return ret;
 }
 
+int ObTableScanRange::init_ranges_in_skip_scan(const common::ObIArray<common::ObNewRange> &ranges,
+                                               const common::ObIArray<common::ObNewRange> &skip_scan_ranges,
+                                               const common::ObQueryFlag &scan_flag,
+                                               const blocksstable::ObStorageDatumUtils *datum_utils)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == allocator_ ||
+      ranges.count() != skip_scan_ranges.count()) ||
+      ranges.count() == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to init ranges", K(ret), K(allocator_), K(ranges.count()), K(skip_scan_ranges.count()));
+  } else {
+    common::ObSEArray<ObSkipScanWrappedRange, DEFAULT_RANGE_CNT> wrapped_ranges_;
+    const int64_t range_cnt = ranges.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_cnt; i++) {
+      ObSkipScanWrappedRange wrapped_range;
+      const ObNewRange &range = ranges.at(i);
+      const ObNewRange &skip_scan_range = skip_scan_ranges.at(i);
+      bool is_false = false;
+      if (OB_FAIL(always_false(range, is_false))) {
+        STORAGE_LOG(WARN, "Failed to check range always false", K(ret), K(range));
+      } else if (is_false) {
+      } else if (OB_FAIL(wrapped_range.datum_range_.from_range(range, *allocator_))) {
+        STORAGE_LOG(WARN, "Failed to transfer range to datum range", K(ret));
+      } else if (OB_FAIL(wrapped_range.datum_skip_range_.from_range(skip_scan_range, *allocator_))) {
+        STORAGE_LOG(WARN, "Failed to transfer skip range to datum range", K(ret));
+      } else if (OB_FAIL(wrapped_ranges_.push_back(wrapped_range))) {
+        STORAGE_LOG(WARN, "Failed to push back", K(ret), K(wrapped_range));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (wrapped_ranges_.empty()) {
+        status_ = EMPTY;
+      } else if (wrapped_ranges_.count() > 1 && nullptr != datum_utils && scan_flag.is_ordered_scan()) {
+        ObDatumComparor<ObSkipScanWrappedRange> comparor(*datum_utils, ret, scan_flag.is_reverse_scan());
+        std::sort(wrapped_ranges_.begin(), wrapped_ranges_.end(), comparor);
+        if (OB_FAIL(ret)) {
+          STORAGE_LOG(WARN, "Failed to sort datum ranges", K(ret), K(wrapped_ranges_));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && EMPTY != status_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < wrapped_ranges_.count(); i++) {
+        const ObSkipScanWrappedRange &wrapped_range = wrapped_ranges_.at(i);
+        STORAGE_LOG(DEBUG, "skip scan range", K(wrapped_range));
+        if (OB_FAIL(ranges_.push_back(wrapped_range.datum_range_))) {
+          STORAGE_LOG(WARN, "Failed to push back datum range", K(ret));
+        } else if (OB_FAIL(skip_scan_ranges_.push_back(wrapped_range.datum_skip_range_))) {
+          STORAGE_LOG(WARN, "Failed to push back datum range", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 
 } // namespace storage

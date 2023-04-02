@@ -15,9 +15,9 @@
 #include "lib/function/ob_function.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/palf_options.h"
 #include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "logservice/palf/palf_options.h"
 #include "logservice/ob_log_handler.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/applyservice/ob_log_apply_service.h"
@@ -35,16 +35,35 @@ enum class RoleChangeEventType {
 };
 
 struct RoleChangeEvent {
+  RoleChangeEvent() { reset(); }
   RoleChangeEvent(const RoleChangeEventType &event_type,
                   const share::ObLSID &ls_id);
   RoleChangeEvent(const RoleChangeEventType &event_type,
                   const share::ObLSID &ls_id,
                   const common::ObAddr &dst_addr);
   bool is_valid() const;
+  void reset();
+  bool operator == (const RoleChangeEvent &event) const;
   RoleChangeEventType event_type_;
   share::ObLSID ls_id_;
   ObAddr dst_addr_;
   TO_STRING_KV(K_(event_type), K_(ls_id), K_(dst_addr));
+};
+
+class RoleChangeEventSet {
+public:
+  RoleChangeEventSet();
+  ~RoleChangeEventSet();
+  int insert(const RoleChangeEvent &event);
+  int remove(const RoleChangeEvent &event);
+  static constexpr int64_t  MAX_ARRAY_SIZE = 128;
+private:
+  // Assumed there are sixteen log streams at most.
+  // 64 for normal role change events.
+  // 64 for leader change events.
+  RoleChangeEvent events_[MAX_ARRAY_SIZE];
+  mutable ObSpinLock lock_;
+  DISALLOW_COPY_AND_ASSIGN(RoleChangeEventSet);
 };
 
 class ObRoleChangeService : public lib::TGTaskHandler , public palf::PalfRoleChangeCb {
@@ -65,6 +84,7 @@ public:
 
 private:
   int submit_role_change_event_(const RoleChangeEvent &event);
+  int push_event_into_queue_(const RoleChangeEvent &event);
   int handle_role_change_event_(const RoleChangeEvent &event);
 
   int handle_role_change_cb_event_for_restore_handler_(const palf::AccessMode &curr_access_mode,
@@ -112,11 +132,11 @@ private:
                                                         const int64_t proposal_id,
                                                         const share::ObLSID &ls_id,
                                                         palf::LSN &end_lsn);
-  bool need_execute_role_change(const int64_t curr_proposal_id, 
+  bool need_execute_role_change(const int64_t curr_proposal_id,
                                 const common::ObRole curr_role,
-                                const int64_t new_proposal_id, 
+                                const int64_t new_proposal_id,
                                 const common::ObRole new_role,
-                                const bool is_pending_state, 
+                                const bool is_pending_state,
                                 const bool is_offline) const;
 
   bool is_append_mode(const palf::AccessMode &access_mode) const;
@@ -143,6 +163,7 @@ private:
   storage::ObLSService *ls_service_;
   logservice::ObLogApplyService *apply_service_;
   logservice::ObILogReplayService *replay_service_;
+  RoleChangeEventSet rc_set_;
   int tg_id_;
   RCDiagnoseInfo cur_task_info_; // for diagnose
   bool is_inited_;

@@ -94,6 +94,11 @@ public:
       : code_(code), info_(from_tid, from_svr_addr, extra_msg)
   {
   }
+  void reset()
+  {
+    code_ = 0;
+    info_.reset();
+  }
   int code_; // Interrupt number
   obrpc::ObInterruptStackInfo info_;
   TO_STRING_KV(K_(code), K_(info));

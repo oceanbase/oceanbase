@@ -86,6 +86,7 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_OB_UROWID,    0, 0},
   {EMySQLFieldType::MYSQL_TYPE_ORA_BLOB,       0, 0},                       /* ObLobType */
   {EMySQLFieldType::MYSQL_TYPE_JSON,       BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObJsonType */
+  {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObGeometryType */
   /* ObMaxType */
 };
 
@@ -190,6 +191,10 @@ int ObSMUtils::cell_str(
       }
       case ObJsonTC:{
         ret = ObMySQLUtil::json_cell_str(buf, len, obj.get_string(), pos);
+        break;
+      }
+      case ObGeometryTC: {
+        ret = ObMySQLUtil::geometry_cell_str(buf, len, obj.get_string(), pos);
         break;
       }
       case ObBitTC: {
@@ -346,6 +351,7 @@ int ObSMUtils::get_mysql_type(ObObjType ob_type, EMySQLFieldType &mysql_type,
       case EMySQLFieldType::MYSQL_TYPE_YEAR:
       case EMySQLFieldType::MYSQL_TYPE_BIT:
       case EMySQLFieldType::MYSQL_TYPE_JSON: // mysql json and long text decimals are 0, we do not need it?
+      case EMySQLFieldType::MYSQL_TYPE_GEOMETRY:
         num_decimals = 0;
         break;
 
@@ -501,6 +507,8 @@ int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type)
     case EMySQLFieldType::MYSQL_TYPE_JSON:
       ob_type = ObJsonType;
       break;
+    case EMySQLFieldType::MYSQL_TYPE_GEOMETRY:
+      ob_type = ObGeometryType;
     default:
       _OB_LOG(WARN, "unsupport MySQL type %d", mysql_type);
       ret = OB_OBJ_TYPE_ERROR;

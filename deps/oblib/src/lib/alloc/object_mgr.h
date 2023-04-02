@@ -36,11 +36,11 @@ class SubObjectMgr : public IBlockMgr
 {
   friend class ObTenantCtxAllocator;
 public:
-  SubObjectMgr(const bool for_logger);
+  SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id);
   virtual ~SubObjectMgr() {}
-  OB_INLINE void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator, const ObMemAttr &attr)
+  OB_INLINE void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
   {
-    bs_.set_tenant_ctx_allocator(allocator, attr);
+    bs_.set_tenant_ctx_allocator(allocator);
   }
   OB_INLINE void lock() { locker_.lock(); }
   OB_INLINE void unlock() { locker_.unlock(); }
@@ -55,14 +55,11 @@ public:
     return bs_.alloc_block(size, attr);
   }
   void free_block(ABlock *block) override;
-  OB_INLINE ObTenantCtxAllocator &get_tenant_ctx_allocator() override
-  {
-    return bs_.get_tenant_ctx_allocator();
-  }
   int64_t sync_wash(int64_t wash_size) override;
   OB_INLINE int64_t get_hold() { return bs_.get_total_hold(); }
   OB_INLINE int64_t get_payload() { return bs_.get_total_payload(); }
   OB_INLINE int64_t get_used() { return bs_.get_total_used(); }
+  OB_INLINE bool check_has_unfree() { return bs_.check_has_unfree(); }
 private:
 #ifndef ENABLE_SANITY
   lib::ObMutex mutex_;
@@ -100,21 +97,17 @@ public:
 
   ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override;
   void free_block(ABlock *block) override;
-  OB_INLINE ObTenantCtxAllocator &get_tenant_ctx_allocator() override
-  {
-    return ta_;
-  }
 
   void print_usage() const;
   int64_t sync_wash(int64_t wash_size) override;
   Stat get_stat();
+  bool check_has_unfree();
 private:
   SubObjectMgr *create_sub_mgr();
   void destroy_sub_mgr(SubObjectMgr *sub_mgr);
 
 public:
   ObTenantCtxAllocator &ta_;
-  const ObMemAttr attr_;
   int sub_cnt_;
   SubObjectMgr root_mgr_;
   SubObjectMgr *sub_mgrs_[N];

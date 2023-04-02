@@ -51,6 +51,14 @@
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"        // ObTenantMajorFreezeP
 #include "storage/tx/ob_xa_rpc.h"
 
+#include "observer/table_load/ob_table_load_abort_processor.h"
+#include "observer/table_load/ob_table_load_begin_processor.h"
+#include "observer/table_load/ob_table_load_commit_processor.h"
+#include "observer/table_load/ob_table_load_finish_processor.h"
+#include "observer/table_load/ob_table_load_get_status_processor.h"
+#include "observer/table_load/ob_table_load_processor.h"
+#include "observer/table_load/ob_table_load_trans_processor.h"
+
 using namespace oceanbase;
 using namespace oceanbase::observer;
 using namespace oceanbase::lib;
@@ -80,6 +88,7 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObDumpSingleTxDataP, gctx_);
   RPC_PROCESSOR(ObForceSwitchILogFileP, gctx_);
   RPC_PROCESSOR(ObForceSetAllAsSingleReplicaP, gctx_);
+  RPC_PROCESSOR(ObForceSetLSAsSingleReplicaP, gctx_);
   // RPC_PROCESSOR(ObSplitDestPartitionRequestP, gctx_.par_ser_);
   // RPC_PROCESSOR(ObReplicaSplitProgressRequestP, gctx_.par_ser_);
   // RPC_PROCESSOR(ObCheckMemberMajorSSTableEnoughP, gctx_.par_ser_);
@@ -164,6 +173,33 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableQueryAndMutateP, gctx_);
   RPC_PROCESSOR(ObTableQuerySyncP, gctx_);
 
+  // table load api
+  RPC_PROCESSOR(ObTableLoadBeginP, gctx_);
+  RPC_PROCESSOR(ObTableLoadFinishP, gctx_);
+  RPC_PROCESSOR(ObTableLoadCommitP, gctx_);
+  RPC_PROCESSOR(ObTableLoadAbortP, gctx_);
+  RPC_PROCESSOR(ObTableLoadGetStatusP, gctx_);
+  RPC_PROCESSOR(ObTableLoadP, gctx_);
+  RPC_PROCESSOR(ObTableLoadStartTransP, gctx_);
+  RPC_PROCESSOR(ObTableLoadFinishTransP, gctx_);
+  RPC_PROCESSOR(ObTableLoadAbandonTransP, gctx_);
+  RPC_PROCESSOR(ObTableLoadGetTransStatusP, gctx_);
+
+  RPC_PROCESSOR(ObTableLoadPreBeginPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadConfirmBeginPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadPreMergePeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadStartMergePeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadCommitPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadAbortPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadGetStatusPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadPreStartTransPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadConfirmStartTransPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadPreFinishTransPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadConfirmFinishTransPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadAbandonTransPeerP, gctx_);
+  RPC_PROCESSOR(ObTableLoadGetTransStatusPeerP, gctx_);
+
   // HA GTS
   RPC_PROCESSOR(ObHaGtsPingRequestP, gctx_);
   RPC_PROCESSOR(ObHaGtsGetRequestP, gctx_);
@@ -196,7 +232,11 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObHighPriorityTableLockTaskP, gctx_);
   RPC_PROCESSOR(ObOutTransLockTableP, gctx_);
   RPC_PROCESSOR(ObOutTransUnlockTableP, gctx_);
-  
+  RPC_PROCESSOR(ObBatchLockTaskP, gctx_);
+  RPC_PROCESSOR(ObHighPriorityBatchLockTaskP, gctx_);
+  RPC_PROCESSOR(ObAdminRemoveLockP);
+  RPC_PROCESSOR(ObAdminUpdateLockP);
+
   // Region Ratelimit rpc
   RPC_PROCESSOR(ObRLGetRegionBWP, gctx_);
 
@@ -229,4 +269,12 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   //sql optimizer estimate tablet block count
   RPC_PROCESSOR(ObEstimateTabletBlockCountP, gctx_);
+
+  // lob
+  RPC_PROCESSOR(ObLobQueryP, gctx_.bandwidth_throttle_);
+  //standby switchover/failover
+  RPC_PROCESSOR(ObRpcGetLSSyncScnP, gctx_);
+  RPC_PROCESSOR(ObRefreshTenantInfoP, gctx_);
+
+  RPC_PROCESSOR(ObSyncRewriteRulesP, gctx_);
 }

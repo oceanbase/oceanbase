@@ -27,16 +27,17 @@ namespace libobcdc
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
-ObLogTimeZoneInfoGetter::ObLogTimeZoneInfoGetter() : inited_(false),
-                                         tz_tid_(0),
-                                         tz_cond_(),
-                                         stop_flag_(true),
-                                         mysql_proxy_(NULL),
-                                         systable_helper_(NULL),
-                                         err_handler_(NULL),
-                                         lock_(),
-                                         tenant_mgr_(NULL),
-                                         timezone_str_(NULL)
+ObLogTimeZoneInfoGetter::ObLogTimeZoneInfoGetter()
+  : inited_(false),
+    tz_tid_(0),
+    tz_cond_(),
+    stop_flag_(true),
+    mysql_proxy_(NULL),
+    systable_helper_(NULL),
+    err_handler_(NULL),
+    lock_(ObLatchIds::OBCDC_TIMEZONE_GETTER_LOCK),
+    tenant_mgr_(NULL),
+    timezone_str_(NULL)
 {
 }
 
@@ -45,7 +46,8 @@ ObLogTimeZoneInfoGetter::~ObLogTimeZoneInfoGetter()
   destroy();
 }
 
-int ObLogTimeZoneInfoGetter::init(const char *timezone_str,
+int ObLogTimeZoneInfoGetter::init(
+    const char *timezone_str,
     common::ObMySQLProxy &mysql_proxy,
     IObLogSysTableHelper &systable_helper,
     IObLogTenantMgr &tenant_mgr,
@@ -54,11 +56,11 @@ int ObLogTimeZoneInfoGetter::init(const char *timezone_str,
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(inited_)) {
-    LOG_ERROR("schema getter has been initialized");
     ret = OB_INIT_TWICE;
+    LOG_ERROR("schema getter has been initialized", KR(ret));
   } else if (OB_ISNULL(timezone_str)) {
-    LOG_ERROR("invalid argument", K(timezone_str));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(timezone_str));
   } else {
     tz_tid_ = 0;
     stop_flag_ = false;
@@ -71,6 +73,7 @@ int ObLogTimeZoneInfoGetter::init(const char *timezone_str,
 
     LOG_INFO("init timezone info getter succ");
   }
+
   return ret;
 }
 
@@ -93,14 +96,18 @@ int ObLogTimeZoneInfoGetter::start()
   int ret = OB_SUCCESS;
   int pthread_ret = 0;
 
-  if (OB_UNLIKELY(0 != tz_tid_)) {
-    LOG_ERROR("timezone info thread has been started", K(tz_tid_));
-    ret = OB_NOT_SUPPORTED;
-  } else if (0 != (pthread_ret = pthread_create(&tz_tid_, NULL, tz_thread_func_, this))) {
-    LOG_ERROR("start timezone info thread fail", K(pthread_ret), KERRNOMSG(pthread_ret));
-    ret = OB_ERR_UNEXPECTED;
+  if (TCTX.is_online_schema_not_avaliable()) {
+    // do nothing
   } else {
-    LOG_INFO("start timezone info thread succ");
+    if (OB_UNLIKELY(0 != tz_tid_)) {
+      LOG_ERROR("timezone info thread has been started", K(tz_tid_));
+      ret = OB_NOT_SUPPORTED;
+    } else if (0 != (pthread_ret = pthread_create(&tz_tid_, NULL, tz_thread_func_, this))) {
+      LOG_ERROR("start timezone info thread fail", K(pthread_ret), KERRNOMSG(pthread_ret));
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      LOG_INFO("start timezone info thread succ");
+    }
   }
 
   return ret;
@@ -110,18 +117,22 @@ void ObLogTimeZoneInfoGetter::stop()
 {
   stop_flag_ = true;
 
-  if (0 != tz_tid_) {
-    tz_cond_.signal();
+  if (TCTX.is_online_schema_not_avaliable()) {
+    // do nothing
+  } else {
+    if (0 != tz_tid_) {
+      tz_cond_.signal();
 
-    int pthread_ret = pthread_join(tz_tid_, NULL);
-    if (0 != pthread_ret) {
-      LOG_ERROR("join timezone info thread fail", K(tz_tid_), K(pthread_ret),
-          KERRNOMSG(pthread_ret));
-    } else {
-      LOG_INFO("stop timezone info thread succ");
+      int pthread_ret = pthread_join(tz_tid_, NULL);
+      if (0 != pthread_ret) {
+        LOG_ERROR_RET(OB_ERR_SYS, "join timezone info thread fail", K(tz_tid_), K(pthread_ret),
+            KERRNOMSG(pthread_ret));
+      } else {
+        LOG_INFO("stop timezone info thread succ");
+      }
+
+      tz_tid_ = 0;
     }
-
-    tz_tid_ = 0;
   }
 }
 
@@ -198,8 +209,8 @@ int ObLogTimeZoneInfoGetter::refresh_timezone_info_()
 
   if (! fetch_timezone_info_by_tennat) {
     // Global use of a time zone table
-    if (OB_FAIL(refresh_tenant_timezone_info_based_on_version_(OB_SYS_TENANT_ID))) {
-      LOG_WARN("refresh_sys_tenant_timezone_info_based_on_version_ fail", KR(ret));
+    if (OB_FAIL(refresh_tenant_timezone_info_(OB_SYS_TENANT_ID))) {
+      LOG_WARN("refresh_sys_tenant_timezone_info fail", KR(ret));
     }
   } else {
     // refresh by tenant
@@ -211,9 +222,18 @@ int ObLogTimeZoneInfoGetter::refresh_timezone_info_()
   return ret;
 }
 
-bool ObLogTimeZoneInfoGetter::need_fetch_timezone_info_by_tennat_() const
+int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_(const uint64_t tenant_id)
 {
-  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260;
+  int ret = OB_SUCCESS;
+
+  if (TCTX.is_online_schema_not_avaliable()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("refresh tenant_timezone_info only avaliable when obcdc is using online schema", KR(ret));
+  } else {
+    ret = refresh_tenant_timezone_info_based_on_version_(tenant_id);
+  }
+
+  return ret;
 }
 
 int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_based_on_version_(const uint64_t tenant_id)
@@ -223,9 +243,12 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_based_on_version_(cons
   ObLogTenantGuard guard;
   ObLogTenant *tenant = NULL;
 
-  if (OB_ISNULL(tenant_mgr_)) {
-    LOG_ERROR("tenant_mgr_ is NULL");
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("timezone_info_getter_ not inited", KR(ret), K_(inited));
+  } else if (OB_ISNULL(tenant_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_mgr_ is NULL", KR(ret));
   } else if (OB_FAIL(query_timezone_info_version_(tenant_id, tz_info_version))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       // Not present, normal, tenant has not imported time zone table
@@ -243,16 +266,16 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_based_on_version_(cons
       LOG_ERROR("get tenant fail", KR(ret), K(tenant_id));
     }
   } else if (OB_ISNULL(tenant = guard.get_tenant())) {
-    LOG_ERROR("invalid tenant", K(tenant_id), K(tenant));
     ret = OB_ERR_UNEXPECTED;
-  } else if (tz_info_version == tenant->get_timezone_info_version()) {
+    LOG_ERROR("invalid tenant", KR(ret), K(tenant_id), K(tenant));
+  } else if (tz_info_version <= tenant->get_timezone_info_version()) {
     // do nothing
     LOG_INFO("timezone_info_version is unchanged, don't need to update timezone info", K(tenant_id),
         "current_tz_info_version", tenant->get_timezone_info_version(), K(tz_info_version));
   } else {
     // Version change, active refresh
-    if (OB_FAIL(refresh_tenant_timezone_info_(tenant_id, tenant->get_tz_info_map()))) {
-      LOG_ERROR("refresh_tenant_timezone_info_ fail", KR(ret), K(tenant_id));
+    if (OB_FAIL(fetch_tenant_timezone_info_(tenant_id, tenant->get_tz_info_map()))) {
+      LOG_ERROR("fetch_tenant_timezone_info_ fail", KR(ret), K(tenant_id));
     } else {
       // update version
       tenant->update_timezone_info_version(tz_info_version);
@@ -262,7 +285,39 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_based_on_version_(cons
   return ret;
 }
 
-int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_(const uint64_t tenant_id,
+int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_from_local_file_(
+    const uint64_t tenant_id,
+    common::ObTZInfoMap &tz_info_map)
+{
+  int ret = OB_SUCCESS;
+  ObDictTenantInfoGuard dict_tenant_info_guard;
+  ObDictTenantInfo *tenant_info = nullptr;
+
+  if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("only effect in data_dict mode)", KR(ret));
+  } else if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
+      tenant_id,
+      dict_tenant_info_guard))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+    } else {
+      LOG_INFO("get_tenant_info_guard failed cause tenant_meta not exist, ignore.", KR(ret), K(tenant_id));
+    }
+  } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_info is nullptr", KR(ret), K(tenant_id));
+  } else if (common::ObCompatibilityMode::MYSQL_MODE == tenant_info->get_compatibility_mode()) {
+    // ignore if mysql mode
+  } else if (OB_FAIL(import_timezone_info_(tz_info_map))) {
+    LOG_ERROR("import_timezone_info failed", KR(ret), K(tenant_id));
+  }
+
+  return ret;
+}
+
+int ObLogTimeZoneInfoGetter::fetch_tenant_timezone_info_(
+    const uint64_t tenant_id,
     common::ObTZInfoMap *tz_info_map)
 {
   int ret = OB_SUCCESS;
@@ -294,6 +349,8 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_(const uint64_t tenant
         ret = OB_NEED_RETRY;
       } else if (OB_FAIL(ObTimeZoneInfoManager::fill_tz_info_map(*result, *tz_info_map))) {
         LOG_ERROR("fill_tz_info_map fail", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(export_timezone_info_(*tz_info_map))) {
+        LOG_ERROR("export_timezone_info failed", KR(ret), K(tenant_id));
       }
     }
   }
@@ -315,9 +372,9 @@ int ObLogTimeZoneInfoGetter::refresh_all_tenant_timezone_info_()
     for (int64_t idx = 0; OB_SUCC(ret) && idx < all_tenant_ids.size(); idx++) {
       const uint64_t tenant_id = all_tenant_ids[idx];
 
-      if (OB_FAIL(refresh_tenant_timezone_info_based_on_version_(tenant_id))) {
+      if (OB_FAIL(refresh_tenant_timezone_info_(tenant_id))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("refresh_tenant_timezone_info_based_on_version_ fail", KR(ret), K(tenant_id));
+          LOG_WARN("refresh_tenant_timezone_info_ fail", KR(ret), K(tenant_id));
         } else {
           // tenant not exist, reset ret
           ret = OB_SUCCESS;
@@ -329,7 +386,8 @@ int ObLogTimeZoneInfoGetter::refresh_all_tenant_timezone_info_()
   return ret;
 }
 
-int ObLogTimeZoneInfoGetter::init_tz_info_wrap(const uint64_t tenant_id,
+int ObLogTimeZoneInfoGetter::init_tz_info_wrap(
+    const uint64_t tenant_id,
     int64_t &tz_info_version,
     ObTZInfoMap &tz_info_map,
     ObTimeZoneInfoWrap &tz_info_wrap)
@@ -343,18 +401,35 @@ int ObLogTimeZoneInfoGetter::init_tz_info_wrap(const uint64_t tenant_id,
   if (OB_ISNULL(timezone_str_)) {
     LOG_ERROR("timezone_str is null", K(timezone_str_));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(query_timezone_info_version_(tenant_id, tz_info_version))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      // Not present, normal, tenant has not imported time zone table
-      LOG_INFO("query_timezone_info_version_, timezone_info_version not exist", K(tenant_id));
-      ret = OB_SUCCESS;
+  } else if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+    if (OB_FAIL(query_timezone_info_version_(tenant_id, tz_info_version))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // Not present, normal, tenant has not imported time zone table
+        LOG_INFO("query_timezone_info_version_, timezone_info_version not exist", K(tenant_id));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("query_timezone_info_version_ fail", KR(ret), K(tenant_id), K(tz_info_version));
+      }
+    } else if (OB_FAIL(fetch_tenant_timezone_info_util_succ(tenant_id, &tz_info_map))) {
+      LOG_ERROR("fetch_tenant_timezone_info_util_succ fail", KR(ret), K(tenant_id));
     } else {
-      LOG_ERROR("query_timezone_info_version_ fail", KR(ret), K(tenant_id), K(tz_info_version));
+      // succ
     }
-  } else if (OB_FAIL(fetch_tenant_timezone_info_util_succ(tenant_id, &tz_info_map))) {
-    LOG_ERROR("fetch_tenant_timezone_info_util_succ fail", KR(ret), K(tenant_id));
+  } else if (is_data_dict_refresh_mode(TCTX.refresh_mode_)) {
+    if (OB_FAIL(refresh_tenant_timezone_info_from_local_file_(tenant_id, tz_info_map))) {
+      if (OB_IO_ERROR == ret) {
+        LOG_INFO("refresh_tenant_timezone_info_from_local_file_ tz_info may not exist "
+            "or tenant is not oracle mode, ignore.", KR(ret), K(tenant_id));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("refresh_tenant_timezone_info_from_local_file_ failed", KR(ret), K(tenant_id));
+      }
+    } else {
+      LOG_INFO("refresh_tenant_timezone_info_from_local_file_ success", K(tenant_id));
+    }
   } else {
-    // succ
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("unknown refresh_mode to init tz_info_wrap", KR(ret), "refresh_mode", print_refresh_mode(TCTX.refresh_mode_));
   }
 
 
@@ -372,7 +447,8 @@ int ObLogTimeZoneInfoGetter::init_tz_info_wrap(const uint64_t tenant_id,
 }
 
 
-int ObLogTimeZoneInfoGetter::query_timezone_info_version_(const uint64_t tenant_id,
+int ObLogTimeZoneInfoGetter::query_timezone_info_version_(
+    const uint64_t tenant_id,
     int64_t &timezone_info_version)
 {
   int ret = OB_SUCCESS;
@@ -382,7 +458,7 @@ int ObLogTimeZoneInfoGetter::query_timezone_info_version_(const uint64_t tenant_
     LOG_ERROR("systable_helper_ is null", K(systable_helper_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    while (! done && OB_SUCCESS == ret) {
+    while (! done && OB_SUCC(ret)) {
       if (OB_FAIL(systable_helper_->query_timezone_info_version(tenant_id, timezone_info_version))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("systable_helper_ query_timezone_info_version fail", KR(ret), K(tenant_id),
@@ -405,15 +481,22 @@ int ObLogTimeZoneInfoGetter::query_timezone_info_version_(const uint64_t tenant_
   return ret;
 }
 
-int ObLogTimeZoneInfoGetter::fetch_tenant_timezone_info_util_succ(const uint64_t tenant_id,
+int ObLogTimeZoneInfoGetter::fetch_tenant_timezone_info_util_succ(
+    const uint64_t tenant_id,
     ObTZInfoMap *tz_info_map)
 {
   int ret = OB_SUCCESS;
   bool done = false;
+  if (TCTX.is_online_schema_not_avaliable()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("not support update timezone_info cause online schema is not support in current mode", KR(ret),
+        "refresh_mode", TCTX.refresh_mode_,
+        "fetch_log_mode", TCTX.fetching_mode_);
+  }
 
-  while (! done && OB_SUCCESS == ret) {
-    if (OB_FAIL(refresh_tenant_timezone_info_(tenant_id, tz_info_map))) {
-      LOG_WARN("refresh_tenant_timezone_info_ fail", KR(ret), K(tenant_id));
+  while (! done && OB_SUCC(ret)) {
+    if (OB_FAIL(fetch_tenant_timezone_info_(tenant_id, tz_info_map))) {
+      LOG_WARN("fetch_tenant_timezone_info_ fail", KR(ret), K(tenant_id));
     } else {
       done = true;
     }
@@ -427,7 +510,8 @@ int ObLogTimeZoneInfoGetter::fetch_tenant_timezone_info_util_succ(const uint64_t
   return ret;
 }
 
-int ObLogTimeZoneInfoGetter::get_tenant_timezone_map(const uint64_t tenant_id,
+int ObLogTimeZoneInfoGetter::get_tenant_timezone_map(
+    const uint64_t tenant_id,
     ObTZMapWrap &tz_mgr_wrap)
 {
   int ret = OB_SUCCESS;
@@ -441,6 +525,114 @@ int ObLogTimeZoneInfoGetter::get_tenant_timezone_map(const uint64_t tenant_id,
     LOG_WARN("log tenant mgr get tenant tz map failed", KR(ret), K(tenant_id));
   } else {
     tz_mgr_wrap.set_tz_map(tz_info_map);
+  }
+
+  return ret;
+}
+
+int ObLogTimeZoneInfoGetter::export_timezone_info_(common::ObTZInfoMap &tz_info_map)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  int64_t buf_len = 0;
+  int64_t pos = 0;
+  common::ObRequestTZInfoResult tz_info_res;
+  const char *tz_info_fpath = TCONF.timezone_info_fpath.str();
+  // 1. serialize timezone_info;
+  // 2. create tmp file;
+  // 3. write to tmp_file;
+  // 4. rename tmp_file to real file_name.
+  auto tz_info_op = [&tz_info_res](const ObTZIDKey &key, ObTimeZoneInfoPos *tz_info)
+  {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_ISNULL(tz_info)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid tz_info", KR(tmp_ret), K(key));
+    } else if (OB_TMP_FAIL(tz_info_res.tz_array_.push_back(*tz_info))) {
+      LOG_ERROR_RET(tmp_ret, "push_back tz_info into ObRequestTZInfoResult failed", KR(tmp_ret), K(key));
+    }
+    return OB_SUCCESS == tmp_ret;
+  };
+
+  if (OB_FAIL(tz_info_map.id_map_.for_each(tz_info_op))) {
+    LOG_ERROR("generate ObRequestTZInfoResult failed", KR(ret));
+  } else if (0 >= tz_info_res.tz_array_.count()) {
+    // skip empty tz_info_result.
+  } else if (OB_UNLIKELY(0 >= (buf_len = tz_info_res.get_serialize_size()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid ObRequestTZInfoResult serialize size", KR(ret), K(buf_len));
+  } else if (OB_ISNULL(buf = static_cast<char*>(ob_cdc_malloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc buf for ObRequestTZInfoResult failed", KR(ret), K(buf_len));
+  } else if (OB_FAIL(tz_info_res.serialize(buf, buf_len, pos))) {
+    LOG_ERROR("serialize ObRequestTZInfoResult failed", KR(ret), K(buf_len), K(pos), KP(buf));
+  } else if (OB_FAIL(write_to_file(tz_info_fpath, buf, pos))) {
+    LOG_ERROR("write timezone info to file failed", KR(ret), K(buf_len), KP(buf), KCSTRING(tz_info_fpath));
+  } else {
+    LOG_DEBUG("export_timezone_info succ", K(tz_info_res));
+  }
+
+  if (OB_NOT_NULL(buf)) {
+    ob_cdc_free(buf);
+  }
+
+  return ret;
+}
+
+int ObLogTimeZoneInfoGetter::import_timezone_info_(common::ObTZInfoMap &tz_info_map)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  // currently timezone_info.conf is about 3.7M, prealloc 12M in case of extend of timezone_info
+  const int64_t buf_len = 12 * _M_;
+  int64_t pos = 0;
+  common::ObRequestTZInfoResult tz_info_res;
+  const char *tzinfo_fpath = TCONF.timezone_info_fpath.str();
+
+  if (OB_ISNULL(buf = static_cast<char*>(ob_cdc_malloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("alloc memory to load tz_info from local file failed", KR(ret), K(buf_len));
+  } else if (OB_FAIL(read_from_file(tzinfo_fpath, buf, buf_len))) {
+    LOG_ERROR("read timezone_info from local file failed", KR(ret), K(buf_len), KP(buf), KCSTRING(tzinfo_fpath));
+  } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid timezone_info load from local config file", KR(ret), K(buf_len), KP(buf));
+  } else if (OB_FAIL(tz_info_res.deserialize(buf, buf_len, pos))) {
+    LOG_ERROR("deserialize tz_info_res failed", KR(ret), K(buf_len), K(pos), KP(buf));
+  } else {
+    const int64_t tz_info_cnt = tz_info_res.tz_array_.count();
+    common::ObTimeZoneInfoPos *stored_tz_info = nullptr;
+
+    for (int idx= 0; OB_SUCC(ret) && idx < tz_info_cnt; idx++) {
+      ObTimeZoneInfoPos &new_tz_info = tz_info_res.tz_array_.at(idx);
+
+      if (OB_FAIL(tz_info_map.id_map_.get(new_tz_info.get_tz_id(), stored_tz_info))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get stored_tz_info, should not happened", KR(ret),
+              "tz_id", new_tz_info.get_tz_id(),
+              "tz_name", new_tz_info.get_tz_name());
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObTimeZoneInfoManager::set_tz_info_map(stored_tz_info, new_tz_info, tz_info_map))) {
+          LOG_WARN("fail to set tz_info map", K(ret));
+        } else {
+          // NO NEED TO UPDATE TENANT_TZ_VERSION WHILE USING LOCAL TZ_INFO_FILE
+          // tenant->update_timezone_info_version(tz_info_res.last_version_);
+        }
+      }
+
+      if (OB_NOT_NULL(stored_tz_info)) {
+        tz_info_map.id_map_.revert(stored_tz_info);
+        stored_tz_info = nullptr;
+      }
+    } // end for
+  }
+
+  if (OB_NOT_NULL(buf)) {
+    ob_cdc_free(buf);
   }
 
   return ret;

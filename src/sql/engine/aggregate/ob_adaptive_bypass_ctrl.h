@@ -21,8 +21,8 @@ namespace oceanbase
 namespace sql
 {
 
-const int64_t INIT_L2_CACHE_SIZE = sysconf(_SC_LEVEL2_CACHE_SIZE);
-const int64_t INIT_L3_CACHE_SIZE = sysconf(_SC_LEVEL3_CACHE_SIZE);
+const int64_t INIT_L2_CACHE_SIZE = get_level2_cache_size();
+const int64_t INIT_L3_CACHE_SIZE = get_level3_cache_size();
 const int64_t MAX_L3_CACHE_SIZE = 50 *1024 *1024; //50M
 const uint64_t FORCE_GPD = 0x100;
 const int64_t MAX_REBUILD_TIMES = 5;

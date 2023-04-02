@@ -30,9 +30,6 @@ namespace oceanbase
 {
 namespace sql
 {
-
-const char *plan_cache_gc_confs[3] = { "OFF", "REPORT", "AUTO" };
-
 int ObGetAllPlanIdOp::set_key_array(common::ObIArray<uint64_t> *key_array)
 {
 int ret = common::OB_SUCCESS;
@@ -78,7 +75,11 @@ int ObGetAllCacheIdOp::operator()(common::hash::HashMapPair<ObCacheObjID, ObILib
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
   } else if (entry.second->get_ns() >= ObLibCacheNameSpace::NS_CRSR
             && entry.second->get_ns() <= ObLibCacheNameSpace::NS_PKG) {
-    if (OB_FAIL(key_array_->push_back(entry.first))) {
+    if (OB_ISNULL(entry.second)) {
+      // do nothing
+    } else if (!entry.second->added_lc()) {
+      // do nothing
+    } else if (OB_FAIL(key_array_->push_back(entry.first))) {
       SQL_PC_LOG(WARN, "fail to push back plan_id", K(ret));
     }
   }
@@ -400,6 +401,9 @@ int ObConfigInfoInPC::load_influence_plan_config()
     rowsets_enabled_ = tenant_config->_rowsets_enabled;
     enable_px_batch_rescan_ = tenant_config->_enable_px_batch_rescan;
     bloom_filter_enabled_ = tenant_config->_bloom_filter_enabled;
+    px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
+    px_join_skew_minfreq_ = static_cast<int8_t>(tenant_config->_px_join_skew_minfreq);
+    min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
   }
 
   return ret;
@@ -430,6 +434,16 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", enable_newsort_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_newsort_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", px_join_skew_handling_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(px_join_skew_handling_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", px_join_skew_minfreq_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(px_join_skew_minfreq_));
+
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%lu", min_cluster_version_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_cluster_version_));
   } else {
     // do nothing
   }

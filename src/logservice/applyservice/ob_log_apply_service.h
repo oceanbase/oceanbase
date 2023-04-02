@@ -18,10 +18,15 @@
 #include "lib/thread/ob_thread_lease.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/palf/palf_handle.h"
+#include "share/scn.h"
 #include "share/ob_ls_id.h"
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 class PalfEnv;
@@ -60,7 +65,7 @@ struct LSApplyStat
 
 struct ApplyDiagnoseInfo
 {
-  int64_t max_applied_scn_;
+  share::SCN max_applied_scn_;
   TO_STRING_KV(K(max_applied_scn_));
 };
 
@@ -167,24 +172,24 @@ public:
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
-  int get_min_unapplied_log_ts_ns(int64_t &log_ts);
+  int get_max_applied_scn(share::SCN &scn);
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
   int diagnose(ApplyDiagnoseInfo &diagnose_info);
   // offline相关
   //
-  // The constraint between palf and apply: 
+  // The constraint between palf and apply:
   //
   // Palf guarantee that switch apply to follower only when there is not
-  // any uncommitted logs in previous LEADER, therefore, apply only update 
-  // 'palf_committed_end_lsn_' when 'proposal_id_' is as same as current 
-  // proposal_id of palf. 
+  // any uncommitted logs in previous LEADER, therefore, apply only update
+  // 'palf_committed_end_lsn_' when 'proposal_id_' is as same as current
+  // proposal_id of palf.
   //
   // To increase robustness, apply assums that update 'palf_committed_end_lsn_'
   // when the role of apply is LEADER execpet above constraints. otherwise,
   // apply consider it as unexpected error.
   //
-  // However, in rebuild scenario, apply will be reset to FOLLOWER even if there 
+  // However, in rebuild scenario, apply will be reset to FOLLOWER even if there
   // are logs to be committed when 'proposal_id_' is as same as current proposal_id
   // of palf.
   //
@@ -197,12 +202,12 @@ public:
                K(role_),
                K(proposal_id_),
                K(palf_committed_end_lsn_),
-               K(last_check_log_ts_ns_),
-               K(max_applied_cb_ts_ns_));
+               K(last_check_scn_),
+               K(max_applied_cb_scn_));
 private:
   int submit_task_to_apply_service_(ObApplyServiceTask &task);
-  int check_and_update_max_applied_log_ts_(const int64_t log_ts);
-  int update_last_check_log_ts_ns_();
+  int check_and_update_max_applied_scn_(const share::SCN scn);
+  int update_last_check_scn_();
   int handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue);
   int switch_to_follower_();
   //从cb中获取打点信息
@@ -212,7 +217,7 @@ private:
                      int64_t &cb_first_handle_time,
                      int64_t &cb_start_time);
   void statistics_cb_cost_(const palf::LSN &lsn,
-                           const int64_t log_ts,
+                           const share::SCN &scn,
                            const int64_t append_start_time,
                            const int64_t append_finish_time,
                            const int64_t cb_first_handle_time,
@@ -223,7 +228,7 @@ private:
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
   typedef RWLock::WLockGuardWithRetryInterval WLockGuardWithRetryInterval;
-  const int64_t MAX_HANDLE_TIME_NS_PER_ROUND_NS = 100 * 1000 * 1000; //100ms
+  const int64_t MAX_HANDLE_TIME_US_PER_ROUND_US = 100 * 1000; //100ms
   const int64_t WRLOCK_RETRY_INTERVAL_US = 20 * 1000;  // 20ms
 private:
   bool is_inited_;
@@ -236,8 +241,8 @@ private:
   palf::LSN palf_committed_end_lsn_;
   //LSN standy_committed_end_lsn_;
   //palf::LSN min_committed_end_lsn_;
-  int64_t last_check_log_ts_ns_; //当前待确认的最大连续回调位点
-  int64_t max_applied_cb_ts_ns_; //该位点前的cb保证都已经回调完成
+  share::SCN last_check_scn_; //当前待确认的最大连续回调位点
+  share::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
   ObApplyServiceQueueTask cb_queues_[APPLY_TASK_QUEUE_SIZE];
   palf::PalfEnv *palf_env_;
@@ -276,7 +281,7 @@ public:
                     palf::LSN &end_lsn);
   int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
   int switch_to_follower(const share::ObLSID &id);
-  int get_min_unapplied_log_ts_ns(const share::ObLSID &id, int64_t &log_ts);
+  int get_max_applied_scn(const share::ObLSID &id, share::SCN &scn);
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);

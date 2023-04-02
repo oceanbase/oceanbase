@@ -31,6 +31,12 @@ class ObDynamicSamplePieceMsg;
 class ObDynamicSampleWholeMsg;
 class ObRDWFPieceMsg;
 class ObRDWFWholeMsg;
+class ObInitChannelPieceMsg;
+class ObInitChannelWholeMsg;
+class ObReportingWFPieceMsg;
+class ObReportingWFWholeMsg;
+class ObOptStatsGatherPieceMsg;
+class ObOptStatsGatherWholeMsg;
 // 抽象出本接口类的目的是为了 MsgProc 和 ObPxCoord 解耦
 class ObIPxCoordMsgProc
 {
@@ -46,6 +52,9 @@ public:
   virtual int on_piece_msg(ObExecContext &ctx, const ObDynamicSamplePieceMsg &pkt) = 0;
   virtual int on_piece_msg(ObExecContext &ctx, const ObRollupKeyPieceMsg &pkt) = 0;
   virtual int on_piece_msg(ObExecContext &ctx, const ObRDWFPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt) = 0;
+  virtual int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt) = 0;
 };
 
 class ObIPxSubCoordMsgProc
@@ -69,6 +78,12 @@ public:
       const ObRollupKeyWholeMsg &pkt) const = 0;
   virtual int on_whole_msg(
       const ObRDWFWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObInitChannelWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObReportingWFWholeMsg &pkt) const = 0;
+  virtual int on_whole_msg(
+      const ObOptStatsGatherWholeMsg &pkt) const = 0;
   // SQC 被中断
   virtual int on_interrupted(const ObInterruptCode &ic) const = 0;
 };
@@ -99,6 +114,12 @@ public:
       const ObRollupKeyWholeMsg &pkt) const;
   virtual int on_whole_msg(
       const ObRDWFWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObInitChannelWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObReportingWFWholeMsg &pkt) const;
+  virtual int on_whole_msg(
+      const ObOptStatsGatherWholeMsg &pkt) const;
 private:
   ObSqcCtx &sqc_ctx_;
 };

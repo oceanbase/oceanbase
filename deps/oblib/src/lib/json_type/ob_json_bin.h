@@ -59,6 +59,23 @@ enum ObJBVerType:uint8_t {
   J_DATETIME_V0,
   J_TIMESTAMP_V0,
   J_OPAQUE_V0, // 13
+
+  J_OFLOAT_V0 = 15,
+  J_ODOUBLE_V0 = 16,
+  J_ODECIMAL_V0 = 17,
+  J_OINT_V0 = 18,
+  J_OLONG_V0 = 19,
+  J_OBINARY_V0 = 20,
+  J_OOID_V0 = 21,
+  J_ORAWHEX_V0 = 22,
+  J_ORAWID_V0 = 23,
+  J_ORACLEDATE_V0 = 24,
+  J_ODATE_V0 = 25,
+  J_OTIMESTAMP_V0 = 26,
+  J_OTIMESTAMPTZ_V0 = 27,
+  J_ODAYSECOND_V0 = 28,
+  J_OYEARMONTH_V0 = 29,
+
   J_ERROR_V0 = 200
 };
 
@@ -70,15 +87,6 @@ typedef struct ObJsonBinKeyDict {
 } ObJsonBinKeyDict;
 
 typedef struct ObJsonBinHeader {
-  ObJsonBinHeader()
-  : type_(0), 
-        entry_size_(0), 
-        count_size_(0), 
-        obj_size_size_(0), 
-        is_continuous_(0), 
-        reserved_(0) 
-  {
-  }
   uint8_t type_;			 // node type for current node
   uint8_t entry_size_   : 2; // the size describe var size of key_entry，val_entry
   uint8_t count_size_   : 2; // the size describe var size of element count
@@ -99,6 +107,7 @@ static const int OB_JSON_BIN_ARR_HEADER_LEN = 2; // actual size of ObJsonBinArrH
 class ObJsonVerType {
 public:
   static ObJsonNodeType get_json_type(ObJBVerType type);
+  static bool is_opaque_or_string(ObJsonNodeType type);
   static ObJBVerType get_json_vertype(ObJsonNodeType type);
   static bool is_array(ObJBVerType type);
   static bool is_object(ObJBVerType type);
@@ -138,6 +147,7 @@ public:
   virtual ~ObJsonBin() { result_.reset(); stack_buf_.reset(); }
   OB_INLINE bool get_boolean() const override { return static_cast<bool>(uint_val_); }
   OB_INLINE double get_double() const override { return double_val_; }
+  OB_INLINE float get_float() const override { return float_val_; };
   OB_INLINE int64_t get_int() const override { return int_val_; }
   OB_INLINE uint64_t get_uint() const override { return uint_val_; }
   OB_INLINE const char *get_data() const override { return data_; }
@@ -179,6 +189,7 @@ public:
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL) const;
+  int get_use_size(uint64_t& used_size) const;
   int get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_t& max_offset) const ;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
@@ -201,6 +212,22 @@ public:
   static OB_INLINE ObJBVerType get_datetime_vertype() { return J_DATETIME_V0; }
   static OB_INLINE ObJBVerType get_timestamp_vertype() { return J_TIMESTAMP_V0; }
   static OB_INLINE ObJBVerType get_opaque_vertype() { return J_OPAQUE_V0; }
+
+  static OB_INLINE ObJBVerType get_ofloat_vertype() { return J_OFLOAT_V0; }
+  static OB_INLINE ObJBVerType get_odouble_vertype() { return J_ODOUBLE_V0; }
+  static OB_INLINE ObJBVerType get_odecimal_vertype() { return J_ODECIMAL_V0; }
+  static OB_INLINE ObJBVerType get_oint_vertype() { return J_OINT_V0; }
+  static OB_INLINE ObJBVerType get_olong_vertype() { return J_OLONG_V0; }
+  static OB_INLINE ObJBVerType get_obinary_vertype() { return J_OBINARY_V0; }
+  static OB_INLINE ObJBVerType get_ooid_vertype() { return J_OOID_V0; }
+  static OB_INLINE ObJBVerType get_orawhex_vertype() { return J_ORAWHEX_V0; }
+  static OB_INLINE ObJBVerType get_orawid_vertype() { return J_ORAWID_V0; }
+  static OB_INLINE ObJBVerType get_oracledate_vertype() { return J_ORACLEDATE_V0; }
+  static OB_INLINE ObJBVerType get_odate_vertype() { return J_ODATE_V0; }
+  static OB_INLINE ObJBVerType get_otimestamp_vertype() { return J_OTIMESTAMP_V0; }
+  static OB_INLINE ObJBVerType get_otimestamptz_vertype() { return J_OTIMESTAMPTZ_V0; }
+  static OB_INLINE ObJBVerType get_ointervalDS_vertype() { return J_ODAYSECOND_V0; }
+  static OB_INLINE ObJBVerType get_ointervalYM_vertype() { return J_OYEARMONTH_V0; }
 public:
   int64_t to_string(char *buf, int64_t len) const;
   /*
@@ -371,10 +398,10 @@ private:
     uint32_t idx_;       // the index of array or object array
     uint64_t offset_;    // cur node offset from 
     uint64_t obj_size_;  // cur node total size
-    ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint64_t idx, uint64_t offset, uint64_t obj_size) :
-                ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), idx_(idx), offset_(offset), obj_size_(obj_size) {}
-    ObJBNodeMeta() : ver_type_(0), size_type_(0), entry_type_(0), idx_(0), offset_(0), obj_size_(0) {}
-    ObJBNodeMeta(const ObJBNodeMeta& src): ver_type_(src.ver_type_), size_type_(src.size_type_), entry_type_(src.entry_type_),
+    ObJBNodeMeta(uint8_t ver_type, uint8_t size_type, uint8_t entry_type, uint32_t idx, uint64_t offset, uint64_t obj_size) :
+                ver_type_(ver_type), size_type_(size_type), entry_type_(entry_type), reserve(0), idx_(idx), offset_(offset), obj_size_(obj_size) {}
+    ObJBNodeMeta() : ver_type_(0), size_type_(0), entry_type_(0), reserve(0), idx_(0), offset_(0), obj_size_(0) {}
+    ObJBNodeMeta(const ObJBNodeMeta& src): ver_type_(src.ver_type_), size_type_(src.size_type_), entry_type_(src.entry_type_), reserve(0),
                 idx_(src.idx_), offset_(src.offset_), obj_size_(src.obj_size_) {}
   };
 
@@ -482,7 +509,6 @@ private:
   int check_valid_object_op(uint64_t index) const;
   int check_valid_array_op(uint64_t index) const;
   int create_new_binary(ObIJsonBase *&value, ObJsonBin *&new_bin) const;
-  int get_use_size(uint64_t& used_size) const;
 /* data */
 private:
   common::ObIAllocator *allocator_;
@@ -503,6 +529,7 @@ private:
     int64_t int_val_;
     uint64_t uint_val_;
     double double_val_;
+    float float_val_;
   };
   number::ObNumber number_;
   ObPrecision prec_;

@@ -774,7 +774,7 @@ TEST_F(TestNewRowReader, test_macro_block)
   ObDataStoreDesc desc;
   int64_t data_version = 1;
 
-  ret = desc.init(table_schema_, data_version, 1, MINI_MINOR_MERGE, true);
+  ret = desc.init(table_schema_, data_version, 1, MINOR_MERGE, true);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = writer.open(desc, start_seq);
   ASSERT_EQ(OB_SUCCESS, ret);

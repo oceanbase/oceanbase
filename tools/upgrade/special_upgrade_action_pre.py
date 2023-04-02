@@ -16,44 +16,20 @@ import my_utils
 import actions
 import sys
 
-#def modify_schema_history(conn, cur, tenant_ids):
-#  try:
-#    conn.autocommit = True
-#
-#    # disable ddl
-#    ori_enable_ddl = actions.get_ori_enable_ddl(cur)
-#    if ori_enable_ddl == 1:
-#      actions.set_parameter(cur, 'enable_ddl', 'False')
-#    log('tenant_ids: {0}'.format(tenant_ids))
-#    for tenant_id in tenant_ids:
-#      sql = """alter system change tenant tenant_id = {0}""".format(tenant_id)
-#      log(sql)
-#      cur.execute(sql)
-
-#    #####implement#####
-#
-#    # 还原默认 tenant
-#    sys_tenant_id = 1
-#    sql = """alter system change tenant tenant_id = {0}""".format(sys_tenant_id)
-#    log(sql)
-#    cur.execute(sql)
-#
-#    # enable ddl
-#    if ori_enable_ddl == 1:
-#      actions.set_parameter(cur, 'enable_ddl', 'True')
-#  except Exception, e:
-#    logging.warn("exec modify trigger failed")
-#    raise e
-#  logging.info('exec modify trigger finish')
-
 # 主库需要执行的升级动作
-def do_special_upgrade(conn, cur, tenant_id_list, user, passwd):
+def do_special_upgrade(conn, cur, timeout, user, passwd):
   # special upgrade action
 #升级语句对应的action要写在下面的actions begin和actions end这两行之间，
 #因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
-# 主库升级流程没加滚动升级步骤，或混部阶段DDL测试有相关case覆盖前，混部开始禁DDL
-  actions.set_parameter(cur, 'enable_ddl', 'False')
+  current_version = actions.fetch_observer_version(cur)
+  target_version = actions.get_current_cluster_version()
+  # when upgrade across version, disable enable_ddl/major_freeze
+  if current_version != target_version:
+    actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
+    actions.set_parameter(cur, 'enable_major_freeze', 'False', timeout)
+    actions.set_parameter(cur, 'enable_rebalance', 'False', timeout)
+    actions.set_parameter(cur, 'enable_rereplication', 'False', timeout)
 ####========******####======== actions begin ========####******========####
   return
 ####========******####========= actions end =========####******========####

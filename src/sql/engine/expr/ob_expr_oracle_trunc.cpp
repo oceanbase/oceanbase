@@ -208,7 +208,8 @@ int calc_trunc_expr_datetime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
         LOG_WARN("session is NULL", K(ret));
       } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*x_datum, arg_type,
                  get_timezone_info(session), ob_time,
-                 get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0))) {
+                 get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), false, 0,
+                 expr.args_[0]->obj_meta_.has_lob_header()))) {
         LOG_WARN("failed to convert obj to ob time", K(ret), K(*x_datum));
       } else {
         int64_t dt = 0;

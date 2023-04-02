@@ -118,7 +118,7 @@ public:
       type_names_(NULL)
   {
     if (OB_ISNULL(type_names)) {
-      SQL_SESSION_LOG(ERROR, "type names is NULL");
+      SQL_SESSION_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "type names is NULL");
     } else {
       // 这里没法按照编码规范检查下标
       for (count_ = 0; 0 != type_names[count_]; count_++);
@@ -888,6 +888,11 @@ public:
                                                 const ObBasicSysVar &sys_var,
                                                 const common::ObObj &val,
                                                 common::ObObj &out_val);
+  static int check_log_row_value_option_is_valid(sql::ObExecContext &ctx,
+                                                  const ObSetVar &set_var,
+                                                  const ObBasicSysVar &sys_var,
+                                                  const common::ObObj &in_val,
+                                                  common::ObObj &out_val);
 private:
   static int check_session_readonly(sql::ObExecContext &ctx,
                                     const ObSetVar &set_var,

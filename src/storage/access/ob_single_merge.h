@@ -47,10 +47,10 @@ private:
                                      bool &have_uncommited_row,
                                      bool &need_update_fuse_cache);
 private:
-  const blocksstable::ObDatumRowkey *rowkey_;
-  blocksstable::ObFuseRowValueHandle handle_;
-private:
   static const int64_t SINGLE_GET_FUSE_ROW_CACHE_PUT_COUNT_THRESHOLD = 50;
+  const blocksstable::ObDatumRowkey *rowkey_;
+  blocksstable::ObDatumRow full_row_;
+  blocksstable::ObFuseRowValueHandle handle_;
   ObFuseRowCacheFetcher fuse_row_cache_fetcher_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSingleMerge);

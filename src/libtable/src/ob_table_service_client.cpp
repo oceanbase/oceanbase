@@ -957,8 +957,8 @@ int ObTableServiceClientImpl::get_tablet_location(const ObString &table_name, co
     ObLSRestoreStatus role_status;
     if (OB_FAIL(fake_leader_loc.init_without_check(client_env_->get_one_server(), ObRole::LEADER,
                                        0, ObReplicaType::REPLICA_TYPE_FULL, ObReplicaProperty(),
-                                       role_status))) {
-      LOG_WARN("fail to init tablet replication location", K(ret));                                   
+                                       role_status, 1))) {
+      LOG_WARN("fail to init tablet replication location", K(ret));
     }
     if (OB_FAIL(tablet_location.add_replica_location(fake_leader_loc))) {
       LOG_WARN("failed to push back", K(ret));

@@ -60,10 +60,10 @@ public:
 protected:
   virtual int post_msg_(const share::ObLSID &receiver, ObTxMsg &msg) override;
   virtual int post_msg_(const ObAddr &receiver, ObTxMsg &msg) override;
-  virtual int get_gts_(int64_t &gts) override;
+  virtual int get_gts_(share::SCN &gts) override;
   virtual int wait_gts_elapse_commit_version_(bool &need_wait) override;
-  virtual int get_local_max_read_version_(int64_t &local_max_read_version) override;
-  virtual int update_local_max_commit_version_(const int64_t &) override;
+  virtual int get_local_max_read_version_(share::SCN &local_max_read_version) override;
+  virtual int update_local_max_commit_version_(const share::SCN &) override;
 private:
   MockObLogQueue log_queue_;
   int64_t addr_;

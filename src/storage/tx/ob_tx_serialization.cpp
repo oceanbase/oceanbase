@@ -59,6 +59,20 @@ int ObTxSerCompatByte::init(int64_t total_object_count)
   return ret;
 }
 
+int ObTxSerCompatByte::set_all_member_need_ser()
+{
+  int ret = OB_SUCCESS;
+
+  if (total_obj_cnt_ <= 0 || total_byte_cnt_ <= 0) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "compat bytes have not been inited", K(ret), KPC(this));
+  } else {
+    init_all_bytes_valid_(total_byte_cnt_);
+  }
+
+  return ret;
+}
+
 int ObTxSerCompatByte::set_object_flag(int64_t object_index, bool is_valid)
 {
   int ret = OB_SUCCESS;
@@ -123,7 +137,7 @@ void ObTxSerCompatByte::set_object_flag_(int64_t byte_index, uint8_t bit_index, 
   uint8_t bit_flag = BASE_VALID_BIT << bit_index;
 
   if (byte_index > total_byte_cnt_) {
-    TRANS_LOG(ERROR, "invalid byte index", K(byte_index), K(bit_index), K(is_valid), KPC(this));
+    TRANS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid byte index", K(byte_index), K(bit_index), K(is_valid), KPC(this));
   } else if (is_valid) {
     compat_bytes_[byte_index] |= bit_flag;
   } else {
@@ -138,7 +152,7 @@ void ObTxSerCompatByte::is_object_valid_(int64_t byte_index,
   uint8_t bit_check_flag = BASE_VALID_BIT << bit_index;
 
   if (byte_index > total_byte_cnt_) {
-    TRANS_LOG(ERROR, "invalid byte index", K(byte_index), K(bit_index), K(is_valid), KPC(this));
+    TRANS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid byte index", K(byte_index), K(bit_index), K(is_valid), KPC(this));
   } else {
     is_valid = (compat_bytes_[byte_index] & bit_check_flag) != 0;
   }

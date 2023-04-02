@@ -54,11 +54,12 @@ int ObTransformSimplifySet::transform_one_stmt(common::ObIArray<ObParentDMLStmt>
     // do nothing
   } else {
     ObSelectStmt * sel_stmt = static_cast<ObSelectStmt*>(stmt);
-    if (OB_FAIL(pruning_set_query(sel_stmt, is_happened))) {
+    if (OB_FAIL(pruning_set_query(parent_stmts, sel_stmt, is_happened))) {
       LOG_WARN("failed to pruning set query", K(ret));
     } else {
       stmt = sel_stmt;
       trans_happened |= is_happened;
+      OPT_TRACE("remove pruning set query:", is_happened);
       LOG_TRACE("succeed to pruning set query.", K(is_happened));
     }
     
@@ -68,6 +69,7 @@ int ObTransformSimplifySet::transform_one_stmt(common::ObIArray<ObParentDMLStmt>
         LOG_WARN("failed to add limit for union", K(ret));
       } else {
         trans_happened |= is_happened;
+        OPT_TRACE("add limit order distinct for union:", is_happened);
         LOG_TRACE("succeed to add limit order distinct for union.", K(is_happened));
       } 
     }
@@ -484,12 +486,14 @@ int ObTransformSimplifySet::check_set_stmt_removable(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformSimplifySet::pruning_set_query(ObSelectStmt *&select_stmt,
+int ObTransformSimplifySet::pruning_set_query(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                              ObSelectStmt *&select_stmt,
                                               bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   SimplifySetHelper helper;
   trans_happened = false;
+  bool first_can_remove = true;
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null pointer", K(ret));
@@ -505,6 +509,18 @@ int ObTransformSimplifySet::pruning_set_query(ObSelectStmt *&select_stmt,
         LOG_WARN("fail to check set stmt removeable", K(ret));
       } else if (need_remove && OB_FAIL(remove_list.push_back(i))) {
         LOG_WARN("fail to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && remove_list.count() > 0 &&
+        remove_list.at(0) == 0) {
+      if (OB_FAIL(check_first_stmt_removable(parent_stmts,
+                                             select_stmt,
+                                             remove_list,
+                                             first_can_remove))) {
+        LOG_WARN("failed to check first stmt removable", K(ret));
+      } else if(!first_can_remove &&
+                OB_FAIL(remove_list.remove(0))) {
+        LOG_WARN("fail to remove item", K(ret));
       }
     }
     // do the remove.
@@ -784,6 +800,43 @@ int ObTransformSimplifySet::replace_set_stmt_with_child_stmt(ObSelectStmt *&pare
     }
   }
   
+  return ret;
+}
+
+/*
+  consider following sql:
+    UPDATE test1 full join  test2 ON test1.h3=null set test1.h2='null' where test2.h2='akeyashi';
+  The full join will be expanded into a set of left join and anti join. If the left join is eliminated at this time,
+  the null column in the anti join will be filled in the dml table info of the upper update statement,
+  which may cause an exception.
+*/
+int ObTransformSimplifySet::check_first_stmt_removable(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                       ObSelectStmt *&stmt,
+                                                       ObIArray<int64_t> &remove_list,
+                                                       bool &can_remove)
+{
+  int ret = OB_SUCCESS;
+  can_remove = true;
+  ObDMLStmt* parent_stmt = NULL;
+  TableItem* table_item = NULL;
+  bool is_dml_table = false;
+  if (parent_stmts.empty()) {
+    // do nothing
+  } else if (OB_ISNULL(parent_stmt = parent_stmts.at(parent_stmts.count() - 1).stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!ObStmt::is_dml_write_stmt(parent_stmt->get_stmt_type())) {
+    // do nothing
+  } else if (OB_FAIL(ObTransformUtils::get_generated_table_item(*parent_stmt, stmt, table_item))) {
+    LOG_WARN("failed to get table_item", K(ret));
+  } else if (OB_ISNULL(table_item)) {
+    // do nothing
+  } else if (OB_FAIL(static_cast<ObDelUpdStmt *>(parent_stmt)->has_dml_table_info(table_item->table_id_,
+                                                                                  is_dml_table))) {
+    LOG_WARN("failed to check is dml table", K(ret));
+  } else if (is_dml_table) {
+    can_remove = false;
+  }
   return ret;
 }
 

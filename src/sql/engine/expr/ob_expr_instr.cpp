@@ -21,6 +21,7 @@
 #include "share/object/ob_obj_cast.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -123,6 +124,155 @@ int ObExprOracleInstr::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
+static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
+                                  ObTextStringIter &needle_iter,
+                                  ObIAllocator &calc_alloc,
+                                  const ObCollationType &calc_cs_type,
+                                  int64_t &pos_int,
+                                  int64_t &occ_int,
+                                  uint32_t &idx)
+{
+  int ret = OB_SUCCESS;
+  ObString haystack_data;
+  ObString needle_data;
+  int64_t needle_char_len = 0;
+  int64_t haystack_char_len = 0;
+  int64_t abs_pos_int = (pos_int > 0) ? (pos_int) : (-pos_int);
+  if (OB_FAIL(haystack_iter.init(0, NULL, &calc_alloc))) {
+    LOG_WARN("init haystack_iter failed ", K(ret), K(haystack_iter));
+  } else if (OB_FAIL(haystack_iter.get_char_len(haystack_char_len))) {
+    LOG_WARN("get haystack char len failed ", K(ret), K(haystack_iter));
+  } else if (OB_FAIL(needle_iter.init(0, NULL, &calc_alloc))) {
+    LOG_WARN("init needle_iter failed ", K(ret), K(needle_iter));
+  } else if (OB_FAIL(needle_iter.get_full_data(needle_data))) {
+    LOG_WARN("get needle data failed ", K(ret), K(needle_iter));
+  } else if (OB_FAIL(needle_iter.get_char_len(needle_char_len))) {
+    LOG_WARN("get needle char len failed ", K(ret), K(needle_iter));
+  } else if ((needle_char_len < 1) ||
+             (haystack_char_len - abs_pos_int + 1 < needle_char_len)) {
+    // pattern is empty string, just return zero
+    // pattern length is bigger than content, just return zero
+    idx = 0;
+  } else {
+    if (haystack_iter.is_outrow_lob()) {
+      haystack_iter.set_reserved_len(static_cast<size_t>(needle_char_len) - 1);
+      if (pos_int > 0) {
+        haystack_iter.set_start_offset(pos_int - 1); // start char len
+        pos_int = 1; // start pos is handled by lob mngr for out row lobs
+      } else {
+        haystack_iter.set_backward();
+      }
+    }
+
+    idx = 0;
+    bool not_first_search = false;
+    ObTextStringIterState state;
+    if (pos_int > 0) {
+      int64_t count = 0;
+      while (count < occ_int && (state = haystack_iter.get_next_block(haystack_data)) == TEXTSTRING_ITER_NEXT) {
+        if (not_first_search) {
+          idx = 0;
+          pos_int = 1;
+        }
+        for (; count < occ_int; ++count) {
+          idx = ObCharset::locate(calc_cs_type, haystack_data.ptr(), haystack_data.length(),
+                                  needle_data.ptr(), needle_data.length(), pos_int);
+          if (idx <= 0) {
+            break;
+          } else {
+            pos_int = idx + 1;
+          }
+        }
+        not_first_search = true;
+      }
+      if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+              haystack_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
+      } else {
+        if (idx != 0) {
+          // 需要加上get next block实际访问过的长度
+          idx += haystack_iter.get_last_accessed_len() + haystack_iter.get_start_offset();
+          if (haystack_iter.get_iter_count() > 1) { // minus reserved length
+            OB_ASSERT(idx > haystack_iter.get_reserved_char_len());
+            idx -= haystack_iter.get_reserved_char_len();
+          }
+        }
+      }
+    } else { // case pos_int < 0; pos_int == 0 handled by the outside caller
+      int count = 0;
+      int64_t total_char_len = 0;
+      int64_t max_access_len = 0;
+      bool access_inrow_lob_prefix = false; // only access prefix of an inrow lob
+      if (OB_FAIL(haystack_iter.get_char_len(total_char_len))) {
+        LOG_WARN("get haystack char len failed", K(ret), K(state));
+      } else if (haystack_iter.is_outrow_lob()) {
+        max_access_len = total_char_len + pos_int + 1;
+        haystack_iter.set_start_offset(-pos_int - 1); // start char len
+        pos_int = -1;
+      } else { // inrow case
+        max_access_len = total_char_len + pos_int + 1;
+        if (pos_int < -1) {
+          pos_int = -1;
+          access_inrow_lob_prefix = true;
+        }
+      }
+      while (OB_SUCC(ret)
+              && count < occ_int
+              && (state = haystack_iter.get_next_block(haystack_data)) == TEXTSTRING_ITER_NEXT) {
+        if (not_first_search) {
+          idx = 0;
+          pos_int = -1;
+        } else {
+          // compat with oracle, same content has different result in varchar or clob
+          // example:
+          // create table test_clob(v1 clob);
+          // insert into test_clob values(rpad('a',4000,'r'));
+          // select instr(v1,'rrrrrrr',-1,1000) from test_clob; // 2995
+          // select instr(v1,'rrrrrrr',-6,1000) from test_clob; // 2990
+          // However, if v1 type is varchar, result of both select stmt is 2995
+          if (access_inrow_lob_prefix) {
+            uint32 accessed_byte_len = ObCharset::charpos(calc_cs_type,
+                                                          haystack_data.ptr(),
+                                                          haystack_data.length(),
+                                                          max_access_len);
+            haystack_data.assign_ptr(haystack_data.ptr(), accessed_byte_len);
+          }
+        }
+        for (; count < occ_int && OB_SUCC(ret); ++count) {
+          if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(calc_alloc, calc_cs_type, haystack_data,
+                                                             needle_data, pos_int, 1, idx))) {
+            LOG_WARN("slow_reverse_search failed", K(ret), K(calc_cs_type),
+                      K(haystack_data), K(needle_data), K(pos_int), K(occ_int));
+          } else if (idx <= 0) {
+            break;
+          } else {
+            // Notice: negative pos
+            if (access_inrow_lob_prefix) {
+              pos_int = -1 -(max_access_len - idx + 1);
+            } else {
+              pos_int = -1 -(static_cast<int64_t>(haystack_iter.get_accessed_len()) - idx + 1);
+            }
+          }
+        }
+        not_first_search = true;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (haystack_iter.get_inner_ret() != OB_SUCCESS) ?
+              haystack_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(haystack_iter));
+      } else {
+        if (idx != 0 && !access_inrow_lob_prefix) {
+          // need to count accessed length by get_next_block
+          idx += (max_access_len - static_cast<int64_t>(haystack_iter.get_accessed_len()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprOracleInstr::calc(ObObj &result,
                             const ObObj &haystack,
                             const ObObj &needle,
@@ -186,21 +336,33 @@ int ObExprOracleInstr::calc(ObObj &result,
       } else {
         str1 = haystack.get_string();
       }
+
+      const ObObjType haystack_type = haystack.get_type();
+      const ObObjType needle_type = needle.get_type();
       if (OB_FAIL(ret)) {
-      } else if (pos > 0) {
-        for (int64_t i = 0; i < occ; ++i) {
-          idx = ObCharset::locate(calc_cs_type, str1.ptr(), str1.length(), str2.ptr(),
-                                  str2.length(), pos);
-          if (idx <= 0) {
-            break;
-          } else {
-            pos = idx + 1;
+      } else if (!ob_is_text_tc(haystack_type) && !ob_is_text_tc(needle_type)) {
+        if (pos > 0) {
+          for (int64_t i = 0; i < occ; ++i) {
+            idx = ObCharset::locate(calc_cs_type, str1.ptr(), str1.length(), str2.ptr(),
+                                    str2.length(), pos);
+            if (idx <= 0) {
+              break;
+            } else {
+              pos = idx + 1;
+            }
+          }
+        } else {
+          if (OB_FAIL(slow_reverse_search(*(expr_ctx.calc_buf_), calc_cs_type, str1,
+                                          str2, pos, occ, idx))) {
+            LOG_WARN("slow_reverse_search failed", K(ret), K(str1), K(str2), K(occ));
           }
         }
-      } else {
-        if (OB_FAIL(slow_reverse_search(*(expr_ctx.calc_buf_), calc_cs_type, str1,
-                                        str2, pos, occ, idx))) {
-          LOG_WARN("slow_reverse_search failed", K(ret), K(str1), K(str2), K(occ));
+      } else { // at least one of the inputs is text tc
+        ObTextStringIter haystack_iter(haystack_type, calc_cs_type, str1, haystack.has_lob_header());
+        ObTextStringIter needle_iter(needle_type, calc_cs_type, str2, needle.has_lob_header());
+        if (OB_FAIL(calc_oracle_instr_text(haystack_iter, needle_iter,
+                                           *expr_ctx.calc_buf_, calc_cs_type, pos, occ, idx))) {
+          LOG_WARN("calc oracle instr for text types failed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -380,12 +542,16 @@ int ObExprOracleInstr::calc_oracle_instr_expr(const ObExpr &expr, ObEvalCtx &ctx
   int64_t pos_int = 1;
   int64_t occ_int = 1;
   ObCollationType calc_cs_type = CS_TYPE_INVALID;
+  const ObObjType needle_type = expr.args_[1]->datum_meta_.type_;
+  const ObObjType haystack_type = expr.args_[0]->datum_meta_.type_;
+  bool haystack_has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+  bool needle_has_lob_header = expr.args_[1]->obj_meta_.has_lob_header();
   if (OB_FAIL(ObExprOracleInstr::calc_oracle_instr_arg(expr, ctx, is_null, haystack,
               needle, pos_int, occ_int, calc_cs_type))) {
     LOG_WARN("calc_oracle_instr_arg failed", K(ret));
   } else if (is_null) {
     res_datum.set_null();
-  } else if (0 == haystack->get_string().length()) {
+  } else if (0 == haystack->get_string().length() || ob_is_empty_lob(haystack_type, *haystack, haystack_has_lob_header)) {
     number::ObNumber res_nmb;
     ObNumStackOnceAlloc tmp_alloc;
     if (OB_FAIL(res_nmb.from((uint64_t)(0), tmp_alloc))) {
@@ -409,26 +575,38 @@ int ObExprOracleInstr::calc_oracle_instr_expr(const ObExpr &expr, ObEvalCtx &ctx
         res_datum.set_number(res_nmb);
       }
     } else {
-      const ObString &str1 = haystack->get_string();
-      const ObString &str2 = needle->get_string();
       uint32_t idx = 0;
-      if (pos_int > 0) {
-        for (int64_t i = 0; i < occ_int; ++i) {
-          idx = ObCharset::locate(calc_cs_type, str1.ptr(), str1.length(),
-                                  str2.ptr(), str2.length(),pos_int);
-          if (idx <= 0) {
-            break;
-          } else {
-            pos_int = idx + 1;
+      if (!ob_is_text_tc(haystack_type) && !ob_is_text_tc(needle_type)) {
+        const ObString &str1 = haystack->get_string();
+        const ObString &str2 = needle->get_string();
+        if (pos_int > 0) {
+          for (int64_t i = 0; i < occ_int; ++i) {
+            idx = ObCharset::locate(calc_cs_type, str1.ptr(), str1.length(),
+                                    str2.ptr(), str2.length(),pos_int);
+            if (idx <= 0) {
+              break;
+            } else {
+              pos_int = idx + 1;
+            }
+          }
+        } else {
+          ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+          ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
+          if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(tmp_alloc, calc_cs_type, str1,
+                                                            str2, pos_int, occ_int, idx))) {
+            LOG_WARN("slow_reverse_search failed", K(ret), K(calc_cs_type), K(str1), K(str2),
+                      K(pos_int), K(occ_int));
           }
         }
-      } else {
+      } else { // at least one of the inputs is text tc
         ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-        ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
-        if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(tmp_alloc, calc_cs_type, str1,
-                                                           str2, pos_int, occ_int, idx))) {
-          LOG_WARN("slow_reverse_search failed", K(ret), K(calc_cs_type), K(str1), K(str2),
-                    K(pos_int), K(occ_int));
+        ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+        ObTextStringIter haystack_iter(haystack_type, calc_cs_type, haystack->get_string(), haystack_has_lob_header);
+        ObTextStringIter needle_iter(needle_type, calc_cs_type, needle->get_string(), needle_has_lob_header);
+
+        if (OB_FAIL(calc_oracle_instr_text(haystack_iter, needle_iter,
+                                          calc_alloc, calc_cs_type, pos_int, occ_int, idx))) {
+          LOG_WARN("calc oracle instr for text types failed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {

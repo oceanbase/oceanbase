@@ -67,7 +67,7 @@ struct ObSessionParam final
 {
 public:
   ObSessionParam()
-    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), nls_formats_{}
+    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), use_external_session_(false), nls_formats_{}
   {}
   ~ObSessionParam() = default;
 public:
@@ -75,6 +75,7 @@ public:
   ObTimeZoneInfoWrap *tz_info_wrap_;
   ObSessionDDLInfo ddl_info_;
   bool is_load_data_exec_;
+  bool use_external_session_; // need init remote inner sql conn with sess getting from sess mgr
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
@@ -100,6 +101,7 @@ public:
   // execute query and return data result
   virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override;
   int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param);
+  int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr);
   //only for across cluster
   //cluster_id can not GCONF.cluster_id
   virtual int read(ReadResult &res,
@@ -110,7 +112,8 @@ public:
   // execute update sql
   virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
   int write(const uint64_t tenant_id, const ObString sql, int64_t &affected_rows, int64_t compatibility_mode,
-        const ObSessionParam *session_param = nullptr);
+        const ObSessionParam *session_param = nullptr,
+        const common::ObAddr *sql_exec_addr = nullptr);
   using ObISQLClient::write;
 
   bool is_inited() const { return NULL != pool_; }
@@ -129,7 +132,7 @@ protected:
   int acquire(sqlclient::ObISQLConnection *&conn) { return this->acquire(OB_INVALID_TENANT_ID, conn); }
   int acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn);
   int read(sqlclient::ObISQLConnection *conn, ReadResult &result,
-           const uint64_t tenant_id, const char *sql);
+           const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr = nullptr);
 
   sqlclient::ObISQLConnectionPool *pool_;
 
@@ -168,19 +171,22 @@ public:
                          const common::ObString &conn_str,
                          const common::ObString &cluster_str,
                          const sqlclient::dblink_param_ctx &param_ctx);
-  int acquire_dblink(uint64_t dblink_id, sqlclient::DblinkDriverProto dblink_type, sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0, int64_t timeout_sec = 0);
+  int acquire_dblink(uint64_t dblink_id,
+                     sqlclient::DblinkDriverProto dblink_type,
+                     const sqlclient::dblink_param_ctx &param_ctx,
+                     sqlclient::ObISQLConnection *&dblink_conn,
+                     uint32_t sessid = 0,
+                     int64_t sql_request_level = 0);
   int release_dblink(/*uint64_t dblink_id,*/sqlclient::DblinkDriverProto dblink_type, sqlclient::ObISQLConnection *dblink_conn, uint32_t sessid = 0);
-  int dblink_read(const uint64_t dblink_id, sqlclient::DblinkDriverProto dblink_type, ReadResult &result,
-                  const char *sql, int &dblink_errno,
-                  const char *&dblink_errmsg, uint32_t sessid = 0);
   int dblink_read(sqlclient::ObISQLConnection *dblink_conn, ReadResult &result, const char *sql);
+  int dblink_write(sqlclient::ObISQLConnection *dblink_conn, int64_t &affected_rows, const char *sql);
   int rollback(sqlclient::ObISQLConnection *dblink_conn);
   int switch_dblink_conn_pool(sqlclient::DblinkDriverProto type, sqlclient::ObISQLConnectionPool *&dblink_conn_pool);
   int set_dblink_pool_charset(uint64_t dblink_id);
   inline sqlclient::ObDbLinkConnectionPool *get_dblink_conn_pool() { return link_pool_; }
+  static int execute_init_sql(sqlclient::ObISQLConnection *dblink_conn, int link_type);
 private:
   int prepare_enviroment(sqlclient::ObISQLConnection *dblink_conn, int link_type);
-  int execute_init_sql(sqlclient::ObISQLConnection *dblink_conn, int link_type);
   sqlclient::ObDbLinkConnectionPool *link_pool_;
 };
 

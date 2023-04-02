@@ -24,7 +24,7 @@
 #include "lib/allocator/ob_fifo_allocator.h"              // ObFIFOAllocator
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"   // ObConcurrentFIFOAllocator
 #include "lib/allocator/ob_allocator.h"                   // ObIAllocator
-#include "ob_log_schema_cache_info.h"                     // TableSchemaInfo
+#include "deps/oblib/src/common/rowkey/ob_rowkey_info.h"  // ObRowkeyInfo, ObIndexInfo
 
 namespace oceanbase
 {
@@ -37,11 +37,18 @@ class ObSimpleTableSchemaV2;
 class ObColumnSchemaV2;
 } // namespace schema
 } // namespace share
+namespace datadict
+{
+class ObDictTableMeta;
+}
 
 namespace libobcdc
 {
 class ObLogSchemaGuard;
 class IObLogSchemaGetter;
+class TableSchemaInfo;
+class ObDictTenantInfo;
+class ObDictTenantInfoGuard;
 
 typedef ObLogSchemaGuard ObLogSchemaGuard;
 
@@ -67,7 +74,13 @@ public:
       const uint64_t tenant_id,
       const int64_t global_schema_version,
       const share::schema::ObSimpleTableSchemaV2 *table_schema,
-      IObLogSchemaGetter &schema_getter,
+      ITableMeta *&table_meta,
+      volatile bool &stop_flag) = 0;
+
+  virtual int get_table_meta(
+      const uint64_t tenant_id,
+      const int64_t global_schema_version,
+      const datadict::ObDictTableMeta *table_schema,
       ITableMeta *&table_meta,
       volatile bool &stop_flag) = 0;
 
@@ -89,6 +102,13 @@ public:
       IDBMeta *&db_meta,
       volatile bool &stop_flag) = 0;
 
+  // for using data_dict
+  virtual int get_db_meta(
+      const uint64_t tenant_id,
+      const DBSchemaInfo &db_schema_info,
+      IDBMeta *&db_meta,
+      volatile bool &stop_flag) = 0;
+
   // decrease ref count of DB Meta
   virtual void revert_db_meta(IDBMeta *db_meta) = 0;
 
@@ -100,9 +120,11 @@ public:
   // delete all data of the deleted database and decrease ref count of the database meta by 1 for all version
   virtual int drop_database(const int64_t database_id) = 0;
 
-  virtual int get_table_schema_meta(const int64_t version,
-    const uint64_t table_id,
-    TableSchemaInfo *&tb_schema_info) = 0;
+  virtual int get_table_schema_meta(
+      const int64_t version,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      TableSchemaInfo *&tb_schema_info) = 0;
 };
 
 class ObLogMetaManager : public IObLogMetaManager
@@ -116,7 +138,12 @@ public:
       const uint64_t tenant_id,
       const int64_t global_schema_version,
       const share::schema::ObSimpleTableSchemaV2 *table_schema,
-      IObLogSchemaGetter &schema_getter,
+      ITableMeta *&table_meta,
+      volatile bool &stop_flag);
+  virtual int get_table_meta(
+      const uint64_t tenant_id,
+      const int64_t global_schema_version,
+      const datadict::ObDictTableMeta *table_schema,
       ITableMeta *&table_meta,
       volatile bool &stop_flag);
   virtual ITableMeta *get_ddl_table_meta() { return ddl_table_meta_; }
@@ -127,12 +154,20 @@ public:
       ObLogSchemaGuard &schema_mgr,
       IDBMeta *&db_meta,
       volatile bool &stop_flag);
+
+  virtual int get_db_meta(
+      const uint64_t tenant_id,
+      const DBSchemaInfo &db_schema_info,
+      IDBMeta *&db_meta,
+      volatile bool &stop_flag);
   virtual void revert_db_meta(IDBMeta *db_meta);
   virtual int drop_table(const int64_t table_id);
   virtual int drop_database(const int64_t database_id);
-  virtual int get_table_schema_meta(const int64_t version,
-    const uint64_t table_id,
-    TableSchemaInfo *&tb_schema_info);
+  virtual int get_table_schema_meta(
+      const int64_t version,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      TableSchemaInfo *&tb_schema_info);
 public:
   int init(ObObj2strHelper *obj2str_helper,
       const bool enable_output_hidden_primary_key);
@@ -175,41 +210,69 @@ private:
     MetaInfo();
     ~MetaInfo();
 
+    TO_STRING_KV(K_(num), K_(head), K_(tail));
+
     int get(const int64_t target_version, Type *&meta);
     int set(const int64_t version, Type *meta);
   };
 
-  struct MetaKey
+  class MetaKey
   {
-    uint64_t id_;
+  public:
+    MetaKey(
+        const uint64_t tenant_id,
+        const uint64_t id) : tenant_id_(tenant_id), id_(id) {}
 
-    bool is_valid() const { return common::OB_INVALID_ID != id_; }
-    uint64_t hash() const { return id_; }
-    bool operator== (const MetaKey & other) const { return id_ == other.id_; }
-    TO_STRING_KV(K_(id));
+    bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != id_; }
+    uint64_t hash() const
+    {
+      uint64_t hash_val = 0;
+      hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
+      hash_val = common::murmurhash(&id_, sizeof(id_), hash_val);
+      return hash_val;
+    }
+    bool operator==(const MetaKey &other) const
+    { return (tenant_id_ == other.tenant_id_) && (id_ == other.id_); }
+
+    OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
+    OB_INLINE uint64_t get_id() const { return id_; }
+
+    TO_STRING_KV(K_(tenant_id), K_(id));
+  private:
+    uint64_t tenant_id_;
+    uint64_t id_; // schema key id
   };
 
   // multi-version table
-  struct MulVerTableKey
+  class MulVerTableKey
   {
-    int64_t version_;
-    uint64_t table_id_;
-
-    MulVerTableKey(const int64_t version,
-        const uint64_t table_id) : version_(version), table_id_(table_id) {}
+  public:
+    MulVerTableKey(
+        const int64_t version,
+        const uint64_t tenant_id,
+        const uint64_t table_id) : version_(version), tenant_id_(tenant_id), table_id_(table_id) {}
 
     uint64_t hash() const
     {
       uint64_t hash_val = 0;
       hash_val = common::murmurhash(&version_, sizeof(version_), hash_val);
+      hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
       hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
 
       return hash_val;
     }
-    bool operator== (const MulVerTableKey & other) const
-    { return (version_ == other.version_) && (table_id_ == other.table_id_); }
+    bool operator==(const MulVerTableKey &other) const
+    { return (version_ == other.version_) && (tenant_id_ == other.tenant_id_) && (table_id_ == other.table_id_); }
 
-    TO_STRING_KV(K_(version), K_(table_id));
+    OB_INLINE int64_t get_version() const { return version_; }
+    OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
+    OB_INLINE uint64_t get_table_id() const { return table_id_; }
+
+    TO_STRING_KV(K_(version), K_(tenant_id), K_(table_id));
+  private:
+    int64_t version_;
+    uint64_t tenant_id_;
+    uint64_t table_id_;
   };
 
   typedef MetaNode<ITableMeta> TableMetaNode;
@@ -222,33 +285,44 @@ private:
   typedef common::ObLinearHashMap<MulVerTableKey, TableSchemaInfo *> MulVerTableSchemaMap;
 
 private:
+  int get_dict_tenant_info_(
+      const uint64_t tenant_id,
+      ObDictTenantInfoGuard &dict_tenant_info_guard,
+      ObDictTenantInfo *&tenant_info);
   template <class MetaMapType, class MetaInfoType>
   int get_meta_info_(MetaMapType &meta_map, const MetaKey &key, MetaInfoType *&meta_info);
   template <class MetaInfoType, class MetaType>
   int get_meta_from_meta_info_(MetaInfoType *meta_info, const int64_t version, MetaType *&meta);
-  int add_and_get_table_meta_(TableMetaInfo *meta_info,
-      const share::schema::ObTableSchema *table_schema,
-      ObLogSchemaGuard &schema_mgr,
+  template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+  int add_and_get_table_meta_(
+      TableMetaInfo *meta_info,
+      const TABLE_SCHEMA *table_schema,
+      SCHEMA_GUARD &schema_mgr,
       ITableMeta *&table_meta,
       volatile bool &stop_flag);
-  int add_and_get_db_meta_(DBMetaInfo *meta_info,
+  int add_and_get_db_meta_(
+      DBMetaInfo *meta_info,
       const DBSchemaInfo &db_schema_info,
       const TenantSchemaInfo &tenant_schema_info,
       IDBMeta *&db_meta);
   template <class MetaType> static int inc_meta_ref_(MetaType *meta);
   template <class MetaType> static int dec_meta_ref_(MetaType *meta, int64_t &ref_cnt);
-  int build_table_meta_(const share::schema::ObTableSchema *schema,
-      ObLogSchemaGuard &schema_mgr,
+  template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+  int build_table_meta_(
+      const TABLE_SCHEMA *schema,
+      SCHEMA_GUARD &schema_mgr,
       ITableMeta *&table_meta,
       volatile bool &stop_flag);
   int build_db_meta_(
       const DBSchemaInfo &db_schema_info,
       const TenantSchemaInfo &tenant_schema_info,
       IDBMeta *&db_meta);
-  int build_column_metas_(ITableMeta *table_meta,
-      const share::schema::ObTableSchema *table_schema,
+  template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+  int build_column_metas_(
+      ITableMeta *table_meta,
+      const TABLE_SCHEMA *table_schema,
       TableSchemaInfo &tb_schema_info,
-      ObLogSchemaGuard &schema_mgr,
+      SCHEMA_GUARD &schema_mgr,
       volatile bool &stop_flag);
   // check_column and exact column properties useful for column_schema.
   //
@@ -256,33 +330,59 @@ private:
   // @param [in]    column_schema         corresponding column_schema(get from OBServer or DICT),
   // @param [out]   is_usr_column         is column need by logmsg.
   // @param [out]   is_heap_table_pk_increment_column  is pk_increment column of heap table.
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int check_column_(
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObColumnSchemaV2 &column_schema,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_schema,
       bool &is_usr_column,
       bool &is_heap_table_pk_increment_column);
-  int set_column_meta_(IColMeta *col_meta,
-      const share::schema::ObColumnSchemaV2 &column_schema,
-      const share::schema::ObTableSchema &table_schema);
-  int set_primary_keys_(ITableMeta *table_meta,
-      const share::schema::ObTableSchema *schema,
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
+  int set_column_meta_(
+      IColMeta *col_meta,
+      const COLUMN_SCHEMA &column_schema,
+      const TABLE_SCHEMA &table_schema);
+  template<class TABLE_SCHEMA>
+  int set_primary_keys_(
+      ITableMeta *table_meta,
+      const TABLE_SCHEMA*schema,
       const TableSchemaInfo &tb_schema_info);
-  int set_unique_keys_(ITableMeta *table_meta,
-      const share::schema::ObTableSchema *table_schema,
+  template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+  int set_unique_keys_(
+      ITableMeta *table_meta,
+      const TABLE_SCHEMA *table_schema,
       const TableSchemaInfo &tb_schema_info,
-      ObLogSchemaGuard &schema_mgr,
+      SCHEMA_GUARD &schema_mgr,
       volatile bool &stop_flag);
+
   int set_unique_keys_from_unique_index_table_(
       const share::schema::ObTableSchema *table_schema,
-      const TableSchemaInfo &tb_schema_info,
       const share::schema::ObTableSchema *index_table_schema,
+      const TableSchemaInfo &tb_schema_info,
       bool *is_uk_column_array,
       ObLogAdaptString &uk_info,
       int64_t &valid_uk_column_count);
-  int set_unique_keys_from_all_index_table_(
-      const share::schema::ObTableSchema &table_schema,
+  int set_unique_keys_from_unique_index_table_(
+      const datadict::ObDictTableMeta *table_schema,
+      const datadict::ObDictTableMeta *index_table_schema,
       const TableSchemaInfo &tb_schema_info,
-      ObLogSchemaGuard &schema_mgr,
+      bool *is_uk_column_array,
+      ObLogAdaptString &uk_info,
+      int64_t &valid_uk_column_count);
+  template<class TABLE_SCHEMA>
+  int build_unique_keys_with_index_column_(
+      const TABLE_SCHEMA *table_schema,
+      const TABLE_SCHEMA *index_table_schema,
+      const common::ObIndexInfo &index_info,
+      const int64_t index_column_idx,
+      const TableSchemaInfo &tb_schema_info,
+      bool *is_uk_column_array,
+      ObLogAdaptString &uk_info,
+      int64_t &valid_uk_column_count);
+  template<class SCHEMA_GUARD, class TABLE_SCHEMA>
+  int set_unique_keys_from_all_index_table_(
+      const TABLE_SCHEMA &table_schema,
+      const TableSchemaInfo &tb_schema_info,
+      SCHEMA_GUARD &schema_mgr,
       volatile bool &stop_flag,
       bool *is_uk_column_array,
       ObLogAdaptString &uk_info,
@@ -295,19 +395,26 @@ private:
 
   int alloc_table_schema_info_(TableSchemaInfo *&tb_schema_info);
   int free_table_schema_info_(TableSchemaInfo *&tb_schema_info);
+  template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int set_column_schema_info_(
-      const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObColumnSchemaV2 &column_table_schema,
+      const TABLE_SCHEMA &table_schema,
+      const COLUMN_SCHEMA &column_table_schema,
       const int16_t column_stored_idx,
       const bool is_usr_column,
       const int16_t usr_column_idx,
       TableSchemaInfo &tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap);
-  int set_table_schema_(const int64_t version,
+  int set_table_schema_(
+      const int64_t version,
+      const uint64_t tenant_id,
       const uint64_t table_id,
       const char *table_name,
       const int64_t non_hidden_column_cnt,
       TableSchemaInfo &tb_schema_info);
+  int try_erase_table_schema_(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t version);
 
 private:
   bool                  inited_;
@@ -337,7 +444,7 @@ ObLogMetaManager::MetaInfo<Type>::MetaInfo() :
     num_(0),
     head_(NULL),
     tail_(NULL),
-    lock_(),
+    lock_(common::ObLatchIds::OBCDC_METAINFO_LOCK),
     base_allocator_(common::ObModIds::OB_LOG_META_INFO),
     fifo_allocator_()
 {

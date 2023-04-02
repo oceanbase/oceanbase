@@ -214,7 +214,7 @@ void ObMapQueueThread<MAX_THREAD_NUM>::stop()
         int pthread_ret = pthread_join(tc.tid_, NULL);
 
         if (0 != pthread_ret) {
-          LIB_LOG(ERROR, "pthread_join fail", "thread_id", tc.tid_, K(pthread_ret));
+          LIB_LOG_RET(ERROR, OB_ERR_SYS, "pthread_join fail", "thread_id", tc.tid_, K(pthread_ret));
         }
 
         tc.tid_ = 0;
@@ -287,9 +287,9 @@ void ObMapQueueThread<MAX_THREAD_NUM>::cond_timedwait(const int64_t thread_index
     const int64_t wait_time)
 {
   if (OB_UNLIKELY(! inited_)) {
-    LIB_LOG(ERROR, "not init");
+    LIB_LOG_RET(ERROR, OB_NOT_INIT, "not init");
   } else if (OB_UNLIKELY(thread_index < 0) || OB_UNLIKELY(thread_index >= thread_num_)) {
-    LIB_LOG(ERROR, "invalid thread index", K(thread_index), K(thread_num_));
+    LIB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid thread index", K(thread_index), K(thread_num_));
   } else {
     tc_[thread_index].cond_.timedwait(wait_time);
   }

@@ -100,12 +100,13 @@ int ObPxMultiPartUpdateOp::update_row_to_das(const ObDASTabletLoc *tablet_loc)
 {
   int ret = OB_SUCCESS;
   bool is_skipped = false;
+  ObChunkDatumStore::StoredRow* stored_row = nullptr;
   ++upd_rtdef_.cur_row_num_;
   if (OB_FAIL(ObDMLService::process_update_row(MY_SPEC.upd_ctdef_, upd_rtdef_, is_skipped, *this))) {
     LOG_WARN("process update row failed", K(ret));
   } else if (is_skipped) {
     //do nothing
-  } else if (OB_FAIL(ObDMLService::update_row(MY_SPEC.upd_ctdef_, upd_rtdef_, tablet_loc, tablet_loc, dml_rtctx_))) {
+  } else if (OB_FAIL(ObDMLService::update_row(MY_SPEC.upd_ctdef_, upd_rtdef_, tablet_loc, tablet_loc, dml_rtctx_, stored_row, stored_row, stored_row))) {
     LOG_WARN("insert row with das failed", K(ret));
   } else {
     ++upd_rtdef_.found_rows_;
@@ -232,6 +233,8 @@ int ObPxMultiPartUpdateOp::write_rows(ObExecContext &ctx,
         }
       } else if (OB_FAIL(update_row_to_das(tablet_loc))) {
         LOG_WARN("update row to das failed", K(ret));
+      } else if (OB_FAIL(discharge_das_write_buffer())) {
+        LOG_WARN("failed to submit all dml task when the buffer of das op is full", K(ret));
       }
     }
 

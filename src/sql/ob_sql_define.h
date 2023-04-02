@@ -104,7 +104,18 @@ enum PathType
   SUBQUERY,
   FAKE_CTE_TABLE_ACCESS,
   FUNCTION_TABLE_ACCESS,
-  TEMP_TABLE_ACCESS
+  TEMP_TABLE_ACCESS,
+  JSON_TABLE_ACCESS
+};
+
+enum JtColType {
+  INVALID_COL_TYPE = 0,
+  COL_TYPE_ORDINALITY, // 1
+  COL_TYPE_EXISTS, // 2
+  COL_TYPE_QUERY, // 3
+  COL_TYPE_VALUE, // 4
+  NESTED_COL_TYPE, // 5
+  COL_TYPE_QUERY_JSON_COL = 6,
 };
 
 enum ObNameTypeClass
@@ -352,7 +363,9 @@ struct ObPQDistributeMethod
     DEF(PARTITION_RANDOM,) \
     DEF(RANGE,)\
     DEF(PARTITION_RANGE,)\
-    DEF(LOCAL,) // represents pull to local
+    DEF(HYBRID_HASH_BROADCAST,) /* aka PX SEND HYBRID HASH */ \
+    DEF(HYBRID_HASH_RANDOM,) /* aka PX SEND HYBRID HASH */ \
+    DEF(LOCAL,) /* represents pull to local */
 
 DECLARE_ENUM(Type, type, PQ_DIST_METHOD_DEF, static);
 
@@ -443,7 +456,8 @@ enum ObExecuteMode
   EXECUTE_PS_FETCH,
   EXECUTE_PS_SEND_PIECE,
   EXECUTE_PS_GET_PIECE,
-  EXECUTE_PS_SEND_LONG_DATA
+  EXECUTE_PS_SEND_LONG_DATA,
+  EXECUTE_PL_EXECUTE
 };
 
 
@@ -498,6 +512,7 @@ enum PXParallelRule
   MANUAL_TABLE_HINT, // /*+ parallel(t1 3) */
   SESSION_FORCE_PARALLEL, // alter session force parallel query parallel 3;
   MANUAL_TABLE_DOP, // create table t1 (...) parallel 3;
+  PL_UDF_DAS_FORCE_SERIALIZE, //stmt has_pl_udf will use das, force serialize;
   MAX_OPTION
 };
 
@@ -512,6 +527,7 @@ inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
     "MANUAL_TABLE_HINT",
     "SESSION_FORCE_PARALLEL",
     "MANUAL_TABLE_DOP",
+    "PL_UDF_DAS_FORCE_SERIALIZE",
     "MAX_OPTION",
   };
   if (OB_LIKELY(px_parallel_ruel >= NOT_USE_PX)
@@ -594,6 +610,7 @@ struct ObWinfuncOptimizationOpt
   union {
     struct {
       uint64_t disable_range_distribution_:1;
+      uint64_t disable_reporting_wf_pushdown_:1;
       // add more options here.
     };
     uint64_t v_;

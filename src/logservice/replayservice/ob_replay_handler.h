@@ -24,6 +24,10 @@ namespace storage
 {
 class ObLS;
 }
+namespace share
+{
+class SCN;
+}
 namespace logservice
 {
 class ObLogService;
@@ -42,7 +46,7 @@ public:
              const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const int64_t ts_ns);
+             const share::SCN &scn);
 private:
   typedef common::RWLock::WLockGuard WLockGuard;
   typedef common::RWLock::RLockGuard RLockGuard;

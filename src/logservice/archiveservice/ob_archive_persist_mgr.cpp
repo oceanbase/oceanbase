@@ -37,8 +37,10 @@
 #include "share/ls/ob_ls_recovery_stat_operator.h"         // ObLSRecoveryStatOperator
 
 #define STAT(level, fmt, args...) ARCHIVE_LOG(level, "[LOG_STREAM] [ARCHIVE_PROGRESS] " fmt, ##args);
+#define STAT_RET(level, errcode, fmt, args...) ARCHIVE_LOG_RET(level, errcode, "[LOG_STREAM] [ARCHIVE_PROGRESS] " fmt, ##args);
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define WSTAT(fmt, args...) STAT(WARN, fmt, ##args)
+#define WSTAT_RET(errcode, fmt, args...) STAT_RET(WARN, errcode, fmt, ##args)
 #define TSTAT(fmt, args...) STAT(TRACE, fmt, ##args)
 
 namespace oceanbase
@@ -72,7 +74,9 @@ ObArchivePersistMgr::ObArchivePersistMgr() :
   inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID),
   tenant_key_(),
+  dest_no_(-1),
   state_(),
+  state_rwlock_(common::ObLatchIds::ARCHIVE_PERSIST_MGR_LOCK),
   proxy_(NULL),
   ls_svr_(NULL),
   ls_mgr_(NULL),
@@ -133,11 +137,14 @@ void ObArchivePersistMgr::destroy()
   }
 }
 
-int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, bool &force, bool &ignore)
+int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, SCN &scn, bool &force, bool &ignore)
 {
   int ret = OB_SUCCESS;
   ArchiveKey key;
   ObArchivePersistValue *value = NULL;
+  ObLSArchivePersistInfo info;
+  bool is_madatory = false;
+  int64_t unused_speed = 0;
   ObArchiveRoundState state;
   {
     RLockGuard guard(state_rwlock_);
@@ -146,9 +153,6 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, boo
     key.round_ = tenant_key_.round_;
     state = state_;
   }
-  //TODO optional / mandatory mode to support
-  force = true;
-  UNUSED(force);
   if (OB_UNLIKELY(! id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id));
@@ -167,12 +171,15 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, boo
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "archive progress value is NULL", K(ret), K(id), K(value));
   } else {
-    if (ArchiveKey(value->info_.incarnation_, value->info_.key_.dest_id_, value->info_.key_.round_id_) != key) {
+    value->get(is_madatory, unused_speed, info);
+    if (ArchiveKey(info.incarnation_, info.key_.dest_id_, info.key_.round_id_) != key) {
       ret = OB_EAGAIN;
       ARCHIVE_LOG(WARN, "ls archive progress not match with tenant, need retry",
-          K(key), "PersistInfo", value->info_);
+          K(key), K(is_madatory), K(info));
     } else {
-      lsn = value->info_.lsn_;
+      lsn = palf::LSN(info.lsn_);
+      scn = info.checkpoint_scn_;
+      force = is_madatory;
     }
     map_.revert(value);
   }
@@ -183,6 +190,8 @@ int ObArchivePersistMgr::get_ls_archive_speed(const ObLSID &id, int64_t &speed, 
 {
   int ret = OB_SUCCESS;
   ObArchivePersistValue *value = NULL;
+  ObLSArchivePersistInfo info;
+  bool is_madatory = false;
   ArchiveKey key;
   ObArchiveRoundState state;
   {
@@ -192,10 +201,7 @@ int ObArchivePersistMgr::get_ls_archive_speed(const ObLSID &id, int64_t &speed, 
     key.round_ = tenant_key_.round_;
     state = state_;
   }
-  //TODO optional / mandatory mode to support
-  force = true;
   speed = 0;
-  UNUSED(force);
   if (OB_UNLIKELY(! id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id));
@@ -205,6 +211,7 @@ int ObArchivePersistMgr::get_ls_archive_speed(const ObLSID &id, int64_t &speed, 
   } else if (OB_FAIL(map_.get(id, value))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       // archive progress not exist, need retry
+      ret = OB_EAGAIN;
     } else {
       ARCHIVE_LOG(WARN, "get archive progress failed", K(ret), K(id));
     }
@@ -212,9 +219,13 @@ int ObArchivePersistMgr::get_ls_archive_speed(const ObLSID &id, int64_t &speed, 
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "archive progress value is NULL", K(ret), K(id), K(value));
   } else {
-    if (ArchiveKey(value->info_.incarnation_, value->info_.key_.dest_id_, value->info_.key_.round_id_) != key) {
+    value->get(is_madatory, speed, info);
+    if (ArchiveKey(info.incarnation_, info.key_.dest_id_, info.key_.round_id_) != key) {
+      ret = OB_EAGAIN;
+      ARCHIVE_LOG(WARN, "ls archive progress not match with tenant, need retry",
+          K(key), K(is_madatory), K(speed), K(info));
     } else {
-      speed = value->speed_;
+      force = is_madatory;
     }
     map_.revert(value);
   }
@@ -236,6 +247,31 @@ int ObArchivePersistMgr::get_archive_persist_info(const ObLSID &id,
     ret = OB_ENTRY_NOT_EXIST;
   } else {
     ARCHIVE_LOG(INFO, "get archive persist info succ", K(info));
+  }
+  return ret;
+}
+
+int ObArchivePersistMgr::check_tenant_in_archive(bool &in_archive)
+{
+  int ret = OB_SUCCESS;
+  ObTenantArchiveRoundAttr attr;
+  in_archive = true;
+  if (OB_FAIL(load_archive_round_attr(attr))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      in_archive = false;
+    } else {
+      ARCHIVE_LOG(WARN, "load archive round attr failed", K(ret));
+    }
+  } else if (OB_UNLIKELY(! attr.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "tenant archive round attr is invalid", K(ret), K(attr));
+  } else {
+    in_archive = attr.state_.is_beginning()
+      || attr.state_.is_doing()
+      || attr.state_.is_prepare()
+      || attr.state_.is_suspending()
+      || attr.state_.is_suspend();
   }
   return ret;
 }
@@ -289,6 +325,7 @@ int ObArchivePersistMgr::load_archive_round_attr(ObTenantArchiveRoundAttr &attr)
         tenant_key_.incarnation_ = attr.incarnation_;
         tenant_key_.dest_id_ = attr.dest_id_;
         tenant_key_.round_ = attr.round_id_;
+        dest_no_ = dest_array.at(0).first;
         state_ = attr.state_;
         ARCHIVE_LOG(TRACE, "get dest round succ", K(tenant_id_), K(dest_id), K(attr));
       }
@@ -443,6 +480,7 @@ int ObArchivePersistMgr::check_ls_archive_progress_advance_(const ObLSID &id,
 int ObArchivePersistMgr::load_archive_progress_(const ArchiveKey &key)
 {
   int ret = OB_SUCCESS;
+  bool is_madatory = false;
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
   if (! key.is_valid()) {
@@ -452,6 +490,8 @@ int ObArchivePersistMgr::load_archive_progress_(const ArchiveKey &key)
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "iter is NULL", K(ret), K(iter));
+  } else if (OB_FAIL(load_dest_mode_(is_madatory))) {
+    ARCHIVE_LOG(WARN, "load dest mode failed", K(ret));
   } else {
     ObLS *ls = NULL;
     ObLSArchivePersistInfo info;
@@ -468,13 +508,29 @@ int ObArchivePersistMgr::load_archive_progress_(const ArchiveKey &key)
               ls->get_ls_id(), key, info, record_exist))) {
         ARCHIVE_LOG(WARN, "load ls archive progress failed", K(ret), K(key), KPC(ls));
       } else if (! record_exist) {
-      } else if (OB_FAIL(update_local_archive_progress_(ls->get_ls_id(), info))) {
+      } else if (OB_FAIL(update_local_archive_progress_(ls->get_ls_id(), is_madatory, info))) {
         ARCHIVE_LOG(WARN, "update local archive progress failed", K(ret), K(info));
       }
     } // while
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
     }
+  }
+  return ret;
+}
+
+int ObArchivePersistMgr::load_dest_mode_(bool &is_madatory)
+{
+  int ret = OB_SUCCESS;
+  const bool need_lock = false;
+  share::ObArchivePersistHelper helper;
+  share::ObLogArchiveDestAtrr::Binding binding;
+  if (OB_FAIL(helper.init(tenant_id_))) {
+    ARCHIVE_LOG(WARN, "archive persist helper init failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(helper.get_binding(*proxy_, need_lock, dest_no_, binding))) {
+    ARCHIVE_LOG(WARN, "get archive dest binding failed", K(ret));
+  } else {
+    is_madatory = binding == share::ObLogArchiveDestAtrr::Binding::MANDATORY;
   }
   return ret;
 }
@@ -505,7 +561,7 @@ int ObArchivePersistMgr::load_ls_archive_progress_(const ObLSID &id,
 }
 
 int ObArchivePersistMgr::update_local_archive_progress_(const ObLSID &id,
-    const ObLSArchivePersistInfo &info)
+    const bool is_madatory, const ObLSArchivePersistInfo &info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! info.is_valid())) {
@@ -519,7 +575,7 @@ int ObArchivePersistMgr::update_local_archive_progress_(const ObLSID &id,
     } else if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       ARCHIVE_LOG(ERROR, "value is NULL", K(ret), K(id), K(value));
-    } else if (OB_FAIL(value->set(info))) {
+    } else if (OB_FAIL(value->set(is_madatory, info))) {
       ARCHIVE_LOG(WARN, "persist value set failed", K(ret), K(id), K(info));
     } else {
       map_.revert(value);
@@ -532,7 +588,7 @@ int ObArchivePersistMgr::update_local_archive_progress_(const ObLSID &id,
     } else if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       ARCHIVE_LOG(WARN, "value is NULL", K(ret), K(id), K(value));
-    } else if (OB_FAIL(value->set(info))) {
+    } else if (OB_FAIL(value->set(is_madatory, info))) {
       ARCHIVE_LOG(WARN, "value set failed", K(ret), K(id), K(info));
     } else if (OB_FAIL(map_.insert_and_get(id, value))) {
       ARCHIVE_LOG(WARN, "insert and get failed", K(ret), K(id), K(value));
@@ -562,13 +618,17 @@ int ObArchivePersistMgr::do_persist_(const ObLSID &id, const bool exist, ObLSArc
   bool need_commit = false;
   ObMySQLTransaction trans;
   ObTenantArchiveRoundAttr current_round;
-  if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(tenant_id_)))) {
+  if (need_wipe_suspend_status_(state_) && OB_FAIL(do_wipe_suspend_status_(id))) {
+    // tenant in beginning state, try wipe suspend state in all pieces for this ls
+    ARCHIVE_LOG(WARN, "do wipe suspend state failed", K(ret), K(id));
+  } else if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(tenant_id_)))) {
     ARCHIVE_LOG(WARN, "trans start failed", K(ret));
   } else if (OB_FAIL(table_operator_.get_round_by_dest_id(trans, tenant_key_.dest_id_, need_lock, current_round))) {
     ARCHIVE_LOG(WARN, "get log archive round status failed", K(ret));
   } else if (! need_persist_(current_round.state_)) {
     // do nothing
-  } else if (! need_stop_status_(current_round.state_)) {
+  } else if (! need_stop_status_(current_round.state_)
+      && ! need_suspend_status_(current_round.state_)) {
     // 1. 当租户归档状态处于BEGINNING / DOING, 有日志流归档进度则持久化该进度
     bool record_exist = false;
     ObLSArchivePersistInfo persist_info;
@@ -593,7 +653,7 @@ int ObArchivePersistMgr::do_persist_(const ObLSID &id, const bool exist, ObLSArc
         need_commit = true;
       }
     }
-  } else {
+  } else if (need_stop_status_(current_round.state_)) {
     // 2. 归档状态处于STOPPING状态, 则设置该日志流所有piece归档状态为STOP
     if (OB_FAIL(table_operator_.set_ls_archive_stop(trans, current_round.dest_id_,
       current_round.round_id_, id, affected_rows))) {
@@ -601,6 +661,15 @@ int ObArchivePersistMgr::do_persist_(const ObLSID &id, const bool exist, ObLSArc
     } else {
       need_commit = true;
       ARCHIVE_LOG(INFO, "set_ls_archive_stop succ", K(ret), K(id), K(current_round), K(affected_rows));
+    }
+  } else {
+    // 3. tenant archive in SUSPENDING status, set all piece status SUSPEND for this ls
+    if (OB_FAIL(table_operator_.set_ls_archive_suspend(trans, current_round.dest_id_,
+            current_round.round_id_, id, affected_rows))) {
+      ARCHIVE_LOG(WARN, "set_ls_archive_suspend failed", K(ret), K(id), K(current_round));
+    } else {
+      need_commit = true;
+      ARCHIVE_LOG(INFO, "set_ls_archive_suspend succ", K(ret), K(id), K(current_round), K(affected_rows));
     }
   }
 
@@ -624,9 +693,50 @@ int ObArchivePersistMgr::do_persist_(const ObLSID &id, const bool exist, ObLSArc
   return ret;
 }
 
+int ObArchivePersistMgr::do_wipe_suspend_status_(const ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  bool need_commit = false;
+  ObMySQLTransaction trans;
+  ObTenantArchiveRoundAttr current_round;
+  const bool need_lock = true;     // select for update
+  ObLSArchivePersistInfo persist_info;
+  bool record_exist = false;
+  if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(tenant_id_)))) {
+    ARCHIVE_LOG(WARN, "trans start failed", K(ret));
+  } else if (OB_FAIL(table_operator_.get_round_by_dest_id(trans, tenant_key_.dest_id_, need_lock, current_round))) {
+    ARCHIVE_LOG(WARN, "get log archive round status failed", K(ret));
+  } else if (! need_wipe_suspend_status_(current_round.state_)) {
+    //do nothing
+  } else if (OB_FAIL(table_operator_.get_latest_ls_archive_progress(trans, current_round.dest_id_,
+          current_round.round_id_, id, persist_info, record_exist))) {
+    ARCHIVE_LOG(WARN, "get ls archive progress failed", K(ret), K(id));
+  } else if (! persist_info.state_.is_suspend()) {
+    // do nothing
+  } else if (OB_FAIL(table_operator_.set_ls_archive_doing(trans, current_round.dest_id_,
+          current_round.round_id_, id, affected_rows))) {
+    ARCHIVE_LOG(WARN, "insert ls archive progress failed", K(ret), K(id), K(persist_info));
+  } else {
+    need_commit = true;
+  }
+
+  if (OB_SUCC(ret) && need_commit) {
+    if (OB_FAIL(trans.end(true))) {
+      ARCHIVE_LOG(WARN, "trans commit failed", K(ret), K(id));
+    }
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+      ARCHIVE_LOG(WARN, "failed to end trans", K(tmp_ret), K(id));
+    }
+  }
+  return ret;
+}
+
 bool ObArchivePersistMgr::need_persist_(const ObArchiveRoundState &state) const
 {
-  return state.is_beginning() || state.is_doing() || state.is_stopping() || state.is_interrupted();
+  return state.is_beginning() || state.is_doing() || state.is_stopping() || state.is_interrupted() || state.is_suspending();
 }
 
 bool ObArchivePersistMgr::need_stop_status_(const ObArchiveRoundState &state) const
@@ -634,7 +744,17 @@ bool ObArchivePersistMgr::need_stop_status_(const ObArchiveRoundState &state) co
   return state.is_stopping();
 }
 
-int ObArchivePersistMgr::get_ls_create_ts(const ObLSID &id, int64_t &timestamp)
+bool ObArchivePersistMgr::need_suspend_status_(const ObArchiveRoundState &state) const
+{
+  return state.is_suspending();
+}
+
+bool ObArchivePersistMgr::need_wipe_suspend_status_(const ObArchiveRoundState &state) const
+{
+  return state.is_beginning();
+}
+
+int ObArchivePersistMgr::get_ls_create_scn(const ObLSID &id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSRecoveryStat stat;
@@ -644,21 +764,24 @@ int ObArchivePersistMgr::get_ls_create_ts(const ObLSID &id, int64_t &timestamp)
     ARCHIVE_LOG(WARN, "get ls reocvery stat failed", K(ret));
   } else if (OB_UNLIKELY(! stat.is_valid())) {
     ret = OB_EAGAIN;
-    ARCHIVE_LOG(WARN, "ls recovery stat is not valid, just wait retry", K(id), K(stat));
+    ARCHIVE_LOG(WARN, "ls recovery stat is not valid, just wait retry", K(id), K(stat), K(ret));
   } else {
-    timestamp = stat.get_create_scn();
+    scn = stat.get_create_scn();
   }
   return ret;
 }
 
-int ObArchivePersistValue::get(ObLSArchivePersistInfo &info)
+void ObArchivePersistValue::get(bool &is_madatory,
+    int64_t &speed,
+    ObLSArchivePersistInfo &info)
 {
   RLockGuard guard(rwlock_);
+  is_madatory = is_madatory_;
+  speed = speed_;
   info = info_;
-  return OB_SUCCESS;
 }
 
-int ObArchivePersistValue::set(const ObLSArchivePersistInfo &info)
+int ObArchivePersistValue::set(const bool is_madatory, const ObLSArchivePersistInfo &info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! info.is_valid())) {
@@ -671,6 +794,7 @@ int ObArchivePersistValue::set(const ObLSArchivePersistInfo &info)
     } else {
       speed_ = static_cast<int64_t>(info.lsn_ - info_.lsn_) / std::max(1L, cur_time - last_update_ts_);
     }
+    is_madatory_ = is_madatory;
     info_ = info;
     last_update_ts_ = cur_time;
   }

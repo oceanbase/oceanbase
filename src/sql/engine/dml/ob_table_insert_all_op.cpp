@@ -100,6 +100,35 @@ int ObTableInsertAllOp::switch_iterator(ObExecContext &ctx)
   return common::OB_ITER_END;
 }
 
+// If there are foreign key dependencies between the tables to be inserted, a single row is required
+int ObTableInsertAllOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ins_ctdefs_.count() && !execute_single_row_; ++i) {
+      const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
+      const ObInsCtDef &ins_ctdef = *(ctdefs.at(0));
+      const uint64_t table_id = ins_ctdef.das_base_ctdef_.index_tid_;
+      const ObForeignKeyArgArray &fk_args = ins_ctdef.fk_args_;
+      if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
+        execute_single_row_ = true;
+      }
+      for (int j = 0; OB_SUCC(ret) && j < fk_args.count() && !execute_single_row_; j++) {
+        const ObForeignKeyArg &fk_arg = fk_args.at(j);
+        const uint64_t parent_table_id = fk_arg.table_id_;
+        for (int k = 0; k < MY_SPEC.ins_ctdefs_.count() && !execute_single_row_; ++k) {
+          const uint64_t tmp_table_id =  MY_SPEC.ins_ctdefs_.at(k).at(0)->das_base_ctdef_.index_tid_;
+          if (parent_table_id == tmp_table_id && k != i) {
+            execute_single_row_ = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableInsertAllOp::write_row_to_das_buffer()
 {
   int ret = OB_SUCCESS;
@@ -130,6 +159,7 @@ int ObTableInsertAllOp::write_row_to_das_buffer()
         const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
         ObInsRtDef &ins_rtdef = rtdefs.at(j);
         ObDASTabletLoc *tablet_loc = nullptr;
+        ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
         ++ins_rtdef.cur_row_num_;
         if (OB_FAIL(ObDMLService::init_heap_table_pk_for_ins(ins_ctdef, eval_ctx_))) {
           LOG_WARN("fail to init heap table pk to null", K(ret));
@@ -145,18 +175,20 @@ int ObTableInsertAllOp::write_row_to_das_buffer()
           LOG_WARN("calc partition key failed", K(ret));
         } else if (OB_FAIL(ObDMLService::set_heap_table_hidden_pk(ins_ctdef, tablet_loc->tablet_id_, eval_ctx_))) {
           LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc));
-        } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_))) {
+        } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, modify_row.new_row_))) {
           LOG_WARN("insert row with das failed", K(ret));
         // TODO(yikang): fix trigger related for heap table
-        } else if (ins_ctdef.is_primary_index_ && OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                              ins_ctdef.trig_ctdef_,
-                                                              ins_rtdef.trig_rtdef_,
-                                                              ObTriggerEvents::get_insert_event()))) {
-          LOG_WARN("failed to handle before trigger", K(ret));
+        } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+          LOG_WARN("failed to push dml modify row to modified row list", K(ret));
         } else {
           have_insert_row = true;
         }
       } // end for global index ctdef loop
+
+      // NOTE: for insert all into t1,t2, t1 is the parent table of t2, Single-line execution is required to ensure oracle compatibility
+      if (OB_SUCC(ret) && execute_single_row_ && OB_FAIL(submit_all_dml_task())) {
+        LOG_WARN("failed to push dml task", K(ret));
+      }
     }
   } // end for table ctdef loop
   //erro logging not support, fix it later

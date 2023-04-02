@@ -222,13 +222,17 @@ namespace sql
     sharding_(NULL),
     calc_part_id_expr_(NULL),
     ref_table_id_(OB_INVALID_ID),
+    index_id_(OB_INVALID_ID),
     table_id_(OB_INVALID_ID),
+    filter_table_id_(OB_INVALID_ID),
     row_count_(1.0),
     join_filter_selectivity_(1.0),
+    right_distinct_card_(1.0),
     need_partition_join_filter_(false),
     can_use_join_filter_(false),
     force_filter_(NULL),
     force_part_filter_(NULL),
+    pushdown_filter_table_(),
     in_current_dfo_(true),
     skip_subpart_(false) {}
 
@@ -238,7 +242,9 @@ namespace sql
     K_(sharding),
     K_(calc_part_id_expr),
     K_(ref_table_id),
+    K_(index_id),
     K_(table_id),
+    K_(filter_table_id),
     K_(row_count),
     K_(join_filter_selectivity),
     K_(need_partition_join_filter),
@@ -254,13 +260,17 @@ namespace sql
   ObShardingInfo *sharding_;      //join filter use基表的sharding
   ObRawExpr *calc_part_id_expr_;  //partition join filter计算分区id的表达式
   uint64_t ref_table_id_;         //join filter use基表的ref table id
+  uint64_t index_id_;             //index id for join filter use
   uint64_t table_id_;             //join filter use基表的table id
+  uint64_t filter_table_id_;        //join filter use实际受hint控制的table id
   double row_count_;              //join filter use基表的output rows
   double join_filter_selectivity_;
+  double right_distinct_card_;
   bool need_partition_join_filter_;
   bool can_use_join_filter_;
   const ObJoinFilterHint *force_filter_;
   const ObJoinFilterHint *force_part_filter_;
+  ObTableInHint pushdown_filter_table_;
   bool in_current_dfo_;
   // Indicates that part bf is only generated for the 1-level partition in the 2-level partition
   // If the table is a 1-level partition, this value is false.
@@ -341,6 +351,7 @@ struct EstimateCostInfo {
         contain_das_op_(false),
         parallel_(1),
         server_cnt_(1),
+        server_list_(),
         is_pipelined_path_(false),
         is_nl_style_pipelined_path_(false)
     {  }
@@ -348,15 +359,17 @@ struct EstimateCostInfo {
     int assign(const Path &other, common::ObIAllocator *allocator);
     bool is_cte_path() const;
     bool is_function_table_path() const;
+    bool is_json_table_path() const;
     bool is_temp_table_path() const;
     bool is_access_path() const;
     bool is_join_path() const;
     bool is_subquery_path() const;
     int check_is_base_table(bool &is_base_table);
-    int check_meet_repart(bool &can_repart);
     inline const common::ObIArray<OrderItem> &get_ordering() const { return ordering_; }
     inline common::ObIArray<OrderItem> &get_ordering() { return ordering_; }
-    inline int get_interesting_order_info() const { return interesting_order_info_; }
+    inline const common::ObIArray<ObAddr> &get_server_list() const { return server_list_; }
+    inline common::ObIArray<ObAddr> &get_server_list() { return server_list_; }
+    inline int64_t get_interesting_order_info() const { return interesting_order_info_; }
     inline void set_interesting_order_info(int64_t info) { interesting_order_info_ = info; }
     inline void add_interesting_order_flag(OrderingFlag flag) { interesting_order_info_ |= flag; }
     inline void add_interesting_order_flag(int64_t flags) { interesting_order_info_ |= flags; }
@@ -417,7 +430,7 @@ struct EstimateCostInfo {
     bool is_nl_style_pipelined_path() const { return is_nl_style_pipelined_path_; }
     virtual int compute_pipeline_info();
     bool contain_das_op() const { return contain_das_op_; }
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
     int get_name(char *buf, const int64_t buf_len, int64_t &pos)
     {
       int ret = common::OB_SUCCESS;
@@ -425,8 +438,6 @@ struct EstimateCostInfo {
       get_name_internal(buf, buf_len, pos);
       common::ObIArray<OrderItem> &ordering = ordering_;
       if (OB_FAIL(BUF_PRINTF("("))) { /* Do nothing */
-      } else {
-        EXPLAIN_PRINT_SORT_KEYS(ordering, EXPLAIN_UNINITIALIZED);
       }
       if (OB_FAIL(ret)) { /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF(", "))) { /* Do nothing */
@@ -436,10 +447,11 @@ struct EstimateCostInfo {
       }
       return ret;
     }
-    inline bool parallel_more_than_part_cnt() const		
-    {		
-      return NULL != strong_sharding_ && parallel_ > strong_sharding_->get_part_cnt();		
+    inline bool parallel_more_than_part_cnt() const
+    {
+      return NULL != strong_sharding_ && parallel_ > strong_sharding_->get_part_cnt();
     }
+    int compute_path_property_from_log_op();
     TO_STRING_KV(K_(is_local_order),
                  K_(ordering),
                  K_(interesting_order_info),
@@ -478,6 +490,7 @@ struct EstimateCostInfo {
     // weak sharding is used for partition-wise-join check, thus it should have table location, otherwise it is meaningless
     common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;
     common::ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
+    common::ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> const_param_constraints_;
     common::ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
     bool exchange_allocated_;
     ObPhyPlanType phy_plan_type_;
@@ -489,13 +502,22 @@ struct EstimateCostInfo {
     // remember the parallel info to get this sharding
     int64_t parallel_;
     int64_t server_cnt_;
+    common::ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
     bool is_pipelined_path_;
     bool is_nl_style_pipelined_path_;
-    
+
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
   };
 
+
+  enum OptSkipScanState
+  {
+    SS_DISABLE = 0,
+    SS_UNSET,
+    SS_HINT_ENABLE,
+    SS_NDV_SEL_ENABLE
+  };
   class AccessPath : public Path
   {
   public:
@@ -528,7 +550,8 @@ struct EstimateCostInfo {
         est_records_(),
         range_prefix_count_(0),
         table_opt_info_(),
-        for_update_(false)
+        for_update_(false),
+        use_skip_scan_(OptSkipScanState::SS_UNSET)
     {
     }
     virtual ~AccessPath() {
@@ -561,11 +584,14 @@ struct EstimateCostInfo {
       return NULL == table_opt_info_ ? false :
             OptimizationMethod::RULE_BASED != table_opt_info_->optimization_method_;
     }
-    const ObRangesArray &get_query_ranges() const;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    const ObIArray<ObNewRange> &get_query_ranges() const;
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
     }
 
     TO_STRING_KV(K_(table_id),
@@ -588,7 +614,8 @@ struct EstimateCostInfo {
                  K_(sample_info),
                  K_(range_prefix_count),
                  K_(for_update),
-                 K_(use_das));
+                 K_(use_das),
+                 K_(use_skip_scan));
   public:
     //member variables
     uint64_t table_id_;
@@ -615,6 +642,7 @@ struct EstimateCostInfo {
     int64_t range_prefix_count_; // prefix count
     BaseTableOptInfo *table_opt_info_;
     bool for_update_;
+    OptSkipScanState use_skip_scan_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
@@ -629,6 +657,7 @@ struct EstimateCostInfo {
       join_algo_(INVALID_JOIN_ALGO),
       join_dist_algo_(DistAlgo::DIST_INVALID_METHOD),
       is_slave_mapping_(false),
+      use_hybrid_hash_dm_(false),
       join_type_(UNKNOWN_JOIN),
       need_mat_(false),
       left_dup_table_pos_(OB_INVALID_ID),
@@ -665,6 +694,7 @@ struct EstimateCostInfo {
         join_algo_(join_algo),
         join_dist_algo_(join_dist_algo),
         is_slave_mapping_(is_slave_mapping),
+        use_hybrid_hash_dm_(false),
         join_type_(join_type),
         need_mat_(need_mat),
         left_dup_table_pos_(OB_INVALID_INDEX),
@@ -683,7 +713,8 @@ struct EstimateCostInfo {
         contain_normal_nl_(false),
         can_use_batch_nlj_(false),
         is_naaj_(false),
-        is_sna_(false)
+        is_sna_(false),
+        inherit_sharding_index_(-1)
       {
       }
     virtual ~JoinPath() {}
@@ -758,23 +789,24 @@ struct EstimateCostInfo {
     inline bool is_fully_paratition_wise() const {
       return is_partition_wise() && !exchange_allocated_;
     }
-
-    inline bool is_partial_partition_wise() const {
-      return is_partition_wise() && exchange_allocated_;
-    }
-
     inline bool is_partition_wise() const
     {
-      return join_dist_algo_ == DistAlgo::DIST_PARTITION_WISE && !is_slave_mapping_;
+      return (join_dist_algo_ == DistAlgo::DIST_PARTITION_WISE ||
+              join_dist_algo_ == DistAlgo::DIST_EXT_PARTITION_WISE) &&
+              !is_slave_mapping_;
     }
     inline SlaveMappingType get_slave_mapping_type() const
     {
       SlaveMappingType sm_type = SlaveMappingType::SM_NONE;
       if (!is_slave_mapping_) {
         sm_type = SlaveMappingType::SM_NONE;
-      } else if (join_dist_algo_ == DIST_PARTITION_WISE) {
+      } else if (join_dist_algo_ == DIST_PARTITION_WISE ||
+                 join_dist_algo_ == DIST_EXT_PARTITION_WISE) {
         sm_type = SlaveMappingType::SM_PWJ_HASH_HASH;
-      } else if (join_dist_algo_ == DIST_PARTITION_NONE || join_dist_algo_ == DIST_NONE_PARTITION) {
+      } else if (join_dist_algo_ == DIST_PARTITION_NONE ||
+                 join_dist_algo_ == DIST_NONE_PARTITION ||
+                 join_dist_algo_ == DIST_NONE_HASH ||
+                 join_dist_algo_ == DIST_HASH_NONE) {
         sm_type = SlaveMappingType::SM_PPWJ_HASH_HASH;
       } else if (join_dist_algo_ == DIST_BROADCAST_NONE) {
         sm_type = SlaveMappingType::SM_PPWJ_BCAST_NONE;
@@ -791,40 +823,48 @@ struct EstimateCostInfo {
     void set_contain_normal_nl(bool contain) { contain_normal_nl_ = contain; }
     int check_is_contain_normal_nl();
     virtual int compute_pipeline_info() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("<");
-      if (NULL != left_path_) {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("<"))) {
+      } else if (NULL != left_path_) {
         left_path_->get_name_internal(buf, buf_len, pos);
       }
-      BUF_PRINTF(" -");
 
-      switch (join_algo_)
-      {
-      case INVALID_JOIN_ALGO:
-      {
-      } break;
-      case NESTED_LOOP_JOIN:
-      {
-        BUF_PRINTF("NL");
-      } break;
-      case MERGE_JOIN:
-      {
-        BUF_PRINTF("M");
-      } break;
-      case HASH_JOIN:
-      {
-        BUF_PRINTF("H");
-      } break;
-      default:
-        break;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF(" -"))) {
+      } else {
+        switch (join_algo_)
+        {
+        case INVALID_JOIN_ALGO:
+        {
+        } break;
+        case NESTED_LOOP_JOIN:
+        {
+          ret = BUF_PRINTF("NL");
+        } break;
+        case MERGE_JOIN:
+        {
+          ret = BUF_PRINTF("M");
+        } break;
+        case HASH_JOIN:
+        {
+          ret = BUF_PRINTF("H");
+        } break;
+        default:
+          break;
+        }
       }
-      BUF_PRINTF("-> ");
 
-      if (NULL != right_path_) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(BUF_PRINTF("-> "))) {
+      } else if (NULL != right_path_) {
         right_path_->get_name_internal(buf, buf_len, pos);
       }
-      BUF_PRINTF(">");
+      if (OB_SUCC(ret)) {
+        ret = BUF_PRINTF(">");
+      }
+      return ret;
     }
   private:
     int compute_hash_hash_sharding_info();
@@ -858,13 +898,15 @@ struct EstimateCostInfo {
                  K_(contain_normal_nl),
                  K_(can_use_batch_nlj),
                  K_(is_naaj),
-                 K_(is_sna));
+                 K_(is_sna),
+                 K_(inherit_sharding_index));
   public:
     const Path *left_path_;
     const Path *right_path_;
     JoinAlgo join_algo_; // e.g., merge, hash, nested loop
     DistAlgo join_dist_algo_; // e.g, partition_wise_join, repartition, hash-hash
     bool is_slave_mapping_; // whether should enable slave mapping
+    bool use_hybrid_hash_dm_; // if use hybrid hash distribution method for hash-hash dm
     ObJoinType join_type_;
     bool need_mat_;
     // for duplicated table
@@ -889,6 +931,8 @@ struct EstimateCostInfo {
     bool can_use_batch_nlj_;
     bool is_naaj_; // is null aware anti join
     bool is_sna_; // is single null aware anti join
+    //Used to indicate which child node the current sharding inherits from
+    int64_t inherit_sharding_index_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JoinPath);
   };
@@ -909,10 +953,13 @@ struct EstimateCostInfo {
     virtual int estimate_cost() override;
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     virtual int compute_pipeline_info() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@sub_");
-      BUF_PRINTF("%lu", subquery_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@sub_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", subquery_id_))) {
+      }
+      return ret;
     }
   public:
     uint64_t subquery_id_;//该subquery所在TableItem的table_id_
@@ -932,16 +979,44 @@ struct EstimateCostInfo {
     virtual ~FunctionTablePath() { }
     int assign(const FunctionTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@function_");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@function_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
     }
   public:
     uint64_t table_id_;
     ObRawExpr* value_expr_;
   private:
       DISALLOW_COPY_AND_ASSIGN(FunctionTablePath);
+  };
+
+  class JsonTablePath : public Path
+  {
+  public:
+    JsonTablePath()
+      : Path(NULL),
+        table_id_(OB_INVALID_ID),
+        value_expr_(NULL) {}
+    virtual ~JsonTablePath() { }
+    int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
+    virtual int estimate_cost() override;
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@json_table_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
+    }
+  public:
+    uint64_t table_id_;
+    ObRawExpr* value_expr_;
+  private:
+      DISALLOW_COPY_AND_ASSIGN(JsonTablePath);
   };
 
   class TempTablePath : public Path
@@ -958,10 +1033,13 @@ struct EstimateCostInfo {
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost) override;
     int compute_sharding_info();
     int compute_path_ordering();
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@temp_");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@temp_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return  ret;
     }
   public:
     uint64_t table_id_;
@@ -970,6 +1048,7 @@ struct EstimateCostInfo {
   private:
       DISALLOW_COPY_AND_ASSIGN(TempTablePath);
   };
+
 
   class CteTablePath : public Path
   {
@@ -981,10 +1060,13 @@ struct EstimateCostInfo {
     virtual ~CteTablePath() { }
     int assign(const CteTablePath &other, common::ObIAllocator *allocator);
     virtual int estimate_cost() override;
-    virtual void get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
+    virtual int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos) const
     {
-      BUF_PRINTF("@cte_");
-      BUF_PRINTF("%lu", table_id_);
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(BUF_PRINTF("@cte_"))) {
+      } else if (OB_FAIL(BUF_PRINTF("%lu", table_id_))) {
+      }
+      return ret;
     }
   public:
     uint64_t table_id_;
@@ -1076,6 +1158,27 @@ struct NullAwareAntiJoinInfo {
       common::ObSEArray<Path*, 8> inner_paths_;  //生成的inner path
       BaseTableOptInfo *table_opt_info_;
       ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
+      ObSEArray<ObPCConstParamInfo, 4> const_param_constraints_;
+    };
+
+    struct DeducedExprInfo {
+      DeducedExprInfo() :
+      deduced_expr_(NULL),
+      deduced_from_expr_(NULL),
+      is_precise_(false),
+      const_param_constraints_() {}
+
+      ObRawExpr * deduced_expr_;
+      ObRawExpr * deduced_from_expr_;
+      bool is_precise_;
+      common::ObSEArray<ObPCConstParamInfo, 2, common::ModulePageAllocator, true> const_param_constraints_;
+
+      int assign(const DeducedExprInfo& other);
+      TO_STRING_KV(
+        K_(deduced_expr),
+        K_(deduced_from_expr),
+        K_(is_precise)
+      );
     };
 
     ObJoinOrder(common::ObIAllocator *allocator,
@@ -1172,11 +1275,9 @@ struct NullAwareAntiJoinInfo {
                                ObIArray<ObExecParamRawExpr *> &nl_params,
                                ObIArray<ObRawExpr*> &subquery_exprs);
 
-    int extract_param_for_query_range(const ObIArray<ObRawExpr*> &range_conditions,
-                                      common::ObIArray<int64_t> &param_pos);
-    int extract_param_for_query_range(const ObRawExpr *raw_expr,
-                                      common::ObIArray<int64_t> &param_pos);
-
+    int param_json_table_expr(ObRawExpr* &json_table_expr,
+                              ObExecParamRawExpr*& nl_params,
+                              ObIArray<ObRawExpr*> &subquery_exprs);
     /**
      * 为本节点增加一条路径，代价竞争过程在这里实现
      * @param path
@@ -1224,35 +1325,24 @@ struct NullAwareAntiJoinInfo {
 
     int compute_const_exprs_for_subquery(uint64_t table_id, ObLogicalOperator *root);
 
-    int convert_subplan_scan_order_item(ObRawExprFactory &expr_factory,
-                                        const EqualSets &equal_sets,
-                                        const ObIArray<ObRawExpr *> &const_exprs,
-                                        const uint64_t table_id,
-                                        const ObDMLStmt &parent_stmt,
-                                        const ObSelectStmt &child_stmt,
-                                        const ObIArray<OrderItem> &input_order,
-                                        ObIArray<OrderItem> &output_order);
+    static int convert_subplan_scan_order_item(ObLogPlan &plan,
+                                               ObLogicalOperator &subplan_root,
+                                               const uint64_t table_id,
+                                               ObIArray<OrderItem> &output_order);
 
-    static int convert_subplan_scan_sharding_info(common::ObIAllocator &allocator,
-                                                  ObOptimizerContext &opt_ctx,
-                                                  const EqualSets &equal_sets,
+    static int convert_subplan_scan_sharding_info(ObLogPlan &plan,
+                                                  ObLogicalOperator &subplan_root,
                                                   const uint64_t table_id,
-                                                  const ObDMLStmt &parent_stmt,
-                                                  const ObSelectStmt &child_stmt,
-                                                  ObShardingInfo *input_strong_sharding,
-                                                  const ObIArray<ObShardingInfo*> &input_weak_sharding,
                                                   ObShardingInfo *&output_strong_sharding,
                                                   ObIArray<ObShardingInfo*> &output_weak_sharding);
 
-    static int convert_subplan_scan_sharding_info(common::ObIAllocator &allocator,
-                                                  ObOptimizerContext &opt_ctx,
-                                                  const EqualSets &equal_sets,
+    static int convert_subplan_scan_sharding_info(ObLogPlan &plan,
+                                                  ObLogicalOperator &subplan_root,
                                                   const uint64_t table_id,
-                                                  const ObDMLStmt &parent_stmt,
-                                                  const ObSelectStmt &child_stmt,
                                                   bool is_strong,
                                                   ObShardingInfo *input_sharding,
                                                   ObShardingInfo *&output_sharding);
+
     int compute_table_meta_info(const uint64_t table_id, const uint64_t ref_table_id);
 
     int fill_path_index_meta_info(const uint64_t table_id,
@@ -1310,6 +1400,7 @@ struct NullAwareAntiJoinInfo {
     inline PathType get_type() const { return type_;}
 
     inline ObLogPlan* get_plan(){return plan_;}
+    inline const ObLogPlan* get_plan() const {return plan_;}
 
     inline uint64_t get_table_id() const {return table_id_;}
 
@@ -1334,8 +1425,9 @@ struct NullAwareAntiJoinInfo {
                                const ObIndexInfoCache &index_info_cache,
                                PathHelper &helper,
                                AccessPath *&ap,
-                               bool use_das);
-                          
+                               bool use_das,
+                               OptSkipScanState use_skip_scan);
+
     int will_use_das(const uint64_t table_id,
                      const uint64_t ref_id,
                      const uint64_t index_id,
@@ -1344,12 +1436,20 @@ struct NullAwareAntiJoinInfo {
                      bool &create_das_path,
                      bool &create_basic_path);
 
+    int will_use_skip_scan(const uint64_t table_id,
+                           const uint64_t ref_id,
+                           const uint64_t index_id,
+                           const ObIndexInfoCache &index_info_cache,
+                           PathHelper &helper,
+                           OptSkipScanState &use_skip_scan);
+
     int get_access_path_ordering(const uint64_t table_id,
                                  const uint64_t ref_table_id,
                                  const uint64_t index_id,
                                  common::ObIArray<ObRawExpr *> &index_keys,
                                  common::ObIArray<ObRawExpr *> &ordering,
-                                 ObOrderDirection &direction);
+                                 ObOrderDirection &direction,
+                                 const bool is_index_back);
 
     int get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,
                                  const ObDMLStmt *stmt,
@@ -1371,6 +1471,17 @@ struct NullAwareAntiJoinInfo {
                                         const common::ObIArray<ObRawExpr*> &predicates,
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         ObQueryRange* &range);
+
+    int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
+                                              const ObIArray<ObRawExpr*> &predicates,
+                                              const ColumnIdInfoMap &column_schema_info,
+                                              ObQueryRange *&query_range);
+
+    int extract_geo_schema_info(const uint64_t table_id,
+                                const uint64_t index_id,
+                                ObWrapperAllocator &wrap_allocator,
+                                ColumnIdInfoMapAllocer &map_alloc,
+                                ColumnIdInfoMap &geo_columnInfo_map);
 
     int check_expr_match_first_col(const ObRawExpr * qual,
                                    const common::ObIArray<ObRawExpr *>& keys,
@@ -1485,11 +1596,12 @@ struct NullAwareAntiJoinInfo {
     int estimate_size_for_inner_subquery_path(double root_card,
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
-    
-    int create_one_cte_table_path(const TableItem* table_item, 
+
+    int create_one_cte_table_path(const TableItem* table_item,
                                   ObShardingInfo * sharding);
     int generate_cte_table_paths();
     int generate_function_table_paths();
+    int generate_json_table_paths();
 
     int generate_subquery_for_function_table(ObRawExpr *function_table_expr,
                                              ObLogicalOperator *&function_table_root);
@@ -1553,6 +1665,9 @@ struct NullAwareAntiJoinInfo {
                           const bool has_equal_cond);
 
     int create_plan_for_inner_path(Path *path);
+
+    int create_subplan_filter_for_join_path(Path *path,
+                                            ObIArray<ObRawExpr*> &subquery_filters);
 
     int check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_conditions,
                                    const ValidPathInfo &path_info,
@@ -1681,28 +1796,34 @@ struct NullAwareAntiJoinInfo {
                                   const bool is_left_naaj_na,
                                   ObIArray<JoinFilterInfo> &join_filter_infos);
 
-    int find_possible_join_filter_table(const Path &left_path,
+    int find_possible_join_filter_tables(const Path &left_path,
                                         const Path &right_path,
                                         const DistAlgo join_dist_algo,
                                         const ObIArray<ObRawExpr*> &equal_join_conditions,
                                         ObIArray<JoinFilterInfo> &join_filter_infos);
 
-    int find_shuffle_table_scan(const ObLogPlanHint &log_plan_hint,
-                                const Path &right_path,
-                                const ObRelIds &left_tables,
-                                bool config_disable,
-                                bool is_current_dfo,
-                                ObIArray<JoinFilterInfo> &join_filter_infos);
+    int find_possible_join_filter_tables(const ObLogPlanHint &log_plan_hint,
+                                        const Path &right_path,
+                                        const ObRelIds &left_tables,
+                                        const ObRelIds &right_tables,
+                                        bool config_disable,
+                                        bool is_current_dfo,
+                                        bool is_fully_partition_wise,
+                                        const ObIArray<ObRawExpr*> &left_join_conditions,
+                                        const ObIArray<ObRawExpr*> &right_join_conditions,
+                                        ObIArray<JoinFilterInfo> &join_filter_infos);
 
-    int get_join_filter_exprs(const ObIArray<ObRawExpr*> &equal_join_conditions,
-                              ObIArray<JoinFilterInfo> &join_filter_infos);
+    int get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
+                              const ObIArray<ObRawExpr*> &right_join_conditions,
+                              JoinFilterInfo &join_filter_info);
+
+    int fill_join_filter_info(JoinFilterInfo &join_filter_info);
 
     int check_normal_join_filter_valid(const Path& left_path,
                                        const Path& right_path,
                                        ObIArray<JoinFilterInfo> &join_filter_infos);
 
     int calc_join_filter_selectivity(const Path& left_path,
-                                    const Path& right_path,
                                     JoinFilterInfo& info,
                                     double &join_filter_selectivity);
 
@@ -1753,13 +1874,14 @@ struct NullAwareAntiJoinInfo {
     bool is_partition_wise_valid(const Path &left_path,
                                  const Path &right_path);
 
+    bool is_repart_valid(const Path &left_path, const Path &right_path, const DistAlgo dist_algo, const bool is_nl);
+
     int check_if_match_partition_wise(const EqualSets &equal_sets,
                                       Path &left_path,
                                       Path &right_path,
                                       const ObIArray<ObRawExpr*> &left_join_keys,
                                       const ObIArray<ObRawExpr*> &right_join_keys,
                                       const ObIArray<bool> &null_safe_info,
-                                      const ObJoinType join_type,
                                       bool &is_partition_wise);
 
     int extract_hashjoin_conditions(const ObIArray<ObRawExpr*> &join_quals,
@@ -1867,7 +1989,8 @@ struct NullAwareAntiJoinInfo {
   private:
     int add_access_filters(AccessPath *path,
                            const common::ObIArray<ObRawExpr*> &index_keys,
-                           const ObIArray<ObRawExpr *> &restrict_infos);
+                           const common::ObIArray<ObRawExpr*> &range_exprs,
+                           PathHelper &helper);
 
     int set_nl_filters(JoinPath *join_path,
                        const Path *right_path,
@@ -1876,7 +1999,8 @@ struct NullAwareAntiJoinInfo {
                        const common::ObIArray<ObRawExpr*> &where_conditions);
 
     int fill_query_range_info(const QueryRangeInfo &range_info,
-                              ObCostTableScanInfo &est_cost_info);
+                              ObCostTableScanInfo &est_cost_info,
+                              bool use_skip_scan);
 
     int compute_table_location_for_paths(ObIArray<AccessPath *> &access_paths,
                                          ObIArray<ObTablePartitionInfo*> &tbl_part_infos);
@@ -1888,6 +2012,7 @@ struct NullAwareAntiJoinInfo {
                                ObTablePartitionInfo *&table_partition_info);
 
     int get_query_range_info(const uint64_t table_id,
+                             const uint64_t base_table_id,
                              const uint64_t index_id,
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
@@ -1897,7 +2022,7 @@ struct NullAwareAntiJoinInfo {
 
     int get_preliminary_prefix_info(ObQueryRange &query_range,QueryRangeInfo &range_info);
 
-    void get_prefix_info(ObKeyPart *key_part,
+    void get_prefix_info(const ObKeyPart *key_part,
                          int64_t &equal_prefix_count,
                          int64_t &range_prefix_count,
                          bool &contain_always_false);
@@ -1973,7 +2098,10 @@ struct NullAwareAntiJoinInfo {
                                     const ObJoinOrder &right_tree,
                                     const ObJoinType join_type,
                                     ValidPathInfo &path_info);
-
+    int check_depend_json_table(const ObJoinOrder &left_tree,
+                                    const ObJoinOrder &right_tree,
+                                    const ObJoinType join_type,
+                                    ValidPathInfo &path_info);
     int check_subquery_in_join_condition(const ObJoinType join_type,
                                          const ObIArray<ObRawExpr*> &join_conditions,
                                          ValidPathInfo &path_info);
@@ -2003,7 +2131,7 @@ struct NullAwareAntiJoinInfo {
                                      const ObJoinOrder *right_tree,
                                      const JoinInfo *join_info,
                                      const ObJoinType join_type);
-    
+
     int compute_fd_item_set_for_inner_join(const ObJoinOrder *left_tree,
                                            const ObJoinOrder *right_tree,
                                            const JoinInfo *join_info);
@@ -2018,14 +2146,8 @@ struct NullAwareAntiJoinInfo {
                                            const JoinInfo *ljoin_info,
                                            const ObJoinType join_type);
 
-    int compute_fd_item_set_for_subquery(ObRawExprFactory &expr_factory,
-                                         const EqualSets &equal_sets,
-                                         const ObIArray<ObRawExpr*> &const_exprs,
-                                         const uint64_t table_id,
-                                         const ObDMLStmt &parent_stmt,
-                                         const ObSelectStmt &child_stmt,
-                                         const ObFdItemSet &input_fd_item_sets,
-                                         ObFdItemSet &output_fd_item_sets);
+    int compute_fd_item_set_for_subquery(const uint64_t table_id,
+                                         ObLogicalOperator *subplan_root);
 
     int compute_one_row_info_for_table_scan(ObIArray<AccessPath *> &access_paths);
 
@@ -2051,7 +2173,8 @@ struct NullAwareAntiJoinInfo {
                      const ObQueryRange* query_range,
                      ObCostTableScanInfo &est_scan_cost_info,
                      bool &is_nl_with_extended_range,
-                     bool is_link = false);
+                     bool is_link = false,
+                     bool use_skip_scan = false);
 
     int can_extract_unprecise_range(const uint64_t table_id,
                                     const ObRawExpr *filter,
@@ -2083,13 +2206,15 @@ struct NullAwareAntiJoinInfo {
                                      double right_output_rows,
                                      const JoinInfo &join_info,
                                      double &new_rows,
-                                     double &selectivity);
+                                     double &selectivity,
+                                     EqualSets &equal_sets);
     inline void set_cnt_rownum(const bool cnt_rownum) { cnt_rownum_ = cnt_rownum; }
     inline bool get_cnt_rownum() const { return cnt_rownum_; }
     inline void increase_total_path_num() { total_path_num_ ++; }
     inline uint64_t get_total_path_num() const { return total_path_num_; }
     int get_join_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
     int get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_conditions);
+    static double calc_single_parallel_rows(double rows, int64_t parallel);
   private:
     static int check_and_remove_is_null_qual(ObLogPlan *plan,
                                              const ObJoinType join_type,
@@ -2133,7 +2258,7 @@ struct NullAwareAntiJoinInfo {
                               ObIArray<ObPCParamEqualInfo> &equal_param_constraints);
 
     int check_filter_is_redundant(ObJoinOrder &left_tree,
-                                  ObRawExpr *expr, 
+                                  ObRawExpr *expr,
                                   ObExprParamCheckContext &context,
                                   bool &is_redunant);
 
@@ -2166,6 +2291,37 @@ struct NullAwareAntiJoinInfo {
                                const bool force_inner_nl,
                                ObIArray<ObRawExpr *> &pushdown_quals);
 
+    int get_generated_col_index_qual(const int64_t table_id,
+                                     ObIArray<ObRawExpr *> &quals);
+
+    int build_prefix_index_compare_expr(ObRawExpr &column_expr,
+                                        ObRawExpr *prefix_expr,
+                                        ObItemType type,
+                                        ObRawExpr &value_expr,
+                                        ObRawExpr *escape_expr,
+                                        ObRawExpr *&new_op_expr);
+
+    int get_prefix_str_idx_exprs(ObRawExpr *expr,
+                                ObColumnRefRawExpr *column_expr,
+                                ObRawExpr *value_expr,
+                                ObRawExpr *escape_expr,
+                                const TableItem *table_item,
+                                ObItemType type,
+                                ObRawExpr *&new_expr);
+
+    int deduce_prefix_str_idx_exprs(ObRawExpr *expr,
+                                    const TableItem *table_item,
+                                    ObRawExpr *&new_expr);
+
+    int deduce_common_gen_col_index_expr(ObRawExpr *qual,
+                                        const TableItem *table_item,
+                                        ObRawExpr *&new_qual);
+
+    int try_get_generated_col_index_expr(ObRawExpr *qual,
+                                         ObRawExpr *depend_expr,
+                                         ObColumnRefRawExpr *col_expr,
+                                         ObRawExpr *&new_qual);
+
     int get_range_params(const Path *path,
                          ObIArray<ObRawExpr*> &range_exprs,
                          ObIArray<ObRawExpr*> &all_table_filters);
@@ -2184,6 +2340,9 @@ struct NullAwareAntiJoinInfo {
                                      ObIArray<ObRawExpr*> &other_join_conditions,
                                      NullAwareAntiJoinInfo &naaj_info);
     bool is_main_table_use_das(const common::ObIArray<AccessPath *> &access_paths);
+    int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_persistent);
+    int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
+                          bool is_persistent, ObExprEqualCheckContext &equal_ctx);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
@@ -2214,6 +2373,7 @@ struct NullAwareAntiJoinInfo {
     ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> not_null_columns_;
     // cache for all inner path
     InnerPathInfos inner_path_infos_;
+    common::ObSEArray<DeducedExprInfo, 4, common::ModulePageAllocator, true> deduced_exprs_info_;
     bool cnt_rownum_;
     uint64_t total_path_num_;
   private:

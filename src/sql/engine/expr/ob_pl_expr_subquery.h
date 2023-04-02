@@ -30,6 +30,7 @@ public:
   ObExprPlSubQueryInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
       id_(common::OB_INVALID_ID),
+      ps_sql_(ObString()),
       type_(stmt::T_NONE),
       route_sql_(ObString()),
       result_type_(),
@@ -42,7 +43,8 @@ public:
   template <typename RE>
   int from_raw_expr(RE &expr, ObIAllocator &alloc);
 
-  ObPsStmtId id_; //prepare的语句id
+  ObPsStmtId id_; //prepare的语句id, 保留id，兼容老版本
+  common::ObString ps_sql_;
   stmt::StmtType type_; //prepare的语句类型
 
   common::ObString route_sql_;
@@ -73,8 +75,12 @@ public:
   {
     return ob_write_string(allocator_, v, route_sql_);
   }
+  int deep_copy_ps_sql(const common::ObString &v)
+  {
+    return ob_write_string(allocator_, v, ps_sql_);
+  }
 
-  inline void set_ps_id(ObPsStmtId id) { id_ = id; }
+  inline void set_ps_sql(common::ObString sql) { ps_sql_ = sql; }
   inline void set_stmt_type(stmt::StmtType type) { type_ = type; }
   inline void set_route_sql(common::ObString sql) { route_sql_ = sql; }
   inline void set_result_type(ObExprResType type) { result_type_ = type; }
@@ -92,6 +98,7 @@ private:
   static int get_result(void *result_set, ObObj &result, ObIAllocator &alloc);
 
   ObPsStmtId id_; //prepare的语句id
+  common::ObString ps_sql_;
   stmt::StmtType type_; //prepare的语句类型
 
   common::ObString route_sql_;

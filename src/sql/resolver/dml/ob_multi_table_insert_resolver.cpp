@@ -176,7 +176,6 @@ int ObMultiTableInsertResolver::resolve_multi_table_insert(const ParseNode &node
   } else {
     //3.解析insert conditions
     //对于列只需要检测在subquery对应的generated table中是否存在对应的列,因此提前设置好相关标记
-    params_.is_multi_table_insert_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < multi_insert_cond_node.count(); ++i) {
       ObSEArray<ObRawExpr*, 8> insert_condition_exprs;
       if (OB_UNLIKELY(multi_insert_cond_node.at(i).table_cnt_ <= 0) ||
@@ -260,7 +259,6 @@ int ObMultiTableInsertResolver::resolve_multi_insert_subquey(const ParseNode &su
     ObSelectStmt *select_stmt = NULL;
     ObSelectResolver *sub_select_resolver = nullptr;
     //重置状态，避免状态误判
-    params_.is_multi_table_insert_ = false;
     params_.have_same_table_name_ = false;
     sub_select_resolver = new(select_buffer) ObSelectResolver(params_);
     sub_select_resolver->set_current_level(current_level_);
@@ -356,6 +354,9 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
     LOG_WARN("get unexpected null", K(ret), K(insert_all_stmt), K(session_info_), K(table_node));
   } else if (OB_FAIL(resolve_basic_table(*table_node, table_item))) {
     LOG_WARN("failed to resolve basic table");
+  } else if (table_item->is_link_table()) {
+    ret = OB_ERR_DDL_ON_REMOTE_DATABASE; // behavior same as Oracle
+    LOG_WARN("dblink dml not support T_INSERT_ALL", K(OB_ERR_DDL_ON_REMOTE_DATABASE));
   } else if (table_item->is_generated_table() || table_item->is_temp_table()) {
     ret = OB_ERR_A_VIEW_NOT_APPROPRIATE_HERE;
     LOG_WARN("a view is not appropriate here", K(ret));
@@ -363,7 +364,6 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
     LOG_WARN("failed to resolve basic table");
   } else {
     //提前设置好解析参数，对于多表插入会出现相同的表的场景，因此检查时需要提前设置好参数
-    params_.is_multi_table_insert_ = true;
     if (OB_FAIL(generate_insert_all_table_info(*table_item, when_conds_idx, table_info))) {
       LOG_WARN("failed to generate insert all table info", K(ret));
     } else if (OB_ISNULL(table_info)) {
@@ -598,7 +598,6 @@ int ObMultiTableInsertResolver::mock_values_column_ref(const ObColumnRefRawExpr 
       value_desc->set_column_flags(column_ref->get_column_flags());
       value_desc->set_dependant_expr(const_cast<ObRawExpr *>(column_ref->get_dependant_expr()));
       value_desc->set_ref_id(table_info.table_id_, column_ref->get_column_id());
-      value_desc->set_expr_level(current_level_);
       value_desc->set_column_attr(ObString::make_string(OB_VALUES), column_ref->get_column_name());
       if (ob_is_enumset_tc(column_ref->get_result_type().get_type ())
           && OB_FAIL(value_desc->set_enum_set_values(column_ref->get_enum_set_values()))) {
@@ -940,7 +939,7 @@ int ObMultiTableInsertResolver::refine_table_check_constraint(ObInsertAllTableIn
     //需要重新设置一下check_constraint_exprs中的列的真实的table id,eg:
     //  CREATE TABLE test2(id int CHECK(id BETWEEN 2 AND 5));
     //  INSERT ALL into test2 values(3) into test2 values(4) select 1 from dual;
-    //具体见bug:https://work.aone.alibaba-inc.com/issue/31884582
+    //具体见bug:
     if (OB_FAIL(ObRawExprUtils::extract_column_exprs(check_cst_expr, old_column_exprs))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (OB_FAIL(get_new_columns_exprs(table_info,

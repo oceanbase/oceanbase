@@ -49,6 +49,15 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace omt;
+
+namespace storage
+{
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+}
+
 namespace unittest
 {
 
@@ -108,7 +117,7 @@ class ObBasicDag : public ObIDag
 {
 public:
   ObBasicDag() :
-    ObIDag(ObDagType::DAG_TYPE_MINOR_MERGE),
+    ObIDag(ObDagType::DAG_TYPE_MAJOR_MERGE),
     id_(ObTimeUtility::current_time() + random())
   {}
   void init(int64_t id) { id_ = id; }
@@ -448,11 +457,8 @@ class ObOperator
 public:
   ObOperator() : num_(0) {}
   ~ObOperator() {}
-  void inc() { ++num_; }
-  void dec()
-  {
-    --num_;
-  }
+  void inc() { ATOMIC_INC(&num_); }
+  void dec() { ATOMIC_DEC(&num_); }
 private:
   int64_t num_;
 };

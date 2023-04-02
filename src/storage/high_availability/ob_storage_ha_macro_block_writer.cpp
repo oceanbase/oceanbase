@@ -69,10 +69,15 @@ int ObStorageHAMacroBlockWriter::check_macro_block_(
     ObMacroBlockCheckLevel check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_MAX;
     switch (migrate_verify_level) {
       case 0:
-        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
+        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_NONE;
         break;
       case 1:
-        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
+        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
+        break;
+      case 2:
+        //check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
+        //Here using logical has a bug.
+        check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
         break;
       default:
         check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_MAX;
@@ -80,17 +85,16 @@ int ObStorageHAMacroBlockWriter::check_macro_block_(
         STORAGE_LOG(WARN, "invalid check level", K(ret), K(migrate_verify_level));
         break;
     }
-    //Here using logical has a bug.
-    check_level = ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
 
-    if (OB_FAIL(macro_checker_.check(data.data(), data.length(), check_level))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(macro_checker_.check(data.data(), data.length(), check_level))) {
       STORAGE_LOG(ERROR, "failed to check macro block", K(ret), K(data), K(check_level));
     }
   }
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    ret = E(EventTable::EN_RESTORE_MACRO_CRC_ERROR) OB_SUCCESS;
+    ret = OB_E(EventTable::EN_RESTORE_MACRO_CRC_ERROR) OB_SUCCESS;
     if (OB_FAIL(ret)) {
       STORAGE_LOG(INFO, "ERRSIM check_macro_block", K(ret));
     }
@@ -114,7 +118,6 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
   int64_t log_seq_num = 0;
   int64_t data_size = 0;
   obrpc::ObCopyMacroBlockHeader header;
-  write_info.io_desc_.set_category(ObIOCategory::SYS_IO);
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
 
   if (OB_UNLIKELY(!is_inited_)) {

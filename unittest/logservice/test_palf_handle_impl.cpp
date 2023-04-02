@@ -78,7 +78,7 @@ protected:
   char log_dir_[OB_MAX_FILE_NAME_LENGTH];
   int64_t  palf_id_;
   PalfEnvImpl palf_env_impl_;
-  PalfHandleImplGuard palf_handle_impl_guard_;
+  IPalfHandleImplGuard palf_handle_impl_guard_;
 };
 
 TestLogService::TestLogService()

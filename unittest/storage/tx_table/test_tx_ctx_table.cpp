@@ -14,6 +14,7 @@
 
 #define protected public
 #define private public
+#define UNITTEST
 
 #include <vector>
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -35,6 +36,14 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 
+namespace storage
+{
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+}
+
 namespace unittest
 {
 
@@ -45,13 +54,25 @@ public:
                                   ObTxCtxTableInfo& ctx_info)
   {
     TRANS_LOG(INFO, "recover_one_tx_ctx_ called", K(ctx_info));
+    recover_tx_id_arr_.push_back(ctx_info.tx_id_);
     return 0;
   }
 
-  ObTxCtxTableInfo* get_tx_ctx_table_info()
+  bool tx_id_recovered(transaction::ObTransID tx_id)
   {
-    return &ctx_info_;
+    bool exist = false;
+
+    for (int64_t i = 0; i < recover_tx_id_arr_.size(); ++i) {
+      if (recover_tx_id_arr_[i] == tx_id) {
+        exist = true;
+        break;
+      }
+    }
+    return exist;
   }
+
+private:
+  std::vector<transaction::ObTransID> recover_tx_id_arr_;
 };
 
 class TestTxCtxTable : public ::testing::Test
@@ -64,13 +85,8 @@ public:
       log_handler_(),
       tablet_id_(LS_TX_DATA_TABLET),
       ls_id_(1),
-      tenant_id_(1001),
-      freezer_((ObLSWRSHandler *)(0x1),
-               (ObLSTxService *)(0x1),
-               (ObLSTabletService *)(0x1),
-               (checkpoint::ObDataCheckpoint *)(0x1),
-               (logservice::ObILogHandler *)(0x1),
-               ls_id_),
+      tenant_id_(1),
+      freezer_(&ls_),
       t3m_(common::OB_SERVER_TENANT_ID),
       mt_mgr_(nullptr),
       ctx_mt_mgr_(nullptr),
@@ -95,7 +111,7 @@ protected:
   virtual void SetUp() override
   {
     ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
-    freezer_.init(&ls_loop_worker_, &ls_tx_service_, &ls_tablet_service_, &ls_data_checkpoint_, &log_handler_, ls_id_);
+    freezer_.init(&ls_);
     EXPECT_EQ(OB_SUCCESS, t3m_.init());
     EXPECT_EQ(OB_SUCCESS,
               ls_tx_ctx_mgr_.init(tenant_id_, /*tenant_id*/
@@ -136,7 +152,7 @@ protected:
     mt_mgr_ = NULL;
     ctx_mt_mgr_ = NULL;
 
-    ASSERT_EQ(1, ref_count_);
+    ASSERT_EQ(0, ref_count_);
 
     tenant_base_.destroy();
     ObTenantEnv::set_tenant(nullptr);
@@ -160,7 +176,7 @@ int64_t TestTxCtxTable::ref_count_;
 TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
 {
   EXPECT_EQ(0, TestTxCtxTable::ref_count_);
-  EXPECT_EQ(OB_SUCCESS, mt_mgr_->create_memtable(0, /*last_replay_log_ts*/
+  EXPECT_EQ(OB_SUCCESS, mt_mgr_->create_memtable(SCN::min_scn(), /*last_replay_log_ts*/
                                                  0  /*schema_version*/));
 
   EXPECT_EQ(1, TestTxCtxTable::ref_count_);
@@ -227,20 +243,22 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObTransID id1(1);
   ObLSID ls_id(1);
   static ObPartTransCtx ctx1;
-  ctx1.tenant_id_ = 1001;
+  ctx1.tenant_id_ = 1;
   ctx1.trans_id_ = id1;
   ctx1.is_inited_ = true;
   ctx1.ls_id_ = ls_id;
+  ctx1.exec_info_.max_applying_log_ts_.convert_from_ts(1);
   ObTxData data1;
   // ctx1.tx_data_ = &data1;
   ctx1.ctx_tx_data_.test_init(data1, &ls_tx_ctx_mgr_);
 
   ObTransID id2(2);
   static ObPartTransCtx ctx2;
-  ctx2.tenant_id_ = 1001;
+  ctx2.tenant_id_ = 1;
   ctx2.trans_id_ = id2;
   ctx2.is_inited_ = true;
   ctx2.ls_id_ = ls_id;
+  ctx2.exec_info_.max_applying_log_ts_.convert_from_ts(2);
   ObTxData data2;
   // ctx2.tx_data_ = &data2;
   ctx2.ctx_tx_data_.test_init(data2, &ls_tx_ctx_mgr_);
@@ -252,9 +270,10 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   // ObTransSSTableDurableCtxInfo ctx_info;
   ObTxCtxTableInfo ctx_info;
   ObSliceAlloc slice_allocator;
+  ObTxDataTable tx_data_table;
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  slice_allocator.init(TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
+  tx_data_table.slice_allocator_.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
 
@@ -266,8 +285,8 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
                                         key_range,
                                         row_iter));
 
+  recover_helper.reset();
   for (int64_t ctx_idx = 0; ctx_idx < 2; ++ctx_idx) {
-    recover_helper.reset();
     ls_tx_ctx_mgr_recover->reset();
     EXPECT_EQ(OB_SUCCESS,
               ls_tx_ctx_mgr_recover->init(TestTxCtxTable::tenant_id_, /*tenant_id*/
@@ -293,13 +312,12 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
       row_copy.storage_datums_[TX_CTX_TABLE_META_COLUMN] = row_copy.storage_datums_[meta_col];
       row_copy.storage_datums_[TX_CTX_TABLE_VAL_COLUMN] = row_copy.storage_datums_[value_col];
       TRANS_LOG(INFO, "row_info projected", K(row_copy));
-      ASSERT_EQ(OB_SUCCESS, recover_helper.recover(row_copy, slice_allocator, ls_tx_ctx_mgr_recover));
+      ASSERT_EQ(OB_SUCCESS, recover_helper.recover(row_copy, tx_data_table, ls_tx_ctx_mgr_recover));
     } while (tx_ctx_memtable_iter->has_unmerged_buf_);
-
-    ObTxCtxTableInfo* ctx_info = recover_helper.get_tx_ctx_table_info();
-    EXPECT_EQ(true, ctx_info->tx_id_ == id1 ||  ctx_info->tx_id_ == id2);
-    TRANS_LOG(INFO, "[TX_CTX_TABLE] successfully recover", K(ctx_info->tx_id_));
   }
+  EXPECT_EQ(true, recover_helper.tx_id_recovered(id1));
+  EXPECT_EQ(true, recover_helper.tx_id_recovered(id2));
+  TRANS_LOG(INFO, "[TX_CTX_TABLE] successfully recover");
 /*
   TRANS_LOG(INFO, "[TX_CTX_TABLE] get next row return", KPC(row));
   EXPECT_EQ(OB_SUCCESS, ObTxCtxTable::TEST_recover(*row, idx, ctx_info, slice_allocator));

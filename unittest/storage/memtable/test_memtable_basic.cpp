@@ -28,6 +28,9 @@
 #include "storage/tx/ob_multi_data_source.h"
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
+#include "share/scn.h"
+#include "storage/ls/ob_ls.h"
+#include "storage/tx_storage/ob_ls_map.h"
 
 namespace oceanbase
 {
@@ -86,18 +89,34 @@ int ObTxTableGuard::init(ObTxTable *tx_table)
 
 namespace memtable
 {
-int ObMvccRow::check_double_insert_(const int64_t ,
+int ObMvccRow::check_double_insert_(const share::SCN ,
                                     ObMvccTransNode &,
                                     ObMvccTransNode *)
 {
   return OB_SUCCESS;
 }
+}
+
+namespace concurrent_control
+{
+int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t ,
+                                 const ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const int64_t )
+{
+  return OB_SUCCESS;
+}
+
 } // end memtable
 
 class TestMemtable : public testing::Test
 {
 public:
-  TestMemtable() : tenant_base_(1001),tablet_id_(1000),rowkey_cnt_(1) {}
+  TestMemtable() : tenant_base_(1),tablet_id_(1000),rowkey_cnt_(1) { freezer_.init(&ls_); }
   void SetUp() override {
     share::ObTenantEnv::set_tenant(&tenant_base_);
     // mock columns
@@ -115,12 +134,14 @@ public:
     ObITable::TableKey table_key;
     table_key.table_type_ = ObITable::DATA_MEMTABLE;
     table_key.tablet_id_ = ObTabletID(tablet_id_.id());
-    table_key.log_ts_range_.start_log_ts_ = 1;
-    table_key.log_ts_range_.end_log_ts_ = ObLogTsRange::MAX_TS;
+    table_key.scn_range_.start_scn_ = share::SCN::base_scn();
+    table_key.scn_range_.end_scn_ = share::SCN::max_scn();
     int64_t schema_version  = 1;
     uint32_t freeze_clock = 0;
+    ObLSHandle ls_handle;
+    ls_handle.set_ls(ls_map_, ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
 
-    return mt_table.init(table_key, nullptr, &freezer_, &memtable_mgr_, schema_version, freeze_clock);
+    return mt_table.init(table_key, ls_handle, &freezer_, &memtable_mgr_, schema_version, freeze_clock);
   }
   int mock_col_desc()
   {
@@ -176,6 +197,7 @@ public:
     read_info_.reset();
   }
 public:
+  ObLS ls_;
   share::ObTenantBase tenant_base_;
   storage::ObFreezer freezer_;
   storage::ObTabletMemtableMgr memtable_mgr_;
@@ -187,6 +209,7 @@ public:
   ObTableReadInfo read_info_;
   ObArenaAllocator allocator_;
   MemtableIDMap ctx_map_;
+  ObLSMap ls_map_;
 };
 
 class RunCtxGuard
@@ -203,8 +226,9 @@ public:
     ObStoreCtx store_ctx;
     ObTxSnapshot snapshot;
     ObTxTableGuard tx_table_guard;
+    concurrent_control::ObWriteFlag write_flag;
     tx_table_guard.init((ObTxTable*)0x100);
-    snapshot.version_ = snapshot_version;
+    snapshot.version_.convert_for_gts(snapshot_version);
     store_ctx.mvcc_acc_ctx_.init_write(trans_ctx_,
                                        mem_ctx_,
                                        tx_desc_.tx_id_,
@@ -213,7 +237,8 @@ public:
                                        tx_table_guard,
                                        snapshot,
                                        INT64_MAX,
-                                       INT64_MAX);
+                                       INT64_MAX,
+                                       write_flag);
     ObTableStoreIterator table_iter;
     store_ctx.table_iter_ = &table_iter;
     ObStoreRow write_row;
@@ -253,7 +278,7 @@ public:
         if (trans_node->is_aborted()) {
           trans_node = trans_node->prev_;
         } else if (trans_node->is_committed()) {
-          if (trans_node->trans_version_ <= snapshot) {
+          if (trans_node->trans_version_.get_val_for_logservice() <= snapshot) {
             break;
           } else {
             trans_node = trans_node->prev_;
@@ -263,7 +288,7 @@ public:
           //if (trans_node->seq_no__ <= snapshot) {
           break;
         } else {
-          if (snapshot < trans_node->trans_version_) {
+          if (snapshot < trans_node->trans_version_.get_val_for_logservice()) {
             trans_node = trans_node->prev_;
           } else {
             ret = OB_ERR_SHARED_LOCK_CONFLICT;
@@ -293,8 +318,9 @@ void print(ObMvccRow *mvcc_row)
   printf("-----------mvcc row %p------------------\n", mvcc_row);
   ObMvccTransNode *node = mvcc_row->get_list_head();
   while (node != nullptr) {
-    printf("%p tx_id:%ld trans_version:%ld log_ts:%ld prev:%p next:%p version:%ld\n",node, node->tx_id_.get_id(), node->trans_version_,node->log_timestamp_, node->prev_,
-      node->next_, node->version_);
+    printf("%p tx_id:%ld trans_version:%ld log_ts:%ld prev:%p next:%p version:%ld\n",
+           node, node->tx_id_.get_id(), node->trans_version_.get_val_for_logservice(),
+           node->scn_.get_val_for_logservice(), node->prev_, node->next_, node->version_);
     node = node->prev_;
   }
   printf("\n");
@@ -326,7 +352,9 @@ TEST_F(TestMemtable, mt_set)
   print(mvcc_row);
   EXPECT_EQ(2, rg.mem_ctx_.trans_mgr_.get_main_list_length());
 
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 1000, 1000, 0));
+  share::SCN val_1000;
+  val_1000.convert_for_logservice(1000);
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_1000, val_1000, 0));
   print(mvcc_row);
 }
 
@@ -345,13 +373,17 @@ TEST_F(TestMemtable, conflict)
   EXPECT_EQ(OB_SUCCESS, rg2.init(2, this));
   EXPECT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, rg2.write(1, 3, mt));
 
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 1000, 1000, 0));
+  share::SCN val_1000;
+  val_1000.convert_for_logservice(1000);
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_1000, val_1000, 0));
 
   EXPECT_EQ(OB_TRANSACTION_SET_VIOLATION, rg2.write(1, 3, mt, 900));
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 3, mt, 1000));
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 4, mt, 1001));
 
-  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, 1002, 1002, 0));
+  share::SCN val_1002;
+  val_1002.convert_for_logservice(1002);
+  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_1002, val_1002, 0));
 
   print(mvcc_row);
 }
@@ -365,22 +397,24 @@ TEST_F(TestMemtable, except)
   EXPECT_EQ(OB_SUCCESS, rg.init(1, this));
 
   ObMvccRow *mvcc_row = nullptr;
-  EXPECT_EQ(OB_SUCCESS, rg.write(1, 2, mt, mvcc_row, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  share::SCN val_900;
+  val_900.convert_for_logservice(900);
 
+  EXPECT_EQ(OB_SUCCESS, rg.write(1, 2, mt, mvcc_row, 1000));
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
 
   RunCtxGuard rg2;
   EXPECT_EQ(OB_SUCCESS, rg2.init(2, this));
 
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 3, mt, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
 
   RunCtxGuard rg3;
   EXPECT_EQ(OB_SUCCESS, rg3.init(3, this));
 
   EXPECT_EQ(OB_SUCCESS, rg3.write(1, 4, mt, 900));
-  EXPECT_EQ(OB_SUCCESS, rg3.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg3.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
 }
 
@@ -393,11 +427,14 @@ TEST_F(TestMemtable, multi_key)
   RunCtxGuard rg;
   EXPECT_EQ(OB_SUCCESS, rg.init(1, this));
 
+  share::SCN val_900;
+  val_900.convert_for_logservice(900);
+
   ObMvccRow *mvcc_row = nullptr;
   ObMvccRow *mvcc_row2 = nullptr;
   EXPECT_EQ(OB_SUCCESS, rg.write(1, 10, mt, mvcc_row, 1000));
   EXPECT_EQ(OB_SUCCESS, rg.write(2, 20, mt, mvcc_row2, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
   print(mvcc_row2);
 
@@ -407,7 +444,7 @@ TEST_F(TestMemtable, multi_key)
 
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 100, mt, 1000));
   EXPECT_EQ(OB_SUCCESS, rg2.write(2, 200, mt, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
   print(mvcc_row2);
 }

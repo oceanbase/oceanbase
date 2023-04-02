@@ -44,32 +44,14 @@ class CtxLockArg
 public:
   CtxLockArg() : trans_id_(), task_list_(), commit_cb_(),
       has_pending_callback_(false),
-      need_del_ctx_(false),
       p_mt_ctx_(NULL) {}
 public:
   ObTransID trans_id_;
   LocalTaskList task_list_;
   ObTxCommitCallback commit_cb_;
   bool has_pending_callback_;
-  bool need_del_ctx_;
   // It is used to wake up lock queue after submitting the log for elr transaction
   memtable::ObIMemtableCtx *p_mt_ctx_;
-};
-
-class LocalTaskFactory
-{
-public:
-  static LocalTask *alloc(int64_t msg_type)
-  { return op_reclaim_alloc_args(LocalTask, msg_type); }
-  static void release(const LocalTask *task)
-  {
-    if (NULL == task) {
-      TRANS_LOG(ERROR, "task is null", KP(task));
-    } else {
-      op_reclaim_free(const_cast<LocalTask *>(task));
-      task = NULL;
-    }
-  }
 };
 
 class CtxLock
@@ -108,44 +90,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(CtxLockGuard);
 private:
   CtxLock *lock_;
-};
-
-class TransTableSeqLock
-{
-public:
-  TransTableSeqLock() : seq_(0) {}
-  ~TransTableSeqLock() {}
-
-  void write_lock();
-  void write_unlock();
-  uint64_t read_begin();
-  bool read_retry(uint64_t seq);
-
-  DISABLE_COPY_ASSIGN(TransTableSeqLock);
-private:
-  uint64_t seq_;
-};
-
-class CtxTransTableLockGuard : public CtxLockGuard
-{
-public:
-  CtxTransTableLockGuard() : CtxLockGuard(), lock_(NULL) {}
-  explicit CtxTransTableLockGuard(CtxLock &lock,
-                                  TransTableSeqLock &seqlock,
-                                  const bool need_lock = true)
-      : CtxLockGuard(lock, need_lock), lock_(&seqlock)
-  {
-    lock_->write_lock();
-  }
-
-  ~CtxTransTableLockGuard();
-
-  void set(CtxLock &lock, TransTableSeqLock &seqlock);
-  void reset();
-
-  DISABLE_COPY_ASSIGN(CtxTransTableLockGuard);
-private:
-  TransTableSeqLock *lock_;
 };
 
 

@@ -105,7 +105,6 @@ int no_priv_needed(
 int expr_has_col_in_tab(
     const ObRawExpr *expr,
     const ObRelIds &rel_ids,
-    const int32_t expr_level,
     bool& exists)
 {
   int ret = OB_SUCCESS;
@@ -119,13 +118,12 @@ int expr_has_col_in_tab(
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (expr->is_column_ref_expr()) {
-    if (rel_ids.is_superset(expr->get_relation_ids())
-        && expr_level == expr->get_expr_level()) {
+    if (rel_ids.is_superset(expr->get_relation_ids())) {
       exists = true;
     }
   } else if (expr->has_flag(CNT_COLUMN)) {
     for (int64_t i = 0; OB_SUCC(ret) && !exists && i < expr->get_param_count(); ++i) {
-      OZ (expr_has_col_in_tab(expr->get_param_expr(i), rel_ids, expr_level, exists));
+      OZ (expr_has_col_in_tab(expr->get_param_expr(i), rel_ids, exists));
     }
   }
   return ret;
@@ -156,7 +154,7 @@ int add_nec_sel_priv_in_dml(
     }
     for (int i = 0; OB_SUCC(ret) && (!exists) && i < dml_stmt->get_condition_size(); i++) {
       const ObRawExpr *raw_expr = dml_stmt->get_condition_expr(i);
-      OZ (expr_has_col_in_tab(raw_expr, table_ids, 0, exists));
+      OZ (expr_has_col_in_tab(raw_expr, table_ids, exists));
     }
     if (OB_SUCC(ret) && exists) {
       OZ (ObPrivPacker::append_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_SELECT, packed_privs));
@@ -1714,7 +1712,8 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_BACKUP_DATABASE != basic_stmt->get_stmt_type() && 
              stmt::T_BACKUP_MANAGE != basic_stmt->get_stmt_type() &&
              stmt::T_BACKUP_CLEAN != basic_stmt->get_stmt_type() &&
-             stmt::T_DELETE_POLICY != basic_stmt->get_stmt_type()) {
+             stmt::T_DELETE_POLICY != basic_stmt->get_stmt_type() &&
+             stmt::T_RECOVER != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());
@@ -2639,11 +2638,12 @@ int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
 {
   static const char *pkg_name_need_priv[] = {
     /* add package's name here, who need to be check priv, for example */
-    "dbms_plan_cache"/* dbms_plan_cache */
+    "dbms_plan_cache",
+    "dbms_resource_manager",
   };
   static const char *pkg_name_only_need_obj_priv[] = {
     /* add package's name here, who need to be check priv, for example */
-    "dbms_plan_cache"/* dbms_plan_cache */
+    "dbms_plan_cache",
   };
   int ret = OB_SUCCESS;
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
@@ -3138,7 +3138,7 @@ bool ObPrivilegeCheck::check_password_expired_time(int64_t password_last_changed
     /*do nothing*/
   } else if ((uint64_t)(timeline) > (uint64_t)password_last_changed_ts) {
     is_expired = true;
-    LOG_WARN("the password is out of date, please change the password");
+    LOG_WARN_RET(OB_SUCCESS, "the password is out of date, please change the password");
   }
   return is_expired;
 }

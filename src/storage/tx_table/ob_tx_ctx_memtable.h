@@ -35,8 +35,8 @@ namespace storage
 // 2, Adaptation is required for a management insituation like LSM mgr[2] as a
 // design prototype, the goal is a unified abstraction of the merge module.
 //
-// [1]: https://yuque.antfin.com/ob/transaction/pxs1cv
-// [2]: https://yuque.antfin.com/docs/share/1e78f01c-73fb-4c32-a002-c2c75ca844a8?#
+// [1]:
+// [2]:
 class ObTxCtxMemtable : public memtable::ObIMemtable, public checkpoint::ObCommonCheckpoint
 {
 public:
@@ -66,11 +66,10 @@ public:
   virtual int64_t get_occupied_size() const override { return 0; }
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
-  virtual int64_t get_rec_log_ts() override;
-  virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
+  virtual share::SCN get_rec_scn();
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const override;
-
   virtual bool is_flushing() const override;
 
   // ================ NOT SUPPORTED INTERFACE ===============

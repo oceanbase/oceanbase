@@ -31,6 +31,7 @@ void ObGVTxStat::reset()
 
   ObVirtualTableScannerIterator::reset();
   all_tenants_.reset();
+  xid_.reset();
   init_ = false;
 }
 
@@ -43,6 +44,7 @@ void ObGVTxStat::destroy()
 
   ObVirtualTableScannerIterator::reset();
   all_tenants_.reset();
+  xid_.reset();
   init_ = false;
 }
 
@@ -57,12 +59,16 @@ int ObGVTxStat::prepare_start_to_read_()
   } else if (OB_SUCCESS != (ret = fill_tenant_ids_())) {
     SERVER_LOG(WARN, "fail to fill tenant ids", K(ret));
   } else {
-    for (int i = 0; i < all_tenants_.count(); i++) {
+    for (int i = 0; i < all_tenants_.count() && OB_SUCC(ret); i++) {
       int64_t cur_tenant_id = all_tenants_.at(i);
       MTL_SWITCH(cur_tenant_id) {
         transaction::ObTransService *txs = MTL(transaction::ObTransService*);
         if (OB_SUCCESS != (ret = txs->iterate_all_observer_tx_stat(tx_stat_iter_))) {
           SERVER_LOG(WARN, "iterate transaction stat error", K(ret), K(cur_tenant_id));
+          // when interate tenant failed, show all info collected, not need return error code
+          if (OB_NOT_RUNNING == ret || OB_NOT_INIT == ret) {
+            ret = OB_SUCCESS;
+          }
         }
       }
     }
@@ -151,6 +157,7 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
     }
   } else {
     const int64_t col_count = output_column_ids_.count();
+    xid_ = tx_stat.xid_;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -245,6 +252,37 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
           break;
         case IS_EXITING:
           cur_row_.cells_[i].set_int(tx_stat.is_exiting_);
+          break;
+        case COORD:
+          cur_row_.cells_[i].set_int(tx_stat.coord_.id());
+          break;
+        case LAST_REQUEST_TS:
+          cur_row_.cells_[i].set_timestamp(tx_stat.last_request_ts_);
+          break;
+        case GTRID:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_varchar(xid_.get_gtrid_str());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          } else {
+            // use default value NULL
+            cur_row_.cells_[i].reset();
+          }
+          break;
+        case BQUAL:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_varchar(xid_.get_bqual_str());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          } else {
+            // use default value NULL
+            cur_row_.cells_[i].reset();
+          }
+          break;
+        case FORMAT_ID:
+          if (!xid_.empty()) {
+            cur_row_.cells_[i].set_int(xid_.get_format_id());
+          } else {
+            cur_row_.cells_[i].set_int(-1);
+          }
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

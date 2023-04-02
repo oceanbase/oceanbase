@@ -30,7 +30,7 @@ uint64_t ObStmtResolver::generate_table_id()
   if (NULL != params_.query_ctx_) {
     return params_.query_ctx_->available_tb_id_--;
   } else {
-    LOG_WARN("query ctx pointer is null");
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "query ctx pointer is null");
     return OB_INVALID_ID;
   }
 }
@@ -89,11 +89,20 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
       NULL != dblink_name_len &&
       node->num_child_ >= 3 && 
       NULL != node->children_[2] && 
-      T_IDENT == node->children_[2]->type_ &&
-      NULL != node->children_[2]->str_value_) {
+      T_DBLINK_NAME == node->children_[2]->type_ &&
+      NULL != node->children_[2]->children_ &&
+      2 == node->children_[2]->num_child_ &&
+      NULL != node->children_[2]->children_[0] &&
+      NULL != node->children_[2]->children_[1]) {
     //Obtaining dblink_name here is not to obtain the dblink name itself, but to determine whether there is an opt_dblink node
-    *dblink_name_ptr = const_cast<char*>(node->children_[2]->str_value_);
-    *dblink_name_len = static_cast<int32_t>(node->children_[2]->str_len_);
+    ParseNode *dblink_name_node = node->children_[2];
+    if (node->children_[2]->children_[1]->value_) { // dblink name is @!
+      *dblink_name_ptr = const_cast<char*>(node->children_[2]->children_[0]->str_value_);
+      *dblink_name_len = 1;
+    } else { // dblink name is @xxxx or @, @ will be skip before here
+      *dblink_name_ptr = const_cast<char*>(node->children_[2]->children_[0]->str_value_);
+      *dblink_name_len = static_cast<int32_t>(node->children_[2]->children_[0]->str_len_);
+    }
   }
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -156,6 +165,24 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
     } else {
       ret = tmp_ret;
       LOG_WARN("fail to check and convert table name", K(table_name), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node)
+{
+  int ret = OB_SUCCESS;
+  dblink_name.reset();
+  if (!OB_ISNULL(table_node) && table_node->num_child_ > 2 &&
+      !OB_ISNULL(table_node->children_) && !OB_ISNULL(table_node->children_[2])) {
+    const ParseNode *dblink_node = table_node->children_[2];
+    has_dblink_node = true;
+    if (2 == dblink_node->num_child_ && !OB_ISNULL(dblink_node->children_) &&
+        !OB_ISNULL(dblink_node->children_[0]) && !OB_ISNULL(dblink_node->children_[1])) {
+      int32_t dblink_name_len = static_cast<int32_t>(dblink_node->children_[0]->str_len_);
+      dblink_name.assign_ptr(dblink_node->children_[0]->str_value_, dblink_name_len);
+      is_reverse_link = dblink_node->children_[1]->value_;
     }
   }
   return ret;
@@ -247,7 +274,7 @@ int ObStmtResolver::normalize_table_or_database_names(ObString &name)
   return ret;
 }
 
-int ObSynonymChecker::add_synonym_id(uint64_t synonym_id)
+int ObSynonymChecker::add_synonym_id(uint64_t synonym_id, uint64_t database_id)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < synonym_ids_.count(); ++i) {
@@ -260,6 +287,8 @@ int ObSynonymChecker::add_synonym_id(uint64_t synonym_id)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(synonym_ids_.push_back(synonym_id))) {
     LOG_WARN("fail to add synonym_id", K(synonym_id), K(ret));
+  } else if (OB_FAIL(database_ids_.push_back(database_id))) {
+    LOG_WARN("fail to add database id", K(database_id), K(ret));
   }
   return ret;
 }

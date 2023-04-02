@@ -276,9 +276,10 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REFRESH_IO_CALIBRATION, get_sys_tenant_alter_syste
 OB_STMT_TYPE_DEF(T_INSERT_ALL, get_dml_stmt_need_privs, 277, ACTION_TYPE_INSERT)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_PHYSICAL_RESTORE_STANDBY_TENANT, get_sys_tenant_alter_system_priv, 278)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_RECOVER, get_sys_tenant_alter_system_priv, 279)
-//OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ADD_ARBITRATION_SERVICE, get_sys_tenant_alter_system_priv, 280)
-//OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REMOVE_ARBITRATION_SERVICE, get_sys_tenant_alter_system_priv, 281)
-//OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REPLACE_ARBITRATION_SERVICE, get_sys_tenant_alter_system_priv, 282)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ADD_ARBITRATION_SERVICE, get_sys_tenant_alter_system_priv, 280)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REMOVE_ARBITRATION_SERVICE, get_sys_tenant_alter_system_priv, 281)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REPLACE_ARBITRATION_SERVICE, get_sys_tenant_alter_system_priv, 282)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SHOW_SEQUENCES, err_stmt_type_priv, 283)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif

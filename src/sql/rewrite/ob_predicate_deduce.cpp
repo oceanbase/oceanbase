@@ -176,14 +176,19 @@ int ObPredicateDeduce::choose_equal_preds(ObIArray<uint8_t> &chosen,
       } else if (OB_FAIL(table_filter.push_back(i * N + j))) {
         LOG_WARN("failed to push back table filter", K(ret));
       }
+//      bool is_eq = has(graph_, i, j, EQ);
+//      bool is_ch = has(chosen, i, j, EQ);
+//      LOG_TRACE("print predicate",
+//               "first expr",
+//               ObLogPrintName<ObRawExpr>(*input_exprs_.at(i)),
+//               "second expr",
+//               ObLogPrintName<ObRawExpr>(*input_exprs_.at(j)), K(is_eq), K(is_ch));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_filter.count(); ++i) {
     int64_t left = table_filter.at(i) / N;
     int64_t right = table_filter.at(i) % N;
-    if (equal_pairs.at(left) == equal_pairs.at(right) && equal_pairs.at(right) != INT64_MAX) {
-      // already implied
-    } else {
+    if (equal_pairs.at(left) == INT64_MAX || equal_pairs.at(right) == INT64_MAX) {
       set(chosen, left, right, EQ);
       equal_pairs.at(left) = left;
       equal_pairs.at(right) = left;
@@ -285,9 +290,8 @@ int ObPredicateDeduce::check_index_part_cond(ObTransformerCtx &ctx,
                                                                 table->ref_id_,
                                                                 col->get_column_id(),
                                                                 column_schema,
-                                                                true,
-                                                                table->is_link_table()))) {
-        LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()), K(col->get_table_id()), K(table->is_link_table()), K(table), K(col), K(lbt()));
+                                                                true))) {
+        LOG_WARN("failed to get column schema", K(ret), K(table->ref_id_), K(col->get_column_id()), K(col->get_table_id()), K(table), K(col), K(lbt()));
       } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column schema is null", K(ret));
@@ -296,14 +300,12 @@ int ObPredicateDeduce::check_index_part_cond(ObTransformerCtx &ctx,
       } else if (OB_FAIL(ctx.schema_checker_->check_column_has_index(column_schema->get_tenant_id(),
                                                                      table->ref_id_,
                                                                      col->get_column_id(),
-                                                                     is_valid,
-                                                                     table->is_link_table()))) {
+                                                                     is_valid))) {
         LOG_WARN("failed to check column is a key", K(ret));
       } else if (is_valid) {
         // do nothing
-      } else if (!table->is_link_table() &&
-                 (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
-                           table->ref_id_, col->get_column_id(), is_valid))) {
+      } else if (ctx.schema_checker_->check_if_partition_key(session_info->get_effective_tenant_id(),
+                           table->ref_id_, col->get_column_id(), is_valid)) {
         LOG_WARN("failed to check if partition key", K(ret));
     }
   }
@@ -391,7 +393,7 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
                       *expr_factory, session_info, T_OP_EQ,
                       pred, input_exprs_.at(i), input_exprs_.at(j)))) {
           LOG_WARN("failed to create double op expr", K(ret));
-        } else if (OB_FAIL(pred->pull_relation_id_and_levels(stmt_.get_current_level()))) {
+        } else if (OB_FAIL(pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
         } else if (OB_FAIL(output_exprs.push_back(pred))) {
           LOG_WARN("failed to push back pred", K(ret));
@@ -403,7 +405,7 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
                       *expr_factory, session_info, T_OP_GT,
                       pred, input_exprs_.at(i), input_exprs_.at(j)))) {
           LOG_WARN("failed to create double op expr", K(ret));
-        } else if (OB_FAIL(pred->pull_relation_id_and_levels(stmt_.get_current_level()))) {
+        } else if (OB_FAIL(pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
         } else if (OB_FAIL(output_exprs.push_back(pred))) {
           LOG_WARN("failed to push back pred", K(ret));
@@ -415,7 +417,7 @@ int ObPredicateDeduce::create_simple_preds(ObTransformerCtx &ctx,
                       *expr_factory, session_info, T_OP_GE,
                       pred, input_exprs_.at(i), input_exprs_.at(j)))) {
           LOG_WARN("failed to create double op expr", K(ret));
-        } else if (OB_FAIL(pred->pull_relation_id_and_levels(stmt_.get_current_level()))) {
+        } else if (OB_FAIL(pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
         } else if (OB_FAIL(output_exprs.push_back(pred))) {
           LOG_WARN("failed to push back pred", K(ret));
@@ -435,10 +437,8 @@ int ObPredicateDeduce::convert_pred(const ObRawExpr *pred,
   if (OB_ISNULL(pred)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("predicate is null", K(ret), K(pred));
-  } else if (!ObOptimizerUtil::find_equal_expr(
-               input_exprs_, pred->get_param_expr(0), left_id) ||
-             !ObOptimizerUtil::find_equal_expr(
-               input_exprs_, pred->get_param_expr(1), right_id)) {
+  } else if (!find_equal_expr(input_exprs_, pred->get_param_expr(0), &left_id) ||
+             !find_equal_expr(input_exprs_, pred->get_param_expr(1), &right_id)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("does not find expr", K(ret), K(*pred), K(left_id), K(right_id));
   } else if (pred->get_expr_type() == T_OP_EQ) {
@@ -581,7 +581,7 @@ int ObPredicateDeduce::deduce_general_predicates(ObTransformerCtx &ctx,
         new_pred->get_param_expr(0) = equal_exprs.at(j);
         if (OB_FAIL(new_pred->formalize(ctx.session_info_))) {
           LOG_WARN("failed to formalize expr", K(ret));
-        } else if (OB_FAIL(new_pred->pull_relation_id_and_levels(stmt_.get_current_level()))) {
+        } else if (OB_FAIL(new_pred->pull_relation_id())) {
           LOG_WARN("failed to pull relation id and levels", K(ret));
         } else if (OB_FAIL(result.push_back(new_pred))) {
           LOG_WARN("failed to push back new pred", K(ret));
@@ -627,6 +627,7 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> first_params;
+  ObSEArray<ObRawExpr *, 4> candi_exprs;
   int64_t param_idx = -1;
   ObRawExpr *param_expr = NULL;
   if (OB_ISNULL(pred) || OB_ISNULL(param_expr = pred->get_param_expr(0))) {
@@ -637,23 +638,101 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
   } else if (ObOptimizerUtil::find_item(input_exprs_, param_expr, &param_idx)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ObRawExpr *expr = input_exprs_.at(i);
+      const ObRawExpr *real_expr = expr;
+      bool need_check_type_safe = false;
       if (!has(graph_, param_idx, i, EQ) || i == param_idx) {
         // do nothing
       } else if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("input expr is null", K(ret));
-      } else if (!expr->is_column_ref_expr()) {
+      } else if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, real_expr))) {
+        LOG_WARN("fail to get real expr", K(ret), K(expr));
+      } else if (!real_expr->is_column_ref_expr()) {
         // do nothing
-      } else if (expr->get_result_type() != param_expr->get_result_type()) {
-        // do nothing
-      } else if (!ObOptimizerUtil::find_item(target_exprs, expr)) {
+      } else if (!ObOptimizerUtil::find_item(target_exprs, real_expr)) {
         // do nothing
       } else if (ObOptimizerUtil::find_item(first_params, expr)) {
         // do nothing
+      } else if (param_expr->get_result_type().get_type() != expr->get_result_type().get_type()) {
+        need_check_type_safe = is_type_safe(param_idx, i);
+      } else if (ob_is_string_or_lob_type(param_expr->get_result_type().get_type())
+                && ((param_expr->get_result_type().get_collation_level() != expr->get_result_type().get_collation_level())
+                    || (param_expr->get_result_type().get_collation_type() != expr->get_result_type().get_collation_type()))) {
+        need_check_type_safe = is_type_safe(param_idx, i);
       } else if (OB_FAIL(equal_exprs.push_back(expr))) {
         LOG_WARN("failed to push back equal expr", K(ret));
       }
+      if (OB_SUCC(ret) && need_check_type_safe && OB_FAIL(candi_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back candi exprs whose result type is different from param_expr", K(ret));
+      }
     }
+    if (OB_SUCC(ret) && !candi_exprs.empty()) {
+      bool type_safe = false;
+      if (OB_FAIL(check_cmp_metas_for_general_preds(param_expr, pred, type_safe))) {
+        LOG_WARN("fail to get cmp metas for the param expr", K(ret));
+      } else if (type_safe) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
+          type_safe = false;
+          if (OB_FAIL(check_cmp_metas_for_general_preds(candi_exprs.at(i), pred, type_safe))) {
+            LOG_WARN("fail to get cmp metas for candi exprs", K(ret));
+          } else if (type_safe && OB_FAIL(equal_exprs.push_back(candi_exprs.at(i)))) {
+            LOG_WARN("failed to push back equal expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPredicateDeduce::check_cmp_metas_for_general_preds(ObRawExpr *left_expr, ObRawExpr *pred, bool &type_safe) {
+  int ret = OB_SUCCESS;
+  ObObjMeta cmp_meta;
+  if (OB_ISNULL(left_expr) || OB_ISNULL(pred)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(left_expr), K(pred));
+  } else if (T_OP_IN == pred->get_expr_type()) {
+    //params of preds like 'A in (a,b,c...)' has been grouped by result types in pre-process phase,
+    //for example: 'A in (int_a, int_b, float_a, float_b)' <=> A in (int_a, int_b) or A in (float_a, float_b)
+    //so only check the cmp type of A and the first param of row_op
+    ObRawExpr *right_expr = NULL;
+    if (OB_ISNULL(right_expr = pred->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(right_expr));
+    } else if (T_OP_ROW != right_expr->get_expr_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the second param of in expr is not row_op", K(ret), K(right_expr->get_expr_type()));
+    } else if (OB_ISNULL(right_expr = right_expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(right_expr));
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(),right_expr->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else {
+      type_safe = (cmp_meta == cmp_type_);
+    }
+  } else if (T_OP_NE == pred->get_expr_type()) {
+    if (OB_ISNULL(pred->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(pred->get_param_expr(1)));
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(),pred->get_param_expr(1)->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else {
+      type_safe = (cmp_meta == cmp_type_);
+    }
+  } else if (T_OP_BTW == pred->get_expr_type()) {
+    if (OB_ISNULL(pred->get_param_expr(1)) || OB_ISNULL(pred->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(pred->get_param_expr(1)), K(pred->get_param_expr(2)));
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(), pred->get_param_expr(1)->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else if (cmp_meta != cmp_type_) {
+    } else if (OB_FAIL(ObRelationalExprOperator::get_equal_meta(cmp_meta, left_expr->get_result_type(), pred->get_param_expr(2)->get_result_type()))) {
+      LOG_WARN("failed to get equal meta", K(ret));
+    } else {
+      type_safe = (cmp_meta == cmp_type_);
+    }
+  } else {
+    type_safe = false;
   }
   return ret;
 }
@@ -772,7 +851,7 @@ int ObPredicateDeduce::deduce_aggr_bound_predicates(ObTransformerCtx &ctx,
                                                         target_exprs.at(i),
                                                         lower_expr))) {
         LOG_WARN("failed to create compare expr", K(ret));
-      } else if (OB_FAIL(new_pred->pull_relation_id_and_levels(stmt_.get_current_level()))) {
+      } else if (OB_FAIL(new_pred->pull_relation_id())) {
         LOG_WARN("failed to pull relation id and levels", K(ret));
       } else if (OB_FAIL(aggr_bound_preds.push_back(new_pred))) {
         LOG_WARN("failed to push back new predicate", K(ret));
@@ -787,7 +866,7 @@ int ObPredicateDeduce::deduce_aggr_bound_predicates(ObTransformerCtx &ctx,
                                                         upper_expr,
                                                         target_exprs.at(i)))) {
         LOG_WARN("failed to create compare expr", K(ret));
-      } else if (OB_FAIL(new_pred->pull_relation_id_and_levels(stmt_.get_current_level()))) {
+      } else if (OB_FAIL(new_pred->pull_relation_id())) {
         LOG_WARN("failed to pull relation id and levels", K(ret));
       } else if (OB_FAIL(aggr_bound_preds.push_back(new_pred))) {
         LOG_WARN("failed to push back new predicate", K(ret));
@@ -840,7 +919,7 @@ int ObPredicateDeduce::get_expr_bound(ObRawExpr *target,
   bool check_lower = true;
   lower = upper = NULL;
   lower_type = upper_type = EQ;
-  if (ObOptimizerUtil::find_equal_expr(input_exprs_, target, target_idx)) {
+  if (find_equal_expr(input_exprs_, target, &target_idx)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       int64_t expr_idx = topo_order_.at(i);
       bool has_gt = false;
@@ -868,4 +947,33 @@ int ObPredicateDeduce::get_expr_bound(ObRawExpr *target,
     }
   }
   return ret;
+}
+
+// TODO (link.zt), try to remove the function
+bool ObPredicateDeduce::find_equal_expr(const ObIArray<ObRawExpr *> &exprs,
+                                        const ObRawExpr *target,
+                                        int64_t *idx,
+                                        ObExprParamCheckContext *context)
+{
+  bool bret = false;
+  int64_t target_idx = -1;
+  if (NULL != target) {
+    for (int64_t i = 0; !bret && i < exprs.count(); ++i) {
+      if (NULL != exprs.at(i)) {
+        if (target == exprs.at(i)) {
+          bret = true;
+          target_idx = i;
+        } else if (target->is_generalized_column()) {
+          // do nothing
+        } else if (target->same_as(*exprs.at(i), context)) {
+          bret = true;
+          target_idx = i;
+        }
+      }
+    }
+  }
+  if (NULL != idx) {
+    *idx = target_idx;
+  }
+  return bret;
 }

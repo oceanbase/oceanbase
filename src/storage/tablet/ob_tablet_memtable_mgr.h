@@ -17,6 +17,8 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/ob_storage_struct.h"
+#include "storage/ob_storage_schema_recorder.h"
+#include "storage/compaction/ob_medium_compaction_mgr.h"
 
 namespace oceanbase
 {
@@ -36,6 +38,8 @@ class ObFreezer;
 class ObTabletMemtableMgr : public ObIMemtableMgr
 {
 public:
+  friend class memtable::ObMemtable;
+public:
   typedef common::ObIArray<ObTableHandleV2> ObTableHdlArray;
 
 public:
@@ -47,9 +51,6 @@ public:
                    ObFreezer *freezer,
                    ObTenantMetaMemMgr *t3m) override;
 
-  virtual int create_memtable(const int64_t clog_checkpoint_ts,
-                              const int64_t schema_version,
-                              const bool for_replay=false) override;
   virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
   virtual int get_all_memtables(ObTableHdlArray &handle) override;
   virtual void destroy() override;
@@ -57,18 +58,19 @@ public:
 
   bool has_active_memtable();
   int64_t get_memtable_count() const;
-  virtual int get_memtable_for_replay(int64_t replay_log_ts,
+  virtual int get_memtable_for_replay(share::SCN replay_scn,
                                       ObTableHandleV2 &handle) override;
-  memtable::ObMemtable *get_last_frozen_memtable() const;
-  memtable::ObMemtable *get_last_frozen_memtable_() const;
+  int get_last_frozen_memtable(ObTableHandleV2 &handle) const;
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) override;
   virtual int get_multi_source_data_unit(
       memtable::ObIMultiSourceDataUnit *const multi_source_data_unit,
       ObIAllocator *allocator = nullptr) const override;
   virtual int get_memtable_for_multi_source_data_unit(
-      memtable::ObMemtable *&memtable,
+      ObTableHandleV2 &handle,
       const memtable::MultiSourceDataUnitType type) const override;
-  int release_tail_memtable(memtable::ObIMemtable *memtable);
+  int create_memtable(const share::SCN clog_checkpoint_scn,
+                      const int64_t schema_version,
+                      const bool for_replay);
   int get_memtables(
       ObTableHdlArray &handle,
       const bool reset_handle = true,
@@ -82,21 +84,26 @@ public:
       const bool include_active_memtable = true);
   int get_memtables_nolock(ObTableHdlArray &handle);
   int get_first_frozen_memtable(ObTableHandleV2 &handle) const;
-  int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable, int64_t start_log_ts, int64_t snapshot_version);
-  int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
-  int set_is_tablet_freeze_for_active_memtable(memtable::ObIMemtable *&memtable,
+  int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle,
                                                bool is_force_freeze = false);
 
   ObStorageSchemaRecorder &get_storage_schema_recorder()
   {
     return schema_recorder_;
   }
-  virtual int init_storage_schema_recorder(
+  compaction::ObTabletMediumCompactionInfoRecorder &get_medium_info_recorder()
+  {
+    return medium_info_recorder_;
+  }
+  virtual int init_storage_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       logservice::ObLogHandler *log_handler) override;
-  virtual int reset_storage_schema_recorder() override;
+  virtual int reset_storage_recorder() override;
+  virtual int remove_memtables_from_data_checkpoint() override;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -124,6 +131,13 @@ private:
       int64_t &start_pos);
   int get_first_frozen_memtable_(ObTableHandleV2 &handle) const;
   void clean_tail_memtable_();
+  int get_last_frozen_memtable_(ObTableHandleV2 &handle) const;
+  int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
+                                                share::SCN start_scn,
+                                                share::SCN snapshot_version);
+  int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
+  void unlink_memtable_mgr_and_memtable_(memtable::ObMemtable *memtable);
+  void wait_memtable_mgr_op_cnt_(memtable::ObMemtable *memtable);
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMemtableMgr);
 
@@ -131,8 +145,11 @@ private:
   static const int64_t PRINT_READABLE_INFO_DURATION_US = 1000 * 1000 * 60 * 10L; //10min
 
 private:
-  ObLS *ls_; //8B
-  ObStorageSchemaRecorder schema_recorder_;// 136B
+  ObLS *ls_; // 8B
+  common::SpinRWLock lock_def_; //8B
+  int64_t retry_times_; // 8B
+  ObStorageSchemaRecorder schema_recorder_; // 120B
+  compaction::ObTabletMediumCompactionInfoRecorder medium_info_recorder_; // 96B
 };
 }
 }

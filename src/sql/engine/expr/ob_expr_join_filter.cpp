@@ -24,6 +24,20 @@ namespace oceanbase
 namespace sql
 {
 
+#define FILL_BATCH_RESULT() \
+      if (OB_FAIL(ObBitVector::flip_foreach(skip, batch_size,\
+        [&](int64_t idx) __attribute__((always_inline)) {\
+          ++join_filter_ctx->n_times_;\
+          int ret = OB_SUCCESS;\
+          eval_flags.set(idx);\
+          results[idx].set_int(is_match);\
+          if (OB_FAIL(collect_sample_info(join_filter_ctx, is_match))) {\
+            LOG_WARN("fail to collect sample info", K(ret));\
+          } else {\
+            ++join_filter_ctx->total_count_;\
+          }\
+          return ret;\
+        }))) {}
 
 void ObExprJoinFilter::ObExprJoinFilterContext::reset_monitor_info()
 {
@@ -32,6 +46,7 @@ void ObExprJoinFilter::ObExprJoinFilterContext::reset_monitor_info()
   check_count_ = 0;
   n_times_ = 0;
   ready_ts_ = 0;
+  dynamic_disable_ = false;
   is_ready_ = false;
 }
 
@@ -85,24 +100,9 @@ int ObExprJoinFilter::eval_bloom_filter(const ObExpr &expr, ObEvalCtx &ctx,
       }
     }
     if (OB_NOT_NULL(bloom_filter_ptr_)) {
-      if (!join_filter_ctx->is_ready_) {
-        if (join_filter_ctx->wait_ready_) {
-          while (!join_filter_ctx->is_ready_ && OB_SUCC(exec_ctx.fast_check_status())) {
-            if (bloom_filter_ptr_->check_ready()) {
-              join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
-              join_filter_ctx->is_ready_ = true;
-            } else {
-              ob_usleep(100);
-            }
-          }
-        } else {
-          if ((join_filter_ctx->n_times_ & CHECK_TIMES) == 0 && bloom_filter_ptr_->check_ready()) {
-            join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
-            join_filter_ctx->is_ready_ = true;
-          }
-        }
-      }
-      if (OB_FAIL(ret) || !join_filter_ctx->is_ready_) {
+      if (OB_FAIL(check_bf_ready(exec_ctx, join_filter_ctx))) {
+        LOG_WARN("fail to check bf ready", K(ret));
+      } else if (!join_filter_ctx->is_ready() || join_filter_ctx->dynamic_disable()) {
       } else if (expr.arg_cnt_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the expr of arg cnt is invalid", K(ret));
@@ -115,8 +115,8 @@ int ObExprJoinFilter::eval_bloom_filter(const ObExpr &expr, ObEvalCtx &ctx,
             LOG_WARN("failed to eval datum", K(ret));
           } else {
             if (OB_ISNULL(expr.inner_functions_)) {
-              // for compatibility
-              hash_func.hash_func_ = expr.args_[i]->basic_funcs_->murmur_hash_;
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr.inner_functions_ is null", K(ret));
             } else {
               hash_func.hash_func_ = reinterpret_cast<ObDatumHashFuncType>(expr.inner_functions_[i * 2]);
             }
@@ -137,8 +137,12 @@ int ObExprJoinFilter::eval_bloom_filter(const ObExpr &expr, ObEvalCtx &ctx,
       if (!is_match) {
         join_filter_ctx->filter_count_++;
       }
-      join_filter_ctx->total_count_++;
       res.set_int(is_match ? 1 : 0);
+      if (OB_FAIL(collect_sample_info(join_filter_ctx, is_match))) {
+        LOG_WARN("fail to collect sample info", K(ret));
+      } else {
+        join_filter_ctx->total_count_++;
+      }
     }
   }
   return ret;
@@ -177,32 +181,10 @@ int ObExprJoinFilter::eval_bloom_filter_batch(
       }
     }
     if (OB_NOT_NULL(bloom_filter_ptr_)) {
-      if (!join_filter_ctx->is_ready_) {
-        if ((join_filter_ctx->n_times_ & CHECK_TIMES) == 0 && bloom_filter_ptr_->check_ready()) {
-          join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
-          join_filter_ctx->is_ready_ = true;
-        }
-        if (!join_filter_ctx->wait_ready_) {
-          if (OB_FAIL(ObBitVector::flip_foreach(skip, batch_size,
-            [&](int64_t idx) __attribute__((always_inline)) {
-              ++join_filter_ctx->n_times_;
-              ++join_filter_ctx->total_count_;
-              eval_flags.set(idx);
-              results[idx].set_int(is_match); // all results are true when join_filter_ctx is not ready.
-              return OB_SUCCESS;
-            }))) { /* do nothing */}
-        } else {
-          while (!join_filter_ctx->is_ready_ && OB_SUCC(exec_ctx.fast_check_status())) {
-            if (bloom_filter_ptr_->check_ready()) {
-              join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
-              join_filter_ctx->is_ready_ = true;
-            } else {
-              ob_usleep(100);
-            }
-          }
-        }
-      }
-      if (OB_FAIL(ret) || !join_filter_ctx->is_ready_) {
+      if (OB_FAIL(check_bf_ready(exec_ctx, join_filter_ctx))) {
+        LOG_WARN("fail to check bf ready", K(ret));
+      } else if (!join_filter_ctx->is_ready() || join_filter_ctx->dynamic_disable()) {
+        FILL_BATCH_RESULT();
       } else if (expr.arg_cnt_ <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the expr of arg cnt is invalid", K(ret));
@@ -236,11 +218,17 @@ int ObExprJoinFilter::eval_bloom_filter_batch(
         } else if (OB_FAIL(ObBitVector::flip_foreach(skip, batch_size,
             [&](int64_t idx) __attribute__((always_inline)) {
               ret = bloom_filter_ptr_->might_contain(hash_values[idx], is_match);
-              ++join_filter_ctx->check_count_;
-              ++join_filter_ctx->total_count_;
-              join_filter_ctx->filter_count_ += !is_match;
-              eval_flags.set(idx);
-              results[idx].set_int(is_match);
+              if (OB_SUCC(ret)) {
+                join_filter_ctx->filter_count_ += !is_match;
+                eval_flags.set(idx);
+                results[idx].set_int(is_match);
+                if (OB_FAIL(collect_sample_info(join_filter_ctx, is_match))) {
+                  LOG_WARN("fail to collect sample info", K(ret));
+                } else {
+                  ++join_filter_ctx->check_count_;
+                  ++join_filter_ctx->total_count_;
+                }
+              }
               return ret;
             }))) {
           LOG_WARN("failed to process prefetch block", K(ret));
@@ -248,14 +236,7 @@ int ObExprJoinFilter::eval_bloom_filter_batch(
       }
     } else { // bloom_filter_ptr_ is null
       LOG_DEBUG("the bloom_filter_ptr_ is null in batch mode", K(ret));
-      if (OB_FAIL(ObBitVector::flip_foreach(skip, batch_size,
-        [&](int64_t idx) __attribute__((always_inline)) {
-          ++join_filter_ctx->n_times_;
-          ++join_filter_ctx->total_count_;
-          eval_flags.set(idx);
-          results[idx].set_int(is_match); // all results are true when join_filter_ctx is not ready.
-          return OB_SUCCESS;
-        }))) { /* do nothing*/ }
+      FILL_BATCH_RESULT();
     }
   }
 
@@ -280,13 +261,98 @@ int ObExprJoinFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
     LOG_WARN("alloc memory for inner_functions_ failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rt_expr.arg_cnt_; ++i) {
-      rt_expr.inner_functions_[i * 2] = reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_);
-      rt_expr.inner_functions_[i * 2 + 1] = reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_batch_);
+      bool is_murmur_hash_v2_ = expr_cg_ctx.cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0;
+      rt_expr.inner_functions_[i * 2] = is_murmur_hash_v2_ ?
+          reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_v2_)
+          : reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_);
+      rt_expr.inner_functions_[i * 2 + 1] = is_murmur_hash_v2_ ?
+          reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_v2_batch_)
+          : reinterpret_cast<void*>(rt_expr.args_[i]->basic_funcs_->murmur_hash_batch_);
     }
   }
 
   return ret;
 }
+
+int ObExprJoinFilter::check_bf_ready(
+    ObExecContext &exec_ctx,
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(join_filter_ctx)) {
+  } else if (!join_filter_ctx->is_ready()) {
+    ObPxBloomFilter *&bloom_filter_ptr_ = join_filter_ctx->bloom_filter_ptr_;
+    if (join_filter_ctx->need_wait_ready()) {
+      while (!join_filter_ctx->is_ready() && OB_SUCC(exec_ctx.fast_check_status())) {
+        if (bloom_filter_ptr_->check_ready()) {
+          join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
+          join_filter_ctx->is_ready_ = true;
+        } else {
+          ob_usleep(100);
+        }
+      }
+    } else {
+      if ((join_filter_ctx->n_times_ & CHECK_TIMES) == 0 && bloom_filter_ptr_->check_ready()) {
+        join_filter_ctx->ready_ts_ = ObTimeUtility::current_time();
+        join_filter_ctx->is_ready_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprJoinFilter::collect_sample_info(
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx,
+    bool is_match)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(join_filter_ctx)) {
+  } else if (OB_FAIL(check_need_dynamic_diable_bf(join_filter_ctx))) {
+    LOG_WARN("fail to check need dynamic disable bf", K(ret));
+  } else if (!join_filter_ctx->dynamic_disable()) {
+    if (!is_match) {
+      join_filter_ctx->partial_filter_count_++;
+    }
+    join_filter_ctx->partial_total_count_++;
+  }
+  return ret;
+}
+
+int ObExprJoinFilter::check_need_dynamic_diable_bf(
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(join_filter_ctx)) {
+  } else if (join_filter_ctx->cur_pos_ == join_filter_ctx->next_check_start_pos_) {
+    join_filter_ctx->partial_total_count_ = 0;
+    join_filter_ctx->partial_filter_count_ = 0;
+    if (join_filter_ctx->dynamic_disable()) {
+      join_filter_ctx->dynamic_disable_ = false;
+    }
+  } else if (join_filter_ctx->cur_pos_ >=
+             join_filter_ctx->next_check_start_pos_ + join_filter_ctx->window_size_) {
+    if (join_filter_ctx->partial_total_count_ -
+          join_filter_ctx->partial_filter_count_ <
+          join_filter_ctx->partial_filter_count_) {
+       // partial_filter_count_ / partial_total_count_ > 0.5
+       // The optimizer choose the bloom filter when the filter threshold is larger than 0.6
+       // 0.5 is a acceptable value
+      join_filter_ctx->partial_total_count_ = 0;
+      join_filter_ctx->partial_filter_count_ = 0;
+      join_filter_ctx->window_cnt_ = 0;
+      join_filter_ctx->next_check_start_pos_ = join_filter_ctx->cur_pos_;
+    } else {
+      join_filter_ctx->partial_total_count_ = 0;
+      join_filter_ctx->partial_filter_count_ = 0;
+      join_filter_ctx->window_cnt_++;
+      join_filter_ctx->next_check_start_pos_ = join_filter_ctx->cur_pos_ +
+          (join_filter_ctx->window_size_ * join_filter_ctx->window_cnt_);
+      join_filter_ctx->dynamic_disable_ = true;
+    }
+  }
+  return ret;
+}
+
 
 }
 }

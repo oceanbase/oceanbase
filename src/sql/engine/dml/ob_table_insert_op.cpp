@@ -26,6 +26,7 @@
 #include "lib/profile/ob_perf_event.h"
 #include "share/schema/ob_table_dml_param.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 
 namespace oceanbase
@@ -34,6 +35,7 @@ using namespace common;
 using namespace storage;
 using namespace share;
 using namespace share::schema;
+using namespace observer;
 namespace sql
 {
 
@@ -106,6 +108,22 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertSpec)
   return len;
 }
 
+int ObTableInsertOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ins_ctdefs_.count() && !execute_single_row_; ++i) {
+      const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
+      const ObInsCtDef &ins_ctdef = *ctdefs.at(0);
+      if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
+        execute_single_row_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
 OB_INLINE int ObTableInsertOp::inner_open_with_das()
 {
   int ret = OB_SUCCESS;
@@ -133,6 +151,11 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
       const ObInsCtDef &ins_ctdef = *ctdefs.at(j);
       if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, ins_ctdef, trigger_clear_exprs_))) {
         LOG_WARN("init insert rtdef failed", K(ret));
+      } else {
+        const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+        if (plan->get_enable_append() && (0 != plan->get_append_table_id())) {
+          ins_rtdef.das_rtdef_.direct_insert_task_id_ = 1;
+        }
       }
     }
     if (OB_SUCC(ret) && !rtdefs.empty()) {
@@ -150,7 +173,7 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
         //this table is being accessed by dml operator, mark its table location as writing
         //but single value insert in oracle allow the nested sql modify its insert table
         //clear the writing flag in table location before the trigger execution
-        //see it:https://yuque.antfin-inc.com/docs/share/40291dac-859c-48de-8a31-79bb7ca7c571
+        //see it:
         primary_ins_rtdef.das_rtdef_.table_loc_->is_writing_ =
             !(primary_ins_ctdef.is_single_value_ && lib::is_oracle_mode());
       }
@@ -193,6 +216,19 @@ int ObTableInsertOp::write_row_to_das_buffer()
   return ret;
 }
 
+void ObTableInsertOp::record_err_for_load_data(int err_ret, int row_num)
+{
+  UNUSED(err_ret);
+  if (OB_NOT_NULL(ctx_.get_my_session()) && ctx_.get_my_session()->is_load_data_exec_session()) {
+    //record failed line num in warning buffer for load data
+    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+    if (OB_NOT_NULL(buffer) && 0 == buffer->get_error_line()) {
+      buffer->set_error_line_column(row_num, 0);
+    }
+    LOG_DEBUG("load data exec log error line", K(err_ret), K(row_num));
+  }
+}
+
 OB_INLINE int ObTableInsertOp::insert_row_to_das()
 {
   int ret = OB_SUCCESS;
@@ -214,6 +250,7 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
       const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
       ObInsRtDef &ins_rtdef = rtdefs.at(j);
       ObDASTabletLoc *tablet_loc = nullptr;
+      ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
       if (!MY_SPEC.ins_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
         ++ins_rtdef.cur_row_num_;
       }
@@ -233,29 +270,16 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
                                                                 tablet_loc->tablet_id_,
                                                                 eval_ctx_))) {
         LOG_WARN("set_heap_table_hidden_pk failed", K(ret), KPC(tablet_loc));
-      } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, modify_row.new_row_))) {
         LOG_WARN("insert row with das failed", K(ret));
       // TODO(yikang): fix trigger related for heap table
-      } else if (ins_ctdef.is_primary_index_ &&
-          OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                     ins_ctdef.trig_ctdef_,
-                                                     ins_rtdef.trig_rtdef_,
-                                                     ObTriggerEvents::get_insert_event()))) {
-        LOG_WARN("failed to handle before trigger", K(ret));
+      } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       }
-
-      if (OB_FAIL(ret) && OB_NOT_NULL(ctx_.get_my_session())
-          && ctx_.get_my_session()->is_load_data_exec_session()) {
-        //record failed line num in warning buffer for load data
-        ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
-        if (OB_NOT_NULL(buffer) && 0 == buffer->get_error_line()) {
-          buffer->set_error_line_column(ins_rtdef.cur_row_num_, 0);
-        }
-        LOG_DEBUG("load data exec log error line", K(ret), K(ins_rtdef.cur_row_num_),
-                  K(buffer->get_error_line()));
+      if (OB_FAIL(ret)) {
+        record_err_for_load_data(ret, ins_rtdef.cur_row_num_);
       }
     } // end for global index ctdef loop
-
     if (OB_SUCC(ret)) {
       int64_t insert_rows = is_skipped ? 0 : 1;
       if (OB_FAIL(merge_implict_cursor(insert_rows, 0, 0, 0))) {
@@ -320,15 +344,6 @@ int ObTableInsertOp::write_rows_post_proc(int last_errno)
       }
     }
   }
-  // all error, we must rollback with single execute when batch executed
-  if (OB_SUCCESS != ret && OB_ITER_END != ret) {
-    ObMultiStmtItem &multi_stmt_item = ctx_.get_sql_ctx()->multi_stmt_item_;
-    if (MY_SPEC.ins_ctdefs_.at(0).at(0)->das_ctdef_.is_batch_stmt_ && !multi_stmt_item.is_ins_multi_val_opt()) {
-      int tmp_ret = ret;
-      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-      LOG_TRACE("batch exec with some exception, rollback with single execute", K(ret), K(tmp_ret));
-    }
-  }
   return ret;
 }
 
@@ -347,7 +362,7 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_insert_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table insert affected row is not match with index table", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table insert affected row is not match with index table", K(ret),
                   "primary_affected_rows", pri_rtdef.das_rtdef_.affected_rows_,
                   "index_affected_rows", idx_rtdef.das_rtdef_.affected_rows_,
                   "primary_ins_ctdef", pri_ctdef,
@@ -361,7 +376,7 @@ OB_INLINE int ObTableInsertOp::check_insert_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_insert_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table insert affected row is not match with found rows", K(ret),
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table insert affected row is not match with found rows", K(ret),
                   "primary_affected_rows", pri_rtdef.das_rtdef_.affected_rows_,
                   "primary_ins_ctdef", pri_ctdef,
                   "primary_ins_rtdef", pri_rtdef);
@@ -387,6 +402,16 @@ int ObTableInsertOp::inner_open()
   } else if (OB_FAIL(inner_open_with_das())) {
     LOG_WARN("inner open with das failed", K(ret));
   }
+  if (OB_SUCC(ret)) {
+    const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+    if (ObTableDirectInsertService::is_direct_insert(*plan)) {
+      int64_t task_id = 1;
+      if (OB_FAIL(ObTableDirectInsertService::open_task(plan->get_append_table_id(), task_id))) {
+        LOG_WARN("failed to open table direct insert task", KR(ret),
+            K(plan->get_append_table_id()), K(task_id));
+      }
+    }
+  }
   return ret;
 }
 
@@ -409,6 +434,14 @@ int ObTableInsertOp::inner_close()
 {
   NG_TRACE(insert_close);
   int ret = OB_SUCCESS;
+  const ObPhysicalPlan *plan = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan();
+  if (ObTableDirectInsertService::is_direct_insert(*plan)) {
+    int64_t task_id = 1;
+    if (OB_FAIL(ObTableDirectInsertService::close_task(plan->get_append_table_id(), task_id))) {
+      LOG_WARN("failed to close table direct insert task", KR(ret),
+          K(plan->get_append_table_id()), K(task_id));
+    }
+  }
   if (OB_FAIL(close_table_for_each())) {
     LOG_WARN("close table for each failed", K(ret));
   }

@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_macro_define.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -374,7 +375,7 @@ int ObInnerTableSchema::user_dependencies_ora_schema(ObTableSchema &table_schema
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_plans_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -383,7 +384,7 @@ int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_PLANS_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_PLANS_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -394,7 +395,7 @@ int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLANS_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLANS_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -424,7 +425,7 @@ int ObInnerTableSchema::dba_rsrc_plans_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_plan_directives_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -433,7 +434,7 @@ int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_sch
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_PLAN_DIRECTIVES_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_PLAN_DIRECTIVES_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -444,7 +445,7 @@ int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_sch
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLAN_DIRECTIVES_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_PLAN_DIRECTIVES_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -474,7 +475,7 @@ int ObInnerTableSchema::dba_rsrc_plan_directives_schema(ObTableSchema &table_sch
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_group_mappings_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -483,7 +484,7 @@ int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_sche
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_GROUP_MAPPINGS_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_GROUP_MAPPINGS_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -494,7 +495,7 @@ int ObInnerTableSchema::dba_rsrc_group_mappings_schema(ObTableSchema &table_sche
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_GROUP_MAPPINGS_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_GROUP_MAPPINGS_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -624,7 +625,7 @@ int ObInnerTableSchema::user_recyclebin_ora_schema(ObTableSchema &table_schema)
   return ret;
 }
 
-int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::dba_rsrc_consumer_groups_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -633,7 +634,7 @@ int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_sch
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_INVALID_ID);
   table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_DBA_RSRC_CONSUMER_GROUPS_TID);
+  table_schema.set_table_id(OB_DBA_RSRC_CONSUMER_GROUPS_ORA_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -644,7 +645,7 @@ int ObInnerTableSchema::dba_rsrc_consumer_groups_schema(ObTableSchema &table_sch
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_CONSUMER_GROUPS_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_RSRC_CONSUMER_GROUPS_ORA_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -1359,7 +1360,7 @@ int ObInnerTableSchema::dba_ob_backup_jobs_ora_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')        END AS END_TIMESTAMP,     STATUS,     RESULT,     "COMMENT",     DESCRIPTION,     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS END_TIMESTAMP,     STATUS,     RESULT,     "COMMENT",     DESCRIPTION,     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1409,7 +1410,7 @@ int ObInnerTableSchema::dba_ob_backup_job_history_ora_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')        END AS END_TIMESTAMP,     STATUS,     RESULT,     "COMMENT",     DESCRIPTION,     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS END_TIMESTAMP,     STATUS,     RESULT,     "COMMENT",     DESCRIPTION,     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1459,7 +1460,7 @@ int ObInnerTableSchema::dba_ob_backup_tasks_ora_schema(ObTableSchema &table_sche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')        END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE        WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     "COMMENT",     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     "COMMENT",     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1509,7 +1510,7 @@ int ObInnerTableSchema::dba_ob_backup_task_history_ora_schema(ObTableSchema &tab
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')        END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE        WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     "COMMENT",     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_TASK_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     "COMMENT",     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_TASK_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1559,7 +1560,7 @@ int ObInnerTableSchema::dba_ob_backup_set_files_ora_schema(ObTableSchema &table_
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     BACKUP_SET_ID,     DEST_ID,     INCARNATION,     BACKUP_TYPE,     PREV_FULL_BACKUP_SET_ID,     PREV_INC_BACKUP_SET_ID,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN ''       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')        END AS END_TIMESTAMP,     STATUS,     FILE_STATUS,     CASE        WHEN END_TS = 0         THEN 0       ELSE          ROUND((END_TS - START_TS)/1000/1000,0)        END AS ELAPSED_SECONDES,     PLUS_ARCHIVELOG,     START_REPLAY_SCN,     SCN_TO_TIMESTAMP(START_REPLAY_SCN) AS START_REPLAY_SCN_DISPLAY,     MIN_RESTORE_SCN,     SCN_TO_TIMESTAMP(MIN_RESTORE_SCN) AS MIN_RESTORE_SCN_DISPLAY,     INPUT_BYTES,     OUTPUT_BYTES,     CASE        WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     "COMMENT",     ENCRYPTION_MODE,     PASSWD,     TENANT_COMPATIBLE,     BACKUP_COMPATIBLE,     PATH     FROM SYS.ALL_VIRTUAL_BACKUP_SET_FILES     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     BACKUP_SET_ID,     DEST_ID,     INCARNATION,     BACKUP_TYPE,     PREV_FULL_BACKUP_SET_ID,     PREV_INC_BACKUP_SET_ID,     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,     CASE       WHEN END_TS = 0         THEN NULL       ELSE         TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS END_TIMESTAMP,     STATUS,     FILE_STATUS,     CASE       WHEN END_TS = 0         THEN 0       ELSE         ROUND((END_TS - START_TS)/1000/1000,0)       END AS ELAPSED_SECONDES,     PLUS_ARCHIVELOG,     START_REPLAY_SCN,     SCN_TO_TIMESTAMP(START_REPLAY_SCN) AS START_REPLAY_SCN_DISPLAY,     MIN_RESTORE_SCN,     SCN_TO_TIMESTAMP(MIN_RESTORE_SCN) AS MIN_RESTORE_SCN_DISPLAY,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE         OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)       END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     "COMMENT",     ENCRYPTION_MODE,     PASSWD,     TENANT_COMPATIBLE,     BACKUP_COMPATIBLE,     PATH,     CLUSTER_VERSION     FROM SYS.ALL_VIRTUAL_BACKUP_SET_FILES     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1909,7 +1910,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_jobs_ora_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS PARAMETER,       JOB_LEVEL,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN ''         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')          END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS PARAMETER,       JOB_LEVEL,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_JOB     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1959,7 +1960,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_job_history_ora_schema(ObTableSchem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS PARAMETER,       JOB_LEVEL,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN ''         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')          END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       INCARNATION,       INITIATOR_TENANT_ID,       INITIATOR_JOB_ID,       EXECUTOR_TENANT_ID,       TYPE,       TO_CHAR(PARAMETER / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS PARAMETER,       JOB_LEVEL,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TASK_COUNT,       SUCCESS_TASK_COUNT,       RESULT,       "COMMENT"     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2009,7 +2010,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_tasks_ora_schema(ObTableSchema &tab
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN ''         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')          END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       RESULT,       "COMMENT",       PATH     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       RESULT,       "COMMENT",       PATH     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_TASK     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2059,7 +2060,7 @@ int ObInnerTableSchema::dba_ob_backup_delete_task_history_ora_schema(ObTableSche
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN ''         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')          END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       RESULT,       "COMMENT",       PATH     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_TASK_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       TASK_ID,       INCARNATION,       JOB_ID,       TASK_TYPE,       ID,       ROUND_ID,       DEST_ID,       TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,       CASE         WHEN END_TS = 0           THEN NULL         ELSE           TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')         END AS END_TIMESTAMP,       STATUS,       TOTAL_LS_COUNT,       FINISH_LS_COUNT,       RESULT,       "COMMENT",       PATH     FROM SYS.ALL_VIRTUAL_BACKUP_DELETE_TASK_HISTORY     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2109,7 +2110,7 @@ int ObInnerTableSchema::dba_ob_restore_progress_ora_schema(ObTableSchema &table_
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT      P.JOB_ID AS JOB_ID,      RESTORE_TENANT_NAME,     RESTORE_TENANT_ID,      BACKUP_TENANT_NAME,      BACKUP_TENANT_ID,     BACKUP_CLUSTER_NAME,      BACKUP_DEST,      RESTORE_OPTION,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN IS NULL         THEN NULL       ELSE          SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     STATUS,      CASE       WHEN START_TIMESTAMP IS NULL         THEN ''       WHEN START_TIMESTAMP=''         THEN ''       WHEN START_TIMESTAMP='0'         THEN ''       ELSE          TO_CHAR(TO_NUMBER(START_TIMESTAMP) / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS START_TIMESTAMP,     BACKUP_SET_LIST,      BACKUP_PIECE_LIST,     TOTAL_BYTES,      CASE       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN TOTAL_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN TOTAL_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(TOTAL_BYTES/1024/1024,2), 'MB')       END AS TOTAL_BYTES_DISPLAY,     FINISH_BYTES,     CASE       WHEN FINISH_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN FINISH_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN FINISH_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')       END AS FINISH_BYTES_DISPLAY,     DESCRIPTION      FROM   (       SELECT        TENANT_ID,        JOB_ID,        MAX(CASE NAME WHEN 'tenant_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TENANT_NAME,       MAX(CASE NAME WHEN 'tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TENANT_ID,       MAX(CASE NAME WHEN 'backup_tenant_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_NAME,       MAX(CASE NAME WHEN 'backup_tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_ID,        MAX(CASE NAME WHEN 'backup_cluster_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_CLUSTER_NAME,       MAX(CASE NAME WHEN 'target_tenant_role' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS TENANT_ROLE,        MAX(CASE NAME WHEN 'backup_dest' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_DEST,        MAX(CASE NAME WHEN 'restore_option' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_OPTION,       MAX(CASE NAME WHEN 'status' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS STATUS,       MAX(CASE NAME WHEN 'restore_scn' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_SCN,       MAX(CASE NAME WHEN 'restore_start_ts' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS START_TIMESTAMP,       MAX(CASE NAME WHEN 'backup_set_list' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_SET_LIST,       MAX(CASE NAME WHEN 'backup_piece_list' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_PIECE_LIST,       MAX(CASE NAME WHEN 'description' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS DESCRIPTION       FROM SYS.ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID   ) P LEFT JOIN   (          SELECT        TENANT_ID,        JOB_ID,       TOTAL_BYTES,       FINISH_BYTES       FROM SYS.ALL_VIRTUAL_RESTORE_PROGRESS   ) J     ON P.TENANT_ID=J.TENANT_ID AND P.JOB_ID=J.JOB_ID     WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     P.JOB_ID AS JOB_ID,     RESTORE_TENANT_NAME,     RESTORE_TENANT_ID,     BACKUP_TENANT_NAME,     BACKUP_TENANT_ID,     BACKUP_CLUSTER_NAME,     BACKUP_DEST,     RESTORE_OPTION,     RESTORE_SCN,     CASE       WHEN RESTORE_SCN IS NULL         THEN NULL       ELSE         SCN_TO_TIMESTAMP(RESTORE_SCN)       END AS RESTORE_SCN_DISPLAY,     CASE       WHEN STATUS = 'RESTORE_PRE'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_CREATE_INIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'RESTORE_WAIT_LS'         THEN 'RESTORING'       WHEN STATUS = 'POST_CHECK'         THEN 'RESTORING'       ELSE STATUS       END AS STATUS,     CASE       WHEN START_TIMESTAMP IS NULL         THEN NULL       WHEN START_TIMESTAMP=''         THEN NULL       WHEN START_TIMESTAMP='0'         THEN NULL       ELSE         TO_CHAR(TO_NUMBER(START_TIMESTAMP) / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')       END AS START_TIMESTAMP,     BACKUP_SET_LIST,     BACKUP_PIECE_LIST,     TOTAL_BYTES,     CASE       WHEN TOTAL_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN TOTAL_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN TOTAL_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(TOTAL_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(TOTAL_BYTES/1024/1024,2), 'MB')       END AS TOTAL_BYTES_DISPLAY,     FINISH_BYTES,     CASE       WHEN FINISH_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN FINISH_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN FINISH_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(FINISH_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(FINISH_BYTES/1024/1024,2), 'MB')       END AS FINISH_BYTES_DISPLAY,     DESCRIPTION     FROM   (       SELECT       TENANT_ID,       JOB_ID,       MAX(CASE NAME WHEN 'tenant_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TENANT_NAME,       MAX(CASE NAME WHEN 'tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_TENANT_ID,       MAX(CASE NAME WHEN 'backup_tenant_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_NAME,       MAX(CASE NAME WHEN 'backup_tenant_id' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_TENANT_ID,       MAX(CASE NAME WHEN 'backup_cluster_name' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_CLUSTER_NAME,       MAX(CASE NAME WHEN 'target_tenant_role' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS TENANT_ROLE,       MAX(CASE NAME WHEN 'backup_dest' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_DEST,       MAX(CASE NAME WHEN 'restore_option' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_OPTION,       MAX(CASE NAME WHEN 'status' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS STATUS,       MAX(CASE NAME WHEN 'restore_scn' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS RESTORE_SCN,       MAX(CASE NAME WHEN 'restore_start_ts' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS START_TIMESTAMP,       MAX(CASE NAME WHEN 'backup_set_list' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_SET_LIST,       MAX(CASE NAME WHEN 'backup_piece_list' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS BACKUP_PIECE_LIST,       MAX(CASE NAME WHEN 'description' THEN CAST(VALUE AS VARCHAR2(4096)) ELSE '' END) AS DESCRIPTION       FROM SYS.ALL_VIRTUAL_RESTORE_JOB GROUP BY TENANT_ID, JOB_ID   ) P LEFT JOIN   (       SELECT       TENANT_ID,       JOB_ID,       TOTAL_BYTES,       FINISH_BYTES       FROM SYS.ALL_VIRTUAL_RESTORE_PROGRESS   ) J     ON P.TENANT_ID=J.TENANT_ID AND P.JOB_ID=J.JOB_ID     WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2309,7 +2310,7 @@ int ObInnerTableSchema::dba_ob_archivelog_summary_ora_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     DEST_ID,     ROUND_ID,     INCARNATION,     DEST_NO,     STATUS,     START_SCN,     SCN_TO_TIMESTAMP(START_SCN) AS START_SCN_DISPLAY,     CHECKPOINT_SCN,     SCN_TO_TIMESTAMP(CHECKPOINT_SCN) AS CHECKPOINT_SCN_DISPLAY,     COMPATIBLE,     BASE_PIECE_ID,     USED_PIECE_ID,     PIECE_SWITCH_INTERVAL,     UNIT_SIZE,     COMPRESSION,     INPUT_BYTES,     CASE       WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN INPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN INPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')       END AS INPUT_BYTES_DISPLAY,     OUTPUT_BYTES,     CASE       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN OUTPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')       END AS OUTPUT_BYTES_DISPLAY,     CASE       WHEN INPUT_BYTES = 0         THEN 0       ELSE         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)       END AS COMPRESSION_RATIO,     DELETED_INPUT_BYTES,     CASE       WHEN DELETED_INPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN DELETED_INPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN DELETED_INPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024,2), 'MB')       END AS DELETED_INPUT_BYTES_DISPLAY,     DELETED_OUTPUT_BYTES,     CASE       WHEN DELETED_OUTPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN DELETED_OUTPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN DELETED_OUTPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024,2), 'MB')       END AS DELETED_OUTPUT_BYTES_DISPLAY,     PATH,     "COMMENT"     FROM  ( SELECT DEST_ID,        ROUND_ID,        INCARNATION,        DEST_NO,        STATUS,        START_SCN,        CHECKPOINT_SCN,        COMPATIBLE,        BASE_PIECE_ID,        USED_PIECE_ID,        PIECE_SWITCH_INTERVAL,        UNIT_SIZE,        COMPRESSION,        (FROZEN_INPUT_BYTES + ACTIVE_INPUT_BYTES) AS INPUT_BYTES,        (FROZEN_OUTPUT_BYTES + ACTIVE_OUTPUT_BYTES) AS OUTPUT_BYTES,        DELETED_INPUT_BYTES,        DELETED_OUTPUT_BYTES,        PATH,        "COMMENT"        FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_PROGRESS        WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND STATUS != 'STOP' UNION SELECT DEST_ID,        ROUND_ID,        INCARNATION,        DEST_NO,        'STOP' AS STATUS,        START_SCN,        CHECKPOINT_SCN,        COMPATIBLE,        BASE_PIECE_ID,        USED_PIECE_ID,        PIECE_SWITCH_INTERVAL,        UNIT_SIZE,        COMPRESSION,        INPUT_BYTES,        OUTPUT_BYTES,        DELETED_INPUT_BYTES,        DELETED_OUTPUT_BYTES,        PATH,        "COMMENT"        FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_HISTORY        WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     DEST_ID,     ROUND_ID,     INCARNATION,     DEST_NO,     STATUS,     START_SCN,     SCN_TO_TIMESTAMP(START_SCN) AS START_SCN_DISPLAY,     CHECKPOINT_SCN,     SCN_TO_TIMESTAMP(CHECKPOINT_SCN) AS CHECKPOINT_SCN_DISPLAY,     COMPATIBLE,     BASE_PIECE_ID,     USED_PIECE_ID,     PIECE_SWITCH_INTERVAL,     UNIT_SIZE,     COMPRESSION,     INPUT_BYTES,     CASE       WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN INPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN INPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')       END AS INPUT_BYTES_DISPLAY,     OUTPUT_BYTES,     CASE       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN OUTPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')       END AS OUTPUT_BYTES_DISPLAY,     CASE       WHEN INPUT_BYTES = 0         THEN 0       ELSE         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)       END AS COMPRESSION_RATIO,     DELETED_INPUT_BYTES,     CASE       WHEN DELETED_INPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN DELETED_INPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN DELETED_INPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(DELETED_INPUT_BYTES/1024/1024,2), 'MB')       END AS DELETED_INPUT_BYTES_DISPLAY,     DELETED_OUTPUT_BYTES,     CASE       WHEN DELETED_OUTPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN DELETED_OUTPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN DELETED_OUTPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(DELETED_OUTPUT_BYTES/1024/1024,2), 'MB')       END AS DELETED_OUTPUT_BYTES_DISPLAY,     PATH,     "COMMENT"     FROM ( SELECT DEST_ID,        ROUND_ID,        INCARNATION,        DEST_NO,        STATUS,        START_SCN,        CHECKPOINT_SCN,        COMPATIBLE,        BASE_PIECE_ID,        USED_PIECE_ID,        PIECE_SWITCH_INTERVAL,        UNIT_SIZE,        COMPRESSION,        (FROZEN_INPUT_BYTES + ACTIVE_INPUT_BYTES) AS INPUT_BYTES,        (FROZEN_OUTPUT_BYTES + ACTIVE_OUTPUT_BYTES) AS OUTPUT_BYTES,        DELETED_INPUT_BYTES,        DELETED_OUTPUT_BYTES,        PATH,        "COMMENT"        FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_PROGRESS        WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND STATUS != 'STOP' UNION SELECT DEST_ID,        ROUND_ID,        INCARNATION,        DEST_NO,        'STOP' AS STATUS,        START_SCN,        CHECKPOINT_SCN,        COMPATIBLE,        BASE_PIECE_ID,        USED_PIECE_ID,        PIECE_SWITCH_INTERVAL,        UNIT_SIZE,        COMPRESSION,        INPUT_BYTES,        OUTPUT_BYTES,        DELETED_INPUT_BYTES,        DELETED_OUTPUT_BYTES,        PATH,        "COMMENT"        FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_HISTORY        WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -2359,7 +2360,7 @@ int ObInnerTableSchema::dba_ob_archivelog_piece_files_ora_schema(ObTableSchema &
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     DEST_ID,     ROUND_ID,     PIECE_ID,     INCARNATION,     DEST_NO,     STATUS,     START_SCN,     SCN_TO_TIMESTAMP(START_SCN) AS START_SCN_DISPLAY,     CHECKPOINT_SCN,     SCN_TO_TIMESTAMP(CHECKPOINT_SCN) AS CHECKPOINT_SCN_DISPLAY,     MAX_SCN,     END_SCN,     COMPATIBLE,     UNIT_SIZE,     COMPRESSION,     INPUT_BYTES,     CASE       WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN INPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN INPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')       END AS INPUT_BYTES_DISPLAY,     OUTPUT_BYTES,     CASE       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN OUTPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')       END AS OUTPUT_BYTES_DISPLAY,     CASE       WHEN INPUT_BYTES = 0         THEN 0       ELSE         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)       END AS COMPRESSION_RATIO,     FILE_STATUS,     PATH     FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     DEST_ID,     ROUND_ID,     PIECE_ID,     INCARNATION,     DEST_NO,     STATUS,     START_SCN,     SCN_TO_TIMESTAMP(START_SCN) AS START_SCN_DISPLAY,     CHECKPOINT_SCN,     SCN_TO_TIMESTAMP(CHECKPOINT_SCN) AS CHECKPOINT_SCN_DISPLAY,     MAX_SCN,     END_SCN,     SCN_TO_TIMESTAMP(END_SCN) AS END_SCN_DISPLAY,     COMPATIBLE,     UNIT_SIZE,     COMPRESSION,     INPUT_BYTES,     CASE       WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN INPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN INPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')       END AS INPUT_BYTES_DISPLAY,     OUTPUT_BYTES,     CASE       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')       WHEN OUTPUT_BYTES >= 1024*1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')       WHEN OUTPUT_BYTES >= 1024*1024*1024         THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')       ELSE         CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')       END AS OUTPUT_BYTES_DISPLAY,     CASE       WHEN INPUT_BYTES = 0         THEN 0       ELSE         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)       END AS COMPRESSION_RATIO,     FILE_STATUS,     PATH     FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES     WHERE TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

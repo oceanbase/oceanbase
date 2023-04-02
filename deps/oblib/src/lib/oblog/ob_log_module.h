@@ -69,7 +69,9 @@ DEFINE_LOG_SUB_MOD(PALF)                 // palf
 DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
 DEFINE_LOG_SUB_MOD(REASY)                 // libreasy
 DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
-DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
+DEFINE_LOG_SUB_MOD(FLT)                // trace
+DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
+DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
 LOG_MOD_END(ROOT)
 
 //statement of WRS's sub_modules
@@ -180,6 +182,7 @@ DEFINE_LOG_SUB_MOD(CG)                   // code_generator
 DEFINE_LOG_SUB_MOD(MONITOR)              // monitor
 DEFINE_LOG_SUB_MOD(DTL)                  // data transfer layer
 DEFINE_LOG_SUB_MOD(DAS)                  // data access service
+DEFINE_LOG_SUB_MOD(QRR)                  // query rewrite rule
 LOG_MOD_END(SQL)
 
 // observer submodules
@@ -226,6 +229,7 @@ DEFINE_LOG_SUB_MOD(SPI)                // service program interface
 DEFINE_LOG_SUB_MOD(PACK)               // package
 DEFINE_LOG_SUB_MOD(TYPE)               // type
 DEFINE_LOG_SUB_MOD(DEBUG)              // debug
+DEFINE_LOG_SUB_MOD(CACHE)              // cache
 LOG_MOD_END(PL)
 
 } //namespace common
@@ -236,8 +240,10 @@ LOG_MOD_END(PL)
 #define OB_LOG_LOCATION_HASH_VAL \
   ({constexpr uint64_t hash_val= oceanbase::common::hash::fnv_hash_for_logger(__FILE__":"STRINGIZE(__LINE__)); hash_val;})
 #define OB_LOG_LEVEL(level) \
-  OB_LOG_LEVEL_##level, __FILE__, __LINE__, _fun_name_, OB_LOG_LOCATION_HASH_VAL
+  OB_LOG_LEVEL_##level, __FILE__, __LINE__, _fun_name_, OB_LOG_LOCATION_HASH_VAL, GET_LOG_ERRCODE(level)
 #define OB_LOG_LEVEL_DIRECT(level) \
+  OB_LOG_LEVEL_##level, __FILE__, __LINE__, __FUNCTION__, OB_LOG_LOCATION_HASH_VAL, GET_LOG_ERRCODE(level)
+#define OB_LOG_LEVEL_DIRECT_NO_ERRCODE(level) \
   OB_LOG_LEVEL_##level, __FILE__, __LINE__, __FUNCTION__, OB_LOG_LOCATION_HASH_VAL
 #define OB_LOG_NUM_LEVEL(level) level, __FILE__, __LINE__, __FUNCTION__, OB_LOG_LOCATION_HASH_VAL
 
@@ -248,6 +254,8 @@ LOG_MOD_END(PL)
 #define MACRO_CALL(x, y) x(y)
 #define MACRO_ARGS(x) MACRO_ARGS_## x, FOR_DEFAULT
 #define MACRO_ARGS_DEBUG , FOR_DEBUG
+#define MACRO_ARGS_DBA_WARN , FOR_DBA_WARN
+#define MACRO_ARGS_DBA_ERROR , FOR_DBA_ERROR
 
 #ifdef ENABLE_DEBUG_LOG
 #define IS_LOG_ENABLED_FOR_DEBUG true
@@ -258,12 +266,23 @@ LOG_MOD_END(PL)
 #define IS_LOG_ENABLED_FOR_DEBUG true
 #endif
 #endif
+#define IS_LOG_ENABLED_FOR_DBA_WARN PLEASE_USE___LOG_DBA_WARN____MACRO
+#define IS_LOG_ENABLED_FOR_DBA_ERROR PLEASE_USE___LOG_DBA_ERROR___MACRO
 #define IS_LOG_ENABLED_FOR_DEFAULT true
 #define IS_LOG_ENABLED(level) LOG_MACRO_JOIN(IS_LOG_ENABLED_, MACRO_CALL(GET_SECOND, MACRO_ARGS(level)))
 
 #define GET_LOG_FUNC_ATTR_FOR_DEBUG always_inline
 #define GET_LOG_FUNC_ATTR_FOR_DEFAULT noinline,cold
+#define GET_LOG_FUNC_ATTR_FOR_DBA_WARN noinline,cold
+#define GET_LOG_FUNC_ATTR_FOR_DBA_ERROR noinline,cold
 #define GET_LOG_FUNC_ATTR(level) LOG_MACRO_JOIN(GET_LOG_FUNC_ATTR_, MACRO_CALL(GET_SECOND, MACRO_ARGS(level)))
+
+#define LOG_ERRCODE_FOR_ERROR ret
+#define LOG_ERRCODE_FOR_WARN ret
+#define LOG_ERRCODE_FOR_INFO 0
+#define LOG_ERRCODE_FOR_TRACE 0
+#define LOG_ERRCODE_FOR_DEBUG 0
+#define GET_LOG_ERRCODE(level) LOG_MACRO_JOIN(LOG_ERRCODE_FOR_, level)
 
 #define OB_LOG(level, infoString, args...)                                                       \
   do { if (IS_LOG_ENABLED(level)) {                                                              \
@@ -278,18 +297,32 @@ LOG_MOD_END(PL)
   { _OB_PRINT("", level, _fmt_, ##args); }                                                       \
   }(__FUNCTION__); } } while (false)
 
-#define _OB_NUM_LEVEL_LOG(level, _fmt_, args...)                                                 \
+#define _OB_NUM_LEVEL_LOG(level, errcode, _fmt_, args...)                                                 \
   (OB_LOGGER.need_to_print(level) ?                                                              \
-   OB_LOGGER.log_message_fmt("", OB_LOG_NUM_LEVEL(level), _fmt_, ##args) : (void) 0)
+   OB_LOGGER.log_message_fmt("", OB_LOG_NUM_LEVEL(level), errcode, _fmt_, ##args) : (void) 0)
 
-#define _OB_NUM_LEVEL_PRINT(level, _fmt_, args...)                                               \
-   OB_LOGGER.log_message("", OB_LOG_NUM_LEVEL(level), _fmt_, ##args)
+#define _OB_NUM_LEVEL_PRINT(level, errcode, _fmt_, args...)                                               \
+   OB_LOGGER.log_message("", OB_LOG_NUM_LEVEL(level), errcode, _fmt_, ##args)
 
 #define IS_OB_LOG_TRACE_MODE()      OB_LOGGER.is_trace_mode()
 #define SET_OB_LOG_TRACE_MODE()     OB_LOGGER.set_trace_mode(true)
 #define CANCLE_OB_LOG_TRACE_MODE()  OB_LOGGER.set_trace_mode(false)
 #define PRINT_OB_LOG_TRACE_BUF(mod_name, level)                                                            \
-  (OB_LOG_NEED_TO_PRINT(level) ? OB_LOGGER.print_trace_buffer("["#mod_name"] ", OB_LOG_LEVEL_DIRECT(level)) : (void) 0)
+  (OB_LOG_NEED_TO_PRINT(level) ? OB_LOGGER.print_trace_buffer("["#mod_name"] ", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(level)) : (void) 0)
+#define PRINT_WITH_TRACE_MODE(mod_name, level, body)      \
+{                                                         \
+  bool need_cancle_trace_mode = false;                    \
+  if (!IS_OB_LOG_TRACE_MODE()) {                          \
+    need_cancle_trace_mode = true;                        \
+  }                                                       \
+  SET_OB_LOG_TRACE_MODE();                                \
+  PRINT_OB_LOG_TRACE_BUF(COMMON, INFO);                   \
+  body;                                                   \
+  PRINT_OB_LOG_TRACE_BUF(mod_name, level);                \
+  if (need_cancle_trace_mode) {                           \
+    CANCLE_OB_LOG_TRACE_MODE();                           \
+  }                                                       \
+}
 
 //for tests/ob_log_test or others
 #define OB_LOG_MOD_NEED_TO_PRINT(parMod, level)                                                  \
@@ -332,6 +365,7 @@ LOG_MOD_END(PL)
     _OB_PRINT("["#parMod"."#subMod"] ", level, _fmt_, ##args) : (void) 0);                       \
     }(__FUNCTION__); } } while (false)
 
+// BEGIN MODULE LOG MACRO DEFINE
 //define ParMod_LOG
 #define BLSST_LOG(level, info_string, args...) OB_MOD_LOG(BLSST, level, info_string, ##args)
 #define _BLSST_LOG(level, _fmt_, args...) _OB_MOD_LOG(BLSST, level, _fmt_, ##args)
@@ -410,8 +444,12 @@ LOG_MOD_END(PL)
 #define _STANDBY_LOG(level, _fmt_, args...) _OB_MOD_LOG(STANDBY, level, _fmt_, ##args)
 #define COORDINATOR_LOG(level, info_string, args...) OB_MOD_LOG(COORDINATOR, level, info_string, ##args)
 #define _COORDINATOR_LOG(level, _fmt_, args...) _OB_MOD_LOG(COORDINATOR, level, _fmt_, ##args)
-#define OBTRACE_LOG(level, info_string, args...) OB_MOD_LOG(OBTRACE, level, info_string, ##args)
-#define _OBTRACE_LOG(level, _fmt_, args...) _OB_MOD_LOG(OBTRACE, level, _fmt_, ##args)
+#define FLT_LOG(level, info_string, args...) OB_MOD_LOG(FLT, level, info_string, ##args)
+#define _FLT_LOG(level, _fmt_, args...) _OB_MOD_LOG(FLT, level, _fmt_, ##args)
+#define DDLOG(level, info_string, args...) OB_MOD_LOG(DATA_DICT, level, info_string, ##args)
+#define _DDLOG(level, _fmt_, args...) _OB_MOD_LOG(DATA_DICT, level, _fmt_, ##args)
+#define MVCC_LOG(level, info_string, args...) OB_MOD_LOG(MVCC, level, info_string, ##args)
+#define _MVCC_LOG(level, _fmt_, args...) _OB_MOD_LOG(MVCC, level, _fmt_, ##args)
 
 //dfine ParMod_SubMod_LOG
 #define WRS_CLUSTER_LOG(level, info_string, args...) OB_SUB_MOD_LOG(WRS, CLUSTER, level,        \
@@ -579,7 +617,10 @@ LOG_MOD_END(PL)
                                                                 info_string, ##args)
 #define _PL_DEBUG_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, DEBUG, level,                   \
                                                                 _fmt_, ##args)
-
+#define PL_CACHE_LOG(level, info_string, args...) OB_SUB_MOD_LOG(PL, CACHE, level,                 \
+                                                                    info_string, ##args)
+#define _PL_CACHE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, CACHE, level,                     \
+                                                                _fmt_, ##args)
 
 
 #define RPC_FRAME_LOG(level, _fmt_, args...)    \
@@ -740,6 +781,10 @@ LOG_MOD_END(PL)
                                                                     info_string, ##args)
 #define _SQL_DAS_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(SQL, DAS, level,                     \
                                                                 _fmt_, ##args)
+#define SQL_QRR_LOG(level, info_string, args...) OB_SUB_MOD_LOG(SQL, QRR, level,                 \
+                                                                    info_string, ##args)
+#define _SQL_QRR_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(SQL, QRR, level,                     \
+                                                                _fmt_, ##args)
 
 #define DETECT_LOG_LOG(level, info_string, args...) OB_SUB_MOD_LOG(DETECT, LOG,level,              \
                                                                 info_string,  ##args)
@@ -790,6 +835,295 @@ LOG_MOD_END(PL)
 #define OBLOG_SORTER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, SORTER, level, fmt, ##args)
 #define _OBLOG_SORTER_LOG(level, fmt, args...) _OB_SUB_MOD_LOG(TLOG, SORTER, level, fmt, ##args)
 
+// END MODULE LOG MACRO DEFINE
+
+#define _OB_LOG_RET(level, errcode, args...) { int ret = errcode; _OB_LOG(level, ##args); }
+#define OB_LOG_RET(level, errcode, args...) { int ret = errcode; OB_LOG(level, ##args); }
+
+//
+// The following LOG MACROS are used for logging with specified error code, which are generated with the shell script:
+//     sed -n '/BEGIN[^[]MODULE LOG MACRO DEFINE/,/END[^[]MODULE LOG MACRO DEFINE/p' deps/oblib/src/lib/oblog/ob_log_module.h | grep 'define[[:space:]]*[[:alnum:]_]*_LOG(level' -o | sed -e 's/^define//g' -e 's/(level//g' | while read l ; do echo "#define ${l}_RET(level, errcode, args...) { int ret = errcode; $l(level, ##args); }"; done
+
+// BEGIN XXX_LOG_RET MACRO DEFINE
+#define BLSST_LOG_RET(level, errcode, args...) { int ret = errcode; BLSST_LOG(level, ##args); }
+#define _BLSST_LOG_RET(level, errcode, args...) { int ret = errcode; _BLSST_LOG(level, ##args); }
+#define CLIENT_LOG_RET(level, errcode, args...) { int ret = errcode; CLIENT_LOG(level, ##args); }
+#define _CLIENT_LOG_RET(level, errcode, args...) { int ret = errcode; _CLIENT_LOG(level, ##args); }
+#define CLOG_LOG_RET(level, errcode, args...) { int ret = errcode; CLOG_LOG(level, ##args); }
+#define _CLOG_LOG_RET(level, errcode, args...) { int ret = errcode; _CLOG_LOG(level, ##args); }
+#define EXTLOG_LOG_RET(level, errcode, args...) { int ret = errcode; EXTLOG_LOG(level, ##args); }
+#define _EXTLOG_LOG_RET(level, errcode, args...) { int ret = errcode; _EXTLOG_LOG(level, ##args); }
+#define CSR_LOG_RET(level, errcode, args...) { int ret = errcode; CSR_LOG(level, ##args); }
+#define _CSR_LOG_RET(level, errcode, args...) { int ret = errcode; _CSR_LOG(level, ##args); }
+#define COMMON_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_LOG(level, ##args); }
+#define _COMMON_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_LOG(level, ##args); }
+#define ELECT_LOG_RET(level, errcode, args...) { int ret = errcode; ELECT_LOG(level, ##args); }
+#define _ELECT_LOG_RET(level, errcode, args...) { int ret = errcode; _ELECT_LOG(level, ##args); }
+#define OCCAM_LOG_RET(level, errcode, args...) { int ret = errcode; OCCAM_LOG(level, ##args); }
+#define _OCCAM_LOG_RET(level, errcode, args...) { int ret = errcode; _OCCAM_LOG(level, ##args); }
+#define IMPS_LOG_RET(level, errcode, args...) { int ret = errcode; IMPS_LOG(level, ##args); }
+#define _IMPS_LOG_RET(level, errcode, args...) { int ret = errcode; _IMPS_LOG(level, ##args); }
+#define WRS_LOG_RET(level, errcode, args...) { int ret = errcode; WRS_LOG(level, ##args); }
+#define _WRS_LOG_RET(level, errcode, args...) { int ret = errcode; _WRS_LOG(level, ##args); }
+#define ARCHIVE_LOG_RET(level, errcode, args...) { int ret = errcode; ARCHIVE_LOG(level, ##args); }
+#define _ARCHIVE_LOG_RET(level, errcode, args...) { int ret = errcode; _ARCHIVE_LOG(level, ##args); }
+#define PHYSICAL_RESTORE_ARCHIVE_LOG_RET(level, errcode, args...) { int ret = errcode; PHYSICAL_RESTORE_ARCHIVE_LOG(level, ##args); }
+#define _PHYSICAL_RESTORE_ARCHIVE_LOG_RET(level, errcode, args...) { int ret = errcode; _PHYSICAL_RESTORE_ARCHIVE_LOG(level, ##args); }
+#define LIB_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_LOG(level, ##args); }
+#define _LIB_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_LOG(level, ##args); }
+#define MEMT_LOG_RET(level, errcode, args...) { int ret = errcode; MEMT_LOG(level, ##args); }
+#define _MEMT_LOG_RET(level, errcode, args...) { int ret = errcode; _MEMT_LOG(level, ##args); }
+#define MRSST_LOG_RET(level, errcode, args...) { int ret = errcode; MRSST_LOG(level, ##args); }
+#define _MRSST_LOG_RET(level, errcode, args...) { int ret = errcode; _MRSST_LOG(level, ##args); }
+#define MYSQL_LOG_RET(level, errcode, args...) { int ret = errcode; MYSQL_LOG(level, ##args); }
+#define _MYSQL_LOG_RET(level, errcode, args...) { int ret = errcode; _MYSQL_LOG(level, ##args); }
+#define OFS_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_LOG(level, ##args); }
+#define _OFS_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_LOG(level, ##args); }
+#define PS_LOG_RET(level, errcode, args...) { int ret = errcode; PS_LOG(level, ##args); }
+#define _PS_LOG_RET(level, errcode, args...) { int ret = errcode; _PS_LOG(level, ##args); }
+#define RPC_LOG_RET(level, errcode, args...) { int ret = errcode; RPC_LOG(level, ##args); }
+#define _RPC_LOG_RET(level, errcode, args...) { int ret = errcode; _RPC_LOG(level, ##args); }
+#define RS_LOG_RET(level, errcode, args...) { int ret = errcode; RS_LOG(level, ##args); }
+#define _RS_LOG_RET(level, errcode, args...) { int ret = errcode; _RS_LOG(level, ##args); }
+#define BOOTSTRAP_LOG_RET(level, errcode, args...) { int ret = errcode; BOOTSTRAP_LOG(level, ##args); }
+#define _BOOTSTRAP_LOG_RET(level, errcode, args...) { int ret = errcode; _BOOTSTRAP_LOG(level, ##args); }
+#define SERVER_LOG_RET(level, errcode, args...) { int ret = errcode; SERVER_LOG(level, ##args); }
+#define _SERVER_LOG_RET(level, errcode, args...) { int ret = errcode; _SERVER_LOG(level, ##args); }
+#define SHARE_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_LOG(level, ##args); }
+#define _SHARE_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_LOG(level, ##args); }
+#define SQL_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_LOG(level, ##args); }
+#define _SQL_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_LOG(level, ##args); }
+#define PL_LOG_RET(level, errcode, args...) { int ret = errcode; PL_LOG(level, ##args); }
+#define _PL_LOG_RET(level, errcode, args...) { int ret = errcode; _PL_LOG(level, ##args); }
+#define JIT_LOG_RET(level, errcode, args...) { int ret = errcode; JIT_LOG(level, ##args); }
+#define _JIT_LOG_RET(level, errcode, args...) { int ret = errcode; _JIT_LOG(level, ##args); }
+#define STORAGE_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_LOG(level, ##args); }
+#define _STORAGE_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_LOG(level, ##args); }
+#define TX_LOG_RET(level, errcode, args...) { int ret = errcode; TX_LOG(level, ##args); }
+#define TRANS_LOG_RET(level, errcode, args...) { int ret = errcode; TRANS_LOG(level, ##args); }
+#define _TRANS_LOG_RET(level, errcode, args...) { int ret = errcode; _TRANS_LOG(level, ##args); }
+#define TABLELOCK_LOG_RET(level, errcode, args...) { int ret = errcode; TABLELOCK_LOG(level, ##args); }
+#define _TABLELOCK_LOG_RET(level, errcode, args...) { int ret = errcode; _TABLELOCK_LOG(level, ##args); }
+#define RU_LOG_RET(level, errcode, args...) { int ret = errcode; RU_LOG(level, ##args); }
+#define _RU_LOG_RET(level, errcode, args...) { int ret = errcode; _RU_LOG(level, ##args); }
+#define REPLAY_LOG_RET(level, errcode, args...) { int ret = errcode; REPLAY_LOG(level, ##args); }
+#define _REPLAY_LOG_RET(level, errcode, args...) { int ret = errcode; _REPLAY_LOG(level, ##args); }
+#define IMC_LOG_RET(level, errcode, args...) { int ret = errcode; IMC_LOG(level, ##args); }
+#define _IMC_LOG_RET(level, errcode, args...) { int ret = errcode; _IMC_LOG(level, ##args); }
+#define OBLOG_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_LOG(level, ##args); }
+#define _OBLOG_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_LOG(level, ##args); }
+#define LOGTOOL_LOG_RET(level, errcode, args...) { int ret = errcode; LOGTOOL_LOG(level, ##args); }
+#define _LOGTOOL_LOG_RET(level, errcode, args...) { int ret = errcode; _LOGTOOL_LOG(level, ##args); }
+#define DETECT_LOG_RET(level, errcode, args...) { int ret = errcode; DETECT_LOG(level, ##args); }
+#define _DETECT_LOG_RET(level, errcode, args...) { int ret = errcode; _DETECT_LOG(level, ##args); }
+#define PALF_LOG_RET(level, errcode, args...) { int ret = errcode; PALF_LOG(level, ##args); }
+#define _PALF_LOG_RET(level, errcode, args...) { int ret = errcode; _PALF_LOG(level, ##args); }
+#define STANDBY_LOG_RET(level, errcode, args...) { int ret = errcode; STANDBY_LOG(level, ##args); }
+#define _STANDBY_LOG_RET(level, errcode, args...) { int ret = errcode; _STANDBY_LOG(level, ##args); }
+#define COORDINATOR_LOG_RET(level, errcode, args...) { int ret = errcode; COORDINATOR_LOG(level, ##args); }
+#define _COORDINATOR_LOG_RET(level, errcode, args...) { int ret = errcode; _COORDINATOR_LOG(level, ##args); }
+#define FLT_LOG_RET(level, errcode, args...) { int ret = errcode; FLT_LOG(level, ##args); }
+#define _FLT_LOG_RET(level, errcode, args...) { int ret = errcode; _FLT_LOG(level, ##args); }
+#define MVCC_LOG_RET(level, errcode, args...) { int ret = errcode; MVCC_LOG(level, ##args); }
+#define _MVCC_LOG_RET(level, errcode, args...) { int ret = errcode; _MVCC_LOG(level, ##args); }
+#define WRS_CLUSTER_LOG_RET(level, errcode, args...) { int ret = errcode; WRS_CLUSTER_LOG(level, ##args); }
+#define _WRS_CLUSTER_LOG_RET(level, errcode, args...) { int ret = errcode; _WRS_CLUSTER_LOG(level, ##args); }
+#define WRS_SERVER_LOG_RET(level, errcode, args...) { int ret = errcode; WRS_SERVER_LOG(level, ##args); }
+#define _WRS_SERVER_LOG_RET(level, errcode, args...) { int ret = errcode; _WRS_SERVER_LOG(level, ##args); }
+#define LIB_ALLOC_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_ALLOC_LOG(level, ##args); }
+#define _LIB_ALLOC_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_ALLOC_LOG(level, ##args); }
+#define LIB_CHARSET_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_CHARSET_LOG(level, ##args); }
+#define _LIB_CHARSET_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_CHARSET_LOG(level, ##args); }
+#define LIB_CONTAIN_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_CONTAIN_LOG(level, ##args); }
+#define _LIB_CONTAIN_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_CONTAIN_LOG(level, ##args); }
+#define LIB_CPU_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_CPU_LOG(level, ##args); }
+#define _LIB_CPU_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_CPU_LOG(level, ##args); }
+#define LIB_ENCRYPT_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_ENCRYPT_LOG(level, ##args); }
+#define _LIB_ENCRYPT_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_ENCRYPT_LOG(level, ##args); }
+#define LIB_FILE_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_FILE_LOG(level, ##args); }
+#define _LIB_FILE_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_FILE_LOG(level, ##args); }
+#define LIB_HASH_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_HASH_LOG(level, ##args); }
+#define _LIB_HASH_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_HASH_LOG(level, ##args); }
+#define LIB_JASON_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_JASON_LOG(level, ##args); }
+#define _LIB_JASON_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_JASON_LOG(level, ##args); }
+#define LIB_LIST_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_LIST_LOG(level, ##args); }
+#define _LIB_LIST_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_LIST_LOG(level, ##args); }
+#define LIB_LOCK_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_LOCK_LOG(level, ##args); }
+#define _LIB_LOCK_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_LOCK_LOG(level, ##args); }
+#define LIB_MYSQLC_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_MYSQLC_LOG(level, ##args); }
+#define _LIB_MYSQLC_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_MYSQLC_LOG(level, ##args); }
+#define LIB_NUM_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_NUM_LOG(level, ##args); }
+#define _LIB_NUM_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_NUM_LOG(level, ##args); }
+#define LIB_OBJP_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_OBJP_LOG(level, ##args); }
+#define _LIB_OBJP_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_OBJP_LOG(level, ##args); }
+#define LIB_PROB_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_PROB_LOG(level, ##args); }
+#define _LIB_PROB_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_PROB_LOG(level, ##args); }
+#define LIB_PROFILE_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_PROFILE_LOG(level, ##args); }
+#define _LIB_PROFILE_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_PROFILE_LOG(level, ##args); }
+#define LIB_QUEUE_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_QUEUE_LOG(level, ##args); }
+#define _LIB_QUEUE_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_QUEUE_LOG(level, ##args); }
+#define LIB_REGEX_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_REGEX_LOG(level, ##args); }
+#define _LIB_REGEX_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_REGEX_LOG(level, ##args); }
+#define LIB_STRING_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_STRING_LOG(level, ##args); }
+#define _LIB_STRING_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_STRING_LOG(level, ##args); }
+#define LIB_TASK_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_TASK_LOG(level, ##args); }
+#define _LIB_TASK_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_TASK_LOG(level, ##args); }
+#define LIB_TRHEADL_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_TRHEADL_LOG(level, ##args); }
+#define _LIB_TRHEADL_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_TRHEADL_LOG(level, ##args); }
+#define LIB_TIME_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_TIME_LOG(level, ##args); }
+#define _LIB_TIME_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_TIME_LOG(level, ##args); }
+#define LIB_UTILITY_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_UTILITY_LOG(level, ##args); }
+#define _LIB_UTILITY_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_UTILITY_LOG(level, ##args); }
+#define LIB_WS_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_WS_LOG(level, ##args); }
+#define _LIB_WS_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_WS_LOG(level, ##args); }
+#define LIB_OCI_LOG_RET(level, errcode, args...) { int ret = errcode; LIB_OCI_LOG(level, ##args); }
+#define _LIB_OCI_LOG_RET(level, errcode, args...) { int ret = errcode; _LIB_OCI_LOG(level, ##args); }
+#define OFS_BLOCK_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_BLOCK_LOG(level, ##args); }
+#define _OFS_BLOCK_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_BLOCK_LOG(level, ##args); }
+#define OFS_BLOCKSERVER_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_BLOCKSERVER_LOG(level, ##args); }
+#define _OFS_BLOCKSERVER_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_BLOCKSERVER_LOG(level, ##args); }
+#define OFS_CLIENT_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_CLIENT_LOG(level, ##args); }
+#define _OFS_CLIENT_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_CLIENT_LOG(level, ##args); }
+#define OFS_CLUSTER_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_CLUSTER_LOG(level, ##args); }
+#define _OFS_CLUSTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_CLUSTER_LOG(level, ##args); }
+#define OFS_COMMON_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_COMMON_LOG(level, ##args); }
+#define _OFS_COMMON_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_COMMON_LOG(level, ##args); }
+#define OFS_FILE_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_FILE_LOG(level, ##args); }
+#define _OFS_FILE_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_FILE_LOG(level, ##args); }
+#define OFS_FS_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_FS_LOG(level, ##args); }
+#define _OFS_FS_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_FS_LOG(level, ##args); }
+#define OFS_MASTER_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_MASTER_LOG(level, ##args); }
+#define _OFS_MASTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_MASTER_LOG(level, ##args); }
+#define OFS_REGRESSION_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_REGRESSION_LOG(level, ##args); }
+#define _OFS_REGRESSION_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_REGRESSION_LOG(level, ##args); }
+#define OFS_RPC_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_RPC_LOG(level, ##args); }
+#define _OFS_RPC_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_RPC_LOG(level, ##args); }
+#define OFS_STREAM_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_STREAM_LOG(level, ##args); }
+#define _OFS_STREAM_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_STREAM_LOG(level, ##args); }
+#define OFS_UTIL_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_UTIL_LOG(level, ##args); }
+#define _OFS_UTIL_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_UTIL_LOG(level, ##args); }
+#define OFS_LIBS_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_LIBS_LOG(level, ##args); }
+#define _OFS_LIBS_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_LIBS_LOG(level, ##args); }
+#define OFS_SHARE_LOG_RET(level, errcode, args...) { int ret = errcode; OFS_SHARE_LOG(level, ##args); }
+#define _OFS_SHARE_LOG_RET(level, errcode, args...) { int ret = errcode; _OFS_SHARE_LOG(level, ##args); }
+#define PL_DEBUG_LOG_RET(level, errcode, args...) { int ret = errcode; PL_DEBUG_LOG(level, ##args); }
+#define _PL_DEBUG_LOG_RET(level, errcode, args...) { int ret = errcode; _PL_DEBUG_LOG(level, ##args); }
+#define PL_CACHE_LOG_RET(level, errcode, args...) { int ret = errcode; PL_CACHE_LOG(level, ##args); }
+#define _PL_CACHE_LOG_RET(level, errcode, args...) { int ret = errcode; _PL_CACHE_LOG(level, ##args); }
+#define RPC_FRAME_LOG_RET(level, errcode, args...) { int ret = errcode; RPC_FRAME_LOG(level, ##args); }
+#define _RPC_FRAME_LOG_RET(level, errcode, args...) { int ret = errcode; _RPC_FRAME_LOG(level, ##args); }
+#define RPC_OBRPC_LOG_RET(level, errcode, args...) { int ret = errcode; RPC_OBRPC_LOG(level, ##args); }
+#define _RPC_OBRPC_LOG_RET(level, errcode, args...) { int ret = errcode; _RPC_OBRPC_LOG(level, ##args); }
+#define RPC_OBMYSQL_LOG_RET(level, errcode, args...) { int ret = errcode; RPC_OBMYSQL_LOG(level, ##args); }
+#define _RPC_OBMYSQL_LOG_RET(level, errcode, args...) { int ret = errcode; _RPC_OBMYSQL_LOG(level, ##args); }
+#define RPC_TEST_LOG_RET(level, errcode, args...) { int ret = errcode; RPC_TEST_LOG(level, ##args); }
+#define _RPC_TEST_LOG_RET(level, errcode, args...) { int ret = errcode; _RPC_TEST_LOG(level, ##args); }
+#define COMMON_CACHE_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_CACHE_LOG(level, ##args); }
+#define _COMMON_CACHE_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_CACHE_LOG(level, ##args); }
+#define COMMON_EXPR_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_EXPR_LOG(level, ##args); }
+#define _COMMON_EXPR_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_EXPR_LOG(level, ##args); }
+#define COMMON_LEASE_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_LEASE_LOG(level, ##args); }
+#define _COMMON_LEASE_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_LEASE_LOG(level, ##args); }
+#define COMMON_MYSQLP_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_MYSQLP_LOG(level, ##args); }
+#define _COMMON_MYSQLP_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_MYSQLP_LOG(level, ##args); }
+#define COMMON_PRI_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_PRI_LOG(level, ##args); }
+#define _COMMON_PRI_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_PRI_LOG(level, ##args); }
+#define COMMON_STAT_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_STAT_LOG(level, ##args); }
+#define _COMMON_STAT_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_STAT_LOG(level, ##args); }
+#define COMMON_UPSR_LOG_RET(level, errcode, args...) { int ret = errcode; COMMON_UPSR_LOG(level, ##args); }
+#define _COMMON_UPSR_LOG_RET(level, errcode, args...) { int ret = errcode; _COMMON_UPSR_LOG(level, ##args); }
+#define SHARE_CONFIG_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_CONFIG_LOG(level, ##args); }
+#define _SHARE_CONFIG_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_CONFIG_LOG(level, ##args); }
+#define SHARE_FILE_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_FILE_LOG(level, ##args); }
+#define _SHARE_FILE_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_FILE_LOG(level, ##args); }
+#define SHARE_INNERT_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_INNERT_LOG(level, ##args); }
+#define _SHARE_INNERT_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_INNERT_LOG(level, ##args); }
+#define SHARE_INTERFACE_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_INTERFACE_LOG(level, ##args); }
+#define _SHARE_INTERFACE_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_INTERFACE_LOG(level, ##args); }
+#define SHARE_LOG_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_LOG_LOG(level, ##args); }
+#define _SHARE_LOG_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_LOG_LOG(level, ##args); }
+#define SHARE_PT_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_PT_LOG(level, ##args); }
+#define _SHARE_PT_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_PT_LOG(level, ##args); }
+#define SHARE_SCHEMA_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_SCHEMA_LOG(level, ##args); }
+#define _SHARE_SCHEMA_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_SCHEMA_LOG(level, ##args); }
+#define SHARE_TRIGGER_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_TRIGGER_LOG(level, ##args); }
+#define _SHARE_TRIGGER_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_TRIGGER_LOG(level, ##args); }
+#define SHARE_LOCATION_LOG_RET(level, errcode, args...) { int ret = errcode; SHARE_LOCATION_LOG(level, ##args); }
+#define _SHARE_LOCATION_LOG_RET(level, errcode, args...) { int ret = errcode; _SHARE_LOCATION_LOG(level, ##args); }
+#define STORAGE_REDO_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_REDO_LOG(level, ##args); }
+#define _STORAGE_REDO_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_REDO_LOG(level, ##args); }
+#define STORAGE_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_COMPACTION_LOG(level, ##args); }
+#define _STORAGE_COMPACTION_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_COMPACTION_LOG(level, ##args); }
+#define STORAGE_BLKMGR_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGE_BLKMGR_LOG(level, ##args); }
+#define _STORAGE_BLKMGR_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGE_BLKMGR_LOG(level, ##args); }
+#define SQL_ENG_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_ENG_LOG(level, ##args); }
+#define _SQL_ENG_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_ENG_LOG(level, ##args); }
+#define SQL_EXE_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_EXE_LOG(level, ##args); }
+#define _SQL_EXE_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_EXE_LOG(level, ##args); }
+#define SQL_OPT_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_OPT_LOG(level, ##args); }
+#define _SQL_OPT_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_OPT_LOG(level, ##args); }
+#define SQL_JO_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_JO_LOG(level, ##args); }
+#define _SQL_JO_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_JO_LOG(level, ##args); }
+#define SQL_PARSER_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_PARSER_LOG(level, ##args); }
+#define _SQL_PARSER_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_PARSER_LOG(level, ##args); }
+#define SQL_PC_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_PC_LOG(level, ##args); }
+#define _SQL_PC_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_PC_LOG(level, ##args); }
+#define _SQL_PLANCACHE_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_PLANCACHE_LOG(level, ##args); }
+#define SQL_RESV_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_RESV_LOG(level, ##args); }
+#define _SQL_RESV_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_RESV_LOG(level, ##args); }
+#define SQL_REWRITE_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_REWRITE_LOG(level, ##args); }
+#define _SQL_REWRITE_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_REWRITE_LOG(level, ##args); }
+#define SQL_SESSION_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_SESSION_LOG(level, ##args); }
+#define _SQL_SESSION_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_SESSION_LOG(level, ##args); }
+#define SQL_CG_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_CG_LOG(level, ##args); }
+#define _SQL_CG_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_CG_LOG(level, ##args); }
+#define SQL_MONITOR_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_MONITOR_LOG(level, ##args); }
+#define _SQL_MONITOR_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_MONITOR_LOG(level, ##args); }
+#define SQL_DTL_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_DTL_LOG(level, ##args); }
+#define _SQL_DTL_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_DTL_LOG(level, ##args); }
+#define SQL_DAS_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_DAS_LOG(level, ##args); }
+#define _SQL_DAS_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_DAS_LOG(level, ##args); }
+#define SQL_SPM_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_SPM_LOG(level, ##args); }
+#define _SQL_SPM_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_SPM_LOG(level, ##args); }
+#define SQL_QRR_LOG_RET(level, errcode, args...) { int ret = errcode; SQL_QRR_LOG(level, ##args); }
+#define _SQL_QRR_LOG_RET(level, errcode, args...) { int ret = errcode; _SQL_QRR_LOG(level, ##args); }
+#define DETECT_LOG_LOG_RET(level, errcode, args...) { int ret = errcode; DETECT_LOG_LOG(level, ##args); }
+#define _DETECT_LOG_LOG_RET(level, errcode, args...) { int ret = errcode; _DETECT_LOG_LOG(level, ##args); }
+#define SERVER_OMT_LOG_RET(level, errcode, args...) { int ret = errcode; SERVER_OMT_LOG(level, ##args); }
+#define _SERVER_OMT_LOG_RET(level, errcode, args...) { int ret = errcode; _SERVER_OMT_LOG(level, ##args); }
+#define RS_LB_LOG_RET(level, errcode, args...) { int ret = errcode; RS_LB_LOG(level, ##args); }
+#define RS_RESTORE_LOG_RET(level, errcode, args...) { int ret = errcode; RS_RESTORE_LOG(level, ##args); }
+#define _RS_RESTORE_LOG_RET(level, errcode, args...) { int ret = errcode; _RS_RESTORE_LOG(level, ##args); }
+#define STORAGETEST_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGETEST_LOG(level, ##args); }
+#define _STORAGETEST_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGETEST_LOG(level, ##args); }
+#define OBLOG_FETCHER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_FETCHER_LOG(level, ##args); }
+#define _OBLOG_FETCHER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_FETCHER_LOG(level, ##args); }
+#define OBLOG_PARSER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_PARSER_LOG(level, ##args); }
+#define _OBLOG_PARSER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_PARSER_LOG(level, ##args); }
+#define OBLOG_SEQUENCER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_SEQUENCER_LOG(level, ##args); }
+#define _OBLOG_SEQUENCER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_SEQUENCER_LOG(level, ##args); }
+#define OBLOG_FORMATTER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_FORMATTER_LOG(level, ##args); }
+#define _OBLOG_FORMATTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_FORMATTER_LOG(level, ##args); }
+#define OBLOG_COMMITTER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_COMMITTER_LOG(level, ##args); }
+#define _OBLOG_COMMITTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_COMMITTER_LOG(level, ##args); }
+#define OBLOG_TAILF_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_TAILF_LOG(level, ##args); }
+#define _OBLOG_TAILF_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_TAILF_LOG(level, ##args); }
+#define OBLOG_SCHEMA_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_SCHEMA_LOG(level, ##args); }
+#define _OBLOG_SCHEMA_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_SCHEMA_LOG(level, ##args); }
+#define OBLOG_STORAGER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_STORAGER_LOG(level, ##args); }
+#define _OBLOG_STORAGER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_STORAGER_LOG(level, ##args); }
+#define OBLOG_READER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_READER_LOG(level, ##args); }
+#define _OBLOG_READER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_READER_LOG(level, ##args); }
+#define OBLOG_DISPATCHER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_DISPATCHER_LOG(level, ##args); }
+#define _OBLOG_DISPATCHER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_DISPATCHER_LOG(level, ##args); }
+#define OBLOG_SORTER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_SORTER_LOG(level, ##args); }
+#define _OBLOG_SORTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_SORTER_LOG(level, ##args); }
+// END XXX_LOG_RET MACRO DEFINE
+
+#define DDLOG_RET(level, errcode, args...){ int ret = errcode; DDLOG(level, ##args); }
+
+
+
 // used for the log return for user;
 // if you want to return ERROR message for user, and the error message parameters returned
 // in mysql mode and oracle mode are the same. you should use LOG_USER_ERROR or FORWARD_USER_ERROR.
@@ -804,7 +1138,7 @@ LOG_MOD_END(PL)
 #define _LOG_USER_MSG(level, errcode, umsg, args...)                      \
   do {\
     OB_LOGGER.log_user_message(level, errcode, umsg, ##args);\
-    OB_LOGGER.log_message_fmt("", OB_LOG_NUM_LEVEL(level), umsg, ##args);\
+    OB_LOGGER.log_message_fmt("", OB_LOG_NUM_LEVEL(OB_LOG_LEVEL_WARN), errcode, umsg, ##args);\
   } while(0)
 
 //
@@ -816,7 +1150,7 @@ LOG_MOD_END(PL)
 
 #define CHECK_LOG_USER_CONST_FMT(x) \
     static_assert(__builtin_constant_p(x) == 1, \
-                  "LOG_USER_XX(errcode..) need use const errcode instead of vairable ret");
+                  "LOG_USER_XX(errcode..)/LOG_DBA_XXX(errcoce) need use const errcode instead of vairable ret");
 #else
 #define CHECK_LOG_USER_CONST_FMT(x)
 #endif
@@ -893,9 +1227,35 @@ LOG_MOD_END(PL)
   if (OB_NOT_NULL(msg)) { \
     OB_LOGGER.insert_warning_buffer(::oceanbase::common::ObLogger::USER_NOTE, errcode, msg, static_cast<int64_t>(strlen(msg))); \
     if (OB_LOGGER.need_to_print(OB_LOG_LEVEL_WARN)) { \
-      ::oceanbase::common::OB_PRINT("", OB_LOG_LEVEL_DIRECT(WARN), msg, LOG_KVS("ret", errcode)); \
+      ::oceanbase::common::OB_PRINT("", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(WARN), errcode, msg, LOG_KVS("ret", errcode)); \
     } \
   }
+
+namespace oceanbase {
+namespace common {
+extern const char *ob_strerror(const int oberr);
+} // end namespace common
+} // end namespace oceanbase
+
+#define LOG_DBA_ERROR(errcode, args...) \
+    do \
+    { \
+      CHECK_LOG_USER_CONST_FMT(errcode); \
+      if (OB_LOG_NEED_TO_PRINT(DBA_ERROR)) { \
+        ::oceanbase::common::OB_PRINT("", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_ERROR), errcode, ob_strerror(errcode), LOG_KVS(args)); \
+      } \
+    } while (0)
+
+#define LOG_DBA_WARN(errcode, args...) \
+    do \
+    { \
+      CHECK_LOG_USER_CONST_FMT(errcode); \
+      if (OB_LOG_NEED_TO_PRINT(DBA_WARN)) { \
+        ::oceanbase::common::OB_PRINT("", OB_LOG_LEVEL_DIRECT_NO_ERRCODE(DBA_WARN), errcode, ob_strerror(errcode), LOG_KVS(args)); \
+      } \
+    } while (0)
+
+
 
 // define USING_LOG_PREFIX in .cpp file to use LOG_ERROR, LOG_WARN ... macros
 //
@@ -904,9 +1264,13 @@ LOG_MOD_END(PL)
 //    LOG_ERROR(...) will expand to COMMON_LOG(ERROR, ...)
 
 #define LOG_ERROR(args...) LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (ERROR, ##args)
+#define LOG_ERROR_RET(args...) LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG_RET) (ERROR, ##args)
 #define _LOG_ERROR(args...) _LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (ERROR, ##args)
+#define _LOG_ERROR_RET(args...) _LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG_RET) (ERROR, ##args)
 #define LOG_WARN(args...) LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (WARN, ##args)
+#define LOG_WARN_RET(args...) LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG_RET) (WARN, ##args)
 #define _LOG_WARN(args...) _LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (WARN, ##args)
+#define _LOG_WARN_RET(args...) _LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG_RET) (WARN, ##args)
 #define LOG_INFO(args...) LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (INFO, ##args)
 #define _LOG_INFO(args...) _LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (INFO, ##args)
 #define LOG_TRACE(args...) LOG_MACRO_JOIN(USING_LOG_PREFIX, _LOG) (TRACE, ##args)
@@ -917,6 +1281,8 @@ LOG_MOD_END(PL)
 // print expr is human-readable format
 #define LOG_PRINT_EXPR(level, statement, expr, args...)                                \
     LOG_##level(statement, "expr", ::oceanbase::common::ObLogPrintName<__typeof__(expr)>(expr), ##args);
+
+#define LOG_PRINT_EXPR_RET(level, errcode, args...) { int ret = errcode; LOG_PRINT_EXPR(level, ##args); }
 
 // When key is the name of value, can use K(value) for key and value.
 // example:

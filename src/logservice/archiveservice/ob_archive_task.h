@@ -18,6 +18,7 @@
 #include "ob_archive_define.h"                     // ArchiveWorkStation
 #include "share/backup/ob_archive_piece.h"         // ObArchivePiece
 #include "logservice/palf/lsn.h"         // LSN
+#include "share/scn.h"         // SCN
 #include <cstdint>
 
 namespace oceanbase
@@ -51,7 +52,7 @@ class ObArchiveSendTask;
  * 另外由于每个observer可能为多个日志流归档服务, 所以多个日志流之间保存整体齐步走是有必要的.
  * ObArchiveSequencer根据ObArchiveLogFetchTask消费进度协调不同日志流归档进度.
  *
- * NB: 由于ObArchiveSequencer无法感知到日志log ts信息, 因此初始LogFetchTask其piece info是空的,
+ * NB: 由于ObArchiveSequencer无法感知到日志log scn信息, 因此初始LogFetchTask其piece info是空的,
  * 由ObArchiveFetcher在消费时, 为跨piece任务归档数据到多个piece下
  * 对于跨piece的归档文件, 相同编号的归档文件可能会出现在多个piece, 其中每个piece仅包含该piece所属日志范围
  *
@@ -70,13 +71,12 @@ public:
            const LSN &start_lsn,
            const LSN &end_lsn);
   uint64_t get_tenant_id() const { return tenant_id_; }
-  const ObLSID &get_ls_id() const { return id_; }
-  ObLSID get_ls_id_copy() { return id_; }
+  ObLSID get_ls_id() const { return id_; }
   const ArchiveWorkStation &get_station() { return station_; }
   const LSN &get_start_offset() const { return start_offset_; }
   const LSN &get_cur_offset() const { return cur_offset_; }
   const LSN &get_end_offset() const { return end_offset_; }
-  int64_t get_max_log_ts() const { return max_log_ts_; }
+  const share::SCN &get_max_scn() const { return max_scn_; }
   int64_t get_log_fetch_size() const { return (int64_t)(end_offset_ - cur_offset_); }
   const ObArchivePiece &get_piece() const { return cur_piece_; }
   int set_next_piece(const ObArchivePiece &piece);
@@ -88,7 +88,7 @@ public:
   int back_fill(const ObArchivePiece &cur_piece,
                   const LSN &start_offset,
                   const LSN &end_offset,
-                  const int64_t max_log_ts,
+                  const share::SCN &max_scn,
                   ObArchiveSendTask *send_task);
   bool has_fetch_log() const { return NULL != send_task_; }
   bool is_continuous_with(const LSN &lsn) const;
@@ -101,8 +101,9 @@ public:
                K_(end_offset),
                K_(cur_offset),
                "unfinished_data_size", get_log_fetch_size(),
-               K_(max_log_ts),
-               K_(send_task));
+               K_(max_scn),
+               K_(send_task),
+               KP(this));
 
 private:
   uint64_t tenant_id_;
@@ -113,7 +114,7 @@ private:
   LSN start_offset_; // 起始拉日志文件起始offset
   LSN end_offset_;   // 拉取日志文件结束offset(如果是拉取完整文件任务，该值为infoblock起点)
   LSN cur_offset_;
-  int64_t max_log_ts_;        // 任务包含最大日志log ts
+  share::SCN max_scn_;        // 任务包含最大日志log scn
 
   ObArchiveSendTask *send_task_;
 };
@@ -158,38 +159,70 @@ public:
            const ObArchivePiece &piece,
            const LSN &start_offset,
            const LSN &end_offset,
-           const int64_t max_log_ts,
-           char *data,
-           const int64_t data_len);
+           const share::SCN &max_scn);
   bool is_valid() const;
   uint64_t get_tenant_id() const { return tenant_id_;}
-  const ObLSID &get_ls_id() const { return id_; }
+  ObLSID get_ls_id() const { return id_; }
   const ArchiveWorkStation &get_station() const { return station_; }
   const ObArchivePiece &get_piece() const { return piece_; }
   const LSN &get_start_lsn() const { return start_offset_; }
   const LSN &get_end_lsn() const { return end_offset_; };
   int get_buffer(char *&data, int64_t &data_len) const;
+  int get_origin_buffer(char *&buf, int64_t &buf_size) const;
   int64_t get_buf_size() const { return data_len_;}
-  int64_t get_max_log_ts() const { return max_log_ts_; }
+  const share::SCN &get_max_scn() const { return max_scn_; }
   int set_buffer(char *buf, const int64_t buf_size);
   bool is_continuous_with(const ObArchiveSendTask &pre_task) const;
-  TO_STRING_KV(K_(tenant_id),
+  // @brief issue this task to a sender thread, only if its status is initial
+  // @ret_code  flase  issue failed, maybe this task is issued by other sender thread
+  //            true   issue successfully
+  bool issue_task();
+  // @brief after the task is issued to a sender thread and archived successfully, finish the task
+  // @ret_code  false  finish failed, should not happend
+  //            true   finish successfully
+  bool finish_task();
+  // @brief mark task stale forcely, cases:
+  //  1) archive is stop
+  //  2) stale archive task after ls archive task station changed
+  void mark_stale();
+  // @brief after the task is issued to a sender thread and archived failed, retire the task and wait next turn
+  // @ret_code  false  retire failed, should not happend
+  //            true   retire successfully
+  bool retire_task_with_retry();
+  bool is_task_finish() const;
+  bool is_task_stale() const;
+  int update_file(const int64_t file_id, const int64_t file_offset);
+  void get_file(int64_t &file_id, int64_t &file_offset);
+  TO_STRING_KV(K_(status),
+               K_(tenant_id),
                K_(id),
                K_(station),
                K_(piece),
                K_(start_offset),
                K_(end_offset),
-               K_(max_log_ts),
+               K_(max_scn),
+               K_(file_id),
+               K_(file_offset),
                K_(data),
-               K_(data_len));
+               K_(data_len),
+               KP(this));
 private:
+  static const int8_t INITAL_STATUS = 0;
+  static const int8_t ISSUE_STATUS = 1;
+  static const int8_t FINISH_STATUS = 2;
+  static const int8_t STALE_STATUS = 3;
+
+private:
+  int8_t status_;           // low 1st bit means issued(1) or not(0), low 2nd bit means finished(1) or not(0)
   uint64_t tenant_id_;
   ObLSID id_;               // ls id
   ArchiveWorkStation station_;     // archive work station, include incarnation/dest_id/round/lease
   ObArchivePiece piece_;
   LSN start_offset_;       // 归档数据在文件起始offset
   LSN end_offset_;         // 归档数据在文件终止offset
-  int64_t max_log_ts_;     // 该task包含数据最大log ts
+  share::SCN max_scn_;     // 该task包含数据最大scn
+  int64_t file_id_;
+  int64_t file_offset_;
   char *data_;             // 发送数据
   int64_t data_len_;       // 发送数据长度
 };

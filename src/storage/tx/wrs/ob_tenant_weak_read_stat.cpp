@@ -18,12 +18,10 @@ namespace transaction
 {
 ObTenantWeakReadStat::ObTenantWeakReadStat() :
   tenant_id_(OB_INVALID_ID),
-  server_version_(0),
   total_part_count_(0),
   valid_inner_part_count_(0),
   valid_user_part_count_(0),
   server_version_delta_(0),
-  local_cluster_version_(0),
   local_cluster_version_delta_(0),
   self_(),
 
@@ -42,10 +40,7 @@ ObTenantWeakReadStat::ObTenantWeakReadStat() :
   cluster_servers_count_(0),
   cluster_skipped_servers_count_(0),
   cluster_version_gen_tstamp_(0),
-  cluster_version_(0),
-  cluster_version_delta_(0),
-  min_cluster_version_(0),
-  max_cluster_version_(0)
+  cluster_version_delta_(0)
 {}
 
 ObTenantWeakReadStat::~ObTenantWeakReadStat()
@@ -56,12 +51,12 @@ ObTenantWeakReadStat::~ObTenantWeakReadStat()
 void ObTenantWeakReadStat::destroy()
 {
   tenant_id_ = OB_INVALID_ID;
-  server_version_ = 0;
+  server_version_.reset();
   total_part_count_ = 0;
   valid_inner_part_count_ = 0;
   valid_user_part_count_ = 0;
   server_version_delta_ = 0;
-  local_cluster_version_ = 0;
+  local_cluster_version_.reset();
   local_cluster_version_delta_ = 0;
   self_.reset();
 
@@ -80,10 +75,10 @@ void ObTenantWeakReadStat::destroy()
   cluster_servers_count_ = 0;
   cluster_skipped_servers_count_ = 0;
   cluster_version_gen_tstamp_ = 0;
-  cluster_version_ = 0;
+  cluster_version_.reset();
   cluster_version_delta_ = 0;
-  min_cluster_version_ = 0;
-  max_cluster_version_ = 0;
+  min_cluster_version_.reset();
+  max_cluster_version_.reset();
 }
 
 }

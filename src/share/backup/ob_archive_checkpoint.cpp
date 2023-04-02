@@ -39,14 +39,15 @@ void ObDestRoundCheckpointer::Counter::reset()
   interrupted_cnt_ = 0;
   doing_cnt_ = 0;
   stopped_cnt_ = 0;
-  max_scn_ = 0;
-  checkpoint_scn_ = UINT64_MAX;
+  suspended_cnt_ = 0;
+  max_scn_.set_min();
+  checkpoint_scn_.set_max();
   max_active_piece_id_ = INT64_MAX;
 }
 
 
 int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const PieceGeneratedCb &piece_generated_cb, 
-    const RoundCheckpointCb &round_checkpoint_cb, const ARCHIVE_SCN_TYPE &max_checkpoint_scn)
+    const RoundCheckpointCb &round_checkpoint_cb, const SCN &max_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -55,7 +56,7 @@ int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const Pi
   } else if (OB_ISNULL(round_handler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("round_handler is null.", K(ret));
-  } else if (0 >= max_checkpoint_scn) {
+  } else if (SCN::min_scn() >= max_checkpoint_scn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid max_checkpoint_scn.", K(ret), K(max_checkpoint_scn));
   } else {
@@ -143,7 +144,13 @@ int ObDestRoundCheckpointer::count_(const ObDestRoundSummary &summary, ObDestRou
       counter.max_scn_ = MAX(counter.max_scn_, ls_round.checkpoint_scn_);
       counter.checkpoint_scn_ = MIN(counter.checkpoint_scn_, ls_round.checkpoint_scn_);
       counter.max_active_piece_id_ = MIN(counter.max_active_piece_id_, ls_round.max_piece_id());
-    } else {
+    } else if (ls_round.state_.is_suspend()) {
+      counter.suspended_cnt_++;
+      counter.max_scn_ = MAX(counter.max_scn_, ls_round.checkpoint_scn_);
+      counter.checkpoint_scn_ = MIN(counter.checkpoint_scn_, ls_round.checkpoint_scn_);
+      counter.max_active_piece_id_ = MIN(counter.max_active_piece_id_, ls_round.max_piece_id());
+    }
+    else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected archive state", K(ret), K(ls_round));
     }
@@ -165,7 +172,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   int ret = OB_SUCCESS;
   // Current existing log stream count.
   int64_t actual_count = counter.ls_count_ - counter.deleted_ls_count_;
-  ARCHIVE_SCN_TYPE next_checkpoint_scn = 0;
+  SCN next_checkpoint_scn = SCN::min_scn();
   need_checkpoint = true;
   if (OB_FAIL(new_round_info.deep_copy_from(old_round_info))) {
     LOG_WARN("failed to deep copy round info", K(ret), K(old_round_info), K(counter));
@@ -178,8 +185,8 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   } else if (OB_FALSE_IT(next_checkpoint_scn = MIN(max_checkpoint_scn_, counter.checkpoint_scn_))) {
     // Checkpoint can not over limit ts. However, if old round goes into STOPPING, then we will not 
     // move checkpoint_scn on.
-  } 
-  
+  }
+
   if (OB_FAIL(ret)) {
   } else if (old_round_info.state_.is_beginning()) {
     if (counter.not_start_cnt_ > 0) {
@@ -219,13 +226,22 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
     }
+  } else if (old_round_info.state_.is_suspending()) {
+    if (counter.suspended_cnt_ + counter.not_start_cnt_ == actual_count) {
+      // previous state is SUSPENDING, expected next state is SUSPEND.
+      new_round_info.state_.set_suspend();
+      LOG_INFO("switch to SUSPEND state", K(old_round_info), K(counter), K(new_round_info));
+    } else if (counter.suspended_cnt_ + counter.not_start_cnt_ < actual_count) {
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
+    }
   } else if (old_round_info.state_.is_stopping()) {
     if (counter.stopped_cnt_ + counter.not_start_cnt_ == actual_count) {
       // previous state is STOPPING, expected next state is STOP.
       new_round_info.state_.set_stop();
       LOG_INFO("switch to STOP state", K(old_round_info), K(counter), K(new_round_info));
     } else if (counter.stopped_cnt_ + counter.not_start_cnt_ < actual_count) {
-      // wait
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error occur", K(ret), K(old_round_info), K(counter), K(new_round_info));
@@ -329,7 +345,8 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
   // stat data amount and checkpoint ts for current piece.
   const ObArray<ObLSDestRoundSummary> &ls_round_list = summary.ls_round_list_;
-  piece.piece_info_.max_scn_ = 0;
+  piece.piece_info_.checkpoint_scn_ = SCN::max_scn();
+  piece.piece_info_.max_scn_ = SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_round_list.count(); i++) {
     const ObLSDestRoundSummary &ls_round = ls_round_list.at(i);
     // search the piece
@@ -348,9 +365,11 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
       gen_ls_piece.max_lsn_ = ls_piece.max_lsn_;
       gen_ls_piece.input_bytes_ = ls_piece.input_bytes_;
       gen_ls_piece.output_bytes_ = ls_piece.output_bytes_;
+      gen_ls_piece.is_ls_deleted_ = ls_round.is_deleted_;
 
 
       // fill piece
+      piece.piece_info_.checkpoint_scn_ = MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_);
       piece.piece_info_.max_scn_ = MAX(piece.piece_info_.max_scn_, ls_piece.checkpoint_scn_);
       piece.piece_info_.input_bytes_ += ls_piece.input_bytes_;
       piece.piece_info_.output_bytes_ += ls_piece.output_bytes_;
@@ -366,11 +385,10 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
   if (OB_FAIL(ret)) {
   } else if (piece_id < max_active_piece_id) {
     piece.piece_info_.status_.set_frozen();
-    piece.piece_info_.checkpoint_scn_ = piece.piece_info_.end_scn_;
     piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
   } else if (piece_id == max_active_piece_id) {
+    piece.piece_info_.checkpoint_scn_ = MIN(new_round_info.checkpoint_scn_, piece.piece_info_.checkpoint_scn_);
     piece.piece_info_.status_.set_active();
-    piece.piece_info_.checkpoint_scn_ = new_round_info.checkpoint_scn_;
     piece.piece_info_.file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
   } else {
     // piece_id > max_active_piece_id
@@ -390,7 +408,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
 bool ObDestRoundCheckpointer::can_do_checkpoint_(const ObTenantArchiveRoundAttr &round_info) const
 {
-  return round_info.state_.is_beginning() || round_info.state_.is_doing() || round_info.state_.is_stopping();
+  return round_info.state_.is_beginning() || round_info.state_.is_doing() || round_info.state_.is_stopping() || round_info.state_.is_suspending();
 }
 
 int ObDestRoundCheckpointer::fill_generated_pieces_(const Result &result, common::ObIArray<ObTenantArchivePieceAttr> &pieces) const

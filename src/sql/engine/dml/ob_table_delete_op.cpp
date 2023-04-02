@@ -134,6 +134,28 @@ OB_INLINE int ObTableDeleteOp::inner_open_with_das()
   return ret;
 }
 
+int ObTableDeleteOp::check_need_exec_single_row()
+{
+  int ret = OB_SUCCESS;
+  ret = ObTableModifyOp::check_need_exec_single_row();
+  if (OB_SUCC(ret) && !execute_single_row_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.del_ctdefs_.count() && !execute_single_row_; ++i) {
+      const ObTableDeleteSpec::DelCtDefArray &ctdefs = MY_SPEC.del_ctdefs_.at(i);
+      const ObDelCtDef &del_ctdef = *ctdefs.at(0);
+      if (has_before_row_trigger(del_ctdef) || has_after_row_trigger(del_ctdef)) {
+        execute_single_row_ = true;
+      }
+      const ObForeignKeyArgArray &fk_args = del_ctdef.fk_args_;
+      for (int j = 0; OB_SUCC(ret) && j < fk_args.count() && !execute_single_row_; j++) {
+        if (fk_args.at(j).is_self_ref_ && fk_args.at(j).ref_action_ == ACTION_CASCADE) {
+          execute_single_row_ = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 OB_INLINE int ObTableDeleteOp::open_table_for_each()
 {
   int ret = OB_SUCCESS;
@@ -238,6 +260,7 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
       const ObDelCtDef &del_ctdef = *ctdefs.at(j);
       ObDelRtDef &del_rtdef = rtdefs.at(j);
       ObDASTabletLoc *tablet_loc = nullptr;
+      ObDMLModifyRowNode modify_row(this, &del_ctdef, &del_rtdef, ObDmlEventType::DE_DELETING);
       bool is_skipped = false;
       if (OB_FAIL(ObDMLService::process_delete_row(del_ctdef, del_rtdef, is_skipped, *this))) {
         LOG_WARN("process delete row failed", K(ret));
@@ -247,8 +270,10 @@ OB_INLINE int ObTableDeleteOp::delete_row_to_das()
         break;
       } else if (OB_FAIL(calc_tablet_loc(del_ctdef, del_rtdef, tablet_loc))) {
         LOG_WARN("calc partition key failed", K(ret));
-      } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef, del_rtdef, tablet_loc, dml_rtctx_))) {
+      } else if (OB_FAIL(ObDMLService::delete_row(del_ctdef, del_rtdef, tablet_loc, dml_rtctx_, modify_row.old_row_))) {
         LOG_WARN("insert row with das failed", K(ret));
+      } else if (need_after_row_process(del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+        LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       } else if (!MY_SPEC.del_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
         ++del_rtdef.cur_row_num_;
       }
@@ -313,7 +338,7 @@ int ObTableDeleteOp::check_delete_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_delete_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table delete affected row is not match with index table",
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table delete affected row is not match with index table",
                   K(ret), K(primary_write_rows), K(index_write_rows),
                   KPC(primary_del_ctdef), K(primary_del_rtdef),
                   KPC(index_del_ctdef), K(index_del_rtdef));
@@ -324,7 +349,7 @@ int ObTableDeleteOp::check_delete_affected_row()
         ret = OB_ERR_DEFENSIVE_CHECK;
         ObString func_name = ObString::make_string("check_delete_affected_row");
         LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-        LOG_ERROR("Fatal Error!!! data table delete affected row is not match with found rows",
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! data table delete affected row is not match with found rows",
                   K(ret), K(primary_write_rows), K(primary_del_rtdef.cur_row_num_),
                   KPC(primary_del_ctdef), K(primary_del_rtdef));
       }

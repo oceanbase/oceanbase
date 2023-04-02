@@ -18,6 +18,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "tx/ob_trans_service.h"
 #include "access/ob_multiple_scan_merge.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -117,6 +118,7 @@ int ObMacroEndkeyIterator::open(
 
     if (OB_SUCC(ret)) {
       cur_idx_ = 0;
+      iter_idx_ = iter_idx;
       is_inited_ = true;
     }
   }
@@ -696,6 +698,7 @@ int ObPartitionRangeSpliter::get_range_split_info(ObIArray<ObITable *> &tables,
   } else {
     // build range paras
     range_info.store_range_ = &store_range;
+    range_info.tables_ = &tables;
     bool is_sstable = false;
     int64_t size = 0;
     int64_t macro_block_cnt = 0;
@@ -723,7 +726,6 @@ int ObPartitionRangeSpliter::get_range_split_info(ObIArray<ObITable *> &tables,
           *range_info.store_range_, index_read_info, table, size, macro_block_cnt))) {
         STORAGE_LOG(WARN, "Failed to get single range info", K(ret), K(i), KPC(table));
       } else {
-        range_info.tables_ = &tables;
         range_info.total_size_ += size;
         range_info.index_read_info_ = &index_read_info;
         range_info.max_macro_block_count_ = MAX(macro_block_cnt, range_info.max_macro_block_count_);
@@ -1574,13 +1576,13 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::get_next_row(
 int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_table_access_param()
 {
   int ret = OB_SUCCESS;
-  const ObMergeSchema *merge_schema = merge_ctx_.schema_ctx_.merge_schema_;
-  if (OB_FAIL(merge_schema->get_rowkey_column_ids(rowkey_col_ids_))) {
+  const ObStorageSchema *storage_schema = merge_ctx_.get_schema();
+  if (OB_FAIL(storage_schema->get_rowkey_column_ids(rowkey_col_ids_))) {
     STORAGE_LOG(WARN, "Failed to get rowkey column ids", KR(ret));
   } else if (OB_FAIL(ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(rowkey_col_ids_))) {
     STORAGE_LOG(WARN, "failed to add extra rowkey cols", KR(ret));
-  } else if (OB_FAIL(tbl_read_info_.init(allocator_, merge_schema->get_column_count(),
-                                         merge_schema->get_rowkey_column_num(),
+  } else if (OB_FAIL(tbl_read_info_.init(allocator_, storage_schema->get_column_count(),
+                                         storage_schema->get_rowkey_column_num(),
                                          lib::is_oracle_mode(), rowkey_col_ids_, true))) {
     STORAGE_LOG(WARN, "Failed to init columns info", KR(ret));
   } else if (OB_FAIL(tbl_xs_param_.init_merge_param(
@@ -1603,10 +1605,13 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_store_ctx
   int ret = OB_SUCCESS;
   auto ls_id = merge_ctx_.param_.ls_id_;
   auto &snapshot = merge_ctx_.sstable_version_range_.snapshot_version_;
-  if (OB_FAIL(store_ctx_.init_for_read(ls_id,
-                                       INT64_MAX,
-                                       -1,
-                                       snapshot))) {
+  SCN scn;
+  if (OB_FAIL(scn.convert_for_tx(snapshot))) {
+    STORAGE_LOG(WARN, "convert for tx fail", K(ret), K(ls_id), K(snapshot));
+  } else if (OB_FAIL(store_ctx_.init_for_read(ls_id,
+                                              INT64_MAX,
+                                              -1,
+                                              scn))) {
     STORAGE_LOG(WARN, "init store ctx fail", K(ret), K(ls_id), K(snapshot));
   }
   return ret;
@@ -1629,7 +1634,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_table_acc
   if (OB_FAIL(tbl_xs_ctx_.init(query_flag, store_ctx_, allocator_, allocator_, scan_version_range))) {
     STORAGE_LOG(WARN, "Failed to init table access context", KR(ret));
   } else {
-    tbl_xs_ctx_.merge_log_ts_ = merge_ctx_.merge_log_ts_;
+    tbl_xs_ctx_.merge_scn_ = merge_ctx_.merge_scn_;
   }
   return ret;
 }
@@ -1705,7 +1710,7 @@ int ObPartitionIncrementalRangeSpliter::init(compaction::ObTabletMergeCtx &merge
     merge_ctx_ = &merge_ctx;
     allocator_ = &allocator;
     major_sstable_ = static_cast<ObSSTable *>(merge_ctx.tables_handle_.get_table(0));
-    tablet_size_ = merge_ctx.schema_ctx_.merge_schema_->get_tablet_size();
+    tablet_size_ = merge_ctx.get_schema()->get_tablet_size();
     if (OB_UNLIKELY(tablet_size_ < 0)) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid argument tablet size", KR(ret), K_(tablet_size));
@@ -1808,8 +1813,7 @@ int ObPartitionIncrementalRangeSpliter::check_is_incremental(bool &is_incrementa
         int cmp_ret = 0;
         ObDatumRowkey row_rowkey;
         ObDatumRowkey end_rowkey;
-        const int64_t rowkey_column_num =
-          merge_ctx_->schema_ctx_.merge_schema_->get_rowkey_column_num();
+        const int64_t rowkey_column_num = merge_ctx_->get_schema()->get_rowkey_column_num();
         const ObStorageDatumUtils &datum_utils =
           merge_ctx_->tablet_handle_.get_obj()->get_index_read_info().get_datum_utils();
         if (OB_FAIL(row_rowkey.assign(row->storage_datums_, rowkey_column_num))) {
@@ -1907,8 +1911,7 @@ int ObPartitionIncrementalRangeSpliter::get_ranges_by_inc_data(ObDatumRangeArray
         num_rows_per_range = default_noisy_row_num_skipped_;
       }
 
-      const int64_t rowkey_column_num =
-        merge_ctx_->schema_ctx_.merge_schema_->get_rowkey_column_num();
+      const int64_t rowkey_column_num = merge_ctx_->get_schema()->get_rowkey_column_num();
       int64_t count = 0;
       const ObDatumRow *row = nullptr;
       ObDatumRowkey rowkey;

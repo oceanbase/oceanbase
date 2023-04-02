@@ -26,6 +26,13 @@ class ObTabletReplicaFilter;
 class ObTabletReplica
 {
 public:
+  enum ScnStatus
+  {
+    SCN_STATUS_IDLE = 0,
+    SCN_STATUS_ERROR,
+    SCN_STATUS_MAX
+  };
+
   ObTabletReplica();
   virtual ~ObTabletReplica();
   void reset();
@@ -36,7 +43,9 @@ public:
         && server_.is_valid()
         && snapshot_version_ >= 0
         && data_size_ >= 0
-        && required_size_ >= 0;
+        && required_size_ >= 0
+        && report_scn_ >= 0
+        && is_status_valid(status_);
   }
   inline bool primary_keys_are_valid() const
   {
@@ -52,6 +61,8 @@ public:
   inline int64_t get_snapshot_version() const { return snapshot_version_; }
   inline int64_t get_data_size() const { return data_size_; }
   inline int64_t get_required_size() const { return required_size_; }
+  inline int64_t get_report_scn() const { return report_scn_; }
+  inline ScnStatus get_status() const { return status_; }
   int init(
       const uint64_t tenant_id,
       const common::ObTabletID &tablet_id,
@@ -59,8 +70,14 @@ public:
       const common::ObAddr &server,
       const int64_t snapshot_version,
       const int64_t data_size,
-      const int64_t required_size);
+      const int64_t required_size,
+      const int64_t report_scn,
+      const ScnStatus status);
   bool is_equal_for_report(const ObTabletReplica &other) const;
+  static bool is_status_valid(const ScnStatus status)
+  {
+    return status >= SCN_STATUS_IDLE && status < SCN_STATUS_MAX;
+  }
   TO_STRING_KV(
       K_(tenant_id),
       K_(tablet_id),
@@ -68,7 +85,9 @@ public:
       K_(server),
       K_(snapshot_version),
       K_(data_size),
-      K_(required_size));
+      K_(required_size),
+      K_(report_scn),
+      K_(status));
 private:
   uint64_t tenant_id_;
   common::ObTabletID tablet_id_;
@@ -77,6 +96,9 @@ private:
   int64_t snapshot_version_;
   int64_t data_size_; // load balancing releated
   int64_t required_size_; // load balancing releated
+  // below: tablet level member for compaction
+  int64_t report_scn_;
+  ScnStatus status_;
 };
 
 class ObTabletInfo

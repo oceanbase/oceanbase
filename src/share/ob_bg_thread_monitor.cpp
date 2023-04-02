@@ -143,7 +143,7 @@ int MonitorEntry::callback()
 
 MonitorEntryStack::MonitorEntryStack() : curr_idx_(0),
                                          inner_entry_(),
-                                         lock_()
+                                         lock_(ObLatchIds::BG_THREAD_MONITOR_LOCK)
 {
 }
 
@@ -171,7 +171,7 @@ void MonitorEntryStack::pop()
 {
   LockGuard guard(lock_);
   if (curr_idx_ <= 0 || curr_idx_ > NEST_LIMIT) {
-    SHARE_LOG(ERROR, "unexpected error, code mustn't go into this branch");
+    SHARE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected error, code mustn't go into this branch");
   } else {
     inner_entry_[--curr_idx_].reset();
   }
@@ -336,9 +336,9 @@ void ObBGThreadMonitor::run_loop_()
     }
     int64_t cost_time = common::ObClockGenerator::getClock() - current_ts;
     if (cost_time > 100*1000) {
-      SHARE_LOG(WARN, "ObBGThreadMonitor cost too much time", K(cost_time));
+      SHARE_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "ObBGThreadMonitor cost too much time", K(cost_time));
     }
-    int64_t sleep_time = CHECK_INTERVAL - cost_time;
+    int32_t sleep_time = static_cast<int32_t>(CHECK_INTERVAL - cost_time);
     if (sleep_time < 0) {
       sleep_time = 0;
     }

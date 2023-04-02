@@ -79,7 +79,8 @@ int ObLZ4StreamCompressor::stream_compress(void *ctx, const char *src, const int
       || OB_ISNULL(src)
       || OB_ISNULL(dest)
       || OB_UNLIKELY(!is_valid_original_data_length(src_size))
-      || OB_UNLIKELY(dest_size <= 0)) {
+      || OB_UNLIKELY(dest_size <= 0)
+      || OB_UNLIKELY(dest_size > INT32_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid compress argument,", KP(src), K(src_size), KP(dest), K(dest_size), K(ret));
   } else if (OB_FAIL(get_compress_bound_size(src_size, bound_size))) {
@@ -90,7 +91,7 @@ int ObLZ4StreamCompressor::stream_compress(void *ctx, const char *src, const int
   } else {
     LZ4_stream_t *lz4_ctx
         = static_cast<LZ4_stream_t *>(ctx);
-    if (OB_UNLIKELY(0 >= (compressed_size = LZ4_compress_fast_continue(lz4_ctx, src, dest, src_size, dest_size, acceleration)))) {
+    if (OB_UNLIKELY(0 >= (compressed_size = LZ4_compress_fast_continue(lz4_ctx, src, dest, static_cast<int32_t>(src_size), static_cast<int32_t>(dest_size), acceleration)))) {
       ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
       LIB_LOG(WARN, "fail to compress data by LZ4_compress_fast_continue",
               KP(src), K(src_size), KP(dest), K(dest_size), K(compressed_size), K(ret));
@@ -140,13 +141,15 @@ int ObLZ4StreamCompressor::stream_decompress(void *ctx, const char *src, const i
       || OB_ISNULL(src)
       || OB_ISNULL(dest)
       || OB_UNLIKELY(src_size <= 0)
-      || OB_UNLIKELY(max_decompressed_size <= 0)) {
+      || OB_UNLIKELY(src_size > INT32_MAX)
+      || OB_UNLIKELY(max_decompressed_size <= 0)
+      || OB_UNLIKELY(max_decompressed_size > INT32_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid decompress argument,", KP(src), K(src_size), KP(dest), K(max_decompressed_size), K(ret));
   } else {
     LZ4_streamDecode_t *decompress_ctx
         = static_cast<LZ4_streamDecode_t *>(ctx);
-    if (OB_UNLIKELY(0 >= (decompressed_size = LZ4_decompress_safe_continue(decompress_ctx, src, dest, src_size, max_decompressed_size)))) {
+    if (OB_UNLIKELY(0 >= (decompressed_size = LZ4_decompress_safe_continue(decompress_ctx, src, dest, static_cast<int32_t>(src_size), static_cast<int32_t>(max_decompressed_size))))) {
       ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
       LIB_LOG(WARN, "fail to decompress data by LZ4_decompress_safe_continue",
               KP(src), KP(dest), K(src_size), K(max_decompressed_size), K(decompressed_size), K(ret));
@@ -162,7 +165,7 @@ int ObLZ4StreamCompressor::get_compress_bound_size(const int64_t src_data_size, 
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid argument, ", K(src_data_size), K(ret));
   } else {
-    bound_size = LZ4_compressBound(src_data_size);
+    bound_size = LZ4_compressBound(static_cast<int32_t>(src_data_size));
   }
   return ret;
 }

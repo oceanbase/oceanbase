@@ -109,6 +109,7 @@ public:
   int update_error_info(const IObErrorInfo *info);
   int get_error_info_from_table(common::ObISQLClient &sql_client, ObErrorInfo *old_err_info);
   int handle_error_info(common::ObMySQLTransaction &trans, const IObErrorInfo *info);
+  int handle_error_info(const IObErrorInfo *info);
   int del_error(common::ObISQLClient &sql_client);
   int del_error(common::ObMySQLProxy *sql_proxy);
   int add_error(common::ObISQLClient & sql_client, bool is_replace, bool only_history);

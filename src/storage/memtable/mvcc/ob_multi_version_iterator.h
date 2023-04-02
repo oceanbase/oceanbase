@@ -44,7 +44,7 @@ public:
   int get_next_uncommitted_node(
       const void *&tnode,
       transaction::ObTransID &trans_id,
-      int64_t &trans_version,
+      share::SCN &trans_version,
       int64_t &sql_sequence);
   int check_next_sql_sequence(
       const transaction::ObTransID &input_trans_id,
@@ -59,8 +59,8 @@ public:
   bool is_trans_node_iter_null() const;
   bool is_compact_iter_end() const;
   int init_multi_version_iter();
-  void set_merge_log_ts(const uint64_t merge_log_ts) { merge_log_ts_ = merge_log_ts; }
-  int64_t get_merge_log_ts() const { return merge_log_ts_; }
+  void set_merge_scn(const share::SCN merge_scn) { merge_scn_ = merge_scn; }
+  share::SCN get_merge_scn() const { return merge_scn_; }
   void print_cur_status();
   blocksstable::ObDmlFlag get_row_first_dml_flag() const
   {
@@ -71,11 +71,11 @@ public:
   DECLARE_TO_STRING;
 
 private:
-  int get_trans_status_with_log_ts(
-      const int64_t log_ts,
+  int get_trans_status_with_scn(
+    const share::SCN scn,
       ObMvccTransNode *trans_node,
       int64_t &status,
-      int64_t &trans_version_at_merge_log_ts);
+      share::SCN &trans_version_at_merge_scn);
   int get_state_of_curr_trans_node(
       transaction::ObTransID &trans_id,
       int64_t &state,
@@ -93,10 +93,10 @@ private:
   ObMvccTransNode *version_iter_;
   ObMvccTransNode *multi_version_iter_;
   int64_t max_committed_trans_version_;
-  int64_t cur_trans_version_;
+  share::SCN cur_trans_version_;
   bool is_node_compacted_;
   bool has_multi_commit_trans_;
-  int64_t merge_log_ts_;
+  share::SCN merge_scn_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

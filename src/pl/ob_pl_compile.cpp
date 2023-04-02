@@ -38,7 +38,8 @@ int ObPLCompiler::init_anonymous_ast(
   ObMySQLProxy &sql_proxy,
   ObSchemaGetterGuard &schema_guard,
   ObPLPackageGuard &package_guard,
-  const ParamStore *params)
+  const ParamStore *params,
+  bool is_prepare_protocol)
 {
   int ret = OB_SUCCESS;
   ObPLDataType pl_type;
@@ -77,7 +78,16 @@ int ObPLCompiler::init_anonymous_ast(
       data_type.set_accuracy(params->at(i).get_accuracy());
       data_type.set_meta_type(params->at(i).get_meta());
       pl_type.reset();
-      pl_type.set_data_type(data_type);
+      int64_t int_value = 0;
+      // 参数化整型常量按照会按照numbger来生成param
+      if (!is_prepare_protocol
+          && (ObNumberType == param.get_type() || ObUNumberType == param.get_type())
+          && param.get_number().is_valid_int64(int_value)
+          && int_value <= INT32_MAX && int_value >= INT32_MIN) {
+        pl_type.set_pl_integer_type(PL_SIMPLE_INTEGER, data_type);
+      } else {
+        pl_type.set_data_type(data_type);
+      }
       OZ (ObPLResolver::adjust_routine_param_type(pl_type));
     }
     OZ (func_ast.add_argument(ObPLResolver::ANONYMOUS_ARG, pl_type, NULL, NULL, true));
@@ -87,17 +97,17 @@ int ObPLCompiler::init_anonymous_ast(
 
 //for anonymous
 int ObPLCompiler::compile(
-  const ObStmtNodeTree *block, ObPLFunction &func, ParamStore *params/*=NULL*/)
+  const ObStmtNodeTree *block,
+  ObPLFunction &func,
+  ParamStore *params/*=NULL*/,
+  bool is_prepare_protocol/*=false*/)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_compile);
-  bool is_prepare_protocol = false;
   bool use_jitted_expr = false;
 
   //Step 1：构造匿名块的ObPLFunctionAST
   HEAP_VAR(ObPLFunctionAST, func_ast, allocator_) {
-
-    is_prepare_protocol = params != NULL ? true : false;
 
     func_ast.set_db_name(session_info_.get_database_name());
     OZ (init_anonymous_ast(func_ast,
@@ -106,7 +116,8 @@ int ObPLCompiler::compile(
                            sql_proxy_,
                            schema_guard_,
                            package_guard_,
-                           params));
+                           params,
+                           is_prepare_protocol));
 
     //Step 2：Resolver
     if (OB_SUCC(ret)) {
@@ -132,9 +143,7 @@ int ObPLCompiler::compile(
     if (OB_SUCC(ret)) {
       func.set_proc_type(STANDALONE_ANONYMOUS);
       func.set_ns(ObLibCacheNameSpace::NS_ANON);
-      func.set_ps_cache(session_info_.get_ps_cache());
       OZ (func.get_exec_env().load(session_info_));
-      OZ (func.add_ps_stmt_ids(func_ast.get_ps_stmt_ids(), &session_info_));
     }
     //Step 3：Code Generator
     if (OB_SUCC(ret)) {
@@ -359,13 +368,6 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         }
       }
     }
-    // Process Prepare SQL Ref
-    if (OB_SUCC(ret)) {
-      func.set_ps_cache(session_info_.get_ps_cache());
-      if (OB_FAIL(func.add_ps_stmt_ids(func_ast.get_ps_stmt_ids(), &session_info_))) {
-        LOG_WARN("failed to add ps stmt ids", K(ret));
-      }
-    }
     int64_t resolve_end = ObTimeUtility::current_time();
     LOG_INFO(">>>>>>>>Resolve Time: ", K(id), K(resolve_end - parse_end));
 
@@ -445,56 +447,64 @@ int ObPLCompiler::update_schema_object_dep_info(ObPLCompileUnitAST &ast,
   int ret = OB_SUCCESS;
   ObMySQLProxy *sql_proxy = nullptr;
   ObMySQLTransaction trans;
+  bool skip = false;
   if (GCTX.is_standby_cluster()) {
-    // do nothing;
+    skip = true;
   } else if (ObTriggerInfo::is_trigger_package_id(dep_obj_id)) {
-    // do nothing;
-    // trigger mock package, but it not do package ddl
-  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(trans.start(sql_proxy, tenant_id))) {
-    LOG_WARN("failed to start trans", K(ret), K(tenant_id));
-  } else {
-    OZ (ObDependencyInfo::delete_schema_object_dependency(trans,
-                                            tenant_id, dep_obj_id,
-                                            schema_version,
-                                            dep_obj_type));
-    ObSArray<ObDependencyInfo> dep_infos;
-    ObString dummy;
-    OZ (ObDependencyInfo::collect_dep_infos(ast.get_dependency_table(),
-                                            dep_infos,
-                                            dep_obj_type,
-                                            0, dummy, dummy));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("delete failed", K(ret));
-    } else if (OB_INVALID_ID == owner_id
-    || OB_INVALID_ID == dep_obj_id
-    || OB_INVALID_ID == tenant_id
-    || OB_INVALID_SCHEMA_VERSION == schema_version) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
-                                                    K(owner_id), K(dep_obj_id));
+    if (lib::is_oracle_mode()) {
+      dep_obj_id = ObTriggerInfo::get_package_trigger_id(dep_obj_id);
+      dep_obj_type = ObObjectType::TRIGGER;
     } else {
-      for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
-        ObDependencyInfo & dep = dep_infos.at(i);
-        dep.set_tenant_id(tenant_id);
-        dep.set_dep_obj_id(dep_obj_id);
-        dep.set_dep_obj_owner_id(owner_id);
-        dep.set_schema_version(schema_version);
-        OZ (dep.insert_schema_object_dependency(trans));
-	// 理论上pl是单线程编译的，但是如果把这个相同的pl在多个observer上同时编译，这个依赖关系可能会多次重建。
-	// 发生这种情况下，简单的忽略错误码
-	if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-	   ret = OB_SUCCESS;
-	}
-      }
+      skip = true;
     }
   }
-  if (trans.is_started()) {
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(ret), K(temp_ret));
-      ret = OB_SUCC(ret) ? temp_ret : ret;
+  if (!skip) {
+    if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(trans.start(sql_proxy, tenant_id))) {
+      LOG_WARN("failed to start trans", K(ret), K(tenant_id));
+    } else {
+      OZ (ObDependencyInfo::delete_schema_object_dependency(trans,
+                                              tenant_id, dep_obj_id,
+                                              schema_version,
+                                              dep_obj_type));
+      ObSArray<ObDependencyInfo> dep_infos;
+      ObString dummy;
+      OZ (ObDependencyInfo::collect_dep_infos(ast.get_dependency_table(),
+                                              dep_infos,
+                                              dep_obj_type,
+                                              0, dummy, dummy));
+      if (OB_FAIL(ret)) {
+        LOG_WARN("delete failed", K(ret));
+      } else if (OB_INVALID_ID == owner_id
+      || OB_INVALID_ID == dep_obj_id
+      || OB_INVALID_ID == tenant_id
+      || OB_INVALID_SCHEMA_VERSION == schema_version) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("illegal schema version or owner id", K(ret), K(schema_version),
+                                                      K(owner_id), K(dep_obj_id));
+      } else {
+        for (int64_t i = 0 ; OB_SUCC(ret) && i < dep_infos.count(); ++i) {
+          ObDependencyInfo & dep = dep_infos.at(i);
+          dep.set_tenant_id(tenant_id);
+          dep.set_dep_obj_id(dep_obj_id);
+          dep.set_dep_obj_owner_id(owner_id);
+          dep.set_schema_version(schema_version);
+          OZ (dep.insert_schema_object_dependency(trans));
+          // 理论上pl是单线程编译的，但是如果把这个相同的pl在多个observer上同时编译，这个依赖关系可能会多次重建。
+          // 发生这种情况下，简单的忽略错误码
+          if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(ret), K(temp_ret));
+        ret = OB_SUCC(ret) ? temp_ret : ret;
+      }
     }
   }
   return ret;
@@ -574,6 +584,35 @@ int ObPLCompiler::analyze_package(const ObString &source,
       OZ (schema_guard_.get_trigger_info(session_info_.get_effective_tenant_id(), trg_id, trg_info));
       CK (OB_NOT_NULL(trg_info));
     }
+    if (OB_SUCC(ret) && is_for_trigger && PL_PACKAGE_SPEC == package_ast.get_package_type()) {
+      const uint64_t trg_id = ObTriggerInfo::get_package_trigger_id(package_ast.get_id());
+      const ObTriggerInfo *trg_info = NULL;
+      const uint64_t tenant_id = session_info_.get_effective_tenant_id();
+      OZ (schema_guard_.get_trigger_info(tenant_id, trg_id, trg_info));
+      OV (OB_NOT_NULL(trg_info), OB_ERR_UNEXPECTED, trg_id);
+      if (OB_SUCC(ret) && !trg_info->get_ref_trg_db_name().empty() && lib::is_oracle_mode()) {
+        uint64_t ref_db_id = OB_INVALID_ID;
+        const ObTriggerInfo *ref_trg_info = NULL;
+        OV (!trg_info->get_ref_trg_db_name().empty());
+        OZ (schema_guard_.get_database_id(tenant_id, trg_info->get_ref_trg_db_name(), ref_db_id));
+        OZ (schema_guard_.get_trigger_info(tenant_id, ref_db_id, trg_info->get_ref_trg_name(), ref_trg_info));
+        if (OB_SUCC(ret) && NULL == ref_trg_info) {
+          ret = OB_ERR_TRIGGER_NOT_EXIST;
+          LOG_WARN("ref_trg_info is NULL", K(trg_info->get_ref_trg_db_name()), K(trg_info->get_ref_trg_name()), K(ret));
+          if (lib::is_oracle_mode()) {
+            LOG_ORACLE_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST, trg_info->get_ref_trg_name().length(),
+                                  trg_info->get_ref_trg_name().ptr());
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObSchemaObjVersion obj_version;
+          obj_version.object_id_ = ref_trg_info->get_trigger_id();
+          obj_version.object_type_ = DEPENDENCY_TRIGGER;
+          obj_version.version_ = ref_trg_info->get_schema_version();
+          OZ (package_ast.add_dependency_object(obj_version));
+        }
+      }
+    }
     OZ (parser.parse_package(source, parse_tree, session_info_.get_dtc_params(), 
                              &schema_guard_, is_for_trigger, trg_info));
     OZ (resolver.init(package_ast));
@@ -636,8 +675,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     OX (package_ast.set_priv_user(trigger_info->get_trigger_priv_user()));
   }
   if (OB_SUCC(ret)) {
-    if (package_info.is_for_trigger() && lib::is_oracle_mode()) {
-      // oracle mode 的 trigger每次编译重新生成package source
+    if (package_info.is_for_trigger()) {
       OZ (ObTriggerInfo::gen_package_source(package_info.get_tenant_id(),
                                             package_info.get_package_id(),
                                             source,
@@ -871,9 +909,11 @@ int ObPLCompiler::generate_package_cursors(
       LOG_WARN("package ast cursor is null", K(ret), K(i), K(ast_cursor));
     } else {
       ObString sql;
+      ObString ps_sql;
       ObRecordType *row_desc = NULL;
       ObPLDataType cursor_type;
       OZ (ob_write_string(package.get_allocator(), ast_cursor->get_sql(), sql));
+      OZ (ob_write_string(package.get_allocator(), ast_cursor->get_ps_sql(), ps_sql));
       if (OB_SUCC(ret) && OB_NOT_NULL(ast_cursor->get_row_desc())) {
         row_desc = static_cast<ObRecordType *>(package.get_allocator().alloc(sizeof(ObRecordType)));
         if (OB_ISNULL(row_desc)) {
@@ -901,7 +941,7 @@ int ObPLCompiler::generate_package_cursors(
                                   ast_cursor->get_index(),//代表在Package符号表中的位置
                                   sql,//Cursor Sql
                                   sql_params,//Cursor参数表达式
-                                  ast_cursor->get_ps_id(),
+                                  ps_sql,
                                   ast_cursor->get_stmt_type(),
                                   ast_cursor->is_for_update(),
                                   ast_cursor->has_hidden_rowid(),
@@ -1065,8 +1105,6 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
         LOG_WARN("allocate memory failed", K(ret));
       } else {
         new (routine) ObPLFunction(compile_unit.get_mem_context());
-        routine->set_ps_cache(session_info.get_ps_cache());
-        OZ (routine->add_ps_stmt_ids(routine_ast->get_ps_stmt_ids(), &session_info));
         OZ (init_function(schema_guard, exec_env, *routine_info, *routine));
         if (OB_SUCC(ret)) {
 

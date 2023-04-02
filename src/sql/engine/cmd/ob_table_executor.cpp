@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/ob_cluster_version.h"
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_table_executor.h"
 #include "sql/engine/cmd/ob_index_executor.h"
@@ -37,6 +38,7 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "sql/parser/ob_parser.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
 
 #include "sql/ob_select_stmt_printer.h"
 #include "observer/ob_server_struct.h"
@@ -86,6 +88,7 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
 //准备查询插入的脚本
 int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                            const ObSQLSessionInfo *my_session,
+                                           ObSchemaGetterGuard *schema_guard,
                                            const ParamStore *param_store,
                                            ObSqlString &ins_sql) //out, 最终的查询插入语句
 {
@@ -96,30 +99,53 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
   int64_t pos1 = 0;
   bool is_set_subquery = false;
   bool is_oracle_mode = lib::is_oracle_mode();
+  bool no_osg_hint = false;
+  bool online_sys_var = false;
   const ObString &db_name = stmt.get_database_name();
   const ObString &tab_name = stmt.get_table_name();
   const char sep_char = is_oracle_mode? '"': '`';
   ObSelectStmt *select_stmt = stmt.get_sub_select();
+  ObObjPrintParams obj_print_params(select_stmt->get_query_ctx()->get_timezone_info());
+  obj_print_params.print_origin_stmt_ = true;
   ObSelectStmtPrinter select_stmt_printer(buf, buf_len, &pos1, select_stmt,
-                                          select_stmt->get_query_ctx()->get_timezone_info(),
+                                          schema_guard,
+                                          obj_print_params,
                                           param_store,
-                                          NULL, // column_list is null here
-                                          is_set_subquery);
+                                          true);
+  select_stmt_printer.set_is_root(true);  // print hint as root stmt
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
-  } else if (OB_ISNULL(select_stmt)) {
+  } else if (OB_ISNULL(select_stmt) || OB_ISNULL(select_stmt->get_query_ctx()) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt should not be null", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1, "insert into %c%.*s%c.%c%.*s%c",
-                                                    sep_char,
-                                                    db_name.length(),
-                                                    db_name.ptr(),
-                                                    sep_char,
-                                                    sep_char,
-                                                    tab_name.length(),
-                                                    tab_name.ptr(),
-                                                    sep_char))) {
+  } else {
+    //get hint
+    no_osg_hint = select_stmt->get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint();
+
+    //get system variable
+    ObObj online_sys_var_obj;
+    if (OB_FAIL(OB_FAIL(my_session->get_sys_variable(SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD, online_sys_var_obj)))) {
+      LOG_WARN("fail to get sys var", K(ret));
+    } else {
+      online_sys_var = online_sys_var_obj.get_bool();
+      LOG_DEBUG("online opt stat gather", K(online_sys_var), K(no_osg_hint));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                      (!no_osg_hint && online_sys_var)
+                                      ? "insert /*+GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                      : "insert /*+NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                      sep_char,
+                                      db_name.length(),
+                                      db_name.ptr(),
+                                      sep_char,
+                                      sep_char,
+                                      tab_name.length(),
+                                      tab_name.ptr(),
+                                      sep_char))) {
     LOG_WARN("fail to print insert into string", K(ret), K(db_name), K(tab_name));
   } else if (lib::is_oracle_mode()) {
     ObTableSchema &table_schema = stmt.get_create_table_arg().schema_;
@@ -286,7 +312,8 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
       OB_NOT_NULL(my_session),
       OB_NOT_NULL(gctx.schema_service_),
       OB_NOT_NULL(plan_ctx),
-      OB_NOT_NULL(common_rpc_proxy));
+      OB_NOT_NULL(common_rpc_proxy),
+      OB_NOT_NULL(ctx.get_sql_ctx()));
     if (OB_SUCC(ret)) {
       ObInnerSQLConnectionPool *pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
       if (OB_ISNULL(pool)) {
@@ -296,7 +323,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("init oracle sql proxy failed", K(ret));
       } else if (OB_FAIL(prepare_stmt(stmt, *my_session, create_table_name))) {
         LOG_WARN("failed to prepare stmt", K(ret));
-      } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, &plan_ctx->get_param_store(), ins_sql))) { //1, 参数准备;
+      } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, ctx.get_sql_ctx()->schema_guard_, &plan_ctx->get_param_store(), ins_sql))) { //1, 参数准备;
         LOG_WARN("failed to prepare insert table arg", K(ret));
       } else if (OB_FAIL(prepare_alter_arg(stmt, my_session, create_table_name, alter_table_arg))) {
         LOG_WARN("failed to prepare alter table arg", K(ret));
@@ -319,7 +346,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         }
         #ifdef ERRSIM
         {
-          int tmp_ret = E(EventTable::EN_CTAS_FAIL_NO_DROP_ERROR) OB_SUCCESS; //错误注入, 使表不能清理
+          int tmp_ret = OB_E(EventTable::EN_CTAS_FAIL_NO_DROP_ERROR) OB_SUCCESS; //错误注入, 使表不能清理
           if (OB_FAIL(tmp_ret)) {
             ret = tmp_ret;
             need_clean = false;
@@ -378,7 +405,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         //4, 刷新schema, 将table的sess id重置为0
         if (OB_SUCC(ret)) {
           obrpc::ObAlterTableRes res;
-          alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ? 
+          alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
           if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
             LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
@@ -393,7 +420,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           if (OB_LIKELY(need_clean)) {
             int tmp_ret = OB_SUCCESS;
             obrpc::ObDDLRes res;
-            drop_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ? 
+            drop_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
               lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
             if (OB_SUCCESS != (tmp_ret = common_rpc_proxy->drop_table(drop_table_arg, res))) {
               LOG_WARN("failed to drop table", K(drop_table_arg), K(ret));
@@ -455,7 +482,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       LOG_WARN("execute create table as select failed", K(ret));
     }
 
-    // only CTAS or create temperary table will make session_id != 0. If such table detected, set 
+    // only CTAS or create temperary table will make session_id != 0. If such table detected, set
     // need ctas cleanup task anyway to do some cleanup jobs
     if (0 != table_schema.get_session_id()) {
       LOG_TRACE("CTAS or temporary table create detected", K(table_schema));
@@ -534,147 +561,9 @@ int ObAlterTableExecutor::refresh_schema_for_table(
   return ret;
 }
 
-/* 3100 之前的版本 alter table 逻辑
-  alter table 向 RS 发 RPC 时，如果有 add index 或者 add unqiue 操作，就发送 “两批” RPC：
-    第一批 RPC 只有一个 RPC，是不包含 add index 或者 add unqiue 操作以外的其他操作的 alter table 的 RPC
-    第二批 RPC 是 alter table 中每创建一个索引，就向 RS 发一个 rpc，observer 端同步等待索引建成功或者建失败
-      a）如果成功就继续发送下一个创建索引的 RPC；
-      b）如果失败，就报错结束，并终止发送后面还没有向 RS 发送 RPC（即还没有创建）的创建索引请求。前面已经发送和创建索引无关的 RPC 在 RS 端均已处理成功，不再回滚。但如果一条 alter table 同时建了多个 index，其中一个失败，就回滚所有已经建立的 index。
-*/
-int ObAlterTableExecutor::alter_table_rpc_v1(
-    obrpc::ObAlterTableArg &alter_table_arg,
-    obrpc::ObAlterTableRes &res,
-    common::ObIAllocator &allocator,
-    obrpc::ObCommonRpcProxy *common_rpc_proxy,
-    ObSQLSessionInfo *my_session,
-    const bool is_sync_ddl_user)
-{
-  int ret = OB_SUCCESS;
-  bool alter_table_add_index = false;
-  const ObSArray<obrpc::ObIndexArg *> index_arg_list = alter_table_arg.index_arg_list_;
-  if (OB_ISNULL(my_session)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
-  } else {
-    alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ? 
-            lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
-    obrpc::ObIndexArg *index_arg = index_arg_list.at(i);
-    if (OB_ISNULL(index_arg)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("index arg should not be null", K(ret));
-    } else if (obrpc::ObIndexArg::ADD_INDEX == index_arg->index_action_type_) {
-      alter_table_add_index = true;
-      break;
-    }
-  }
-  if (!alter_table_add_index) {
-  // alter table 中没有 add index 的情况
-  if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-    LOG_WARN("rpc proxy alter table failed", K(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
-    }
-  } else {
-    // alter table 中有 add index 的情况
-    ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
-    alter_table_arg.index_arg_list_.reset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
-      obrpc::ObIndexArg *index_arg = index_arg_list.at(i);
-      if (OB_ISNULL(index_arg)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("index arg should not be null", K(ret));
-      } else if (obrpc::ObIndexArg::ADD_INDEX == index_arg->index_action_type_) {
-        if (OB_FAIL(add_index_arg_list.push_back(index_arg))) {
-          LOG_WARN("fail to push back to arg_for_adding_index_list", K(ret));
-        }
-      } else { // not for adding index
-        if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(index_arg))) {
-          LOG_WARN("fail to push back to arg_for_adding_index_list", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-        LOG_WARN("rpc proxy alter table for not adding index failed", K(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObString empty_stmt;
-      alter_table_arg.is_alter_columns_ = false;
-      alter_table_arg.is_alter_options_ = false;
-      alter_table_arg.is_alter_partitions_ = false;
-      alter_table_arg.ddl_stmt_str_ = empty_stmt;
-      alter_table_arg.ddl_id_str_ = empty_stmt;
-      alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION;
-      ObSArray<uint64_t> added_index_table_ids;
-      ObCreateIndexExecutor create_index_executor;
-      for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.size(); ++i) {
-        alter_table_arg.index_arg_list_.reset();
-        if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(add_index_arg_list.at(i)))) {
-          LOG_WARN("fail to push back to arg_for_adding_index_list", K(ret));
-        } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-          LOG_WARN("rpc proxy alter table for adding index failed", K(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
-        } else {
-          // 同步等索引建成功
-          obrpc::ObIndexArg *index_arg = alter_table_arg.index_arg_list_.at(0);
-          obrpc::ObCreateIndexArg *create_index_arg = NULL;
-          if (OB_ISNULL(index_arg)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("index arg is null", K(ret), K(i));
-          } else if (obrpc::ObIndexArg::ADD_INDEX != index_arg->index_action_type_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("index action type should be add index", K(ret), K(i));
-          } else if (OB_ISNULL(create_index_arg = static_cast<obrpc::ObCreateIndexArg *>(index_arg))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create index arg is null", K(ret), K(i));
-          } else if (!is_sync_ddl_user) {
-            // 只考虑非备份恢复时的索引同步检查
-            create_index_arg->index_schema_.set_table_id(res.index_table_id_);
-            create_index_arg->index_schema_.set_schema_version(res.schema_version_);
-            if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, *create_index_arg, res, allocator))) {
-              LOG_WARN("failed to sync_check_index_status", K(ret), K(*create_index_arg), K(i));
-            } else {
-              added_index_table_ids.push_back(res.index_table_id_);
-            }
-          }
-        }
-      }
-      // 如果一条 alter table 同时建了多个 index，其中一个失败，就回滚所有已经建立的 index
-      if (OB_FAIL(ret)) {
-        int tmp_ret = OB_SUCCESS;
-        for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < added_index_table_ids.size(); ++i) {
-          obrpc::ObDropIndexArg drop_index_arg;
-          obrpc::ObDropIndexRes drop_index_res;
-          obrpc::ObCreateIndexArg *create_index_arg = static_cast<obrpc::ObCreateIndexArg *>(add_index_arg_list.at(i));
-          drop_index_arg.tenant_id_ = create_index_arg->tenant_id_;
-          drop_index_arg.exec_tenant_id_ = create_index_arg->tenant_id_;
-          drop_index_arg.index_table_id_ = added_index_table_ids.at(i);
-          drop_index_arg.session_id_ = create_index_arg->session_id_;
-          drop_index_arg.index_name_ = create_index_arg->index_name_;
-          drop_index_arg.table_name_ = create_index_arg->table_name_;
-          drop_index_arg.database_name_ = create_index_arg->database_name_;
-          drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
-          drop_index_arg.is_add_to_scheduler_ = false;
-          if (OB_SUCCESS != (tmp_ret = create_index_executor.set_drop_index_stmt_str(drop_index_arg, allocator))) {
-            LOG_WARN("fail to set drop index ddl_stmt_str", K(tmp_ret));
-          } else if (OB_SUCCESS != (tmp_ret = common_rpc_proxy->drop_index(drop_index_arg, drop_index_res))) {
-            LOG_WARN("rpc proxy drop index failed", "dst", common_rpc_proxy->get_server(),
-                                                    K(tmp_ret),
-                                                    K(drop_index_arg.table_name_),
-                                                    K(drop_index_arg.index_name_));
-          }
-        }
-        LOG_INFO("added indexes failed, we rolled back all indexes added in this same alter table sql. But we didn't roll back other actions in this same alter table sql");
-      }
-    }
-  }
-
-  return ret;
-}
-
 /* 从 3100 开始的版本 alter table 逻辑是将建索引和其他操作放到同一个 rpc 里发到 rs，返回后对每个创建的索引进行同步等，如果一个索引创建失败，则回滚全部索引
    mysql 模式下支持 alter table 同时做建索引操作和其他操作，需要保证 rs 在处理 drop index 之后再处理 add index
-   否则前缀索引会有问题：https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/1907077
+   否则前缀索引会有问题：
 */
 int ObAlterTableExecutor::alter_table_rpc_v2(
     obrpc::ObAlterTableArg &alter_table_arg,
@@ -691,12 +580,12 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
   alter_table_arg.index_arg_list_.reset();
-  
+
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else {
-    alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ? 
+    alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
@@ -968,7 +857,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         int64_t affected_rows = 0;
         if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {
           LOG_WARN("refresh_schema_for_table failed", K(ret));
-        } else if (!is_ddl_retry_task && OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, 
+        } else if (!is_ddl_retry_task && OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_,
                                                                                     *my_session, common_rpc_proxy))) {
           LOG_WARN("fail to wait ddl finish", K(ret), K(tenant_id), K(res));
         } else if (is_ddl_retry_task && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(tenant_id, res.task_id_,
@@ -1486,8 +1375,8 @@ int ObAlterTableExecutor::check_alter_part_key(ObExecContext &ctx,
           const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
           orig_column_schema = orig_table_schema->get_column_schema(orig_column_name);
           if (OB_ISNULL(orig_column_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unknown column", K(orig_column_name), KPC(orig_table_schema));
+            ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+            LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, orig_column_name.length(), orig_column_name.ptr());
           } else if (OB_FAIL(ObTableSchema::check_is_exactly_same_type(
             *orig_column_schema, *alter_column_schema, is_same))) {
             LOG_WARN("failed to check is exactly same type", K(ret));
@@ -1627,12 +1516,12 @@ int ObAlterTableExecutor::check_alter_partition(ObExecContext &ctx,
     CK (NULL != stmt.get_transition_expr());
     OZ (ObPartitionExecutorUtils::check_transition_interval_valid(
                                         stmt::T_CREATE_TABLE,
-                                        ctx, 
+                                        ctx,
                                         stmt.get_transition_expr(),
                                         stmt.get_interval_expr()));
-    OZ (ObPartitionExecutorUtils::set_interval_value(ctx, 
-                                                     stmt::T_CREATE_TABLE, 
-                                                     table_schema, 
+    OZ (ObPartitionExecutorUtils::set_interval_value(ctx,
+                                                     stmt::T_CREATE_TABLE,
+                                                     table_schema,
                                                      stmt.get_interval_expr()));
   }
 
@@ -1722,8 +1611,8 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
       //impossible
     } else if (FALSE_IT(my_session->get_foreign_key_checks(foreign_key_checks))) {
     } else if (FALSE_IT(const_cast<obrpc::ObDropTableArg&>(drop_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks))) {
-    } else if (FALSE_IT(const_cast<obrpc::ObDropTableArg&>(drop_table_arg).compat_mode_ = 
-        ORACLE_MODE == my_session->get_compatibility_mode() ? 
+    } else if (FALSE_IT(const_cast<obrpc::ObDropTableArg&>(drop_table_arg).compat_mode_ =
+        ORACLE_MODE == my_session->get_compatibility_mode() ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL)) {
     } else if (OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg, res))) {
       LOG_WARN("rpc proxy drop table failed", K(ret), "dst", common_rpc_proxy->get_server());
@@ -1807,17 +1696,88 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
       int64_t foreign_key_checks = 0;
+      share::schema::ObSchemaGetterGuard schema_guard;
       my_session->get_foreign_key_checks(foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;
-      if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
-        LOG_WARN("rpc proxy alter table failed", K(ret));
-      } else if (res.is_valid()
-        && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(res.tenant_id_, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
-        LOG_WARN("wait ddl finish failed", K(ret));
+      uint64_t compat_version = 0;
+      const ObTableSchema *table_schema = NULL;
+      const uint64_t tenant_id = truncate_table_arg.tenant_id_;
+      const ObString table_name = truncate_table_arg.table_name_;
+      const ObString database_name = truncate_table_arg.database_name_;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("GCTX schema_service not init", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+      } else if (FALSE_IT(schema_guard.set_session_id(truncate_table_arg.session_id_))) {
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, database_name, table_name, false, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(database_name), K(table_name));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
+      // Avoiding the impact of new_truncate_table on mysql auotinc, then we need to execute the old logic
+      } else if (compat_version < DATA_VERSION_4_1_0_0
+                || table_schema->get_autoinc_column_id() != 0) {
+        if (OB_FAIL(common_rpc_proxy->truncate_table(truncate_table_arg, res))) {
+          LOG_WARN("rpc proxy alter table failed", K(ret));
+        } else if (res.is_valid()
+          && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(tenant_id, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
+          LOG_WARN("wait ddl finish failed", K(ret));
+        }
+      } else {
+        // new parallel truncate
+        ObTimeoutCtx ctx;
+        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
+          LOG_WARN("fail to set timeout ctx", K(ret));
+        } else {
+          int64_t start_time = ObTimeUtility::current_time();
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
+              LOG_WARN("rpc proxy truncate table failed", K(ret));
+              if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret
+                    || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_TENANT_NOT_IN_SERVER == ret) && ctx.get_timeout() > 0) {
+                ob_usleep(1 * 1000 * 1000);
+                // retry
+                ret = OB_SUCCESS;
+              }
+            } else {
+              // success
+              break;
+            }
+          }
+          int64_t step_time = ObTimeUtility::current_time();
+          LOG_INFO("truncate_table_v2 finish trans", K(ret), "cost", step_time-start_time, "table_name", truncate_table_arg.table_name_, K(res));
+          if (OB_FAIL(ret)) {
+          } else if (!res.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("truncate invalid ddl_res", KR(ret), K(res));
+          } else {
+            // wait schema_version refreshed on this server
+            while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
+              int64_t refreshed_schema_version = OB_INVALID_VERSION;
+              if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(res.tenant_id_, refreshed_schema_version))) {
+                LOG_WARN("get schema_version fail", KR(ret), K(res.tenant_id_));
+              } else if (refreshed_schema_version >= res.task_id_) {
+                break;
+              } else {
+                ob_usleep(10 * 1000);
+              }
+            }
+          }
+          int64_t end_time = ObTimeUtility::current_time();
+          LOG_INFO("truncate_table_v2", K(ret), "cost", end_time-start_time,
+                                                "trans_cost", step_time - start_time,
+                                                "wait_refresh", end_time - step_time,
+                                                "table_name", truncate_table_arg.table_name_,
+                                                K(res));
+        }
       }
+
     } else {
       ObSqlString sql;
       int64_t affect_rows = 0;
@@ -1914,8 +1874,10 @@ int ObFlashBackTableToScnExecutor::execute(ObExecContext &ctx, ObFlashBackTableT
   obrpc::ObFlashBackTableToScnArg &arg = stmt.flashback_table_to_scn_arg_;
   RowDesc row_desc;
   ObTempExpr *temp_expr = NULL;
+  CK(OB_NOT_NULL(ctx.get_sql_ctx()));
   OZ(ObStaticEngineExprCG::gen_expr_with_row_desc(stmt.get_time_expr(),
-     row_desc, ctx.get_allocator(), ctx.get_my_session(), temp_expr));
+     row_desc, ctx.get_allocator(), ctx.get_my_session(),
+     ctx.get_sql_ctx()->schema_guard_, temp_expr));
   CK(OB_NOT_NULL(temp_expr));
   if (OB_SUCC(ret)) {
     ObNewRow empty_row;
@@ -2075,7 +2037,7 @@ int ObOptimizeTenantExecutor::optimize_tenant(const obrpc::ObOptimizeTenantArg &
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("tenant id mismatch", K(tenant_id), K(effective_tenant_id));
   } else {
-    ObArray<const ObTableSchema *> table_schemas;
+    ObSEArray<const ObSimpleTableSchemaV2 *, 512> table_schemas;
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("fail to get tenant schema guard", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, table_schemas))) {
@@ -2083,7 +2045,7 @@ int ObOptimizeTenantExecutor::optimize_tenant(const obrpc::ObOptimizeTenantArg &
     } else {
       LOG_INFO("optimize tenant, table schema count", K(table_schemas.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-        const ObTableSchema *table_schema = table_schemas.at(i);
+        const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
         const ObDatabaseSchema *database_schema = nullptr;
         obrpc::ObOptimizeTableArg optimize_table_arg;
         if (OB_ISNULL(table_schema)) {

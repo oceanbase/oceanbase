@@ -111,6 +111,16 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
     return ERROR;                                               \
   } while(0)
 
+#define YYABORT_UNDECLARE_VAR                 \
+  do {                                                          \
+    if (OB_UNLIKELY(NULL == result)) {                          \
+      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
+    } else if (0 == result->extra_errno_) {                     \
+      result->extra_errno_ = OB_PARSER_ERR_UNDECLARED_VAR;\
+    } else {/*do nothing*/}                                     \
+    YYABORT;                                                    \
+  } while(0)
+
 #define YYABORT_NOT_VALID_ROUTINE_NAME                          \
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
@@ -294,7 +304,7 @@ do {                                                                            
       yyerror(NULL, result, "node or result is NULL\n");           \
       YYABORT_UNEXPECTED;                                        \
     } else if (OB_UNLIKELY(!result->pl_parse_info_.is_pl_parse_ && 0 != result->question_mark_ctx_.count_)) {  \
-       /* 如果是PL过来的sql语句，不要检查：https://work.aone.alibaba-inc.com/issue/22935971*/ \
+       /* 如果是PL过来的sql语句，不要检查：*/ \
       yyerror(NULL, result, "Unknown column '?'\n");               \
       YYABORT_UNEXPECTED;                                        \
     } else {                                                     \
@@ -386,7 +396,7 @@ do {                                                                            
   } while (0)
 
 //查找pl变量，并把该变量替换成:int形式
-#define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name) \
+#define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name, is_report_error) \
     do { \
       if (OB_UNLIKELY((NULL == node || NULL == result || NULL == node->str_value_))) { \
         yyerror(NULL, result, "invalid var node: %p\n", node); \
@@ -430,6 +440,8 @@ do {                                                                            
           result->no_param_sql_[result->no_param_sql_len_++]  = ':'; \
           result->no_param_sql_len_ += sprintf(result->no_param_sql_ + result->no_param_sql_len_, "%ld", idx); \
           store_pl_symbol(node, result->param_nodes_, result->tail_param_node_); \
+        } else if (is_report_error) { \
+          YYABORT_UNDECLARE_VAR;   \
         } else { /*do nothing*/ } \
       } \
     } while (0)
@@ -513,6 +525,69 @@ do {                                                                            
 
 #define malloc_time_node_s(malloc_pool, type) malloc_time_node(malloc_pool, type, '\'');
 #define malloc_time_node_d(malloc_pool, type) malloc_time_node(malloc_pool, type, '\"');
+
+// special case json object ( key :ident/intnum)
+#define  malloc_object_key_node(malloc_pool)                                      \
+do {                                                                              \
+  ParseNode *key_node = NULL;                                                     \
+  malloc_new_node(key_node, malloc_pool, T_CHAR, 0);                              \
+  char *begin_k = strchr(yytext, '\'');                                           \
+  check_value(begin_k);                                                           \
+  char *end_k = strchr(begin_k + 1, '\'');                                        \
+  check_value(end_k);                                                             \
+  char *dest = NULL;                                                              \
+  size_t len = end_k - begin_k - 1;                                               \
+  dest = parse_strndup(begin_k + 1, len, malloc_pool);                            \
+  check_malloc(dest);                                                             \
+  key_node->str_value_ = dest;                                                    \
+  key_node->str_len_ = len;                                                       \
+  char *raw_dest = NULL;                                                          \
+  raw_dest = parse_strndup(begin_k + 1, len, malloc_pool);                        \
+  check_malloc(raw_dest);                                                         \
+  key_node->str_value_ = raw_dest;                                                \
+  key_node->str_len_ = len;                                                       \
+  ParseNode *object_node = NULL;                                                  \
+  malloc_new_node(object_node, malloc_pool, T_LINK_NODE, 2);                      \
+  object_node->children_[0] = key_node;                                           \
+  check_value(yylval);                                                            \
+  yylval->node = object_node;                                                     \
+} while (0);
+
+#define  malloc_key_colon_ident_value_node(malloc_pool)                                 \
+do {                                                                              \
+  malloc_object_key_node(malloc_pool);                                            \
+  ParseNode *value_node = NULL;                                                   \
+  malloc_new_node(value_node, malloc_pool, T_IDENT, 0);                           \
+  char *begin_v = strchr(yytext, ':');                                            \
+  check_value(begin_v);                                                           \
+  size_t end_v = strlen(begin_v);                                                 \
+  size_t len_v = end_v - 1;                                                       \
+  char *dest_v = NULL;                                                            \
+  dest_v = parse_strndup(begin_v + 1, len_v, malloc_pool);                        \
+  check_malloc(dest_v);                                                           \
+  value_node->str_len_ = len_v;                                                   \
+  value_node->str_value_ = dest_v;                                                \
+  yylval->node->children_[1] = value_node;                                         \
+  check_value(yylval);                                                            \
+} while (0);
+
+#define  malloc_key_colon_intnum_value_node(malloc_pool)                                 \
+do {                                                                              \
+  malloc_object_key_node(malloc_pool);                                            \
+  ParseNode *value_node = NULL;                                                   \
+  malloc_new_node(value_node, malloc_pool, T_INT, 0);                           \
+  char *begin_v = strchr(yytext, ':');                                            \
+  check_value(begin_v);                                                           \
+  size_t end_v = strlen(begin_v);                                                 \
+  size_t len_v = end_v - 1;                                                       \
+  char *dest_v = NULL;                                                            \
+  dest_v = parse_strndup(begin_v + 1, len_v, malloc_pool);                        \
+  check_malloc(dest_v);                                                           \
+  value_node->str_len_ = len_v;                                                   \
+  value_node->str_value_ = dest_v;                                                \
+  yylval->node->children_[1] = value_node;                                         \
+  check_value(yylval);                                                            \
+} while (0);
 
 #define check_value(val_ptr)                                                       \
 do {                                                                               \
@@ -896,7 +971,7 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
     }                                                                       \
   } while (0);
 
-// bugfix: https://work.aone.alibaba-inc.com/issue/39093490
+// bugfix:
 // convert '%' to '%%' for printf's format string.
 #define ESCAPE_PERCENT(result, src, dst)\
 do {\
@@ -917,7 +992,7 @@ do {\
   }\
 } while (0)\
 
-// bugfix:https://work.aone.alibaba-inc.com/issue/41048982
+// bugfix:
 // avoid '\0' in the middle of a str.
 #define CHECK_STR_LEN_MATCH(src_str, str_len)                                   \
   do {                                                                          \
@@ -926,6 +1001,7 @@ do {\
       for (int64_t i = 0; i < str_len; i++) {                                   \
         if (OB_UNLIKELY(src_str[i] == '\0')) {                                  \
           yyerror(yylloc, yyextra, "mismatch strlen, may cased by '\0' in str");\
+          return PARSER_SYNTAX_ERROR;                                           \
         }                                                                       \
       }                                                                         \
     }                                                                           \

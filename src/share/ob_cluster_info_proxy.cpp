@@ -104,7 +104,7 @@ const char* ObClusterInfo::in_memory_switchover_status_to_str(const InMemorySwit
 
   const char* str = "UNKNOWN";
   if (status <= I_INVALID || status >= I_MAX_STATUS) {
-    LOG_WARN("invalid in-memory switchover status", K(status));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid in-memory switchover status", K(status));
   } else {
     str = IN_MEMORY_SWITCHOVER_STATUS_ARRAY[status];
   }
@@ -118,7 +118,7 @@ const char* ObClusterInfo::persistent_switchover_status_to_str(const PersistentS
 
   const char* str = "UNKNOWN";
   if (status < P_SWITCHOVER_INVALID || status >= P_MAX_STATUS) {
-    LOG_WARN("invalid persistent switchover status", K(status));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid persistent switchover status", K(status));
   } else {
     str = PERSISTENT_SWITCHOVER_STATUS_ARRAY[status];
   }
@@ -186,9 +186,7 @@ bool ObClusterInfo::is_valid() const
     bret = true;
   }
   if (bret) {
-    if (CLUSTER_VERSION_2260 <= GET_MIN_CLUSTER_VERSION()) {
-      bret = OB_INVALID_VERSION != version_;
-    }
+    bret = OB_INVALID_VERSION != version_;
   }
   return bret;
 }

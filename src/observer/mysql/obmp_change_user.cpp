@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/mysql/obmp_change_user.h"
+#include "observer/mysql/obmp_utils.h"
 #include "lib/string/ob_sql_string.h"
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "rpc/obmysql/packet/ompk_ok.h"
@@ -200,13 +201,23 @@ int ObMPChangeUser::process()
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
   bool is_proxy_mod = get_conn()->is_proxy_;
-  bool need_disconnect = false;
+  bool need_disconnect = true;
+  bool need_response_error = true;
+  const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(ret), K(session));
+  } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
+  } else if (pkt.get_extra_info().exist_sync_sess_info()
+                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
+                              pkt.get_extra_info().get_sync_sess_info()))) {
+    need_response_error = false;
+    LOG_WARN("fail to update sess info", K(ret));
+  } else if (FALSE_IT(session->post_sync_session_info())) {
   } else {
+    need_disconnect = false;
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->update_last_active_time();
     if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
@@ -241,7 +252,7 @@ int ObMPChangeUser::process()
     if (OB_FAIL(send_ok_packet(*session, ok_param))) {
       OB_LOG(WARN, "response ok packet fail", K(ret));
     }
-  } else {
+  } else if (need_response_error) {
     if (OB_FAIL(send_error_packet(ret, NULL))) {
       OB_LOG(WARN,"response fail packet fail", K(ret));
     }

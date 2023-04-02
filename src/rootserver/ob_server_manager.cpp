@@ -782,9 +782,9 @@ void ObServerManager::clear_in_recovery_server_takenover_by_rs(
   if (OB_SUCCESS == tmp_ret) {
     status_ptr->in_recovery_for_takenover_by_rs_ = false;;
   } else if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-    LOG_WARN("find failed", K(server), K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "find failed", K(server), K(tmp_ret));
   } else {
-    LOG_WARN("fail to find server", K(server), K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to find server", K(server), K(tmp_ret));
   }
 }
 
@@ -994,9 +994,7 @@ int ObServerManager::receive_hb(
         }
       } else {
         status_ptr->last_hb_time_ = now;
-        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1450) {
-          // for compatibility
-        } else if (update_delay_time_flag) {
+        if (update_delay_time_flag) {
           const int64_t current_rs_time = ObTimeUtility::current_time();
           int64_t server_behind_time = current_rs_time - (lease_request.current_server_time_ + lease_request.round_trip_time_ / 2);
           if (std::abs(server_behind_time) > GCONF.rpc_timeout) {
@@ -1880,7 +1878,7 @@ int ObServerManager::load_server_statuses(const ObServerStatusArray &server_stat
     LOG_WARN("server_statuses is empty", K(server_statuses), K(ret));
   } else {
     // to protect from executing concurrently with add_server(),
-    // see https://aone.alibaba-inc.com/issue/9191143?stat=1.5.0&toPage=1&companyId=0
+    // see
     SpinWLockGuard guard2(server_status_rwlock_);
     for (int64_t idx = server_statuses_.count() - 1; OB_SUCC(ret) && idx >= 0; --idx) {
       bool found = false;
@@ -2733,14 +2731,14 @@ bool ObServerManager::have_server_deleting() const
   ObArray<ObServerStatus> server_statuses;
   if (!inited_) {
     tmp_ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "server manager not inited", K(tmp_ret));
   } else if (OB_SUCCESS != (tmp_ret = get_server_statuses(zone, server_statuses))) {
-    LOG_WARN("fail to get server status", K(zone), K(tmp_ret));
+    LOG_WARN_RET(tmp_ret, "fail to get server status", K(zone), K(tmp_ret));
   } else {
     FOREACH_CNT_X(status, server_statuses, OB_SUCCESS == tmp_ret) {
       if (OB_ISNULL(status)) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid status", K(tmp_ret));
+        LOG_WARN_RET(tmp_ret, "get invalid status", K(tmp_ret));
       } else if (ObServerStatus::OB_SERVER_ADMIN_DELETING == status->admin_status_) {
         bret = true;
         break;

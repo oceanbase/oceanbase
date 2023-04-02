@@ -28,6 +28,7 @@
 #include "ob_tx_msg.h"
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
+#include "ob_tx_free_route_msg.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,7 @@ private:
   int64_t send_timestamp_;
 public:
   // for ObTxCommitReqMsg, it is commit version
-  int64_t private_data_;
+  share::SCN private_data_;
 };
 
 struct ObTxRpcRollbackSPResult
@@ -89,6 +90,11 @@ public:
   RPC_AP(PR3 post_rollback_sp_msg, OB_TX_ROLLBACK_SAVEPOINT, (transaction::ObTxRollbackSPMsg), ObTxRpcRollbackSPResult);
   RPC_AP(PR3 post_keep_alive_msg, OB_TX_KEEPALIVE, (transaction::ObTxKeepaliveMsg), ObTransRpcResult);
   RPC_AP(PR3 post_keep_alive_resp_msg, OB_TX_KEEPALIVE_RESP, (transaction::ObTxKeepaliveRespMsg), ObTransRpcResult);
+  // for standby
+  RPC_AP(PR3 post_ask_state_msg, OB_TX_ASK_STATE, (transaction::ObAskStateMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_ask_state_resp_msg, OB_TX_ASK_STATE_RESP, (transaction::ObAskStateRespMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_collect_state_msg, OB_TX_COLLECT_STATE, (transaction::ObCollectStateMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_collect_state_resp_msg, OB_TX_COLLECT_STATE_RESP, (transaction::ObCollectStateRespMsg), ObTransRpcResult);
   // xa
   RPC_AP(PR3 post_sub_prepare_msg, OB_TX_SUB_PREPARE, (transaction::ObTxSubPrepareMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_prepare_resp_msg, OB_TX_SUB_PREPARE_RESP, (transaction::ObTxSubPrepareRespMsg), ObTransRpcResult);
@@ -96,9 +102,13 @@ public:
   RPC_AP(PR3 post_sub_commit_resp_msg, OB_TX_SUB_COMMIT_RESP, (transaction::ObTxSubCommitRespMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_rollback_msg, OB_TX_SUB_ROLLBACK, (transaction::ObTxSubRollbackMsg), ObTransRpcResult);
   RPC_AP(PR3 post_sub_rollback_resp_msg, OB_TX_SUB_ROLLBACK_RESP, (transaction::ObTxSubRollbackRespMsg), ObTransRpcResult);
+  // txn free route
+  RPC_AP(PR3 post_msg, OB_TX_FREE_ROUTE_CHECK_ALIVE, (transaction::ObTxFreeRouteCheckAliveMsg), ObTransRpcResult);
+  RPC_AP(PR3 post_msg, OB_TX_FREE_ROUTE_CHECK_ALIVE_RESP, (transaction::ObTxFreeRouteCheckAliveRespMsg), ObTransRpcResult);
+  RPC_S(@PR3 sync_access, OB_TX_FREE_ROUTE_PUSH_STATE, (transaction::ObTxFreeRoutePushState), transaction::ObTxFreeRoutePushStateResp);
 };
 
-#define TX_P_(name, pcode) \
+#define TX_P_(name, pcode)                                              \
 class ObTx##name##P : public ObRpcProcessor< ObTransRpcProxy::ObRpc<pcode> > \
 { \
 public: \
@@ -115,6 +125,11 @@ TX_P_(Abort, OB_TX_ABORT);
 TX_P_(RollbackSP, OB_TX_ROLLBACK_SAVEPOINT);
 TX_P_(Keepalive, OB_TX_KEEPALIVE);
 TX_P_(KeepaliveResp, OB_TX_KEEPALIVE_RESP);
+//for standby
+TX_P_(AskState, OB_TX_ASK_STATE);
+TX_P_(AskStateResp, OB_TX_ASK_STATE_RESP);
+TX_P_(CollectState, OB_TX_COLLECT_STATE);
+TX_P_(CollectStateResp, OB_TX_COLLECT_STATE_RESP);
 // for xa
 TX_P_(SubPrepare, OB_TX_SUB_PREPARE);
 TX_P_(SubPrepareResp, OB_TX_SUB_PREPARE_RESP);
@@ -203,7 +218,7 @@ int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const int status,
                               const ObAddr &receiver_addr,
                               const int64_t request_id,
-                              const int64_t private_data);
+                              const share::SCN &private_data);
 
 int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
                             const int64_t epoch,
@@ -342,6 +357,8 @@ void ObTxRPCCB<PC>::on_timeout()
 }
 } // obrpc
 
+#include "ob_tx_free_route_rpc.h"
+
 namespace transaction
 {
 
@@ -357,6 +374,8 @@ public:
 public:
   virtual int post_msg(const ObAddr &server, ObTxMsg &msg) = 0;
   virtual int post_msg(const share::ObLSID &p, ObTxMsg &msg) = 0;
+  virtual int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &m) = 0;
+  virtual int sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result) = 0;
 };
 
 /*
@@ -391,17 +410,21 @@ public:
 public:
   int post_msg(const ObAddr &server, ObTxMsg &msg);
   int post_msg(const share::ObLSID &p, ObTxMsg &msg);
+  int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &m);
+  int sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result);
 private:
   int post_(const ObAddr &server, ObTxMsg &msg);
   int post_commit_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_sub_request_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_sub_response_msg_(const ObAddr &server, ObTxMsg &msg);
+  int post_standby_msg_(const ObAddr &server, ObTxMsg &msg);
   void statistics_();
 private:
   static const int64_t STAT_INTERVAL = 1 * 1000 * 1000;
   bool is_inited_;
   bool is_running_;
   // common info
+  int64_t tenant_id_;
   ObTransService *trans_service_;
   obrpc::ObTransRpcProxy rpc_proxy_;
   obrpc::ObBatchRpc* batch_rpc_; // used to send msg by batch
@@ -412,17 +435,25 @@ private:
   obrpc::ObTxRPCCB<obrpc::OB_TX_ROLLBACK_SAVEPOINT> tx_rollback_sp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_KEEPALIVE> tx_keepalive_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_KEEPALIVE_RESP> tx_keepalive_resp_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE> tx_ask_state_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_ASK_STATE_RESP> tx_ask_state_resp_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_COLLECT_STATE> tx_collect_state_cb_;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_COLLECT_STATE_RESP> tx_collect_state_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_PREPARE> tx_sub_prepare_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_PREPARE_RESP> tx_sub_prepare_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_COMMIT> tx_sub_commit_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_COMMIT_RESP> tx_sub_commit_resp_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_ROLLBACK> tx_sub_rollback_cb_;
   obrpc::ObTxRPCCB<obrpc::OB_TX_SUB_ROLLBACK_RESP> tx_sub_rollback_resp_cb_;
+  obrpc::ObTxFreeRouteRPCCB<obrpc::OB_TX_FREE_ROUTE_CHECK_ALIVE> tx_free_route_ck_alive_cb_;
+  obrpc::ObTxFreeRouteRPCCB<obrpc::OB_TX_FREE_ROUTE_CHECK_ALIVE_RESP> tx_free_route_ck_alive_resp_cb_;
   // statistic info
   int64_t total_trans_msg_count_;
   int64_t total_trans_resp_msg_count_;
   int64_t last_stat_ts_;
 };
+
+
 
 } // transaction
 
