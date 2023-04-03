@@ -433,8 +433,7 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
   ObSQLSessionInfo *sess_info = NULL;
   sessinfo_map_.get(Key(sessid), sess_info);
   if (NULL != sess_info) {
-    if (sess_info->has_got_conn_res()
-        && OB_UNLIKELY(OB_SUCCESS != sess_info->on_user_disconnect())) {
+    if (OB_UNLIKELY(OB_SUCCESS != sess_info->on_user_disconnect())) {
       LOG_WARN("user disconnect failed", K(ret), K(sess_info->get_user_id()));
     }
     sessinfo_map_.revert(sess_info);

@@ -995,8 +995,12 @@ public:
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }
-  void set_got_conn_res(bool v) { got_conn_res_ = v; }
-  bool has_got_conn_res() const { return got_conn_res_; }
+  void set_got_tenant_conn_res(bool v) { got_tenant_conn_res_ = v; }
+  bool has_got_tenant_conn_res() const { return got_tenant_conn_res_; }
+  void set_got_user_conn_res(bool v) { got_user_conn_res_ = v; }
+  bool has_got_user_conn_res() const { return got_user_conn_res_; }
+  void set_conn_res_user_id(uint64_t v) { conn_res_user_id_ = v; }
+  uint64_t get_conn_res_user_id() const { return conn_res_user_id_; }
   int on_user_connect(share::schema::ObSessionPrivInfo &priv_info, const ObUserInfo *user_info);
   int on_user_disconnect();
   virtual void reset_tx_variable();
@@ -1143,7 +1147,9 @@ private:
   // It's used for on_user_disconnect.
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
   // While only session got connection resource can release connection resource and decrease connections count.
-  bool got_conn_res_;
+  bool got_tenant_conn_res_;
+  bool got_user_conn_res_;
+  uint64_t conn_res_user_id_;
   bool tx_level_temp_table_;
   // get_session_allocator can only apply for fixed-length memory.
   // To customize the memory length, you need to use malloc_alloctor of mem_context
