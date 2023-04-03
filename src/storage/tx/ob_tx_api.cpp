@@ -1523,7 +1523,9 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
     tx.lock_.lock();
     tx.flags_.BLOCK_ = false;
     // restore state
-    tx.state_ = save_state;
+    if (OB_SUCC(ret) && tx.is_tx_active()) {
+      tx.state_ = save_state;
+    }
     // mask_set need clear
     tx.brpc_mask_set_.reset();
     // clear interrupt flag
