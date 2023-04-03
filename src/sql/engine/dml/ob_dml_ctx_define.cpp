@@ -116,7 +116,7 @@ OB_SERIALIZE_MEMBER(ObTriggerArg, trigger_id_, trigger_events_.bit_value_, timin
 
 OB_SERIALIZE_MEMBER(ObForeignKeyColumn, name_, idx_, name_idx_);
 
-OB_SERIALIZE_MEMBER(ObForeignKeyArg, ref_action_, table_name_, columns_, database_name_, is_self_ref_);
+OB_SERIALIZE_MEMBER(ObForeignKeyArg, ref_action_, table_name_, columns_, database_name_, is_self_ref_, table_id_);
 
 OB_SERIALIZE_MEMBER(ColumnContent,
                     projector_index_,
