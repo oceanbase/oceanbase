@@ -4962,6 +4962,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                               0/*object_id*/,
                                               new_index_schema.get_schema_version(),
                                               0L/*parallelism*/,
+                                              drop_index_arg->consumer_group_id_,
                                               &allocator,
                                               drop_index_arg);
                   if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -10305,7 +10306,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                                        &index_schema,
                                                                        alter_table_arg.parallelism_,
                                                                        alter_table_arg.allocator_,
-                                                                       task_record))) {
+                                                                       task_record,
+                                                                       alter_table_arg.consumer_group_id_))) {
                 LOG_WARN("fail to submit build index task", K(ret), "type", create_index_arg->index_type_);
               } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
                 LOG_WARN("fail to push ddl task", K(ret), K(task_record));
@@ -10355,6 +10357,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                         (*iter)->get_constraint_id(),
                                         new_table_schema.get_schema_version(),
                                         0/*parallelsim*/,
+                                        const_alter_table_arg.consumer_group_id_,
                                         &alter_table_arg.allocator_,
                                         &const_alter_table_arg);
               if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -10400,6 +10403,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                            fk_id,
                                            new_table_schema.get_schema_version(),
                                            0/*parallelism*/,
+                                           const_alter_table_arg.consumer_group_id_,
                                            &alter_table_arg.allocator_,
                                            &const_alter_table_arg);
                 if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -10886,6 +10890,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    0/*object_id*/,
                                    new_table_schema.get_schema_version(),
                                    alter_table_arg.parallelism_,
+                                   alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
                                    &alter_table_arg);
         if (orig_table_schema->is_tmp_table()) {
@@ -10912,6 +10917,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    0/*object_id*/,
                                    new_table_schema.get_schema_version(),
                                    alter_table_arg.parallelism_,
+                                   alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
                                    &alter_table_arg);
         if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -11026,6 +11032,7 @@ int ObDDLService::create_hidden_table(
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
             } else {
+              alter_table_arg.consumer_group_id_ = create_hidden_table_arg.consumer_group_id_;
               LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
               ObCreateDDLTaskParam param(tenant_id,
                                         create_hidden_table_arg.ddl_type_,
@@ -11034,6 +11041,7 @@ int ObDDLService::create_hidden_table(
                                         table_id,
                                         orig_table_schema->get_schema_version(),
                                         create_hidden_table_arg.parallelism_,
+                                        create_hidden_table_arg.consumer_group_id_,
                                         &allocator_for_redef,
                                         &alter_table_arg);
               if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
@@ -19559,7 +19567,8 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTabl
                                                                  &new_table_schema,
                                                                  arg.parallelism_,
                                                                  allocator,
-                                                                 task_record))) {
+                                                                 task_record,
+                                                                 arg.consumer_group_id_))) {
           LOG_WARN("fail to submit build global index task", KR(ret));
         } else {
           res.index_table_id_ = new_table_schema.get_table_id();

@@ -293,7 +293,8 @@ int ObIndexBuilder::do_create_global_index(
                                                  &index_schema,
                                                  arg.parallelism_,
                                                  allocator,
-                                                 task_record))) {
+                                                 task_record,
+                                                 arg.consumer_group_id_))) {
         LOG_WARN("fail to submit build global index task", K(ret));
       }
     }
@@ -328,7 +329,8 @@ int ObIndexBuilder::submit_build_index_task(
     const ObTableSchema *index_schema,
     const int64_t parallelism,
     common::ObIAllocator &allocator,
-    ObDDLTaskRecord &task_record)
+    ObDDLTaskRecord &task_record,
+    const int64_t group_id)
 {
   int ret = OB_SUCCESS;
   ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
@@ -338,6 +340,7 @@ int ObIndexBuilder::submit_build_index_task(
                              0/*object_id*/,
                              index_schema->get_schema_version(),
                              parallelism,
+                             group_id,
                              &allocator,
                              &create_index_arg);
   if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
@@ -369,6 +372,7 @@ int ObIndexBuilder::submit_drop_index_task(const ObTableSchema &index_schema,
                                0/*object_id*/,
                                index_schema.get_schema_version(),
                                0/*parallelism*/,
+                               arg.consumer_group_id_,
                                &allocator,
                                &arg);
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, ddl_service_.get_sql_proxy(), task_record))) {
@@ -463,7 +467,8 @@ int ObIndexBuilder::do_create_local_index(
                                                  &index_schema,
                                                  create_index_arg.parallelism_,
                                                  allocator,
-                                                 task_record))) {
+                                                 task_record,
+                                                 create_index_arg.consumer_group_id_))) {
         LOG_WARN("failt to submit build local index task", K(ret));
       } else {
         res.index_table_id_ = index_schema.get_table_id();

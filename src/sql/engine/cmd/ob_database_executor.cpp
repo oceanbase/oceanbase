@@ -44,11 +44,13 @@ int ObCreateDatabaseExecutor::execute(ObExecContext &ctx, ObCreateDatabaseStmt &
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const obrpc::ObCreateDatabaseArg &create_database_arg = stmt.get_create_database_arg();
+  obrpc::ObCreateDatabaseArg &tmp_arg = const_cast<obrpc::ObCreateDatabaseArg&>(create_database_arg);
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
-    const_cast<obrpc::ObCreateDatabaseArg&>(create_database_arg).ddl_stmt_str_ = first_stmt;
+    tmp_arg.ddl_stmt_str_ = first_stmt;
+    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -135,6 +137,7 @@ int ObAlterDatabaseExecutor::execute(ObExecContext &ctx, ObAlterDatabaseStmt &st
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const obrpc::ObAlterDatabaseArg &alter_database_arg = stmt.get_alter_database_arg();
+  obrpc::ObAlterDatabaseArg &tmp_arg = const_cast<obrpc::ObAlterDatabaseArg&>(alter_database_arg);
   ObString first_stmt;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(session = ctx.get_my_session())) {
@@ -143,7 +146,8 @@ int ObAlterDatabaseExecutor::execute(ObExecContext &ctx, ObAlterDatabaseStmt &st
   } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
-    const_cast<obrpc::ObAlterDatabaseArg&>(alter_database_arg).ddl_stmt_str_ = first_stmt;
+    tmp_arg.ddl_stmt_str_ = first_stmt;
+    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -183,11 +187,13 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const obrpc::ObDropDatabaseArg &drop_database_arg = stmt.get_drop_database_arg();
+  obrpc::ObDropDatabaseArg &tmp_arg = const_cast<obrpc::ObDropDatabaseArg&>(drop_database_arg);
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
-    const_cast<obrpc::ObDropDatabaseArg&>(drop_database_arg).ddl_stmt_str_ = first_stmt;
+    tmp_arg.ddl_stmt_str_ = first_stmt;
+    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -253,13 +259,15 @@ int ObFlashBackDatabaseExecutor::execute(ObExecContext &ctx, ObFlashBackDatabase
 {
   int ret = OB_SUCCESS;
   const obrpc::ObFlashBackDatabaseArg &flashback_database_arg = stmt.get_flashback_database_arg();
+  obrpc::ObFlashBackDatabaseArg &tmp_arg = const_cast<obrpc::ObFlashBackDatabaseArg&>(flashback_database_arg);
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
-    const_cast<obrpc::ObFlashBackDatabaseArg&>(flashback_database_arg).ddl_stmt_str_ = first_stmt;
+    tmp_arg.ddl_stmt_str_ = first_stmt;
+    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
@@ -280,13 +288,15 @@ int ObPurgeDatabaseExecutor::execute(ObExecContext &ctx, ObPurgeDatabaseStmt &st
 {
   int ret = OB_SUCCESS;
   const obrpc::ObPurgeDatabaseArg &purge_database_arg = stmt.get_purge_database_arg();
+  obrpc::ObPurgeDatabaseArg &tmp_arg = const_cast<obrpc::ObPurgeDatabaseArg&>(purge_database_arg);
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   ObString first_stmt;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
-    const_cast<obrpc::ObPurgeDatabaseArg&>(purge_database_arg).ddl_stmt_str_ = first_stmt;
+    tmp_arg.ddl_stmt_str_ = first_stmt;
+    tmp_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {

@@ -91,6 +91,7 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
   } else if (nullptr != session_param) {
     conn->set_ddl_info(&session_param->ddl_info_);
     conn->set_use_external_session(session_param->use_external_session_);
+    conn->set_group_id(session_param->consumer_group_id_);
     if (nullptr != session_param->sql_mode_) {
       if (OB_FAIL(conn->set_session_variable("sql_mode", *session_param->sql_mode_))) {
         LOG_WARN("set inner connection sql mode failed", K(ret));
@@ -197,6 +198,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
   if (OB_SUCC(ret) && nullptr != param) {
     conn->set_is_load_data_exec(param->is_load_data_exec_);
     conn->set_use_external_session(param->use_external_session_);
+    conn->set_group_id(param->consumer_group_id_);
     if (param->is_load_data_exec_) {
       is_user_sql = true;
     }

@@ -276,6 +276,7 @@ private:
       const share::schema::ObTableSchema *index_schema,
       const int64_t parallelism,
       const int64_t parent_task_id,
+      const int64_t consumer_group_id,
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -287,6 +288,7 @@ private:
       const int64_t schema_version,
       const obrpc::ObAlterTableArg *arg,
       const int64_t parent_task_id,
+      const int64_t consumer_group_id,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -296,6 +298,7 @@ private:
       const share::schema::ObTableSchema *src_schema,
       const share::schema::ObTableSchema *dest_schema,
       const int64_t parallelism,
+      const int64_t consumer_group_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -306,6 +309,7 @@ private:
       const ObTableSchema *src_schema,
       const ObTableSchema *dest_schema,
       const int64_t parallelism,
+      const int64_t consumer_group_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -316,6 +320,7 @@ private:
       const share::schema::ObTableSchema *src_schema,
       const share::schema::ObTableSchema *dest_schema,
       const int64_t parallelism,
+      const int64_t consumer_group_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -325,6 +330,7 @@ private:
       const uint64_t tenant_id,
       const int64_t table_id,
       const int64_t schema_version,
+      const int64_t consumer_group_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -333,6 +339,7 @@ private:
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *index_schema,
       const int64_t parent_task_id,
+      const int64_t consumer_group_id,
       const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -342,6 +349,7 @@ private:
       const uint64_t tenant_id,
       const uint64_t object_id,
       const int64_t schema_version,
+      const int64_t consumer_group_id,
       const share::ObDDLType &type,
       const obrpc::ObDDLArg *arg,
       ObIAllocator &allocator,

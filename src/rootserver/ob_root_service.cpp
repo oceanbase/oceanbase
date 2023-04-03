@@ -4083,6 +4083,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
                                    orig_table_schema->get_table_id(),
                                    orig_table_schema->get_schema_version(),
                                    arg.parallelism_,
+                                   arg.consumer_group_id_,
                                    &allocator,
                                    &arg,
                                    0 /* parent task id*/);
@@ -4202,6 +4203,7 @@ int ObRootService::drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes 
                                target_object_id,
                                schema_version,
                                arg.parallelism_,
+                               arg.consumer_group_id_,
                                &allocator,
                                &arg,
                                0 /* parent task id*/);
@@ -4261,6 +4263,7 @@ int ObRootService::drop_database(const obrpc::ObDropDatabaseArg &arg, ObDropData
                                 database_id,
                                 schema_version,
                                 arg.parallelism_,
+                                arg.consumer_group_id_,
                                 &allocator,
                                 &arg,
                                 0 /* parent task id*/);
@@ -4451,6 +4454,7 @@ int ObRootService::truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::O
                                    table_schema->get_table_id(),
                                    table_schema->get_schema_version(),
                                    arg.parallelism_,
+                                   arg.consumer_group_id_,
                                    &allocator,
                                    &arg,
                                    0 /* parent task id*/);

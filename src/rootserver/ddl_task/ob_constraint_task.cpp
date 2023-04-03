@@ -484,6 +484,7 @@ int ObConstraintTask::init(
     const ObDDLType type,
     const int64_t schema_version,
     const ObAlterTableArg &alter_table_arg,
+    const int64_t consumer_group_id,
     const int64_t parent_task_id,
     const int64_t status,
     const int64_t snapshot_version)
@@ -516,6 +517,7 @@ int ObConstraintTask::init(
     root_service_ = root_service;
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
+    consumer_group_id_ = consumer_group_id;
     task_version_ = OB_CONSTRAINT_TASK_VERSION;
     is_table_hidden_ = table_schema->is_user_hidden_table();
     is_inited_ = true;

@@ -67,7 +67,7 @@ struct ObSessionParam final
 {
 public:
   ObSessionParam()
-    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), use_external_session_(false), nls_formats_{}
+    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), use_external_session_(false), consumer_group_id_(0), nls_formats_{}
   {}
   ~ObSessionParam() = default;
 public:
@@ -76,6 +76,7 @@ public:
   ObSessionDDLInfo ddl_info_;
   bool is_load_data_exec_;
   bool use_external_session_; // need init remote inner sql conn with sess getting from sess mgr
+  int64_t consumer_group_id_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 

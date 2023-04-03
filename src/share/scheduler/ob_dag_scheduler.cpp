@@ -365,6 +365,7 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     dag_ret_(OB_SUCCESS),
     add_time_(0),
     start_time_(0),
+    consumer_group_id_(0),
     is_inited_(false),
     type_(type),
     priority_(OB_DAG_TYPES[type].init_dag_prio_),
@@ -416,6 +417,7 @@ void ObIDag::clear_running_info()
 {
   add_time_ = 0;
   start_time_ = 0;
+  consumer_group_id_ = 0;
   running_task_cnt_ = 0;
   dag_status_ = ObDagStatus::DAG_STATUS_INITING;
   dag_ret_ = OB_SUCCESS;
@@ -718,7 +720,7 @@ int64_t ObIDag::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(KP(this), K_(type), "name", get_dag_type_str(type_), K_(id), K_(dag_ret), K_(dag_status),
-        K_(start_time), K_(running_task_cnt), K_(indegree), "hash", hash());
+        K_(start_time), K_(running_task_cnt), K_(indegree), K_(consumer_group_id), "hash", hash());
     J_OBJ_END();
   }
   return pos;
@@ -1290,7 +1292,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     check_period_(0),
     last_check_time_(0),
     function_type_(0),
-    group_id_(-1),
+    group_id_(INT64_MAX),
     tg_id_(-1),
     is_inited_(false)
 {
@@ -1351,7 +1353,7 @@ void ObTenantDagWorker::destroy()
     check_period_ = 0;
     last_check_time_ = 0;
     function_type_ = 0;
-    group_id_ = -1;
+    group_id_ = INT64_MAX;
     self_ = NULL;
     is_inited_ = false;
     TG_DESTROY(tg_id_);
@@ -1370,21 +1372,28 @@ void ObTenantDagWorker::resume()
   notify(DWS_RUNNABLE);
 }
 
-int ObTenantDagWorker::set_dag_resource()
+int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t group_id = 0;
   if (nullptr == GCTX.cgroup_ctrl_ || OB_UNLIKELY(!GCTX.cgroup_ctrl_->is_valid())) {
     //invalid cgroup, cannot bind thread and control resource
-  } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, group_id))) {
-    LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(group_id));
-  } else if (group_id == group_id_) {
-    // group not change, do nothing
-  } else if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), group_id))) {
-    LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
-  } else {
-    ATOMIC_SET(&group_id_, group_id);
-    THIS_WORKER.set_group_id(static_cast<int32_t>(group_id));
+  } else  {
+    uint64_t consumer_group_id = 0;
+    if (group_id != 0) {
+      //user level
+      consumer_group_id = group_id;
+    } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {
+      //function level
+      LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
+    }
+    if (OB_SUCC(ret) && consumer_group_id != group_id_) {
+      if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), group_id))) {
+        LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
+      } else {
+        ATOMIC_SET(&group_id_, group_id);
+        THIS_WORKER.set_group_id(static_cast<int32_t>(group_id));
+      }
+    }
   }
   return ret;
 }
@@ -1417,7 +1426,7 @@ void ObTenantDagWorker::run1()
           COMMON_LOG(WARN, "invalid compat mode", K(ret), K(*dag));
         } else {
           THIS_WORKER.set_compatibility_mode(compat_mode);
-          if (OB_FAIL(set_dag_resource())) {
+          if (OB_FAIL(set_dag_resource(dag->get_consumer_group_id()))) {
             LOG_WARN("isolate dag CPU and IOPS failed", K(ret));
           } else if (OB_FAIL(task_->do_work())) {
             if (!dag->ignore_warning()) {

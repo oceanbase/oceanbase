@@ -78,6 +78,7 @@ public:
        dblink_id_(OB_INVALID_ID),
        dblink_driver_proto_(-1),
        sessid_(-1),
+       consumer_group_id_(0),
        has_reverse_link_credentials_(false),
        usable_(true)
   {}
@@ -135,6 +136,8 @@ public:
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
   void set_init_remote_env(bool flag) { is_init_remote_env_ = flag;}
   bool get_init_remote_env() const { return is_init_remote_env_; }
+  void set_group_id(const int64_t v) {consumer_group_id_ = v; }
+  int64_t get_group_id() const {return consumer_group_id_; }
   void set_reverse_link_creadentials(bool flag) { has_reverse_link_credentials_ = flag; }
   bool get_reverse_link_creadentials() { return has_reverse_link_credentials_; }
   void set_usable(bool flag) { usable_ = flag; }
@@ -146,6 +149,7 @@ protected:
   uint64_t dblink_id_; // for dblink, record dblink_id of a connection used by dblink
   int64_t dblink_driver_proto_; //for dblink, record DblinkDriverProto of a connection used by dblink
   uint32_t sessid_;
+  int64_t consumer_group_id_; //for resource isolation
   bool has_reverse_link_credentials_; // for dblink, mark if this link has credentials set
   bool usable_;  // usable_ = false: connection is unusable, should not execute query again.
 };

@@ -42,6 +42,7 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const int64_t schema_version,
     const int64_t snapshot_version,
     const int64_t execution_id,
+    const int64_t consumer_group_id,
     const ObSQLMode &sql_mode,
     const common::ObCurTraceId::TraceId &trace_id,
     const int64_t parallelism,
@@ -50,7 +51,7 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const common::ObAddr &inner_sql_exec_addr)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
-    execution_id_(execution_id), sql_mode_(sql_mode), trace_id_(trace_id),
+    execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service),
     inner_sql_exec_addr_(inner_sql_exec_addr)
 {
@@ -135,6 +136,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       session_param.ddl_info_.set_dest_table_hidden(true);
       session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
       session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+      session_param.consumer_group_id_ = consumer_group_id_;
 
       common::ObAddr *sql_exec_addr = nullptr;
       if (inner_sql_exec_addr_.is_valid()) {
@@ -188,6 +190,7 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         schema_version_,
         snapshot_version_,
         execution_id_,
+        consumer_group_id_,
         sql_mode_,
         trace_id_,
         parallelism_,
@@ -776,6 +779,7 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
                                      constraint_id,
                                      table_schema->get_schema_version(),
                                      0L/*parallelism*/,
+                                     consumer_group_id_,
                                      &allocator_,
                                      &alter_table_arg,
                                      task_id_);
@@ -903,6 +907,7 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
                                      fk_id,
                                      hidden_table_schema->get_schema_version(),
                                      0L/*parallelism*/,
+                                     consumer_group_id_,
                                      &allocator_,
                                      &alter_table_arg,
                                      task_id_);

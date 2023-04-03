@@ -44,6 +44,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = session_info.get_local_nls_date_format();
     create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = session_info.get_local_nls_timestamp_format();
     create_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info.get_local_nls_timestamp_tz_format();
+    create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
     if (OB_FAIL(create_table_arg.tz_info_wrap_.deep_copy(session_info.get_tz_info_wrap()))) {
       LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res, snapshot_version, session_info))) {

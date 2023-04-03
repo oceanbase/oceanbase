@@ -57,21 +57,21 @@ public:
       worker_timeout_(OB_DEFAULT_SESSION_TIMEOUT),
       query_timeout_(OB_DEFAULT_SESSION_TIMEOUT), trx_timeout_(OB_DEFAULT_SESSION_TIMEOUT),
       sql_mode_(0), tz_info_wrap_(), ddl_info_(), is_load_data_exec_(false), nls_formats_{},
-      use_external_session_(false) {};
+      use_external_session_(false), consumer_group_id_(0) {};
   ObInnerSQLTransmitArg(common::ObAddr ctrl_svr, common::ObAddr runner_svr,
                         uint64_t tenant_id, uint64_t conn_id, common::ObString inner_sql,
                         InnerSQLOperationType operation_type, bool is_oracle_mode,
                         const int64_t source_cluster_id, const int64_t worker_timeout,
                         const int64_t query_timeout, const int64_t trx_timeout,
                         ObSQLMode sql_mode, ObSessionDDLInfo ddl_info, const bool is_load_data_exec,
-                        const bool use_external_session)
+                        const bool use_external_session, const int64_t consumer_group_id = 0)
         : ctrl_svr_(ctrl_svr), runner_svr_(runner_svr),
           tenant_id_(tenant_id), conn_id_(conn_id), inner_sql_(inner_sql),
           operation_type_(operation_type), is_oracle_mode_(is_oracle_mode),
           source_cluster_id_(source_cluster_id), worker_timeout_(worker_timeout),
           query_timeout_(query_timeout), trx_timeout_(trx_timeout), sql_mode_(sql_mode),
           tz_info_wrap_(), ddl_info_(ddl_info), is_load_data_exec_(is_load_data_exec), nls_formats_{},
-          use_external_session_(use_external_session) {}
+          use_external_session_(use_external_session), consumer_group_id_(consumer_group_id) {}
   ~ObInnerSQLTransmitArg() {}
 
   const common::ObAddr &get_ctrl_svr() const { return ctrl_svr_; }
@@ -120,6 +120,12 @@ public:
   int64_t get_trx_timeout() const {
     return trx_timeout_;
   }
+  void set_consumer_group_id(const int64_t consumer_group_id) {
+    consumer_group_id_ = consumer_group_id;
+  }
+  int64_t get_consumer_group_id() const {
+    return consumer_group_id_;
+  }
   inline int set_tz_info_wrap(const ObTimeZoneInfoWrap &other) { return tz_info_wrap_.deep_copy(other); }
   void set_nls_formats(const common::ObString &nls_date_format,
                        const common::ObString &nls_timestamp_format,
@@ -153,7 +159,8 @@ public:
                K_(ddl_info),
                K_(is_load_data_exec),
                K_(nls_formats),
-               K_(use_external_session));
+               K_(use_external_session),
+               K_(consumer_group_id));
 
 private:
   common::ObAddr ctrl_svr_;
@@ -173,6 +180,7 @@ private:
   bool is_load_data_exec_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   bool use_external_session_;
+  int64_t consumer_group_id_;
 };
 
 class ObInnerSQLTransmitResult

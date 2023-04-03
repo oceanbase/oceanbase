@@ -155,6 +155,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
                          const int64_t task_id,
                          const uint64_t object_id,
                          const int64_t schema_version,
+                         const int64_t consumer_group_id,
                          const share::ObDDLType &ddl_type,
                          const obrpc::ObDDLArg *ddl_arg, 
                          const int64_t task_status)
@@ -181,6 +182,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
     object_id_ = object_id;
     target_object_id_ = object_id;
     schema_version_ = schema_version;
+    consumer_group_id_ = consumer_group_id;
     tenant_id_ = tenant_id;
     task_id_ = task_id;
     task_type_ = ddl_type;

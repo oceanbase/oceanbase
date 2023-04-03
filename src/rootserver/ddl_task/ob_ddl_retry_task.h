@@ -32,6 +32,7 @@ public:
       const int64_t task_id,
       const uint64_t object_id,
       const int64_t schema_version,
+      const int64_t consumer_group_id,
       const share::ObDDLType &type,
       const obrpc::ObDDLArg *ddl_arg,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE);

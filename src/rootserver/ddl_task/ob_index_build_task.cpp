@@ -110,6 +110,7 @@ int ObIndexSSTableBuildTask::process()
       session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
       session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
       session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+      session_param.consumer_group_id_ = consumer_group_id_;
 
       common::ObAddr *sql_exec_addr = nullptr;
       if (inner_sql_exec_addr_.is_valid()) {
@@ -165,6 +166,7 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         schema_version_,
         snapshot_version_,
         execution_id_,
+        consumer_group_id_,
         trace_id_,
         parallelism_,
         root_service_,
@@ -309,6 +311,7 @@ int ObIndexBuildTask::init(
     const ObTableSchema *index_schema,
     const int64_t schema_version,
     const int64_t parallelism,
+    const int64_t consumer_group_id,
     const obrpc::ObCreateIndexArg &create_index_arg,
     const int64_t parent_task_id /* = 0 */,
     const int64_t task_status /* = TaskStatus::PREPARE */,
@@ -357,6 +360,7 @@ int ObIndexBuildTask::init(
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
     }
+    consumer_group_id_ = consumer_group_id;
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
@@ -788,6 +792,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
         schema_version_,
         snapshot_version_,
         new_execution_id,
+        consumer_group_id_,
         trace_id_,
         parallelism_,
         root_service_,
