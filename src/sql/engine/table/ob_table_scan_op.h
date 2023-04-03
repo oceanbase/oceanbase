@@ -427,6 +427,7 @@ protected:
                                 ObNewRange &part_range);
 
   int fill_storage_feedback_info();
+  void fill_sql_plan_monitor_info();
   //int extract_scan_ranges();
   void fill_table_scan_stat(const ObTableScanStatistic &statistic,
                             ObTableScanStat &scan_stat) const;

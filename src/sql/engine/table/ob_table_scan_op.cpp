@@ -1306,11 +1306,32 @@ int ObTableScanOp::inner_close()
     }
   }
   if (OB_SUCC(ret)) {
+    fill_sql_plan_monitor_info();
+  }
+  if (OB_SUCC(ret)) {
     iter_end_ = false;
     need_init_before_get_row_ = true;
   }
 
   return ret;
+}
+
+void ObTableScanOp::fill_sql_plan_monitor_info()
+{
+  oceanbase::common::ObDiagnoseSessionInfo *di = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+  if (OB_LIKELY(di)) {
+    // Hope to demostrate:
+    // 1. how many bytes read from io (IO_READ_BYTES)
+    // 2. how many bytes in total (DATA_BLOCK_READ_CNT + INDEX_BLOCK_READ_CNT) * 16K (approximately, many diff for each table)
+    // 3. how many rows processed before filtering (MEMSTORE_READ_ROW_COUNT + SSSTORE_READ_ROW_COUNT)
+    op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::IO_READ_BYTES;
+    op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::TOTAL_READ_BYTES;
+    op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::TOTAL_READ_ROW_COUNT;
+    op_monitor_info_.otherstat_1_value_ = EVENT_GET(ObStatEventIds::IO_READ_BYTES, di);
+    // NOTE: this is not always accurate, as block size change be change from default 16K to any value
+    op_monitor_info_.otherstat_2_value_ = (EVENT_GET(ObStatEventIds::DATA_BLOCK_READ_CNT, di) + EVENT_GET(ObStatEventIds::INDEX_BLOCK_READ_CNT, di)) * 16 * 1024;
+    op_monitor_info_.otherstat_3_value_ = EVENT_GET(ObStatEventIds::MEMSTORE_READ_ROW_COUNT, di) + EVENT_GET(ObStatEventIds::SSSTORE_READ_ROW_COUNT, di);
+  }
 }
 
 int ObTableScanOp::do_init_before_get_row()
