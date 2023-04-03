@@ -83,7 +83,10 @@ int ObMPInitDB::process()
     int64_t retry_times = 0;
     THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(effective_tenant_id, global_version))) {
+    if (OB_UNLIKELY(session->is_zombie())) {
+      ret = OB_ERR_SESSION_INTERRUPTED;
+      LOG_WARN("session has been killed", K(ret), KPC(session));
+    } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(effective_tenant_id, global_version))) {
       LOG_WARN("fail to get global_version", K(ret), K(effective_tenant_id));
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_refreshed_schema_version(effective_tenant_id, local_version))) {
       LOG_WARN("fail to get local_version", K(ret), K(effective_tenant_id));
