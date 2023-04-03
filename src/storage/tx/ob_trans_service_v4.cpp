@@ -1496,6 +1496,7 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   int64_t epoch = 0;
   bool leader = false;
   SCN snapshot0;
+  SCN snapshot1;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
   const bool can_elr = MTL_IS_PRIMARY_TENANT() ? true : false;
   if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
@@ -1512,8 +1513,9 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
   } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
   } else if (!snapshot0.is_valid_and_not_min()) {
     ret = OB_EAGAIN;
+  } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, NULL, snapshot1))) {
   } else {
-    snapshot = snapshot0;
+    snapshot = SCN::max(snapshot0, snapshot1);
   }
   if (OB_NOT_NULL(ls_tx_ctx_mgr)) {
     tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
