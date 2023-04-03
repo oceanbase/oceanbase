@@ -978,6 +978,17 @@ int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
             return ret;
           }))) {
         LOG_WARN("failed to modify task", K(ret));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          int tmp_ret = OB_SUCCESS;
+          ObSqlString sql_string;
+          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
+            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id.task_id_));
+          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
+            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
       } else {
         redefinition_task.set_is_abort(true);
         if (OB_FAIL(update_task_info(task_id, trans, task_record,
@@ -2022,6 +2033,9 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task)
   if (OB_ISNULL(ddl_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(ddl_task));
+  } else if (!is_started_) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ddl schedule is not start", K(ret));
   } else {
     int tmp_ret = OB_SUCCESS;
     bool longops_added = true;
