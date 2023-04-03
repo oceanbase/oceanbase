@@ -156,8 +156,8 @@ int ObLtsSource::update_publish_version(const int64_t publish_version)
 int ObLtsSource::get_publish_version(int64_t& publish_version)
 {
   int ret = OB_SUCCESS;
-  int64_t tmp_publish_version;
-  if (OB_FAIL(OB_TRANS_VERSION.get_publish_version(tmp_publish_version))) {
+  //int64_t tmp_publish_version;
+  if (OB_FAIL(OB_TRANS_VERSION.get_publish_version(publish_version))) {
     TRANS_LOG(WARN, "get publish version failed", KR(ret));
   } else {
     // In the scenario of unlocking in advance,
@@ -165,10 +165,10 @@ int ObLtsSource::get_publish_version(int64_t& publish_version)
     // predecessor dependence and improve the performance of elr
     // However, when the elr scenario is closed,
     // the probability of waiting for the end of the row lock transaction will increase
-    publish_version = tmp_publish_version + 10;
-    if (OB_FAIL(OB_TRANS_VERSION.update_publish_version(publish_version))) {
-      TRANS_LOG(WARN, "update local trans version failed", K(ret), K(publish_version));
-    }
+    //publish_version = tmp_publish_version + 10;
+    //if (OB_FAIL(OB_TRANS_VERSION.update_publish_version(publish_version))) {
+    //  TRANS_LOG(WARN, "update local trans version failed", K(ret), K(publish_version));
+    //}
     TRANS_LOG(DEBUG, "get publish version from lts", K(publish_version));
   }
   return ret;
