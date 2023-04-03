@@ -2142,6 +2142,7 @@ int ObLogReplayEngine::pre_check_(const ObPartitionKey& pkey, ObReplayStatus& re
       REPLAY_LOG(WARN, "failed to pre_check", K(ret), K(pkey), K(replay_status), K(task));
     }
   } else {
+    ret = OB_EAGAIN;
     // At this time, the write lock is added, and the partition may be cleaning up
     if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
       REPLAY_LOG(INFO, "try lock failed in pre_check", K(replay_status), K(task), K(ret));
