@@ -2089,19 +2089,6 @@ int ObMemtable::flush(share::ObLSID ls_id)
   if (is_flushed_) {
     ret = OB_NO_NEED_UPDATE;
   } else {
-    if (mt_stat_.create_flush_dag_time_ == 0 &&
-        mt_stat_.ready_for_flush_time_ != 0 &&
-        cur_time - mt_stat_.ready_for_flush_time_ > 30 * 1000 * 1000) {
-      STORAGE_LOG(WARN, "memtable can not create dag successfully for long time",
-                K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
-      ADD_SUSPECT_INFO(MINI_MERGE,
-                       ls_id, get_tablet_id(),
-                       "memtable can not create dag successfully",
-                       "has been ready for flush time:",
-                       cur_time - mt_stat_.ready_for_flush_time_,
-                       "ready for flush time:",
-                       mt_stat_.ready_for_flush_time_);
-    }
     ObTabletMergeDagParam param;
     param.ls_id_ = ls_id;
     param.tablet_id_ = key_.tablet_id_;
@@ -2115,6 +2102,23 @@ int ObMemtable::flush(share::ObLSID ls_id)
     } else {
       mt_stat_.create_flush_dag_time_ = cur_time;
       TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
+    }
+
+    if (OB_FAIL(ret) && mt_stat_.create_flush_dag_time_ == 0 &&
+        mt_stat_.ready_for_flush_time_ != 0 &&
+        cur_time - mt_stat_.ready_for_flush_time_ > 30 * 1000 * 1000) {
+      STORAGE_LOG(WARN, "memtable can not create dag successfully for long time",
+                K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
+      const char *str_user_error = ob_errpkt_str_user_error(ret, false);
+      ADD_SUSPECT_INFO(MINI_MERGE,
+                       ls_id, get_tablet_id(),
+                       "memtable can not create dag successfully",
+                       "extra info",
+                       str_user_error,
+                       "has been ready for flush time:",
+                       cur_time - mt_stat_.ready_for_flush_time_,
+                       "ready for flush time:",
+                       mt_stat_.ready_for_flush_time_);
     }
   }
 

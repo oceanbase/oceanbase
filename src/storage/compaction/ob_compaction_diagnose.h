@@ -94,7 +94,6 @@ struct ObCompactionDiagnoseInfo
     DIA_STATUS_FAILED = 2,
     DIA_STATUS_FINISH = 3,
     DIA_STATUS_RS_UNCOMPACTED = 4, // RS diagnose
-    DIA_STATUS_DIA_FAILED = 5,
     DIA_STATUS_MAX
   };
   const static char *ObDiagnoseStatusStr[DIA_STATUS_MAX];
@@ -134,6 +133,7 @@ private:
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_medium_merge(
+      const int64_t compaction_scn,
       const ObLSID &ls_id,
       ObTablet &tablet);
   int diagnose_tablet_major_merge(

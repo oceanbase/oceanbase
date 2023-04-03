@@ -45,6 +45,7 @@ ObPartitionMergeProgress::ObPartitionMergeProgress(common::ObIAllocator &allocat
     pre_scanned_row_cnt_(0),
     pre_output_block_cnt_(0),
     is_updating_(false),
+    is_waiting_schedule_(true),
     is_inited_(false)
 {
 }
@@ -72,6 +73,7 @@ void ObPartitionMergeProgress::reset()
   pre_output_block_cnt_ = 0;
   concurrent_cnt_ = 0;
   is_updating_ = false;
+  is_waiting_schedule_ = true;
 }
 
 
@@ -112,6 +114,7 @@ int ObPartitionMergeProgress::init(ObTabletMergeCtx *ctx, const ObTableReadInfo 
     MEMSET(buf, 0, sizeof(int64_t) * concurrent_cnt * 2);
     scanned_row_cnt_arr_ = buf;
     output_block_cnt_arr_ = buf + concurrent_cnt;
+    is_waiting_schedule_ = false;
 
     concurrent_cnt_ = concurrent_cnt;
     merge_dag_ = merge_dag;
@@ -224,21 +227,6 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
   return ret;
 }
 
-int ObPartitionMergeProgress::update_row_count(const int64_t idx, const int64_t incre_row_cnt)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPartitionMergeProgress not inited", K(ret));
-  } else if (incre_row_cnt > 0) {
-    scanned_row_cnt_arr_[idx] += incre_row_cnt;
-    if (REACH_TENANT_TIME_INTERVAL(UPDATE_INTERVAL)) {
-      latest_update_ts_ = ObTimeUtility::fast_current_time();
-    }
-  }
-  return ret;
-}
-
 int ObPartitionMergeProgress::update_merge_progress(
     const int64_t idx,
     const int64_t scanned_row_cnt,
@@ -254,7 +242,6 @@ int ObPartitionMergeProgress::update_merge_progress(
   } else if (scanned_row_cnt > scanned_row_cnt_arr_[idx] || output_block_cnt > output_block_cnt_arr_[idx]) {
     scanned_row_cnt_arr_[idx] = MAX(scanned_row_cnt_arr_[idx], scanned_row_cnt);
     output_block_cnt_arr_[idx] = MAX(output_block_cnt_arr_[idx], output_block_cnt);
-
     if (REACH_TENANT_TIME_INTERVAL(UPDATE_INTERVAL)) {
       if (!ATOMIC_CAS(&is_updating_, false, true)) {
         latest_update_ts_ = ObTimeUtility::fast_current_time();
@@ -351,7 +338,9 @@ int ObPartitionMergeProgress::diagnose_progress(ObDiagnoseTabletCompProgress &in
   int ret = OB_SUCCESS;
   if (ObTimeUtility::fast_current_time() - latest_update_ts_ > UPDATE_INTERVAL * NORMAL_UPDATE_PARAM) {
     input_progress.is_suspect_abormal_ = true;
+    input_progress.is_waiting_schedule_ = is_waiting_schedule_;
   }
+  input_progress.latest_update_ts_ = latest_update_ts_;
   return ret;
 }
 

@@ -120,8 +120,10 @@ void ObDiagnoseTabletCompProgress::reset()
 {
   ObCompactionProgress::reset();
   is_suspect_abormal_ = false;
+  is_waiting_schedule_ = false;
   dag_id_.reset();
   create_time_ = 0;
+  latest_update_ts_ = 0;
   base_version_ = 0;
   snapshot_version_ = 0;
 }
@@ -397,6 +399,9 @@ int ObTenantCompactionProgressMgr::update_progress(
         }
       } else if (array_[pos].estimated_finish_time_ < estimate_finish_time) {
         array_[pos].estimated_finish_time_  = estimate_finish_time;
+      }
+      if (ObPartitionMergeProgress::MAX_ESTIMATE_SPEND_TIME < array_[pos].estimated_finish_time_ - array_[pos].start_time_) {
+        array_[pos].estimated_finish_time_ = array_[pos].start_time_ + ObPartitionMergeProgress::MAX_ESTIMATE_SPEND_TIME;
       }
       LOG_DEBUG("success to update progress", K(ret), K(total_data_size_delta), K(output_block_cnt_delta),
           K(scanned_data_size_delta), K(array_[pos]));
