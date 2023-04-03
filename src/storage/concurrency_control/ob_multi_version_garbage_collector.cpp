@@ -1273,7 +1273,7 @@ int ObMultiVersionGCSnapshotOperator::operator()(const share::SCN snapshot_versi
 }
 
 // Functor to fetch the status of all alived session
-// TODO(handora.qc): using better timestamp instead of query_start_time
+// TODO(handora.qc): using better timestamp instead of cur state start time
 bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key key,
                                                     sql::ObSQLSessionInfo *sess_info)
 {
@@ -1308,7 +1308,7 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
         // maintained, so we use query start time instead
         // TODO(handora.qc): use better snapshot version
         if (sql::ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
-          snapshot_version.convert_from_ts(sess_info->get_query_start_time());
+          snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time());
         }
         MVCC_LOG(DEBUG, "RC txn with tx_desc", K(MTL_ID()), KPC(tx_desc), KPC(sess_info),
                  K(snapshot_version), K(min_active_snapshot_version_));
@@ -1327,7 +1327,7 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
         // maintained, so we use query start time instead
         // TODO(handora.qc): use better snapshot version
         if (sql::ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
-          snapshot_version.convert_from_ts(sess_info->get_query_start_time());
+          snapshot_version.convert_from_ts(sess_info->get_cur_state_start_time());
         }
         MVCC_LOG(DEBUG, "RC txn with non tx_desc", K(MTL_ID()), KPC(sess_info),
                  K(snapshot_version), K(min_active_snapshot_version_));
