@@ -1839,6 +1839,7 @@ int ObInsertResolver::save_autoinc_params(uint64_t table_offset /*default 0*/)
   int ret = OB_SUCCESS;
   ObInsertStmt* insert_stmt = get_insert_stmt();
   const ObTableSchema* table_schema = NULL;
+  int64_t auto_increment_cache_size = -1;
   if (OB_ISNULL(insert_stmt) || OB_ISNULL(params_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid insert stmt", K(insert_stmt), K(params_.session_info_));
@@ -1847,6 +1848,8 @@ int ObInsertResolver::save_autoinc_params(uint64_t table_offset /*default 0*/)
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get table schema", K(ret), K(table_schema));
+  } else if (OB_FAIL(params_.session_info_->get_auto_increment_cache_size(auto_increment_cache_size))) {
+    LOG_WARN("fail to get increment cache size", K(ret));
   } else {
     for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
          OB_SUCCESS == ret && iter != table_schema->column_end();
@@ -1869,6 +1872,7 @@ int ObInsertResolver::save_autoinc_params(uint64_t table_offset /*default 0*/)
           ObObjType column_type = table_schema->get_column_schema(column_id)->get_data_type();
           param.autoinc_col_type_ = column_type;
           param.autoinc_desired_count_ = 0;
+          param.auto_increment_cache_size_ = auto_increment_cache_size;
           // hidden pk auto-increment variables' default value is 1
           // auto-increment variables for other columns are set in ob_sql.cpp
           // because physical plan may come from plan cache; it need be reset every time
